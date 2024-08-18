@@ -7,7 +7,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use ff_standard_lib::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::candle::{Candle, CandleCalculationType};
-use ff_standard_lib::standardized_types::base_data::history::history;
+use ff_standard_lib::standardized_types::base_data::history::{history_many};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::canvas::graph::state::ChartState;
@@ -30,7 +30,7 @@ impl SeriesData {
     /// Gets history for the chart from the ff_data_server in the correct format based on the subscription.
     pub async fn get_history(subscription: DataSubscription, time_zone: &Tz, from_date: DateTime<FixedOffset>, to_date: DateTime<FixedOffset>, candle_type:  Option<CandleCalculationType> ) -> BTreeMap<i64, Vec<SeriesData>> {
         let subscriptions = vec![subscription.clone()];
-        let history = history(subscriptions, from_date, to_date).await.unwrap();
+        let history = history_many(subscriptions, from_date, to_date).await.unwrap();
         SeriesData::from_time_slices(&history, &time_zone, candle_type)
     }
 

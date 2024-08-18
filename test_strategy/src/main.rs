@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
@@ -9,6 +8,7 @@ use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::server_connections::{PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
+use ff_standard_lib::standardized_types::base_data::history::{history};
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
@@ -48,7 +48,8 @@ async fn main() {
         None,
         100
     ).await;
-
+    /*let history = history(DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex), strategy.time_local().await - Duration::days(3), strategy.time_local().await).await;
+    println!("History: {:?}", history);*/
     on_strategy_events(strategy, strategy_event_receiver).await;
 }
 
@@ -56,16 +57,6 @@ async fn main() {
 pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_receiver: mpsc::Receiver<StrategyEvent>)  {
     // Spawn a new task to listen for incoming data
     println!("Subscriptions: {:? }", strategy.subscriptions().await);
-    // get history for specific date range for some analysis etc
-    /*let history = history(set_subscriptions(), strategy.read().await.time_local().await - Duration::days(3), strategy.read().await.time_local().await).await;
-    println!("History: {:?}", history);*/
-
-    // get the strategy time in utc time
-    // let time_utc = strategy.read().await.time_utc();
-    // println!("UTC Time: {:?}", time_utc);
-    // get the strategy time in local time
-    // let local_time = strategy.read().await.time_local();
-    // println!("Local Time: {:?}", local_time);
     let mut count = 0;
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         if !strategy.is_warmup_complete().await {

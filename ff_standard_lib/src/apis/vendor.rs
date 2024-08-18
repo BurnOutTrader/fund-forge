@@ -98,14 +98,14 @@ pub mod client_requests {
     #[async_trait]
     pub trait ClientSideDataVendor: Sync + Send {
         /// returns just the symbols available from the DataVendor in the fund forge format
-        async fn symbols_request(&self, market_type: MarketType) -> Result<Vec<Symbol>, FundForgeError>;
-        async fn resolutions_request(&self, market_type: MarketType) -> Result<Vec<Resolution>, FundForgeError>;
-        async fn markets_request(&self) -> Result<Vec<MarketType>, FundForgeError>;
+        async fn symbols(&self, market_type: MarketType) -> Result<Vec<Symbol>, FundForgeError>;
+        async fn resolutions(&self, market_type: MarketType) -> Result<Vec<Resolution>, FundForgeError>;
+        async fn markets(&self) -> Result<Vec<MarketType>, FundForgeError>;
     }
 
     #[async_trait]
     impl ClientSideDataVendor for DataVendor {
-        async fn symbols_request(&self, market_type: MarketType) -> Result<Vec<Symbol>, FundForgeError> {
+        async fn symbols(&self, market_type: MarketType) -> Result<Vec<Symbol>, FundForgeError> {
             let api_client = self.synchronous_client().await;
             let request = SynchronousRequestType::SymbolsVendor(self.clone(), market_type);
             let response = match api_client.send_and_receive(request.to_bytes(), false).await {
@@ -120,7 +120,7 @@ pub mod client_requests {
             }
         }
 
-        async fn resolutions_request(&self, market_type: MarketType) -> Result<Vec<Resolution>, FundForgeError> {
+        async fn resolutions(&self, market_type: MarketType) -> Result<Vec<Resolution>, FundForgeError> {
             let api_client = self.synchronous_client().await;
             let request = SynchronousRequestType::Resolutions(self.clone(), market_type);
             let response = match api_client.send_and_receive(request.to_bytes(), false).await {
@@ -135,7 +135,7 @@ pub mod client_requests {
             }
         }
 
-        async fn markets_request(&self) -> Result<Vec<MarketType>, FundForgeError> {
+        async fn markets(&self) -> Result<Vec<MarketType>, FundForgeError> {
             let api_client = self.synchronous_client().await;
             let request = SynchronousRequestType::Markets(self.clone());
             let response = match api_client.send_and_receive(request.to_bytes(), false).await {
@@ -178,11 +178,11 @@ mod tests {
          let result = initialize_clients(&PlatformMode::SingleMachine).await;
          assert!(result.is_ok());
          let vendor = DataVendor::Test;
-         let symbols = vendor.symbols_request(MarketType::Forex).await.unwrap();
+         let symbols = vendor.symbols(MarketType::Forex).await.unwrap();
          println!("Symbols: {:?}", symbols);
          assert!(symbols.len() > 0);
 
-         let resolutions = vendor.resolutions_request(MarketType::Forex).await.unwrap();
+         let resolutions = vendor.resolutions(MarketType::Forex).await.unwrap();
          assert!(resolutions.len() > 0);
     }
 
@@ -193,11 +193,11 @@ mod tests {
         assert!(result.is_ok());
 
         let vendor = DataVendor::Test;
-        let symbols = vendor.symbols_request(MarketType::Forex).await.unwrap();
+        let symbols = vendor.symbols(MarketType::Forex).await.unwrap();
         //println!("Symbols: {:?}", symbols);
         assert!(symbols.len() > 0);
 
-        let resolutions = vendor.resolutions_request(MarketType::Forex).await.unwrap();
+        let resolutions = vendor.resolutions(MarketType::Forex).await.unwrap();
         assert!(resolutions.len() > 0);
     }
 }

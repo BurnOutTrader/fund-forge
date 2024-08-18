@@ -62,7 +62,7 @@ impl VendorApiResponse for TestVendorApi {
         if market_type != MarketType::Forex {
             return Err(FundForgeError::ClientSideErrorDebug("Market Type not supported".to_string()));
         }
-        Ok(SynchronousResponseType::Resolutions(vec![Resolution::Ticks(1), Resolution::Minutes(1)], market_type))
+        Ok(SynchronousResponseType::Resolutions(vec![Resolution::Ticks(1)], market_type))
     }
 
     async fn markets_response(&self) -> Result<SynchronousResponseType, FundForgeError> {

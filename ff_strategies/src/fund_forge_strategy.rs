@@ -18,7 +18,7 @@ use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::Order;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::market_handlers::{HistoricalMarketHandler, MarketHandlerEnum};
+use crate::market_handlers::{MarketHandlerEnum};
 use crate::drawing_object_handler::DrawingObjectHandler;
 use crate::interaction_handler::InteractionHandler;
 use crate::messages::strategy_events::{DataSubscriptionEvent, StrategyEvent, StrategyInteractionMode};
@@ -151,7 +151,6 @@ impl FundForgeStrategy {
         let order = Order::exit_short(self.owner_id.clone(), symbol_name, brokerage, quantity, tag, account_id, self.time_utc().await);
         self.market_event_handler.send_order(order).await;
     }
-    //Todo for position pricing support only USD, AUD and convert using historical data.. more can be added later
 
     pub async fn buy_market(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
         let order = Order::market_order(self.owner_id.clone(), symbol_name, brokerage, quantity, OrderSide::Buy, tag, account_id, self.time_utc().await);

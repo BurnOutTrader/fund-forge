@@ -1,13 +1,17 @@
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::time_slices::UnstructuredSlice;
-use std::collections::{btree_map, BTreeMap};
+use std::collections::{btree_map, BTreeMap, HashMap};
 use chrono::{DateTime, FixedOffset, Utc};
+use iced::Application;
+use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType};
-use crate::standardized_types::subscriptions::DataSubscription;
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::helpers::converters::next_month;
-
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::enums::Resolution;
+use crate::subscription_handler::ConsolidatorEnum;
 
 /// Method responsible for getting historical data for a specific subscription.
 /// Users should use this method to get historical data for a specific subscription/subscriptions
@@ -140,6 +144,34 @@ pub async fn get_historical_data(subscriptions: Vec<DataSubscription>, time: Dat
     tree
 }
 
+pub fn get_lowest_resolution(all_symbol_subscriptions: &HashMap<Symbol, Vec<DataSubscription>>, symbol: &Symbol) -> Option<Resolution> {
+    all_symbol_subscriptions.get(symbol).and_then(|subscriptions| {
+        subscriptions.iter().min_by_key(|sub| &sub.resolution).map(|sub| sub.resolution.clone())
+    })
+}
+
+pub async fn history_many(subscriptions: Vec<DataSubscription>, from_time: DateTime<FixedOffset>, to_time: DateTime<FixedOffset>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
+    let mut combined_data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
+    for subscription in subscriptions {
+        let history = history(subscription.clone(), from_time, to_time).await;
+        match history {
+            Some(history) => {
+                for (time, slice) in history {
+                    if !combined_data.contains_key(&time) {
+                        combined_data.insert(time.clone(), slice);
+                    } else {
+                        combined_data.get_mut(&time).unwrap().extend(slice);
+                    }
+                }
+            },
+            None => return None
+        }
+    }
+    match combined_data.is_empty() {
+        false => return Some(combined_data),
+        true => return None
+    }
+}
 
 /// Method responsible for getting historical data for all subscriptions that are passed in,
 /// # Arguments
@@ -150,23 +182,81 @@ pub async fn get_historical_data(subscriptions: Vec<DataSubscription>, time: Dat
 /// # Returns
 /// `Option<BTreeMap<i64, TimeSlice>>` - where `i64` is the `time` and `TimeSlice` is the data for that time.
 /// The TimeSlice is a type `Vec<BaseDataEnum>` that occurred at that moment in time. any kind of `BaseDataEnum` can be mixed into this list. \
-pub async fn history(subscriptions: Vec<DataSubscription>, from_time: DateTime<FixedOffset>, to_time: DateTime<FixedOffset>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
-    let from_time = from_time.to_utc();
-    let to_time = to_time.to_utc();
+pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOffset>, to_time: DateTime<FixedOffset>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
+    //determine if the subscription is a base_resolution
+    let vendor_resolutions = subscription.symbol.data_vendor.resolutions(subscription.market_type.clone()).await.unwrap();
+    if vendor_resolutions.contains(&subscription.resolution) {
+        let data = range_data(from_time.to_utc(), to_time.to_utc(), subscription.clone()).await;
+        match data.is_empty() {
+            false => return Some(data),
+            true => return None
+        }
+    } else {
+        //determine the correct resolution
+        let mut minimum_resolution: Option<Resolution> = None;
+         for resolution in vendor_resolutions {
+             if minimum_resolution.is_none() {
+                 minimum_resolution = Some(resolution);
+             } else {
+                 if resolution > minimum_resolution.unwrap() && resolution < subscription.resolution {
+                     minimum_resolution = Some(resolution);
+                 }
+             }
+        }
+        let minimum_resolution = match minimum_resolution.is_none() {
+            true => return None,
+            false => minimum_resolution.unwrap()
+        };
+        
+        println!("{:?}", minimum_resolution);
+        let data_type = match minimum_resolution {
+            Resolution::Ticks(_) => BaseDataType::Ticks,
+            _ => subscription.base_data_type.clone()
+        };
+        
+        let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, subscription.market_type.clone());
+        println!("{:?}", base_subscription);
+        let base_data = range_data(from_time.to_utc() - (subscription.resolution.as_duration() * 2), to_time.to_utc(), base_subscription.clone()).await;
+        println!("{:?}", base_data.len());
+        let mut consolidator = match subscription.resolution {
+            Resolution::Ticks(_) => ConsolidatorEnum::new_count_consolidator(subscription.clone(), 1).unwrap(),
+            _ => ConsolidatorEnum::new_time_consolidator(subscription.clone(), 1).unwrap()
+        };
+        let mut consolodated_data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
+        for (time, slice) in base_data {
+            for data in slice {
+                match consolidator.update(&data) {
+                    None => {}
+                    Some(consolidated) => {
+                        if consolidated.time_created_utc() < from_time.to_utc() {
+                            continue;
+                        }
+                        if !consolodated_data.contains_key(&time) {
+                            consolodated_data.insert(time.clone(), vec![consolidated]);
+                        } else {
+                            consolodated_data.get_mut(&time).unwrap().push(consolidated);
+                        }
+                    }
+                }
+            }
+        }
+        match consolodated_data.is_empty() {
+            false => return Some(consolodated_data),
+            true => return None
+        }
+    }
+}
 
-    let month_years = generate_file_dates(from_time.clone(), to_time.clone());
-
+async fn range_data(from_time: DateTime<Utc>, to_time: DateTime<Utc>, subscription: DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice> {
+    let mut data : BTreeMap<DateTime<Utc>, TimeSlice>  = BTreeMap::new();
     let mut last_time = from_time.clone();
     let end_time: DateTime<Utc> = to_time.clone();
-
-    let mut data : BTreeMap<DateTime<Utc>, TimeSlice>  = BTreeMap::new();
-
-    // While the last time is less than the strategy start time, we keep getting data and feeding it to the algo.
+    let month_years = generate_file_dates(from_time.clone(), to_time.clone());
     let mut end_loop = false;
     for (_, month_year) in month_years{ //start time already utc
         //println!("Getting historical data for: {:?}", month_year);
         // Get the historical data for all subscriptions from the server, parse it into TimeSlices.
-        let time_slices = match get_historical_data(subscriptions.clone(), month_year).await {
+        let time_slices = match get_historical_data(vec![subscription.clone()], month_year).await {
             Ok(time_slices) => {
                 time_slices
             },
@@ -191,16 +281,13 @@ pub async fn history(subscriptions: Vec<DataSubscription>, from_time: DateTime<F
                 continue;
             }
             last_time = time.clone();
-           data.insert(time, time_slice);
+            data.insert(time, time_slice);
         }
         if end_loop {
             break;
         }
     }
-    if data.len() == 0 {
-        return None;
-    }
-    Some(data)
+    data
 }
 
 pub fn generate_file_dates(mut start_time: DateTime<Utc>, end_time: DateTime<Utc>) -> BTreeMap<i32, DateTime<Utc>> {
@@ -214,77 +301,103 @@ pub fn generate_file_dates(mut start_time: DateTime<Utc>, end_time: DateTime<Utc
     month_years
 }
 
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{FixedOffset, NaiveDate, TimeZone};
     use crate::apis::vendor::DataVendor;
     use crate::server_connections::{initialize_clients, PlatformMode};
-    use crate::standardized_types::base_data::base_data_type::BaseDataType;
-    use crate::standardized_types::enums::{MarketType, Resolution};
-
-     #[tokio::test]
-       async fn test_initialize_clients_single_machine() {
-            let result = initialize_clients(&PlatformMode::SingleMachine).await;
-            assert!(result.is_ok());
-
-             let subscription = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex);
-             let time = DateTime::from_timestamp(1612473600, 0).unwrap();
-             match get_historical_data(vec![subscription.clone()], time).await {
-                 Ok(time_slices) => {
-                     //println!("{:?}", time_slices);
-                     assert!(time_slices.len() > 0);
-                 },
-                 Err(e) => {
-                     panic!("Error: {}", e);
-                 }
-             }
-
-             let result = initialize_clients(&PlatformMode::SingleMachine).await;
-             assert!(result.is_ok());
-
-             let subscription = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex);
-             let time = DateTime::from_timestamp(1612473600, 0).unwrap();
-             match get_historical_data(vec![subscription.clone()], time).await {
-                 Ok(time_slices) => {
-                     assert!(time_slices.len() > 0);
-                 },
-                 Err(e) => {
-                     panic!("Error: {}", e);
-                 }
-             }
-        }
+    use crate::standardized_types::enums::MarketType;
 
     #[tokio::test]
-    async fn test_get_historical_data() {
-        // Assuming you have a way to mock or set up the settings for a multi-machine scenario
-        let result = initialize_clients(&PlatformMode::MultiMachine).await;
-        assert!(result.is_ok());
+    async fn test_history_base_data() {
+        initialize_clients(&PlatformMode::SingleMachine).await;
+        // Setup the date range
+        let from_time = NaiveDate::from_ymd_opt(2023, 03, 8).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let to_time = NaiveDate::from_ymd_opt(2023, 03, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
 
-        let subscription = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex);
-        let time = DateTime::from_timestamp(1612473600, 0).unwrap();
-        match get_historical_data(vec![subscription.clone()], time).await {
-            Ok(time_slices) => {
-                //println!("{:?}", time_slices);
-                assert!(time_slices.len() > 0);
-            },
-            Err(e) => {
-                panic!("Error: {}", e);
-            }
-        }
+        // Convert to FixedOffset for the function calls
+        let from_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&from_time).unwrap();
+        let to_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&to_time).unwrap();
 
-        let result = initialize_clients(&PlatformMode::SingleMachine).await;
-        assert!(result.is_ok());
 
-        let subscription = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex);
-        let time = DateTime::from_timestamp(1612473600, 0).unwrap();
-        match get_historical_data(vec![subscription.clone()], time).await {
-            Ok(time_slices) => {
-                assert!(time_slices.len() > 0);
-            },
-            Err(e) => {
-                panic!("Error: {}", e);
-            }
-        }
+        let subscription = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex);
+
+        // Call history function
+        let result = history(subscription, from_time, to_time).await;
+
+        // Check result
+        assert!(result.is_some(), "Expected some historical data.");
+    }
+
+    #[tokio::test]
+    async fn test_history_many_base_data() {
+        initialize_clients(&PlatformMode::SingleMachine).await;
+        // Setup the date range
+        let from_time = NaiveDate::from_ymd_opt(2023, 03, 8).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let to_time = NaiveDate::from_ymd_opt(2023, 03, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+
+        // Convert to FixedOffset for the function calls
+        let from_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&from_time).unwrap();
+        let to_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&to_time).unwrap();
+
+
+        let subscriptions: Vec<DataSubscription> = vec![
+            DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
+            DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
+        ];
+
+        // Call history_many function
+        let result = history_many(subscriptions, from_time, to_time).await;
+
+        // Check result
+        assert!(result.is_some(), "Expected some combined historical data.");
+    }
+
+    #[tokio::test]
+    async fn test_history_consolidated_data() {
+        initialize_clients(&PlatformMode::SingleMachine).await;
+        // Setup the date range
+        let from_time = NaiveDate::from_ymd_opt(2023, 03, 8).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let to_time = NaiveDate::from_ymd_opt(2023, 03, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+
+        // Convert to FixedOffset for the function calls
+        let from_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&from_time).unwrap();
+        let to_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&to_time).unwrap();
+
+
+        let subscription = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex);
+
+        // Call history function
+        let result = history(subscription, from_time, to_time).await;
+
+        // Check result
+        assert!(result.is_some(), "Expected some historical data.");
+    }
+
+    #[tokio::test]
+    async fn test_history_many_consolidated_data() {
+        initialize_clients(&PlatformMode::SingleMachine).await;
+        // Setup the date range
+        let from_time = NaiveDate::from_ymd_opt(2023, 03, 8).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let to_time = NaiveDate::from_ymd_opt(2023, 03, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+
+        // Convert to FixedOffset for the function calls
+        let from_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&from_time).unwrap();
+        let to_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&to_time).unwrap();
+
+
+        let subscriptions: Vec<DataSubscription> = vec![
+            DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex),
+            DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(1), BaseDataType::Candles, MarketType::Forex),
+        ];
+
+        // Call history_many function
+        let result = history_many(subscriptions, from_time, to_time).await;
+
+        // Check result
+        assert!(result.is_some(), "Expected some combined historical data.");
     }
 }
 
