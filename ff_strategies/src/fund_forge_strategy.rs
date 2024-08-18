@@ -211,7 +211,7 @@ impl FundForgeStrategy {
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
     /// todo need a way to prevent strategy subscribing to higher res data and always consolidate by default, a as new lower res subscriptions are made the consolidator is replaced with a new one.
-    pub async fn subscribe(&mut self, subscription: DataSubscription, retain_history: usize) {
+    pub async fn subscribe(&self, subscription: DataSubscription, retain_history: usize) {
         match self.subscription_handler.subscribe(subscription.clone(), retain_history).await {
             Ok(_) => {},
             Err(e) => {
@@ -223,7 +223,7 @@ impl FundForgeStrategy {
     }
 
     /// Unsubscribes from a subscription.
-    pub async fn unsubscribe(&mut self, subscription: DataSubscription) {
+    pub async fn unsubscribe(&self, subscription: DataSubscription) {
         match self.subscription_handler.unsubscribe(subscription.clone()).await {
             Ok(_) => {},
             Err(e) => {

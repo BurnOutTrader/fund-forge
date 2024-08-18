@@ -37,7 +37,7 @@ impl FundForgeStrategy {
 
         println!("{:?}", &msg);
         let end_event = StrategyEvent::ShutdownEvent(strategy.owner_id.clone(), msg);
-        strategy.fwd_event(end_event);
+        strategy.fwd_event(end_event).await;
     }
 
     pub async fn run_live(&self) {
@@ -85,7 +85,7 @@ impl FundForgeStrategy {
         self.historical_data_feed(month_years, end_date).await;
 
         self.market_event_handler.process_ledgers().await;
-
+    
         // If we have reached the end of the backtest, we check that the last time recorded is not in the future, if it is, we set it to the current time.
     }
 
@@ -98,7 +98,7 @@ impl FundForgeStrategy {
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, month_start) in month_years {
             'month_loop: loop {
-                let subscriptions = self.subscriptions().await;
+                let subscriptions = self.subscription_handler.primary_subscriptions().await;
                 let time_slices = match get_historical_data(subscriptions.clone(), month_start).await {
                     Ok(time_slices) => {
                         time_slices
@@ -114,16 +114,15 @@ impl FundForgeStrategy {
                     break 'month_loop
                 }
 
-                for (time, time_slice) in time_slices {
+                'slice_loop: for (time, time_slice) in time_slices {
                     if time > end_time {
                         break 'main_loop
                     }
                     
-                    last_time = time;
-                    
                     if self.subscription_handler.subscriptions_updated().await {
                         self.subscription_handler.set_subscriptions_updated(false).await;
-                        break 'month_loop
+                        last_time = time;
+                        break 'slice_loop
                     }
 
                     if time < last_time {

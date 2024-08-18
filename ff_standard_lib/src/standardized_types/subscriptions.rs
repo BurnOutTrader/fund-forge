@@ -6,6 +6,7 @@ use crate::apis::vendor::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 
 pub type ExchangeCode = String;
 
@@ -98,6 +99,7 @@ impl DataSubscription {
     pub fn new(symbol_name: String, data_vendor: DataVendor, resolution: Resolution, base_data_type: BaseDataType, market_type: MarketType) -> Self {
         let cleaned_symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         let symbol = Symbol::new(cleaned_symbol_name, data_vendor, market_type.clone());
+        
         DataSubscription {
             symbol,
             resolution,

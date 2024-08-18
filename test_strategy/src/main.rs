@@ -67,7 +67,7 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
     // let local_time = strategy.read().await.time_local();
     // println!("Local Time: {:?}", local_time);
     let mut count = 0;
-    while let Some(strategy_event) = event_receiver.recv().await {
+    'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         if !strategy.is_warmup_complete().await {
             continue;
         }
@@ -88,44 +88,28 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
                             //println!("Time Slice: {:?}", &time_slice.len());
                             count += 1;
                             println!("{}...Candle {}: close:{} at {}", count, candle.symbol.name, candle.close, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                            //println!("{}... time local {}", count, strategy.time_local().await);
+                            println!("{}... time local {}", count, strategy.time_local().await);
                             println!("{}... time utc {}", count, strategy.time_utc().await);
+                            
+                            
+                            if count == 100 {
+                                // we can add subscriptions at any time
+                                strategy.subscribe(DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),100).await;
+                                strategy.subscribe(DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex),100).await;
+                            }
+
+                            if count /3 == 0 {
+                                 strategy.enter_long(candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string(), "1".to_string()).await;
+                            }
+                            if count / 5 == 0 {
+                             strategy.exit_long(candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string(), "1".to_string()).await; 
+                            }
                         }
                         BaseDataEnum::QuoteBar(_) => {}
-                        BaseDataEnum::Tick(ref _tick) => {
-                            //println!("{}... {}: close:{} at {}", count, tick.symbol.name, tick.price, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                            //println!("{:?}", bar);
-
-                            // for demo purposes: after 10 bars we will change our subscriptions closure and then calibrate our strategy subscriptions to its requirements.
-
-
-                            // we can change the start-up set_subscriptions function at any time by calling state.set_subscriptions() and passing in a new closure or fn.
-                            // here we could use advanced filtering logic to select assets based on some criteria.
-                            /*
-                              let subscriptions = vec![
-                                  DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-                                  DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-                              ];
-
-                              // we can change the subscriptions at any time
-                              strategy.subscriptions_update(subscriptions).await;
-
-                              for subscription in strategy.state().subscriptions().await {
-                                  println!("Subscription: {:? }", subscription);
-                              }
-
-                              //sleep for 10 seconds to allow us to read the console and check the new subscriptions updated correctly.
-                              //tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
-
-
-                          if count /3 == 0 {
-                                 strategy.enter_long(tick.symbol.clone(), Brokerage::Test, 1, "Entry".to_string(), "1".to_string()).await;
-                             }
-
-                             if count / 5 == 0 {
-                                 strategy.exit_long(tick.symbol.clone(), Brokerage::Test, 1, "Entry".to_string(), "1".to_string()).await;
-                             }
-                           */
+                        BaseDataEnum::Tick(_tick) => {
+                            if count == 101 {
+                                assert!(strategy.subscriptions().await.len() == 4);
+                            }
                         }
                         BaseDataEnum::Quote(_) => {}
                         BaseDataEnum::Fundamental(_) => {}
@@ -142,12 +126,13 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
             }
             // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
             StrategyEvent::StrategyControls(_, _, _) => {}
-            StrategyEvent::ShutdownEvent(_, _) => break //Ok(()) // we could serialize data on shutdown here.
+            StrategyEvent::ShutdownEvent(_, _) => {
+                break 'strategy_loop
+            } //Ok(()) // we could serialize data on shutdown here.
         }
         //simulate work
         //tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
     }
     event_receiver.close();
     println!("Strategy Event Loop Ended");
-    //Ok(())
 }

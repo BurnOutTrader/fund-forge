@@ -194,6 +194,10 @@ impl SymbolSubscriptionHandler {
         }
         all_subscriptions
     }
+    
+    pub fn primary_subscription(&self) -> DataSubscription {
+        self.primary_subscription.clone()
+    }
 }
 
 /// Manages all subscriptions for a backtest strategy, in live 1 static handler is shared for all strategies and platform requirements.
@@ -263,6 +267,14 @@ impl SubscriptionHandler {
     
     pub async fn set_subscriptions_updated(&self, updated: bool) {
         *self.subscriptions_updated.write().await = updated;
+    }
+
+    pub async fn primary_subscriptions(&self) -> Vec<DataSubscription> {
+        let mut primary_subscriptions = vec![];
+        for symbol_handler in self.symbol_subscriptions.read().await.values() {
+            primary_subscriptions.push(symbol_handler.primary_subscription());
+        }
+        primary_subscriptions
     }
 
     pub async fn subscriptions(&self) -> Vec<DataSubscription> {
