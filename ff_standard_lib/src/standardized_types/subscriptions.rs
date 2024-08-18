@@ -95,7 +95,7 @@ pub struct DataSubscription {
 }
 
 impl DataSubscription {
-    pub fn new(mut symbol_name: String, data_vendor: DataVendor, resolution: Resolution, base_data_type: BaseDataType, market_type: MarketType) -> Self {
+    pub fn new(symbol_name: String, data_vendor: DataVendor, resolution: Resolution, base_data_type: BaseDataType, market_type: MarketType) -> Self {
         let cleaned_symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         let symbol = Symbol::new(cleaned_symbol_name, data_vendor, market_type.clone());
         DataSubscription {

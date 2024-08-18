@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::{env};
 use crate::strategy_state::StrategyState;
-use tokio::sync::{Barrier, mpsc};
+use tokio::sync::{mpsc};
 use std::path::Path;
 use std::sync::Arc;
 use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
@@ -81,8 +81,8 @@ impl FundForgeStrategy {
             None => FundForgeStrategy::assign_owner_id(),
         };
 
-        let event_handler = match strategy_mode {
-            StrategyMode::Backtest => MarketHandlerEnum::Backtest(HistoricalMarketHandler::new(owner_id.clone(), start_time.to_utc())),
+        let market_event_handler = match strategy_mode {
+            StrategyMode::Backtest => MarketHandlerEnum::new(owner_id.clone(), start_time.to_utc(), strategy_mode.clone()),
             StrategyMode::Live => panic!("Live mode not yet implemented"),
             StrategyMode::LivePaperTrading => panic!("Live paper mode not yet implemented")
         };
@@ -95,7 +95,7 @@ impl FundForgeStrategy {
             state,
             owner_id,
             drawing_objects_handler: DrawingObjectHandler::new(Default::default()),
-            market_event_handler: event_handler,
+            market_event_handler,
             strategy_event_sender,
             interaction_handler: InteractionHandler::new(replay_delay_ms, interaction_mode),
             subscription_handler

@@ -35,12 +35,11 @@ pub fn time_convert_utc_naive_to_fixed_offset(time_zone: &Tz, utc_time: NaiveDat
 }
 
 pub fn convert_to_utc(naive_date_time: NaiveDateTime, time_zone: Tz) -> DateTime<Utc> {
-    // Get the offset from UTC for the given time zone and NaiveDateTime
-    let offset = time_zone.offset_from_local_datetime(&naive_date_time).unwrap().fix();
+    // Get the DateTime in the given time zone
+    let fixed_offset_date_time = time_zone
+        .from_local_datetime(&naive_date_time)
+        .unwrap();  // Handle potential None here if necessary
 
-    // Convert NaiveDateTime to DateTime<FixedOffset>
-    let fixed_offset_date_time = DateTime::<FixedOffset>::from_local(naive_date_time, offset);
-    
     // Convert DateTime<FixedOffset> to DateTime<Utc>
     fixed_offset_date_time.with_timezone(&Utc)
 }

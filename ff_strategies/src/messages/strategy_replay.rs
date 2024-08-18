@@ -237,14 +237,14 @@ impl StrategyEventStream {
 
                 //replay the histocial strategies
                 if !events.is_empty() {
-                    for (time, event_list) in events {
+                    for (_, event_list) in events {
                         self.process_events(&event_list).await;
                     }
                 }
             }
             //replay the current strategies not yet saved
             if !self.current_events.is_empty() {
-                for (time, event_list) in &self.current_events {
+                for (_, event_list) in &self.current_events {
                     self.process_events(event_list).await;
                 }
             }

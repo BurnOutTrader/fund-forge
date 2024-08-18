@@ -1,5 +1,4 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use tokio::sync::RwLock;
 use ff_charting::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::orders::orders::OrderUpdateEvent;

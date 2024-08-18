@@ -1,4 +1,3 @@
-use crate::apis::vendor::DataVendor;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use chrono::{DateTime, FixedOffset};
@@ -53,7 +52,7 @@ impl Fundamental {
     /// 6. `name` - `String` The name of the fundamental data: This can be used in the `ff_data_server` to specify how the server is to pull the data from the specified broker, this allows max versatility with minimum hard coding, or re-coding of the engine.
     /// 7. `bias` - `Bias` enum The bias of the fundamental data `Bias` enum variant.
     /// 8. `data_vendor` - `DataVendor` enum The data vendor of the fundamental data `DataVendor` enum variant.
-    pub fn new(symbol: Symbol, time: String, value: Option<f64>, value_string: Option<String>, value_bytes: Option<Vec<u8>>, name: String, bias: Bias, data_vendor: DataVendor) -> Self {
+    pub fn new(symbol: Symbol, time: String, value: Option<f64>, value_string: Option<String>, value_bytes: Option<Vec<u8>>, name: String, bias: Bias) -> Self {
         Self {
             symbol,
             time,

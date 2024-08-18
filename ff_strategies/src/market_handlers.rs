@@ -5,7 +5,6 @@ use tokio::sync::{RwLock};
 use ff_standard_lib::apis::brokerage::Brokerage;
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Ledger};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::{Order, OrderState, OrderType, OrderUpdateEvent};
 use ff_standard_lib::standardized_types::OwnerId;
@@ -36,7 +35,7 @@ impl MarketHandlerEnum {
     pub(crate) async fn last_time(&self) -> DateTime<Utc> {
         match self {
             MarketHandlerEnum::Backtest(handler) => handler.last_time.read().await.clone(),
-            MarketHandlerEnum::Live(handler) => panic!("Live mode should not use this function for time")
+            MarketHandlerEnum::Live(_) => panic!("Live mode should not use this function for time")
         }
     }
     
@@ -111,7 +110,6 @@ impl HistoricalMarketHandler {
                 ledger.on_data_update(time_slice.clone()).await;
             }
         }
-        let last_data_time = self.last_time.read().await.clone();
         for base_data in &time_slice {
             //println!("Base data: {:?}", base_data.time_created_utc());
             match base_data {
@@ -154,7 +152,7 @@ impl HistoricalMarketHandler {
 
         let mut events = Vec::new();
         let orders = &mut *orders;
-        for mut order in &mut *orders {
+        for order in &mut *orders {
             //1. If we don't have a brokerage + account create one
             if !self.ledgers.read().await.contains_key(&order.brokerage) {
                 self.ledgers.write().await.insert(order.brokerage.clone(), HashMap::new());
@@ -166,7 +164,7 @@ impl HistoricalMarketHandler {
 
             //2. send the order to the ledger to be handled
             let mut ledgers = self.ledgers.write().await;
-            let mut ledger = ledgers.get_mut(&order.brokerage).unwrap().get_mut(&order.account_id).unwrap();
+            let ledger = ledgers.get_mut(&order.brokerage).unwrap().get_mut(&order.account_id).unwrap();
 
             let owner_id = self.owner_id.clone();
 

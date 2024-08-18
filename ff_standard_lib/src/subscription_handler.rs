@@ -1,6 +1,5 @@
 use std::collections::{HashMap, VecDeque};
 use chrono::{DateTime, Timelike, Utc};
-use iced::Application;
 use tokio::sync::RwLock;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -9,7 +8,7 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::FundForgeError;
-use crate::standardized_types::enums::{Resolution, StrategyMode};
+use crate::standardized_types::enums::{Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 
@@ -353,7 +352,6 @@ pub struct CountConsolidator {
     number: u64,
     counter: u64,
     current_data: Candle,
-    base_data_type: BaseDataType,
     subscription: DataSubscription,
     history: RollingWindow,
 }
@@ -374,7 +372,6 @@ impl CountConsolidator {
             number,
             counter: 0,
             current_data,
-            base_data_type,
             subscription,
             history: RollingWindow::new(retain_last),
         })
@@ -467,7 +464,6 @@ pub struct TimeConsolidator {
     current_data: Option<BaseDataEnum>,
     base_data_type: BaseDataType,
     subscription: DataSubscription,
-    last_time: Option<DateTime<Utc>>,
     history: RollingWindow,
 }
 
@@ -487,7 +483,6 @@ impl TimeConsolidator {
             current_data: None,
             base_data_type,
             subscription,
-            last_time: None,
             history: RollingWindow::new(retain_last),
         })
     }
@@ -691,7 +686,7 @@ impl TimeConsolidator {
             Resolution::Seconds(interval) => {
                 let timestamp = time.timestamp();
                 let rounded_timestamp = timestamp - (timestamp % interval as i64);
-                DateTime::<Utc>::from_utc(chrono::NaiveDateTime::from_timestamp(rounded_timestamp, 0), Utc)
+                DateTime::from_timestamp(rounded_timestamp, 0).unwrap()
             }
             Resolution::Minutes(interval) => {
                 let minute = time.minute() as i64;

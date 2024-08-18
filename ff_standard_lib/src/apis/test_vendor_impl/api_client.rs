@@ -77,7 +77,7 @@ impl BrokerApiResponse for TestVendorApi {
     }
 
     async fn account_currency_reponse(&self, account_id: AccountId) -> Result<SynchronousResponseType, FundForgeError> {
-        let response = SynchronousResponseType::AccountCurrency(AccountCurrency::USD);
+        let response = SynchronousResponseType::AccountCurrency(account_id, AccountCurrency::USD);
         Ok(response)
     }
 

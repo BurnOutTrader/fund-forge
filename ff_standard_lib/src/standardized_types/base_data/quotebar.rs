@@ -4,7 +4,6 @@ use std::str::FromStr;
 use chrono::{DateTime, FixedOffset};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::apis::vendor::DataVendor;
 use crate::standardized_types::enums::Resolution;
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::subscriptions::Symbol;
@@ -113,7 +112,7 @@ impl QuoteBar {
     /// - `volume`: The trading volume.
     /// - `time`: The opening time as a Unix timestamp.
     /// - `data_vendor`: The data vendor that provided the quote bar.
-    pub fn from_closed(symbol: Symbol, bid_high: f64, bid_low: f64, bid_open: f64, bid_close: f64, ask_high: f64, ask_low: f64, ask_open: f64, ask_close: f64, volume: f64, time: DateTime<chrono::Utc>, resolution: Resolution,data_vendor: DataVendor) -> Self {
+    pub fn from_closed(symbol: Symbol, bid_high: f64, bid_low: f64, bid_open: f64, bid_close: f64, ask_high: f64, ask_low: f64, ask_open: f64, ask_close: f64, volume: f64, time: DateTime<chrono::Utc>, resolution: Resolution) -> Self {
         Self {
             symbol,
             bid_high,

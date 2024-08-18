@@ -69,16 +69,13 @@ impl SeriesData {
         if range_data.is_empty() {
             return;
         }
-        for (time, data_vec) in range_data {
+        for (_, data_vec) in range_data {
             for data_object in data_vec {
                 match data_object {
                     SeriesData::CandleStickData(candle) => {
                         candle.draw_object(frame, view, bounds, logarithmic, &time_zone )
                     },
                     // Add other variants here...
-                    _ => {
-                        panic!("Not implemented")
-                    },
                 }
             }
         }

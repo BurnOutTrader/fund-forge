@@ -3,7 +3,6 @@ use std::sync::Arc;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use tokio::sync::{mpsc};
-use tokio::task;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::brokerage::Brokerage;
 use ff_standard_lib::apis::vendor::DataVendor;
@@ -16,11 +15,12 @@ use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_strategies::messages::strategy_events::{StrategyEvent, StrategyInteractionMode};
 
 
-fn defualt_broker_map() -> HashMap<DataVendor, Brokerage> {
+/*fn defualt_broker_map() -> HashMap<DataVendor, Brokerage> {
     let mut broker_map = HashMap::new();
     broker_map.insert(DataVendor::Test, Brokerage::Test);
     broker_map
-}
+}*/
+
 /// On initialization of a strategy we need to set the subscriptions function, this can be changed at any time to a new function, or the existing function can be used to recalibrate the subscriptions at runtime.
 fn set_subscriptions_initial() -> Vec<DataSubscription> {
     let subscriptions: Vec<DataSubscription> = vec![
@@ -92,7 +92,7 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
                             println!("{}... time utc {}", count, strategy.time_utc().await);
                         }
                         BaseDataEnum::QuoteBar(_) => {}
-                        BaseDataEnum::Tick(ref tick) => {
+                        BaseDataEnum::Tick(ref _tick) => {
                             //println!("{}... {}: close:{} at {}", count, tick.symbol.name, tick.price, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                             //println!("{:?}", bar);
 

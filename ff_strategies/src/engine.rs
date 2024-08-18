@@ -37,6 +37,7 @@ impl FundForgeStrategy {
 
         println!("{:?}", &msg);
         let end_event = StrategyEvent::ShutdownEvent(strategy.owner_id.clone(), msg);
+        strategy.fwd_event(end_event);
     }
 
     pub async fn run_live(&self) {
@@ -113,7 +114,7 @@ impl FundForgeStrategy {
                     break 'month_loop
                 }
 
-                for (time, mut time_slice) in time_slices {
+                for (time, time_slice) in time_slices {
                     if time > end_time {
                         break 'main_loop
                     }
@@ -141,9 +142,9 @@ impl FundForgeStrategy {
                                 consolidated_timeslices.get_mut(&data.time_created_utc()).unwrap().push(data);
                             }
                         }
-                        for (time, time_slice) in consolidated_timeslices {
+                        for (consolidation_time, time_slice) in consolidated_timeslices {
                             let time_slice_event = StrategyEvent::TimeSlice(owner_id.clone(), time_slice);
-                            self.market_event_handler.update_time(time).await;
+                            self.market_event_handler.update_time(consolidation_time).await;
                             self.fwd_event(time_slice_event).await;
                         }
                     }
@@ -151,6 +152,7 @@ impl FundForgeStrategy {
                     // The market event handler response with any order events etc that may have been returned from the base data update
                     let market_event_handler_events = self.market_event_handler.base_data_upate(time_slice.clone()).await;
                     if let Some(event_handler_events) = market_event_handler_events {
+                        self.market_event_handler.update_time(time.clone()).await;
                         for event in event_handler_events {
                             self.fwd_event(event).await;
                         }

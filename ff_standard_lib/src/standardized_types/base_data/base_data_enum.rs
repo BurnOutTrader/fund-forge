@@ -164,8 +164,8 @@ impl BaseDataEnum {
     
     pub fn set_is_closed(&mut self, is_closed: bool) {
         match self {
-            BaseDataEnum::Candle(candle) => candle.is_closed = true,
-            BaseDataEnum::QuoteBar(bar) => bar.is_closed = true,
+            BaseDataEnum::Candle(candle) => candle.is_closed = is_closed,
+            BaseDataEnum::QuoteBar(bar) => bar.is_closed = is_closed,
             _ => {}
         }
     }

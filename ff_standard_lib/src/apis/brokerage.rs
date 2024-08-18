@@ -142,7 +142,7 @@ pub mod client_requests {
             };
             let response = SynchronousResponseType::from_bytes(&response).unwrap();
             match response {
-                SynchronousResponseType::AccountCurrency(currency) => Ok(currency),
+                SynchronousResponseType::AccountCurrency(_, currency) => Ok(currency),
                 SynchronousResponseType::Error(e) => Err(e),
                 _ => Err(FundForgeError::ClientSideErrorDebug("Invalid response type from server".to_string()))
             }

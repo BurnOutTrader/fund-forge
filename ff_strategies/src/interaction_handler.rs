@@ -6,8 +6,6 @@ pub struct InteractionHandler {
     control_state: RwLock<StrategyControls>,
     ///delay to add to market replay data feed to slow down backtests
     replay_delay_ms: RwLock<Option<u64>>,
-    /// the interaction mode of the strategy, semi-automated or automated
-    interaction_mode: RwLock<StrategyInteractionMode>,
 }
 
 impl InteractionHandler {
@@ -15,16 +13,7 @@ impl InteractionHandler {
         InteractionHandler {
             control_state: RwLock::new(StrategyControls::Continue),
             replay_delay_ms: RwLock::new(replay_delay_ms),
-            interaction_mode: RwLock::new(interaction_mode),
         }
-    }
-
-    pub async fn set_interaction_mode(&self, mode: StrategyInteractionMode) {
-        *self.interaction_mode.write().await = mode;
-    }
-
-    pub async fn interaction_mode(&self) -> StrategyInteractionMode {
-        *self.interaction_mode.read().await
     }
 
     pub async fn set_control_state(&self, control_state: StrategyControls) {

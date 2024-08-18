@@ -1,10 +1,9 @@
 use chrono_tz::Tz;
 use std::fmt::Debug;
-use chrono::{DateTime, Duration, FixedOffset, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use tokio::sync::RwLock;
-use ff_standard_lib::helpers::converters::{convert_to_utc, time_convert_utc_naive_to_fixed_offset};
+use ff_standard_lib::helpers::converters::{convert_to_utc};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 
 pub struct StrategyState {
     pub mode: StrategyMode,

@@ -87,7 +87,7 @@ impl DrawingTool {
         }
     }
 
-    pub fn process_click(&self, view: &ChartState, click: Click) {
+    pub fn process_click(&self, _view: &ChartState, _click: Click) {
         /*match self.clone() {
         DrawingTool::VerticleLines(mut verticle_line) => verticle_line.process_click(view, click),
         DrawingTool::HorizontalLines(mut horizontal_line) => horizontal_line.process_click(view, click),

@@ -160,7 +160,7 @@ pub enum SynchronousResponseType {
     /// [`DataServerError`](ff_data_vendors::networks::DataServerError)
     Error(FundForgeError),
 
-    AccountCurrency(AccountCurrency),
+    AccountCurrency(AccountId, AccountCurrency),
 
     AccountInfo(AccountInfo),
 

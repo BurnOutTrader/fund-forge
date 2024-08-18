@@ -162,7 +162,7 @@ impl TimeScale {
             if space_taken >= max_space_available {
                 break;
             }
-            for (&time, grid) in &scale_grids {
+            for (_, grid) in &scale_grids {
                 if grid.importance != importance || space_taken >= max_space_available {
                     continue;
                 }
