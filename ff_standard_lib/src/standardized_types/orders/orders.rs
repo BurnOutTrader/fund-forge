@@ -1,4 +1,3 @@
-
 use std::str::FromStr;
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
@@ -111,6 +110,10 @@ pub struct Order {
 }
 
 impl Order {
+    pub fn update_time_created_utc(&mut self, time: DateTime<Utc>) {
+        self.time_created_utc = time.to_string();
+    }
+    
     pub fn market_order(owner_id: OwnerId, symbol: Symbol, brokerage: Brokerage, quantity: u64, side: OrderSide, tag: String, account_id: AccountId, time: DateTime<Utc>) -> Self {
         Order {
             id: format!("{}-{}-{}-{}", brokerage, symbol.name, time.timestamp_millis(), side),

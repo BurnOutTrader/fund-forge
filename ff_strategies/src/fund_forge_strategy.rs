@@ -132,34 +132,34 @@ impl FundForgeStrategy {
         false
     }
 
-    pub async fn enter_long(&self, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId) {
-        let order = Order::enter_long(self.owner_id.clone(), symbol_name, brokerage, quantity, account_id, tag, self.time_utc().await);
+    pub async fn enter_long(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
+        let order = Order::enter_long(self.owner_id.clone(), symbol_name, brokerage, quantity, tag, account_id, self.time_utc().await);
         self.market_event_handler.send_order(order).await;
     }
 
-    pub async fn enter_short(&self, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId) {
-        let order = Order::enter_short(self.owner_id.clone(), symbol_name, brokerage, quantity,  account_id, tag, self.time_utc().await);
+    pub async fn enter_short(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
+        let order = Order::enter_short(self.owner_id.clone(), symbol_name, brokerage, quantity,  tag, account_id, self.time_utc().await);
         self.market_event_handler.send_order(order).await;
     }
 
-    pub async fn exit_long(&self, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId) {
-        let order = Order::exit_long(self.owner_id.clone(), symbol_name, brokerage, quantity, account_id, tag, self.time_utc().await);
+    pub async fn exit_long(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
+        let order = Order::exit_long(self.owner_id.clone(), symbol_name, brokerage, quantity, tag, account_id, self.time_utc().await);
         self.market_event_handler.send_order(order).await;
     }
 
-    pub async fn exit_short(&self, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId) {
-        let order = Order::exit_short(self.owner_id.clone(), symbol_name, brokerage, quantity, account_id, tag, self.time_utc().await);
+    pub async fn exit_short(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
+        let order = Order::exit_short(self.owner_id.clone(), symbol_name, brokerage, quantity, tag, account_id, self.time_utc().await);
         self.market_event_handler.send_order(order).await;
     }
     //Todo for position pricing support only USD, AUD and convert using historical data.. more can be added later
 
-    pub async fn buy_market(&self, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId) {
-        let order = Order::market_order(self.owner_id.clone(), symbol_name, brokerage, quantity, OrderSide::Buy, account_id, tag, self.time_utc().await);
+    pub async fn buy_market(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
+        let order = Order::market_order(self.owner_id.clone(), symbol_name, brokerage, quantity, OrderSide::Buy, tag, account_id, self.time_utc().await);
         self.market_event_handler.send_order(order).await;
     }
 
-    pub async fn sell_market(&self, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId) {
-        let order = Order::market_order(self.owner_id.clone(), symbol_name, brokerage, quantity, OrderSide::Sell, account_id, tag, self.time_utc().await);
+    pub async fn sell_market(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
+        let order = Order::market_order(self.owner_id.clone(), symbol_name, brokerage, quantity, OrderSide::Sell, tag, account_id, self.time_utc().await);
         self.market_event_handler.send_order(order).await;
     }
 

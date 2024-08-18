@@ -99,10 +99,10 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
                             }
 
                             if count /3 == 0 {
-                                 strategy.enter_long(candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string(), "1".to_string()).await;
+                                 strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
                             }
                             if count / 5 == 0 {
-                             strategy.exit_long(candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string(), "1".to_string()).await; 
+                             strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await; 
                             }
                         }
                         BaseDataEnum::QuoteBar(_) => {}
