@@ -79,7 +79,7 @@ pub(crate) struct HistoricalMarketHandler {
     last_price: RwLock<HashMap<Symbol, f64>>,
     ledgers: RwLock<HashMap<Brokerage, HashMap<AccountId, Ledger>>>,
     pub(crate) last_time: RwLock<DateTime<Utc>>,
-    pub order_cache: RwLock<Vec<Order>>, //ToDo: see if I can remove these locks 1 at a time... i dont know if theyre eve needed... just for interior mutability... maybe we can use mutable ref for handlers
+    pub order_cache: RwLock<Vec<Order>>, 
 }
 
 impl HistoricalMarketHandler {
@@ -151,7 +151,8 @@ impl HistoricalMarketHandler {
         }
 
         let mut events = Vec::new();
-        let orders = &mut *orders;
+        let mut orders = &mut *orders;
+        let mut remaining_orders: Vec<Order> = Vec::new();
         for order in &mut *orders {
             //1. If we don't have a brokerage + account create one
             if !self.ledgers.read().await.contains_key(&order.brokerage) {
@@ -170,7 +171,10 @@ impl HistoricalMarketHandler {
 
             //3. respond with an order event
             match order.order_type {
-                OrderType::Limit => panic!("Limit orders not supported in backtest"),
+                OrderType::Limit => {
+                    // todo! for limit orders that are not hit we need to push the order into remaining orders, so that it can be retained
+                    panic!("Limit orders not supported in backtest")
+                },
                 OrderType::Market => panic!("Market orders not supported in backtest"),
                 OrderType::MarketIfTouched => panic!("MarketIfTouched orders not supported in backtest"),
                 OrderType::StopMarket => panic!("StopMarket orders not supported in backtest"),
@@ -247,7 +251,7 @@ impl HistoricalMarketHandler {
                 },
             };
         };
-        orders.clear();
+        *orders = remaining_orders;
         if events.len() == 0 {
             None
         } else {
