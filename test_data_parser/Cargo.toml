@@ -1,0 +1,8 @@
+[package]
+name = "test_data_parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ff_standard_lib = { path = "../ff_standard_lib"}
+chrono = "0.4.38"

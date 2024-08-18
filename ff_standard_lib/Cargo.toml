@@ -1,0 +1,37 @@
+[package]
+name = "ff_standard_lib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = "*"
+serde = { version = "*", features = ["derive"] }
+rkyv = { version =  "*", features = ["std", "alloc", "validation"] }
+bytes = "*"
+zip = "*"
+log = "*"
+serde_json = "*"
+tokio =  { version = "*", features = ["full"] }
+once_cell = "*"
+lazy_static = "*"
+structopt = "*"
+indicatif = "*"
+strum_macros = "*"
+strum ="*"
+reqwest = { version = "*", features = ["stream"] }
+urlencoding = "*"
+toml = "*"
+chrono-tz = "*"
+serde_derive = "*"
+env_logger = "*"
+futures = "*"
+rustls = "*"
+tokio-rustls = "*"
+iso_currency = "*"
+rust_decimal = "*"
+float-cmp = "*"
+rustls-pemfile = "*"
+async-std = "*"
+async-trait = "0.1.80"
+heck = "*"
+iced = "*"

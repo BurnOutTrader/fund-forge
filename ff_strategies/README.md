@@ -1,0 +1,1 @@
+todo! Implement currency conversions after implementing oandas full 1 hour data for all fx pairs.

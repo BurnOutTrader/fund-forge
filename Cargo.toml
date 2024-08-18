@@ -1,0 +1,25 @@
+[package]
+name = "fund-forge"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+members = [
+    "ff_standard_lib",
+    "ff_strategies",
+    "ff_data_server",
+    "ff_application",
+    "ff_data_server",
+    "test_strategy"
+, "ff_charting",
+    "ff_strategy_registry", "test_data_parser"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ff_standard_lib = { path = "ff_standard_lib" }
+ff_strategies = { path = "ff_strategies" }
+ff_application = { path = "ff_application" }
+ff_data_server = { path = "ff_data_server" }
+test_strategy = { path = "test_strategy" }
+ff_strategy_registry = {path = "ff_strategy_registry"}

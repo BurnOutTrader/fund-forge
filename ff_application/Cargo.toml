@@ -1,0 +1,17 @@
+[package]
+name = "ff_application"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "*", features = ["full"] }
+rkyv = { version = "*", features = ["std", "alloc", "validation"] }
+chrono-tz = "*"
+chrono = "*"
+iced = { version = "*", features = ["canvas", "multi-window", "advanced", "debug", "lazy"] }
+iced_graphics = "*"
+strum = "*"
+strum_macros = "*"
+ff_standard_lib = { path = "../ff_standard_lib" }

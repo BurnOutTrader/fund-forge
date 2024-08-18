@@ -1,0 +1,22 @@
+[package]
+name = "ff_data_server"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ff_standard_lib = { path = "../ff_standard_lib" }
+chrono = "*"
+tokio = { version = "*", features = ["full"] }
+futures = "*"
+rustls = "*"
+rustls-pemfile = "*"
+tokio-rustls = "0.26.0"
+log = "0.4.21"
+mio = "0.8.11"
+serde = { version = "1.0.197", features = ["derive"] }
+env_logger = "0.11.3"
+webpki-roots = "0.26.1"
+rustls-native-certs = "*"
+structopt = "*"
