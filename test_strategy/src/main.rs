@@ -39,8 +39,8 @@ async fn main() {
         PlatformMode::SingleMachine, // SingleMachine or MultiMachine, multi machine mode for co-located servers, single machine for and MT5/Ninjatrader style platform
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2023, 03, 8).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2023, 03, 10).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney, // the strategy time zone
         Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         set_subscriptions_initial(), //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
@@ -56,7 +56,7 @@ async fn main() {
 /// Here we listen for incoming data and build our custom strategy logic. this is where the magic happens.
 pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_receiver: mpsc::Receiver<StrategyEvent>)  {
     // Spawn a new task to listen for incoming data
-    println!("Subscriptions: {:? }", strategy.subscriptions().await);
+    //println!("Subscriptions: {:? }", strategy.subscriptions().await);
     let mut count = 0;
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         if !strategy.is_warmup_complete().await {
@@ -69,6 +69,7 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
                 println!("Drawing Tool Event: {:?}", drawing_tool_event);
             }
             // our base data is received here and can be handled according to type
+            // we may return data we didn't subscribe to here, if we subscribed to a data type which the vendor can not supply we will return the consolidated data + the data used to create the consolidated data.
             StrategyEvent::TimeSlice(_, time_slice) => {
                 // here we would process the time slice events and update the strategy state accordingly.
 
@@ -76,16 +77,24 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
                     match base_data {
                         BaseDataEnum::Price(_) => {}
                         BaseDataEnum::Candle(ref candle) => {
-                            //println!("Time Slice: {:?}", &time_slice.len());
                             count += 1;
                             println!("{}...Candle {}: close:{} at {}", count, candle.symbol.name, candle.close, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                            println!("{}... time local {}", count, strategy.time_local().await);
-                            println!("{}... time utc {}", count, strategy.time_utc().await);
+                            //println!("{}... time local {}", count, strategy.time_local().await);
+                            //println!("{}... time utc {}", count, strategy.time_utc().await);
                             
+                            if count > 1010 && count < 1015 {
+                                let subscription = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex);
+                                let three_bars_ago = &strategy.data_index(&subscription, 3).await;
+                                //println!("{}... Three bars ago: {:?}", count, three_bars_ago);
+                                //println!("{}... time utc {}", count, strategy.time_utc().await);
+                                
+                                let data_current = &strategy.data_current(&subscription).await;
+                                //println!("{}... Current data: {:?}", count, data_current);
+                            }
                             
                             if count == 100 {
                                 // we can add subscriptions at any time
-                                strategy.subscribe(DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),100).await;
+                                //strategy.subscribe(DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),100).await;
                                 strategy.subscribe(DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex),100).await;
                             }
 
@@ -97,11 +106,7 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
                             }
                         }
                         BaseDataEnum::QuoteBar(_) => {}
-                        BaseDataEnum::Tick(_tick) => {
-                            if count == 101 {
-                                assert!(strategy.subscriptions().await.len() == 4);
-                            }
-                        }
+                        BaseDataEnum::Tick(_tick) => {}
                         BaseDataEnum::Quote(_) => {}
                         BaseDataEnum::Fundamental(_) => {}
                     }

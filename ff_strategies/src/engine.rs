@@ -85,7 +85,7 @@ impl FundForgeStrategy {
         self.historical_data_feed(month_years, end_date).await;
 
         self.market_event_handler.process_ledgers().await;
-    
+
         // If we have reached the end of the backtest, we check that the last time recorded is not in the future, if it is, we set it to the current time.
     }
 
@@ -118,7 +118,7 @@ impl FundForgeStrategy {
                     if time > end_time {
                         break 'main_loop
                     }
-                    
+
                     if self.subscription_handler.subscriptions_updated().await {
                         self.subscription_handler.set_subscriptions_updated(false).await;
                         last_time = time;
@@ -128,7 +128,7 @@ impl FundForgeStrategy {
                     if time < last_time {
                         continue;
                     }
-                    
+
                     // Here we check if we have any consildated data and feed it into the engine first, this is because time consoldated data forms 1 base data point late and so must be fed into the strategy before the next base data
                     let consolidated_data = self.subscription_handler.update_consolidators(time_slice.clone()).await;
                     if let Some(consolidated_data) = consolidated_data {
@@ -147,7 +147,7 @@ impl FundForgeStrategy {
                             self.fwd_event(time_slice_event).await;
                         }
                     }
-                    
+
                     // The market event handler response with any order events etc that may have been returned from the base data update
                     let market_event_handler_events = self.market_event_handler.base_data_upate(time_slice.clone()).await;
                     if let Some(event_handler_events) = market_event_handler_events {
@@ -156,10 +156,10 @@ impl FundForgeStrategy {
                             self.fwd_event(event).await;
                         }
                     }
-                    
+
                     let time_slice_event = StrategyEvent::TimeSlice(owner_id.clone(), time_slice);
                     self.fwd_event(time_slice_event).await;
-                    
+
                    // We check if the user has requested a delay between time slices for market replay style backtesting.
                     match self.interaction_handler.replay_delay_ms().await {
                         Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
