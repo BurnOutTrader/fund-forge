@@ -6,7 +6,6 @@ use crate::apis::vendor::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 
 pub type ExchangeCode = String;
 

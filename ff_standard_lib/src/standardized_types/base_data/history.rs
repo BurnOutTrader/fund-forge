@@ -2,6 +2,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::time_slices::UnstructuredSlice;
 use std::collections::{btree_map, BTreeMap, HashMap};
 use chrono::{DateTime, FixedOffset, Utc};
+use futures::future::join_all;
 use iced::Application;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -70,7 +71,6 @@ async fn que_builder(slices: Vec<UnstructuredSlice>) -> Option<BTreeMap<DateTime
     }
     Some(time_slices)
 }
-
 
 /// Method responsible for getting historical data for a single subscription
 /// Can be used to get historical data for a single subscription.
@@ -150,11 +150,20 @@ pub fn get_lowest_resolution(all_symbol_subscriptions: &HashMap<Symbol, Vec<Data
     })
 }
 
+
 pub async fn history_many(subscriptions: Vec<DataSubscription>, from_time: DateTime<FixedOffset>, to_time: DateTime<FixedOffset>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
     let mut combined_data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
-    for subscription in subscriptions {
-        let history = history(subscription.clone(), from_time, to_time).await;
-        match history {
+
+    // Create a list of futures for concurrent execution
+    let history_futures = subscriptions.into_iter()
+        .map(|subscription| history(subscription, from_time, to_time))
+        .collect::<Vec<_>>();
+
+    // Await all the futures concurrently
+    let results = join_all(history_futures).await;
+
+    for history_result in results {
+        match history_result {
             Some(history) => {
                 for (time, slice) in history {
                     if !combined_data.contains_key(&time) {
@@ -164,12 +173,14 @@ pub async fn history_many(subscriptions: Vec<DataSubscription>, from_time: DateT
                     }
                 }
             },
-            None => return None
+            None => return None,
         }
     }
-    match combined_data.is_empty() {
-        false => return Some(combined_data),
-        true => return None
+
+    if combined_data.is_empty() {
+        None
+    } else {
+        Some(combined_data)
     }
 }
 
@@ -183,6 +194,9 @@ pub async fn history_many(subscriptions: Vec<DataSubscription>, from_time: DateT
 /// `Option<BTreeMap<i64, TimeSlice>>` - where `i64` is the `time` and `TimeSlice` is the data for that time.
 /// The TimeSlice is a type `Vec<BaseDataEnum>` that occurred at that moment in time. any kind of `BaseDataEnum` can be mixed into this list. \
 pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOffset>, to_time: DateTime<FixedOffset>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
+    if from_time > to_time {
+        panic!("From time cannot be greater than to time");
+    }
     //determine if the subscription is a base_resolution
     let vendor_resolutions = subscription.symbol.data_vendor.resolutions(subscription.market_type.clone()).await.unwrap();
     if vendor_resolutions.contains(&subscription.resolution) {
@@ -207,17 +221,15 @@ pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOf
             true => return None,
             false => minimum_resolution.unwrap()
         };
-        
-        println!("{:?}", minimum_resolution);
+
         let data_type = match minimum_resolution {
             Resolution::Ticks(_) => BaseDataType::Ticks,
             _ => subscription.base_data_type.clone()
         };
         
         let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, subscription.market_type.clone());
-        println!("{:?}", base_subscription);
-        let base_data = range_data(from_time.to_utc() - (subscription.resolution.as_duration() * 2), to_time.to_utc(), base_subscription.clone()).await;
-        println!("{:?}", base_data.len());
+        let base_data = range_data(from_time.to_utc(), to_time.to_utc(), base_subscription.clone()).await;
+
         let mut consolidator = match subscription.resolution {
             Resolution::Ticks(_) => ConsolidatorEnum::new_count_consolidator(subscription.clone(), 1).unwrap(),
             _ => ConsolidatorEnum::new_time_consolidator(subscription.clone(), 1).unwrap()
@@ -247,13 +259,15 @@ pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOf
     }
 }
 
-async fn range_data(from_time: DateTime<Utc>, to_time: DateTime<Utc>, subscription: DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice> {
-    let mut data : BTreeMap<DateTime<Utc>, TimeSlice>  = BTreeMap::new();
-    let mut last_time = from_time.clone();
-    let end_time: DateTime<Utc> = to_time.clone();
+pub(crate) async fn range_data(from_time: DateTime<Utc>, to_time: DateTime<Utc>, subscription: DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice> {
+    if from_time > to_time {
+        panic!("From time cannot be greater than to time");
+    }
+    
     let month_years = generate_file_dates(from_time.clone(), to_time.clone());
-    let mut end_loop = false;
-    for (_, month_year) in month_years{ //start time already utc
+    
+    let mut data : BTreeMap<DateTime<Utc>, TimeSlice>  = BTreeMap::new();
+    'month_loop: for (_, month_year) in month_years{ //start time already utc
         //println!("Getting historical data for: {:?}", month_year);
         // Get the historical data for all subscriptions from the server, parse it into TimeSlices.
         let time_slices = match get_historical_data(vec![subscription.clone()], month_year).await {
@@ -269,22 +283,15 @@ async fn range_data(from_time: DateTime<Utc>, to_time: DateTime<Utc>, subscripti
 
         // We loop through the time slices and get the data that is in the range we want.
         for (time, time_slice) in time_slices {
+            //println!("Time: {:?}", time);
             if time < from_time {
                 continue;
             }
 
-            if time >= end_time {
-                end_loop = true;
-                break;
+            if time > to_time {
+                break  'month_loop;
             }
-            if time <= last_time {
-                continue;
-            }
-            last_time = time.clone();
             data.insert(time, time_slice);
-        }
-        if end_loop {
-            break;
         }
     }
     data
@@ -312,10 +319,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_history_base_data() {
-        initialize_clients(&PlatformMode::SingleMachine).await;
+        initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
         // Setup the date range
-        let from_time = NaiveDate::from_ymd_opt(2023, 03, 8).unwrap().and_hms_opt(0, 0, 0).unwrap();
-        let to_time = NaiveDate::from_ymd_opt(2023, 03, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let from_time = NaiveDate::from_ymd_opt(2023, 03, 19).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let to_time = NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
 
         // Convert to FixedOffset for the function calls
         let from_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&from_time).unwrap();
@@ -328,15 +335,19 @@ mod tests {
         let result = history(subscription, from_time, to_time).await;
 
         // Check result
-        assert!(result.is_some(), "Expected some historical data.");
+       if let Some(result) = result {
+           assert!(result.len() > 20, "Expected more historical data.");
+       } else {
+           assert!(false, "Expected some historical data.");
+       }
     }
 
     #[tokio::test]
     async fn test_history_many_base_data() {
-        initialize_clients(&PlatformMode::SingleMachine).await;
+        initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
         // Setup the date range
-        let from_time = NaiveDate::from_ymd_opt(2023, 03, 8).unwrap().and_hms_opt(0, 0, 0).unwrap();
-        let to_time = NaiveDate::from_ymd_opt(2023, 03, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let from_time = NaiveDate::from_ymd_opt(2023, 03, 19).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let to_time = NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
 
         // Convert to FixedOffset for the function calls
         let from_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&from_time).unwrap();
@@ -352,15 +363,19 @@ mod tests {
         let result = history_many(subscriptions, from_time, to_time).await;
 
         // Check result
-        assert!(result.is_some(), "Expected some combined historical data.");
+        if let Some(result) = result {
+            assert!(result.len() > 20, "Expected more historical data.");
+        } else {
+            assert!(false, "Expected some historical data.");
+        }
     }
 
     #[tokio::test]
     async fn test_history_consolidated_data() {
-        initialize_clients(&PlatformMode::SingleMachine).await;
+        initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
         // Setup the date range
-        let from_time = NaiveDate::from_ymd_opt(2023, 03, 8).unwrap().and_hms_opt(0, 0, 0).unwrap();
-        let to_time = NaiveDate::from_ymd_opt(2023, 03, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let from_time = NaiveDate::from_ymd_opt(2023, 03, 19).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let to_time = NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
 
         // Convert to FixedOffset for the function calls
         let from_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&from_time).unwrap();
@@ -373,15 +388,19 @@ mod tests {
         let result = history(subscription, from_time, to_time).await;
 
         // Check result
-        assert!(result.is_some(), "Expected some historical data.");
+        if let Some(result) = result {
+            assert!(result.len() > 20, "Expected more historical data.");
+        } else {
+            assert!(false, "Expected some historical data.");
+        }
     }
 
     #[tokio::test]
     async fn test_history_many_consolidated_data() {
-        initialize_clients(&PlatformMode::SingleMachine).await;
+        initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
         // Setup the date range
-        let from_time = NaiveDate::from_ymd_opt(2023, 03, 8).unwrap().and_hms_opt(0, 0, 0).unwrap();
-        let to_time = NaiveDate::from_ymd_opt(2023, 03, 10).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let from_time = NaiveDate::from_ymd_opt(2023, 03, 19).unwrap().and_hms_opt(0, 0, 0).unwrap();
+        let to_time = NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
 
         // Convert to FixedOffset for the function calls
         let from_time = FixedOffset::east_opt(0).unwrap().from_local_datetime(&from_time).unwrap();
@@ -397,7 +416,13 @@ mod tests {
         let result = history_many(subscriptions, from_time, to_time).await;
 
         // Check result
-        assert!(result.is_some(), "Expected some combined historical data.");
+        if let Some(result) = result {
+            assert!(result.len() > 20, "Expected more historical data.");
+            //test the order of the data
+            assert!(result.keys().next().unwrap() < result.keys().last().unwrap(), "Expected the data to be ordered by time.");
+        } else {
+            assert!(false, "Expected some historical data.");
+        }
     }
 }
 
