@@ -6,15 +6,17 @@ use std::path::Path;
 use std::sync::Arc;
 use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use chrono_tz::Tz;
+use futures::executor::block_on;
 use futures::SinkExt;
 use tokio::task;
 use ff_charting::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::apis::brokerage::Brokerage;
-use ff_standard_lib::subscription_handler::SubscriptionHandler;
+use ff_standard_lib::subscription_handler::{RollingWindow, SubscriptionHandler};
 use ff_standard_lib::helpers::converters::{time_convert_utc_datetime_to_fixed_offset, time_convert_utc_naive_to_fixed_offset};
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId};
-use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use ff_standard_lib::standardized_types::enums::{OrderSide, Resolution, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::Order;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
@@ -74,7 +76,7 @@ impl FundForgeStrategy {
         retain_history: usize,
     ) -> Arc<FundForgeStrategy> {
         initialize_clients(&platform_mode).await.unwrap();
-        let state = StrategyState::new(strategy_mode.clone(), start_date, end_date, time_zone, warmup_duration);
+        let state = StrategyState::new(strategy_mode.clone(), start_date, end_date, time_zone.clone(), warmup_duration);
         let start_time = time_convert_utc_naive_to_fixed_offset(&time_zone, start_date);
         let owner_id = match owner_id {
             Some(owner_id) => owner_id,
@@ -87,10 +89,12 @@ impl FundForgeStrategy {
             StrategyMode::LivePaperTrading => panic!("Live paper mode not yet implemented")
         };
 
+        let start_time = start_time - warmup_duration;
         let subscription_handler = SubscriptionHandler::new().await;
         for subscription in subscriptions {
-            subscription_handler.subscribe(subscription.clone(), retain_history).await.unwrap();
+            subscription_handler.subscribe(subscription.clone(), retain_history, start_time.to_utc(), time_zone.clone(), strategy_mode.clone()).await.unwrap();
         }
+        
         let strategy = FundForgeStrategy {
             state,
             owner_id,
@@ -100,6 +104,8 @@ impl FundForgeStrategy {
             interaction_handler: InteractionHandler::new(replay_delay_ms, interaction_mode),
             subscription_handler
         };
+        
+        
 
         let strategy = Arc::new(strategy);
         let strategy_clone = Arc::clone(&strategy);
@@ -209,9 +215,8 @@ impl FundForgeStrategy {
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
-    /// todo need a way to prevent strategy subscribing to higher res data and always consolidate by default, a as new lower res subscriptions are made the consolidator is replaced with a new one.
     pub async fn subscribe(&self, subscription: DataSubscription, retain_history: usize) {
-        match self.subscription_handler.subscribe(subscription.clone(), retain_history).await {
+        match self.subscription_handler.subscribe(subscription.clone(), retain_history, self.time_utc().await, self.state.time_zone.clone(), self.state.mode.clone()).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error subscribing: {:?}", e);
@@ -240,7 +245,7 @@ impl FundForgeStrategy {
         // We subscribe to the new subscriptions and unsubscribe from the old ones
         for subscription in &subscriptions {
             if !current_subscriptions.contains(&subscription) {
-                match self.subscription_handler.subscribe(subscription.clone(), retain_history).await {
+                match self.subscription_handler.subscribe(subscription.clone(), retain_history, self.time_utc().await, self.state.time_zone.clone(), self.state.mode.clone()).await {
                     Ok(_) => {},
                     Err(e) => {
                         println!("Error subscribing: {:?}", e);
@@ -259,6 +264,17 @@ impl FundForgeStrategy {
                 }
             }
         }
+    }
+    
+    /// returns the nth last bar at the specified index. 1 = 1 bar ago, 0 = current bar.
+    pub async fn data_index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
+        self.subscription_handler.data_index(subscription, index).await
+        //Todo Data is being recieved in the above function... but not received here
+    }
+
+    pub async fn data_current(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
+        self.subscription_handler.current_data(subscription).await
+        //Todo Data is being recieved in the above function... but not received here
     }
 
     /// Current Tz time, depends on the `StrategyMode`. \
@@ -293,8 +309,6 @@ impl FundForgeStrategy {
             .and_then(|name| name.to_str())
             .unwrap_or("unknown strategy").to_string()
     }
-
-
  }
 
 
