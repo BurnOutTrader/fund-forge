@@ -16,7 +16,7 @@ impl FundForgeStrategy {
     pub async fn launch(strategy: Arc<FundForgeStrategy>) {
         println!("Initializing the strategy...");
         let mode = {
-            println!("Subscriptions updated: {:?}", strategy.subscription_handler.subscriptions().await);
+            //println!("Subscriptions updated: {:?}", strategy.subscription_handler.subscriptions().await);
             strategy.state.mode.clone()
         };
 
@@ -99,6 +99,7 @@ impl FundForgeStrategy {
         'main_loop: for (_, month_start) in month_years {
             'month_loop: loop {
                 let subscriptions = self.subscription_handler.primary_subscriptions().await;
+                //println!("Month Loop Subscriptions: {:?}", subscriptions);
                 let time_slices = match get_historical_data(subscriptions.clone(), month_start).await {
                     Ok(time_slices) => {
                         time_slices
@@ -120,8 +121,8 @@ impl FundForgeStrategy {
                     }
 
                     if self.subscription_handler.subscriptions_updated().await {
-                        self.subscription_handler.set_subscriptions_updated(false).await;
                         last_time = time;
+                        self.subscription_handler.set_subscriptions_updated(false).await;
                         break 'slice_loop
                     }
 

@@ -79,31 +79,32 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
                         BaseDataEnum::Candle(ref candle) => {
                             count += 1;
                             println!("{}...Candle {}: close:{} at {}", count, candle.symbol.name, candle.close, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                            //todo somehow i fucked up the time of the bars being created by consolidators
                             //println!("{}... time local {}", count, strategy.time_local().await);
                             //println!("{}... time utc {}", count, strategy.time_utc().await);
-                            
+
                             if count > 1010 && count < 1015 {
-                                let subscription = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex);
-                                let three_bars_ago = &strategy.data_index(&subscription, 3).await;
+                                //let subscription = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex);
+                                //let three_bars_ago = &strategy.data_index(&subscription, 3).await;
                                 //println!("{}... Three bars ago: {:?}", count, three_bars_ago);
                                 //println!("{}... time utc {}", count, strategy.time_utc().await);
-                                
-                                let data_current = &strategy.data_current(&subscription).await;
+
+                                //let data_current = &strategy.data_current(&subscription).await;
                                 //println!("{}... Current data: {:?}", count, data_current);
                             }
-                            
+
                             if count == 100 {
                                 // we can add subscriptions at any time
                                 //strategy.subscribe(DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),100).await;
                                 strategy.subscribe(DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex),100).await;
                             }
 
-                            if count /3 == 0 {
+                          /*  if count /3 == 0 {
                                  strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
                             }
                             if count / 5 == 0 {
-                             strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await; 
-                            }
+                             strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
+                            }*/
                         }
                         BaseDataEnum::QuoteBar(_) => {}
                         BaseDataEnum::Tick(_tick) => {}

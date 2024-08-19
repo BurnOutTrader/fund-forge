@@ -223,7 +223,6 @@ impl FundForgeStrategy {
             }
         }
         self.fwd_event(StrategyEvent::DataSubscriptionEvents(self.owner_id.clone(), DataSubscriptionEvent::Subscribed(subscription), self.time_utc().await.timestamp())).await;
-        self.subscription_handler.set_subscriptions_updated(true).await;
     }
 
     /// Unsubscribes from a subscription.
@@ -235,13 +234,14 @@ impl FundForgeStrategy {
             }
         }
         self.fwd_event(StrategyEvent::DataSubscriptionEvents(self.owner_id.clone(), DataSubscriptionEvent::Unsubscribed(subscription), self.time_utc().await.timestamp())).await;
-        self.subscription_handler.set_subscriptions_updated(true).await;
     }
 
     /// Sets the subscriptions for the strategy using the subscriptions_closure.
     /// This method is called when the strategy is initialized and can be called at any time to update the subscriptions based on the provided user logic within the closure.
     pub async fn subscriptions_update(&self, subscriptions: Vec<DataSubscription>, retain_history: usize) {
         let current_subscriptions = self.subscription_handler.subscriptions().await;
+        //toDo sort subscriptions so lowest resolution comes first on iter for performance boost later
+        
         // We subscribe to the new subscriptions and unsubscribe from the old ones
         for subscription in &subscriptions {
             if !current_subscriptions.contains(&subscription) {
