@@ -129,16 +129,10 @@ impl SubscriptionHandler {
 
     pub async fn data_index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
-            let fundamental_subscriptions = self.fundamental_subscriptions.read().await;
-            for fundamental_subscription in fundamental_subscriptions.iter() {
-                if fundamental_subscription == subscription {
-                    return None;
-                }
-            }
             return None;
         }
-        let mut symbol_handler = self.symbol_subscriptions.write().await;
-        match symbol_handler.get_mut(&subscription.symbol) {
+        let symbol_handler = self.symbol_subscriptions.read().await;
+        match symbol_handler.get(&subscription.symbol) {
             Some(symbol_handler) => {
                 let data = symbol_handler.get_bar(subscription, index).await;
                 //println!("Data Index:{} : {:?}",index, data);
@@ -149,21 +143,15 @@ impl SubscriptionHandler {
         None
     }
     
-    pub async fn current_data(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
+    pub async fn data_current(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
-            let fundamental_subscriptions = self.fundamental_subscriptions.read().await;
-            for fundamental_subscription in fundamental_subscriptions.iter() {
-                if fundamental_subscription == subscription {
-                    return None;
-                }
-            }
             return None;
         }
         let symbol_handler = self.symbol_subscriptions.read().await;
         match symbol_handler.get(&subscription.symbol) {
             Some(symbol_handler) => {
                 let data = symbol_handler.bar_current(subscription);
-                //println!("Current Data: {:?}", data);
+                println!("Current Data: {:?}", data);
                 data
             },
             None => return None,
@@ -741,15 +729,10 @@ impl TimeConsolidator {
         let time = self.open_time(new_data.time_utc());
         match new_data {
             BaseDataEnum::QuoteBar(bar) => {
-                let mut new_bar = QuoteBar::new(self.subscription.symbol.clone(), bar.bid_open, bar.ask_open, 0.0, time.to_string(), self.subscription.resolution.clone());
-                new_bar.ask_high = bar.ask_high;
-                new_bar.ask_low = bar.ask_low;
-                new_bar.ask_close = bar.ask_close;
-                new_bar.ask_open = bar.ask_open;
-                new_bar.bid_high = bar.bid_high;
-                new_bar.bid_low = bar.bid_low;
-                new_bar.bid_close = bar.bid_close;
-                new_bar.bid_open = bar.bid_open;
+                let mut new_bar = bar.clone();
+                new_bar.is_closed = false;
+                new_bar.time = time.to_string();
+                new_bar.resolution = self.subscription.resolution.clone();
                 new_bar
             },
             BaseDataEnum::Quote(quote) => QuoteBar::new(self.subscription.symbol.clone(), quote.bid, quote.ask, 0.0, time.to_string(), self.subscription.resolution.clone()),
@@ -759,7 +742,7 @@ impl TimeConsolidator {
 
     pub fn bars_index(&self, mut index: usize) -> Option<BaseDataEnum> {
         if index == 0 {
-            return self.current_data.clone();
+            self.current_data.clone()
         } else {
             index -= 1;
             self.history.get(index).cloned()
@@ -827,21 +810,27 @@ impl TimeConsolidator {
                            quote_bar.volume += bar.volume;
                            return None
                        },
-                       _ => panic!("Invalid base data type for QuoteBar consolidator")
+                       _ =>  panic!("Invalid base data type for QuoteBar consolidator: {}", base_data.base_data_type())
 
                    }
                }
-               _ => panic!("Invalid base data type for QuoteBar consolidator")
+               _ =>  panic!("Invalid base data type for QuoteBar consolidator: {}", base_data.base_data_type())
            }
        }
-       panic!("Invalid base data type for QuoteBar consolidator")
+        panic!("Invalid base data type for QuoteBar consolidator: {}", base_data.base_data_type())
     }
 
     fn new_candle(&self, new_data: &BaseDataEnum) -> Candle {
         let time = self.open_time(new_data.time_utc());
         match new_data {
             BaseDataEnum::Tick(tick) => Candle::new(self.subscription.symbol.clone(), tick.price, tick.volume, time.to_string(), self.subscription.resolution.clone()),
-            BaseDataEnum::Candle(candle) => Candle::new(self.subscription.symbol.clone(), candle.open, candle.volume, time.to_string(), self.subscription.resolution.clone()),
+            BaseDataEnum::Candle(candle) => {
+                let mut consolidated_candle = candle.clone();
+                consolidated_candle.is_closed = false;
+                consolidated_candle.resolution = self.subscription.resolution.clone();
+                consolidated_candle.time = time.to_string();
+                consolidated_candle
+            },
             BaseDataEnum::Price(price) => Candle::new(self.subscription.symbol.clone(), price.price, 0.0, time.to_string(), self.subscription.resolution.clone()),
             _ => panic!("Invalid base data type for Candle consolidator")
         }
@@ -901,13 +890,13 @@ impl TimeConsolidator {
                             candle.close = price.price;
                             return None
                         },
-                        _ => panic!("Invalid base data type for QuoteBar consolidator")
+                        _ => panic!("Invalid base data type for Candle consolidator: {}", base_data.base_data_type())
                     }
                 },
-                _ => panic!("Invalid base data type for QuoteBar consolidator")
+                _ =>  panic!("Invalid base data type for Candle consolidator: {}", base_data.base_data_type())
             }
         }
-        panic!("Invalid base data type for QuoteBar consolidator")
+        panic!("Invalid base data type for Candle consolidator: {}", base_data.base_data_type())
     }
 
     fn open_time(&self, time: DateTime<Utc>) -> DateTime<Utc> {

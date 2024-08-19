@@ -3,12 +3,10 @@ use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use tokio::sync::{mpsc};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
-use ff_standard_lib::apis::brokerage::Brokerage;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::server_connections::{PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
-use ff_standard_lib::standardized_types::base_data::history::{history};
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
@@ -25,7 +23,7 @@ use ff_strategies::messages::strategy_events::{StrategyEvent, StrategyInteractio
 fn set_subscriptions_initial() -> Vec<DataSubscription> {
     let subscriptions: Vec<DataSubscription> = vec![
         DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-        DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex),
+        DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
     ];
     subscriptions
 }
@@ -58,6 +56,15 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
     let mut count = 0;
+
+    let aud_cad_15s = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+    let aud_usd_15s = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+    strategy.subscribe(aud_cad_15s.clone(),100).await;
+    strategy.subscribe(aud_usd_15s.clone(),100).await;
+    
+    //todo()! 2. NEXT TASK, SEPARATE fn for each event type. use some sort of strategy trait instead of an actual object.. this will probably solve sync problems
+    //todo()! 3. speed up warm up.. need to get it 100% precise
+
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         if !strategy.is_warmup_complete().await {
             continue;
@@ -72,32 +79,34 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
             // we may return data we didn't subscribe to here, if we subscribed to a data type which the vendor can not supply we will return the consolidated data + the data used to create the consolidated data.
             StrategyEvent::TimeSlice(_, time_slice) => {
                 // here we would process the time slice events and update the strategy state accordingly.
-
+                count += 1;
                 for base_data in &time_slice {
                     match base_data {
                         BaseDataEnum::Price(_) => {}
                         BaseDataEnum::Candle(ref candle) => {
-                            count += 1;
                             println!("{}...Candle {}: close:{} at {}", count, candle.symbol.name, candle.close, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                            //todo somehow i fucked up the time of the bars being created by consolidators
                             //println!("{}... time local {}", count, strategy.time_local().await);
                             //println!("{}... time utc {}", count, strategy.time_utc().await);
 
-                            if count > 1010 && count < 1015 {
-                                //let subscription = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex);
-                                //let three_bars_ago = &strategy.data_index(&subscription, 3).await;
-                                //println!("{}... Three bars ago: {:?}", count, three_bars_ago);
-                                //println!("{}... time utc {}", count, strategy.time_utc().await);
+                           /* if count == 51 {
+                                // check subscription 1
+                                
+                                let three_bars_ago = &strategy.data_index(&subscription, 3).await;
+                                println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
 
                                 //let data_current = &strategy.data_current(&subscription).await;
-                                //println!("{}... Current data: {:?}", count, data_current);
-                            }
+                                //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
+                                
+                                // check subcription 2
+                        
+                                let three_bars_ago = &strategy.data_index(&subscription_2, 3).await;
+                                println!("{}...{} Three bars ago: {:?}",  count, subscription_2.symbol.name, three_bars_ago);
 
-                            if count == 100 {
-                                // we can add subscriptions at any time
-                                //strategy.subscribe(DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),100).await;
-                                strategy.subscribe(DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Seconds(15), BaseDataType::Candles, MarketType::Forex),100).await;
-                            }
+                                //let data_current = &strategy.data_current(&subscription_2).await;
+                                //println!("{}...{} Current data: {:?}", count, subscription_2.symbol.name, data_current);
+                            }*/
+
+                            
 
                           /*  if count /3 == 0 {
                                  strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
@@ -107,7 +116,9 @@ pub async fn on_strategy_events(strategy: Arc<FundForgeStrategy>, mut event_rece
                             }*/
                         }
                         BaseDataEnum::QuoteBar(_) => {}
-                        BaseDataEnum::Tick(_tick) => {}
+                        BaseDataEnum::Tick(_tick) => {
+                            //println!("{}...{} Tick: {}", count, tick.symbol.name, base_data.time_created_utc());
+                        }
                         BaseDataEnum::Quote(_) => {}
                         BaseDataEnum::Fundamental(_) => {}
                     }

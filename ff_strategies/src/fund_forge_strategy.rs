@@ -6,17 +6,16 @@ use std::path::Path;
 use std::sync::Arc;
 use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use chrono_tz::Tz;
-use futures::executor::block_on;
 use futures::SinkExt;
 use tokio::task;
 use ff_charting::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::apis::brokerage::Brokerage;
-use ff_standard_lib::subscription_handler::{RollingWindow, SubscriptionHandler};
+use ff_standard_lib::subscription_handler::{SubscriptionHandler};
 use ff_standard_lib::helpers::converters::{time_convert_utc_datetime_to_fixed_offset, time_convert_utc_naive_to_fixed_offset};
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use ff_standard_lib::standardized_types::enums::{OrderSide, Resolution, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::Order;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
@@ -54,6 +53,8 @@ pub struct FundForgeStrategy {
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
 
     pub(crate) subscription_handler: SubscriptionHandler,
+    
+    //pub history_handler: HistoryHandler, //todo use this object to save history from timeslices
 }
 
 impl FundForgeStrategy {
@@ -273,7 +274,7 @@ impl FundForgeStrategy {
     }
 
     pub async fn data_current(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
-        self.subscription_handler.current_data(subscription).await
+        self.subscription_handler.data_current(subscription).await
         //Todo Data is being recieved in the above function... but not received here
     }
 

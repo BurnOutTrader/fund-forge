@@ -38,7 +38,7 @@ impl MarketHandlerEnum {
             MarketHandlerEnum::Live(_) => panic!("Live mode should not use this function for time")
         }
     }
-    
+
     pub(crate) async fn update_time(&self, time: DateTime<Utc>) {
         match self {
             MarketHandlerEnum::Backtest(handler) => handler.update_time(time).await,
@@ -79,7 +79,7 @@ pub(crate) struct HistoricalMarketHandler {
     last_price: RwLock<HashMap<Symbol, f64>>,
     ledgers: RwLock<HashMap<Brokerage, HashMap<AccountId, Ledger>>>,
     pub(crate) last_time: RwLock<DateTime<Utc>>,
-    pub order_cache: RwLock<Vec<Order>>, 
+    pub order_cache: RwLock<Vec<Order>>,
 }
 
 impl HistoricalMarketHandler {
@@ -98,7 +98,7 @@ impl HistoricalMarketHandler {
     pub async fn send_order(&self, order: Order) {
         self.order_cache.write().await.push(order);
     }
-    
+
     pub async fn update_time(&self, time: DateTime<Utc>) {
         *self.last_time.write().await = time;
     }
@@ -151,7 +151,7 @@ impl HistoricalMarketHandler {
         }
 
         let mut events = Vec::new();
-        let mut orders = &mut *orders;
+        let orders = &mut *orders;
         let mut remaining_orders: Vec<Order> = Vec::new();
         for order in &mut *orders {
             //1. If we don't have a brokerage + account create one
