@@ -1,8 +1,7 @@
 use std::sync::Arc;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
-use tokio::sync::{mpsc};
-use tokio::task;
+use tokio::sync::{mpsc, Notify};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::server_connections::{PlatformMode};
@@ -11,7 +10,6 @@ use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
-use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_strategies::messages::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
 
 
@@ -33,9 +31,11 @@ fn set_subscriptions_initial() -> Vec<DataSubscription> {
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000000);
+    let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, todo! this needs to be upgraded in the future to be more reliable in Single and Multi machine modes.
+        notify.clone(),
         PlatformMode::SingleMachine, // SingleMachine or MultiMachine, multi machine mode for co-located servers, single machine for and MT5/Ninjatrader style platform
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
@@ -49,11 +49,11 @@ async fn main() {
         100
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver).await;
+    on_data_received(strategy, notify, strategy_event_receiver).await;
 }
 
 /// Here we listen for incoming data and build our custom strategy logic. this is where the magic happens.
-pub async fn on_data_received(strategy: FundForgeStrategy, mut event_receiver: mpsc::Receiver<EventTimeSlice>)  {
+pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>)  {
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
 
@@ -148,6 +148,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, mut event_receiver: m
                     warmup_complete = true;
                 }
             }
+            notify.notify_one();
             //simulate work
             //tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
         }

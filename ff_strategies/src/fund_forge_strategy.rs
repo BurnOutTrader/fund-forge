@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::{env};
 use crate::strategy_state::StrategyStartState;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, Notify, RwLock};
 use std::path::Path;
 use std::sync::Arc;
 use ahash::AHashMap;
@@ -46,12 +46,12 @@ pub struct FundForgeStrategy {
     /// Drawing objects aren't just Ui objects, they can be interacted with by the engine backend and used for trading signals.
     drawing_objects_handler: DrawingObjectHandler,
 
-    interaction_handler: Arc<RwLock<InteractionHandler>>,
+    interaction_handler: Arc<InteractionHandler>,
 
-    market_event_handler: Arc<RwLock<MarketHandlerEnum>>,
+    market_event_handler: Arc<MarketHandlerEnum>,
 
-    subscription_handler: Arc<RwLock<SubscriptionHandler>>,
-    
+    subscription_handler: Arc<SubscriptionHandler>,
+
     history: Arc<RwLock<HistoryHandler>>, //todo use this object to save history from timeslices
 }
 
@@ -62,6 +62,7 @@ impl FundForgeStrategy {
     /// This asynchronous function sets up the initial state of the strategy, including its mode, cash balance, start and end dates, time zone, and subscription settings. It creates a message channel for strategy events and returns a handle to the newly created strategy along with the receiver end of the channel.
     pub async fn initialize(
         owner_id: Option<OwnerId>,
+        notify: Arc<Notify>,
         platform_mode: PlatformMode,
         strategy_mode: StrategyMode,
         interaction_mode: StrategyInteractionMode,
@@ -87,23 +88,23 @@ impl FundForgeStrategy {
             StrategyMode::Live => panic!("Live mode not yet implemented"),
             StrategyMode::LivePaperTrading => panic!("Live paper mode not yet implemented")
         };
-        
+
         let subscription_handler = SubscriptionHandler::new().await;
         for subscription in subscriptions {
             subscription_handler.subscribe(subscription.clone()).await.unwrap();
         }
-        
+
         let strategy = FundForgeStrategy {
             start_state: start_state.clone(),
             owner_id,
             drawing_objects_handler: DrawingObjectHandler::new(Default::default()),
-            market_event_handler: Arc::new(RwLock::new(market_event_handler)),
-            interaction_handler: Arc::new(RwLock::new(InteractionHandler::new(replay_delay_ms, interaction_mode))),
-            subscription_handler: Arc::new(RwLock::new(subscription_handler)),
+            market_event_handler: Arc::new(market_event_handler),
+            interaction_handler: Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode)),
+            subscription_handler: Arc::new(subscription_handler),
             history: Arc::new(RwLock::new(HistoryHandler::new(retain_history))),
         };
 
-        let engine = Engine::new(strategy.owner_id.clone(), start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), strategy.market_event_handler.clone(), strategy.interaction_handler.clone());
+        let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), strategy.market_event_handler.clone(), strategy.interaction_handler.clone());
         Engine::launch(engine).await;
 
         strategy
@@ -119,32 +120,32 @@ impl FundForgeStrategy {
 
     pub async fn enter_long(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
         let order = Order::enter_long(self.owner_id.clone(), symbol_name, brokerage, quantity, tag, account_id, self.time_utc().await);
-        self.market_event_handler.read().await.send_order(order).await;
+        self.market_event_handler.send_order(order).await;
     }
 
     pub async fn enter_short(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
         let order = Order::enter_short(self.owner_id.clone(), symbol_name, brokerage, quantity,  tag, account_id, self.time_utc().await);
-        self.market_event_handler.read().await.send_order(order).await;
+        self.market_event_handler.send_order(order).await;
     }
 
     pub async fn exit_long(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
         let order = Order::exit_long(self.owner_id.clone(), symbol_name, brokerage, quantity, tag, account_id, self.time_utc().await);
-        self.market_event_handler.read().await.send_order(order).await;
+        self.market_event_handler.send_order(order).await;
     }
 
     pub async fn exit_short(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
         let order = Order::exit_short(self.owner_id.clone(), symbol_name, brokerage, quantity, tag, account_id, self.time_utc().await);
-        self.market_event_handler.read().await.send_order(order).await;
+        self.market_event_handler.send_order(order).await;
     }
 
     pub async fn buy_market(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
         let order = Order::market_order(self.owner_id.clone(), symbol_name, brokerage, quantity, OrderSide::Buy, tag, account_id, self.time_utc().await);
-        self.market_event_handler.read().await.send_order(order).await;
+        self.market_event_handler.send_order(order).await;
     }
 
     pub async fn sell_market(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
         let order = Order::market_order(self.owner_id.clone(), symbol_name, brokerage, quantity, OrderSide::Sell, tag, account_id, self.time_utc().await);
-        self.market_event_handler.read().await.send_order(order).await;
+        self.market_event_handler.send_order(order).await;
     }
 
     pub fn time_zone(&self) -> &Tz {
@@ -190,12 +191,12 @@ impl FundForgeStrategy {
     }
     
     pub async fn subscriptions(&self) -> Vec<DataSubscription> {
-        self.subscription_handler.read().await.subscriptions().await
+        self.subscription_handler.subscriptions().await
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
     pub async fn subscribe(&self, subscription: DataSubscription, retain_history: usize) {
-        match self.subscription_handler.write().await.subscribe(subscription.clone()).await {
+        match self.subscription_handler.subscribe(subscription.clone()).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error subscribing: {:?}", e);
@@ -206,7 +207,7 @@ impl FundForgeStrategy {
 
     /// Unsubscribes from a subscription.
     pub async fn unsubscribe(&self, subscription: DataSubscription) {
-        match self.subscription_handler.write().await.unsubscribe(subscription.clone()).await {
+        match self.subscription_handler.unsubscribe(subscription.clone()).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error subscribing: {:?}", e);
@@ -218,14 +219,13 @@ impl FundForgeStrategy {
     /// Sets the subscriptions for the strategy using the subscriptions_closure.
     /// This method is called when the strategy is initialized and can be called at any time to update the subscriptions based on the provided user logic within the closure.
     pub async fn subscriptions_update(&self, subscriptions: Vec<DataSubscription>, retain_history: usize) {
-        let subscription_handler = self.subscription_handler.write().await;
-        let current_subscriptions = subscription_handler.subscriptions().await;
+        let current_subscriptions = self.subscription_handler.subscriptions().await;
         //toDo sort subscriptions so lowest resolution comes first on iter for performance boost later
-        
+
         // We subscribe to the new subscriptions and unsubscribe from the old ones
         for subscription in &subscriptions {
             if !current_subscriptions.contains(&subscription) {
-                match subscription_handler.subscribe(subscription.clone()).await {
+                match self.subscription_handler.subscribe(subscription.clone()).await {
                     Ok(_) => {},
                     Err(e) => {
                         println!("Error subscribing: {:?}", e);
@@ -237,7 +237,7 @@ impl FundForgeStrategy {
         // Unsubscribe from the old subscriptions
         for subscription in current_subscriptions {
             if !subscriptions.contains(&subscription) {
-                match subscription_handler.unsubscribe(subscription.clone()).await {
+                match self.subscription_handler.unsubscribe(subscription.clone()).await {
                     Ok(_) => {},
                     Err(e) => {
                         println!("Error unsubscribing: {:?}", e);
@@ -246,7 +246,7 @@ impl FundForgeStrategy {
             }
         }
     }
-/*    
+/*
     /// returns the nth last bar at the specified index. 1 = 1 bar ago, 0 = current bar.
     pub async fn data_index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
         self.subscription_handler.data_index(subscription, index).await
@@ -271,7 +271,7 @@ impl FundForgeStrategy {
     /// Backtest will return the last data point time, live will return the current time.
     pub async fn time_utc(&self) -> DateTime<Utc> {
         match self.start_state.mode {
-            StrategyMode::Backtest => self.market_event_handler.write().await.last_time().await,
+            StrategyMode::Backtest => self.market_event_handler.last_time().await,
             _ => Utc::now()
         }
     }
