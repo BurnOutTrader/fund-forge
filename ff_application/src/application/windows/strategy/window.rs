@@ -47,7 +47,7 @@ pub struct StrategyWindow {
     start_time: DateTime<FixedOffset>,
     
     //data
-    charts: Arc<Mutex<BTreeMap<DataSubscription, Vec<SeriesCanvas>>>>,
+    charts: Arc<Mutex<AHashMap<DataSubscription, Vec<SeriesCanvas>>>>,
     subscriptions: Vec<DataSubscription>,
 }
 

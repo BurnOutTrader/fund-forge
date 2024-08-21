@@ -1,5 +1,6 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use ff_charting::drawing_tool_enum::DrawingTool;
+use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::orders::orders::OrderUpdateEvent;
 use ff_standard_lib::standardized_types::OwnerId;
@@ -103,7 +104,9 @@ pub enum StrategyEvent {
     /// - `TimeSlice`: The time slice data.
     TimeSlice(OwnerId, TimeSlice),
 
-    ShutdownEvent(OwnerId, String)
+    ShutdownEvent(OwnerId, String),
+    
+    WarmUpComplete(OwnerId)
 }
 
 impl StrategyEvent {
@@ -114,7 +117,8 @@ impl StrategyEvent {
             StrategyEvent::StrategyControls(owner_id, _, _) => owner_id.clone(),
             StrategyEvent::DrawingToolEvents(owner_id, _, _) => owner_id.clone(),
             StrategyEvent::TimeSlice(owner_id, _) => owner_id.clone(),
-            StrategyEvent::ShutdownEvent(owner_id, _) => owner_id.clone()
+            StrategyEvent::ShutdownEvent(owner_id, _) => owner_id.clone(),
+            StrategyEvent::WarmUpComplete(owner_id) => owner_id.clone()
         }
     }
 
@@ -217,4 +221,6 @@ pub enum StrategyControls {
     /// Used to set the delay time, to speed up or slow down backtests
     Delay(Option<u64>)
 }
+
+pub type EventTimeSlice = Vec<StrategyEvent>;
 

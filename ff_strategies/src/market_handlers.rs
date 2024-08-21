@@ -10,8 +10,8 @@ use ff_standard_lib::standardized_types::orders::orders::{Order, OrderState, Ord
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::subscriptions::Symbol;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use crate::messages::strategy_events::StrategyEvent;
-
+use crate::messages::strategy_events::{EventTimeSlice, StrategyEvent};
+use ahash::AHashMap;
 
 /*lazy_static! LIVE_EVENT_HANDLER {
 
@@ -47,6 +47,7 @@ impl MarketHandlerEnum {
     }
 
     //Updates the market handler with incoming data and returns any triggered events
+    // TimeSlice: A collection of base data to update the handler with
     pub async fn base_data_upate(&self, time_slice: TimeSlice) -> Option<Vec<StrategyEvent>> {
         match self {
             MarketHandlerEnum::Backtest(handler) => handler.on_data_update(time_slice).await,
@@ -67,6 +68,13 @@ impl MarketHandlerEnum {
             MarketHandlerEnum::Live(handler) => handler.send_order(order).await
         }
     }
+    
+    pub async fn set_warm_up_complete(&self) {
+        match self {
+            MarketHandlerEnum::Backtest(handler) => handler.set_warm_up_complete().await,
+            MarketHandlerEnum::Live(handler) => handler.set_warm_up_complete().await
+        }
+    }
 }
 
 
@@ -74,12 +82,13 @@ pub(crate) struct HistoricalMarketHandler {
     owner_id: String,
     /// The strategy receives its timeslices using strategy events, this is for other processes that need time slices and do not need synchronisation with the strategy
     /// These time slices are sent before they are sent to the strategy as events
-    last_bid: RwLock<HashMap<Symbol, f64>>,
-    last_ask: RwLock<HashMap<Symbol, f64>>,
-    last_price: RwLock<HashMap<Symbol, f64>>,
-    ledgers: RwLock<HashMap<Brokerage, HashMap<AccountId, Ledger>>>,
+    last_bid: RwLock<AHashMap<Symbol, f64>>,
+    last_ask: RwLock<AHashMap<Symbol, f64>>,
+    last_price: RwLock<AHashMap<Symbol, f64>>,
+    ledgers: RwLock<AHashMap<Brokerage, HashMap<AccountId, Ledger>>>,
     pub(crate) last_time: RwLock<DateTime<Utc>>,
     pub order_cache: RwLock<Vec<Order>>,
+    warm_up_complete: RwLock<bool>,
 }
 
 impl HistoricalMarketHandler {
@@ -92,6 +101,7 @@ impl HistoricalMarketHandler {
             ledgers: Default::default(),
             last_time: RwLock::new(start_time),
             order_cache: Default::default(),
+            warm_up_complete: RwLock::new(false),
         }
     }
 
@@ -102,9 +112,13 @@ impl HistoricalMarketHandler {
     pub async fn update_time(&self, time: DateTime<Utc>) {
         *self.last_time.write().await = time;
     }
+    
+    pub async fn set_warm_up_complete(&self) {
+        *self.warm_up_complete.write().await = true;
+    }
 
     /// forwards time slices to the strategy
-    pub(crate) async fn on_data_update(&self, time_slice: TimeSlice) -> Option<Vec<StrategyEvent>> {
+    pub(crate) async fn on_data_update(&self, time_slice: TimeSlice) -> Option<EventTimeSlice> {
         for ledger in self.ledgers.read().await.values() {
             for ledger in ledger.values() {
                 ledger.on_data_update(time_slice.clone()).await;
@@ -140,11 +154,14 @@ impl HistoricalMarketHandler {
                 BaseDataEnum::Fundamental(_) => ()
             }
         }
-
-        self.backtest_matching_engine().await
+        if *self.warm_up_complete.read().await {
+            self.backtest_matching_engine().await
+        } else {
+            None
+        }
     }
 
-    pub(crate) async fn backtest_matching_engine(&self) -> Option<Vec<StrategyEvent>> {
+    pub(crate) async fn backtest_matching_engine(&self) -> Option<EventTimeSlice> {
         let mut orders = self.order_cache.write().await;
         if orders.len() == 0 {
             return None;

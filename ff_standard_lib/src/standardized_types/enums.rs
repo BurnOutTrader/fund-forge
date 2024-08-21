@@ -86,6 +86,7 @@ check_bytes,
 )]
 #[archive_attr(derive(Debug))]
 pub enum Resolution {
+    Instant,
     Ticks(u64),
     Seconds(u64),
     Minutes(u64),
@@ -105,6 +106,7 @@ impl Resolution {
 
      pub fn as_duration(&self) -> Duration {
         match self {
+            Resolution::Instant => Duration::zero(),
             Resolution::Ticks(_) => Duration::zero(),
             Resolution::Seconds(val) => Duration::seconds(*val as i64),
             Resolution::Minutes(val) => Duration::minutes(*val as i64),
@@ -114,6 +116,7 @@ impl Resolution {
     
     pub fn number_of(&self) -> u64 {
         match self {
+            Resolution::Instant => 0,
             Resolution::Ticks(val) => val.clone(),
             Resolution::Seconds(val) =>  val.clone(),
             Resolution::Minutes(val) =>  val.clone(),
@@ -133,6 +136,7 @@ impl Resolution {
     ///Returns the number of seconds in the resolution
         pub fn file_str(&self) -> String {
             match self {
+                Resolution::Instant => "I".to_string(),
                 Resolution::Ticks(val) => format!("{}T", val),
                 Resolution::Seconds(val) => format!("{}S", val),
                 Resolution::Minutes(val) => format!("{}M", val),
@@ -146,6 +150,7 @@ impl Resolution {
         let (number, res) = split_string.split_at(1);
         let number = number[0].parse::<u64>().unwrap();
         match res[0] {
+            "I" => Some(Resolution::Instant),
             "T" => Some(Resolution::Ticks(number)),
             "S" => Some(Resolution::Seconds(number)),
             "M" => Some(Resolution::Minutes(number)),
@@ -156,6 +161,7 @@ impl Resolution {
 
     pub fn to_string(&self) -> String {
         match self {
+            Resolution::Instant => "I".to_string(),
             Resolution::Ticks(val) => format!("{}-T", val),
             Resolution::Seconds(val) => format!("{}-S", val),
             Resolution::Minutes(val) => format!("{}-M", val),
@@ -168,6 +174,7 @@ impl Resolution {
 impl fmt::Display for Resolution {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Resolution::Instant => write!(f, "Instant"),
             Resolution::Ticks(val) => write!(f, "{}-Tick", val),
             Resolution::Seconds(val) => write!(f, "{}-Second", val),
             Resolution::Minutes(val) => write!(f, "{}-Minute", val),

@@ -242,6 +242,7 @@ fn rank_format_time(time: i64, previous_time: i64, resolution: &Resolution) -> T
             (DateScaleImportance::Days, "%e") // New day
         } else {
             match resolution {
+                Resolution::Instant => (DateScaleImportance::TimeOfDay, "%H:%M:%S.f"), // Lowest importance intraday prices
                 Resolution::Ticks(_) => (DateScaleImportance::TimeOfDay, "%H:%M:%S.f"), // Lowest importance intraday prices
                 Resolution::Seconds(_) => (DateScaleImportance::TimeOfDay, "%H:%M:%S"),
                 Resolution::Minutes(_) => (DateScaleImportance::TimeOfDay, "%H:%M"),

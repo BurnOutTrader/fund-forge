@@ -6,4 +6,5 @@ pub mod standardized_types;
 pub mod server_connections;
 pub mod app;
 pub mod subscription_handler;
+pub mod history_handler;
 

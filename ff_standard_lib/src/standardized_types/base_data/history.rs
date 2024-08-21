@@ -44,22 +44,21 @@ use crate::subscription_handler::ConsolidatorEnum;
 /// The TimeSlice is a type `Vec<BaseDataEnum>` that occurred at that moment in time. any kind of of `BaseDataEnum` can be mixed into this list.
 /// ```rust
 /// ```
-async fn que_builder(slices: Vec<UnstructuredSlice>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
-    let mut time_slices: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
-
+async fn unstructured_que_builder(slices: Vec<UnstructuredSlice>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
     if slices.len() == 0 {
         println!("No TimeSlices to process");
         return None;
     }
 
+    let mut time_slices: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
     // Deserialize and get time for sorting
     for unstructured_slice in slices {
-        let price_data: Vec<BaseDataEnum> = match BaseDataEnum::from_array_bytes(&unstructured_slice.data) {
+        let base_data: Vec<BaseDataEnum> = match BaseDataEnum::from_array_bytes(&unstructured_slice.data) {
             Ok(data) => data,
             Err(_) => return None
         };
 
-        for data in price_data {
+        for data in base_data {
             let time = data.time_created_utc();
             if let btree_map::Entry::Vacant(e) = time_slices.entry(time) {
                 let time_slice : TimeSlice = vec![data];
@@ -70,6 +69,20 @@ async fn que_builder(slices: Vec<UnstructuredSlice>) -> Option<BTreeMap<DateTime
         }
     }
     Some(time_slices)
+}
+
+pub fn build_data_que(base_data: Vec<BaseDataEnum> ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
+    let mut time_slices: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
+    for data in base_data {
+        let time = data.time_created_utc();
+        if let btree_map::Entry::Vacant(e) = time_slices.entry(time) {
+            let time_slice : TimeSlice = vec![data];
+            e.insert(time_slice);
+        } else if let Some(time_slice) = time_slices.get_mut(&time) {
+            time_slice.push(data);
+        }
+    }
+    time_slices
 }
 
 /// Method responsible for getting historical data for a single subscription
@@ -135,7 +148,7 @@ pub async fn get_historical_data(subscriptions: Vec<DataSubscription>, time: Dat
     }
 
     // structure our slices into time slices and arrange by time
-    let tree = match que_builder(slices).await {
+    let tree = match unstructured_que_builder(slices).await {
         Some(time_slices) => Ok(time_slices),
         None => Err(FundForgeError::ClientSideErrorDebug("Error getting historical data for all subscriptions".to_string()))
     };
@@ -231,22 +244,22 @@ pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOf
         let base_data = range_data(from_time.to_utc(), to_time.to_utc(), base_subscription.clone()).await;
 
         let mut consolidator = match subscription.resolution {
-            Resolution::Ticks(_) => ConsolidatorEnum::new_count_consolidator(subscription.clone(), 1).unwrap(),
-            _ => ConsolidatorEnum::new_time_consolidator(subscription.clone(), 1).unwrap()
+            Resolution::Ticks(_) => ConsolidatorEnum::new_count_consolidator(subscription.clone()).unwrap(),
+            _ => ConsolidatorEnum::new_time_consolidator(subscription.clone()).unwrap()
         };
         let mut consolodated_data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
         for (time, slice) in base_data {
             for data in slice {
-                match consolidator.update(&data) {
-                    None => {}
-                    Some(consolidated) => {
+                let new_consolidated = consolidator.update(&data);
+                if !new_consolidated.is_empty() {
+                    for consolidated in new_consolidated{
                         if consolidated.time_created_utc() < from_time.to_utc() {
                             continue;
                         }
-                        if !consolodated_data.contains_key(&time) {
+                        if !consolodated_data.contains_key(&consolidated.time_created_utc()) {
                             consolodated_data.insert(time.clone(), vec![consolidated]);
                         } else {
-                            consolodated_data.get_mut(&time).unwrap().push(consolidated);
+                            consolodated_data.get_mut(&consolidated.time_created_utc()).unwrap().push(consolidated);
                         }
                     }
                 }

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap};
 use std::fmt::Error;
 use std::fs::File;
 use std::{fs};
@@ -20,7 +20,7 @@ use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{FundForgeError};
-use crate::standardized_types::enums::{MarketType};
+use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::traits::bytes::Bytes;
 
@@ -149,6 +149,14 @@ impl BaseDataEnum {
             _ => true,
         }
     }
+    
+    pub fn subscription(&self) -> DataSubscription {
+        match self {
+            BaseDataEnum::Candle(candle) => DataSubscription::new(candle.symbol.name.clone(), candle.symbol.data_vendor.clone(), candle.resolution.clone(), self.base_data_type(), candle.symbol.market_type.clone()),
+            BaseDataEnum::QuoteBar(bar) => DataSubscription::new(bar.symbol.name.clone(), bar.symbol.data_vendor.clone(), bar.resolution.clone(), self.base_data_type(), bar.symbol.market_type.clone()),
+            _ => DataSubscription::new(self.symbol().name.clone(), self.symbol().data_vendor.clone(), Resolution::Instant, self.base_data_type(), self.symbol().market_type.clone()),
+        }
+    }
 
     /// Links `BaseDataEnum` to a `BaseDataType`
     pub fn base_data_type(&self) -> BaseDataType {
@@ -253,7 +261,7 @@ impl BaseDataEnum {
     /// Helper method used to separate and price data to files in the fund forge file system path format.
     /// Makes it easier to download all available bars from a broker and save them to files.
     pub fn format_and_save(base_data_path: &PathBuf, price_data_enum_vec: BTreeMap<DateTime<Utc>, BaseDataEnum>, subscription: &DataSubscription) -> Result<(), Box<dyn std::error::Error>> {
-        let mut data_dict: HashMap<String, Vec<BaseDataEnum>> = HashMap::new();
+        let mut data_dict: BTreeMap<String, Vec<BaseDataEnum>> = BTreeMap::new();
         println!("Formatting and saving {} data for: {}",price_data_enum_vec.len(), subscription.symbol.name);
         // separate data by types and dates
         for (time, data) in &price_data_enum_vec {

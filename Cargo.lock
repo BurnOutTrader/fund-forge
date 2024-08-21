@@ -1441,6 +1441,7 @@ dependencies = [
 name = "ff_standard_lib"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.11",
  "async-std",
  "async-trait",
  "bytes",
@@ -1478,6 +1479,7 @@ dependencies = [
 name = "ff_strategies"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.11",
  "bytes",
  "chrono",
  "chrono-tz",

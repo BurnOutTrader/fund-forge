@@ -1,15 +1,15 @@
-use std::collections::HashMap;
 use std::sync::Arc;
+use ahash::AHashMap;
 use tokio::sync::{RwLock, RwLockReadGuard};
 use ff_charting::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 
 pub struct DrawingObjectHandler {
-    drawing_objects: Arc<RwLock<HashMap<DataSubscription, Vec<DrawingTool>>>>,
+    drawing_objects: Arc<RwLock<AHashMap<DataSubscription, Vec<DrawingTool>>>>,
 }
 
 impl DrawingObjectHandler {
-    pub fn new(drawing_objects: HashMap<DataSubscription, Vec<DrawingTool>>) -> Self {
+    pub fn new(drawing_objects: AHashMap<DataSubscription, Vec<DrawingTool>>) -> Self {
         Self {
             drawing_objects: Arc::new(RwLock::new(drawing_objects)),
         }
@@ -17,11 +17,11 @@ impl DrawingObjectHandler {
 
     pub fn default() -> Self {
         Self {
-            drawing_objects: Arc::new(RwLock::new(HashMap::new())),
+            drawing_objects: Arc::new(RwLock::new(AHashMap::new())),
         }
     }
 
-    pub async fn drawing_tools(&self) -> RwLockReadGuard<HashMap<DataSubscription, Vec<DrawingTool>>> {
+    pub async fn drawing_tools(&self) -> RwLockReadGuard<AHashMap<DataSubscription, Vec<DrawingTool>>> {
         self.drawing_objects.read().await
     }
 

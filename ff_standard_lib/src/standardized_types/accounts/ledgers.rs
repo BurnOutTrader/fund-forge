@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use ahash::AHashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::apis::brokerage::Brokerage;
 use crate::standardized_types::enums::{PositionSide};
@@ -44,8 +44,8 @@ pub struct Ledger {
     pub cash_available: f64,
     pub currency: AccountCurrency,
     pub cash_used: f64,
-    pub positions: RwLock<HashMap<Symbol, Position>>,
-    pub positions_closed: RwLock<HashMap<Symbol, Position>>,
+    pub positions: RwLock<AHashMap<Symbol, Position>>,
+    pub positions_closed: RwLock<AHashMap<Symbol, Position>>,
 }
 
 impl Ledger {
@@ -59,7 +59,7 @@ impl Ledger {
             currency: account_info.currency,
             cash_used: account_info.cash_used,
             positions: RwLock::new(positions),
-            positions_closed: RwLock::new(HashMap::new()),
+            positions_closed: RwLock::new(AHashMap::new()),
         };
         ledger
     }
@@ -72,8 +72,8 @@ impl Ledger {
             cash_available: cash_value,
             currency,
             cash_used: 0.0,
-            positions: RwLock::new(HashMap::new()),
-            positions_closed: RwLock::new(HashMap::new()),
+            positions: RwLock::new(AHashMap::new()),
+            positions_closed: RwLock::new(AHashMap::new()),
         };
         account
     }
