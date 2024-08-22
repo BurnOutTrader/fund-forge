@@ -65,7 +65,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         if warmup_complete {
-            let count = count + 1;
+            count += 1;
             //todo... neeed to get subscribing ability in the event loop.
             //todo... then build unit tests for each event handler using test strategy initialization fn.
             // finish matching engine for backtests, download historical currency data for currency converter fn, have option for higher resolution conversions if tick data available.
