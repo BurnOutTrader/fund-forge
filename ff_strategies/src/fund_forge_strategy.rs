@@ -48,6 +48,8 @@ pub struct FundForgeStrategy {
 
     subscription_handler: Arc<SubscriptionHandler>,
 
+    history_handler: Arc<HistoryHandler>,
+
    // history: Arc<RwLock<HistoryHandler>>, //todo use this object to save history from timeslices
 }
 
@@ -97,10 +99,10 @@ impl FundForgeStrategy {
             market_event_handler: Arc::new(market_event_handler),
             interaction_handler: Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode)),
             subscription_handler: Arc::new(subscription_handler),
-            //history: Arc::new(RwLock::new(HistoryHandler::new(retain_history))),
+            history_handler: Arc::new(HistoryHandler::new())
         };
 
-        let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), strategy.market_event_handler.clone(), strategy.interaction_handler.clone());
+        let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), strategy.market_event_handler.clone(), strategy.interaction_handler.clone(), strategy.history_handler.clone());
         Engine::launch(engine).await;
 
         strategy
@@ -191,25 +193,25 @@ impl FundForgeStrategy {
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
-    pub async fn subscribe(&self, subscription: DataSubscription, _retain_history: usize) {
+    pub async fn subscribe(&self, subscription: DataSubscription, retain_history: usize) {
+        self.history_handler.initialize_subscription(subscription.clone(), retain_history).await;
         match self.subscription_handler.subscribe(subscription.clone()).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error subscribing: {:?}", e);
             }
         }
-        //self.fwd_event(vec![StrategyEvent::DataSubscriptionEvents(self.owner_id.clone(), DataSubscriptionEvent::Subscribed(subscription), self.time_utc().await.timestamp())]).await;
     }
 
     /// Unsubscribes from a subscription.
     pub async fn unsubscribe(&self, subscription: DataSubscription) {
+        self.history_handler.remove_subscription(&subscription).await;
         match self.subscription_handler.unsubscribe(subscription.clone()).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error subscribing: {:?}", e);
             }
         }
-        // should be sent from the subscription handler self.fwd_event(vec![StrategyEvent::DataSubscriptionEvents(self.owner_id.clone(), DataSubscriptionEvent::Unsubscribed(subscription), self.time_utc().await.timestamp())]).await;
     }
 
     /// Sets the subscriptions for the strategy using the subscriptions_closure.

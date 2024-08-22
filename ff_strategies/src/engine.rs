@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::{Notify};
 use tokio::task;
+use ff_standard_lib::history_handler::HistoryHandler;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::history::{generate_file_dates, get_historical_data};
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
@@ -35,6 +36,7 @@ pub struct Engine {
     subscription_handler: Arc<SubscriptionHandler>,
     market_event_handler: Arc<MarketHandlerEnum>,
     interaction_handler: Arc<InteractionHandler>,
+    history_handler: Arc<HistoryHandler>,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
 }
 
@@ -46,7 +48,8 @@ impl Engine {
                strategy_event_sender: Sender<EventTimeSlice>,
                subscription_handler: Arc<SubscriptionHandler>,
                market_event_handler: Arc<MarketHandlerEnum>,
-               interaction_handler: Arc<InteractionHandler>) -> Self {
+               interaction_handler: Arc<InteractionHandler>,
+               history_handler: Arc<HistoryHandler>) -> Self {
         Engine {
             owner_id,
             notify,
@@ -54,6 +57,7 @@ impl Engine {
             strategy_event_sender,
             subscription_handler,
             market_event_handler,
+            history_handler,
             interaction_handler
         }
     }
@@ -65,6 +69,7 @@ impl Engine {
 
             self.warmup().await;
             println!("Warmup complete");
+            self.history_handler.set_warmup_complete().await;
 
             println!("Start {:?} Engine ", self.start_state.mode);
             let msg = match self.start_state.mode {
@@ -275,7 +280,7 @@ impl Engine {
                     }
                     
                     self.market_event_handler.update_time(time.clone()).await;
-                    
+                    self.history_handler.update(time_slice.clone()).await;
                     match self.strategy_event_sender.send(strategy_event).await {
                         Ok(_) => {},
                         Err(e) => {

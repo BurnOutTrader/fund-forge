@@ -1,6 +1,8 @@
 use std::collections::{VecDeque};
 use std::sync::Mutex;
 use ahash::AHashMap;
+use chrono::{DateTime, Utc};
+use tokio::sync::RwLock;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
 use crate::standardized_types::time_slices::TimeSlice;
@@ -48,46 +50,75 @@ impl RollingWindow {
 }
 
 pub struct HistoryHandler {
-    history: Mutex<AHashMap<DataSubscription, RollingWindow>>,
-    retain_last: usize,
+    history: RwLock<AHashMap<DataSubscription, RollingWindow>>,
+    is_warmup_complete: Mutex<bool>,
 }
 
 impl HistoryHandler {
-    pub fn new(retain_last: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            history: Mutex::new(AHashMap::new()),
-            retain_last,
+            history: RwLock::new(AHashMap::new()),
+            is_warmup_complete: Mutex::new(false),
         }
     }
     
-  pub fn add(&self, time_slice: TimeSlice) {
-    let mut history = self.history.lock().unwrap();
+    pub async fn set_warmup_complete(&self) {
+        let mut is_warmup_complete = self.is_warmup_complete.lock().unwrap();
+        *is_warmup_complete = true;
+    }
+    
+    pub async fn initialize_subscription(&self, subscription: DataSubscription, history_to_retain: usize) {
+        let mut history = self.history.write().await;
+        if !history.contains_key(&subscription) {
+            history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+        }
+        //todo: warm up if warm up is already complete
+    }
+    
+    pub async fn remove_subscription(&self, subscription: &DataSubscription) {
+        let mut history = self.history.write().await;
+        history.remove(subscription);
+    }
+
+    pub async fn update(&self, time_slice: TimeSlice) {
+    let mut history = self.history.write().await;
     for data in time_slice {
         let subscription = data.subscription();
-        if !history.contains_key(&subscription) {
-            history.insert(subscription.clone(), RollingWindow::new(self.retain_last));
-        }
-        let rolling_window = history.get_mut(&subscription).unwrap();
+        let rolling_window = match history.get_mut(&subscription){
+            Some(rolling_window) => rolling_window,
+            None => continue
+        };
         rolling_window.add(data.clone());
     }
   }
 
-    pub fn window(&self, subscription: &DataSubscription) -> RollingWindow {
-        let mut history = self.history.lock().unwrap();
-        if !history.contains_key(subscription) {
-            history.insert(subscription.clone(), RollingWindow::new(self.retain_last));
+    pub async fn window(&self, subscription: &DataSubscription) -> Option<RollingWindow> {
+        let mut history = self.history.write().await;
+        match history.get(subscription) {
+            None => None,
+            Some(window) => {
+                return Some(window.clone());
+            }
         }
-        history.get(subscription).unwrap().clone()
     }
     
-    pub fn index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
-        let history = self.history.lock().unwrap();
-        history.get(subscription).unwrap().get(index).cloned()
+    pub async fn index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
+        let mut history = self.history.read().await;
+        match history.get(subscription) {
+            Some(rolling_window) => match rolling_window.get(index) {
+                Some(data) => Some(data.clone()),
+                None => None
+            },
+            None => None
+        }
     }
     
-    pub fn last(&self, subscription: &DataSubscription) -> BaseDataEnum {
-        let history = self.history.lock().unwrap();
-        history.get(subscription).unwrap().last().unwrap().clone()
+    pub async fn last(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
+        let mut history = self.history.read().await;
+        match history.get(subscription) {
+            Some(rolling_window) => Some(rolling_window.last().unwrap().clone()),
+            None => None
+        }
     }
 }
 /*
