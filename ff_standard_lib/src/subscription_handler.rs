@@ -50,8 +50,8 @@ impl SubscriptionHandler {
     /// Returns all the subscription events that have occurred since the last time this method was called.
     pub async fn subscription_events(&self) -> Vec<DataSubscriptionEvent> {
         let mut subscription_events = vec![];
-        for symbol_handler in self.symbol_subscriptions.read().await.values() {
-            subscription_events.append(&mut symbol_handler.subscription_event_buffer.clone());
+        for symbol_handler in self.symbol_subscriptions.write().await.values_mut() {
+            subscription_events.extend(symbol_handler.get_subscription_event_buffer());
         }
         subscription_events
     }
@@ -236,6 +236,12 @@ impl SymbolSubscriptionHandler {
                 },
             }
         }
+    }
+    
+    pub fn get_subscription_event_buffer(&mut self) -> Vec<DataSubscriptionEvent> {
+        let buffer = self.subscription_event_buffer.clone();
+        self.subscription_event_buffer.clear();
+        buffer
     }
 
     /// This is only used
