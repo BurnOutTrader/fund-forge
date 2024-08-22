@@ -169,7 +169,7 @@ impl HistoricalMarketHandler {
 
         let mut events = Vec::new();
         let orders = &mut *orders;
-        let mut remaining_orders: Vec<Order> = Vec::new();
+        let remaining_orders: Vec<Order> = Vec::new();
         for order in &mut *orders {
             //1. If we don't have a brokerage + account create one
             if !self.ledgers.read().await.contains_key(&order.brokerage) {

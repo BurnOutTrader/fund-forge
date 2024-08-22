@@ -81,12 +81,12 @@ impl HistoryHandler {
     }
     
     pub fn index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
-        let mut history = self.history.lock().unwrap();
+        let history = self.history.lock().unwrap();
         history.get(subscription).unwrap().get(index).cloned()
     }
     
     pub fn last(&self, subscription: &DataSubscription) -> BaseDataEnum {
-        let mut history = self.history.lock().unwrap();
+        let history = self.history.lock().unwrap();
         history.get(subscription).unwrap().last().unwrap().clone()
     }
 }

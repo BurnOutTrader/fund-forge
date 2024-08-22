@@ -75,7 +75,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 }
                 // our base data is received here and can be handled according to type
                 // we may return data we didn't subscribe to here, if we subscribed to a data type which the vendor can not supply we will return the consolidated data + the data used to create the consolidated data.
-                StrategyEvent::TimeSlice(time, time_slice) => {
+                StrategyEvent::TimeSlice(_time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
                     for base_data in &time_slice {
                         match base_data {
@@ -123,7 +123,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                   }*/
                             }
                             BaseDataEnum::QuoteBar(_) => {}
-                            BaseDataEnum::Tick(tick) => { 
+                            BaseDataEnum::Tick(_tick) => {
                                 //println!("{}...{} Tick: {}", strategy.time_utc().await, tick.symbol.name, base_data.time_created_utc());
                             }
                             BaseDataEnum::Quote(_) => {}

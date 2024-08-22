@@ -9,7 +9,7 @@ pub struct InteractionHandler {
 }
 
 impl InteractionHandler {
-    pub fn new(replay_delay_ms: Option<u64>, interaction_mode: StrategyInteractionMode) -> InteractionHandler {
+    pub fn new(replay_delay_ms: Option<u64>, _interaction_mode: StrategyInteractionMode) -> InteractionHandler {
         InteractionHandler {
             control_state: RwLock::new(StrategyControls::Continue),
             replay_delay_ms: RwLock::new(replay_delay_ms),

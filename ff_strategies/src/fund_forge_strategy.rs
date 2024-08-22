@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::{env};
 use crate::strategy_state::StrategyStartState;
 use tokio::sync::{mpsc, Notify, RwLock};
@@ -7,8 +6,6 @@ use std::sync::Arc;
 use ahash::AHashMap;
 use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use chrono_tz::Tz;
-use futures::SinkExt;
-use tokio::task;
 use ff_charting::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::apis::brokerage::Brokerage;
 use ff_standard_lib::subscription_handler::{SubscriptionHandler};
@@ -16,7 +13,6 @@ use ff_standard_lib::helpers::converters::{time_convert_utc_datetime_to_fixed_of
 use ff_standard_lib::history_handler::HistoryHandler;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId};
-use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::Order;
 use ff_standard_lib::standardized_types::OwnerId;
@@ -25,7 +21,7 @@ use crate::market_handlers::{MarketHandlerEnum};
 use crate::drawing_object_handler::DrawingObjectHandler;
 use crate::engine::Engine;
 use crate::interaction_handler::InteractionHandler;
-use crate::messages::strategy_events::{DataSubscriptionEvent, EventTimeSlice, StrategyEvent, StrategyInteractionMode};
+use crate::messages::strategy_events::{EventTimeSlice, StrategyInteractionMode};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -195,7 +191,7 @@ impl FundForgeStrategy {
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
-    pub async fn subscribe(&self, subscription: DataSubscription, retain_history: usize) {
+    pub async fn subscribe(&self, subscription: DataSubscription, _retain_history: usize) {
         match self.subscription_handler.subscribe(subscription.clone()).await {
             Ok(_) => {},
             Err(e) => {
@@ -218,7 +214,7 @@ impl FundForgeStrategy {
 
     /// Sets the subscriptions for the strategy using the subscriptions_closure.
     /// This method is called when the strategy is initialized and can be called at any time to update the subscriptions based on the provided user logic within the closure.
-    pub async fn subscriptions_update(&self, subscriptions: Vec<DataSubscription>, retain_history: usize) {
+    pub async fn subscriptions_update(&self, subscriptions: Vec<DataSubscription>, _retain_history: usize) {
         let current_subscriptions = self.subscription_handler.subscriptions().await;
         //toDo sort subscriptions so lowest resolution comes first on iter for performance boost later
 
