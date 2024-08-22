@@ -64,6 +64,7 @@ impl Engine {
             println!("Initializing the strategy...");
 
             self.warmup().await;
+            println!("Warmup complete");
 
             println!("Start {:?} Engine ", self.start_state.mode);
             let msg = match self.start_state.mode {
@@ -118,13 +119,14 @@ impl Engine {
 
         self.market_event_handler.set_warm_up_complete().await;
         let warmup_complete_event = StrategyEvent::WarmUpComplete(self.owner_id.clone());
-        self.notify.notified().await;
-        match self.strategy_event_sender.send(vec![warmup_complete_event]).await {
+        
+        //todo, this is the cause of the pausing
+     /*   match self.strategy_event_sender.send(vec![warmup_complete_event]).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error forwarding event: {:?}", e);
             }
-        }
+        }*/
     }
 
     /// Runs the strategy backtest
@@ -263,7 +265,9 @@ impl Engine {
                             }
                         }
                     }
+                    
                     self.market_event_handler.update_time(time.clone()).await;
+                    
                     match self.strategy_event_sender.send(strategy_event).await {
                         Ok(_) => {},
                         Err(e) => {
@@ -273,7 +277,6 @@ impl Engine {
 
                     // Update the last processed time
                     last_time = time.clone();
-
 
                     // We check if the user has requested a delay between time slices for market replay style backtesting.
                     match self.interaction_handler.replay_delay_ms().await {
@@ -287,7 +290,8 @@ impl Engine {
                     }
                     self.notify.notified().await;
                 }
-            };
+                break 'month_loop
+            }
         }
     }
 }

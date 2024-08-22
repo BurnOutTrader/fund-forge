@@ -48,7 +48,7 @@ pub struct FundForgeStrategy {
 
     subscription_handler: Arc<SubscriptionHandler>,
 
-    history: Arc<RwLock<HistoryHandler>>, //todo use this object to save history from timeslices
+   // history: Arc<RwLock<HistoryHandler>>, //todo use this object to save history from timeslices
 }
 
 impl FundForgeStrategy {
@@ -97,7 +97,7 @@ impl FundForgeStrategy {
             market_event_handler: Arc::new(market_event_handler),
             interaction_handler: Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode)),
             subscription_handler: Arc::new(subscription_handler),
-            history: Arc::new(RwLock::new(HistoryHandler::new(retain_history))),
+            //history: Arc::new(RwLock::new(HistoryHandler::new(retain_history))),
         };
 
         let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), strategy.market_event_handler.clone(), strategy.interaction_handler.clone());

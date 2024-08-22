@@ -54,6 +54,7 @@ async fn main() {
 
 /// Here we listen for incoming data and build our custom strategy logic. this is where the magic happens.
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>)  {
+    //notify.notify_one();
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
 
@@ -123,7 +124,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                   }*/
                             }
                             BaseDataEnum::QuoteBar(_) => {}
-                            BaseDataEnum::Tick(_tick) => {
+                            BaseDataEnum::Tick(tick) => {
                                 //println!("{}...{} Tick: {}", strategy.time_utc().await, tick.symbol.name, base_data.time_created_utc());
                             }
                             BaseDataEnum::Quote(_) => {}
@@ -150,7 +151,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
             }
             notify.notify_one();
             //simulate work
-            //tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            //tokio::time::sleep(tokio::time::Duration::from_nanos(50)).await;
         }
     }
     event_receiver.close();

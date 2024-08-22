@@ -106,7 +106,6 @@ impl SubscriptionHandler {
     /// Updates any consolidators with primary data
     pub async fn update_consolidators(&self, time_slice: TimeSlice) -> TimeSlice {
         let mut tasks = vec![];
-        let time_slice = time_slice.clone();
 
         for base_data in time_slice {
             let symbol_subscriptions = self.symbol_subscriptions.clone();
