@@ -3,6 +3,20 @@ use ahash::AHashMap;
 use tokio::sync::{RwLock, RwLockReadGuard};
 use ff_charting::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
+#[archive(
+    compare(PartialEq),
+    check_bytes,
+)]
+#[archive_attr(derive(Debug))]
+pub enum DrawingToolEvent {
+    Add(DrawingTool),
+    Remove(DrawingTool),
+    Update(DrawingTool),
+    RemoveAll
+}
 
 pub struct DrawingObjectHandler {
     drawing_objects: Arc<RwLock<AHashMap<DataSubscription, Vec<DrawingTool>>>>,

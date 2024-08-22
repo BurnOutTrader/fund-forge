@@ -1,11 +1,10 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use ff_charting::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::orders::orders::OrderUpdateEvent;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-
+use crate::drawing_object_handler::DrawingToolEvent;
 
 /// Used to determine if a strategy takes certain event inputs from the Ui.
 /// A trader can still effect the strategy via the broker, but the strategy will not take any input from the Ui unless in SemiAutomated mode.
@@ -149,19 +148,6 @@ check_bytes,
 pub enum ShutdownEvent {
     Error(String),
     Success(String)
-}
-
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
-#[archive_attr(derive(Debug))]
-pub enum DrawingToolEvent {
-    Add(DrawingTool),
-    Remove(DrawingTool),
-    Update(DrawingTool),
-    RemoveAll
 }
 
 
