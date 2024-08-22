@@ -35,7 +35,7 @@ pub struct Engine {
     subscription_handler: Arc<SubscriptionHandler>,
     market_event_handler: Arc<MarketHandlerEnum>,
     interaction_handler: Arc<InteractionHandler>,
-    notify: Arc<Notify>,
+    notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -81,7 +81,7 @@ impl Engine {
 
             println!("{:?}", &msg);
             let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg);
-            //todo() need a receiver for otehr event types
+            //DO not wait for permits outside data feed or we will have problems with freezing
             match self.strategy_event_sender.send(vec![end_event]).await {
                 Ok(_) => {},
                 Err(e) => {
@@ -121,12 +121,12 @@ impl Engine {
         let warmup_complete_event = StrategyEvent::WarmUpComplete(self.owner_id.clone());
         
         //todo, this is the cause of the pausing
-     /*   match self.strategy_event_sender.send(vec![warmup_complete_event]).await {
+        match self.strategy_event_sender.send(vec![warmup_complete_event]).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error forwarding event: {:?}", e);
             }
-        }*/
+        }
     }
 
     /// Runs the strategy backtest
