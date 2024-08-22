@@ -1,6 +1,6 @@
 use std::sync::Arc;
-use chrono::{DateTime, Timelike, Utc};
-use tokio::sync::{RwLock};
+use chrono::{DateTime, Duration, Timelike, Utc};
+use tokio::sync::{Mutex, RwLock};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -8,30 +8,46 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::FundForgeError;
-use crate::standardized_types::enums::{Resolution};
+use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use ahash::AHashMap;
 use futures::future::join_all;
+use crate::rolling_window::RollingWindow;
+use crate::standardized_types::base_data::history::range_data;
 
-/// Manages all subscriptions for a backtest strategy, in live 1 static handler is shared for all strategies and platform requirements.
+/// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
     /// Manages the subscriptions of specific symbols
     symbol_subscriptions: Arc<RwLock<AHashMap<Symbol, SymbolSubscriptionHandler>>>,
     fundamental_subscriptions: RwLock<Vec<DataSubscription>>,
     /// Keeps a record when the strategy has updated its subscriptions, so we can pause the backtest to fetch new data.
     subscriptions_updated: RwLock<bool>,
+    is_warmed_up: Mutex<bool>,
+    strategy_mode: StrategyMode,
 }
 
 impl SubscriptionHandler {
-    pub async fn new() -> Self {
+    pub async fn new(strategy_mode: StrategyMode) -> Self {
         SubscriptionHandler {
             fundamental_subscriptions: RwLock::new(vec![]),
             symbol_subscriptions: Arc::new(RwLock::new(Default::default())),
             subscriptions_updated: RwLock::new(true),
+            is_warmed_up: Mutex::new(false),
+            strategy_mode,
         }
     }
-    
+
+    /// Sets the SubscriptionHandler as warmed up, so we can start processing data.
+    /// This lets the handler know that it needs to manually warm up any future subscriptions.
+    pub async fn set_warmup_complete(&self) {
+        *self.is_warmed_up.lock().await = true;
+        for symbol_handler in self.symbol_subscriptions.write().await.values_mut() {
+            symbol_handler.set_warmed_up();
+        }
+    }
+
+    /// Returns all the subscription events that have occurred since the last time this method was called.
     pub async fn subscription_events(&self) -> Vec<DataSubscriptionEvent> {
         let mut subscription_events = vec![];
         for symbol_handler in self.symbol_subscriptions.read().await.values() {
@@ -40,7 +56,13 @@ impl SubscriptionHandler {
         subscription_events
     }
 
-    pub async fn subscribe(&self, new_subscription: DataSubscription) -> Result<(), FundForgeError> {
+    
+    /// Subscribes to a new data subscription
+    /// 'new_subscription: DataSubscription' The new subscription to subscribe to.
+    /// 'history_to_retain: usize' The number of bars to retain in the history.
+    /// 'current_time: DateTime<Utc>' The current time is used to warm up consolidator history if we have already done our initial strategy warm up.
+    /// 'strategy_mode: StrategyMode' The strategy mode is used to determine how to warm up the history, in live mode we may not yet have a serialized history to the current time.
+    pub async fn subscribe(&self, new_subscription: DataSubscription, history_to_retain: usize, current_time: DateTime<Utc>) -> Result<(), FundForgeError> {
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
             //subscribe to fundamental
             let mut fundamental_subscriptions = self.fundamental_subscriptions.write().await;
@@ -52,18 +74,22 @@ impl SubscriptionHandler {
         }
         let mut symbol_subscriptions = self.symbol_subscriptions.write().await;
         if !symbol_subscriptions.contains_key(&new_subscription.symbol) {
-            let symbol_handler = SymbolSubscriptionHandler::new(new_subscription.clone()).await;
+            let symbol_handler = SymbolSubscriptionHandler::new(new_subscription.clone(), self.is_warmed_up.lock().await.clone(), history_to_retain, current_time, self.strategy_mode).await;
             symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
         }
         else {
             let symbol_handler = symbol_subscriptions.get_mut(&new_subscription.symbol).unwrap();
-            symbol_handler.subscribe(new_subscription).await;
+            symbol_handler.subscribe(new_subscription, history_to_retain, current_time, self.strategy_mode).await;
         }
         *self.subscriptions_updated.write().await = true;
         Ok(())
     }
 
-    pub async fn unsubscribe(&self, subscription: DataSubscription) -> Result<(), FundForgeError>  {
+    /// Unsubscribes from a data subscription
+    /// 'subscription: DataSubscription' The subscription to unsubscribe from.
+    /// 'current_time: DateTime<Utc>' The current time is used to change our base data subscription and warm up any new consolidators if we are adjusting our base resolution.
+    /// 'strategy_mode: StrategyMode' The strategy mode is used to determine how to warm up the history, in live mode we may not yet have a serialized history to the current time.
+    pub async fn unsubscribe(&self, subscription: DataSubscription, current_time: DateTime<Utc>) -> Result<(), FundForgeError>  {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             let mut fundamental_subscriptions = self.fundamental_subscriptions.write().await;
             if fundamental_subscriptions.contains(&subscription) {
@@ -76,7 +102,7 @@ impl SubscriptionHandler {
         }
         let mut handler = self.symbol_subscriptions.write().await;
         let symbol_handler = handler.get_mut(&subscription.symbol).unwrap();
-        symbol_handler.unsubscribe(&subscription).await;
+        symbol_handler.unsubscribe(&subscription, current_time, self.strategy_mode).await;
         if symbol_handler.active_count == 0 {
             handler.remove(&subscription.symbol);
         }
@@ -92,6 +118,9 @@ impl SubscriptionHandler {
         *self.subscriptions_updated.write().await = updated;
     }
 
+    /// Returns all the primary subscriptions
+    /// These are subscriptions that come directly from the vendors own data source.
+    /// They are not consolidators, but are the primary source of data for the consolidators.
     pub async fn primary_subscriptions(&self) -> Vec<DataSubscription> {
         let mut primary_subscriptions = vec![];
         for symbol_handler in self.symbol_subscriptions.read().await.values() {
@@ -100,6 +129,7 @@ impl SubscriptionHandler {
         primary_subscriptions
     }
 
+    /// Returns all the subscriptions including primary and consolidators
     pub async fn subscriptions(&self) -> Vec<DataSubscription> {
         let mut all_subscriptions = vec![];
         for symbol_handler in self.symbol_subscriptions.read().await.values() {
@@ -152,18 +182,20 @@ pub struct SymbolSubscriptionHandler {
     active_count: i32,
     symbol: Symbol,
     subscription_event_buffer: Vec<DataSubscriptionEvent>,
+    is_warmed_up: bool,
 }
 
 impl SymbolSubscriptionHandler {
-    pub async fn new(primary_subscription: DataSubscription) -> Self {
+    pub async fn new(primary_subscription: DataSubscription, is_warmed_up: bool, history_to_retain: usize, warm_up_to: DateTime<Utc>, strategy_mode: StrategyMode) -> Self {
         let mut handler = SymbolSubscriptionHandler {
             primary_subscription: primary_subscription.clone(),
             secondary_subscriptions: vec![],
             active_count: 1,
             symbol: primary_subscription.symbol.clone(),
             subscription_event_buffer: vec![],
+            is_warmed_up
         };
-        handler.select_primary_subscription(primary_subscription).await;
+        handler.select_primary_subscription(primary_subscription, history_to_retain, warm_up_to, strategy_mode).await;
         handler
     }
 
@@ -189,6 +221,10 @@ impl SymbolSubscriptionHandler {
         consolidated_data
     }
 
+    pub fn set_warmed_up(&mut self) {
+        self.is_warmed_up = true;
+    }
+
     pub async fn clear_current_data(&mut self) {
         for consolidator in &mut self.secondary_subscriptions.iter_mut() {
             match consolidator {
@@ -203,7 +239,7 @@ impl SymbolSubscriptionHandler {
     }
 
     /// This is only used
-    async fn select_primary_subscription(&mut self, new_subscription: DataSubscription) {
+    async fn select_primary_subscription(&mut self, new_subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
         let available_resolutions: Vec<Resolution> = new_subscription.symbol.data_vendor.resolutions(new_subscription.market_type.clone()).await.unwrap();
         //println!("Available Resolutions: {:?}", available_resolutions);
         if available_resolutions.is_empty() {
@@ -214,16 +250,16 @@ impl SymbolSubscriptionHandler {
             panic!("{} does not have any resolutions available for {:?}", new_subscription.symbol.data_vendor, new_subscription);
         }
         if !resolutions.contains(&new_subscription.resolution) {
-            self.secondary_subscriptions.push(ConsolidatorEnum::new_time_consolidator(new_subscription.clone()).unwrap());
+            match self.is_warmed_up {
+                true => {
+                    self.secondary_subscriptions.push(ConsolidatorEnum::new_time_consolidator_and_warmup(new_subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap());
+                },
+                false => {
+                    self.secondary_subscriptions.push(ConsolidatorEnum::new_time_consolidator(new_subscription.clone(), history_to_retain).unwrap());
+                }
+            }
+
             self.active_count += 1;
-            let resolution = resolutions.iter().max().unwrap();
-            let data_type = match resolution {
-                Resolution::Ticks(_) => BaseDataType::Ticks,
-                _ => new_subscription.base_data_type.clone()
-            };
-            let new_primary_subscription = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(),  resolution.clone(), data_type, new_subscription.market_type.clone());
-            self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_primary_subscription.clone()));
-            self.primary_subscription = new_primary_subscription;
         }
         else {
             self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
@@ -286,7 +322,7 @@ impl SymbolSubscriptionHandler {
             .collect()
     }
 
-    async fn subscribe(&mut self, new_subscription: DataSubscription) {
+    async fn subscribe(&mut self, new_subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
         match new_subscription.resolution {
             Resolution::Ticks(number) => {
                 if !new_subscription.symbol.data_vendor.resolutions(new_subscription.market_type.clone()).await.unwrap().contains(&Resolution::Ticks(1)) {
@@ -296,13 +332,19 @@ impl SymbolSubscriptionHandler {
                 if number > 1  {
                     match self.primary_subscription.resolution {
                         Resolution::Ticks(_) => {
-                            let consolidator = ConsolidatorEnum::new_count_consolidator(self.primary_subscription.clone()).unwrap();
+                            let consolidator = match self.is_warmed_up {
+                                true => ConsolidatorEnum::new_count_consolidator_and_warmup(self.primary_subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap(),
+                                false => ConsolidatorEnum::new_count_consolidator(self.primary_subscription.clone(), history_to_retain).unwrap(),
+                            };
                             self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(consolidator.subscription().clone()));
                             self.secondary_subscriptions.push(consolidator);
-                            
+
                         },
                         _ => {
-                            let consolidator = ConsolidatorEnum::new_time_consolidator(self.primary_subscription.clone()).unwrap();
+                            let consolidator = match self.is_warmed_up {
+                                true => ConsolidatorEnum::new_time_consolidator_and_warmup(self.primary_subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap(),
+                                false => ConsolidatorEnum::new_time_consolidator(self.primary_subscription.clone(), history_to_retain).unwrap(),
+                            };
                             self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(consolidator.subscription().clone()));
                             self.secondary_subscriptions.push(consolidator);
                         },
@@ -318,10 +360,13 @@ impl SymbolSubscriptionHandler {
             _ => {
                 // if the new subscription is of a lower resolution
                 if new_subscription.resolution < self.primary_subscription.resolution {
-                    self.select_primary_subscription(new_subscription).await;
+                    self.select_primary_subscription(new_subscription, history_to_retain, to_time, strategy_mode).await;
                 }
                 else { //if we have no problem with adding new the resolution we can just add the new subscription as a consolidator
-                    let consolidator = ConsolidatorEnum::new_time_consolidator(new_subscription.clone()).unwrap();
+                    let consolidator = match self.is_warmed_up {
+                        true => ConsolidatorEnum::new_time_consolidator_and_warmup(new_subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap(),
+                        false => ConsolidatorEnum::new_time_consolidator(new_subscription.clone(), history_to_retain).unwrap(),
+                    };
                     self.secondary_subscriptions.push(consolidator);
                     self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
                 }
@@ -330,18 +375,25 @@ impl SymbolSubscriptionHandler {
         self.active_count += 1;
     }
 
-    async fn unsubscribe(&mut self, subscription: &DataSubscription) {
+    async fn unsubscribe(&mut self, subscription: &DataSubscription, current_time: DateTime<Utc>, strategy_mode: StrategyMode) {
         if subscription == &self.primary_subscription {
-            if let Some(lowest_subscription) = self.secondary_subscriptions.iter().map(|consolidator| consolidator.subscription()).min() {
-                self.select_primary_subscription(lowest_subscription).await;
+            if self.secondary_subscriptions.is_empty() {
+                self.subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
+                self.active_count -= 1;
+                return;
+            }
+            let consolidator = self.secondary_subscriptions.iter()
+                .min_by_key(|consolidator| consolidator.subscription().resolution.clone());
+            if let Some(lowest_resolution_consolidator) = consolidator {
+                self.select_primary_subscription(lowest_resolution_consolidator.subscription(), lowest_resolution_consolidator.history_to_retain(), current_time, strategy_mode).await;
             }
         } else { //if subscription is not the primary subscription, then it must be a consolidator and can be removed without changing the primary subscription
             self.secondary_subscriptions.retain(|consolidator| {
                 &consolidator.subscription() != subscription
             });
+            self.subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
+            self.active_count -= 1;
         }
-        self.subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
-        self.active_count -= 1;
     }
 
     pub async fn all_subscriptions(&self) -> Vec<DataSubscription> {
@@ -363,15 +415,29 @@ pub enum ConsolidatorEnum {
 }
 
 impl ConsolidatorEnum {
-    pub fn new_count_consolidator(subscription: DataSubscription) -> Result<Self, ConsolidatorError> {
-        match CountConsolidator::new(subscription) {
+    pub async fn new_count_consolidator_and_warmup(subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
+        match CountConsolidator::new_and_warmup(subscription, history_to_retain, to_time, strategy_mode).await {
             Ok(consolidator) => Ok(ConsolidatorEnum::Count(consolidator)),
             Err(e) => Err(ConsolidatorError { message: e.message }),
         }
     }
 
-    pub fn new_time_consolidator(subscription: DataSubscription) -> Result<Self, ConsolidatorError> {
-        match TimeConsolidator::new(subscription) {
+    pub async fn new_time_consolidator_and_warmup(subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
+        match TimeConsolidator::new_and_warmup(subscription, history_to_retain, to_time, strategy_mode).await {
+            Ok(consolidator) => Ok(ConsolidatorEnum::Time(consolidator)),
+            Err(e) => Err(ConsolidatorError { message: e.message }),
+        }
+    }
+
+    pub fn new_count_consolidator(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+        match CountConsolidator::new(subscription, history_to_retain) {
+            Ok(consolidator) => Ok(ConsolidatorEnum::Count(consolidator)),
+            Err(e) => Err(ConsolidatorError { message: e.message }),
+        }
+    }
+
+    pub fn new_time_consolidator(subscription: DataSubscription,  history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+        match TimeConsolidator::new(subscription, history_to_retain) {
             Ok(consolidator) => Ok(ConsolidatorEnum::Time(consolidator)),
             Err(e) => Err(ConsolidatorError { message: e.message }),
         }
@@ -394,6 +460,20 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::Time(time_consolidator) => time_consolidator.subscription.clone(),
         }
     }
+    
+    pub fn resolution(&self) -> Resolution {
+        match self {
+            ConsolidatorEnum::Count(count_consolidator) => count_consolidator.subscription.resolution.clone(),
+            ConsolidatorEnum::Time(time_consolidator) => time_consolidator.subscription.resolution.clone(),
+        }
+    }
+    
+    pub fn history_to_retain(&self) -> usize {
+        match self {
+            ConsolidatorEnum::Count(count_consolidator) => count_consolidator.history.number,
+            ConsolidatorEnum::Time(time_consolidator) => time_consolidator.history.number,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -408,10 +488,33 @@ pub struct CountConsolidator {
     counter: u64,
     current_data: Candle,
     subscription: DataSubscription,
+    history: RollingWindow,
 }
 
 impl CountConsolidator {
-    pub fn new(subscription: DataSubscription) -> Result<Self, ConsolidatorError> {
+    pub async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
+        let number = match subscription.resolution {
+            Resolution::Ticks(num) => num,
+            _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),
+        };
+
+        let current_data = match subscription.base_data_type {
+            BaseDataType::Ticks => Candle::new(subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Ticks(number)),
+            _ => return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type) }),
+        };
+
+        let mut consolidator = CountConsolidator {
+            number,
+            counter: 0,
+            current_data: current_data,
+            subscription,
+            history: RollingWindow::new(history_to_retain),
+        };
+        consolidator.warmup(warm_up_to_time, strategy_mode).await;
+        Ok(consolidator)
+    }
+
+    pub fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
             _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),
@@ -427,12 +530,59 @@ impl CountConsolidator {
             counter: 0,
             current_data: current_data,
             subscription,
+            history: RollingWindow::new(history_to_retain),
         })
+    }
+
+
+    async fn warmup(&mut self, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
+        match strategy_mode {
+            StrategyMode::Backtest => {
+                //let historical_duration =
+                let vendor_resolutions = self.subscription.symbol.data_vendor.resolutions(self.subscription.market_type.clone()).await.unwrap();
+                let mut minimum_resolution: Option<Resolution> = None;
+                if vendor_resolutions.contains(&Resolution::Ticks(1)) {
+                    minimum_resolution = Some(Resolution::Ticks(1));
+                }
+                else {
+                    return;
+                }
+
+                let minimum_resolution = match minimum_resolution.is_none() {
+                    true => panic!("{} does not have any resolutions available", self.subscription.symbol.data_vendor),
+                    false => minimum_resolution.unwrap()
+                };
+
+                let data_type = match minimum_resolution {
+                    Resolution::Ticks(_) => BaseDataType::Ticks,
+                    _ => self.subscription.base_data_type.clone()
+                };
+
+                //todo we need a way to calulate the numebr of weekends etc to add to the from_time
+                let from_time = (to_time - (self.subscription.resolution.as_duration() * self.history.number as i32) - Duration::days(4)); //we go back a bit further in case of holidays or weekends
+
+                let base_subscription = DataSubscription::new(self.subscription.symbol.name.clone(), self.subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, self.subscription.market_type.clone());
+                let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
+
+                for (_, slice) in &base_data {
+                    for base_data in slice {
+                        self.update(base_data);
+                    }
+                }
+            },
+            _ => {
+                todo!("Finish implementing warmup for live trading");
+            }
+        }
     }
 
     pub(crate) fn clear_current_data(&mut self) {
         self.current_data = match self.subscription.base_data_type {
-            BaseDataType::Ticks => Candle::new(self.subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Ticks(self.number)),
+            BaseDataType::Ticks => {
+                self.history.clear();
+                self.counter = 0;
+                Candle::new(self.subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Ticks(self.number))
+            },
             _ => panic!("Invalid base data type for CountConsolidator: {}", self.subscription.base_data_type),
         };
     }
@@ -458,10 +608,12 @@ impl CountConsolidator {
                 self.current_data.close = tick.price;
                 self.current_data.volume += tick.volume;
                 if self.counter == self.number {
-                    let mut consolidated_bar = self.current_data.clone();
-                    consolidated_bar.is_closed = true;
+                    let mut consolidated_candle = self.current_data.clone();
+                    consolidated_candle.is_closed = true;
                     self.counter = 0;
-                    candles.push(BaseDataEnum::Candle(consolidated_bar.clone()));
+                    let consolidated_data = BaseDataEnum::Candle(consolidated_candle.clone());
+                    self.history.add(consolidated_data.clone());
+                    candles.push(consolidated_data);
                     self.current_data = match self.subscription.base_data_type {
                         BaseDataType::Ticks => Candle::new(self.subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Ticks(self.number)),
                         _ => panic!("Invalid base data type for CountConsolidator: {}", self.subscription.base_data_type),
@@ -481,10 +633,16 @@ impl CountConsolidator {
 pub struct TimeConsolidator {
     current_data: Option<BaseDataEnum>,
     subscription: DataSubscription,
+    history: RollingWindow,
 }
 
 impl TimeConsolidator {
-    pub fn new(subscription: DataSubscription) -> Result<Self, ConsolidatorError> {
+    /// Creates a new TimeConsolidator
+    /// 'subscription: DataSubscription' The TimeConsolidator will consolidate data based on the resolution of the subscription.
+    /// 'history_to_retain: usize' will retain the last `history_to_retain` bars.
+    /// 'warm_up_to_time: DateTime<Utc>' will warm up the history to the specified time.
+    /// 'strategy_mode: StrategyMode' will use the specified strategy mode to warm up the history, if Live mode then we will need to get the most recent data from the vendor directly as we may not yet have the data in the serialized history.
+    pub async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for TimeConsolidator", subscription.base_data_type) });
         }
@@ -494,9 +652,28 @@ impl TimeConsolidator {
         }
 
         //todo()! we should load the history from the server, run the consolidator until we have the bars we need for history
+        let mut consolidator = TimeConsolidator {
+            current_data: None,
+            subscription,
+            history: RollingWindow::new(history_to_retain),
+        };
+        consolidator.warmup(warm_up_to_time, strategy_mode).await;
+        Ok(consolidator)
+    }
+
+    pub fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+        if subscription.base_data_type == BaseDataType::Fundamentals {
+            return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for TimeConsolidator", subscription.base_data_type) });
+        }
+
+        if let Resolution::Ticks(_) = subscription.resolution {
+            return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for TimeConsolidator", subscription.resolution) });
+        }
+
         Ok(TimeConsolidator {
             current_data: None,
             subscription,
+            history: RollingWindow::new(history_to_retain),
         })
     }
 
@@ -557,7 +734,7 @@ impl TimeConsolidator {
            if base_data.time_created_utc() >= current_bar.time_created_utc() {
                let mut consolidated_bar = current_bar.clone();
                consolidated_bar.set_is_closed(true);
-
+                self.history.add(consolidated_bar.clone());
                let new_bar = self.new_quote_bar(base_data);
                self.current_data = Some(BaseDataEnum::QuoteBar(new_bar.clone()));
                return vec![consolidated_bar, BaseDataEnum::QuoteBar(new_bar)]
@@ -630,6 +807,7 @@ impl TimeConsolidator {
 
     pub(crate) fn clear_current_data(&mut self) {
         self.current_data = None;
+        self.history.clear();
     }
 
     fn update_candles(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
@@ -642,6 +820,7 @@ impl TimeConsolidator {
             if base_data.time_created_utc() >= current_bar.time_created_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
+                self.history.add(consolidated_bar.clone());
 
                 let new_bar = self.new_candle(base_data);
                 self.current_data = Some(BaseDataEnum::Candle(new_bar.clone()));
@@ -728,6 +907,50 @@ impl TimeConsolidator {
                 rounded_time
             }
             _ => time, // Handle other resolutions if necessary
+        }
+    }
+
+    async fn warmup(&mut self, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
+        match strategy_mode {
+            StrategyMode::Backtest => {
+                //let historical_duration =
+                let vendor_resolutions = self.subscription.symbol.data_vendor.resolutions(self.subscription.market_type.clone()).await.unwrap();
+                let mut minimum_resolution: Option<Resolution> = None;
+                for resolution in vendor_resolutions {
+                    if minimum_resolution.is_none() {
+                        minimum_resolution = Some(resolution);
+                    } else {
+                        if resolution > minimum_resolution.unwrap() && resolution < self.subscription.resolution {
+                            minimum_resolution = Some(resolution);
+                        }
+                    }
+                }
+
+                let minimum_resolution = match minimum_resolution.is_none() {
+                    true => panic!("{} does not have any resolutions available", self.subscription.symbol.data_vendor),
+                    false => minimum_resolution.unwrap()
+                };
+
+                let data_type = match minimum_resolution {
+                    Resolution::Ticks(_) => BaseDataType::Ticks,
+                    _ => self.subscription.base_data_type.clone()
+                };
+
+                //todo we need a way to calulate the numebr of weekends etc to add to the from_time
+                let from_time = to_time - (self.subscription.resolution.as_duration() * self.history.number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
+
+                let base_subscription = DataSubscription::new(self.subscription.symbol.name.clone(), self.subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, self.subscription.market_type.clone());
+                let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
+
+                for (_, slice) in &base_data {
+                    for base_data in slice {
+                        self.update(base_data);
+                    }
+                }
+            },
+            _ => {
+                todo!("Finish implementing warmup for live trading");
+            }
         }
     }
 }

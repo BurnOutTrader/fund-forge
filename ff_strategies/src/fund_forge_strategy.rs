@@ -10,7 +10,6 @@ use ff_charting::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::apis::brokerage::Brokerage;
 use ff_standard_lib::subscription_handler::{SubscriptionHandler};
 use ff_standard_lib::helpers::converters::{time_convert_utc_datetime_to_fixed_offset, time_convert_utc_naive_to_fixed_offset};
-use ff_standard_lib::history_handler::HistoryHandler;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId};
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
@@ -47,9 +46,6 @@ pub struct FundForgeStrategy {
     market_event_handler: Arc<MarketHandlerEnum>,
 
     subscription_handler: Arc<SubscriptionHandler>,
-
-    history_handler: Arc<HistoryHandler>,
-
    // history: Arc<RwLock<HistoryHandler>>, //todo use this object to save history from timeslices
 }
 
@@ -87,9 +83,9 @@ impl FundForgeStrategy {
             StrategyMode::LivePaperTrading => panic!("Live paper mode not yet implemented")
         };
 
-        let subscription_handler = SubscriptionHandler::new().await;
+        let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
         for subscription in subscriptions {
-            subscription_handler.subscribe(subscription.clone()).await.unwrap();
+            subscription_handler.subscribe(subscription.clone(), retain_history, start_time.to_utc()).await.unwrap();
         }
 
         let strategy = FundForgeStrategy {
@@ -99,10 +95,9 @@ impl FundForgeStrategy {
             market_event_handler: Arc::new(market_event_handler),
             interaction_handler: Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode)),
             subscription_handler: Arc::new(subscription_handler),
-            history_handler: Arc::new(HistoryHandler::new())
         };
 
-        let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), strategy.market_event_handler.clone(), strategy.interaction_handler.clone(), strategy.history_handler.clone());
+        let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), strategy.market_event_handler.clone(), strategy.interaction_handler.clone());
         Engine::launch(engine).await;
 
         strategy
@@ -194,8 +189,7 @@ impl FundForgeStrategy {
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
     pub async fn subscribe(&self, subscription: DataSubscription, retain_history: usize) {
-        self.history_handler.initialize_subscription(subscription.clone(), retain_history).await;
-        match self.subscription_handler.subscribe(subscription.clone()).await {
+        match self.subscription_handler.subscribe(subscription.clone(), retain_history, self.time_utc().await).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error subscribing: {:?}", e);
@@ -205,8 +199,7 @@ impl FundForgeStrategy {
 
     /// Unsubscribes from a subscription.
     pub async fn unsubscribe(&self, subscription: DataSubscription) {
-        self.history_handler.remove_subscription(&subscription).await;
-        match self.subscription_handler.unsubscribe(subscription.clone()).await {
+        match self.subscription_handler.unsubscribe(subscription.clone(), self.time_utc().await).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error subscribing: {:?}", e);
@@ -216,14 +209,14 @@ impl FundForgeStrategy {
 
     /// Sets the subscriptions for the strategy using the subscriptions_closure.
     /// This method is called when the strategy is initialized and can be called at any time to update the subscriptions based on the provided user logic within the closure.
-    pub async fn subscriptions_update(&self, subscriptions: Vec<DataSubscription>, _retain_history: usize) {
+    pub async fn subscriptions_update(&self, subscriptions: Vec<DataSubscription>, retain_history: usize) {
         let current_subscriptions = self.subscription_handler.subscriptions().await;
         //toDo sort subscriptions so lowest resolution comes first on iter for performance boost later
 
         // We subscribe to the new subscriptions and unsubscribe from the old ones
         for subscription in &subscriptions {
             if !current_subscriptions.contains(&subscription) {
-                match self.subscription_handler.subscribe(subscription.clone()).await {
+                match self.subscription_handler.subscribe(subscription.clone(), retain_history, self.time_utc().await).await {
                     Ok(_) => {},
                     Err(e) => {
                         println!("Error subscribing: {:?}", e);
@@ -235,7 +228,7 @@ impl FundForgeStrategy {
         // Unsubscribe from the old subscriptions
         for subscription in current_subscriptions {
             if !subscriptions.contains(&subscription) {
-                match self.subscription_handler.unsubscribe(subscription.clone()).await {
+                match self.subscription_handler.unsubscribe(subscription.clone(), self.time_utc().await).await {
                     Ok(_) => {},
                     Err(e) => {
                         println!("Error unsubscribing: {:?}", e);

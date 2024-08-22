@@ -244,8 +244,8 @@ pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOf
         let base_data = range_data(from_time.to_utc(), to_time.to_utc(), base_subscription.clone()).await;
 
         let mut consolidator = match subscription.resolution {
-            Resolution::Ticks(_) => ConsolidatorEnum::new_count_consolidator(subscription.clone()).unwrap(),
-            _ => ConsolidatorEnum::new_time_consolidator(subscription.clone()).unwrap()
+            Resolution::Ticks(_) => ConsolidatorEnum::new_count_consolidator(subscription.clone(), 1).unwrap(),
+            _ => ConsolidatorEnum::new_time_consolidator(subscription.clone(), 1).unwrap()
         };
         let mut consolodated_data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
         for (time, slice) in base_data {

@@ -19,7 +19,7 @@ use ahash::AHashMap;
 
 
 
-pub enum MarketHandlerEnum {
+pub(crate) enum MarketHandlerEnum {
     Backtest(HistoricalMarketHandler),
     Live(Arc<HistoricalMarketHandler>) //ToDo Will use this later so that live strategies share an event handler.. the local platform will also use this event handler
 }
