@@ -58,16 +58,27 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
 
-    let aud_cad_15s = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-    let aud_usd_15s = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-    strategy.subscribe(aud_cad_15s.clone(),100).await;
-    strategy.subscribe(aud_usd_15s.clone(),100).await;
+    let aud_cad_15m = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+    let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+    strategy.subscribe(aud_cad_15m.clone(),100).await;
+    strategy.subscribe(aud_usd_15m.clone(),100).await;
 
     //todo()! 2. NEXT TASK, SEPARATE fn for each event type. use some sort of strategy trait instead of an actual object.. this will probably solve sync problems
     //todo()! 3. speed up warm up.. need to get it 100% precise
 
     let mut warmup_complete = false;
+    let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
+        if warmup_complete {
+            let count = count + 1;
+            if count == 100 {
+                let aud_usd_60m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex);
+                strategy.subscribe(aud_usd_60m, 100).await;
+            }
+            if count == 5000 {
+                strategy.unsubscribe(aud_usd_15m.clone()).await;
+            }
+        }
         for strategy_event in event_slice {
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
@@ -78,14 +89,14 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 // we may return data we didn't subscribe to here, if we subscribed to a data type which the vendor can not supply we will return the consolidated data + the data used to create the consolidated data.
                 StrategyEvent::TimeSlice(_time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
-                    for base_data in &time_slice {
+                    'base_data_loop: for base_data in &time_slice {
                         match base_data {
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
-                               /* if !warmup_complete {
+                                if !warmup_complete {
                                     // we could manually warm up indicators etc here.
-                                    continue;
-                                }*/
+                                    break 'base_data_loop 
+                                }
                                 if candle.is_closed {
                                     println!("{}...Candle {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                 } else {
@@ -125,6 +136,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             }
                             BaseDataEnum::QuoteBar(_) => {}
                             BaseDataEnum::Tick(tick) => {
+                                if !warmup_complete {
+                                    // we could manually warm up indicators etc here.
+                                    break 'base_data_loop
+                                }
                                 //println!("{}...{} Tick: {}", strategy.time_utc().await, tick.symbol.name, base_data.time_created_utc());
                             }
                             BaseDataEnum::Quote(_) => {}

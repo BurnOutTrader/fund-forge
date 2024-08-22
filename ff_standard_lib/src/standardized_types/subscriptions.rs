@@ -141,3 +141,14 @@ impl DataSubscription {
         vec.to_vec()
     }
 }
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
+#[archive(
+    compare(PartialEq),
+    check_bytes,
+)]
+#[archive_attr(derive(Debug))]
+pub enum DataSubscriptionEvent {
+    Subscribed(DataSubscription),
+    Unsubscribed(DataSubscription)
+}

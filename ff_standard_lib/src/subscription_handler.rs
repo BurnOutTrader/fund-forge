@@ -9,7 +9,7 @@ use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::{Resolution};
-use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
+use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use ahash::AHashMap;
 use futures::future::join_all;
@@ -30,6 +30,14 @@ impl SubscriptionHandler {
             symbol_subscriptions: Arc::new(RwLock::new(Default::default())),
             subscriptions_updated: RwLock::new(true),
         }
+    }
+    
+    pub async fn subscription_events(&self) -> Vec<DataSubscriptionEvent> {
+        let mut subscription_events = vec![];
+        for symbol_handler in self.symbol_subscriptions.read().await.values() {
+            subscription_events.append(&mut symbol_handler.subscription_event_buffer.clone());
+        }
+        subscription_events
     }
 
     pub async fn subscribe(&self, new_subscription: DataSubscription) -> Result<(), FundForgeError> {
@@ -143,6 +151,7 @@ pub struct SymbolSubscriptionHandler {
     /// Count the subscriptions so we can delete the object if it is no longer being used
     active_count: i32,
     symbol: Symbol,
+    subscription_event_buffer: Vec<DataSubscriptionEvent>,
 }
 
 impl SymbolSubscriptionHandler {
@@ -152,6 +161,7 @@ impl SymbolSubscriptionHandler {
             secondary_subscriptions: vec![],
             active_count: 1,
             symbol: primary_subscription.symbol.clone(),
+            subscription_event_buffer: vec![],
         };
         handler.select_primary_subscription(primary_subscription).await;
         handler
@@ -211,10 +221,13 @@ impl SymbolSubscriptionHandler {
                 Resolution::Ticks(_) => BaseDataType::Ticks,
                 _ => new_subscription.base_data_type.clone()
             };
-            self.primary_subscription = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(),  resolution.clone(), data_type, new_subscription.market_type.clone());
+            let new_primary_subscription = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(),  resolution.clone(), data_type, new_subscription.market_type.clone());
+            self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_primary_subscription.clone()));
+            self.primary_subscription = new_primary_subscription;
         }
         else {
-            self.primary_subscription = new_subscription.clone();
+            self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+            self.primary_subscription = new_subscription;
         }
     }
 
@@ -284,17 +297,22 @@ impl SymbolSubscriptionHandler {
                     match self.primary_subscription.resolution {
                         Resolution::Ticks(_) => {
                             let consolidator = ConsolidatorEnum::new_count_consolidator(self.primary_subscription.clone()).unwrap();
-                            self.secondary_subscriptions.push(consolidator)
+                            self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(consolidator.subscription().clone()));
+                            self.secondary_subscriptions.push(consolidator);
+                            
                         },
                         _ => {
                             let consolidator = ConsolidatorEnum::new_time_consolidator(self.primary_subscription.clone()).unwrap();
-                            self.secondary_subscriptions.push(consolidator)
+                            self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(consolidator.subscription().clone()));
+                            self.secondary_subscriptions.push(consolidator);
                         },
                     }
                 }
 
                 if self.primary_subscription.resolution != Resolution::Ticks(1) {
-                    self.primary_subscription = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(),  Resolution::Ticks(1), new_subscription.base_data_type.clone(),new_subscription.market_type.clone());
+                    let new_primary_subscription = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(),  Resolution::Ticks(1), new_subscription.base_data_type.clone(),new_subscription.market_type.clone());
+                    self.primary_subscription = new_primary_subscription.clone();
+                    self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_primary_subscription.clone()));
                 }
             },
             _ => {
@@ -305,6 +323,7 @@ impl SymbolSubscriptionHandler {
                 else { //if we have no problem with adding new the resolution we can just add the new subscription as a consolidator
                     let consolidator = ConsolidatorEnum::new_time_consolidator(new_subscription.clone()).unwrap();
                     self.secondary_subscriptions.push(consolidator);
+                    self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
                 }
             }
         }
@@ -321,6 +340,7 @@ impl SymbolSubscriptionHandler {
                 &consolidator.subscription() != subscription
             });
         }
+        self.subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
         self.active_count -= 1;
     }
 

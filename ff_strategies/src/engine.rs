@@ -220,7 +220,6 @@ impl Engine {
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, month_start) in &month_years {
             'month_loop: loop {
-                self.subscription_handler.set_subscriptions_updated(false).await;
                 let time_slices = match self.get_base_time_slices(month_start.clone()).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -243,6 +242,15 @@ impl Engine {
 
                     if self.subscription_handler.subscriptions_updated().await {
                         last_time = time.clone();
+                        let subscription_events = self.subscription_handler.subscription_events().await;
+                        let strategy_event = vec![StrategyEvent::DataSubscriptionEvents(self.owner_id.clone(), subscription_events, time.timestamp())];
+                        match self.strategy_event_sender.send(strategy_event).await {
+                            Ok(_) => {},
+                            Err(e) => {
+                                println!("Error forwarding event: {:?}", e);
+                            }
+                        }
+                        self.subscription_handler.set_subscriptions_updated(false).await;
                         break 'slice_loop
                     }
 

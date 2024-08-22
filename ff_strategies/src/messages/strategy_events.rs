@@ -2,7 +2,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::orders::orders::OrderUpdateEvent;
 use ff_standard_lib::standardized_types::OwnerId;
-use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::drawing_object_handler::DrawingToolEvent;
 
@@ -75,7 +75,7 @@ pub enum StrategyEvent {
     /// - `DataSubscriptionEvent`: The subscription event details.
     /// - `EventForwarderType`: Specifies the type of event forwarder (Strategy or UI).
     /// - `i64`: A timestamp indicating when the event was created.
-    DataSubscriptionEvents(OwnerId, DataSubscriptionEvent, i64),
+    DataSubscriptionEvents(OwnerId, Vec<DataSubscriptionEvent>, i64),
 
     /// Enables remote control of strategy operations.
     ///
@@ -153,16 +153,7 @@ pub enum ShutdownEvent {
 
 
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
-#[archive_attr(derive(Debug))]
-pub enum DataSubscriptionEvent {
-    Subscribed(DataSubscription),
-    Unsubscribed(DataSubscription)
-}
+
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(
