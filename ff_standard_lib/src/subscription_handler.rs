@@ -11,7 +11,6 @@ use crate::standardized_types::time_slices::TimeSlice;
 use ahash::AHashMap;
 use futures::future::join_all;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
-use crate::consolidators::consolidators_trait::Consolidators;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -368,7 +367,7 @@ impl SymbolSubscriptionHandler {
             }
         } else { //if subscription is not the primary subscription, then it must be a consolidator and can be removed without changing the primary subscription
             self.secondary_subscriptions.retain(|consolidator| {
-                &consolidator.subscription() != subscription
+                consolidator.subscription() != subscription
             });
             self.subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
             self.active_count -= 1;
@@ -378,7 +377,7 @@ impl SymbolSubscriptionHandler {
     pub async fn all_subscriptions(&self) -> Vec<DataSubscription> {
         let mut all_subscriptions = vec![self.primary_subscription.clone()];
         for consolidator in self.secondary_subscriptions.iter() {
-            all_subscriptions.push(consolidator.subscription());
+            all_subscriptions.push(consolidator.subscription().clone());
         }
         all_subscriptions
     }

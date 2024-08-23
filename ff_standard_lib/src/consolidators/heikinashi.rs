@@ -1,6 +1,7 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
+use iced::Application;
+use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::candlesticks::open_time;
-use crate::consolidators::consolidators_trait::Consolidators;
 use crate::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -8,6 +9,7 @@ use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use crate::consolidators::count::ConsolidatorError;
 use crate::standardized_types::base_data::candle::Candle;
+use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::base_data::traits::BaseData;
 
 pub struct HeikinAshiConsolidator {
@@ -110,8 +112,8 @@ impl HeikinAshiConsolidator {
     }
 }
 
-impl Consolidators for HeikinAshiConsolidator {
-    fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+impl HeikinAshiConsolidator {
+    pub(crate) fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
         if subscription.base_data_type != BaseDataType::Candles {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for HeikinAshiConsolidator", subscription.base_data_type) });
         }
@@ -131,7 +133,7 @@ impl Consolidators for HeikinAshiConsolidator {
         })
     }
 
-    async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
         if subscription.base_data_type != BaseDataType::Candles {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for HeikinAshiConsolidator", subscription.base_data_type) });
         }
@@ -150,21 +152,9 @@ impl Consolidators for HeikinAshiConsolidator {
         consolidator.warmup(warm_up_to_time, strategy_mode).await;
         Ok(consolidator)
     }
-
-    fn subscription(&self) -> DataSubscription {
-        self.subscription.clone()
-    }
-
-    fn resolution(&self) -> Resolution {
-        self.subscription.resolution.clone()
-    }
-
-    fn history_to_retain(&self) -> usize {
-        self.history.number
-    }
-
+    
     //problem where this is returning a closed candle constantly
-    fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         if self.current_data.is_none() {
             let data = self.new_heikin_ashi_candle(base_data);
             self.current_data = Some(BaseDataEnum::Candle(data));
@@ -223,7 +213,7 @@ impl Consolidators for HeikinAshiConsolidator {
         panic!("Invalid base data type for Candle consolidator: {}", base_data.base_data_type())
     }
 
-    fn clear_current_data(&mut self) {
+    pub(crate) fn clear_current_data(&mut self) {
         self.current_data = None;
         self.history.clear();
         self.previous_ha_close = 0.0;
@@ -246,6 +236,45 @@ impl Consolidators for HeikinAshiConsolidator {
         match &self.current_data {
             Some(data) => Some(data.clone()),
             None => None,
+        }
+    }
+
+    async fn warmup(&mut self, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
+        //todo if live we will tell the self.subscription.symbol.data_vendor to .update_historical_symbol()... we will wait then continue
+        let vendor_resolutions = self.subscription.symbol.data_vendor.resolutions(self.subscription.market_type.clone()).await.unwrap();
+        let mut minimum_resolution: Option<Resolution> = None;
+        for resolution in vendor_resolutions {
+            if minimum_resolution.is_none() {
+                minimum_resolution = Some(resolution);
+            } else {
+                if resolution > minimum_resolution.unwrap() && resolution < self.subscription.resolution {
+                    minimum_resolution = Some(resolution);
+                }
+            }
+        }
+
+        let minimum_resolution = match minimum_resolution.is_none() {
+            true => panic!("{} does not have any resolutions available", self.subscription.symbol.data_vendor),
+            false => minimum_resolution.unwrap()
+        };
+
+        let data_type = match minimum_resolution {
+            Resolution::Ticks(_) => BaseDataType::Ticks,
+            _ => self.subscription.base_data_type.clone()
+        };
+
+        let from_time = to_time - (self.subscription.resolution.as_duration() * self.history().number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
+
+        let base_subscription = DataSubscription::new(self.subscription.symbol.name.clone(), self.subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, self.subscription.market_type.clone());
+        let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
+
+        for (_, slice) in &base_data {
+            for base_data in slice {
+                self.update(base_data);
+            }
+        }
+        if strategy_mode != StrategyMode::Backtest {
+            //todo() we will get any bars which are not in out serialized history here
         }
     }
 }

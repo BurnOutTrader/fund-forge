@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use crate::consolidators::candlesticks::CandleStickConsolidator;
-use crate::consolidators::consolidators_trait::Consolidators;
 use crate::consolidators::count::{CountConsolidator};
 use crate::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::consolidators::renko::RenkoConsolidator;
@@ -17,6 +16,7 @@ pub enum ConsolidatorEnum {
 
 impl ConsolidatorEnum {
     
+    /// Creates a new consolidator based on the subscription. if is_warmed_up is true, the consolidator will warm up to the to_time on its own.
     pub async fn create_consolidator(is_warmed_up: bool, subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> ConsolidatorEnum {
         let is_tick = match subscription.resolution {
             Resolution::Ticks(_) => true,
@@ -55,6 +55,7 @@ impl ConsolidatorEnum {
         }
     }
 
+    /// Updates the consolidator with the new data point.
     pub fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => {
@@ -72,24 +73,27 @@ impl ConsolidatorEnum {
         }
     }
 
-    pub fn subscription(&self) -> DataSubscription {
+    /// Clears the current data and history of the consolidator.
+    pub fn subscription(&self) -> &DataSubscription {
         match self {
-            ConsolidatorEnum::Count(count_consolidator) => count_consolidator.subscription.clone(),
-            ConsolidatorEnum::TimeCandlesOrQuoteBars(time_consolidator) => time_consolidator.subscription.clone(),
-            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => heikin_ashi_consolidator.subscription.clone(),
-            ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.subscription.clone(),
+            ConsolidatorEnum::Count(count_consolidator) => &count_consolidator.subscription,
+            ConsolidatorEnum::TimeCandlesOrQuoteBars(time_consolidator) => &time_consolidator.subscription,
+            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => &heikin_ashi_consolidator.subscription,
+            ConsolidatorEnum::Renko(renko_consolidator) => &renko_consolidator.subscription,
         }
     }
     
-    pub fn resolution(&self) -> Resolution {
+    /// Returns the resolution of the consolidator.
+    pub fn resolution(&self) -> &Resolution {
         match self {
-            ConsolidatorEnum::Count(count_consolidator) => count_consolidator.subscription.resolution.clone(),
-            ConsolidatorEnum::TimeCandlesOrQuoteBars(time_consolidator) => time_consolidator.subscription.resolution.clone(),
-            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => heikin_ashi_consolidator.subscription.resolution.clone(),
-            ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.subscription.resolution.clone(),
+            ConsolidatorEnum::Count(count_consolidator) => &count_consolidator.subscription.resolution,
+            ConsolidatorEnum::TimeCandlesOrQuoteBars(time_consolidator) => &time_consolidator.subscription.resolution,
+            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => &heikin_ashi_consolidator.subscription.resolution,
+            ConsolidatorEnum::Renko(renko_consolidator) => &renko_consolidator.subscription.resolution,
         }
     }
     
+    /// Returns the history to retain for the consolidator.
     pub fn history_to_retain(&self) -> usize {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => count_consolidator.history.number,

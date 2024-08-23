@@ -6,7 +6,6 @@ use futures::future::join_all;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::candlesticks::CandleStickConsolidator;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
-use crate::consolidators::consolidators_trait::Consolidators;
 use crate::consolidators::count::CountConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -250,6 +249,7 @@ pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOf
             Resolution::Ticks(_) => ConsolidatorEnum::Count(CountConsolidator::new(subscription.clone(), 0).unwrap()),
             _ => ConsolidatorEnum::TimeCandlesOrQuoteBars(CandleStickConsolidator::new(subscription.clone(), 0).unwrap())
         };
+        
         let mut consolidated_data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
         for (time, slice) in base_data {
             for data in slice {

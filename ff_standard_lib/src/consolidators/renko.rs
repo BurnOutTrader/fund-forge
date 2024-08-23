@@ -9,7 +9,6 @@ use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::consolidators::consolidators_trait::Consolidators;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[archive(
@@ -34,13 +33,8 @@ pub struct RenkoConsolidator {
     parameters: RenkoParameters,
 }
 
-impl Consolidators for RenkoConsolidator {
-    fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
-        let number = match &subscription.resolution {
-            Resolution::Ticks(num) => num,
-            _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),
-        };
-
+impl RenkoConsolidator {
+    pub(crate) fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
         let current_data = match &subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Instant, subscription.candle_type.clone().unwrap()),
             _ => return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type) }),
@@ -64,11 +58,7 @@ impl Consolidators for RenkoConsolidator {
         })
     }
 
-    async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
-        let number = match subscription.resolution {
-            Resolution::Ticks(num) => num,
-            _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),
-        };
+    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
         let current_data = match subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Instant, subscription.candle_type.clone().unwrap()),
             _ => return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type) }),
@@ -95,25 +85,12 @@ impl Consolidators for RenkoConsolidator {
         Ok(consolidator)
     }
 
-
-    fn subscription(&self) -> DataSubscription {
-        self.subscription.clone()
-    }
-
-    fn resolution(&self) -> Resolution {
-        self.subscription.resolution.clone()
-    }
-
-    fn history_to_retain(&self) -> usize {
-        self.history.number
-    }
-
     /// Returns a candle if the count is reached
-    fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         todo!() //will need to be based on renko parameters
     }
     
-    fn clear_current_data(&mut self) {
+    pub(crate) fn clear_current_data(&mut self) {
         self.current_data = Candle::new(self.subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Instant, self.subscription.candle_type.clone().unwrap());
         self.history.clear();
     }
