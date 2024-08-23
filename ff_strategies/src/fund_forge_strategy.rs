@@ -20,7 +20,7 @@ use crate::market_handlers::{MarketHandlerEnum};
 use crate::drawing_object_handler::DrawingObjectHandler;
 use crate::engine::Engine;
 use crate::interaction_handler::InteractionHandler;
-use crate::messages::strategy_events::{EventTimeSlice, StrategyInteractionMode};
+use crate::messages::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -82,10 +82,21 @@ impl FundForgeStrategy {
             StrategyMode::Live => panic!("Live mode not yet implemented"),
             StrategyMode::LivePaperTrading => panic!("Live paper mode not yet implemented")
         };
-
+        
         let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
-        for subscription in subscriptions {
-            subscription_handler.subscribe(subscription.clone(), retain_history, start_time.to_utc()).await.unwrap();
+        if !subscriptions.is_empty() {
+            for subscription in subscriptions {
+                subscription_handler.subscribe(subscription.clone(), retain_history, start_time.to_utc()).await.unwrap();
+            }
+            let subscription_events = subscription_handler.subscription_events().await;
+            let strategy_event = vec![StrategyEvent::DataSubscriptionEvents(owner_id.clone(), subscription_events, start_time.timestamp())];
+            match strategy_event_sender.send(strategy_event).await {
+                Ok(_) => {},
+                Err(e) => {
+                    println!("Error forwarding event: {:?}", e);
+                }
+            }
+            subscription_handler.set_subscriptions_updated(false).await;
         }
 
         let strategy = FundForgeStrategy {
@@ -199,7 +210,7 @@ impl FundForgeStrategy {
 
     /// Unsubscribes from a subscription.
     pub async fn unsubscribe(&self, subscription: DataSubscription) {
-        match self.subscription_handler.unsubscribe(subscription.clone(), self.time_utc().await).await {
+        match self.subscription_handler.unsubscribe(subscription.clone()).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error subscribing: {:?}", e);
@@ -228,7 +239,7 @@ impl FundForgeStrategy {
         // Unsubscribe from the old subscriptions
         for subscription in current_subscriptions {
             if !subscriptions.contains(&subscription) {
-                match self.subscription_handler.unsubscribe(subscription.clone(), self.time_utc().await).await {
+                match self.subscription_handler.unsubscribe(subscription.clone()).await {
                     Ok(_) => {},
                     Err(e) => {
                         println!("Error unsubscribing: {:?}", e);

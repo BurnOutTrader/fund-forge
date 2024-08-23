@@ -77,10 +77,9 @@ impl SubscriptionHandler {
             let symbol_handler = SymbolSubscriptionHandler::new(new_subscription.clone(), self.is_warmed_up.lock().await.clone(), history_to_retain, current_time, self.strategy_mode).await;
             symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
         }
-        else {
-            let symbol_handler = symbol_subscriptions.get_mut(&new_subscription.symbol).unwrap();
-            symbol_handler.subscribe(new_subscription, history_to_retain, current_time, self.strategy_mode).await;
-        }
+        let symbol_handler = symbol_subscriptions.get_mut(&new_subscription.symbol).unwrap();
+        symbol_handler.subscribe(new_subscription, history_to_retain, current_time, self.strategy_mode).await;
+
         *self.subscriptions_updated.write().await = true;
         Ok(())
     }
@@ -89,7 +88,7 @@ impl SubscriptionHandler {
     /// 'subscription: DataSubscription' The subscription to unsubscribe from.
     /// 'current_time: DateTime<Utc>' The current time is used to change our base data subscription and warm up any new consolidators if we are adjusting our base resolution.
     /// 'strategy_mode: StrategyMode' The strategy mode is used to determine how to warm up the history, in live mode we may not yet have a serialized history to the current time.
-    pub async fn unsubscribe(&self, subscription: DataSubscription, current_time: DateTime<Utc>) -> Result<(), FundForgeError>  {
+    pub async fn unsubscribe(&self, subscription: DataSubscription) -> Result<(), FundForgeError>  {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             let mut fundamental_subscriptions = self.fundamental_subscriptions.write().await;
             if fundamental_subscriptions.contains(&subscription) {
@@ -102,7 +101,7 @@ impl SubscriptionHandler {
         }
         let mut handler = self.symbol_subscriptions.write().await;
         let symbol_handler = handler.get_mut(&subscription.symbol).unwrap();
-        symbol_handler.unsubscribe(&subscription, current_time, self.strategy_mode).await;
+        symbol_handler.unsubscribe(&subscription).await;
         if symbol_handler.active_count == 0 {
             handler.remove(&subscription.symbol);
         }
@@ -329,6 +328,9 @@ impl SymbolSubscriptionHandler {
     }
 
     async fn subscribe(&mut self, new_subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
+        if self.all_subscriptions().await.contains(&new_subscription) {
+            return
+        }
         match new_subscription.resolution {
             Resolution::Ticks(number) => {
                 if !new_subscription.symbol.data_vendor.resolutions(new_subscription.market_type.clone()).await.unwrap().contains(&Resolution::Ticks(1)) {
@@ -381,17 +383,12 @@ impl SymbolSubscriptionHandler {
         self.active_count += 1;
     }
 
-    async fn unsubscribe(&mut self, subscription: &DataSubscription, current_time: DateTime<Utc>, strategy_mode: StrategyMode) {
+    async fn unsubscribe(&mut self, subscription: &DataSubscription) {
         if subscription == &self.primary_subscription {
             if self.secondary_subscriptions.is_empty() {
                 self.subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
                 self.active_count -= 1;
                 return;
-            }
-            let consolidator = self.secondary_subscriptions.iter()
-                .min_by_key(|consolidator| consolidator.subscription().resolution.clone());
-            if let Some(lowest_resolution_consolidator) = consolidator {
-                self.select_primary_subscription(lowest_resolution_consolidator.subscription(), lowest_resolution_consolidator.history_to_retain(), current_time, strategy_mode).await;
             }
         } else { //if subscription is not the primary subscription, then it must be a consolidator and can be removed without changing the primary subscription
             self.secondary_subscriptions.retain(|consolidator| {
