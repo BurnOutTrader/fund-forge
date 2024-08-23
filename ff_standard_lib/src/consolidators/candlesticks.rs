@@ -160,39 +160,23 @@ impl CandleStickConsolidator {
                BaseDataEnum::QuoteBar(quote_bar) => {
                    match base_data {
                        BaseDataEnum::Quote(quote) => {
-                           if quote.ask > quote_bar.ask_high {
-                               quote_bar.ask_high = quote.ask;
-                           }
-                           if quote.ask < quote_bar.ask_low {
-                               quote_bar.ask_low = quote.ask;
-                           }
-                           if quote.bid > quote_bar.bid_high {
-                               quote_bar.bid_high = quote.bid;
-                           }
-                           if quote.bid < quote_bar.bid_low {
-                               quote_bar.bid_low = quote.bid;
-                           }
+                           quote_bar.ask_high = quote_bar.ask_high.max(quote.ask);
+                           quote_bar.ask_low = quote_bar.ask_low.min(quote.ask);
+                           quote_bar.bid_high = quote_bar.bid_high.max(quote.bid);
+                           quote_bar.bid_low = quote_bar.bid_low.min(quote.bid);
                            quote_bar.range = quote_bar.ask_high - quote_bar.bid_low;
                            quote_bar.ask_close = quote.ask;
                             quote_bar.bid_close = quote.bid;
                            return vec![BaseDataEnum::QuoteBar(quote_bar.clone())]
                        },
                        BaseDataEnum::QuoteBar(bar) => {
-                            if bar.ask_high > quote_bar.ask_high {
-                                 quote_bar.ask_high = bar.ask_high;
-                            }
-                            if bar.ask_low < quote_bar.ask_low {
-                                 quote_bar.ask_low = bar.ask_low;
-                            }
-                            if bar.bid_high > quote_bar.bid_high {
-                                 quote_bar.bid_high = bar.bid_high;
-                            }
-                            if bar.bid_low < quote_bar.bid_low {
-                                 quote_bar.bid_low = bar.bid_low;
-                            }
+                           quote_bar.ask_high = quote_bar.ask_high.max(bar.ask_high);
+                           quote_bar.ask_low = quote_bar.ask_low.min(bar.ask_low);
+                           quote_bar.bid_high = quote_bar.bid_high.max(bar.bid_high);
+                           quote_bar.bid_low = bar.bid_low.min(bar.bid_low);
                            quote_bar.range = quote_bar.ask_high - quote_bar.bid_low;
                            quote_bar.ask_close = bar.ask_close;
-                            quote_bar.bid_close = bar.bid_close;
+                           quote_bar.bid_close = bar.bid_close;
                            quote_bar.volume += bar.volume;
                            return vec![BaseDataEnum::QuoteBar(quote_bar.clone())]
                        },
@@ -247,36 +231,24 @@ impl CandleStickConsolidator {
                 BaseDataEnum::Candle(candle) => {
                     match base_data {
                         BaseDataEnum::Tick(tick) => {
-                            if tick.price > candle.high {
-                                candle.high = tick.price;
-                            }
-                            if tick.price < candle.low {
-                                candle.low = tick.price;
-                            }
+                            candle.high = candle.high.max(tick.price);
+                            candle.low = candle.low.min(tick.price);
                             candle.close = tick.price;
                             candle.range = candle.high - candle.low;
                             candle.volume += tick.volume;
                             return vec![BaseDataEnum::Candle(candle.clone())]
                         },
                         BaseDataEnum::Candle(new_candle) => {
-                            if new_candle.high > candle.high {
-                                candle.high = new_candle.high;
-                            }
-                            if new_candle.low < candle.low {
-                                candle.low = new_candle.low;
-                            }
+                            candle.high = candle.high.max(new_candle.high);
+                            candle.low = candle.low.min(new_candle.low);
                             candle.range = candle.high - candle.low;
                             candle.close = new_candle.close;
                             candle.volume += new_candle.volume;
                             return vec![BaseDataEnum::Candle(candle.clone())]
                         },
                         BaseDataEnum::Price(price) => {
-                            if price.price > candle.high {
-                                candle.high = price.price;
-                            }
-                            if price.price < candle.low {
-                                candle.low = price.price;
-                            }
+                            candle.high = candle.high.max(price.price);
+                            candle.low = candle.low.min(price.price);
                             candle.range = candle.high - candle.low;
                             candle.close = price.price;
                             return vec![BaseDataEnum::Candle(candle.clone())]

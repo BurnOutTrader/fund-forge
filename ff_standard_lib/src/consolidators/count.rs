@@ -127,14 +127,12 @@ impl CountConsolidator {
                     self.current_data.time = tick.time.clone();
                     self.current_data.open = tick.price;
                     self.current_data.volume = tick.volume;
-                }
-                self.counter += 1;
-                if tick.price > self.current_data.high {
                     self.current_data.high = tick.price;
-                }
-                if tick.price < self.current_data.low {
                     self.current_data.low = tick.price;
                 }
+                self.counter += 1;
+                self.current_data.high = self.current_data.high.max(tick.price);
+                self.current_data.low = self.current_data.low.min(tick.price);
                 self.current_data.close = tick.price;
                 self.current_data.volume += tick.volume;
                 if self.counter == self.number {

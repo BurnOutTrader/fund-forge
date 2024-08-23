@@ -6,7 +6,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
-use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
+use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
 use crate::consolidators::count::ConsolidatorError;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -24,7 +24,7 @@ impl HeikinAshiConsolidator {
         if subscription.base_data_type != BaseDataType::Candles {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for HeikinAshiConsolidator", subscription.base_data_type) });
         }
-        
+
         if let Some(candle_type) = &subscription.candle_type {
             if candle_type != &CandleType::HeikinAshi {
                 return Err(ConsolidatorError { message: format!("{:?} is an Invalid candle type for HeikinAshiConsolidator", candle_type) });
@@ -47,7 +47,7 @@ impl HeikinAshiConsolidator {
         if let Resolution::Ticks(_) = subscription.resolution {
             return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for TimeConsolidator", subscription.resolution) });
         }
-        
+
 
         let mut consolidator = Self {
             current_data: None,
@@ -73,22 +73,22 @@ impl HeikinAshiConsolidator {
                 }
             }
         }
-    
+
         let minimum_resolution = match minimum_resolution.is_none() {
             true => panic!("{} does not have any resolutions available", self.subscription.symbol.data_vendor),
             false => minimum_resolution.unwrap()
         };
-    
+
         let data_type = match minimum_resolution {
             Resolution::Ticks(_) => BaseDataType::Ticks,
             _ => self.subscription.base_data_type.clone()
         };
-    
+
         let from_time = to_time - (self.subscription.resolution.as_duration() * self.history.number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
-    
+
         let base_subscription = DataSubscription::new(self.subscription.symbol.name.clone(), self.subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, self.subscription.market_type.clone());
         let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
-    
+
         for (_, slice) in &base_data {
             for base_data in slice {
                 self.update(base_data);
@@ -96,6 +96,22 @@ impl HeikinAshiConsolidator {
         }
         if strategy_mode != StrategyMode::Backtest {
             //todo() we will get any bars which are not in out serialized history here
+        }
+    }
+    
+    fn candle_from_base_data(&self, ha_open: f64, ha_high: f64, ha_low: f64, ha_close: f64, volume: f64, time: String, is_closed: bool, range: f64) -> Candle {
+        Candle {
+            symbol: self.subscription.symbol.clone(),
+            open: ha_open,
+            high: ha_high,
+            low: ha_low,
+            close: ha_close,
+            volume,
+            time,
+            resolution: self.subscription.resolution.clone(),
+            is_closed,
+            range,
+            candle_type: CandleType::HeikinAshi,
         }
     }
 
@@ -116,19 +132,7 @@ impl HeikinAshiConsolidator {
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
-                return Candle {
-                    symbol: candle.symbol.clone(),
-                    open: ha_open,
-                    high: ha_high,
-                    low: ha_low,
-                    close: ha_close,
-                    volume: candle.volume,
-                    time: time.to_string(),
-                    resolution: self.subscription.resolution.clone(),
-                    is_closed: false,
-                    range: ha_high - ha_low,
-                    candle_type: self.subscription.candle_type.clone().unwrap()
-                }
+                self.candle_from_base_data(ha_open, ha_high, ha_low, ha_close, candle.volume, time.to_string(), false, ha_high - ha_low)
             },
             BaseDataEnum::Price(price) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
@@ -145,19 +149,7 @@ impl HeikinAshiConsolidator {
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
-                return Candle {
-                    symbol: price.symbol.clone(),
-                    open: ha_open,
-                    high: ha_high,
-                    low: ha_low,
-                    close: ha_close,
-                    volume: 0.0,
-                    time: time.to_string(),
-                    resolution: self.subscription.resolution.clone(),
-                    is_closed: false,
-                    range: ha_high - ha_low,
-                    candle_type: self.subscription.candle_type.clone().unwrap()
-                }
+                self.candle_from_base_data(ha_open, ha_high, ha_low, ha_close, 0.0, time.to_string(), false, ha_high - ha_low)
             },
             BaseDataEnum::QuoteBar(bar) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
@@ -174,19 +166,7 @@ impl HeikinAshiConsolidator {
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
-                return Candle {
-                    symbol: bar.symbol.clone(),
-                    open: ha_open,
-                    high: ha_high,
-                    low: ha_low,
-                    close: ha_close,
-                    volume: bar.volume,
-                    time: time.to_string(),
-                    resolution: self.subscription.resolution.clone(),
-                    is_closed: false,
-                    range: ha_high - ha_low,
-                    candle_type: self.subscription.candle_type.clone().unwrap()
-                }
+                self.candle_from_base_data(ha_open, ha_high, ha_low, ha_close, bar.volume, time.to_string(), false, ha_high - ha_low)
             },
             BaseDataEnum::Tick(tick) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
@@ -203,24 +183,12 @@ impl HeikinAshiConsolidator {
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
-                return Candle {
-                    symbol: tick.symbol.clone(),
-                    open: ha_open,
-                    high: ha_high,
-                    low: ha_low,
-                    close: ha_close,
-                    volume: tick.volume,
-                    time: time.to_string(),
-                    resolution: self.subscription.resolution.clone(),
-                    is_closed: false,
-                    range: ha_high - ha_low,
-                    candle_type: self.subscription.candle_type.clone().unwrap()
-                }
+                self.candle_from_base_data(ha_open, ha_high, ha_low, ha_close, tick.volume, time.to_string(), false, ha_high - ha_low)
             },
             _ => panic!("Invalid base data type for Heikin Ashi calculation")
         }
     }
-    
+
     //problem where this is returning a closed candle constantly
     pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         if self.current_data.is_none() {
