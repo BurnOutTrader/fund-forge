@@ -7,6 +7,7 @@ use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::server_connections::{PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
+use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_strategies::messages::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
@@ -23,6 +24,7 @@ fn set_subscriptions_initial() -> Vec<DataSubscription> {
     let subscriptions: Vec<DataSubscription> = vec![
         DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
         DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
+        DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)
     ];
     subscriptions
 }
@@ -57,26 +59,18 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
 
-    let aud_cad_15m = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-    let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-    strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_15m.clone()],100).await;
-
     let mut warmup_complete = false;
     let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         if warmup_complete {
             count += 1;
-            //todo... neeed to get subscribing ability in the event loop.
-            //todo... then build unit tests for each event handler using test strategy initialization fn.
-            // finish matching engine for backtests, download historical currency data for currency converter fn, have option for higher resolution conversions if tick data available.
-            if count == 10 { 
-                println!("Subscribing AUD-USD 15m");
-                let aud_usd_60m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex);
-                strategy.subscribe(aud_usd_60m, 100).await;
-            }
-            if count == 50 {
-                println!("Unsubscribing AUD-USD 15m");
-                strategy.unsubscribe(aud_usd_15m.clone()).await;
+            if count == 100000 {
+                //todo... neeed to get subscribing ability in the event loop.
+                //todo... then build unit tests for each event handler using test strategy initialization fn.
+                // finish matching engine for backtests, download historical currency data for currency converter fn, have option for higher resolution conversions if tick data available.
+                let aud_cad_60m = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex);
+                let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+                strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()],100).await;
             }
         }
         for strategy_event in event_slice {
@@ -93,12 +87,12 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                         match base_data {
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
-                                if !warmup_complete {
+                         /*       if !warmup_complete {
                                     // we could manually warm up indicators etc here.
-                                    break 'base_data_loop 
-                                }
+                                    continue
+                                }*/
                                 if candle.is_closed {
-                                    //println!("{}...Candle {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                 } else {
                                     //Todo Documents, Open bars get sent through with every tick, so you can always access the open bar using highest resolution.
                                     //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
@@ -136,7 +130,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             }
                             BaseDataEnum::QuoteBar(_) => {}
                             BaseDataEnum::Tick(tick) => {
-                                //println!("{}...{} Tick: {}", strategy.time_utc().await, tick.symbol.name, base_data.time_created_utc());
+                                if !warmup_complete {
+                                    // we could manually warm up indicators etc here.
+                                    println!("{}...{} Tick: {}", strategy.time_utc().await, tick.symbol.name, base_data.time_created_utc());
+                                }
                             }
                             BaseDataEnum::Quote(_) => {}
                             BaseDataEnum::Fundamental(_) => {}
@@ -155,7 +152,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 }
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
                 StrategyEvent::StrategyControls(_, _, _) => {}
-                StrategyEvent::ShutdownEvent(_, _) => break 'strategy_loop,
+                StrategyEvent::ShutdownEvent(_, _) => break 'strategy_loop, //we should handle shutdown gracefully by first ending the strategy loop.
                 StrategyEvent::WarmUpComplete(_) => {
                     warmup_complete = true;
                 }
