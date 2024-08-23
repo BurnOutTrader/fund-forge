@@ -8,4 +8,5 @@ pub mod app;
 pub mod subscription_handler;
 pub mod rolling_window;
 pub mod consolidators;
+pub mod indicators;
 

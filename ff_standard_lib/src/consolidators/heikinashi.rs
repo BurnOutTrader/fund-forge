@@ -15,7 +15,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 pub struct HeikinAshiConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
-    pub(crate) history: RollingWindow,
+    pub(crate) history: RollingWindow<BaseDataEnum>,
     previous_ha_close: f64,
     previous_ha_open: f64,
 }
@@ -220,7 +220,7 @@ impl HeikinAshiConsolidator {
         self.previous_ha_open = 0.0;
     }
 
-    fn history(&self) -> &RollingWindow {
+    fn history(&self) -> &RollingWindow<BaseDataEnum> {
         &self.history
     }
     

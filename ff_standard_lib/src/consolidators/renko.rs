@@ -29,7 +29,7 @@ pub struct RenkoParameters {
 pub struct RenkoConsolidator {
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
-    pub(crate) history: RollingWindow,
+    pub(crate) history: RollingWindow<BaseDataEnum>,
     parameters: RenkoParameters,
 }
 
@@ -95,7 +95,7 @@ impl RenkoConsolidator {
         self.history.clear();
     }
 
-    fn history(&self) -> &RollingWindow {
+    fn history(&self) -> &RollingWindow<BaseDataEnum> {
         &self.history
     }
 

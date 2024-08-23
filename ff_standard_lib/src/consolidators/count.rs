@@ -20,7 +20,7 @@ pub struct CountConsolidator {
     counter: u64,
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
-    pub(crate) history: RollingWindow,
+    pub(crate) history: RollingWindow<BaseDataEnum>,
 }
 
 impl CountConsolidator {
@@ -116,7 +116,7 @@ impl CountConsolidator {
         };
     }
 
-    fn history(&self) -> &RollingWindow {
+    fn history(&self) -> &RollingWindow<BaseDataEnum> {
         &self.history
     }
 

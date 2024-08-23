@@ -51,7 +51,7 @@ pub fn open_time(subscription: &DataSubscription, time: DateTime<Utc>) -> DateTi
 pub struct CandleStickConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
-    pub(crate) history: RollingWindow,
+    pub(crate) history: RollingWindow<BaseDataEnum>,
 }
 
 impl CandleStickConsolidator {
@@ -262,7 +262,7 @@ impl CandleStickConsolidator {
         self.history.clear();
     }
 
-    fn history(&self) -> &RollingWindow {
+    fn history(&self) -> &RollingWindow<BaseDataEnum> {
         &self.history
     }
 
