@@ -51,7 +51,7 @@ async fn main() {
         None,
         100
     ).await;
-    
+
 
     on_data_received(strategy, notify, strategy_event_receiver).await;
 }
@@ -95,7 +95,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                     continue
                                 }*/
                                 if candle.is_closed {
-                                    println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                 } else {
                                     //Todo Documents, Open bars get sent through with every tick, so you can always access the open bar using highest resolution.
                                     //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.

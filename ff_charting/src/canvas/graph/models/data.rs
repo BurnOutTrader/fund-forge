@@ -6,7 +6,7 @@ use iced::widget::canvas:: Frame;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use ff_standard_lib::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use ff_standard_lib::standardized_types::base_data::candle::{Candle, CandleCalculationType};
+use ff_standard_lib::standardized_types::base_data::candle::{Candle};
 use ff_standard_lib::standardized_types::base_data::history::{history_many};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;

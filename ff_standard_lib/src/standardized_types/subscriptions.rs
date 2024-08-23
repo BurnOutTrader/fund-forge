@@ -69,7 +69,7 @@ impl Symbol {
     }
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+#[derive(Debug, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[archive(
     // This will generate a PartialEq impl between our unarchived and archived
     // types:
@@ -113,7 +113,7 @@ pub struct DataSubscription {
 }
 
 impl DataSubscription {
-    
+
     // we use this for any data that is represented by base data types
     pub fn new(symbol_name: String, data_vendor: DataVendor, resolution: Resolution, base_data_type: BaseDataType, market_type: MarketType) -> Self {
         let cleaned_symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
@@ -121,7 +121,7 @@ impl DataSubscription {
         let candle_type = match base_data_type {
             BaseDataType::Candles => Some(CandleType::CandleStick),
             BaseDataType::QuoteBars => Some(CandleType::CandleStick),
-            BaseDataType::Ticks => { 
+            BaseDataType::Ticks => {
                 match resolution {
                     Resolution::Ticks(number) => if number > 1 { Some(CandleType::CandleStick) } else { None },
                     _ => None

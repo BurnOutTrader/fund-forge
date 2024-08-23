@@ -9,7 +9,6 @@ use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use crate::consolidators::count::ConsolidatorError;
 use crate::standardized_types::base_data::candle::Candle;
-use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::traits::BaseData;
 
 pub struct HeikinAshiConsolidator {
@@ -126,7 +125,7 @@ impl HeikinAshiConsolidator {
                     volume: candle.volume,
                     time: time.to_string(),
                     resolution: self.subscription.resolution.clone(),
-                    is_closed: candle.is_closed,
+                    is_closed: false,
                     range: ha_high - ha_low,
                     candle_type: self.subscription.candle_type.clone().unwrap()
                 }
@@ -155,7 +154,7 @@ impl HeikinAshiConsolidator {
                     volume: 0.0,
                     time: time.to_string(),
                     resolution: self.subscription.resolution.clone(),
-                    is_closed: true,
+                    is_closed: false,
                     range: ha_high - ha_low,
                     candle_type: self.subscription.candle_type.clone().unwrap()
                 }
@@ -184,7 +183,7 @@ impl HeikinAshiConsolidator {
                     volume: bar.volume,
                     time: time.to_string(),
                     resolution: self.subscription.resolution.clone(),
-                    is_closed: true,
+                    is_closed: false,
                     range: ha_high - ha_low,
                     candle_type: self.subscription.candle_type.clone().unwrap()
                 }
@@ -213,16 +212,16 @@ impl HeikinAshiConsolidator {
                     volume: tick.volume,
                     time: time.to_string(),
                     resolution: self.subscription.resolution.clone(),
-                    is_closed: true,
+                    is_closed: false,
                     range: ha_high - ha_low,
                     candle_type: self.subscription.candle_type.clone().unwrap()
                 }
             },
             _ => panic!("Invalid base data type for Heikin Ashi calculation")
         }
-        
     }
-
+    
+    //problem where this is returning a closed candle constantly
     pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         if self.current_data.is_none() {
             let data = self.new_heikin_ashi_candle(base_data);
