@@ -8,7 +8,8 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
-use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use crate::consolidators::consolidators_trait::Consolidators;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[archive(
@@ -33,39 +34,8 @@ pub struct RenkoConsolidator {
     parameters: RenkoParameters,
 }
 
-impl RenkoConsolidator {
-    pub async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
-        let number = match subscription.resolution {
-            Resolution::Ticks(num) => num,
-            _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),
-        };
-        let current_data = match subscription.base_data_type {
-            BaseDataType::Ticks => Candle::new(subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Instant, subscription.candle_type.clone().unwrap()),
-            _ => return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type) }),
-        };
-        
-        let parameters = match subscription.candle_type.clone() {
-            Some(candle_type) => {
-                match candle_type {
-                    CandleType::Renko(params) => params,
-                    _ => panic!("Unsupported candle type for RenkoConsolidator"),
-                }
-            }
-            _ => panic!("RenkoConsolidator requires a candle type"),
-        };
-
-        let mut consolidator = RenkoConsolidator {
-            current_data: current_data,
-            subscription,
-            history: RollingWindow::new(history_to_retain),
-            parameters: parameters.clone(),
-        };
-        
-        consolidator.warmup(warm_up_to_time, strategy_mode).await;
-        Ok(consolidator)
-    }
-
-    pub fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+impl Consolidators for RenkoConsolidator {
+    fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
         let number = match &subscription.resolution {
             Resolution::Ticks(num) => num,
             _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),
@@ -87,13 +57,82 @@ impl RenkoConsolidator {
         };
 
         Ok(RenkoConsolidator {
-            current_data: current_data,
+            current_data,
             subscription,
             history: RollingWindow::new(history_to_retain),
             parameters: parameters.clone(),
         })
     }
 
+    async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
+        let number = match subscription.resolution {
+            Resolution::Ticks(num) => num,
+            _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),
+        };
+        let current_data = match subscription.base_data_type {
+            BaseDataType::Ticks => Candle::new(subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Instant, subscription.candle_type.clone().unwrap()),
+            _ => return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type) }),
+        };
+        
+        let parameters = match subscription.candle_type.clone() {
+            Some(candle_type) => {
+                match candle_type {
+                    CandleType::Renko(params) => params,
+                    _ => panic!("Unsupported candle type for RenkoConsolidator"),
+                }
+            }
+            _ => panic!("RenkoConsolidator requires a candle type"),
+        };
+
+        let mut consolidator = RenkoConsolidator {
+            current_data,
+            subscription,
+            history: RollingWindow::new(history_to_retain),
+            parameters: parameters.clone(),
+        };
+        
+        consolidator.warmup(warm_up_to_time, strategy_mode).await;
+        Ok(consolidator)
+    }
+
+
+    fn subscription(&self) -> DataSubscription {
+        self.subscription.clone()
+    }
+
+    fn resolution(&self) -> Resolution {
+        self.subscription.resolution.clone()
+    }
+
+    fn history_to_retain(&self) -> usize {
+        self.history.number
+    }
+
+    /// Returns a candle if the count is reached
+    fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+        todo!() //will need to be based on renko parameters
+    }
+    
+    fn clear_current_data(&mut self) {
+        self.current_data = Candle::new(self.subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Instant, self.subscription.candle_type.clone().unwrap());
+        self.history.clear();
+    }
+
+    fn history(&self) -> &RollingWindow {
+        &self.history
+    }
+
+
+    fn index(&self, index: usize) -> Option<BaseDataEnum> {
+        match self.history.get(index) {
+            Some(data) => Some(data.clone()),
+            None => None,
+        }
+    }
+
+    fn current(&self) -> Option<BaseDataEnum> {
+        Some(BaseDataEnum::Candle(self.current_data.clone()))
+    }
 
     async fn warmup(&mut self, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
         //todo if live we will tell the self.subscription.symbol.data_vendor to .update_historical_symbol()... we will wait then continue
@@ -132,14 +171,5 @@ impl RenkoConsolidator {
         if strategy_mode != StrategyMode::Backtest {
             //todo() we will get any bars which are not in out serialized history here
         }
-    }
-
-    pub(crate) fn clear_current_data(&mut self) {
-        todo!()
-    }
-
-    /// Returns a candle if the count is reached
-    pub fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
-        todo!() //will need to be based on renko parameters
     }
 }

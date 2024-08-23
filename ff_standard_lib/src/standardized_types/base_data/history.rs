@@ -3,8 +3,11 @@ use crate::standardized_types::time_slices::UnstructuredSlice;
 use std::collections::{btree_map, BTreeMap, HashMap};
 use chrono::{DateTime, FixedOffset, Utc};
 use futures::future::join_all;
-use iced::Application;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
+use crate::consolidators::candlesticks::CandleStickConsolidator;
+use crate::consolidators::consolidator_enum::ConsolidatorEnum;
+use crate::consolidators::consolidators_trait::Consolidators;
+use crate::consolidators::count::CountConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType};
@@ -12,7 +15,6 @@ use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::helpers::converters::next_month;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
-use crate::consolidators::consolidator_enum::ConsolidatorEnum;
 
 /// Method responsible for getting historical data for a specific subscription.
 /// Users should use this method to get historical data for a specific subscription/subscriptions
@@ -207,6 +209,7 @@ pub async fn history_many(subscriptions: Vec<DataSubscription>, from_time: DateT
 /// `Option<BTreeMap<i64, TimeSlice>>` - where `i64` is the `time` and `TimeSlice` is the data for that time.
 /// The TimeSlice is a type `Vec<BaseDataEnum>` that occurred at that moment in time. any kind of `BaseDataEnum` can be mixed into this list. \
 pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOffset>, to_time: DateTime<FixedOffset>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
+    //todo!()
     if from_time > to_time {
         panic!("From time cannot be greater than to time");
     }
@@ -244,10 +247,10 @@ pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOf
         let base_data = range_data(from_time.to_utc(), to_time.to_utc(), base_subscription.clone()).await;
 
         let mut consolidator = match subscription.resolution {
-            Resolution::Ticks(_) => ConsolidatorEnum::new_count_consolidator(subscription.clone(), 1).unwrap(),
-            _ => ConsolidatorEnum::new_time_consolidator(subscription.clone(), 1).unwrap()
+            Resolution::Ticks(_) => ConsolidatorEnum::Count(CountConsolidator::new(subscription.clone(), 0).unwrap()),
+            _ => ConsolidatorEnum::TimeCandlesOrQuoteBars(CandleStickConsolidator::new(subscription.clone(), 0).unwrap())
         };
-        let mut consolodated_data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
+        let mut consolidated_data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
         for (time, slice) in base_data {
             for data in slice {
                 let new_consolidated = consolidator.update(&data);
@@ -256,18 +259,18 @@ pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOf
                         if consolidated.time_created_utc() < from_time.to_utc() {
                             continue;
                         }
-                        if !consolodated_data.contains_key(&consolidated.time_created_utc()) {
-                            consolodated_data.insert(time.clone(), vec![consolidated]);
+                        if !consolidated_data.contains_key(&consolidated.time_created_utc()) {
+                            consolidated_data.insert(time.clone(), vec![consolidated]);
                         } else {
-                            consolodated_data.get_mut(&consolidated.time_created_utc()).unwrap().push(consolidated);
+                            consolidated_data.get_mut(&consolidated.time_created_utc()).unwrap().push(consolidated);
                         }
                     }
                 }
             }
         }
-        match consolodated_data.is_empty() {
-            false => return Some(consolodated_data),
-            true => return None
+        match consolidated_data.is_empty() {
+            false => Some(consolidated_data),
+            true => None
         }
     }
 }

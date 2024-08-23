@@ -6,11 +6,13 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
-use crate::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent, Symbol};
+use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use ahash::AHashMap;
 use futures::future::join_all;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
+use crate::consolidators::consolidators_trait::Consolidators;
+
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
     /// Manages the subscriptions of specific symbols
@@ -256,15 +258,7 @@ impl SymbolSubscriptionHandler {
             panic!("{} does not have any resolutions available for {:?}", new_subscription.symbol.data_vendor, new_subscription);
         }
         if !resolutions.contains(&new_subscription.resolution) {
-            match self.is_warmed_up {
-                true => {
-                    self.secondary_subscriptions.push(ConsolidatorEnum::new_time_consolidator_and_warmup(new_subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap());
-                },
-                false => {
-                    self.secondary_subscriptions.push(ConsolidatorEnum::new_time_consolidator(new_subscription.clone(), history_to_retain).unwrap());
-                }
-            }
-
+            self.secondary_subscriptions.push(ConsolidatorEnum::create_consolidator(self.is_warmed_up, new_subscription.clone(), history_to_retain, to_time, strategy_mode).await);
             self.active_count += 1;
         }
         else {
@@ -339,19 +333,9 @@ impl SymbolSubscriptionHandler {
                 }
                 // we switch to tick data as base resolution for any tick subscription
                 if number > 1  {
-                    match self.primary_subscription.resolution {
-                        Resolution::Ticks(_) => {
-                            let consolidator = ConsolidatorEnum::create_consolidator(self.is_warmed_up, true, new_subscription.clone(), history_to_retain, to_time, strategy_mode).await;
-                            self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(consolidator.subscription().clone()));
-                            self.secondary_subscriptions.push(consolidator);
-
-                        },
-                        _ => {
-                            let consolidator = ConsolidatorEnum::create_consolidator(self.is_warmed_up, false, new_subscription.clone(), history_to_retain, to_time, strategy_mode).await;
-                            self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(consolidator.subscription().clone()));
-                            self.secondary_subscriptions.push(consolidator);
-                        },
-                    }
+                    let consolidator = ConsolidatorEnum::create_consolidator(self.is_warmed_up, new_subscription.clone(), history_to_retain, to_time, strategy_mode).await;
+                    self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(consolidator.subscription().clone()));
+                    self.secondary_subscriptions.push(consolidator);
                 }
 
                 if self.primary_subscription.resolution != Resolution::Ticks(1) {
@@ -366,7 +350,7 @@ impl SymbolSubscriptionHandler {
                     self.select_primary_subscription(new_subscription, history_to_retain, to_time, strategy_mode).await;
                 }
                 else { //if we have no problem with adding new the resolution we can just add the new subscription as a consolidator
-                    let consolidator = ConsolidatorEnum::create_consolidator(self.is_warmed_up, false, new_subscription.clone(), history_to_retain, to_time, strategy_mode).await;
+                    let consolidator = ConsolidatorEnum::create_consolidator(self.is_warmed_up, new_subscription.clone(), history_to_retain, to_time, strategy_mode).await;
                     self.secondary_subscriptions.push(consolidator);
                     self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
                 }

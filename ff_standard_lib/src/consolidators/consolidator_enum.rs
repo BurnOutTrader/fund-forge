@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use crate::consolidators::candlesticks::CandleStickConsolidator;
-use crate::consolidators::count::{ConsolidatorError, CountConsolidator};
+use crate::consolidators::consolidators_trait::Consolidators;
+use crate::consolidators::count::{CountConsolidator};
 use crate::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::consolidators::renko::RenkoConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -16,98 +17,41 @@ pub enum ConsolidatorEnum {
 
 impl ConsolidatorEnum {
     
-    pub async fn create_consolidator(is_warmed_up: bool, is_tick: bool, subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> ConsolidatorEnum {
-        match is_tick {
-            false => {
-                match is_warmed_up {
-                    true => {
-                        match &subscription.candle_type {
-                            Some(candle_type) => {
-                                match candle_type {
-                                    CandleType::Renko(_) => ConsolidatorEnum::new_renko_consolidator_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap(),
-                                    CandleType::HeikinAshi => ConsolidatorEnum::new_heikin_ashi_consolidator_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap(),
-                                    CandleType::CandleStick => ConsolidatorEnum::new_time_consolidator_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap(),
-                                }
-                            },
-                            None => ConsolidatorEnum::new_time_consolidator_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap()
-                        }
-                    },
-                    false => {
-                        match &subscription.candle_type {
-                            Some(candle_type) => {
-                                match candle_type {
-                                    CandleType::Renko(_) => ConsolidatorEnum::new_renko_consolidator(subscription.clone(), history_to_retain).unwrap(),
-                                    CandleType::HeikinAshi => ConsolidatorEnum::new_heikin_ashi_consolidator(subscription.clone(), history_to_retain).unwrap(),
-                                    CandleType::CandleStick => ConsolidatorEnum::new_time_consolidator(subscription.clone(), history_to_retain).unwrap(),
-                                }
-                            },
-                            None => ConsolidatorEnum::new_time_consolidator(subscription.clone(), history_to_retain).unwrap()
-                        }
-                    },
-                }
-            }
-            true => {
-                match is_warmed_up {
-                    true => ConsolidatorEnum::new_count_consolidator_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap(),
-                    false => ConsolidatorEnum::new_count_consolidator(subscription.clone(), history_to_retain).unwrap(),
-                }
+    pub async fn create_consolidator(is_warmed_up: bool, subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> ConsolidatorEnum {
+        let is_tick = match subscription.resolution {
+            Resolution::Ticks(_) => true,
+            _ => false
+        };
+        
+        if  is_tick {
+            return match is_warmed_up {
+                true => ConsolidatorEnum::Count(CountConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap()),
+                false => ConsolidatorEnum::Count(CountConsolidator::new(subscription.clone(), history_to_retain).unwrap()),
             }
         }
-    }
-    
-    pub async fn new_count_consolidator_and_warmup(subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
-        match CountConsolidator::new_and_warmup(subscription, history_to_retain, to_time, strategy_mode).await {
-            Ok(consolidator) => Ok(ConsolidatorEnum::Count(consolidator)),
-            Err(e) => Err(ConsolidatorError { message: e.message }),
+        
+        if is_warmed_up {
+            return match &subscription.candle_type {
+                Some(candle_type) => {
+                    match candle_type {
+                        CandleType::Renko(_) => ConsolidatorEnum::Renko(RenkoConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap()),
+                        CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(HeikinAshiConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap()),
+                        CandleType::CandleStick => ConsolidatorEnum::TimeCandlesOrQuoteBars(CandleStickConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap())
+                    }
+                },
+                None => ConsolidatorEnum::TimeCandlesOrQuoteBars(CandleStickConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap())
+            }
         }
-    }
-    
-    pub async fn new_renko_consolidator_and_warmup(subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
-        match RenkoConsolidator::new_and_warmup(subscription, history_to_retain, to_time, strategy_mode).await {
-            Ok(consolidator) => Ok(ConsolidatorEnum::Renko(consolidator)),
-            Err(e) => Err(ConsolidatorError { message: e.message }),
-        }
-    }
-    
-    pub async fn new_heikin_ashi_consolidator_and_warmup(subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
-        match HeikinAshiConsolidator::new_and_warmup(subscription, history_to_retain, to_time, strategy_mode).await {
-            Ok(consolidator) => Ok(ConsolidatorEnum::HeikinAshi(consolidator)),
-            Err(e) => Err(ConsolidatorError { message: e.message }),
-        }
-    }
-
-    pub async fn new_time_consolidator_and_warmup(subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
-        match CandleStickConsolidator::new_and_warmup(subscription, history_to_retain, to_time, strategy_mode).await {
-            Ok(consolidator) => Ok(ConsolidatorEnum::TimeCandlesOrQuoteBars(consolidator)),
-            Err(e) => Err(ConsolidatorError { message: e.message }),
-        }
-    }
-    
-    pub fn new_heikin_ashi_consolidator(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
-        match HeikinAshiConsolidator::new(subscription, history_to_retain) {
-            Ok(consolidator) => Ok(ConsolidatorEnum::HeikinAshi(consolidator)),
-            Err(e) => Err(ConsolidatorError { message: e.message }),
-        }
-    }
-
-    pub fn new_count_consolidator(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
-        match CountConsolidator::new(subscription, history_to_retain) {
-            Ok(consolidator) => Ok(ConsolidatorEnum::Count(consolidator)),
-            Err(e) => Err(ConsolidatorError { message: e.message }),
-        }
-    }
-
-    pub fn new_time_consolidator(subscription: DataSubscription,  history_to_retain: usize) -> Result<Self, ConsolidatorError> {
-        match CandleStickConsolidator::new(subscription, history_to_retain) {
-            Ok(consolidator) => Ok(ConsolidatorEnum::TimeCandlesOrQuoteBars(consolidator)),
-            Err(e) => Err(ConsolidatorError { message: e.message }),
-        }
-    }
-    
-    pub fn new_renko_consolidator(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
-        match RenkoConsolidator::new(subscription, history_to_retain) {
-            Ok(consolidator) => Ok(ConsolidatorEnum::Renko(consolidator)),
-            Err(e) => Err(ConsolidatorError { message: e.message }),
+        
+        match &subscription.candle_type {
+            Some(candle_type) => {
+                match candle_type {
+                    CandleType::Renko(_) => ConsolidatorEnum::Renko(RenkoConsolidator::new(subscription.clone(), history_to_retain).unwrap()),
+                    CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(HeikinAshiConsolidator::new(subscription.clone(), history_to_retain).unwrap()),
+                    CandleType::CandleStick => ConsolidatorEnum::TimeCandlesOrQuoteBars(CandleStickConsolidator::new(subscription.clone(), history_to_retain).unwrap())
+                }
+            },
+            None => panic!("Candle type is required for this subscription")
         }
     }
 

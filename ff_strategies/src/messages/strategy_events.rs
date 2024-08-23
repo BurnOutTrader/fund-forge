@@ -2,7 +2,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::orders::orders::OrderUpdateEvent;
 use ff_standard_lib::standardized_types::OwnerId;
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscriptionEvent};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::drawing_object_handler::DrawingToolEvent;
 
