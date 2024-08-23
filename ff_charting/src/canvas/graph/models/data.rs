@@ -28,19 +28,16 @@ pub enum SeriesData {
 impl SeriesData {
 
     /// Gets history for the chart from the ff_data_server in the correct format based on the subscription.
-    pub async fn get_history(subscription: DataSubscription, time_zone: &Tz, from_date: DateTime<FixedOffset>, to_date: DateTime<FixedOffset>, candle_type:  Option<CandleCalculationType> ) -> BTreeMap<i64, Vec<SeriesData>> {
+    pub async fn get_history(subscription: DataSubscription, time_zone: &Tz, from_date: DateTime<FixedOffset>, to_date: DateTime<FixedOffset>) -> BTreeMap<i64, Vec<SeriesData>> {
         let subscriptions = vec![subscription.clone()];
         let history = history_many(subscriptions, from_date, to_date).await.unwrap();
-        SeriesData::from_time_slices(&history, &time_zone, candle_type)
+        SeriesData::from_time_slices(&history, &time_zone)
     }
 
     /// Converts our BaseDataEnums into SeriesData enum variants.
-    pub fn from_time_slices(time_slices:  &BTreeMap<DateTime<Utc>, TimeSlice>, time_zone: &Tz, candle_type:  Option<CandleCalculationType>) -> BTreeMap<i64, Vec<SeriesData>> {
+    pub fn from_time_slices(time_slices:  &BTreeMap<DateTime<Utc>, TimeSlice>, time_zone: &Tz) -> BTreeMap<i64, Vec<SeriesData>> {
         let mut data: BTreeMap<i64, Vec<SeriesData>> = BTreeMap::new();
         let mut prior_candle: Option<Candle> = None;
-
-        //used for candles if we don't pass in a value
-        let calculation_type = candle_type.unwrap_or_else(|| CandleCalculationType::Candle);
 
         for (time, slice) in time_slices.iter() {
             for base_data in slice {
@@ -48,13 +45,11 @@ impl SeriesData {
                 let series_data: SeriesData = match base_data {
                     BaseDataEnum::QuoteBar(quotebar)  => {
                         let mut candle = Candle::from_quotebar(quotebar.clone(), true);
-                        candle.mutate_candle(&calculation_type, &prior_candle);
                         prior_candle = Some(candle.clone());
                         SeriesData::CandleStickData(candle)
                     },
                     BaseDataEnum::Candle(candle) => {
                         let mut candle = candle.clone();
-                        candle.mutate_candle(&calculation_type, &prior_candle);
                         prior_candle = Some(candle.clone());
                         SeriesData::CandleStickData(candle.clone())
                     },

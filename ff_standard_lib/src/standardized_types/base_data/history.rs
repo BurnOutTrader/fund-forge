@@ -12,7 +12,7 @@ use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::helpers::converters::next_month;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
-use crate::subscription_handler::ConsolidatorEnum;
+use crate::consolidators::consolidator_enum::ConsolidatorEnum;
 
 /// Method responsible for getting historical data for a specific subscription.
 /// Users should use this method to get historical data for a specific subscription/subscriptions

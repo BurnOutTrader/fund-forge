@@ -6,7 +6,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::enums::Resolution;
-use crate::standardized_types::subscriptions::Symbol;
+use crate::standardized_types::subscriptions::{CandleType, Symbol};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Eq, PartialOrd, Ord)]
 #[archive(
@@ -62,6 +62,7 @@ pub struct Candle {
     pub time: String,
     pub is_closed: bool,
     pub resolution: Resolution,
+    pub candle_type: CandleType,
 }
 
 impl Candle {
@@ -95,10 +96,11 @@ impl Candle {
             volume: quotebar.volume,
             range: high - low,
             resolution: quotebar.resolution,
+            candle_type: CandleType::CandleStick
         }
     }
     /// Mutates the raw candle data into the required CandleStickType
-    pub fn mutate_candle(&mut self, candle_calculation_type: &CandleCalculationType, prior_candle: &Option<Candle>) {
+/*    pub fn mutate_candle(&mut self, candle_calculation_type: &CandleCalculationType, prior_candle: &Option<Candle>) {
         match candle_calculation_type {
             CandleCalculationType::Candle => {
                 return
@@ -126,7 +128,7 @@ impl Candle {
             }
 
         }
-    }
+    }*/
     /// Creates a new `candles` instance that is open and has not yet closed.
     ///
     /// # Arguments
@@ -136,7 +138,7 @@ impl Candle {
     /// - `volume`: The trading volume.
     /// - `time`: The opening time as a Unix timestamp.
     ///
-    pub fn new(symbol: Symbol, open: f64, volume: f64, time: String, resolution: Resolution) -> Self {
+    pub fn new(symbol: Symbol, open: f64, volume: f64, time: String, resolution: Resolution, candle_type: CandleType) -> Self {
         Self {
             symbol,
             high: open,
@@ -147,7 +149,8 @@ impl Candle {
             range: 0.0,
             time,
             is_closed: false,
-            resolution
+            resolution,
+            candle_type
         }
     }
 
@@ -172,7 +175,7 @@ impl Candle {
     /// - `close`: The closing price.
     /// - `volume`: The trading volume.
     /// - `time`: The opening time as a Unix timestamp.
-    pub fn from_closed(symbol: Symbol, high: f64, low: f64, open: f64, close: f64, volume: f64, time: DateTime<chrono::Utc>, resolution: Resolution) -> Self {
+    pub fn from_closed(symbol: Symbol, high: f64, low: f64, open: f64, close: f64, volume: f64, time: DateTime<chrono::Utc>, resolution: Resolution, candle_type: CandleType) -> Self {
         Self {
             symbol,
             high,
@@ -183,7 +186,8 @@ impl Candle {
             range: high - low,
             time: time.to_string(),
             is_closed: true,
-            resolution
+            resolution,
+            candle_type,
         }
     }
 

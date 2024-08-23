@@ -69,7 +69,6 @@ impl FundForgeStrategy {
         replay_delay_ms: Option<u64>,
         retain_history: usize,
     ) -> FundForgeStrategy {
-        initialize_clients(&platform_mode).await.unwrap();
         let start_state = StrategyStartState::new(strategy_mode.clone(), start_date, end_date, time_zone.clone(), warmup_duration);
         let start_time = time_convert_utc_naive_to_fixed_offset(&time_zone, start_date);
         let owner_id = match owner_id {

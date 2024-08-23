@@ -7,4 +7,5 @@ pub mod server_connections;
 pub mod app;
 pub mod subscription_handler;
 pub mod rolling_window;
+pub mod consolidators;
 

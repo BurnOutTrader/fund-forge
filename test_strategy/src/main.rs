@@ -5,12 +5,12 @@ use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Receiver;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
-use ff_standard_lib::server_connections::{PlatformMode};
+use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
+use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent};
 use ff_strategies::messages::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
 
 
@@ -32,6 +32,7 @@ fn set_subscriptions_initial() -> Vec<DataSubscription> {
 
 #[tokio::main]
 async fn main() {
+    initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
@@ -50,6 +51,7 @@ async fn main() {
         None,
         100
     ).await;
+    
 
     on_data_received(strategy, notify, strategy_event_receiver).await;
 }
@@ -69,7 +71,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 //todo... neeed to get subscribing ability in the event loop.
                 //todo... then build unit tests for each event handler using test strategy initialization fn.
                 // finish matching engine for backtests, download historical currency data for currency converter fn, have option for higher resolution conversions if tick data available.
-                let aud_cad_60m = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex);
+                let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
                 let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
                 strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()],100).await;
             }
@@ -93,7 +95,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                     continue
                                 }*/
                                 if candle.is_closed {
-                                    //println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                 } else {
                                     //Todo Documents, Open bars get sent through with every tick, so you can always access the open bar using highest resolution.
                                     //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
@@ -202,6 +204,7 @@ async fn initialize_test_strategy() -> (Receiver<EventTimeSlice>, FundForgeStrat
 }
 #[tokio::test]
 pub async fn test_subscribing_and_consolidating()  {
+    initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
     let (mut event_receiver, strategy, notify) = initialize_test_strategy().await;
     let mut warmup_complete = false;
     let mut count = 0;
@@ -226,7 +229,7 @@ pub async fn test_subscribing_and_consolidating()  {
                                 }
                                 if candle.is_closed && count > 1000 {
                                     assert!(matches!(candle.resolution, Resolution::Minutes(15) | Resolution::Minutes(60)));
-                                } 
+                                }
                             }
                             _ => {}
                         }

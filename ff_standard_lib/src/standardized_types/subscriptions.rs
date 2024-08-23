@@ -3,6 +3,7 @@ use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Se
 use rkyv::ser::Serializer;
 use rkyv::ser::serializers::AllocSerializer;
 use crate::apis::vendor::DataVendor;
+use crate::consolidators::renko::RenkoParameters;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
@@ -70,6 +71,22 @@ impl Symbol {
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[archive(
+    // This will generate a PartialEq impl between our unarchived and archived
+    // types:
+    compare(PartialEq),
+    // bytecheck can be used to validate your data if you want. To use the safe
+    // API, you have to derive CheckBytes for the archived type:
+    check_bytes,
+)]
+#[archive_attr(derive(Debug))]
+pub enum CandleType {
+    Renko(RenkoParameters),
+    HeikinAshi,
+    CandleStick
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
+#[archive(
 // This will generate a PartialEq impl between our unarchived and archived
 // types:
 compare(PartialEq),
@@ -92,18 +109,46 @@ pub struct DataSubscription {
     pub resolution: Resolution,
     pub base_data_type: BaseDataType,
     pub market_type: MarketType,
+    pub candle_type: Option<CandleType>,
 }
 
 impl DataSubscription {
+    
+    // we use this for any data that is represented by base data types
     pub fn new(symbol_name: String, data_vendor: DataVendor, resolution: Resolution, base_data_type: BaseDataType, market_type: MarketType) -> Self {
         let cleaned_symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         let symbol = Symbol::new(cleaned_symbol_name, data_vendor, market_type.clone());
-        
+        let candle_type = match base_data_type {
+            BaseDataType::Candles => Some(CandleType::CandleStick),
+            BaseDataType::QuoteBars => Some(CandleType::CandleStick),
+            BaseDataType::Ticks => { 
+                match resolution {
+                    Resolution::Ticks(number) => if number > 1 { Some(CandleType::CandleStick) } else { None },
+                    _ => None
+                }
+            },
+            _ => None
+        };
         DataSubscription {
             symbol,
             resolution,
             base_data_type,
             market_type,
+            candle_type
+        }
+    }
+
+    /// We can use this to consolidate custom candle types which are not represented by the base data types
+    pub fn new_custom(symbol_name: String, data_vendor: DataVendor, resolution: Resolution, base_data_type: BaseDataType, market_type: MarketType, candle_type: CandleType) -> Self {
+        let cleaned_symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
+        let symbol = Symbol::new(cleaned_symbol_name, data_vendor, market_type.clone());
+
+        DataSubscription {
+            symbol,
+            resolution,
+            base_data_type,
+            market_type,
+            candle_type: Some(candle_type)
         }
     }
 
