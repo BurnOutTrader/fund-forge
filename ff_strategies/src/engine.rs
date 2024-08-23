@@ -61,32 +61,30 @@ impl Engine {
     /// Calling this method will start the strategy running.
     pub async fn launch(self: Self) {
         task::spawn(async move {
-            println!("Initializing the strategy...");
+            println!("Engine: Initializing the strategy...");
 
             self.warmup().await;
-            println!("Warmup complete");
-            self.subscription_handler.set_warmup_complete().await;
 
-            println!("Start {:?} Engine ", self.start_state.mode);
+            println!("Engine: Start {:?} ", self.start_state.mode);
             let msg = match self.start_state.mode {
                 StrategyMode::Backtest => {
                     self.run_backtest().await;
-                    "Backtest complete".to_string()
+                    "Engine: Backtest complete".to_string()
                 }
                 // All other modes use the live engine, just with different fns from the engine
                 _ => {
                     self.run_live().await;
-                    "Live complete".to_string()
+                    "Engine: Live complete".to_string()
                 }
             };
 
             println!("{:?}", &msg);
             let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg);
-            //DO not wait for permits outside data feed or we will have problems with freezing
+            //self.notify.notified().await;
             match self.strategy_event_sender.send(vec![end_event]).await {
                 Ok(_) => {},
                 Err(e) => {
-                    println!("Error forwarding event: {:?}", e);
+                    println!("Engine: Error forwarding event: {:?}", e);
                 }
             }
         });
@@ -104,7 +102,7 @@ impl Engine {
     /// An alternative to the warmup, would be using the `history` method to get historical data for a specific subscription, and then manually warm up the indicators during re-balancing or adding new subscriptions.
     /// You don't need to be subscribed to an instrument to get the history, so that method is a good alternative for strategies that dynamically subscribe to instruments.
     async fn warmup(&self) {
-        println!("Warming up the strategy...");
+        println!("Engine: Warming up the strategy...");
         let start_time = match self.start_state.mode {
             StrategyMode::Backtest => {
                 self.start_state.start_date.to_utc()
@@ -118,21 +116,21 @@ impl Engine {
         let month_years = generate_file_dates(warmup_start_time, start_time.clone());
         self.historical_data_feed(warmup_start_time, month_years, start_time.clone()).await;
 
+        self.subscription_handler.set_warmup_complete().await;
         self.market_event_handler.set_warm_up_complete().await;
         let warmup_complete_event = StrategyEvent::WarmUpComplete(self.owner_id.clone());
-        
-        //todo, this is the cause of the pausing
+        //self.notify.notified().await;
         match self.strategy_event_sender.send(vec![warmup_complete_event]).await {
             Ok(_) => {},
             Err(e) => {
-                println!("Error forwarding event: {:?}", e);
+                println!("Engine: Error forwarding event: {:?}", e);
             }
         }
     }
 
     /// Runs the strategy backtest
     async fn run_backtest(&self) {
-        println!("Running the strategy backtest...");
+        println!("Engine: Running the strategy backtest...");
         {
             self.interaction_handler.process_controls().await;
         }
@@ -221,6 +219,7 @@ impl Engine {
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, month_start) in &month_years {
             'month_loop: loop {
+                self.subscription_handler.set_subscriptions_updated(false).await;
                 let time_slices = match self.get_base_time_slices(month_start.clone()).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -236,9 +235,14 @@ impl Engine {
                     break 'month_loop
                 }
 
+                let mut end_month = true;
                 'slice_loop: for (time, time_slice) in &combined_data {
                     if time > &end_time {
                         break 'main_loop
+                    }
+
+                    if time < &last_time {
+                        continue;
                     }
 
                     if self.subscription_handler.subscriptions_updated().await {
@@ -251,14 +255,10 @@ impl Engine {
                                 println!("Error forwarding event: {:?}", e);
                             }
                         }
-                        self.subscription_handler.set_subscriptions_updated(false).await;
+                        end_month = false;
                         break 'slice_loop
                     }
-
-                    if time < &last_time {
-                        continue;
-                    }
-
+                    
                     let mut strategy_event : EventTimeSlice = vec![];
                     strategy_event.push(StrategyEvent::TimeSlice(self.owner_id.clone(), time_slice.clone()));
                         // The market event handler response with any order events etc that may have been returned from the base data update
@@ -298,7 +298,9 @@ impl Engine {
                     }
                     self.notify.notified().await;
                 }
-                break 'month_loop
+                if end_month {
+                    break 'month_loop
+                }
             }
         }
     }
