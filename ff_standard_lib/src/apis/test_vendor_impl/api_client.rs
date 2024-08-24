@@ -72,6 +72,10 @@ impl VendorApiResponse for TestVendorApi {
     async fn decimal_accuracy_response(&self, symbol: Symbol) -> Result<SynchronousResponseType, FundForgeError> {
         Ok(SynchronousResponseType::DecimalAccuracy(symbol, 5))
     }
+    
+    async fn tick_size_response(&self, symbol: Symbol) -> Result<SynchronousResponseType, FundForgeError> {
+        Ok(SynchronousResponseType::TickSize(symbol, 0.00001))
+    }
 }
 
 #[async_trait]

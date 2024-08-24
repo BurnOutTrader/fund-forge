@@ -65,6 +65,7 @@ pub mod server_responses {
         async fn resolutions_response(&self, market_type: MarketType) -> Result<SynchronousResponseType, FundForgeError>;
         async fn markets_response(&self) -> Result<SynchronousResponseType, FundForgeError>;
         async fn decimal_accuracy_response(&self, symbol: Symbol) -> Result<SynchronousResponseType, FundForgeError>;
+        async fn tick_size_response(&self, symbol: Symbol) -> Result<SynchronousResponseType, FundForgeError>;
     }
 
     /// Responses
@@ -89,6 +90,11 @@ pub mod server_responses {
             let api_client = vendor_api_object(self).await;
             api_client.decimal_accuracy_response(symbol).await
         }
+
+        async fn tick_size_response(&self, symbol: Symbol) -> Result<SynchronousResponseType, FundForgeError> {
+            let api_client = vendor_api_object(self).await;
+            api_client.tick_size_response(symbol).await
+        }
     }
 }
 
@@ -109,6 +115,7 @@ pub mod client_requests {
         async fn resolutions(&self, market_type: MarketType) -> Result<Vec<Resolution>, FundForgeError>;
         async fn markets(&self) -> Result<Vec<MarketType>, FundForgeError>;
         async fn decimal_accuracy(&self, symbol: Symbol) -> Result<u32, FundForgeError>;
+        async fn tick_size(&self, symbol: Symbol) -> Result<f64, FundForgeError>;
     }
 
     #[async_trait]
@@ -168,6 +175,21 @@ pub mod client_requests {
             let response = SynchronousResponseType::from_bytes(&response)?;
             match response {
                 SynchronousResponseType::DecimalAccuracy(symbol, accuracy) => Ok(accuracy),
+                SynchronousResponseType::Error(e) => Err(e),
+                _ => Err(FundForgeError::ClientSideErrorDebug("Invalid response type from server".to_string()))
+            }
+        }
+        
+        async fn tick_size(&self, symbol: Symbol) -> Result<f64, FundForgeError> {
+            let api_client = self.synchronous_client().await;
+            let request = SynchronousRequestType::TickSize(self.clone(), symbol);
+            let response = match api_client.send_and_receive(request.to_bytes(), false).await {
+                Ok(response) => response,
+                Err(e) => return Err(e)
+            };
+            let response = SynchronousResponseType::from_bytes(&response)?;
+            match response {
+                SynchronousResponseType::TickSize(symbol, tick_size) => Ok(tick_size),
                 SynchronousResponseType::Error(e) => Err(e),
                 _ => Err(FundForgeError::ClientSideErrorDebug("Invalid response type from server".to_string()))
             }

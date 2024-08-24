@@ -47,6 +47,7 @@ pub async fn manage_sequential_requests(communicator: Arc<SynchronousCommunicato
                 SynchronousRequestType::AccountInfo(broker, account_id) => broker.account_info_response(account_id).await,
                 SynchronousRequestType::Markets(vendor) => vendor.markets_response().await,
                 SynchronousRequestType::DecimalAccuracy(vendor, symbol) => vendor.decimal_accuracy_response(symbol).await,
+                SynchronousRequestType::TickSize(vendor, symbol) => vendor.tick_size_response(symbol).await,
             };
 
             let response = response.unwrap_or_else(|ff_error| SynchronousResponseType::Error(ff_error.into()));

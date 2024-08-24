@@ -96,6 +96,8 @@ pub enum SynchronousRequestType {
     AccountInfo(Brokerage, AccountId),
 
     Markets(DataVendor),
+
+    TickSize(DataVendor, Symbol),
     
     DecimalAccuracy(DataVendor, Symbol),
 }
@@ -167,6 +169,8 @@ pub enum SynchronousResponseType {
     AccountInfo(AccountInfo),
 
     Markets(Vec<MarketType>),
+
+    TickSize(Symbol, f64),
     
     DecimalAccuracy(Symbol, u32),
 }
