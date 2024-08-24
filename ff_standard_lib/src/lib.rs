@@ -9,4 +9,8 @@ pub mod subscription_handler;
 pub mod rolling_window;
 pub mod consolidators;
 pub mod indicators;
+pub mod strategy_events;
+pub mod drawing_object_handler;
+pub mod drawing_tool_enum;
+pub mod lines;
 

@@ -7,7 +7,6 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use ff_standard_lib::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::candle::{Candle};
-use ff_standard_lib::standardized_types::base_data::history::{history_many};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::canvas::graph::state::ChartState;
@@ -28,11 +27,11 @@ pub enum SeriesData {
 impl SeriesData {
 
     /// Gets history for the chart from the ff_data_server in the correct format based on the subscription.
-    pub async fn get_history(subscription: DataSubscription, time_zone: &Tz, from_date: DateTime<FixedOffset>, to_date: DateTime<FixedOffset>) -> BTreeMap<i64, Vec<SeriesData>> {
+/*    pub async fn get_history(subscription: DataSubscription, time_zone: &Tz, from_date: DateTime<FixedOffset>, to_date: DateTime<FixedOffset>) -> BTreeMap<i64, Vec<SeriesData>> {
         let subscriptions = vec![subscription.clone()];
         let history = history_many(subscriptions, from_date, to_date).await.unwrap();
         SeriesData::from_time_slices(&history, &time_zone)
-    }
+    }*/
 
     /// Converts our BaseDataEnums into SeriesData enum variants.
     pub fn from_time_slices(time_slices:  &BTreeMap<DateTime<Utc>, TimeSlice>, time_zone: &Tz) -> BTreeMap<i64, Vec<SeriesData>> {
@@ -44,12 +43,12 @@ impl SeriesData {
                 let time = time_convert_utc_datetime_to_fixed_offset(&time_zone, time.clone()).timestamp();
                 let series_data: SeriesData = match base_data {
                     BaseDataEnum::QuoteBar(quotebar)  => {
-                        let mut candle = Candle::from_quotebar(quotebar.clone(), true);
+                        let candle = Candle::from_quotebar(quotebar.clone(), true);
                         prior_candle = Some(candle.clone());
                         SeriesData::CandleStickData(candle)
                     },
                     BaseDataEnum::Candle(candle) => {
-                        let mut candle = candle.clone();
+                        let candle = candle.clone();
                         prior_candle = Some(candle.clone());
                         SeriesData::CandleStickData(candle.clone())
                     },

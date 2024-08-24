@@ -11,6 +11,7 @@ pub struct StrategyStartState {
     pub end_date: DateTime<Utc>,
     pub time_zone: Tz,
     pub warmup_duration: Duration,
+    pub backtest_resolution: Duration,
 }
 
 impl Debug for StrategyStartState {
@@ -27,7 +28,7 @@ impl Debug for StrategyStartState {
 }
 
 impl StrategyStartState {
-    pub fn new(mode: StrategyMode, start_date: NaiveDateTime, end_date: NaiveDateTime, time_zone: Tz, warmup_duration: Duration) -> StrategyStartState {
+    pub fn new(mode: StrategyMode, start_date: NaiveDateTime, end_date: NaiveDateTime, time_zone: Tz, warmup_duration: Duration, backtest_resolution: Duration) -> StrategyStartState {
         let start_date =  convert_to_utc(start_date, time_zone);
         println!("start_date: {:?}", start_date);
         let end_date =  convert_to_utc(end_date, time_zone);
@@ -41,6 +42,7 @@ impl StrategyStartState {
             end_date,
             time_zone,
             warmup_duration,
+            backtest_resolution
         }
     }
 }

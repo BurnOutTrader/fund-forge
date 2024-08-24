@@ -1,5 +1,4 @@
 use chrono::{DateTime, Duration, Utc};
-use iced::Application;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::candlesticks::open_time;
 use crate::rolling_window::RollingWindow;
@@ -12,7 +11,7 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::base_data::traits::BaseData;
 
-pub struct HeikinAshiConsolidator {
+pub struct HeikinAshiConsolidator{
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
@@ -20,7 +19,8 @@ pub struct HeikinAshiConsolidator {
     previous_ha_open: f64,
 }
 
-impl HeikinAshiConsolidator {
+impl HeikinAshiConsolidator
+{
     fn candle_from_base_data(&self, ha_open: f64, ha_high: f64, ha_low: f64, ha_close: f64, volume: f64, time: String, is_closed: bool, range: f64) -> Candle {
         Candle {
             symbol: self.subscription.symbol.clone(),
@@ -112,8 +112,9 @@ impl HeikinAshiConsolidator {
     }
 }
 
-impl HeikinAshiConsolidator {
-    pub(crate) fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+impl HeikinAshiConsolidator
+{
+    pub(crate) fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<HeikinAshiConsolidator, ConsolidatorError> {
         if subscription.base_data_type != BaseDataType::Candles {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for HeikinAshiConsolidator", subscription.base_data_type) });
         }
@@ -133,7 +134,7 @@ impl HeikinAshiConsolidator {
         })
     }
 
-    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<HeikinAshiConsolidator, ConsolidatorError> {
         if subscription.base_data_type != BaseDataType::Candles {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for HeikinAshiConsolidator", subscription.base_data_type) });
         }
@@ -142,7 +143,7 @@ impl HeikinAshiConsolidator {
         }
 
 
-        let mut consolidator = Self {
+        let mut consolidator = HeikinAshiConsolidator{
             current_data: None,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -151,6 +152,17 @@ impl HeikinAshiConsolidator {
         };
         consolidator.warmup(warm_up_to_time, strategy_mode).await;
         Ok(consolidator)
+    }
+
+    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+        if let Some(current_data) = self.current_data.as_mut() {
+            if time >= current_data.time_created_utc() {
+                let return_data = current_data.clone();
+                self.current_data = None;
+                return vec![return_data];
+            }
+        }
+        vec![]
     }
     
     //problem where this is returning a closed candle constantly
@@ -225,14 +237,14 @@ impl HeikinAshiConsolidator {
     }
     
 
-    fn index(&self, index: usize) -> Option<BaseDataEnum> {
+    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
         match self.history.get(index) {
             Some(data) => Some(data.clone()),
             None => None,
         }
     }
 
-    fn current(&self) -> Option<BaseDataEnum> {
+    pub(crate) fn current(&self) -> Option<BaseDataEnum> {
         match &self.current_data {
             Some(data) => Some(data.clone()),
             None => None,
@@ -263,7 +275,7 @@ impl HeikinAshiConsolidator {
             _ => self.subscription.base_data_type.clone()
         };
 
-        let from_time = to_time - (self.subscription.resolution.as_duration() * self.history().number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
+        let from_time = to_time - (self.subscription.resolution.as_duration() * self.history.number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
 
         let base_subscription = DataSubscription::new(self.subscription.symbol.name.clone(), self.subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, self.subscription.market_type.clone());
         let base_data = range_data(from_time, to_time, base_subscription.clone()).await;

@@ -23,7 +23,8 @@ pub struct CountConsolidator {
     pub(crate) history: RollingWindow<BaseDataEnum>,
 }
 
-impl CountConsolidator {
+impl CountConsolidator
+{
     pub(crate) fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
@@ -120,14 +121,14 @@ impl CountConsolidator {
         &self.history
     }
 
-    fn index(&self, index: usize) -> Option<BaseDataEnum> {
+    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
         match self.history.get(index) {
             Some(data) => Some(data.clone()),
             None => None,
         }
     }
 
-    fn current(&self) -> Option<BaseDataEnum> {
+    pub(crate) fn current(&self) -> Option<BaseDataEnum> {
         Some(BaseDataEnum::Candle(self.current_data.clone()))
     }
 

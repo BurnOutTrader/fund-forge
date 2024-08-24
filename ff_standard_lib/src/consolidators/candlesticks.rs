@@ -55,6 +55,17 @@ pub struct CandleStickConsolidator {
 }
 
 impl CandleStickConsolidator {
+    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+        if let Some(current_data) = self.current_data.as_mut() {
+            if time >= current_data.time_created_utc() {
+                let return_data = current_data.clone();
+                self.current_data = None;
+                return vec![return_data];
+            }
+        }
+        vec![]
+    }
+    
     fn update_candles(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         if self.current_data.is_none() {
             let data = self.new_candle(base_data);
@@ -267,14 +278,14 @@ impl CandleStickConsolidator {
     }
 
 
-    fn index(&self, index: usize) -> Option<BaseDataEnum> {
+    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
         match self.history.get(index) {
             Some(data) => Some(data.clone()),
             None => None,
         }
     }
 
-    fn current(&self) -> Option<BaseDataEnum> {
+    pub(crate) fn current(&self) -> Option<BaseDataEnum> {
         match &self.current_data {
             Some(data) => Some(data.clone()),
             None => None,

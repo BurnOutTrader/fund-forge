@@ -1,24 +1,24 @@
-use crate::indicators::indicator_trait::{Indicator, IndicatorResult};
+
 use crate::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
-
+/*
 pub struct AverageTrueRange {
-    name: String,
     subscription: DataSubscription,
-    history: RollingWindow<IndicatorResult>,
+    history: RollingWindow<IndicatorResults>,
     base_data_history: RollingWindow<BaseDataEnum>,
+    is_ready: bool,
 }
 
 impl AverageTrueRange {
     fn new(subscription: DataSubscription, history_to_retain: usize, period: usize) -> Self {
         AverageTrueRange {
-            name: format!("Average True Range: {:?} {} {}", subscription.symbol, subscription.resolution, subscription.symbol.data_vendor),
             subscription,
             history: RollingWindow::new(history_to_retain),
             base_data_history: RollingWindow::new(period),
-        }
+            is_ready: false,
+        }   
     }
 
     fn calculate_true_range(&self) -> f64 {
@@ -54,40 +54,37 @@ impl AverageTrueRange {
     }
 }
 
-impl Indicator for AverageTrueRange {
-    
-    fn name(&self) -> &str {
-        &self.name
-    }
-
+impl AverageTrueRange {
     fn subscription(&self) -> &DataSubscription {
         &self.subscription
     }
 
-    fn update(&mut self, base_data: BaseDataEnum) -> Option<IndicatorResult> {
-        match base_data {
-            BaseDataEnum::QuoteBar(_) => (),
-            BaseDataEnum::Candle(_) => (),
-            _ => panic!("Unsupported data type for AverageTrueRange")
-        }
-        
-        if base_data.subscription() != self.subscription {
-            panic!("Subscription mismatch in AverageTrueRange")
+    fn update(&mut self, base_data: BaseDataEnum) -> Option<IndicatorResults> {
+        if !base_data.is_closed() {
+            return None
         }
         
         self.base_data_history.add(base_data.clone());
         if !self.base_data_history.is_full() {
             return None
+        } else if self.is_ready == false {
+            self.is_ready = true;
         }
         
         let atr = self.calculate_true_range();
-        let result = IndicatorResult::new(atr, base_data.time_utc(), String::from("ATR"));
+        if atr == 0.0 {
+            return None
+        }
+ 
+        let result = IndicatorResult::new(atr, base_data.time_utc(), String::from("atr"));
+        let mut results =IndicatorResults::new();
+        results.push(result);
         
         if base_data.is_closed() {
-            self.history.add(result.clone());
+            self.history.add(results.clone());
         }
         
-        Some(result)
+        Some(results)
         
     }
 
@@ -96,11 +93,15 @@ impl Indicator for AverageTrueRange {
         self.base_data_history.clear();
     }
 
-    fn index(&self, index: usize) -> Option<IndicatorResult> {
+    fn index(&self, index: usize) -> Option<IndicatorResults> {
         self.history.get(index).cloned()
     }
 
-    fn plots(&self) -> RollingWindow<IndicatorResult> {
+    fn plots(&self) -> RollingWindow<IndicatorResults> {
         self.history.clone()
     }
-}
+    
+    fn is_ready(&self) -> bool {
+        self.is_ready
+    }
+}*/

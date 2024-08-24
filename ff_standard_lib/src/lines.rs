@@ -2,12 +2,9 @@ use chrono_tz::Tz;
 use iced::Point;
 use iced::widget::canvas;
 use iced::Color;
-use iced_graphics::geometry::Stroke;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use ff_standard_lib::app::settings::GraphElementSettings;
-use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
-use crate::canvas::graph::state::ChartState;
-use crate::clicks::Click;
+use crate::app::settings::GraphElementSettings;
+use crate::standardized_types::subscriptions::DataSubscription;
 use crate::drawing_tool_enum::DrawingTool;
 
 /// A struct that represents a vertical line on the graph.
@@ -58,7 +55,12 @@ impl VerticleLine {
             subscription,
         }
     }
-    pub fn draw(&self, time_zone: &Tz, state: &ChartState, frame: &mut canvas::Frame, cursor: iced::mouse::Cursor) {
+    
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    
+    /*pub fn draw(&self, time_zone: &Tz, state: &ChartState, frame: &mut canvas::Frame, cursor: iced::mouse::Cursor) {
         if let Some(utc_time) = self.x_alignment {
             let time = DrawingTool::x_alignment(utc_time, time_zone);
             let position = match self.is_ready {
@@ -92,7 +94,7 @@ impl VerticleLine {
             let line = canvas::Path::line(Point::new(position.x, state.drawing_area.y), Point::new(position.x, state.drawing_area.y + height));
             frame.stroke(&line, Stroke::default().with_color(color).with_width(width));
         }
-    }
+    }*/
 }
 
 /// A struct that represents a horizontal line on the graph.
@@ -145,18 +147,22 @@ impl HorizontalLine {
             subscription
         }
     }
+    
+    pub fn id(&self) -> &str {
+        &self.id
+    }
 
-    pub fn process_click(&mut self, view: &ChartState, click: Click) {
+  /*  pub fn process_click(&mut self, view: &ChartState, click: Click) {
         let price = view.value_at_y(click.position.y, self.logarithmic);
         self.is_ready = true;
         self.update_price(price);
-    }
+    }*/
 
     pub fn update_price(&mut self, price: f64) {
         self.price = Some(price);
     }
 
-    pub fn draw(&self, view: &ChartState, frame: &mut canvas::Frame, cursor: iced::mouse::Cursor) {
+   /* pub fn draw(&self, view: &ChartState, frame: &mut canvas::Frame, cursor: iced::mouse::Cursor) {
         let position = match self.is_ready {
             false => if let Some(cursor_position) = cursor.position() {
                 cursor_position
@@ -185,5 +191,5 @@ impl HorizontalLine {
         let line = canvas::Path::line(Point::new(position.x, view.drawing_area.x), Point::new(view.drawing_area.x, position.y + width));
         frame.stroke(&line, Stroke::default().with_color(color).with_width( self.settings.object_settings.size));
 
-    }
+    }*/
 }

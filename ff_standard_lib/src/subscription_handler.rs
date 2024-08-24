@@ -162,6 +162,24 @@ impl SubscriptionHandler {
         // Flatten the results
         results.into_iter().flatten().collect()
     }
+
+    pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> TimeSlice {
+        let mut symbol_subscriptions = self.symbol_subscriptions.write().await;
+        let mut time_slice = TimeSlice::new();
+        
+        for (_, mut symbol_handler) in symbol_subscriptions.iter_mut() {
+            time_slice.extend(symbol_handler.update_time(time.clone()).await); //todo we need to use interior mutability to update the consolidators across threads, add RWLock or mutex
+        }
+        time_slice
+    }
+    
+    pub async fn bar_index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
+        todo!()
+    }
+
+    pub async fn bar_current(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
+        todo!()
+    }
 }
 
 
@@ -216,6 +234,16 @@ impl SymbolSubscriptionHandler {
         consolidated_data
     }
 
+    pub async fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+        let mut consolidated_data = vec![];
+            // Iterate over the secondary subscriptions and update them
+        for consolidator in &mut self.secondary_subscriptions {
+            let data = consolidator.update_time(time.clone());
+            consolidated_data.extend(data);
+        }
+        consolidated_data
+    }
+
     pub fn set_warmed_up(&mut self) {
         self.is_warmed_up = true;
     }
@@ -226,7 +254,7 @@ impl SymbolSubscriptionHandler {
                 ConsolidatorEnum::Count(count_consolidator) => {
                     count_consolidator.clear_current_data();
                 },
-                ConsolidatorEnum::TimeCandlesOrQuoteBars(time_consolidator) => {
+                ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
                     time_consolidator.clear_current_data();
                 },
                 ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {

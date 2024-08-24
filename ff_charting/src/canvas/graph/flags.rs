@@ -8,7 +8,7 @@ use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::traits::bytes::Bytes;
-use crate::drawing_tool_enum::DrawingTool;
+use ff_standard_lib::drawing_tool_enum::DrawingTool;
 
 /// Used by strategies to communicate with the application remotely about new chart configurations. Uses rkyv serialization and the ff Bytes Trait
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]

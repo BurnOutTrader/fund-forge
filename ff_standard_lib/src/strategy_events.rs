@@ -1,10 +1,10 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
-use ff_standard_lib::standardized_types::orders::orders::OrderUpdateEvent;
-use ff_standard_lib::standardized_types::OwnerId;
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscriptionEvent};
-use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::drawing_object_handler::DrawingToolEvent;
+use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::standardized_types::orders::orders::OrderUpdateEvent;
+use crate::standardized_types::OwnerId;
+use crate::standardized_types::subscriptions::{DataSubscriptionEvent};
+use crate::standardized_types::time_slices::TimeSlice;
 
 /// Used to determine if a strategy takes certain event inputs from the Ui.
 /// A trader can still effect the strategy via the broker, but the strategy will not take any input from the Ui unless in SemiAutomated mode.
@@ -101,10 +101,12 @@ pub enum StrategyEvent {
     /// - `OwnerId`: The unique identifier of the owner (strategy).
     /// - `TimeSlice`: The time slice data.
     TimeSlice(OwnerId, TimeSlice),
+    
+    //IndicatorSlice(OwnerId, IndicatorResults),
 
     ShutdownEvent(OwnerId, String),
     
-    WarmUpComplete(OwnerId)
+    WarmUpComplete(OwnerId),
 }
 
 impl StrategyEvent {
@@ -116,7 +118,8 @@ impl StrategyEvent {
             StrategyEvent::DrawingToolEvents(owner_id, _, _) => owner_id.clone(),
             StrategyEvent::TimeSlice(owner_id, _) => owner_id.clone(),
             StrategyEvent::ShutdownEvent(owner_id, _) => owner_id.clone(),
-            StrategyEvent::WarmUpComplete(owner_id) => owner_id.clone()
+            StrategyEvent::WarmUpComplete(owner_id) => owner_id.clone(),
+            //StrategyEvent::IndicatorSlice(owner_id, _) => owner_id.clone(),
         }
     }
 

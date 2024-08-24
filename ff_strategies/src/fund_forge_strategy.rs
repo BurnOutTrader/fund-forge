@@ -4,23 +4,23 @@ use tokio::sync::{mpsc, Notify, RwLock};
 use std::path::Path;
 use std::sync::Arc;
 use ahash::AHashMap;
-use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime, Utc};
 use chrono_tz::Tz;
-use ff_charting::drawing_tool_enum::DrawingTool;
+use ff_standard_lib::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::apis::brokerage::Brokerage;
 use ff_standard_lib::subscription_handler::{SubscriptionHandler};
 use ff_standard_lib::helpers::converters::{time_convert_utc_datetime_to_fixed_offset, time_convert_utc_naive_to_fixed_offset};
-use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId};
+use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::Order;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::market_handlers::{MarketHandlerEnum};
-use crate::drawing_object_handler::DrawingObjectHandler;
+use ff_standard_lib::drawing_object_handler::DrawingObjectHandler;
 use crate::engine::Engine;
 use crate::interaction_handler::InteractionHandler;
-use crate::messages::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
+use ff_standard_lib::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -46,7 +46,8 @@ pub struct FundForgeStrategy {
     market_event_handler: Arc<MarketHandlerEnum>,
 
     subscription_handler: Arc<SubscriptionHandler>,
-   // history: Arc<RwLock<HistoryHandler>>, //todo use this object to save history from timeslices
+    
+    //todo make indicator handler indicator_handler: Arc<IndicatorHandler>,
 }
 
 impl FundForgeStrategy {
@@ -57,7 +58,6 @@ impl FundForgeStrategy {
     pub async fn initialize(
         owner_id: Option<OwnerId>,
         notify: Arc<Notify>,
-        platform_mode: PlatformMode,
         strategy_mode: StrategyMode,
         interaction_mode: StrategyInteractionMode,
         start_date: NaiveDateTime,
@@ -68,8 +68,9 @@ impl FundForgeStrategy {
         strategy_event_sender: mpsc::Sender<EventTimeSlice>,
         replay_delay_ms: Option<u64>,
         retain_history: usize,
+        backtest_resolution: Duration,
     ) -> FundForgeStrategy {
-        let start_state = StrategyStartState::new(strategy_mode.clone(), start_date, end_date, time_zone.clone(), warmup_duration);
+        let start_state = StrategyStartState::new(strategy_mode.clone(), start_date, end_date, time_zone.clone(), warmup_duration, backtest_resolution);
         let start_time = time_convert_utc_naive_to_fixed_offset(&time_zone, start_date);
         let owner_id = match owner_id {
             Some(owner_id) => owner_id,
@@ -247,17 +248,15 @@ impl FundForgeStrategy {
             }
         }
     }
-/*
+
     /// returns the nth last bar at the specified index. 1 = 1 bar ago, 0 = current bar.
-    pub async fn data_index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
-        self.subscription_handler.data_index(subscription, index).await
-        //Todo Data is being recieved in the above function... but not received here
+    pub async fn bar_index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
+        self.subscription_handler.bar_index(subscription, index).await
     }
 
-    pub async fn data_current(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
-        self.subscription_handler.data_current(subscription).await
-        //Todo Data is being recieved in the above function... but not received here
-    }*/
+    pub async fn bar_current(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
+        self.subscription_handler.bar_current(subscription).await
+    }
 
     /// Current Tz time, depends on the `StrategyMode`. \
     /// Backtest will return the last data point time, live will return the current time.

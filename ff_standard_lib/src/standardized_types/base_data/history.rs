@@ -2,11 +2,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::time_slices::UnstructuredSlice;
 use std::collections::{btree_map, BTreeMap, HashMap};
 use chrono::{DateTime, FixedOffset, Utc};
-use futures::future::join_all;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
-use crate::consolidators::candlesticks::CandleStickConsolidator;
-use crate::consolidators::consolidator_enum::ConsolidatorEnum;
-use crate::consolidators::count::CountConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType};
@@ -164,7 +160,7 @@ pub fn get_lowest_resolution(all_symbol_subscriptions: &HashMap<Symbol, Vec<Data
     })
 }
 
-
+/*
 pub async fn history_many(subscriptions: Vec<DataSubscription>, from_time: DateTime<FixedOffset>, to_time: DateTime<FixedOffset>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
     let mut combined_data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
 
@@ -196,8 +192,8 @@ pub async fn history_many(subscriptions: Vec<DataSubscription>, from_time: DateT
     } else {
         Some(combined_data)
     }
-}
-
+}*/
+/*
 /// Method responsible for getting historical data for all subscriptions that are passed in,
 /// # Arguments
 /// * `subscriptions` - The subscriptions to get the historical data for, this doesn't actually subscribe your strategy to the symbol, it just defines the request we are making to get the correct data. This is a `Vec<Subscription>` objects.
@@ -273,7 +269,7 @@ pub async fn history(subscription: DataSubscription, from_time: DateTime<FixedOf
             true => None
         }
     }
-}
+}*/
 
 pub(crate) async fn range_data(from_time: DateTime<Utc>, to_time: DateTime<Utc>, subscription: DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice> {
     if from_time > to_time {

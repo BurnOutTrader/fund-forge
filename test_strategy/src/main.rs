@@ -11,7 +11,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent};
-use ff_strategies::messages::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
+use ff_standard_lib::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
 
 
 /*fn defualt_broker_map() -> HashMap<DataVendor, Brokerage> {
@@ -39,7 +39,6 @@ async fn main() {
     let strategy = FundForgeStrategy::initialize(
         Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, todo! this needs to be upgraded in the future to be more reliable in Single and Multi machine modes.
         notify.clone(),
-        PlatformMode::SingleMachine, // SingleMachine or MultiMachine, multi machine mode for co-located servers, single machine for and MT5/Ninjatrader style platform
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
@@ -49,7 +48,8 @@ async fn main() {
         set_subscriptions_initial(), //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
         strategy_event_sender, // the sender for the strategy events
         None,
-        100
+        100,
+        Duration::seconds(1)
     ).await;
 
 
@@ -61,13 +61,13 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     //notify.notify_one();
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
-
+    let subscription = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
     let mut warmup_complete = false;
     let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         if warmup_complete {
             count += 1;
-            if count == 100000 {
+            if count == 10000 {
                 //todo... neeed to get subscribing ability in the event loop.
                 //todo... then build unit tests for each event handler using test strategy initialization fn.
                 // finish matching engine for backtests, download historical currency data for currency converter fn, have option for higher resolution conversions if tick data available.
@@ -104,22 +104,20 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                 //println!("{}... time local {}", count, strategy.time_local().await);
                                 //println!("{}... time utc {}", count, strategy.time_utc().await);
 
-                                /* if count == 51 {
+                       /*          if count > 20000 {
                                      // check subscription 1
-
-                                     let three_bars_ago = &strategy.data_index(&subscription, 3).await;
+                                    
+                                     let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
                                      println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
-
                                      //let data_current = &strategy.data_current(&subscription).await;
                                      //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
 
                                      // check subcription 2
 
-                                     let three_bars_ago = &strategy.data_index(&subscription_2, 3).await;
-                                     println!("{}...{} Three bars ago: {:?}",  count, subscription_2.symbol.name, three_bars_ago);
+                                     let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
 
-                                     //let data_current = &strategy.data_current(&subscription_2).await;
-                                     //println!("{}...{} Current data: {:?}", count, subscription_2.symbol.name, data_current);
+                                     let data_current = &strategy.bar_current(&subscription).await;
+                                     println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
                                  }*/
 
 
@@ -159,6 +157,9 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 StrategyEvent::WarmUpComplete(_) => {
                     warmup_complete = true;
                 }
+            /*    StrategyEvent::IndicatorSlice(_, indicator_event) => {
+                    println!("Indicator Event: {:?}", indicator_event);
+                }*/
             }
             notify.notify_one();
             //simulate work
@@ -188,7 +189,6 @@ async fn initialize_test_strategy() -> (Receiver<EventTimeSlice>, FundForgeStrat
     let strategy = FundForgeStrategy::initialize(
         Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, todo! this needs to be upgraded in the future to be more reliable in Single and Multi machine modes.
         notify.clone(),
-        PlatformMode::SingleMachine, // SingleMachine or MultiMachine, multi machine mode for co-located servers, single machine for and MT5/Ninjatrader style platform
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
@@ -198,7 +198,8 @@ async fn initialize_test_strategy() -> (Receiver<EventTimeSlice>, FundForgeStrat
         set_test_subscriptions_initial(), //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
         strategy_event_sender, // the sender for the strategy events
         None,
-        100
+        100,
+        Duration::seconds(1)
     ).await;
     (strategy_event_receiver, strategy, notify)
 }

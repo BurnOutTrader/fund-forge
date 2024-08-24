@@ -4,6 +4,7 @@ use std::fs::File;
 use std::{fs};
 use std::io::Write;
 use std::path::PathBuf;
+use std::str::FromStr;
 use chrono::{DateTime, FixedOffset, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -494,12 +495,12 @@ impl BaseData for BaseDataEnum {
     /// This is the closing time of the `BaseDataEnum` variant, so for 1 hour quotebar, if the bar opens at 5pm, the closing time will be 6pm and the time_utc will be 6pm. time_object_unchanged(&self) will return the unaltered value.
     fn time_utc(&self) -> DateTime<Utc> {
         match self {
-            BaseDataEnum::Price(price) => price.time_utc(),
-            BaseDataEnum::Candle(candle) => candle.time_utc(),
-            BaseDataEnum::QuoteBar(quote_bar) => quote_bar.time_utc(),
-            BaseDataEnum::Tick(tick) => tick.time_utc(),
-            BaseDataEnum::Quote(quote) => quote.time_utc(),
-            BaseDataEnum::Fundamental(fundamental) => fundamental.time_utc(),
+            BaseDataEnum::Price(price) => DateTime::from_str(&price.time).unwrap(),
+            BaseDataEnum::Candle(candle) => DateTime::from_str(&candle.time).unwrap(),
+            BaseDataEnum::QuoteBar(quote_bar) => DateTime::from_str(&quote_bar.time).unwrap(),
+            BaseDataEnum::Tick(tick) => DateTime::from_str(&tick.time).unwrap(),
+            BaseDataEnum::Quote(quote) => DateTime::from_str(&quote.time).unwrap(),
+            BaseDataEnum::Fundamental(fundamental) => DateTime::from_str(&fundamental.time).unwrap(),
         }
     }
 
