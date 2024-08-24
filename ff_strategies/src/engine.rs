@@ -164,9 +164,9 @@ impl Engine{
     async fn historical_data_feed(&self, month_years: BTreeMap<i32, DateTime<Utc>>, end_time: DateTime<Utc>, warm_up_completed: bool) {
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
+            self.market_event_handler.update_time(start.clone()).await;
             let mut last_time = start.clone();
             'month_loop: loop {
-                self.subscription_handler.set_subscriptions_updated(false).await;
                 let mut time_slices = match self.get_base_time_slices(start.clone()).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -221,7 +221,9 @@ impl Engine{
                     }
 
                     let consolidated_data = self.subscription_handler.update_consolidators(time_slice.clone()).await;
-                    time_slice.extend(consolidated_data);
+                    if !consolidated_data.is_empty() {
+                        time_slice.extend(consolidated_data);
+                    }
                     strategy_event.push(StrategyEvent::TimeSlice(self.owner_id.clone(), time_slice));
 
                     if !self.send_and_continue(time.clone(), strategy_event, warm_up_completed).await {
@@ -249,6 +251,7 @@ impl Engine{
 
     async fn subscriptions_updated(&self, last_time: DateTime<Utc>) -> bool {
         if self.subscription_handler.subscriptions_updated().await {
+            self.subscription_handler.set_subscriptions_updated(false).await;
             let subscription_events = self.subscription_handler.subscription_events().await;
             let strategy_event = vec![StrategyEvent::DataSubscriptionEvents(self.owner_id.clone(), subscription_events, last_time.timestamp())];
             match self.strategy_event_sender.send(strategy_event).await {

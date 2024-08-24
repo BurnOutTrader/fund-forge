@@ -89,40 +89,42 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                         match base_data {
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
-                                if candle.is_closed {
-                                    //println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                                } else {
-                                    //Todo Documents, Open bars get sent through with every tick, so you can always access the open bar using highest resolution.
-                                    println!("{}...Open Candle {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                if warmup_complete {
+                                    if candle.is_closed {
+                                        //println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    } else {
+                                        //Todo Documents, Open bars get sent through with every tick, so you can always access the open bar using highest resolution.
+                                        //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    }
+
+                                    //println!("{}... time local {}", count, strategy.time_local().await);
+                                    //println!("{}... time utc {}", count, strategy.time_utc().await);
+
+                                    /*          if count > 20000 {
+                                                  // check subscription 1
+                                                 
+                                                  let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
+                                                  println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
+                                                  //let data_current = &strategy.data_current(&subscription).await;
+                                                  //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
+             
+                                                  // check subcription 2
+             
+                                                  let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
+             
+                                                  let data_current = &strategy.bar_current(&subscription).await;
+                                                  println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
+                                              }*/
+
+
+
+                                    /*  if count /3 == 0 {
+                                           strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
+                                      }
+                                      if count / 5 == 0 {
+                                       strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
+                                      }*/
                                 }
-
-                                //println!("{}... time local {}", count, strategy.time_local().await);
-                                //println!("{}... time utc {}", count, strategy.time_utc().await);
-
-                       /*          if count > 20000 {
-                                     // check subscription 1
-                                    
-                                     let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
-                                     println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
-                                     //let data_current = &strategy.data_current(&subscription).await;
-                                     //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
-
-                                     // check subcription 2
-
-                                     let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
-
-                                     let data_current = &strategy.bar_current(&subscription).await;
-                                     println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
-                                 }*/
-
-
-
-                                /*  if count /3 == 0 {
-                                       strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
-                                  }
-                                  if count / 5 == 0 {
-                                   strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
-                                  }*/
                             }
                             BaseDataEnum::QuoteBar(_) => {}
                             BaseDataEnum::Tick(tick) => {
