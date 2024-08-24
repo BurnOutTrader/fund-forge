@@ -69,7 +69,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         if warmup_complete {
             count += 1;
-            if count == 10000 {
+            if count == 1000 {
                 let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
                 let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
                 strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()],100).await;
@@ -90,10 +90,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
                                 if candle.is_closed {
-                                    println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    //println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                 } else {
                                     //Todo Documents, Open bars get sent through with every tick, so you can always access the open bar using highest resolution.
-                                    //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    println!("{}...Open Candle {}: close:{} at {}, is_closed: {}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_utc(), candle.is_closed); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                 }
 
                                 //println!("{}... time local {}", count, strategy.time_local().await);

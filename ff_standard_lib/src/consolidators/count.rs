@@ -42,6 +42,7 @@ impl CountConsolidator
             Ok(size) => size,
             Err(e) => return Err(ConsolidatorError { message: format!("Error getting tick size: {}", e) }),
         };
+        
         Ok(CountConsolidator {
             number,
             counter: 0,
