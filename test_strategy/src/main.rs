@@ -3,6 +3,7 @@ use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Receiver;
+use ff_standard_lib::apis::brokerage::Brokerage;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
@@ -69,7 +70,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         if warmup_complete {
             count += 1;
-            if count == 1000 {
+            if count == 100 {
                 let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
                 let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
                 strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()],100).await;
@@ -90,9 +91,25 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
                                 if warmup_complete {
-                                    if candle.is_closed {
+                                    if candle.is_closed == true {
                                         println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                                    } else {
+                                        if count > 2000 {
+                                            // check subscription 1
+
+                                            /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
+                                            println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
+                                            //let data_current = &strategy.data_current(&subscription).await;
+                                            //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
+       
+                                            // check subcription 2
+       
+                                            let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
+       
+                                            let data_current = &strategy.bar_current(&subscription).await;
+                                            println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);*/
+                                        }
+                                    
+                                    } else if candle.is_closed == false {
                                         //Todo Documents, Open bars get sent through with every tick, so you can always access the open bar using highest resolution.
                                         //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     }
@@ -100,25 +117,9 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                     //println!("{}... time local {}", count, strategy.time_local().await);
                                     //println!("{}... time utc {}", count, strategy.time_utc().await);
 
-                                    /*          if count > 20000 {
-                                                  // check subscription 1
-                                                 
-                                                  let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
-                                                  println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
-                                                  //let data_current = &strategy.data_current(&subscription).await;
-                                                  //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
-             
-                                                  // check subcription 2
-             
-                                                  let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
-             
-                                                  let data_current = &strategy.bar_current(&subscription).await;
-                                                  println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
-                                              }*/
 
 
-
-                                    /*  if count /3 == 0 {
+                                   /*   if count /3 == 0 {
                                            strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
                                       }
                                       if count / 5 == 0 {

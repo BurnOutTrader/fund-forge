@@ -151,14 +151,6 @@ impl BaseDataEnum {
         }
     }
     
-    pub fn subscription(&self) -> DataSubscription {
-        match self {
-            BaseDataEnum::Candle(candle) => DataSubscription::new(candle.symbol.name.clone(), candle.symbol.data_vendor.clone(), candle.resolution.clone(), self.base_data_type(), candle.symbol.market_type.clone()),
-            BaseDataEnum::QuoteBar(bar) => DataSubscription::new(bar.symbol.name.clone(), bar.symbol.data_vendor.clone(), bar.resolution.clone(), self.base_data_type(), bar.symbol.market_type.clone()),
-            _ => DataSubscription::new(self.symbol().name.clone(), self.symbol().data_vendor.clone(), Resolution::Instant, self.base_data_type(), self.symbol().market_type.clone()),
-        }
-    }
-
     /// Links `BaseDataEnum` to a `BaseDataType`
     pub fn base_data_type(&self) -> BaseDataType {
         match self {
