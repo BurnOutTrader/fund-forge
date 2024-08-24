@@ -1,14 +1,13 @@
-use std::cell::RefCell;
 use std::collections::{BTreeMap};
+use std::collections::Bound::Included;
 use std::sync::{Arc};
 use std::time::Duration as StdDuration;
-use chrono::{DateTime, Datelike, Duration, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::{Notify};
 use tokio::task;
-use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use tokio::time::sleep;
 use ff_standard_lib::standardized_types::base_data::history::{generate_file_dates, get_historical_data};
-use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::{StrategyMode};
 use ff_standard_lib::standardized_types::OwnerId;
@@ -18,6 +17,7 @@ use crate::interaction_handler::InteractionHandler;
 use crate::market_handlers::MarketHandlerEnum;
 use ff_standard_lib::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::strategy_state::StrategyStartState;
+
 //Possibly more accurate engine
 /*todo Use this for saving and loading data, it will make smaller file sizes and be less handling for consolidator, we can then just update historical data once per week on sunday and load last week from broker.
    use Create a date (you can use DateTime<Utc>, Local, or NaiveDate)
@@ -64,6 +64,13 @@ impl Engine{
         task::spawn(async move {
             println!("Engine: Initializing the strategy...");
 
+            let mut subscriptions = self.subscription_handler.primary_subscriptions().await;
+            //wait until we have at least one subscription
+            while subscriptions.is_empty() {
+                sleep(StdDuration::from_secs(1)).await;
+                subscriptions = self.subscription_handler.primary_subscriptions().await;
+            }
+            
             self.warmup().await;
 
             println!("Engine: Start {:?} ", self.start_state.mode);
@@ -170,7 +177,7 @@ impl Engine{
 
                 let mut end_month = true;
                 'time_loop: loop {
-                    let time = last_time + self.start_state.backtest_resolution;
+                    let time = last_time + self.start_state.buffer_resolution;
 
                     if time > end_time {
                         break 'main_loop
@@ -185,14 +192,16 @@ impl Engine{
                         break 'time_loop
                     }
 
-                    //check if we have any base data for the time
-                    let time_slice = time_slices.get(&time);
-
+                    //check if we have any base data for the time, if we have more then one data point we will consolidate it to the strategy resolution
+                    let mut time_slice: TimeSlice = time_slices.range(last_time..=time)
+                        .flat_map(|(_, value)| value.iter().cloned())
+                        .collect();
+                    
                     // if we don't have base data we update any objects which need to be updated with the time
-                    if time_slice.is_none() {
+                    if time_slice.is_empty() {
                         let mut strategy_event_slice : EventTimeSlice = EventTimeSlice::new();
                         let consolidated_data = self.subscription_handler.update_consolidators_time(time.clone()).await;
-                        
+
                         if !consolidated_data.is_empty() {
                             strategy_event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), consolidated_data));
                         }
@@ -204,12 +213,6 @@ impl Engine{
                         last_time = time.clone();
                         continue 'time_loop
                     }
-                    
-                    if time_slice.is_none() {
-                        continue 'time_loop
-                    }
-
-                    let mut time_slice = time_slice.unwrap().clone();
 
                     let mut strategy_event = EventTimeSlice::new();
 
@@ -221,12 +224,20 @@ impl Engine{
                     time_slice.extend(consolidated_data);
                     strategy_event.push(StrategyEvent::TimeSlice(self.owner_id.clone(), time_slice));
 
-                    
                     if !self.send_and_continue(time.clone(), strategy_event, warm_up_completed).await {
                         break 'main_loop
                     }
-                    
-                    time_slices.remove(&time);
+                   
+                    let keys_to_remove: Vec<_> = time_slices.range((Included(last_time), Included(time)))
+                        .map(|(key, _)| key.clone())
+                        .collect();
+
+                    if !keys_to_remove.is_empty() {
+                        for key in keys_to_remove {
+                            time_slices.remove(&key);
+                        }
+                    }
+
                     last_time = time.clone();
                 }
                 if end_month {
@@ -235,7 +246,7 @@ impl Engine{
             }
         }
     }
-    
+
     async fn subscriptions_updated(&self, last_time: DateTime<Utc>) -> bool {
         if self.subscription_handler.subscriptions_updated().await {
             let subscription_events = self.subscription_handler.subscription_events().await;
@@ -250,7 +261,7 @@ impl Engine{
         }
         false
     }
-    
+
     async fn send_and_continue(&self, time: DateTime<Utc>, strategy_event_slice: EventTimeSlice, warm_up_completed: bool) -> bool {
         self.market_event_handler.update_time(time.clone()).await;
         match self.strategy_event_sender.send(strategy_event_slice).await {
@@ -270,7 +281,7 @@ impl Engine{
             }
         }
         self.notify.notified().await;
-        
+
         true
     }
 }
