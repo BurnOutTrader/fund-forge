@@ -68,6 +68,8 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     let mut warmup_complete = false;
     let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
+        //println!("{}... time local {}", count, strategy.time_local().await);
+        //println!("{}... time utc {}", count, strategy.time_utc().await);
         if warmup_complete {
             count += 1;
             if count == 100 {
@@ -94,17 +96,14 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                     if candle.is_closed == true {
                                         println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                         if count > 2000 {
-                                            // check subscription 1
-
                                             /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
                                             println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
                                             //let data_current = &strategy.data_current(&subscription).await;
                                             //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
        
-                                            // check subcription 2
-       
+        
                                             let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
-       
+                                            println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);  
                                             let data_current = &strategy.bar_current(&subscription).await;
                                             println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);*/
                                         }
@@ -114,11 +113,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                         //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     }
 
-                                    //println!("{}... time local {}", count, strategy.time_local().await);
-                                    //println!("{}... time utc {}", count, strategy.time_utc().await);
-
-
-
+                                    
                                    /*   if count /3 == 0 {
                                            strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
                                       }
