@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::collections::{BTreeMap};
 use std::sync::{Arc};
 use std::time::Duration as StdDuration;
@@ -36,8 +37,6 @@ pub(crate) struct Engine {
     market_event_handler: Arc<MarketHandlerEnum>,
     interaction_handler: Arc<InteractionHandler>,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
-    last_time: DateTime<Utc>,
-    warmup_complete: bool,
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -52,18 +51,16 @@ impl Engine{
         Engine {
             owner_id,
             notify,
-            last_time: start_state.start_date - start_state.warmup_duration,
             start_state,
             strategy_event_sender,
             subscription_handler,
             market_event_handler,
             interaction_handler,
-            warmup_complete: false,
         }
     }
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
     /// Calling this method will start the strategy running.
-    pub async fn launch(mut self: Self) {
+    pub async fn launch(self: Self) {
         task::spawn(async move {
             println!("Engine: Initializing the strategy...");
 
@@ -105,7 +102,7 @@ impl Engine{
     /// \
     /// An alternative to the warmup, would be using the `history` method to get historical data for a specific subscription, and then manually warm up the indicators during re-balancing or adding new subscriptions.
     /// You don't need to be subscribed to an instrument to get the history, so that method is a good alternative for strategies that dynamically subscribe to instruments.
-    async fn warmup(&mut self) {
+    async fn warmup(&self) {
         println!("Engine: Warming up the strategy...");
         let start_time = match self.start_state.mode {
             StrategyMode::Backtest => {
@@ -116,8 +113,8 @@ impl Engine{
         };
 
         // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
-        let month_years = generate_file_dates(self.last_time , start_time.clone());
-        self.historical_data_feed(month_years, start_time.clone()).await;
+        let month_years = generate_file_dates(self.start_state.start_date - self.start_state.warmup_duration , start_time.clone());
+        self.historical_data_feed(month_years, start_time.clone(), false).await;
 
         self.subscription_handler.set_warmup_complete().await;
         self.market_event_handler.set_warm_up_complete().await;
@@ -129,24 +126,15 @@ impl Engine{
                 println!("Engine: Error forwarding event: {:?}", e);
             }
         }
-        self.warmup_complete = true;
     }
 
     /// Runs the strategy backtest
-    async fn run_backtest(&mut self) {
+    async fn run_backtest(&self) {
         println!("Engine: Running the strategy backtest...");
-        {
-            self.interaction_handler.process_controls().await;
-        }
-
+        self.interaction_handler.process_controls().await;
         // we run the historical data feed from the start time until we reach the end date for the strategy
-        self.last_time = self.start_state.start_date.clone();
-        let end_date = self.start_state.end_date.clone();
-        let month_years = generate_file_dates(self.last_time, end_date.clone());
-
-        //println!("file dates: {:?}", month_years);
-
-        self.historical_data_feed(month_years, end_date).await;
+        let month_years = generate_file_dates(self.start_state.start_date, self.start_state.end_date.clone());
+        self.historical_data_feed(month_years, self.start_state.end_date.clone(), true).await;
 
         self.market_event_handler.process_ledgers().await;
 
@@ -166,9 +154,10 @@ impl Engine{
     }
 
     /// Feeds the historical data to the strategy, along with any events that were created.
-    async fn historical_data_feed(&mut self, month_years: BTreeMap<i32, DateTime<Utc>>, end_time: DateTime<Utc>) {
+    async fn historical_data_feed(&self, month_years: BTreeMap<i32, DateTime<Utc>>, end_time: DateTime<Utc>, warm_up_completed: bool) {
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
+            let mut last_time = start.clone();
             'month_loop: loop {
                 self.subscription_handler.set_subscriptions_updated(false).await;
                 let mut time_slices = match self.get_base_time_slices(start.clone()).await {
@@ -178,120 +167,110 @@ impl Engine{
                         break 'month_loop
                     }
                 };
-                
+
                 let mut end_month = true;
                 'time_loop: loop {
-                    let time = self.last_time + self.start_state.backtest_resolution;
-                    
+                    let time = last_time + self.start_state.backtest_resolution;
+
                     if time > end_time {
                         break 'main_loop
                     }
                     if time.month() != start.month() {
-                        break 'time_loop
+                        break 'month_loop
                     }
-                    
+
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
-                    if self.subscription_handler.subscriptions_updated().await {
-                        let subscription_events = self.subscription_handler.subscription_events().await;
-                        let strategy_event = vec![StrategyEvent::DataSubscriptionEvents(self.owner_id.clone(), subscription_events, self.last_time.timestamp())];
-                        match self.strategy_event_sender.send(strategy_event).await {
-                            Ok(_) => {},
-                            Err(e) => {
-                                println!("Error forwarding event: {:?}", e);
-                            }
-                        }
+                    if self.subscriptions_updated(last_time).await {
                         end_month = false;
                         break 'time_loop
                     }
-                    
-                    self.last_time = time;
-                    
+
                     //check if we have any base data for the time
                     let time_slice = time_slices.get(&time);
-                    
+
                     // if we don't have base data we update any objects which need to be updated with the time
-                    if !time_slice.is_some() {
-                        let mut event_slice : EventTimeSlice = EventTimeSlice::new();
+                    if time_slice.is_none() {
+                        let mut strategy_event_slice : EventTimeSlice = EventTimeSlice::new();
                         let consolidated_data = self.subscription_handler.update_consolidators_time(time.clone()).await;
                         
-                        //we are also passing the open bars here which is ok, but indicators need to filter them out if not wanted.
-                       /* let indicator_events = self.subscription_handler.update_indicators(&consolidated_data).await;
-                        if !indicator_events.is_empty() {
-                            event_slice.push(StrategyEvent::IndicatorSlice(self.owner_id.clone(), indicator_events));
-                        }*/
                         if !consolidated_data.is_empty() {
-                            event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), consolidated_data));
+                            strategy_event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), consolidated_data));
                         }
-                        if !event_slice.is_empty() {
-                            self.market_event_handler.update_time(time.clone()).await;
-                            match self.strategy_event_sender.send(event_slice).await {
-                                Ok(_) => {},
-                                Err(e) => {
-                                    println!("Error forwarding event: {:?}", e);
-                                }
-                            }
-                            self.notify.notified().await; //todo times are out of sync again now.. somewhere good to put notifys is key.
-                        }
-                        // we need to check if consolidators have any indicator events
-                        // we need to send these to the strategy
-                        if self.warmup_complete {
-                            match self.interaction_handler.replay_delay_ms().await {
-                                Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
-                                None => {},
-                            }
-
-                            // We check if the user has input any strategy commands, pause, play, stop etc.
-                            if self.interaction_handler.process_controls().await == true {
+                        if !strategy_event_slice.is_empty() {
+                            if !self.send_and_continue(time.clone(), strategy_event_slice, warm_up_completed).await {
                                 break 'main_loop
                             }
                         }
+                        last_time = time.clone();
+                        continue 'time_loop
+                    }
+                    
+                    if time_slice.is_none() {
                         continue 'time_loop
                     }
 
-                    let time_slice = time_slice.unwrap();
-                    
-                    //feed time slice to consolidator and return consolidated data
+                    let mut time_slice = time_slice.unwrap().clone();
+
+                    let mut strategy_event = EventTimeSlice::new();
+
+                    if let Some(market_event_handler_events) = self.market_event_handler.base_data_upate(time_slice.clone()).await {
+                        strategy_event.extend(market_event_handler_events);
+                    }
+
                     let consolidated_data = self.subscription_handler.update_consolidators(time_slice.clone()).await;
-                    
-                    let mut strategy_event: EventTimeSlice = vec![];
-                    let mut combined_slice = time_slice.clone();
-                    combined_slice.extend(consolidated_data);
-                    strategy_event.push(StrategyEvent::TimeSlice(self.owner_id.clone(), time_slice.clone()));
-                    // The market event handler response with any order events etc that may have been returned from the base data update
-                    
-                    let market_event_handler_events = self.market_event_handler.base_data_upate(combined_slice).await;
-                    match market_event_handler_events {
-                        Some(events) => {
-                            strategy_event.extend(events);
-                        },
-                        None => {},
-                    }
+                    time_slice.extend(consolidated_data);
+                    strategy_event.push(StrategyEvent::TimeSlice(self.owner_id.clone(), time_slice));
 
-                    self.market_event_handler.update_time(time.clone()).await;
-                    match self.strategy_event_sender.send(strategy_event).await {
-                        Ok(_) => {},
-                        Err(e) => {
-                            println!("Error forwarding event: {:?}", e);
-                        }
+                    
+                    if !self.send_and_continue(time.clone(), strategy_event, warm_up_completed).await {
+                        break 'main_loop
                     }
-
-                    // We check if the user has requested a delay between time slices for market replay style backtesting.
-                    if self.warmup_complete {
-                        match self.interaction_handler.replay_delay_ms().await {
-                            Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
-                            None => {},
-                        }
-                        if self.interaction_handler.process_controls().await == true {
-                            break 'main_loop
-                        }
-                    }
-                    self.notify.notified().await;
+                    
                     time_slices.remove(&time);
+                    last_time = time.clone();
                 }
                 if end_month {
                     break 'month_loop
                 }
             }
         }
+    }
+    
+    async fn subscriptions_updated(&self, last_time: DateTime<Utc>) -> bool {
+        if self.subscription_handler.subscriptions_updated().await {
+            let subscription_events = self.subscription_handler.subscription_events().await;
+            let strategy_event = vec![StrategyEvent::DataSubscriptionEvents(self.owner_id.clone(), subscription_events, last_time.timestamp())];
+            match self.strategy_event_sender.send(strategy_event).await {
+                Ok(_) => {},
+                Err(e) => {
+                    println!("Error forwarding event: {:?}", e);
+                }
+            }
+            return true
+        }
+        false
+    }
+    
+    async fn send_and_continue(&self, time: DateTime<Utc>, strategy_event_slice: EventTimeSlice, warm_up_completed: bool) -> bool {
+        self.market_event_handler.update_time(time.clone()).await;
+        match self.strategy_event_sender.send(strategy_event_slice).await {
+            Ok(_) => {},
+            Err(e) => {
+                println!("Error forwarding event: {:?}", e);
+            }
+        }
+        // We check if the user has requested a delay between time slices for market replay style backtesting.
+        if warm_up_completed {
+            match self.interaction_handler.replay_delay_ms().await {
+                Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
+                None => {},
+            }
+            if self.interaction_handler.process_controls().await == true {
+                return false
+            }
+        }
+        self.notify.notified().await;
+        
+        true
     }
 }

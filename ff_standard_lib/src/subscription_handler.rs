@@ -147,7 +147,7 @@ impl SubscriptionHandler {
                 let symbol = base_data.symbol();
                 let mut symbol_subscriptions = symbol_subscriptions.write().await;
                 if let Some(symbol_handler) =  symbol_subscriptions.get_mut(&symbol) {
-                    symbol_handler.update(&base_data).await //todo we need to use interior mutability to update the consolidators across threads, add RWLock or mutex
+                    symbol_handler.update(&base_data) //todo we need to use interior mutability to update the consolidators across threads, add RWLock or mutex
                 } else {
                     vec![]
                 }
@@ -168,7 +168,7 @@ impl SubscriptionHandler {
         let mut time_slice = TimeSlice::new();
         
         for (_, mut symbol_handler) in symbol_subscriptions.iter_mut() {
-            time_slice.extend(symbol_handler.update_time(time.clone()).await); //todo we need to use interior mutability to update the consolidators across threads, add RWLock or mutex
+            time_slice.extend(symbol_handler.update_time(time.clone())); //todo we need to use interior mutability to update the consolidators across threads, add RWLock or mutex
         }
         time_slice
     }
@@ -212,7 +212,7 @@ impl SymbolSubscriptionHandler {
         handler
     }
 
-    pub async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         // Ensure we only process if the symbol matches
         if &self.symbol != base_data.symbol() {
             panic!("Symbol mismatch: {:?} != {:?}", self.symbol, base_data.symbol());
@@ -234,7 +234,7 @@ impl SymbolSubscriptionHandler {
         consolidated_data
     }
 
-    pub async fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
         let mut consolidated_data = vec![];
             // Iterate over the secondary subscriptions and update them
         for consolidator in &mut self.secondary_subscriptions {

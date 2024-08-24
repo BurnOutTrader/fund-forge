@@ -68,9 +68,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         if warmup_complete {
             count += 1;
             if count == 10000 {
-                //todo... neeed to get subscribing ability in the event loop.
-                //todo... then build unit tests for each event handler using test strategy initialization fn.
-                // finish matching engine for backtests, download historical currency data for currency converter fn, have option for higher resolution conversions if tick data available.
                 let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
                 let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
                 strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()],100).await;
@@ -90,10 +87,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                         match base_data {
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
-                         /*       if !warmup_complete {
-                                    // we could manually warm up indicators etc here.
-                                    continue
-                                }*/
                                 if candle.is_closed {
                                     println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                 } else {
