@@ -96,6 +96,8 @@ pub enum SynchronousRequestType {
     AccountInfo(Brokerage, AccountId),
 
     Markets(DataVendor),
+    
+    DecimalAccuracy(DataVendor, Symbol),
 }
 
 impl SynchronousRequestType {
@@ -165,6 +167,8 @@ pub enum SynchronousResponseType {
     AccountInfo(AccountInfo),
 
     Markets(Vec<MarketType>),
+    
+    DecimalAccuracy(Symbol, u32),
 }
 
 impl SynchronousResponseType {

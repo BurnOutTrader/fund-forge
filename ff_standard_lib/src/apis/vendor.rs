@@ -56,6 +56,7 @@ pub mod server_responses {
     use crate::apis::vendor::{vendor_api_object, DataVendor};
     use crate::standardized_types::data_server_messaging::{FundForgeError, SynchronousResponseType};
     use crate::standardized_types::enums::MarketType;
+    use crate::standardized_types::subscriptions::Symbol;
 
     /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
     #[async_trait]
@@ -63,6 +64,7 @@ pub mod server_responses {
         async fn basedata_symbols_response(&self, market_type: MarketType) -> Result<SynchronousResponseType, FundForgeError>;
         async fn resolutions_response(&self, market_type: MarketType) -> Result<SynchronousResponseType, FundForgeError>;
         async fn markets_response(&self) -> Result<SynchronousResponseType, FundForgeError>;
+        async fn decimal_accuracy_response(&self, symbol: Symbol) -> Result<SynchronousResponseType, FundForgeError>;
     }
 
     /// Responses
@@ -81,6 +83,11 @@ pub mod server_responses {
         async fn markets_response(&self) -> Result<SynchronousResponseType, FundForgeError> {
             let api_client = vendor_api_object(self).await;
             api_client.markets_response().await
+        }
+
+        async fn decimal_accuracy_response(&self, symbol: Symbol) -> Result<SynchronousResponseType, FundForgeError> {
+            let api_client = vendor_api_object(self).await;
+            api_client.decimal_accuracy_response(symbol).await
         }
     }
 }
@@ -101,6 +108,7 @@ pub mod client_requests {
         async fn symbols(&self, market_type: MarketType) -> Result<Vec<Symbol>, FundForgeError>;
         async fn resolutions(&self, market_type: MarketType) -> Result<Vec<Resolution>, FundForgeError>;
         async fn markets(&self) -> Result<Vec<MarketType>, FundForgeError>;
+        async fn decimal_accuracy(&self, symbol: Symbol) -> Result<u32, FundForgeError>;
     }
 
     #[async_trait]
@@ -145,6 +153,21 @@ pub mod client_requests {
             let response = SynchronousResponseType::from_bytes(&response).unwrap();
             match response {
                 SynchronousResponseType::Markets(market_type) => Ok(market_type),
+                SynchronousResponseType::Error(e) => Err(e),
+                _ => Err(FundForgeError::ClientSideErrorDebug("Invalid response type from server".to_string()))
+            }
+        }
+
+        async fn decimal_accuracy(&self, symbol: Symbol) -> Result<u32, FundForgeError> {
+            let api_client = self.synchronous_client().await;
+            let request = SynchronousRequestType::DecimalAccuracy(self.clone(), symbol);
+            let response = match api_client.send_and_receive(request.to_bytes(), false).await {
+                Ok(response) => response,
+                Err(e) => return Err(e)
+            };
+            let response = SynchronousResponseType::from_bytes(&response)?;
+            match response {
+                SynchronousResponseType::DecimalAccuracy(symbol, accuracy) => Ok(accuracy),
                 SynchronousResponseType::Error(e) => Err(e),
                 _ => Err(FundForgeError::ClientSideErrorDebug("Invalid response type from server".to_string()))
             }

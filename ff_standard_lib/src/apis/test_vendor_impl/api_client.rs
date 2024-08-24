@@ -68,6 +68,10 @@ impl VendorApiResponse for TestVendorApi {
     async fn markets_response(&self) -> Result<SynchronousResponseType, FundForgeError> {
         Ok(SynchronousResponseType::Markets(vec![MarketType::Forex]))
     }
+
+    async fn decimal_accuracy_response(&self, symbol: Symbol) -> Result<SynchronousResponseType, FundForgeError> {
+        Ok(SynchronousResponseType::DecimalAccuracy(symbol, 5))
+    }
 }
 
 #[async_trait]
