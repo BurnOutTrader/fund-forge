@@ -3,7 +3,6 @@ use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Receiver;
-use ff_standard_lib::apis::brokerage::Brokerage;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
@@ -11,7 +10,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
-use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription};
+use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent};
 use ff_standard_lib::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
 
 
@@ -259,6 +258,7 @@ pub async fn test_subscribing_and_consolidating()  {
                                     assert_eq!(subscription.symbol.name, "AUD-CAD");
                                     assert_eq!(subscription.resolution, Resolution::Minutes(15));
                                 }
+                                DataSubscriptionEvent::Failed(_) => {}
                             }
                         }
                     },

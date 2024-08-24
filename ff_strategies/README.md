@@ -100,7 +100,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         for strategy_event in event_slice {
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
-                StrategyEvent::DrawingToolEvents(_, drawing_tool_event, _) => {}
+                StrategyEvent::DrawingToolEvents(_, drawing_tool_event, _) => {
+                    // The engine is being designed to allow for extremely high levels of user interaction with strategies, 
+                    // where strategies can be written to interact with the users analysis through drawing tools.
+                }
                 StrategyEvent::TimeSlice(_time, time_slice) => {
                     'base_data_loop: for base_data in &time_slice {
                         if !warmup_complete {
@@ -116,16 +119,20 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                         }
                     }
                 }
-                // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
-                StrategyEvent::OrderEvents(_, event) => {}
-                // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
-                StrategyEvent::DataSubscriptionEvents(_, events, _) => {}
-                // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
-                StrategyEvent::StrategyControls(_, _, _) => {}
+                StrategyEvent::OrderEvents(_, event) => {
+                    // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
+                }
+                StrategyEvent::DataSubscriptionEvents(_, events, _) => {
+                    // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
+                }
+                StrategyEvent::StrategyControls(_, _, _) => {
+                    // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
+                }
                 StrategyEvent::ShutdownEvent(_, _) => break 'strategy_loop, //we should handle shutdown gracefully by first ending the strategy loop.
                 StrategyEvent::WarmUpComplete(_) => {
                     warmup_complete = true;
                 }
+                //todo add more event types 
             }
             notify.notify_one();
         }
@@ -260,7 +267,7 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
                             BaseDataEnum::Fundamental(fundamental) => {
                                 println!("{}...{} Fundamental: {:?}", count, fundamental.symbol.name, fundamental.price);
                                 // fundamental data can vary wildly, i have built in the ability to add custom data to the fundamental struct.
-                                // we can use rkyv to parse from bytes
+                                // we can use rkyv to parse from bytes if we know the type, we can determine the type using fundamental.name
                                 // or we can use fundamental variant to hold strings, like json or csv data.
                             }
                         }
