@@ -51,10 +51,28 @@ pub struct FundForgeStrategy {
 }
 
 impl FundForgeStrategy {
-
     /// Initializes a new `FundForgeStrategy` instance with the provided parameters.
     ///
-    /// This asynchronous function sets up the initial state of the strategy, including its mode, cash balance, start and end dates, time zone, and subscription settings. It creates a message channel for strategy events and returns a handle to the newly created strategy along with the receiver end of the channel.
+    /// # Arguments
+    /// `owner_id: Option<OwnerId>`: The unique identifier for the owner of the strategy. If None, a unique identifier will be generated based on the executable's name. \
+    /// `notify: Arc<Notify>`: The notification mechanism for the strategy, this is useful to slow the message sender channel until we have processed the last message. \
+    /// `strategy_mode: StrategyMode`: The mode of the strategy (Backtest, Live, LivePaperTrading). \
+    /// `interaction_mode: StrategyInteractionMode`: The interaction mode for the strategy. \
+    /// `start_date: NaiveDateTime`: The start date of the strategy. \
+    /// `end_date: NaiveDateTime`: The end date of the strategy. \
+    /// `time_zone: Tz`: The time zone of the strategy, you can use Utc for default. \
+    /// `warmup_duration: Duration`: The warmup duration for the strategy. \
+    /// `subscriptions: Vec<DataSubscription>`: The initial data subscriptions for the strategy. \
+    /// `strategy_event_sender: mpsc::Sender<EventTimeSlice>`: The sender for strategy events. \
+    /// `replay_delay_ms: Option<u64>`: The delay in milliseconds between time slices for market replay style backtesting. \
+    /// `retain_history: usize`: The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions. \
+    ///  any additional subscriptions added later will be able to specify their own history requirements.
+    /// `buffering_resolution: Option<Duration>`: The buffering resolution of the strategy. If we are backtesting, any data of a lower granularity will be consolidated into a single time slice. 
+    /// If out base data source is tick data, but we are trading only on 15min bars, then we can just consolidate the tick data and ignore it in on_data_received(). 
+    /// In live trading our strategy will capture the tick stream in a buffer and pass it to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn. 
+    /// If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events. 
+    /// This also helps us get consistent results between backtesting and live trading. 
+    /// If None then it will default to a 1-second buffer. 
     pub async fn initialize(
         owner_id: Option<OwnerId>,
         notify: Arc<Notify>,
@@ -63,14 +81,14 @@ impl FundForgeStrategy {
         start_date: NaiveDateTime,
         end_date: NaiveDateTime,
         time_zone: Tz,
-        warmup_duration: chrono::Duration,
+        warmup_duration: Duration,
         subscriptions: Vec<DataSubscription>,
         strategy_event_sender: mpsc::Sender<EventTimeSlice>,
         replay_delay_ms: Option<u64>,
         retain_history: usize,
-        backtest_resolution: Duration,
+        buffering_resolution: Option<Duration>,
     ) -> FundForgeStrategy {
-        let start_state = StrategyStartState::new(strategy_mode.clone(), start_date, end_date, time_zone.clone(), warmup_duration, backtest_resolution);
+        let start_state = StrategyStartState::new(strategy_mode.clone(), start_date, end_date, time_zone.clone(), warmup_duration, buffering_resolution);
         let start_time = time_convert_utc_naive_to_fixed_offset(&time_zone, start_date);
         let owner_id = match owner_id {
             Some(owner_id) => owner_id,
