@@ -243,8 +243,8 @@ impl HeikinAshiConsolidator
         self.previous_ha_open = 0.0;
     }
 
-    fn history(&self) -> &RollingWindow<BaseDataEnum> {
-        &self.history
+    pub(crate) fn history(&self) -> RollingWindow<BaseDataEnum> {
+        self.history.clone()
     }
     
 

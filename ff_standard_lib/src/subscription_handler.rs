@@ -174,6 +174,19 @@ impl SubscriptionHandler {
         time_slice
     }
     
+    
+    pub async fn history(&self, subscription: &DataSubscription) -> Option<RollingWindow<BaseDataEnum>> {
+        if subscription.base_data_type == BaseDataType::Fundamentals {
+            return None
+        }
+        if let Some(symbol_subscription) = self.symbol_subscriptions.read().await.get(&subscription.symbol) {
+            if let Some(consolidator) = symbol_subscription.secondary_subscriptions.get(subscription) {
+                return Some(consolidator.history());
+            }
+        }
+        None
+    }
+    
     pub async fn bar_index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return None
@@ -275,25 +288,6 @@ impl SymbolSubscriptionHandler {
 
     pub fn set_warmed_up(&mut self) {
         self.is_warmed_up = true;
-    }
-
-    pub async fn clear_current_data(&mut self) {
-        for (_, consolidator) in &mut self.secondary_subscriptions.iter_mut() {
-            match consolidator {
-                ConsolidatorEnum::Count(count_consolidator) => {
-                    count_consolidator.clear_current_data();
-                },
-                ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
-                    time_consolidator.clear_current_data();
-                },
-                ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
-                    heikin_ashi_consolidator.clear_current_data();
-                }
-                ConsolidatorEnum::Renko(renko_consolidator) => {
-                    renko_consolidator.clear_current_data();
-                }
-            }
-        }
     }
     
     pub fn get_subscription_event_buffer(&mut self) -> Vec<DataSubscriptionEvent> {

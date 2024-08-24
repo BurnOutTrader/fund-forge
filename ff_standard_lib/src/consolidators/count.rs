@@ -133,8 +133,8 @@ impl CountConsolidator
         };
     }
 
-    fn history(&self) -> &RollingWindow<BaseDataEnum> {
-        &self.history
+    pub(crate) fn history(&self) -> RollingWindow<BaseDataEnum> {
+        self.history.clone()
     }
 
     pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {

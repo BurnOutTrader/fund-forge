@@ -21,7 +21,7 @@ use ff_standard_lib::strategy_events::{EventTimeSlice, StrategyEvent, StrategyIn
     broker_map
 }*/
 
-/// On initialization of a strategy we need to set the subscriptions function, this can be changed at any time to a new function, or the existing function can be used to recalibrate the subscriptions at runtime.
+
 fn set_subscriptions_initial() -> Vec<DataSubscription> {
     let subscriptions: Vec<DataSubscription> = vec![
         DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
@@ -100,20 +100,20 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                             println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
                                             //let data_current = &strategy.data_current(&subscription).await;
                                             //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
-       
-        
+
+
                                             let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
-                                            println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);  
+                                            println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
                                             let data_current = &strategy.bar_current(&subscription).await;
                                             println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);*/
                                         }
-                                    
+
                                     } else if candle.is_closed == false {
                                         //Todo Documents, Open bars get sent through with every tick, so you can always access the open bar using highest resolution.
                                         //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     }
 
-                                    
+
                                    /*   if count /3 == 0 {
                                            strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
                                       }

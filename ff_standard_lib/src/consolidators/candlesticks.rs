@@ -287,8 +287,8 @@ impl CandleStickConsolidator {
         self.history.clear();
     }
 
-    fn history(&self) -> &RollingWindow<BaseDataEnum> {
-        &self.history
+    pub(crate) fn history(&self) -> RollingWindow<BaseDataEnum> {
+        self.history.clone()
     }
 
 

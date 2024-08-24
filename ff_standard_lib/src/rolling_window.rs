@@ -1,6 +1,9 @@
 use std::collections::{VecDeque};
 
-
+/// Keeps track of the last N data points.
+/// When the window is full, adding a new data point will remove the oldest data point.
+/// The data points are stored in a VecDeque.
+/// The data points can be accessed by index. where 0 is the latest data point.
 #[derive(Clone)]
 pub struct RollingWindow<T> {
     pub(crate) history: VecDeque<T>,

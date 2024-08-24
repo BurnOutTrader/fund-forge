@@ -3,6 +3,7 @@ use crate::consolidators::candlesticks::CandleStickConsolidator;
 use crate::consolidators::count::{CountConsolidator};
 use crate::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::consolidators::renko::RenkoConsolidator;
+use crate::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
@@ -102,6 +103,15 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => time_consolidator.history.number,
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => heikin_ashi_consolidator.history.number,
             ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.history.number,
+        }
+    }
+    
+    pub fn history(&self) -> RollingWindow<BaseDataEnum> {
+        match self {
+            ConsolidatorEnum::Count(count_consolidator) => count_consolidator.history(),
+            ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => time_consolidator.history(),
+            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => heikin_ashi_consolidator.history(),
+            ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.history(),
         }
     }
     
