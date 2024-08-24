@@ -204,6 +204,17 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
     
     // if our strategy has already warmed up, the subscription will automatically have warm up to the maximum number of bars and have history available.
     let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+
+    // this will return a RollingWindow<BaseData> for the subscription by cloning the history.
+    // at the current point this clones the whole rolling window, and so is not suitable for frequent use of large history.
+    history: &RollingWindow<BaseDataEnum>  = strategy.history(&aud_usd_15m).await;
+
+    // if we are keeping a large history and need to access it often, it could be better to manually keep the history we need to avoid clone()ing the whole history on every iter.
+    // we could set the history_to_retain variable to some small number and keep the larger history in a separate variable.
+    let rolling_window: RollingWindow<BaseDataEnum> = RollingWindow::new(100);
+    for data in history {
+        rolling_window.add(data);
+    }
     
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         // this will give us the closed bar, 2 bars ago
@@ -214,16 +225,6 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
         let data_current = &strategy.data_current(&aud_cad_60m).await;
         println!("{}...{} Current data: {:?}, {}", count, aud_cad_60m.symbol.name, data_current.is_closed);
         
-        // this will return a RollingWindow<BaseData> for the subscription //todo! this is being worked on now and may return an Arc<RollingWindow<BaseData>> in the future.
-        // at the current point this clones the whole rolling window, and so is not suitable for frequent use of large history.
-        history: &RollingWindow<BaseDataEnum>  = strategy.history(&aud_usd_15m).await;
-
-        // if we are keeping a large history and need to access it often, it could be better to manually keep the history we need to avoid clone()ing the whole history on every iter.
-        let rolling_window: RollingWindow<BaseDataEnum> = RollingWindow::new(100);
-        for data in history {
-            rolling_window.add(data);
-        }
-
         //The data points can be accessed by index. where 0 is the latest data point.
         let last_data_point = rolling_window.get(0);
     }
