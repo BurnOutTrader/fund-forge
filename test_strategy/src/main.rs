@@ -10,7 +10,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
-use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent};
+use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription};
 use ff_standard_lib::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
 
 
@@ -49,9 +49,11 @@ async fn main() {
         strategy_event_sender, // the sender for the strategy events
         None,
         100,
-        Duration::seconds(1)
-    ).await;
 
+        //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
+        //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
+        Some(Duration::minutes(1))
+    ).await;
 
     on_data_received(strategy, notify, strategy_event_receiver).await;
 }
@@ -192,7 +194,7 @@ async fn initialize_test_strategy() -> (Receiver<EventTimeSlice>, FundForgeStrat
         strategy_event_sender, // the sender for the strategy events
         None,
         100,
-        Duration::seconds(1)
+        Some(Duration::seconds(1))
     ).await;
     (strategy_event_receiver, strategy, notify)
 }
