@@ -19,6 +19,10 @@ pub fn round_to_decimals(value: f64, decimals: u32) -> f64 {
     (value * factor).round() / factor
 }
 
+pub fn round_to_tick_size(value: f64, tick_size: f64) -> f64 {
+    (value / tick_size).round() * tick_size
+}
+
 
 /// Calculates the average of a vector of floating-point numbers using Decimal for high precision.
 /// Skips NaN values and entries associated with zero quantity if applicable.
