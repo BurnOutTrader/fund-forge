@@ -1,5 +1,3 @@
-todo! Implement currency conversions after implementing oandas full 1 hour data for all fx pairs.
-
 # `FundForgeStrategy::Initialize()`
 ##### `owner_id: Option<OwnerId>:` 
 The unique identifier for the owner of the strategy. If None, a unique identifier will be generated based on the executable's name.
