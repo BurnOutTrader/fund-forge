@@ -7,6 +7,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use crate::consolidators::count::ConsolidatorError;
+use crate::helpers::decimal_calculators::round_to_decimals;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -17,6 +18,7 @@ pub struct HeikinAshiConsolidator{
     pub(crate) history: RollingWindow<BaseDataEnum>,
     previous_ha_close: f64,
     previous_ha_open: f64,
+    decimal_accuracy: u32,
 }
 
 impl HeikinAshiConsolidator
@@ -44,8 +46,8 @@ impl HeikinAshiConsolidator
                     self.previous_ha_close = candle.close;
                     self.previous_ha_open = candle.open;
                 }
-                let ha_close = (candle.open + candle.high + candle.low + candle.close) / 4.0;
-                let ha_open = (self.previous_ha_open + self.previous_ha_close) / 2.0;
+                let ha_close = round_to_decimals((candle.open + candle.high + candle.low + candle.close) / 4.0, self.decimal_accuracy);
+                let ha_open = round_to_decimals((self.previous_ha_open + self.previous_ha_close) / 2.0, self.decimal_accuracy);
                 let ha_high = candle.high.max(ha_open).max(ha_close);
                 let ha_low = candle.low.min(ha_open).min(ha_close);
 
@@ -62,7 +64,7 @@ impl HeikinAshiConsolidator
                     self.previous_ha_open = price.price;
                 }
                 let ha_close = price.price;
-                let ha_open = (self.previous_ha_open + self.previous_ha_close) / 2.0;
+                let ha_open = round_to_decimals((self.previous_ha_open + self.previous_ha_close) / 2.0, self.decimal_accuracy);
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -79,7 +81,7 @@ impl HeikinAshiConsolidator
                     self.previous_ha_open = bar.bid_close;
                 }
                 let ha_close = bar.bid_close;
-                let ha_open = (self.previous_ha_open + self.previous_ha_close) / 2.0;
+                let ha_open = round_to_decimals((self.previous_ha_open + self.previous_ha_close) / 2.0, self.decimal_accuracy);
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -96,7 +98,7 @@ impl HeikinAshiConsolidator
                     self.previous_ha_open = tick.price;
                 }
                 let ha_close = tick.price;
-                let ha_open = (self.previous_ha_open + self.previous_ha_close) / 2.0;
+                let ha_open = round_to_decimals((self.previous_ha_open + self.previous_ha_close) / 2.0, self.decimal_accuracy);
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -114,7 +116,7 @@ impl HeikinAshiConsolidator
 
 impl HeikinAshiConsolidator
 {
-    pub(crate) fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<HeikinAshiConsolidator, ConsolidatorError> {
+    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<HeikinAshiConsolidator, ConsolidatorError> {
         if subscription.base_data_type != BaseDataType::Candles {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for HeikinAshiConsolidator", subscription.base_data_type) });
         }
@@ -124,13 +126,18 @@ impl HeikinAshiConsolidator
                 return Err(ConsolidatorError { message: format!("{:?} is an Invalid candle type for HeikinAshiConsolidator", candle_type) });
             }
         }
-
+        let decimal_accuracy = match subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.clone()).await {
+            Ok(accuracy) => accuracy,
+            Err(e) => return Err(ConsolidatorError { message: format!("Error getting decimal accuracy: {}", e) }),
+        };
+        
         Ok(HeikinAshiConsolidator {
             current_data: None,
             subscription,
             history: RollingWindow::new(history_to_retain),
             previous_ha_close: 0.0,
             previous_ha_open: 0.0,
+            decimal_accuracy
         })
     }
 
@@ -142,13 +149,17 @@ impl HeikinAshiConsolidator
             return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for TimeConsolidator", subscription.resolution) });
         }
 
-
+        let decimal_accuracy = match subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.clone()).await {
+            Ok(accuracy) => accuracy,
+            Err(e) => return Err(ConsolidatorError { message: format!("Error getting decimal accuracy: {}", e) }),
+        };
         let mut consolidator = HeikinAshiConsolidator{
             current_data: None,
             subscription,
             history: RollingWindow::new(history_to_retain),
             previous_ha_close: 0.0,
             previous_ha_open: 0.0,
+            decimal_accuracy
         };
         consolidator.warmup(warm_up_to_time, strategy_mode).await;
         Ok(consolidator)

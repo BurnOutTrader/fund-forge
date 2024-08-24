@@ -195,5 +195,6 @@ impl DataSubscription {
 #[archive_attr(derive(Debug))]
 pub enum DataSubscriptionEvent {
     Subscribed(DataSubscription),
-    Unsubscribed(DataSubscription)
+    Unsubscribed(DataSubscription),
+    Failed(DataSubscription)
 }

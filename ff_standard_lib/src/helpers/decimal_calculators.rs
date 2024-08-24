@@ -14,6 +14,11 @@ pub fn divide_f64(dividend: f64, divisor: f64) -> f64 {
     result.to_f64().expect("Error converting result to f64")
 }
 
+pub fn round_to_decimals(value: f64, decimals: u32) -> f64 {
+    let factor = 10f64.powi(decimals as i32);
+    (value * factor).round() / factor
+}
+
 
 /// Calculates the average of a vector of floating-point numbers using Decimal for high precision.
 /// Skips NaN values and entries associated with zero quantity if applicable.

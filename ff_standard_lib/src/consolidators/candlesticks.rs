@@ -9,6 +9,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::DataSubscription;
 use crate::consolidators::count::ConsolidatorError;
+use crate::helpers::decimal_calculators::round_to_decimals;
 use crate::standardized_types::base_data::history::range_data;
 
 pub fn open_time(subscription: &DataSubscription, time: DateTime<Utc>) -> DateTime<Utc> {
@@ -52,6 +53,7 @@ pub struct CandleStickConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
+    decimal_accuracy: u32,
 }
 
 impl CandleStickConsolidator {
@@ -89,14 +91,14 @@ impl CandleStickConsolidator {
                             candle.high = candle.high.max(tick.price);
                             candle.low = candle.low.min(tick.price);
                             candle.close = tick.price;
-                            candle.range = candle.high - candle.low;
+                            candle.range = round_to_decimals(candle.high - candle.low, self.decimal_accuracy);
                             candle.volume += tick.volume;
                             return vec![BaseDataEnum::Candle(candle.clone())]
                         },
                         BaseDataEnum::Candle(new_candle) => {
                             candle.high = candle.high.max(new_candle.high);
                             candle.low = candle.low.min(new_candle.low);
-                            candle.range = candle.high - candle.low;
+                            candle.range = round_to_decimals(candle.high - candle.low, self.decimal_accuracy);
                             candle.close = new_candle.close;
                             candle.volume += new_candle.volume;
                             return vec![BaseDataEnum::Candle(candle.clone())]
@@ -104,7 +106,7 @@ impl CandleStickConsolidator {
                         BaseDataEnum::Price(price) => {
                             candle.high = candle.high.max(price.price);
                             candle.low = candle.low.min(price.price);
-                            candle.range = candle.high - candle.low;
+                            candle.range = round_to_decimals(candle.high - candle.low, self.decimal_accuracy);
                             candle.close = price.price;
                             return vec![BaseDataEnum::Candle(candle.clone())]
                         },
@@ -155,7 +157,7 @@ impl CandleStickConsolidator {
                             quote_bar.ask_low = quote_bar.ask_low.min(quote.ask);
                             quote_bar.bid_high = quote_bar.bid_high.max(quote.bid);
                             quote_bar.bid_low = quote_bar.bid_low.min(quote.bid);
-                            quote_bar.range = quote_bar.ask_high - quote_bar.bid_low;
+                            quote_bar.range = round_to_decimals(quote_bar.ask_high - quote_bar.bid_low, self.decimal_accuracy);
                             quote_bar.ask_close = quote.ask;
                             quote_bar.bid_close = quote.bid;
                             return vec![BaseDataEnum::QuoteBar(quote_bar.clone())]
@@ -165,7 +167,7 @@ impl CandleStickConsolidator {
                             quote_bar.ask_low = quote_bar.ask_low.min(bar.ask_low);
                             quote_bar.bid_high = quote_bar.bid_high.max(bar.bid_high);
                             quote_bar.bid_low = bar.bid_low.min(bar.bid_low);
-                            quote_bar.range = quote_bar.ask_high - quote_bar.bid_low;
+                            quote_bar.range = round_to_decimals(quote_bar.ask_high - quote_bar.bid_low, self.decimal_accuracy);
                             quote_bar.ask_close = bar.ask_close;
                             quote_bar.bid_close = bar.bid_close;
                             quote_bar.volume += bar.volume;
@@ -197,7 +199,7 @@ impl CandleStickConsolidator {
         }
     }
     
-    pub(crate) fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for TimeConsolidator", subscription.base_data_type) });
         }
@@ -206,10 +208,16 @@ impl CandleStickConsolidator {
             return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for TimeConsolidator", subscription.resolution) });
         }
 
+        let decimal_accuracy = match subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.clone()).await {
+            Ok(accuracy) => accuracy,
+            Err(e) => return Err(ConsolidatorError { message: format!("Error getting decimal accuracy: {}", e) }),
+        };
+        
         Ok(CandleStickConsolidator {
             current_data: None,
             subscription,
             history: RollingWindow::new(history_to_retain),
+            decimal_accuracy,
         })
     }
 
@@ -226,11 +234,17 @@ impl CandleStickConsolidator {
         if let Resolution::Ticks(_) = subscription.resolution {
             return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for TimeConsolidator", subscription.resolution) });
         }
+
+        let decimal_accuracy = match subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.clone()).await {
+            Ok(accuracy) => accuracy,
+            Err(e) => return Err(ConsolidatorError { message: format!("Error getting decimal accuracy: {}", e) }),
+        };
         
         let mut consolidator = CandleStickConsolidator {
             current_data: None,
             subscription,
             history: RollingWindow::new(history_to_retain),
+            decimal_accuracy,
         };
         consolidator.warmup(warm_up_to_time, strategy_mode).await;
         Ok(consolidator)

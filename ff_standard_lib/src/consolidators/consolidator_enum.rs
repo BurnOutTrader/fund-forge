@@ -19,6 +19,7 @@ impl ConsolidatorEnum {
     
     /// Creates a new consolidator based on the subscription. if is_warmed_up is true, the consolidator will warm up to the to_time on its own.
     pub async fn create_consolidator(is_warmed_up: bool, subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> ConsolidatorEnum {
+        //todo return a consolidator error instead of unwrap() so subscription manager can return DataSubscriptionEvent::Failed to the strategy and handle gracefully.
         let is_tick = match subscription.resolution {
             Resolution::Ticks(_) => true,
             _ => false
@@ -27,7 +28,7 @@ impl ConsolidatorEnum {
         if  is_tick {
             return match is_warmed_up {
                 true => ConsolidatorEnum::Count(CountConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap()),
-                false => ConsolidatorEnum::Count(CountConsolidator::new(subscription.clone(), history_to_retain).unwrap()),
+                false => ConsolidatorEnum::Count(CountConsolidator::new(subscription.clone(), history_to_retain).await.unwrap()),
             }
         }
         
@@ -47,9 +48,9 @@ impl ConsolidatorEnum {
         match &subscription.candle_type {
             Some(candle_type) => {
                 match candle_type {
-                    CandleType::Renko(_) => ConsolidatorEnum::Renko(RenkoConsolidator::new(subscription.clone(), history_to_retain).unwrap()),
-                    CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(HeikinAshiConsolidator::new(subscription.clone(), history_to_retain).unwrap()),
-                    CandleType::CandleStick => ConsolidatorEnum::CandleStickConsolidator(CandleStickConsolidator::new(subscription.clone(), history_to_retain).unwrap())
+                    CandleType::Renko(_) => ConsolidatorEnum::Renko(RenkoConsolidator::new(subscription.clone(), history_to_retain).await.unwrap()),
+                    CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(HeikinAshiConsolidator::new(subscription.clone(), history_to_retain).await.unwrap()),
+                    CandleType::CandleStick => ConsolidatorEnum::CandleStickConsolidator(CandleStickConsolidator::new(subscription.clone(), history_to_retain).await.unwrap())
                 }
             },
             None => panic!("Candle type is required for this subscription")

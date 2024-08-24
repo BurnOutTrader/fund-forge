@@ -1,5 +1,6 @@
 use chrono::{DateTime, Duration, Utc};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
+use crate::helpers::decimal_calculators::round_to_decimals;
 use crate::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -21,11 +22,12 @@ pub struct CountConsolidator {
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
+    decimal_accuracy: u32,
 }
 
 impl CountConsolidator
 {
-    pub(crate) fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
             _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),
@@ -36,12 +38,17 @@ impl CountConsolidator
             _ => return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type) }),
         };
 
+        let decimal_accuracy = match subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.clone()).await {
+            Ok(accuracy) => accuracy,
+            Err(e) => return Err(ConsolidatorError { message: format!("Error getting decimal accuracy: {}", e) }),
+        };
         Ok(CountConsolidator {
             number,
             counter: 0,
-            current_data: current_data,
+            current_data,
             subscription,
             history: RollingWindow::new(history_to_retain),
+            decimal_accuracy
         })
     }
 
@@ -56,17 +63,22 @@ impl CountConsolidator
             _ => return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type) }),
         };
 
+        let decimal_accuracy = match subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.clone()).await {
+            Ok(accuracy) => accuracy,
+            Err(e) => return Err(ConsolidatorError { message: format!("Error getting decimal accuracy: {}", e) }),
+        };
         let mut consolidator = CountConsolidator {
             number,
             counter: 0,
             current_data: current_data,
             subscription,
             history: RollingWindow::new(history_to_retain),
+            decimal_accuracy
         };
         consolidator.warmup(warm_up_to_time, strategy_mode).await;
         Ok(consolidator)
     }
-
+    
     /// Returns a candle if the count is reached
     pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         match base_data {
@@ -83,6 +95,7 @@ impl CountConsolidator
                 self.counter += 1;
                 self.current_data.high = self.current_data.high.max(tick.price);
                 self.current_data.low = self.current_data.low.min(tick.price);
+                self.current_data.range = round_to_decimals(self.current_data.high - self.current_data.low, self.decimal_accuracy);
                 self.current_data.close = tick.price;
                 self.current_data.volume += tick.volume;
                 if self.counter == self.number {
