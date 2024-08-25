@@ -152,7 +152,7 @@ The engine is designed to handle all serialized data as UTC, and then convert it
 ```rust
 use chrono_tz::Australia;
 
-pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
+pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         // time_local() will return the current time in the strategy's time zone as DateTime<FixedOffset>
         println!("{}... time local {}", count, strategy.time_local().await);
@@ -178,7 +178,7 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
 
 ## Subscriptions
 ```rust
-pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
+pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
 
     // subscribing to multiple items while unsubscribing from existing items
     // if our strategy has already warmed up, the subscription will automatically have warm up to the maximum number of bars and have history available.
@@ -218,7 +218,7 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
 The consolidators will retain history when specified during subscription.
 If we want to have the engine keep a history automatically, we will need a reference to the subscription to access it.
 ```rust
-pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
+pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     
     // if our strategy has already warmed up, the subscription will automatically have warm up to the maximum number of bars and have history available.
     let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
@@ -255,7 +255,7 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
 
 ## Handling BaseDataEnum
 ```rust
-pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
+pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for strategy_event in event_slice {
             match strategy_event {
@@ -326,7 +326,7 @@ impl IndicatorValues {
 
 ### Using Indicators
 ```rust
-pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
+pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     
     // Subscribe to a 60-minute candle for the AUD-CAD pair
     let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
