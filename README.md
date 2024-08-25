@@ -1,9 +1,11 @@
 # Fund Forge
-## Architecture
+## Strategies
+Once you have followed the setup instructions below, you can play with a test strategy by reviewing https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md
 
+## Architecture
 First and foremost I have tried to keep the design as modular as possible to allow for upgrades and improvements to functions by more experienced programmers. 
 
-I have opted for hard code and `impl` over `dyn` and dynamic dispatch, using enums instead of inheritance when possible for better run time performance. 
+I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance. 
 
 The architecture of fund forge designed to allow for "monolithic" or "micro-service" runtime depending on:
 ```rust
