@@ -1,4 +1,5 @@
-use std::fmt::{Debug, Error};
+use std::fmt;
+use std::fmt::{Debug, Display, Error, Formatter};
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rkyv::ser::Serializer;
 use rkyv::ser::serializers::AllocSerializer;
@@ -83,6 +84,22 @@ pub enum CandleType {
     Renko(RenkoParameters),
     HeikinAshi,
     CandleStick
+}
+
+impl Display for CandleType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            CandleType::Renko(params) => {
+                write!(f, "{}", format!("Renko: {}", params))
+            },
+            CandleType::HeikinAshi => {
+                write!(f, "{}", "Heikin Ashi")
+            },
+            CandleType::CandleStick => {
+                write!(f, "{}", "Candle Stick")
+            }
+        }
+    }
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]

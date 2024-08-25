@@ -16,7 +16,7 @@ use crate::servers::communications_sync::{InternalCommunicator, SecureExternalCo
 use crate::standardized_types::data_server_messaging::FundForgeError;
 
 /// A wrapper to allow us to pass in either a `Brokerage` or a `DataVendor`
-/// # Varians
+/// # Variants
 /// * `Broker(Brokerage)` - Containing a `Brokerage` object
 /// * `Vendor(DataVendor)` - Containing a `DataVendor` object
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Serialize, Deserialize, Debug, Display)]

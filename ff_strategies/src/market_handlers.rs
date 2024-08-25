@@ -10,7 +10,7 @@ use ff_standard_lib::standardized_types::orders::orders::{Order, OrderState, Ord
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::subscriptions::Symbol;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use ff_standard_lib::strategy_events::{EventTimeSlice, StrategyEvent};
+use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use ahash::AHashMap;
 
 /*lazy_static! LIVE_EVENT_HANDLER {

@@ -1,6 +1,6 @@
 use chrono::{DateTime, Duration, Timelike, Utc};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
-use crate::rolling_window::RollingWindow;
+use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
@@ -199,7 +199,7 @@ impl CandleStickConsolidator {
         }
     }
     
-    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: u64) -> Result<Self, ConsolidatorError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for TimeConsolidator", subscription.base_data_type) });
         }
@@ -226,7 +226,7 @@ impl CandleStickConsolidator {
     /// 'history_to_retain: usize' will retain the last `history_to_retain` bars.
     /// 'warm_up_to_time: DateTime<Utc>' will warm up the history to the specified time.
     /// 'strategy_mode: StrategyMode' will use the specified strategy mode to warm up the history, if Live mode then we will need to get the most recent data from the vendor directly as we may not yet have the data in the serialized history.
-    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: u64, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for TimeConsolidator", subscription.base_data_type) });
         }

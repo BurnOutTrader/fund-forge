@@ -5,7 +5,7 @@ use iced::Color;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::app::settings::GraphElementSettings;
 use crate::standardized_types::subscriptions::DataSubscription;
-use crate::drawing_tool_enum::DrawingTool;
+use crate::drawing_objects::drawing_tool_enum::DrawingTool;
 
 /// A struct that represents a vertical line on the graph.
 ///

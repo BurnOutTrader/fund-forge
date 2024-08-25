@@ -11,7 +11,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent};
-use ff_standard_lib::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
+use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
 
 
 /*fn defualt_broker_map() -> HashMap<DataVendor, Brokerage> {

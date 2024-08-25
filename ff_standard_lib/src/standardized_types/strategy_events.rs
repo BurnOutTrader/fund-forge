@@ -1,5 +1,5 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::drawing_object_handler::DrawingToolEvent;
+use crate::drawing_objects::drawing_object_handler::DrawingToolEvent;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::orders::orders::OrderUpdateEvent;
 use crate::standardized_types::OwnerId;

@@ -17,7 +17,7 @@ use crate::canvas::graph::models::time_scale::TimeScale;
 use crate::canvas::graph::state::ChartState;
 use crate::canvas::graph::view;
 use crate::clicks::click_location;
-use ff_standard_lib::drawing_tool_enum::DrawingTool;
+use ff_standard_lib::drawing_objects::drawing_tool_enum::DrawingTool;
 
 
 ///  A graph is the canvases object responsible for bringing the other elements that make up a graph, it is responsible for drawing, update and event state.

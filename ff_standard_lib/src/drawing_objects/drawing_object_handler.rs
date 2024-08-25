@@ -3,7 +3,7 @@ use ahash::AHashMap;
 use tokio::sync::{RwLock, RwLockReadGuard};
 use crate::standardized_types::subscriptions::DataSubscription;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::drawing_tool_enum::DrawingTool;
+use crate::drawing_objects::drawing_tool_enum::DrawingTool;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(

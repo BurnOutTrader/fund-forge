@@ -11,7 +11,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 use ahash::AHashMap;
 use futures::future::join_all;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
-use crate::rolling_window::RollingWindow;
+use crate::standardized_types::rolling_window::RollingWindow;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -59,7 +59,7 @@ impl SubscriptionHandler {
     /// 'history_to_retain: usize' The number of bars to retain in the history.
     /// 'current_time: DateTime<Utc>' The current time is used to warm up consolidator history if we have already done our initial strategy warm up.
     /// 'strategy_mode: StrategyMode' The strategy mode is used to determine how to warm up the history, in live mode we may not yet have a serialized history to the current time.
-    pub async fn subscribe(&self, new_subscription: DataSubscription, history_to_retain: usize, current_time: DateTime<Utc>) -> Result<(), FundForgeError> {
+    pub async fn subscribe(&self, new_subscription: DataSubscription, history_to_retain: u64, current_time: DateTime<Utc>) -> Result<(), FundForgeError> {
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
             //subscribe to fundamental
             let mut fundamental_subscriptions = self.fundamental_subscriptions.write().await;
@@ -240,7 +240,7 @@ pub struct SymbolSubscriptionHandler {
 }
 
 impl SymbolSubscriptionHandler {
-    pub async fn new(primary_subscription: DataSubscription, is_warmed_up: bool, history_to_retain: usize, warm_up_to: DateTime<Utc>, strategy_mode: StrategyMode) -> Self {
+    pub async fn new(primary_subscription: DataSubscription, is_warmed_up: bool, history_to_retain: u64, warm_up_to: DateTime<Utc>, strategy_mode: StrategyMode) -> Self {
         let mut handler = SymbolSubscriptionHandler {
             primary_subscription: primary_subscription.clone(),
             secondary_subscriptions: AHashMap::new(),
@@ -297,7 +297,7 @@ impl SymbolSubscriptionHandler {
     }
 
     /// This is only used
-    async fn select_primary_non_tick_subscription(&mut self, new_subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
+    async fn select_primary_non_tick_subscription(&mut self, new_subscription: DataSubscription, history_to_retain: u64, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
         let available_resolutions: Vec<Resolution> = new_subscription.symbol.data_vendor.resolutions(new_subscription.market_type.clone()).await.unwrap();
         //println!("Available Resolutions: {:?}", available_resolutions);
         if available_resolutions.is_empty() {
@@ -373,7 +373,7 @@ impl SymbolSubscriptionHandler {
             .collect()
     }
 
-    async fn subscribe(&mut self, new_subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
+    async fn subscribe(&mut self, new_subscription: DataSubscription, history_to_retain: u64, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
         if self.all_subscriptions().await.contains(&new_subscription) {
             return
         }

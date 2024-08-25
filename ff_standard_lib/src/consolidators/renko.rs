@@ -1,7 +1,8 @@
+use std::fmt::{Display, Formatter};
 use chrono::{DateTime, Duration, Utc};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::count::ConsolidatorError;
-use crate::rolling_window::RollingWindow;
+use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
@@ -24,6 +25,12 @@ pub struct RenkoParameters {
     
 }
 
+impl Display for RenkoParameters {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        todo!()
+    }
+}
+
 /// A consolidator that produces a new piece of data after a certain number of data points have been added.
 /// Supports Ticks only.
 pub struct RenkoConsolidator {
@@ -31,12 +38,12 @@ pub struct RenkoConsolidator {
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
     parameters: RenkoParameters,
-    decimal_accuracy: u32,
+    tick_size: f64,
 }
 
 impl RenkoConsolidator
 {
-    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: u64) -> Result<Self, ConsolidatorError> {
         let current_data = match &subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Instant, subscription.candle_type.clone().unwrap()),
             _ => return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type) }),
@@ -52,21 +59,18 @@ impl RenkoConsolidator
             _ => panic!("RenkoConsolidator requires a candle type"),
         };
 
-        let decimal_accuracy = match subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.clone()).await {
-            Ok(accuracy) => accuracy,
-            Err(e) => return Err(ConsolidatorError { message: format!("Error getting decimal accuracy: {}", e) }),
-        };
+        let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.clone()).await.unwrap();
         
         Ok(RenkoConsolidator {
             current_data,
             subscription,
             history: RollingWindow::new(history_to_retain),
             parameters: parameters.clone(),
-            decimal_accuracy
+            tick_size: tick_size.try_into().unwrap()
         })
     }
 
-    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: u64, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
         let current_data = match subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(subscription.symbol.clone(), 0.0, 0.0, "".to_string(), Resolution::Instant, subscription.candle_type.clone().unwrap()),
             _ => return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type) }),
@@ -82,17 +86,14 @@ impl RenkoConsolidator
             _ => panic!("RenkoConsolidator requires a candle type"),
         };
 
-        let decimal_accuracy = match subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.clone()).await {
-            Ok(accuracy) => accuracy,
-            Err(e) => return Err(ConsolidatorError { message: format!("Error getting decimal accuracy: {}", e) }),
-        };
+        let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.clone()).await.unwrap();
         
         let mut consolidator = RenkoConsolidator {
             current_data,
             subscription,
             history: RollingWindow::new(history_to_retain),
             parameters: parameters.clone(),
-            decimal_accuracy
+            tick_size: tick_size.try_into().unwrap()
         };
         
         consolidator.warmup(warm_up_to_time, strategy_mode).await;

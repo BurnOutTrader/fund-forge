@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap};
-use std::fmt::Error;
+use std::fmt::{Display, Error, Formatter};
 use std::fs::File;
 use std::{fs};
 use std::io::Write;
@@ -127,6 +127,32 @@ pub enum BaseDataEnum {
     /// * `bias` - `Bias` enum The bias of the fundamental data `Bias` enum variant.
     /// * `data_vendor` - `DataVendor` enum The data vendor of the fundamental data `DataVendor` enum variant.
     Fundamental(Fundamental),
+}
+
+impl Display for BaseDataEnum {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BaseDataEnum::Price(price) => write!(f, "{}: {}, {}: {}", price.symbol.name, price.symbol.data_vendor, price.price, price.time),
+            BaseDataEnum::Candle(candle) => write!(f, "{}: {}, {}: {}, {}, {}, {}, {}, {}", candle.symbol.name, candle.resolution, candle.symbol.data_vendor, candle.open, candle.high, candle.low, candle.close, candle.volume, candle.time),
+            BaseDataEnum::QuoteBar(bar) => write!(f, "{}: {}, {}: bid: {}, {}, {}, {}, ask: {}, {}, {}, {}, {}, {}",
+                                                  bar.symbol.name,
+                                                  bar.resolution,
+                                                  bar.symbol.data_vendor,
+                                                  bar.bid_open,
+                                                  bar.bid_high,
+                                                  bar.bid_low,
+                                                  bar.bid_close,
+                                                  bar.ask_open,
+                                                  bar.ask_high,
+                                                  bar.ask_low,
+                                                  bar.ask_close,
+                                                  bar.volume,
+                                                  bar.time),
+            BaseDataEnum::Tick(tick) => write!(f, "{}: {}, {}: {}, {}", tick.symbol.name, tick.symbol.data_vendor, tick.price, tick.time, tick.volume),
+            BaseDataEnum::Quote(quote) => write!(f, "{}: {}, {}: {}, {}", quote.symbol.name, quote.symbol.data_vendor, quote.bid, quote.ask, quote.time),
+            BaseDataEnum::Fundamental(fundamental) => write!(f, "{}: {}, {}: {}, {}", fundamental.symbol.name, fundamental.symbol.data_vendor, fundamental.value.unwrap_or_default(), fundamental.time, fundamental.name),
+        }
+    }
 }
 
 impl BaseDataEnum {

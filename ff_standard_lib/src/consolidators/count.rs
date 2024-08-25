@@ -1,7 +1,7 @@
 use chrono::{DateTime, Duration, Utc};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::rolling_window::RollingWindow;
+use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
@@ -27,7 +27,7 @@ pub struct CountConsolidator {
 
 impl CountConsolidator
 {
-    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: usize) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: u64) -> Result<Self, ConsolidatorError> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
             _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),
@@ -53,7 +53,7 @@ impl CountConsolidator
         })
     }
 
-    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: usize, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
+    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: u64, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<Self, ConsolidatorError> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
             _ => return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution) }),

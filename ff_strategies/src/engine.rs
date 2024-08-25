@@ -12,10 +12,10 @@ use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::{StrategyMode};
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use ff_standard_lib::subscription_handler::SubscriptionHandler;
+use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
 use crate::interaction_handler::InteractionHandler;
 use crate::market_handlers::MarketHandlerEnum;
-use ff_standard_lib::strategy_events::{EventTimeSlice, StrategyEvent};
+use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::strategy_state::StrategyStartState;
 
 //Possibly more accurate engine

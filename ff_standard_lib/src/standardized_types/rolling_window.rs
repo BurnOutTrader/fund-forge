@@ -4,22 +4,22 @@ use std::collections::{VecDeque};
 /// When the window is full, adding a new data point will remove the oldest data point.
 /// The data points are stored in a VecDeque.
 /// The data points can be accessed by index. where 0 is the latest data point.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RollingWindow<T> {
     pub(crate) history: VecDeque<T>,
-    pub(crate) number: usize,
+    pub(crate) number: u64,
 }
 
 impl<T> RollingWindow<T> {
-    pub fn new(number: usize) -> Self {
+    pub fn new(number: u64) -> Self {
         RollingWindow {
-            history: VecDeque::with_capacity(number),
+            history: VecDeque::with_capacity(number as usize),
             number,
         }
     }
 
     pub fn add(&mut self, data: T) {
-        if self.history.len() == self.number {
+        if self.history.len() as u64 == self.number {
             self.history.pop_back(); // Remove the oldest data
         }
         self.history.push_front(data); // Add the latest data at the front
@@ -38,7 +38,7 @@ impl<T> RollingWindow<T> {
     }
 
     pub fn is_full(&self) -> bool {
-        self.history.len() == self.number
+        self.history.len() as u64 == self.number
     }
 
     pub fn clear(&mut self) {

@@ -5,7 +5,7 @@ use iced::widget::canvas::Frame;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::app::settings::GraphElementSettings;
 use crate::helpers::converters::time_convert_utc_timestamp_to_fixed_offset;
-use crate::lines::{HorizontalLine, VerticleLine};
+use crate::drawing_objects::lines::{HorizontalLine, VerticleLine};
 use crate::standardized_types::subscriptions::DataSubscription;
 
 //ToDo make drawing tool trait so we can implement depending on if strategy is using or if gui is using... or convert from strategy to gui type tool.

@@ -184,7 +184,9 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
         let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
         let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
         
-        //note that any existing subscriptions which are not primary subscriptions (tick stream etc) will be unsubscribed from.
+        // Note that this function completely overrides our current subcsriptions, If we have any current subscriptions they will be unsubscribed if not also passed in.
+        // Any existing subscriptions which are not primary subscriptions (tick stream etc) will not be unsubscribed from.
+        // Any primary subscription, which is being used to consolidate data which is not being unsubscribed will not be unsubscribed.
         // The second parameter is the number of bars to retain in memory for the strategy.
         // The engine will automatically consolidate the data to the required resolution and will try to maintain only a single primary subscription per symbol to minimise data vendor api usage.
         strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()], 100).await; 

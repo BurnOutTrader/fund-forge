@@ -3,7 +3,7 @@ use crate::consolidators::candlesticks::CandleStickConsolidator;
 use crate::consolidators::count::{CountConsolidator};
 use crate::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::consolidators::renko::RenkoConsolidator;
-use crate::rolling_window::RollingWindow;
+use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
@@ -19,7 +19,7 @@ pub enum ConsolidatorEnum {
 impl ConsolidatorEnum {
     
     /// Creates a new consolidator based on the subscription. if is_warmed_up is true, the consolidator will warm up to the to_time on its own.
-    pub async fn create_consolidator(is_warmed_up: bool, subscription: DataSubscription, history_to_retain: usize, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> ConsolidatorEnum {
+    pub async fn create_consolidator(is_warmed_up: bool, subscription: DataSubscription, history_to_retain: u64, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> ConsolidatorEnum {
         //todo return a consolidator error instead of unwrap() so subscription manager can return DataSubscriptionEvent::Failed to the strategy and handle gracefully.
         let is_tick = match subscription.resolution {
             Resolution::Ticks(_) => true,
@@ -97,7 +97,7 @@ impl ConsolidatorEnum {
     }
     
     /// Returns the history to retain for the consolidator.
-    pub fn history_to_retain(&self) -> usize {
+    pub fn history_to_retain(&self) -> u64 {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => count_consolidator.history.number,
             ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => time_consolidator.history.number,

@@ -1,6 +1,6 @@
 use std::time::Duration;
 use tokio::sync::RwLock;
-use ff_standard_lib::strategy_events::{StrategyControls, StrategyInteractionMode};
+use ff_standard_lib::standardized_types::strategy_events::{StrategyControls, StrategyInteractionMode};
 
 pub struct InteractionHandler {
     control_state: RwLock<StrategyControls>,
