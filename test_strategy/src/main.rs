@@ -106,16 +106,16 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                         match base_data {
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
-                                if base_data.subscription() == aud_cad_60m && candle.is_closed {
-                                    /*heikin_atr.update_base_data(base_data);
+                               /* if base_data.subscription() == aud_cad_60m && candle.is_closed {
+                                    heikin_atr.update_base_data(base_data);
                                     if heikin_atr.is_ready() {
                                         let atr = heikin_atr.current();
                                         println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
-                                    }*/
-                                }
+                                    }
+                                }*/
                                 if warmup_complete {
                                     if candle.is_closed == true {
-                                        //println!("{}...Candle {}, {}: close price:{} at {}, closed: {}, {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                        println!("{}...Candle {}, {}: close price:{} at {}, closed: {}, {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                         if count > 2000 {
                                             /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
                                             println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);

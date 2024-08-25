@@ -47,7 +47,7 @@ impl IndicatorHandler {
         }
     }
     
-    pub async fn get_event_buffer(&self) -> Vec<StrategyEvent> {
+    async fn get_event_buffer(&self) -> Vec<StrategyEvent> {
         let mut buffer  = self.event_buffer.write().await;
         let buffer_cached = buffer.clone();
         buffer.clear();
@@ -89,7 +89,7 @@ impl IndicatorHandler {
     }
 
 
-    pub async fn update_time_slice(&self, time_slice: &TimeSlice) {
+    pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
         let mut indicators = self.indicators.write().await;
         let mut values = Vec::new();
         for data in time_slice {
@@ -108,6 +108,11 @@ impl IndicatorHandler {
         }
         if !values.is_empty() {
             self.event_buffer.write().await.push(StrategyEvent::IndicatorEvent(self.owner_id.clone(), IndicatorEvents::IndicatorTimeSlice(values)));
+        }
+        let events = self.get_event_buffer().await;
+        match events.is_empty() {
+            true => None,
+            false => Some(events)
         }
     }
     

@@ -164,7 +164,7 @@ impl RenkoConsolidator
             }
         }
         if strategy_mode != StrategyMode::Backtest {
-            //todo() we will get any bars which are not in out serialized history here
+            //todo() we will get any bars which are not in our serialized history here
         }
     }
 }

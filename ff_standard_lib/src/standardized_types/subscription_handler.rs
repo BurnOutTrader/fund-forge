@@ -138,10 +138,10 @@ impl SubscriptionHandler {
     }
 
     /// Updates any consolidators with primary data
-    pub async fn update_consolidators(&self, time_slice: TimeSlice) -> TimeSlice {
+    pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<TimeSlice> {
         let mut tasks = vec![];
 
-        for base_data in time_slice {
+        for base_data in time_slice.clone() {
             let symbol_subscriptions = self.symbol_subscriptions.clone();
             let task = tokio::spawn(async move {
                 let base_data = base_data.clone();
@@ -160,8 +160,10 @@ impl SubscriptionHandler {
         // Await all tasks and collect the results
         let results: Vec<Vec<BaseDataEnum>> = join_all(tasks).await.into_iter().filter_map(|r| r.ok()).collect();
 
-        // Flatten the results
-        results.into_iter().flatten().collect()
+        match results.is_empty() {
+            true => None,
+            false => Some(results.into_iter().flatten().collect()),
+        }
     }
 
     pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> TimeSlice {

@@ -48,7 +48,7 @@ impl MarketHandlerEnum {
 
     //Updates the market handler with incoming data and returns any triggered events
     // TimeSlice: A collection of base data to update the handler with
-    pub async fn base_data_upate(&self, time_slice: TimeSlice) -> Option<Vec<StrategyEvent>> {
+    pub async fn base_data_upate(&self, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
         match self {
             MarketHandlerEnum::Backtest(handler) => handler.on_data_update(time_slice).await,
             MarketHandlerEnum::Live(handler) => handler.on_data_update(time_slice).await //ToDo we will need a historical handler just to warm up the strategy
@@ -118,13 +118,13 @@ impl HistoricalMarketHandler {
     }
 
     /// forwards time slices to the strategy
-    pub(crate) async fn on_data_update(&self, time_slice: TimeSlice) -> Option<EventTimeSlice> {
+    pub(crate) async fn on_data_update(&self, time_slice: &TimeSlice) -> Option<EventTimeSlice> {
         for ledger in self.ledgers.read().await.values() {
             for ledger in ledger.values() {
                 ledger.on_data_update(time_slice.clone()).await;
             }
         }
-        for base_data in &time_slice {
+        for base_data in time_slice {
             //println!("Base data: {:?}", base_data.time_created_utc());
             match base_data {
                 BaseDataEnum::Price(ref price) => {
