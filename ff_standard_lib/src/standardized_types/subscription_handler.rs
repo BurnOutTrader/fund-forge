@@ -168,7 +168,7 @@ impl SubscriptionHandler {
         let mut symbol_subscriptions = self.symbol_subscriptions.write().await;
         let mut time_slice = TimeSlice::new();
         
-        for (_, mut symbol_handler) in symbol_subscriptions.iter_mut() {
+        for (_, symbol_handler) in symbol_subscriptions.iter_mut() {
             time_slice.extend(symbol_handler.update_time(time.clone())); //todo we need to use interior mutability to update the consolidators across threads, add RWLock or mutex
         }
         time_slice

@@ -1,14 +1,12 @@
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::time_slices::UnstructuredSlice;
 use std::collections::{btree_map, BTreeMap, HashMap};
-use chrono::{DateTime, FixedOffset, Utc};
-use crate::apis::vendor::client_requests::ClientSideDataVendor;
+use chrono::{DateTime, Utc};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::helpers::converters::next_month;
-use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
 
 /// Method responsible for getting historical data for a specific subscription.

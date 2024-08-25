@@ -170,6 +170,8 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
         let candle_time_sydney = candle.time_local(time_zone);
         let strategy_time_local = strategy.time_local();
         let strategy_time_utc = strategy.time_utc();
+
+        notify.notify_one();
     }
 }
 ```
@@ -201,6 +203,12 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
         //we can see our subscriptions
         let subscriptions = strategy.subscriptions().await;
         println!("subscriptions: {:?}", subscriptions);
+        
+        // we can also access the subscription for BaseDataEnums 
+        // base_data.subscription() which returns a DataSubscription object
+        // all objects wrapped in a BaseDataEnum will have a subscription() fn.
+
+        notify.notify_one();
     }
 }
 ```
@@ -237,6 +245,8 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
         
         //The data points can be accessed by index. where 0 is the latest data point.
         let last_data_point = rolling_window.get(0);
+        
+        notify.notify_one();
     }
 }
 ```
@@ -278,11 +288,87 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
                 }
             }
         }
+        notify.notify_one();
     }
 }
 ```
 
 ## Indicators
-```rust
+Indicators can be handled automatically by the strategy Indicator handler, or we can create and manage them manually in the `on_data_received()` function.
+We can implement the `Indicators trait` for our custom indicators.
+If building a custom indicator be sure to add it to the IndicatorEnum and complete the matching statements, so that the Indicator handler can handle it if needed.
 
+### Indicator Values
+```rust
+///indicators return `IndicatorValues`, the values have the normal fund forge functions for time_utc() and time_local(Tz)
+pub struct IndicatorValues {
+    time: String,
+    pub indicator_name: IndicatorName,
+    pub subscription: DataSubscription,
+    values: AHashMap<PlotName, f64>
+}
+impl IndicatorValues {
+    pub fn time_utc(&self) -> DateTime<Utc> {
+        DateTime::from_str(&self.time).unwrap()
+    }
+
+    pub fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
+        time_convert_utc_datetime_to_fixed_offset(time_zone, self.time_utc())
+    }
+
+    /// get the value of a plot by name
+    pub fn get_plot(&self, plot_name: &str) -> Option<f64> {
+        self.values.get(plot_name).cloned()
+    }
+}
+```
+
+### Using Indicators
+```rust
+pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
+    
+    // Subscribe to a 60-minute candle for the AUD-CAD pair
+    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+    strategy.subscriptions_update(vec![aud_cad_60m.clone()],100).await;
+    
+    // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
+    let mut heikin_atr = AverageTrueRange::new(aud_cad_60m.clone(), 100, 14).await;
+    let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);
+    
+    'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
+        for strategy_event in event_slice {
+            match strategy_event {
+                StrategyEvent::TimeSlice(_time, time_slice) => {
+                    'base_data_loop: for base_data in &time_slice {
+                        match base_data {
+                            BaseDataEnum::Candle(candle) => {
+                                // lets update the indicator with the new candles
+                                if candle.is_closed {
+                                    heikin_atr.update_base_data(candle).await;
+                                }
+                                
+                                // lets get the indicator value for the current candle, note for atr we can use current, as it only updates on closed candles.
+                                if heikin_atr.is_ready() {
+                                    let atr = heikin_atr.current();
+                                    println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
+                                    heikin_atr_history.add(heikin_atr.current());
+                               
+                                    // we can also get the value at a specific index, current bar (closed) is index 0, 1 bar ago is index 1 etc.
+                                    let atr = heikin_atr.index(2);
+                                    println!("{}...{} ATR 2 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
+                                    
+                                    //of we can use our own history to get the value at a specific index
+                                    let atr = heikin_atr_history.get(10);
+                                    println!("{}...{} ATR 10 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
+                                }
+                            },
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+        notify.notify_one();
+    }
+}
 ```

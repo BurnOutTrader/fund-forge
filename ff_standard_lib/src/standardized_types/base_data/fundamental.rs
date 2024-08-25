@@ -3,9 +3,10 @@ use std::str::FromStr;
 use chrono::{DateTime, FixedOffset};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::standardized_types::enums::Bias;
+use crate::standardized_types::enums::{Bias, Resolution};
 use crate::helpers::converters::{time_local_from_str};
-use crate::standardized_types::subscriptions::Symbol;
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
 #[archive(
@@ -62,6 +63,16 @@ impl Fundamental {
             name,
             bias,
         }
+    }
+
+    pub fn resolution(&self) -> Resolution {
+        Resolution::Instant
+    }
+
+    pub fn subscription(&self) -> DataSubscription {
+        let symbol = self.symbol.clone();
+        let resolution = self.resolution();
+        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), resolution, BaseDataType::Fundamentals, symbol.market_type.clone(), None)
     }
 
     pub fn time_utc(&self) -> DateTime<chrono::Utc> {

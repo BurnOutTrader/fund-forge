@@ -1,10 +1,7 @@
 use std::fmt::Error;
-use chrono_tz::Tz;
-use iced::widget::canvas;
-use iced::widget::canvas::Frame;
+
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::app::settings::GraphElementSettings;
-use crate::helpers::converters::time_convert_utc_timestamp_to_fixed_offset;
+
 use crate::drawing_objects::lines::{HorizontalLine, VerticleLine};
 use crate::standardized_types::subscriptions::DataSubscription;
 

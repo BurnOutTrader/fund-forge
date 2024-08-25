@@ -9,6 +9,7 @@ use crate::standardized_types::subscriptions::DataSubscription;
 
 pub type PlotName = String;
 
+/// A struct that represents the values of an indicator at a specific time.
 #[derive(Debug, Clone)]
 pub struct IndicatorValues {
     time: String,
@@ -37,19 +38,22 @@ impl IndicatorValues {
         }
     }
 
+    /// get the time in the UTC time zone
     pub fn time_utc(&self) -> DateTime<Utc> {
         DateTime::from_str(&self.time).unwrap()
     }
 
+    /// get the time in the local time zone
     pub fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
         time_convert_utc_datetime_to_fixed_offset(time_zone, self.time_utc())
     }
 
+    /// get the value of a plot by name
     pub fn get_plot(&self, plot_name: &str) -> Option<f64> {
         self.values.get(plot_name).cloned()
     }
 
-    pub fn insert(&mut self, plot_name: PlotName, value: f64) {
+    pub(crate) fn insert(&mut self, plot_name: PlotName, value: f64) {
         self.values.insert(plot_name, value);
     }
 }

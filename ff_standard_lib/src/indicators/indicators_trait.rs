@@ -1,4 +1,3 @@
-use std::fmt::{Display};
 use crate::indicators::values::IndicatorValues;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -20,8 +19,6 @@ pub trait Indicators {
     /// Returns the name of the indicator with the symbol and data vendor, resolution, base data type and candle type where applicable.
     /// example: "Average True Range EUR-USD Test QuoteBar 1D Candle Stick"
     fn long_name(&self) -> IndicatorLongName {
-        let mut type_name = std::any::type_name::<Self>();
-        type_name = self.short_name().as_str();
         let subscription = self.subscription();
         match &subscription.candle_type {
             Some(candle_type) => {

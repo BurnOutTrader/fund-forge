@@ -174,7 +174,7 @@ pub mod client_requests {
             };
             let response = SynchronousResponseType::from_bytes(&response)?;
             match response {
-                SynchronousResponseType::DecimalAccuracy(symbol, accuracy) => Ok(accuracy),
+                SynchronousResponseType::DecimalAccuracy(_, accuracy) => Ok(accuracy),
                 SynchronousResponseType::Error(e) => Err(e),
                 _ => Err(FundForgeError::ClientSideErrorDebug("Invalid response type from server".to_string()))
             }
@@ -189,7 +189,7 @@ pub mod client_requests {
             };
             let response = SynchronousResponseType::from_bytes(&response)?;
             match response {
-                SynchronousResponseType::TickSize(symbol, tick_size) => Ok(tick_size),
+                SynchronousResponseType::TickSize(_, tick_size) => Ok(tick_size),
                 SynchronousResponseType::Error(e) => Err(e),
                 _ => Err(FundForgeError::ClientSideErrorDebug("Invalid response type from server".to_string()))
             }

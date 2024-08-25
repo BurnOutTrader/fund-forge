@@ -6,7 +6,8 @@ use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::standardized_types::enums::Resolution;
 use crate::helpers::converters::time_local_from_str;
-use crate::standardized_types::subscriptions::{CandleType, Symbol};
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
 
 /// Represents a single quote bar in a financial chart, commonly used
 /// in the financial technical analysis of price patterns.
@@ -97,6 +98,17 @@ impl QuoteBar {
             resolution,
             candle_type
         }
+    }
+
+    pub fn resolution(&self) -> Resolution {
+        self.resolution.clone()
+    }
+
+    pub fn subscription(&self) -> DataSubscription {
+        let symbol = self.symbol.clone();
+        let resolution = self.resolution();
+        let candle_type= Some(self.candle_type.clone());
+        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), resolution, BaseDataType::QuoteBars, symbol.market_type.clone(), candle_type)
     }
 
     /// Creates a new `QuoteBar` instance representing a completed (closed) trading period.

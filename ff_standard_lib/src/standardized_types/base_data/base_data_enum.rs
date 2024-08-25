@@ -66,6 +66,7 @@ pub enum BaseDataEnum {
     /// * `is_closed` - A boolean value indicating if the candle is closed.
     /// * `data_vendor` - The data vendor that provided the price.
     /// * `resolution` - The resolution of the candle.
+    /// * `candle_type` - The type of candle.
     Candle(Candle),
     /// The `QuoteBar` struct is used to represent the more detailed properties of an asset at a given Resolution. see [`QuoteBar`](ff_data_vendors::base_data_types::quotebar::QuoteBar)
     /// The QuoteBar is both a mid-price and bid-ask specific view.
@@ -90,6 +91,7 @@ pub enum BaseDataEnum {
     /// * `is_closed`: Indicates whether the quote bar is closed.
     /// * `data_vendor`: The data vendor that provided the quote bar.
     /// * `resolution`: The resolution of the quote bar.
+    /// * `candle_type`: The type of candle.
     QuoteBar(QuoteBar),
 
     /// The `Tick` struct is used to represent the price of an asset at a given time. see [`Tick`](ff_data_vendors::base_data_types::tick::Tick)
@@ -173,7 +175,7 @@ impl BaseDataEnum {
             BaseDataEnum::Candle(candle) => candle.resolution,
             BaseDataEnum::QuoteBar(bar) => bar.resolution,
             // this works because tick candles will be candles not ticks so number is always 1
-            BaseDataEnum::Tick(tick) => Resolution::Ticks(1),
+            BaseDataEnum::Tick(_) => Resolution::Ticks(1),
            _ => Resolution::Instant
         }
     }
