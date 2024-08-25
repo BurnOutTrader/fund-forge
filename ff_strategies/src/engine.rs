@@ -7,6 +7,7 @@ use tokio::sync::mpsc::{Sender};
 use tokio::sync::{Notify};
 use tokio::task;
 use tokio::time::sleep;
+use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
 use ff_standard_lib::standardized_types::base_data::history::{generate_file_dates, get_historical_data};
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::{StrategyMode};
@@ -36,6 +37,7 @@ pub(crate) struct Engine {
     subscription_handler: Arc<SubscriptionHandler>,
     market_event_handler: Arc<MarketHandlerEnum>,
     interaction_handler: Arc<InteractionHandler>,
+    indicator_handler: Arc<IndicatorHandler>,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
 }
 
@@ -47,7 +49,8 @@ impl Engine{
                strategy_event_sender: Sender<EventTimeSlice>,
                subscription_handler: Arc<SubscriptionHandler>,
                market_event_handler: Arc<MarketHandlerEnum>,
-               interaction_handler: Arc<InteractionHandler>) -> Self {
+               interaction_handler: Arc<InteractionHandler>,
+               indicator_handler: Arc<IndicatorHandler>) -> Self {
         Engine {
             owner_id,
             notify,
@@ -56,6 +59,7 @@ impl Engine{
             subscription_handler,
             market_event_handler,
             interaction_handler,
+            indicator_handler
         }
     }
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
@@ -125,6 +129,7 @@ impl Engine{
 
         self.subscription_handler.set_warmup_complete().await;
         self.market_event_handler.set_warm_up_complete().await;
+        self.indicator_handler.set_warmup_complete().await;
         let warmup_complete_event = StrategyEvent::WarmUpComplete(self.owner_id.clone());
         //self.notify.notified().await;
         match self.strategy_event_sender.send(vec![warmup_complete_event]).await {
@@ -197,13 +202,18 @@ impl Engine{
                         .flat_map(|(_, value)| value.iter().cloned())
                         .collect();
                     
+                    let mut strategy_event_slice : EventTimeSlice = EventTimeSlice::new();
                     // if we don't have base data we update any objects which need to be updated with the time
                     if time_slice.is_empty() {
-                        let mut strategy_event_slice : EventTimeSlice = EventTimeSlice::new();
+                        
                         let consolidated_data = self.subscription_handler.update_consolidators_time(time.clone()).await;
 
                         if !consolidated_data.is_empty() {
+                            self.indicator_handler.update_time_slice(&consolidated_data).await;
+                            let buffered_indicator_events = self.indicator_handler.get_event_buffer().await;
+                            strategy_event_slice.extend(buffered_indicator_events);
                             strategy_event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), consolidated_data));
+                            
                         }
                         if !strategy_event_slice.is_empty() {
                             if !self.send_and_continue(time.clone(), strategy_event_slice, warm_up_completed).await {
@@ -213,20 +223,22 @@ impl Engine{
                         last_time = time.clone();
                         continue 'time_loop
                     }
-
-                    let mut strategy_event = EventTimeSlice::new();
-
+                    
                     if let Some(market_event_handler_events) = self.market_event_handler.base_data_upate(time_slice.clone()).await {
-                        strategy_event.extend(market_event_handler_events);
+                        strategy_event_slice.extend(market_event_handler_events);
                     }
 
                     let consolidated_data = self.subscription_handler.update_consolidators(time_slice.clone()).await;
                     if !consolidated_data.is_empty() {
                         time_slice.extend(consolidated_data);
                     }
-                    strategy_event.push(StrategyEvent::TimeSlice(self.owner_id.clone(), time_slice));
+                    self.indicator_handler.update_time_slice(&time_slice).await;
+                    let buffered_indicator_events = self.indicator_handler.get_event_buffer().await;
+                    strategy_event_slice.extend(buffered_indicator_events);
 
-                    if !self.send_and_continue(time.clone(), strategy_event, warm_up_completed).await {
+                    strategy_event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), time_slice));
+
+                    if !self.send_and_continue(time.clone(), strategy_event_slice, warm_up_completed).await {
                         break 'main_loop
                     }
                    

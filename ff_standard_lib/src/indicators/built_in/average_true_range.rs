@@ -24,17 +24,17 @@ impl Display for AverageTrueRange {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let last = self.history.last(); 
         match last {
-            Some(last) => write!(f, "{}\n{}", &self.long_name(), last),
-            None => write!(f, "{}: No Values", &self.long_name())
+            Some(last) => write!(f, "{}\n{}", &self.name, last),
+            None => write!(f, "{}: No Values", &self.name)
         }
     }
 }
 
 impl AverageTrueRange {
-    pub async fn new(subscription: DataSubscription, history_to_retain: u64, period: u64) -> Self {
+    pub async fn new(name: IndicatorName, subscription: DataSubscription, history_to_retain: u64, period: u64) -> Self {
         let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.clone()).await.unwrap();
         let mut atr = AverageTrueRange {
-            name: String::from("Average True Range"),
+            name,
             subscription,
             history: RollingWindow::new(history_to_retain),
             base_data_history: RollingWindow::new(period),
@@ -83,8 +83,12 @@ impl Indicators for AverageTrueRange {
     fn subscription(&self) -> DataSubscription {
         self.subscription.clone()
     }
+    
+    fn name(&self) -> IndicatorName {
+        self.name.clone()
+    }
 
-    fn update_base_data(&mut self, base_data: BaseDataEnum) -> Option<IndicatorValues> {
+    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
         if !base_data.is_closed() {
             return None
         }
@@ -105,7 +109,7 @@ impl Indicators for AverageTrueRange {
  
         let mut plots = AHashMap::new();
         plots.insert("atr".to_string(), atr);
-        let result = IndicatorValues::new(self.short_name(), self.subscription(), plots, base_data.time_created_utc());
+        let result = IndicatorValues::new(self.name(), self.subscription(), plots, base_data.time_created_utc());
         
         if base_data.is_closed() {
             self.history.add(result.clone());
@@ -139,5 +143,9 @@ impl Indicators for AverageTrueRange {
     
     fn is_ready(&self) -> bool {
         self.is_ready
+    }
+
+    fn history(&self) -> RollingWindow<IndicatorValues> {
+        self.history.clone()
     }
 }

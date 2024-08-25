@@ -40,6 +40,10 @@ impl<T> RollingWindow<T> {
     pub fn is_full(&self) -> bool {
         self.history.len() as u64 == self.number
     }
+    
+    pub fn is_empty(&self) -> bool {
+        self.history.is_empty()
+    }
 
     pub fn clear(&mut self) {
         self.history.clear();

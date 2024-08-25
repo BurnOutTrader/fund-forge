@@ -18,6 +18,11 @@ use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::market_handlers::{MarketHandlerEnum};
 use ff_standard_lib::drawing_objects::drawing_object_handler::DrawingObjectHandler;
+use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
+use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
+use ff_standard_lib::indicators::indicators_trait::IndicatorName;
+use ff_standard_lib::indicators::values::IndicatorValues;
+use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use crate::engine::Engine;
 use crate::interaction_handler::InteractionHandler;
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
@@ -46,8 +51,8 @@ pub struct FundForgeStrategy {
     market_event_handler: Arc<MarketHandlerEnum>,
 
     subscription_handler: Arc<SubscriptionHandler>,
-    
-    //todo make indicator handler indicator_handler: Arc<IndicatorHandler>,
+
+    indicator_handler: Arc<IndicatorHandler>,
 }
 
 impl FundForgeStrategy {
@@ -119,14 +124,17 @@ impl FundForgeStrategy {
 
         let strategy = FundForgeStrategy {
             start_state: start_state.clone(),
-            owner_id,
+            owner_id: owner_id.clone(),
             drawing_objects_handler: DrawingObjectHandler::new(Default::default()),
             market_event_handler: Arc::new(market_event_handler),
             interaction_handler: Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode)),
             subscription_handler: Arc::new(subscription_handler),
+            indicator_handler: Arc::new(IndicatorHandler::new(owner_id.clone(), strategy_mode.clone())),
         };
 
-        let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), strategy.market_event_handler.clone(), strategy.interaction_handler.clone());
+        let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), 
+                                 strategy.market_event_handler.clone(), strategy.interaction_handler.clone(), strategy.indicator_handler.clone());
+        
         Engine::launch(engine).await;
 
         strategy
@@ -168,6 +176,30 @@ impl FundForgeStrategy {
     pub async fn sell_market(&self, account_id: AccountId, symbol_name: Symbol, brokerage: Brokerage, quantity: u64, tag: String) {
         let order = Order::market_order(self.owner_id.clone(), symbol_name, brokerage, quantity, OrderSide::Sell, tag, account_id, self.time_utc().await);
         self.market_event_handler.send_order(order).await;
+    }
+    
+    pub async fn indicator_subscribe(&self, indicator: IndicatorEnum) {
+        self.indicator_handler.add_indicator(indicator, self.time_utc().await).await
+    }
+    
+    pub async fn indicator_unsubscribe(&self, name: &IndicatorName) {
+        self.indicator_handler.remove_indicator(name).await
+    }
+    
+    pub async fn indicator_unsubscribe_subscription(&self, subscription: &DataSubscription) {
+        self.indicator_handler.indicators_unsubscribe(subscription).await
+    }
+    
+    pub async fn indicator_index(&self, name: &IndicatorName, index: u64) -> Option<IndicatorValues> {
+        self.indicator_handler.index(name, index).await
+    }
+    
+    pub async fn indicator_current(&self, name: &IndicatorName) -> Option<IndicatorValues> {
+        self.indicator_handler.current(name).await
+    }
+    
+    pub async fn indicator_history(&self, name: &IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
+        self.indicator_handler.history(name).await
     }
 
     pub fn time_zone(&self) -> &Tz {
@@ -229,7 +261,9 @@ impl FundForgeStrategy {
     /// Unsubscribes from a subscription.
     pub async fn unsubscribe(&self, subscription: DataSubscription) {
         match self.subscription_handler.unsubscribe(subscription.clone()).await {
-            Ok(_) => {},
+            Ok(_) => {
+                self.indicator_handler.indicators_unsubscribe(&subscription).await
+            },
             Err(e) => {
                 println!("Error subscribing: {:?}", e);
             }
@@ -258,11 +292,14 @@ impl FundForgeStrategy {
         for subscription in current_subscriptions {
             if !subscriptions.contains(&subscription) {
                 match self.subscription_handler.unsubscribe(subscription.clone()).await {
-                    Ok(_) => {},
+                    Ok(_) => {
+                        self.indicator_handler.indicators_unsubscribe(&subscription).await
+                    },
                     Err(e) => {
                         println!("Error unsubscribing: {:?}", e);
                     }
                 }
+                
             }
         }
     }

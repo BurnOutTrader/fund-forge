@@ -177,7 +177,11 @@ impl CountConsolidator
         let base_subscription = DataSubscription::new(self.subscription.symbol.name.clone(), self.subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, self.subscription.market_type.clone());
         let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
 
-        for (_, slice) in &base_data {
+        for (time, slice) in &base_data {
+            if time > &to_time {
+                break;
+            }
+            
             for base_data in slice {
                 self.update(base_data);
             }

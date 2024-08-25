@@ -132,6 +132,9 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 StrategyEvent::WarmUpComplete(_) => {
                     warmup_complete = true;
                 }
+                StrategyEvent::IndicatorEvent(_, _) => {
+
+                }
                 //todo add more event types 
             }
             notify.notify_one();
@@ -325,6 +328,14 @@ impl IndicatorValues {
 ```
 
 ### Using Indicators
+We can use the inbuilt indicators or create our own custom indicators.
+For creating custom indicators, we just need to implement the `indicators trait` and either:
+1. Create and hardcode `IndicatorEnum` variant including all matching statements, or
+2. Wrap our indicator in the `IndicatorEnum::Custom(Box<dyn Indicators>)` variant, where it will be used via `Box<dyn Indicators>` dynamic dispatch.
+The fist option is the most performant, but if you want to create and test a number of indicators, you can save hardcoding the enum variants by using the second option.
+Once you have tested and are happy with the performance of your custom indicator, you can then hardcode it into the IndicatorEnum.
+You dont actually need to do any of this if you want to manually handle your Indicators in the `fn on_data_received()` function, but if you wrap in the `IndicatorEnum::Custom(Box<dyn Indicators>)` variant, 
+you will be able to handle it in the Indicator handler, which will automatically update the indicators for you and return enums `IndicatorEvents` to the `fn on_data_received()`.
 ```rust
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     
@@ -333,8 +344,12 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     strategy.subscriptions_update(vec![aud_cad_60m.clone()],100).await;
     
     // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
-    let mut heikin_atr = AverageTrueRange::new(aud_cad_60m.clone(), 100, 14).await;
+    let mut heikin_atr = AverageTrueRange::new(String::from("heikin_atr"), aud_cad_60m.clone(), 100, 14).await;
     let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);
+
+    // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variant of the same name.
+    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(String::from("heikin_atr_20"), aud_cad_60m.clone(), 100, 20).await);
+    strategy.indicator_subscribe(heikin_atr_20).await;
     
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for strategy_event in event_slice {
@@ -366,6 +381,22 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             _ => {}
                         }
                     }
+                }
+                StrategyEvent::IndicatorEvent(_, event) => {
+                    //we can handle indicator events here, this is useful for working with the IndicatorHandler.
+                    // which will handle warming up, updating, subscribing etc for many indicators.
+                    match event {
+                        IndicatorEvents::IndicatorAdded(name) => {}
+                        IndicatorEvents::IndicatorRemoved(name) => {}
+                        IndicatorEvents::IndicatorTimeSlice(slice) => {
+                            // we can see our auto manged indicator values for here.
+                            for indicator_values in slice {
+                                println!("Indicator Time Slice: {:?}", indicator_values);
+                            }
+                        }
+                        IndicatorEvents::Replaced(name) => {}
+                    }
+
                 }
             }
         }

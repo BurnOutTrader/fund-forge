@@ -5,6 +5,7 @@ Once you have followed the setup instructions below, you can play with a test st
 ## Architecture
 An object-oriented, Rust based, Algorithmic Trading Platform designed to be as flexible as possible, allowing for both local and remote api instances, and a variety of api types. 
 The platform is designed to be as fast as possible, using `rkyv` for serialization and deserialization and network messaging, and `tokio` for async communication.
+see: https://github.com/rkyv/rkyv
 
 I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance. 
 

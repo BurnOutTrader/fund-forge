@@ -8,13 +8,7 @@ pub type IndicatorName = String;
 
 pub trait Indicators {
     
-    /// Returns the short name of the indicator.
-    /// example: "AverageTrueRange"
-    fn short_name(&self) -> IndicatorName {
-        let mut type_name = std::any::type_name::<Self>();
-        type_name = type_name.split("::").last().unwrap();
-        type_name.to_string()
-    }
+    fn name(&self) -> IndicatorName;
 
     /// Returns the name of the indicator with the symbol and data vendor, resolution, base data type and candle type where applicable.
     /// example: "Average True Range EUR-USD Test QuoteBar 1D Candle Stick"
@@ -34,7 +28,7 @@ pub trait Indicators {
     fn subscription(&self) -> DataSubscription;
 
     /// Updates the indicator with the new data point.
-    fn update_base_data(&mut self, base_data: BaseDataEnum) -> Option<IndicatorValues>;
+    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues>;
 
     /// Resets the indicator to its initial state.
     fn reset(&mut self);
@@ -64,5 +58,7 @@ pub trait Indicators {
 
     /// Returns true if the indicator is ready.
     fn is_ready(&self) -> bool;
+
+    fn history(&self) -> RollingWindow<IndicatorValues>;
 }
 

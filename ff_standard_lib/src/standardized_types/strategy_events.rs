@@ -1,5 +1,6 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::drawing_objects::drawing_object_handler::DrawingToolEvent;
+use crate::indicators::indicator_handler::IndicatorEvents;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::orders::orders::OrderUpdateEvent;
 use crate::standardized_types::OwnerId;
@@ -107,6 +108,8 @@ pub enum StrategyEvent {
     ShutdownEvent(OwnerId, String),
     
     WarmUpComplete(OwnerId),
+    
+    IndicatorEvent(OwnerId, IndicatorEvents),
 }
 
 impl StrategyEvent {
@@ -119,7 +122,7 @@ impl StrategyEvent {
             StrategyEvent::TimeSlice(owner_id, _) => owner_id.clone(),
             StrategyEvent::ShutdownEvent(owner_id, _) => owner_id.clone(),
             StrategyEvent::WarmUpComplete(owner_id) => owner_id.clone(),
-            //StrategyEvent::IndicatorSlice(owner_id, _) => owner_id.clone(),
+            StrategyEvent::IndicatorEvent(owner_id, _) => owner_id.clone(),
         }
     }
 
