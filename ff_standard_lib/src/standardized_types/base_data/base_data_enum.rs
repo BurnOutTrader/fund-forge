@@ -167,6 +167,27 @@ impl BaseDataEnum {
             BaseDataEnum::Fundamental(fundamental) => &fundamental.symbol,
         }
     }
+    
+    pub fn resolution(&self) -> Resolution {
+        match self {
+            BaseDataEnum::Candle(candle) => candle.resolution,
+            BaseDataEnum::QuoteBar(bar) => bar.resolution,
+            // this works because tick candles will be candles not ticks so number is always 1
+            BaseDataEnum::Tick(tick) => Resolution::Ticks(1),
+           _ => Resolution::Instant
+        }
+    }
+    
+    pub fn subscription(&self) -> DataSubscription {
+        let symbol = self.symbol();
+        let resolution = self.resolution();
+        let candle_type = match self {
+            BaseDataEnum::Candle(candle) => Some(candle.candle_type.clone()),
+            BaseDataEnum::QuoteBar(bar) => Some(bar.candle_type.clone()),
+            _ => None
+        };
+        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), resolution, self.base_data_type(), symbol.market_type.clone(), candle_type)
+    }
 
     /// Returns the `is_closed` property of the `BaseDataEnum` variant for variants that implement it, else just returns true.
     pub fn is_closed(&self) -> bool {

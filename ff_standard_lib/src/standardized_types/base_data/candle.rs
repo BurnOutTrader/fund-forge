@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use chrono::{DateTime, FixedOffset};
 use chrono_tz::Tz;
@@ -63,6 +64,16 @@ pub struct Candle {
     pub is_closed: bool,
     pub resolution: Resolution,
     pub candle_type: CandleType,
+}
+
+impl Display for Candle {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{:?},{},{},{},{},{},{},{},{},{},{}",
+            self.symbol, self.resolution, self.high, self.low, self.open, self.close, self.volume, self.range, self.time, self.is_closed, self.candle_type
+        )
+    }
 }
 
 impl Candle {
@@ -213,22 +224,12 @@ impl Candle {
     }
 }
 
-impl fmt::Display for Candle {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{:?},{},{},{},{},{},{},{},{},{}",
-            self.symbol, self.resolution, self.high, self.low, self.open, self.close, self.volume, self.range, self.time, self.is_closed
-        )
-    }
-}
-
 impl fmt::Debug for Candle {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Candle {{ resolution {}, symbol: {:?}, high: {}, low: {}, open: {}, close: {}, volume: {}, range: {}, time: {}, is_closed: {} }}",
-            self.resolution, self.symbol, self.high, self.low, self.open, self.close, self.volume, self.range, self.time, self.is_closed
+            "Candle {{ resolution {}, symbol: {:?}, high: {}, low: {}, open: {}, close: {}, volume: {}, range: {}, time: {}, is_closed: {}, candle_type {} }}",
+            self.resolution, self.symbol, self.high, self.low, self.open, self.close, self.volume, self.range, self.time, self.is_closed, self.candle_type
         )
     }
 }

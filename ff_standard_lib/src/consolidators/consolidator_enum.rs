@@ -124,7 +124,7 @@ impl ConsolidatorEnum {
         }
     }
 
-    pub fn index(&self, index: usize) -> Option<BaseDataEnum> {
+    pub fn index(&self, index: u64) -> Option<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => count_consolidator.index(index),
             ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => time_consolidator.index(index),

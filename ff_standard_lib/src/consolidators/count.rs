@@ -137,7 +137,7 @@ impl CountConsolidator
         self.history.clone()
     }
 
-    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
+    pub(crate) fn index(&self, index: u64) -> Option<BaseDataEnum> {
         match self.history.get(index) {
             Some(data) => Some(data.clone()),
             None => None,

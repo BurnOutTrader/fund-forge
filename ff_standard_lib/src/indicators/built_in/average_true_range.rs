@@ -1,41 +1,38 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use crate::indicators::indicator_trait::{IndicatorName, IndicatorValue, Indicators};
+use ahash::AHashMap;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
-use crate::helpers::decimal_calculators::round_to_decimals;
+use crate::helpers::decimal_calculators::{round_to_tick_size};
+use crate::indicators::indicators_trait::{IndicatorName, Indicators};
+use crate::indicators::values::IndicatorValues;
 
 pub struct AverageTrueRange {
     name: IndicatorName,
     subscription: DataSubscription,
-    history: RollingWindow<Vec<IndicatorValue>>,
+    history: RollingWindow<IndicatorValues>,
     base_data_history: RollingWindow<BaseDataEnum>,
     is_ready: bool,
     period: u64,
-    decimal_accuracy: u64,
+    tick_size: f64,
 }
 
 impl Display for AverageTrueRange {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let last = self.history.last();
+        let last = self.history.last(); 
         match last {
-            Some(values) => {
-                let values_string = values.iter().map(|x| x.to_string()).collect::<Vec<String>>().join("\n");
-                write!(f, "{}: {}\n{}", self.name(), self.period, values_string)
-
-            },
-            None => write!(f, "{}", format!("{}: {}: No values", self.name(), self.period)),
+            Some(last) => write!(f, "{}\n{}", &self.long_name(), last),
+            None => write!(f, "{}: No Values", &self.long_name())
         }
     }
 }
 
 impl AverageTrueRange {
     pub async fn new(subscription: DataSubscription, history_to_retain: u64, period: u64) -> Self {
-        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.clone()).await;
+        let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.clone()).await.unwrap();
         let mut atr = AverageTrueRange {
             name: String::from("Average True Range"),
             subscription,
@@ -43,9 +40,9 @@ impl AverageTrueRange {
             base_data_history: RollingWindow::new(period),
             is_ready: false,
             period,
-            decimal_accuracy: decimal_accuracy.unwrap(),
+            tick_size,
         };
-        atr.name = atr.name();
+        atr.name = atr.long_name();
         atr
     }
 
@@ -73,7 +70,7 @@ impl AverageTrueRange {
 
         // Calculate the average of true ranges (ATR)
         let atr = if !true_ranges.is_empty() {
-            round_to_decimals(true_ranges.iter().sum::<f64>() / true_ranges.len() as f64, self.decimal_accuracy.clone()) 
+            round_to_tick_size(true_ranges.iter().sum::<f64>() / true_ranges.len() as f64, self.tick_size.clone()) 
         } else {
             0.0
         };
@@ -83,20 +80,22 @@ impl AverageTrueRange {
 }
 
 impl Indicators for AverageTrueRange {
-    fn subscription(&self) -> &DataSubscription {
-        &self.subscription
+    fn subscription(&self) -> DataSubscription {
+        self.subscription.clone()
     }
 
-    fn update_base_data(&mut self, base_data: BaseDataEnum) -> Option<Vec<IndicatorValue>> {
+    fn update_base_data(&mut self, base_data: BaseDataEnum) -> Option<IndicatorValues> {
         if !base_data.is_closed() {
             return None
         }
         
         self.base_data_history.add(base_data.clone());
-        if !self.base_data_history.is_full() {
-            return None
-        } else if self.is_ready == false {
-            self.is_ready = true;
+        if self.is_ready == false {
+            if !self.base_data_history.is_full() {
+                return None
+            } else {
+                self.is_ready = true;
+            }
         }
         
         let atr = self.calculate_true_range();
@@ -104,16 +103,15 @@ impl Indicators for AverageTrueRange {
             return None
         }
  
-        let result = IndicatorValue::new(atr, base_data.time_utc(), String::from("atr"));
-        let mut results = Vec::new();
-        results.push(result);
+        let mut plots = AHashMap::new();
+        plots.insert("atr".to_string(), atr);
+        let result = IndicatorValues::new(self.short_name(), self.subscription(), plots, base_data.time_created_utc());
         
         if base_data.is_closed() {
-            self.history.add(results.clone());
+            self.history.add(result.clone());
         }
         
-        Some(results)
-        
+        Some(result)
     }
 
     fn reset(&mut self) {
@@ -121,11 +119,21 @@ impl Indicators for AverageTrueRange {
         self.base_data_history.clear();
     }
 
-    fn index(&self, index: usize) -> Option<Vec<IndicatorValue>> {
+    fn index(&self, index: u64) -> Option<IndicatorValues> {
+        if !self.is_ready {
+            return None
+        }
         self.history.get(index).cloned()
     }
 
-    fn plots(&self) -> RollingWindow<Vec<IndicatorValue>> {
+    fn current(&self) -> Option<IndicatorValues> {
+        if !self.is_ready {
+            return None
+        }
+        self.history.last().cloned()
+    }
+
+    fn plots(&self) -> RollingWindow<IndicatorValues> {
         self.history.clone()
     }
     

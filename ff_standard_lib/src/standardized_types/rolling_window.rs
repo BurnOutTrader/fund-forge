@@ -29,8 +29,8 @@ impl<T> RollingWindow<T> {
         self.history.front()
     }
 
-    pub fn get(&self, index: usize) -> Option<&T> {
-        self.history.get(index)
+    pub fn get(&self, index: u64) -> Option<&T> {
+        self.history.get(index as usize)
     }
 
     pub fn len(&self) -> usize {

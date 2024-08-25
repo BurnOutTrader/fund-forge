@@ -1,3 +1,5 @@
-pub mod indicator_trait;
+pub mod indicator_enum;
 pub mod built_in;
-mod indicator_handler;
+pub mod indicator_handler;
+pub mod indicators_trait;
+pub mod values;

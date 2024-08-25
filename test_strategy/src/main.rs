@@ -5,6 +5,8 @@ use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Receiver;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
+use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
+use ff_standard_lib::indicators::indicators_trait::Indicators;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -63,7 +65,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     //notify.notify_one();
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
-    let subscription = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+    let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+    
+    let mut heikin_atr = AverageTrueRange::new(aud_cad_60m.clone(), 100, 14).await;
     let mut warmup_complete = false;
     let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -72,8 +77,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         if warmup_complete {
             count += 1;
             if count == 100 {
-                let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
-                let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
                 strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()],100).await;
             }
         }
@@ -91,9 +94,16 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                         match base_data {
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
+                                if base_data.subscription() == aud_cad_60m && candle.is_closed {
+                                    heikin_atr.update_base_data(base_data.clone());
+                                    if heikin_atr.is_ready() {
+                                        let atr = heikin_atr.current();
+                                        println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
+                                    }
+                                }
                                 if warmup_complete {
                                     if candle.is_closed == true {
-                                        println!("{}...Candle {}, {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                        //println!("{}...Candle {}, {}: close price:{} at {}, closed: {}, {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                         if count > 2000 {
                                             /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
                                             println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);

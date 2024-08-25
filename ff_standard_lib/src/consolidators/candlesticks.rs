@@ -7,7 +7,7 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
-use crate::standardized_types::subscriptions::DataSubscription;
+use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use crate::consolidators::count::ConsolidatorError;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::history::range_data;
@@ -129,7 +129,7 @@ impl CandleStickConsolidator {
                 new_bar.resolution = self.subscription.resolution.clone();
                 new_bar
             },
-            BaseDataEnum::Quote(quote) => QuoteBar::new(self.subscription.symbol.clone(), quote.bid, quote.ask, 0.0, time.to_string(), self.subscription.resolution.clone()),
+            BaseDataEnum::Quote(quote) => QuoteBar::new(self.subscription.symbol.clone(), quote.bid, quote.ask, 0.0, time.to_string(), self.subscription.resolution.clone(), CandleType::CandleStick),
             _ => panic!("Invalid base data type for QuoteBar consolidator"),
         }
     }
@@ -292,7 +292,7 @@ impl CandleStickConsolidator {
     }
 
 
-    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
+    pub(crate) fn index(&self, index: u64) -> Option<BaseDataEnum> {
         match self.history.get(index) {
             Some(data) => Some(data.clone()),
             None => None,

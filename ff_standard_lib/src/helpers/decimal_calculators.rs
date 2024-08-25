@@ -16,11 +16,17 @@ pub fn divide_f64(dividend: f64, divisor: f64) -> f64 {
 
 pub fn round_to_decimals(value: f64, decimals: u64) -> f64 {
     let factor = 10f64.powi(decimals as i32);
-    (value * factor).round() / factor
+    let rounded_value = (value * factor).round() / factor;
+    let rounded_str = format!("{:.10}", rounded_value); // Convert to string with sufficient precision
+    let truncated_str = rounded_str.trim_end_matches('0').trim_end_matches('.'); // Remove trailing zeros and decimal point if necessary
+    truncated_str.parse::<f64>().unwrap_or(rounded_value) // Convert back to f64
 }
 
 pub fn round_to_tick_size(value: f64, tick_size: f64) -> f64 {
-    (value / tick_size).round() * tick_size
+    let rounded_value = (value / tick_size).round() * tick_size;
+    let rounded_str = format!("{:.10}", rounded_value); // Convert to string with sufficient precision
+    let truncated_str = rounded_str.trim_end_matches('0').trim_end_matches('.'); // Remove trailing zeros and decimal point if necessary
+    truncated_str.parse::<f64>().unwrap_or(rounded_value) // Convert back to f64
 }
 
 

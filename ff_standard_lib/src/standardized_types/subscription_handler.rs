@@ -187,7 +187,7 @@ impl SubscriptionHandler {
         None
     }
     
-    pub async fn bar_index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
+    pub async fn bar_index(&self, subscription: &DataSubscription, index: u64) -> Option<BaseDataEnum> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return None
         }

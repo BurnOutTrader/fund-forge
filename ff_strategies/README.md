@@ -216,6 +216,7 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
 
     // this will return a RollingWindow<BaseData> for the subscription by cloning the history.
     // at the current point this clones the whole rolling window, and so is not suitable for frequent use of large history.
+    // An alternative would be to get the history once, after initializing the indicator, so we have a warmed up history, then keep the history in a separate variable and add the new data to it.
     history: &RollingWindow<BaseDataEnum>  = strategy.history(&aud_usd_15m).await;
 
     // if we are keeping a large history and need to access it often, it could be better to manually keep the history we need to avoid clone()ing the whole history on every iter.
@@ -279,4 +280,9 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
         }
     }
 }
+```
+
+## Indicators
+```rust
+
 ```

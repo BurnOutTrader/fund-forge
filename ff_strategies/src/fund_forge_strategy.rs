@@ -268,7 +268,7 @@ impl FundForgeStrategy {
     }
 
     /// returns the nth last bar at the specified index. 1 = 1 bar ago, 0 = current bar.
-    pub async fn bar_index(&self, subscription: &DataSubscription, index: usize) -> Option<BaseDataEnum> {
+    pub async fn bar_index(&self, subscription: &DataSubscription, index: u64) -> Option<BaseDataEnum> {
         self.subscription_handler.bar_index(subscription, index).await
     }
 

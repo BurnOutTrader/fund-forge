@@ -129,6 +129,19 @@ pub struct DataSubscription {
     pub candle_type: Option<CandleType>,
 }
 
+impl Display for DataSubscription {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match &self.candle_type {
+            Some(candle_type) => {
+                write!(f, "{} {} {} {} {}: {}", self.symbol.name, self.symbol.data_vendor, self.base_data_type, self.resolution, self.market_type, candle_type)
+            },
+            None => {
+                write!(f, "{} {} {} {} {}", self.symbol.name, self.symbol.data_vendor, self.base_data_type, self.resolution, self.market_type)
+            }
+        }
+    }
+}
+
 impl DataSubscription {
 
     // we use this for any data that is represented by base data types
@@ -166,6 +179,19 @@ impl DataSubscription {
             base_data_type,
             market_type,
             candle_type: Some(candle_type)
+        }
+    }
+    
+    pub fn from_base_data(symbol_name: String, data_vendor: DataVendor, resolution: Resolution, base_data_type: BaseDataType, market_type: MarketType, candle_type: Option<CandleType>) -> Self {
+        let cleaned_symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
+        let symbol = Symbol::new(cleaned_symbol_name, data_vendor, market_type.clone());
+
+        DataSubscription {
+            symbol,
+            resolution,
+            base_data_type,
+            market_type,
+            candle_type
         }
     }
 
