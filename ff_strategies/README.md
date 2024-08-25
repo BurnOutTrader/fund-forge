@@ -179,35 +179,36 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
 ## Subscriptions
 ```rust
 pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
-    'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        
-        // subscribing to multiple items while unsubscribing from existing items
-        // if our strategy has already warmed up, the subscription will automatically have warm up to the maximum number of bars and have history available.
-        let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
-        let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-        
-        // Note that this function completely overrides our current subcsriptions, If we have any current subscriptions they will be unsubscribed if not also passed in.
-        // Any existing subscriptions which are not primary subscriptions (tick stream etc) will not be unsubscribed from.
-        // Any primary subscription, which is being used to consolidate data which is not being unsubscribed will not be unsubscribed.
-        // The second parameter is the number of bars to retain in memory for the strategy.
-        // The engine will automatically consolidate the data to the required resolution and will try to maintain only a single primary subscription per symbol to minimise data vendor api usage.
-        strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()], 100).await; 
-        
-        //or we can subscribe to a single item and not effect any existing subscriptions
-        // The second parameter is the number of bars to retain in memory for the strategy.
-        strategy.subscribe(aud_usd_15m.clone(), 100).await;
-        
-        //or we can unsubscribe from a single item
-        strategy.unsubscribe(&aud_usd_15m.symbol).await;
-        
-        //we can see our subscriptions
-        let subscriptions = strategy.subscriptions().await;
-        println!("subscriptions: {:?}", subscriptions);
-        
-        // we can also access the subscription for BaseDataEnums 
-        // base_data.subscription() which returns a DataSubscription object
-        // all objects wrapped in a BaseDataEnum will have a subscription() fn.
 
+    // subscribing to multiple items while unsubscribing from existing items
+    // if our strategy has already warmed up, the subscription will automatically have warm up to the maximum number of bars and have history available.
+    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+    let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+
+    // Note that this function completely overrides our current subcsriptions, If we have any current subscriptions they will be unsubscribed if not also passed in.
+    // Any existing subscriptions which are not primary subscriptions (tick stream etc) will not be unsubscribed from.
+    // Any primary subscription, which is being used to consolidate data which is not being unsubscribed will not be unsubscribed.
+    // The second parameter is the number of bars to retain in memory for the strategy.
+    // The engine will automatically consolidate the data to the required resolution and will try to maintain only a single primary subscription per symbol to minimise data vendor api usage.
+    strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()], 100).await;
+
+    //or we can subscribe to a single item and not effect any existing subscriptions
+    // The second parameter is the number of bars to retain in memory for the strategy.
+    strategy.subscribe(aud_usd_15m.clone(), 100).await;
+
+    //or we can unsubscribe from a single item
+    strategy.unsubscribe(&aud_usd_15m.symbol).await;
+
+    //we can see our subscriptions
+    let subscriptions = strategy.subscriptions().await;
+    println!("subscriptions: {:?}", subscriptions);
+
+    // we can also access the subscription for BaseDataEnums 
+    // base_data.subscription() which returns a DataSubscription object
+    // all objects wrapped in a BaseDataEnum will have a subscription() fn.
+    
+    'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
+        // we can subscribe in the event loop with no problems, the engine can handle this in live and backtest without skipping data.
         notify.notify_one();
     }
 }
@@ -357,7 +358,7 @@ pub fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut ev
                                     let atr = heikin_atr.index(2);
                                     println!("{}...{} ATR 2 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
                                     
-                                    //of we can use our own history to get the value at a specific index
+                                    //or we can use our own history to get the value at a specific index
                                     let atr = heikin_atr_history.get(10);
                                     println!("{}...{} ATR 10 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
                                 }
