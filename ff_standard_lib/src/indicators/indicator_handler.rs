@@ -9,6 +9,8 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::standardized_types::time_slices::TimeSlice;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
+use crate::consolidators::consolidator_enum::ConsolidatorEnum;
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
@@ -161,12 +163,12 @@ async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicat
     let subscription = indicator.subscription();
     let vendor_resolutions = subscription.symbol.data_vendor.resolutions(subscription.market_type.clone()).await.unwrap();
     let mut minimum_resolution: Option<Resolution> = None;
-    for resolution in vendor_resolutions {
+    for resolution in &vendor_resolutions {
         if minimum_resolution.is_none() {
-            minimum_resolution = Some(resolution);
+            minimum_resolution = Some(resolution.clone());
         } else {
-            if resolution > minimum_resolution.unwrap() && resolution < subscription.resolution {
-                minimum_resolution = Some(resolution);
+            if resolution > &minimum_resolution.unwrap() && resolution < &subscription.resolution {
+                minimum_resolution = Some(resolution.clone());
             }
         }
     }
@@ -185,13 +187,34 @@ async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicat
 
     let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, subscription.market_type.clone());
     let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
-
-    for (time, slice) in &base_data {
-        if time > &to_time {
-            break;
+    
+    match vendor_resolutions.contains(&indicator.subscription().resolution) {
+        true => {
+            for (time, slice) in &base_data {
+                if time > &to_time {
+                    break;
+                }
+                for base_data in slice {
+                    indicator.update_base_data(base_data);
+                }
+            }
         }
-        for base_data in slice {
-            indicator.update_base_data(base_data);
+        false => {
+            let mut consolidator = ConsolidatorEnum::create_consolidator(true, indicator.subscription().clone(), indicator.history().number, to_time, strategy_mode).await;
+            for (time, slice) in &base_data {
+                if time > &to_time {
+                    break;
+                }
+                for base_data in slice {
+                    let consolidated = consolidator.update(base_data);
+                    if consolidated.is_empty() {
+                        continue
+                    }
+                    for data in consolidated {
+                        indicator.update_base_data(&data);
+                    }
+                }
+            }
         }
     }
     if strategy_mode != StrategyMode::Backtest {

@@ -28,6 +28,8 @@ impl Indicators for IndicatorEnum {
         }
     }
 
+    /// Be sure to handle open vs closed bars in your indicators fn update_base_data(). 
+    /// Some indicators will update from open and closed bars and some will only want closed bars (like atr for example)
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
         if base_data.subscription() != self.subscription() {
             return None

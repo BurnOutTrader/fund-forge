@@ -329,13 +329,32 @@ impl IndicatorValues {
 
 ### Using Indicators
 We can use the inbuilt indicators or create our own custom indicators.
+
+#### Creating Indicators
 For creating custom indicators, we just need to implement the `indicators trait` and either:
 1. Create and hardcode `IndicatorEnum` variant including all matching statements, or
 2. Wrap our indicator in the `IndicatorEnum::Custom(Box<dyn Indicators>)` variant, where it will be used via `Box<dyn Indicators>` dynamic dispatch.
 The fist option is the most performant, but if you want to create and test a number of indicators, you can save hardcoding the enum variants by using the second option.
 Once you have tested and are happy with the performance of your custom indicator, you can then hardcode it into the IndicatorEnum.
-You dont actually need to do any of this if you want to manually handle your Indicators in the `fn on_data_received()` function, but if you wrap in the `IndicatorEnum::Custom(Box<dyn Indicators>)` variant, 
+You don't actually need to do any of this if you want to manually handle your Indicators in the `fn on_data_received()` function, but if you wrap in the `IndicatorEnum::Custom(Box<dyn Indicators>)` variant, 
 you will be able to handle it in the Indicator handler, which will automatically update the indicators for you and return enums `IndicatorEvents` to the `fn on_data_received()`.
+
+#### Using Indicators
+If we pass the indicator to `strategy.indicator_subscribe(indicator: IndicatorEnum).await;` the handler will automatically handle, history, warmup and deletion of the indicator when we unsubscribe a symbol.
+There aren't many reasons not to use this fn.
+
+we can access the indicators values the same way we do for base_data 
+```rust
+fn example(strategy: FundForgeStrategy) {
+    let mut heikin_atr = AverageTrueRange::new(String::from("heikin_atr"), aud_cad_60m.clone(), 100, 14).await;
+    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(String::from("heikin_atr_20"), aud_cad_60m.clone(), 100, 20).await);
+    
+    // if the strategy is already warmed up, the indicator will warm itself up using historical data
+    strategy.indicator_subscribe(heikin_atr_20).await;
+    
+    
+}
+```
 ```rust
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     
