@@ -3,11 +3,12 @@
 Once you have followed the setup instructions below, you can play with a test strategy by reviewing https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md
 
 ## Architecture
-First and foremost I have tried to keep the design as modular as possible to allow for upgrades and improvements to functions by more experienced programmers. 
+An object-oriented, Rust based, Algorithmic Trading Platform designed to be as flexible as possible, allowing for both local and remote api instances, and a variety of api types. 
+The platform is designed to be as fast as possible, using `rkyv` for serialization and deserialization and network messaging, and `tokio` for async communication.
 
 I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance. 
 
-The architecture of fund forge designed to allow for "monolithic" or "micro-service" runtime depending on:
+The architecture of fund forge designed to allow for "monolithic" or "microservices" runtime depending on:
 ```rust
 pub enum PlatformMode {
     SingleMachine,
@@ -54,11 +55,13 @@ On the client side the function calls are automatically forwarded to the correct
 All requests made by the engine will use the DataVendor or Brokerage variant in some way.
 We are simply sending a request to the server using the DataVendor or Brokerage enum variant, and the server is returning a response with the data we require based on that variant.
 ```rust
-/// in a strategy we could request the symbols for a market like this
-let vendor = DataVendor::Test;
+fn example() {
+    /// in a strategy we could request the symbols for a market like this
+    let vendor = DataVendor::Test;
 
-/// we will return a result from the fn, it will either be a Vec<Symbol> or a FundForgeError, this error type will contain a string to tell us if the error was on the client side, or if the server has some problem fetching data.
-let symbols = vendor.symbols(MarketType::Forex).await.unwrap();
+    /// we will return a result from the fn, it will either be a Vec<Symbol> or a FundForgeError, this error type will contain a string to tell us if the error was on the client side, or if the server has some problem fetching data.
+    let symbols = vendor.symbols(MarketType::Forex).await.unwrap();
+}
 ```
 
 What the above function actually does is call a function to get the connection to the data server instance associated with that enum variant, then it sends a request for the symbols which also contains the enum variant to the data server, the server requests the api and retrieves the symbols, returning them in fund forge format as `Vec<Symbol>`. 
@@ -68,7 +71,7 @@ The current design is simply to maximize utility of more client limiting brokera
 
 `DataVendor::Test` and `Brokerage::Test` do not actually use any live Api endpoints and are instead designed to simulate end points so that we can get a reliable response from the server using pre serialized or hardcoded data to test platform functionality during development and remain broker agnostic.
 
-# Setup 
+## Setup 
 You will need to change these hard coded directories in `ff_standard_lib::helpers` `mod.rs`
 ```rust
 /// This is the path to the folder we use to store all base data from vendors
@@ -117,7 +120,7 @@ struct ServerLaunchOptions {
 ```
 
 
-# Parsing Data and Time handling
+## Parsing Data and Time handling
 All data should be saved as 1 file per month and all times for data should be Utc time, use the time parsing functions in `ff_standard_lib::helpers::converters` to parse time from your time zone, these functions use `chrono-tz` and will automatically handle historical time zone conversions such as day light savings times. All Base data time properties are serialized as Strings, these strings are auto parsed into `DateTime<Utc>` using `base_data.time_utc()` or. `DateTime<FixedOffset>` using `base_data.time_local(Tz)` when running strategies, the reason for parsing to string is simply for easier `ser/de` using `rkyv`.
 
 There are a number of helpers built into `BaseDataEnum impl` which help with parsing and serializing `BaseDataEnum`. for example `BaseDataEnum::format_and_save()` can take a large collection of base data and format it into separate files, 1 file per month. There are also functions for checking the earliest or latest base data for a particular subscription which can be useful for updating historical data at regular intervals.
@@ -126,9 +129,10 @@ Please see the base_data_enum.rs file for more info when building DataVendor imp
 
 When handling historical data it is assumed that the `time` property of `Candle` and `QuoteBar` object is the opening time, so in the historical data requests we add the `base_data_enum.resolution.as_seconds()` to get the `base_data_enum.time_created()` which represents the closing time of the bar. To properly align the historical candles and quotebars with other historical data types such as ticks, which represent a single instance in time and therefore do not need to be adjusted. To avoid look ahead bias on our bars during backtesting, a tick that occurred at say 16:00 will be correctly aligned with the bar that closed at 16:00 instead of the bar that opened. This also allows us to reliably combine historical data feeds of different resolutions.
 
-# Decimal Accuracy
+## Decimal Accuracy
 I have opted to just build decimal calculators to avoid rounding errors, these calculators use the rust_decimal crate and help us to avoid rounding errors without having the additional overhead in our base data when it is not actually needed.
-# Strategy Registry
+
+## Strategy Registry
 The strategy registry service is a server where running strategies register and forward events to the Ui, in `SinglMachine` mode this will just be done over mspc channels, in `MultiMachine` mode we will need to manually launch a server instance.
 
 This service will allow the Ui to find any strategy that is online via Tls/Tcp and communicate by sending commands and receiving updates in an async manner. It will also keep a record of all strategy events that are forwarded by strategies to allow us to replay strategies and see what has happened.
@@ -137,7 +141,16 @@ There will be an option to store data received by strategies, so we can see exac
 
 The registry will also forward commands like pause, play and stop or allow us to add drawing objects to strategies which they will then be able to interact with depending on the `StrategyInteractionMode`.
 
-# Work in progress
-We will use a broadcaster object to allow many incoming stream requests to share a single instance of an api data stream event.
+## Work in progress
+Currently only implementing a dummy `Test` api to build the standardized types and functions.
+
+I am making it very easy to implement new `Brokerage` and `DataVendor` apis, so that we can have a wide range of options for users to choose from.
+Simply create an api object which implements the `VendorApiResponse` or `BrokerApiResponse` trait and you can use it in your strategy or UI.
+
+The client side is already handled, but if you want to add new request/response types you can just add them to the `VendorApiResponse` or `BrokerApiResponse` trait and implement them in your api object and 
+`ClientSideDataVendor` or `ClientSideBrokerage` object.
+
+It is possible to add a new request and response function to handle new api reqirements in a matter of minutes.
+
 
 
