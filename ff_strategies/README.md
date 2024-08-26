@@ -411,12 +411,24 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice {
                                 println!("Indicator Time Slice: {:?}", indicator_values);
+                                
                             }
+
+                            // we could also get the automanaged indicator values from teh strategy at any time. we should have history immediatley since the indicator will warm itself up.
+                            // this will not be the case if we did not have historical data available for the indicator.
+                            let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(&IndicatorName::from("heikin_atr_20")).await;
+                            assert!(history.is_some());
+
+                            let current: Option<IndicatorValues> = strategy.indicator_current(&IndicatorName::from("heikin_atr_20")).await;
+                            assert!(current.is_some());
+
+                            let index: Option<IndicatorValues> = strategy.indicator_index(&IndicatorName::from("heikin_atr_20"), 3).await;
+                            assert!(index.is_some());
                         }
                         IndicatorEvents::Replaced(name) => {}
                     }
-
                 }
+                _ => {}
             }
         }
         notify.notify_one();

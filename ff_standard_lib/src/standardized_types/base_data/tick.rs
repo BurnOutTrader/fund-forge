@@ -55,8 +55,7 @@ impl Tick {
 
     pub fn subscription(&self) -> DataSubscription {
         let symbol = self.symbol.clone();
-        let resolution = self.resolution();
-        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), resolution, BaseDataType::Ticks, symbol.market_type.clone(), None)
+        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), Resolution::Instant, BaseDataType::Ticks, symbol.market_type.clone(), None)
     }
 
     pub fn time_utc(&self) -> DateTime<chrono::Utc> {

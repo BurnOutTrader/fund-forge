@@ -198,7 +198,7 @@ impl FundForgeStrategy {
         self.indicator_handler.current(name).await
     }
     
-    pub async fn indicator_history(&self, name: &IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
+    pub async fn indicator_history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
         self.indicator_handler.history(name).await
     }
 

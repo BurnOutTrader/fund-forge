@@ -10,7 +10,6 @@ use crate::standardized_types::time_slices::TimeSlice;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
@@ -30,12 +29,32 @@ pub enum IndicatorEvents {
     Replaced(IndicatorName),
 }
 
+pub enum IndicatorRequest {
+    
+}
+
 pub struct IndicatorHandler {
     indicators: RwLock<AHashMap<DataSubscription, AHashMap<IndicatorName, IndicatorEnum>>>,
     is_warm_up_complete: RwLock<bool>,
     owner_id: OwnerId,
     strategy_mode: StrategyMode,
     event_buffer: RwLock<Vec<StrategyEvent>>,
+    subscription_map: RwLock<AHashMap<IndicatorName, DataSubscription>>, //used to quickly find the subscription of an indicator by name.
+    //receiver: Receiver<StrategyEvent>,
+    //todo add broadcaster and receiver to decouple handlers. this will allow the handlers to
+    //1. Have interior mutability and remove async locks.
+    //2. Be seperated and insulated from the engine and the strategy. 
+    //3. This will allow us to have multiple strategies running in parallel.
+    //4. Live strategies can share the same handler.
+    //5. You could async send all data... run all handlers at the same time, then async collect all buffers.
+    
+    // Downside:
+    // 1. Each handler will require its own messaging.
+    
+    // How:
+    // strategies starting in backtest mode will launch a function which will generate a new handler.
+    // strategies in live mode will subscribe to an existing handler and launch there own listener function for receiving requests from the strategy.
+    // each handler will have a buffer for events which will be sent to the strategies.
 }
 
 impl IndicatorHandler {
@@ -46,6 +65,7 @@ impl IndicatorHandler {
             owner_id,
             strategy_mode,
             event_buffer: Default::default(),
+            subscription_map: Default::default(),
         }
     }
     
@@ -59,7 +79,7 @@ impl IndicatorHandler {
     pub async fn set_warmup_complete(&self) {
         *self.is_warm_up_complete.write().await = true;
     }
-
+    
     pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) {
         let mut indicators = self.indicators.write().await;
         let indicators = indicators.entry(indicator.subscription()).or_insert_with(|| AHashMap::new());
@@ -69,27 +89,32 @@ impl IndicatorHandler {
             true => warmup(time, self.strategy_mode.clone(), indicator).await,
             false => indicator
         };
-        
+        self.subscription_map.write().await.insert(name.clone(), indicator.subscription().clone());
         match indicators.insert(name.clone(), indicator) {
-            Some(indicator) => self.event_buffer.write().await.push(StrategyEvent::IndicatorEvent(self.owner_id.clone(), IndicatorEvents::Replaced(indicator.name()))),
+            Some(_) => self.event_buffer.write().await.push(StrategyEvent::IndicatorEvent(self.owner_id.clone(), IndicatorEvents::Replaced(name.clone()))),
             None => self.event_buffer.write().await.push(StrategyEvent::IndicatorEvent(self.owner_id.clone(), IndicatorEvents::IndicatorAdded(name.clone())))
         }
     }
 
     pub async fn remove_indicator(&self, indicator: &IndicatorName) {
         let mut indicators = self.indicators.write().await;
-        for (_, map) in indicators.iter_mut() {
+        if let Some(map) = indicators.get_mut(&self.subscription_map.read().await.get(indicator).unwrap()) {
             if map.remove(indicator).is_some() {
                 self.event_buffer.write().await.push(StrategyEvent::IndicatorEvent(self.owner_id.clone(), IndicatorEvents::IndicatorRemoved(indicator.clone())));
-                return
+                self.subscription_map.write().await.remove(indicator);
             }
         }
+        self.subscription_map.write().await.remove(indicator);
     }
 
     pub async fn indicators_unsubscribe(&self, subscription: &DataSubscription) {
         self.indicators.write().await.remove(subscription);
+        for (name, sub) in self.subscription_map.read().await.iter() {
+            if sub == subscription {
+                self.subscription_map.write().await.remove(name);
+            }
+        }
     }
-
 
     pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
         let mut indicators = self.indicators.write().await;
@@ -98,9 +123,6 @@ impl IndicatorHandler {
             let subscription = data.subscription();
             if let Some(indicators) = indicators.get_mut(&subscription) {
                 for indicator in indicators.values_mut() {
-                    if indicator.subscription() != subscription {
-                        continue
-                    }
                     let value = indicator.update_base_data(data);
                     if let Some(value) = value {
                         values.push(value);
@@ -118,16 +140,18 @@ impl IndicatorHandler {
         }
     }
     
-    pub async fn history(&self, name: &IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
-        let indicators = self.indicators.read().await;
-        for (_, map) in indicators.iter() {
-            for indicator in map.values() {
-                if &indicator.name() == name {
-                    let history = indicator.history();
-                    return match history.is_empty() {
-                        true => None,
-                        false => Some(history),
-                    }
+    pub async fn history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
+        let indicators = self.indicators.write().await;
+        let subscription = match self.subscription_map.read().await.get(&name) {
+            Some(sub) => sub.clone(),
+            None => return None
+        };
+        if let Some(map) = indicators.get(&subscription) {
+            if let Some(indicator) = map.get(&name) {
+                let history = indicator.history();
+                return match history.is_empty() {
+                    true => None,
+                    false => Some(history),
                 }
             }
         }
@@ -136,7 +160,11 @@ impl IndicatorHandler {
     
     pub async fn current(&self, name: &IndicatorName) -> Option<IndicatorValues> {
         let indicators = self.indicators.read().await;
-        for (_, map) in indicators.iter() {
+        let subscription = match self.subscription_map.read().await.get(name) {
+            Some(sub) => sub.clone(),
+            None => return None
+        };
+        if let Some(map) = indicators.get(&subscription) {
             for indicator in map.values() {
                 if &indicator.name() == name {
                     return indicator.current();
@@ -148,7 +176,11 @@ impl IndicatorHandler {
     
     pub async fn index(&self, name: &IndicatorName, index: u64) -> Option<IndicatorValues> {
         let indicators = self.indicators.read().await;
-        for (_, map) in indicators.iter() {
+        let subscription = match self.subscription_map.read().await.get(name) {
+            Some(sub) => sub.clone(),
+            None => return None
+        };
+        if let Some(map) = indicators.get(&subscription) {
             for indicator in map.values() {
                 if &indicator.name() == name {
                     return indicator.index(index);
@@ -188,7 +220,7 @@ async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicat
     let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, subscription.market_type.clone());
     let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
     
-    match vendor_resolutions.contains(&indicator.subscription().resolution) {
+    match base_subscription == subscription {
         true => {
             for (time, slice) in &base_data {
                 if time > &to_time {

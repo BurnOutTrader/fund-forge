@@ -8,7 +8,7 @@ use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
-use ff_standard_lib::indicators::indicators_trait::Indicators;
+use ff_standard_lib::indicators::indicators_trait::{IndicatorName, Indicators};
 use ff_standard_lib::indicators::values::IndicatorValues;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -70,14 +70,14 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
     let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
-    let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-    
-    // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
-    let mut heikin_atr = AverageTrueRange::new(String::from("heikin_atr"), aud_usd_15m.clone(), 100, 14).await;
-    let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);
+    let aud_usd_3m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(3), BaseDataType::Candles, MarketType::Forex);
 
-    
-    
+    // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
+   /* let mut heikin_atr = AverageTrueRange::new(IndicatorName::from("heikin_atr"), aud_usd_15m.clone(), 100, 14).await;
+    let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);*/
+
+
+
     let mut warmup_complete = false;
     let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -86,9 +86,9 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         if warmup_complete {
             count += 1;
             if count == 100 {
-                strategy.subscriptions_update(vec![aud_usd_15m.clone(), aud_cad_60m.clone()],100).await;
-                // lets make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variat of the same name.
-                let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(String::from("heikin_atr_20"), aud_usd_15m.clone(), 100, 20).await);
+                strategy.subscriptions_update(vec![aud_usd_3m.clone(), aud_cad_60m.clone()],100).await;
+                // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variat of the same name.
+                let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), aud_usd_3m.clone(), 100, 20).await);
                 strategy.indicator_subscribe(heikin_atr_20).await;
             }
         }
@@ -115,7 +115,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                 }*/
                                 if warmup_complete {
                                     if candle.is_closed == true {
-                                        println!("{}...Candle {}, {}: close price:{} at {}, closed: {}, {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                        //println!("{}...Candle {}, {}: close price:{} at {}, closed: {}, {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                         if count > 2000 {
                                             /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
                                             println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
@@ -182,15 +182,35 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             println!("Indicator Removed: {:?}", removed_event);
                         }
                         IndicatorEvents::IndicatorTimeSlice(slice_event) => {
+                            
                             // we can see our auto manged indicator values for here.
-                            for indicator_values in slice_event {
+                           /* for indicator_values in slice_event {
                                 println!("{}: \n {:?}", indicator_values.name(), indicator_values.values());
+                            }*/
+
+                     /*       let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
+                            //assert!(history.is_some());
+                            println!("History: {:?}", history);*/
+                            
+                            let current: Option<IndicatorValues> = strategy.indicator_current(&IndicatorName::from("heikin_atr_20")).await;
+                            //assert!(current.is_some());
+                            if let Some(current) = current {
+                                println!("Current: {:?}", current.values());
+                            }
+                            
+                            let index: Option<IndicatorValues> = strategy.indicator_index(&IndicatorName::from("heikin_atr_20"), 3).await;
+                            //assert!(index.is_some());
+                            if let Some(index) = index {
+                                println!("Index: {:?}", index.values());
                             }
                         }
                         IndicatorEvents::Replaced(replace_event) => {
                             println!("Indicator Replaced: {:?}", replace_event);
                         }
                     }
+                    
+                    // we could also get the automanaged indicator values from teh strategy at any time.
+                    
                 }
             }
             notify.notify_one();

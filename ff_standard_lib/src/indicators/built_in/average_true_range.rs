@@ -42,7 +42,6 @@ impl AverageTrueRange {
             period,
             tick_size,
         };
-        atr.name = atr.long_name();
         atr
     }
 
@@ -80,12 +79,12 @@ impl AverageTrueRange {
 }
 
 impl Indicators for AverageTrueRange {
-    fn subscription(&self) -> DataSubscription {
-        self.subscription.clone()
-    }
-    
     fn name(&self) -> IndicatorName {
         self.name.clone()
+    }
+
+    fn subscription(&self) -> DataSubscription {
+        self.subscription.clone()
     }
 
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
@@ -110,10 +109,8 @@ impl Indicators for AverageTrueRange {
         let mut plots = AHashMap::new();
         plots.insert("atr".to_string(), atr);
         let result = IndicatorValues::new(self.name(), self.subscription(), plots, base_data.time_created_utc());
-        
-        if base_data.is_closed() {
-            self.history.add(result.clone());
-        }
+        self.history.add(result.clone());
+
         
         Some(result)
     }
