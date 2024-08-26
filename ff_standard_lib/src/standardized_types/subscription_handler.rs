@@ -139,8 +139,10 @@ impl SubscriptionHandler {
 
     /// Updates any consolidators with primary data
     pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<TimeSlice> {
+        //this could potentially have a race condition if we have 2x the same data subscription in the same time slice. but this would only happen in back-tests using an incorrect strategy resolution or in 
+        // fast markets where indicators using tick or price data... in should not generally be possible unless done deliberately. I think it is worth keeping simple concurrent performance gain for the risk.
+        
         let mut tasks = vec![];
-
         for base_data in time_slice.clone() {
             let symbol_subscriptions = self.symbol_subscriptions.clone();
             let task = tokio::spawn(async move {

@@ -182,24 +182,23 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             println!("Indicator Removed: {:?}", removed_event);
                         }
                         IndicatorEvents::IndicatorTimeSlice(slice_event) => {
-                            
+
                             // we can see our auto manged indicator values for here.
                            /* for indicator_values in slice_event {
                                 println!("{}: \n {:?}", indicator_values.name(), indicator_values.values());
                             }*/
 
-                     /*       let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
-                            //assert!(history.is_some());
-                            println!("History: {:?}", history);*/
-                            
+                           let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
+                            if let Some(history) = history {
+                                println!("History: {:?}", history.history());
+                            }
+
                             let current: Option<IndicatorValues> = strategy.indicator_current(&IndicatorName::from("heikin_atr_20")).await;
-                            //assert!(current.is_some());
                             if let Some(current) = current {
                                 println!("Current: {:?}", current.values());
                             }
-                            
+
                             let index: Option<IndicatorValues> = strategy.indicator_index(&IndicatorName::from("heikin_atr_20"), 3).await;
-                            //assert!(index.is_some());
                             if let Some(index) = index {
                                 println!("Index: {:?}", index.values());
                             }
@@ -208,9 +207,9 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             println!("Indicator Replaced: {:?}", replace_event);
                         }
                     }
-                    
+
                     // we could also get the automanaged indicator values from teh strategy at any time.
-                    
+
                 }
             }
             notify.notify_one();
