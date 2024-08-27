@@ -114,7 +114,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                 }*/
                                 if warmup_complete {
                                     if candle.is_closed == true {
-                                        println!("{}", candle); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                        println!("{:?}", candle); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                         if count > 2000 {
                                             /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
                                             println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);

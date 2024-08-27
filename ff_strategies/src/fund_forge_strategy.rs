@@ -26,7 +26,7 @@ use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use crate::engine::Engine;
 use crate::interaction_handler::InteractionHandler;
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
-use ff_standard_lib::timed_events_handler::{EventTimeEnum, TimedEvent, TimedEventHandler};
+use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
