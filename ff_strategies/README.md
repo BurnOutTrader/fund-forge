@@ -1,5 +1,53 @@
 ## Launching a strategy
-####`FundForgeStrategy::Initialize()`
+Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function.
+This will automatically create the engine and start the strategy in the background.
+Then we can receive events in our `fn on_data_received()` function.
+```rust
+#[tokio::main]
+async fn main() {
+    // we need to initialize the api clients and ff_data_server. (this will be handled by the gui application in the future)
+    initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
+    
+    // we create a channel for the receiving strategy events
+    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
+    
+    // we create a notify object to control the message sender channel until we have processed the last message or to speed up the que. 
+    // this gives us full async control over the engine and handlers
+    let notify = Arc::new(Notify::new());
+    
+    let strategy = FundForgeStrategy::initialize(
+        Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, 
+        notify.clone(),
+        StrategyMode::Backtest, // Backtest, Live, LivePaper
+        StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. 
+        NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        Australia::Sydney, // the strategy time zone
+        Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
+        
+        // the initial data subscriptions for the strategy. we can also subscribe or unsubscribe at run time.
+        vec![
+            DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
+            DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
+            // we can subscribe to fundamental data and alternative data sources (no actual test data available yet)
+            DataSubscription::new_fundamental("GDP-USA".to_string(), DataVendor::Test)
+            //if using new() default candle type is CandleStick
+            DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)
+            // we can also specify candle types like HeikinAshi, Renko, CandleStick (more to come). 
+            DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, Some(CandleType::HeikinAshi))
+        ],
+        
+        strategy_event_sender, // the sender for the strategy events
+        None,
+        100, //bars to retain in memory for the initial subscriptions
+
+        //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
+        //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
+        Some(Duration::seconds(1))
+    ).await;
+}
+```
+#### Parameters for FundForgeStrategy::initialize() 
 ##### `owner_id: Option<OwnerId>:` 
 The unique identifier for the owner of the strategy. If None, a unique identifier will be generated based on the executable's name.
 
@@ -439,6 +487,86 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
             }
         }
         notify.notify_one();
+    }
+}
+```
+
+## TimedEvents 
+TimedEvents are a way to schedule events to occur at a specific time, they are useful for scheduling events like closing orders at a specific time, or sending notifications.
+```rust
+fn example() {
+    pub enum EventTimeEnum {
+        /// Events to occur at on a specific day of the week
+        Weekday {
+            day: Weekday,
+        },
+        /// Events to occur at a specific hour of the day
+        HourOfDay {
+            hour: u32,
+        },
+        /// Events to occur at a specific time on a specific day of the week
+        TimeOnWeekDay {
+            day: Weekday,
+            hour: u32,
+            minute: u32,
+            second: u32,
+        },
+        /// Events to occur at a specific date and time only once
+        DateTime{
+            date_time: DateTime<Utc>,
+        },
+        /// Events to occur at a specific time of the day
+        TimeOfDay {
+            hour: u32,
+            minute: u32,
+            second: u32,
+        },
+        /// Events to occur at a specific interval
+        Every {
+            duration: Duration,
+            next_time: DateTime<Utc>,
+        }
+    }
+
+    //first create the timed event variant
+    let event_time = EventTimeEnum::HourOfDay { hour: 12 };
+
+    // next we need to create a TimedEvent
+    
+    // we need 
+    let (sender, receiver) = mpsc::channel(100);
+    let event = TimedEvent::new("test_event".to_string, event_time, sender);
+    
+    // then we pass the event to the strategy timed event handler
+    strategy.timed_event_subscribe(event).await;
+    
+    // We can remove the event by name
+    strategy.timed_event_unsubscribe("test_event".to_string()).await;
+    
+    // when the time is reached the event will be sent to the receiver
+    while let Some(event) = receiver.recv().await {
+        println!("Event: {:?}", event);
+    }
+}
+```
+
+## Drawing Tools
+Fund forge strategies are designed to be able to interact with the user through drawing tools.
+
+```rust
+fn example() {
+    //todo add tool example
+    strategy.drawing_tool_add(tool).await;
+    strategy.drawing_tool_update(tool).await;
+    strategy.drawing_tool_remove("test_tool".to_string()).await;
+    strategy.drawing_tools_remove_all().await;
+    
+    // A strategy event is fires when an outside source alters the drawing tools
+    pub enum DrawingToolEvent {
+        Add(DrawingTool),
+        Remove(DrawingTool),
+        Update(DrawingTool),
+        RemoveAll
     }
 }
 ```
