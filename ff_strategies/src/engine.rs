@@ -205,12 +205,12 @@ impl Engine{
                     let mut strategy_event_slice : EventTimeSlice = EventTimeSlice::new();
                     // if we don't have base data we update any objects which need to be updated with the time
                     if time_slice.is_empty() {
-                        if let Some(consolidated_data) = self.subscription_handler.update_time_slice(&time_slice).await {
+                        if let Some(consolidated_data) = self.subscription_handler.update_consolidators_time(time.clone()).await {
                             if let Some(buffered_indicator_events)  = self.indicator_handler.update_time_slice(&consolidated_data).await {
                                 strategy_event_slice.extend(buffered_indicator_events);
                             }
                             strategy_event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), consolidated_data));
-                        }
+                        } 
                         if !strategy_event_slice.is_empty() {
                             if !self.send_and_continue(time.clone(), strategy_event_slice, warm_up_completed).await {
                                 break 'main_loop
