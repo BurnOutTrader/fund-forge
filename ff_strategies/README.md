@@ -2,6 +2,10 @@
 Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function.
 This will automatically create the engine and start the strategy in the background.
 Then we can receive events in our `fn on_data_received()` function.
+The strategy object returned from `initialize()` is a fully owned object, and we can pass it to other function, wrap it in an arc etc.
+It is best practice to use the strategies methods to interact with the strategy rather than calling on any private fields directly.
+strategy methods only need a reference to the strategy object, and will handle all the necessary locking and thread safety for you.
+It is possible to wrap the strategy in Arc if you need to pass it to multiple threads, all functionality will remain.
 ```rust
 #[tokio::main]
 async fn main() {
