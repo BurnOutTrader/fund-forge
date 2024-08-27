@@ -2,25 +2,34 @@ use std::sync::mpsc::Sender;
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc, Weekday};
 use tokio::sync::RwLock;
 
+#[derive(Clone, Debug)]
 pub enum EventTimeEnum {
+    /// Events to occur at on a specific day of the week
     Weekday {
         day: Weekday,
     },
+    /// Events to occur at a specific hour of the day
     HourOfDay {
         hour: u32,
     },
-    HourOnWeekDay {
+    /// Events to occur at a specific time on a specific day of the week
+    TimeOnWeekDay {
         day: Weekday,
         hour: u32,
+        minute: u32,
+        second: u32,
     },
+    /// Events to occur at a specific date and time only once
     DateTime{
         date_time: DateTime<Utc>,
     },
+    /// Events to occur at a specific time of the day
     TimeOfDay {
         hour: u32,
         minute: u32,
         second: u32,
     },
+    /// Events to occur at a specific interval
     Every {
         duration: Duration,
         next_time: DateTime<Utc>,
@@ -28,7 +37,7 @@ pub enum EventTimeEnum {
 }
 
 impl EventTimeEnum {
-    pub fn is_time(&mut self, current_time: DateTime<Utc>) -> bool {
+    pub fn event_time(&mut self, current_time: DateTime<Utc>) -> bool {
         match self {
             EventTimeEnum::Weekday { day } => {
                 if current_time.weekday() == *day {
@@ -40,8 +49,8 @@ impl EventTimeEnum {
                     return true
                 }
             },
-            EventTimeEnum::HourOnWeekDay { day, hour } => {
-                if current_time.weekday() == *day && current_time.hour() == *hour {
+            EventTimeEnum::TimeOnWeekDay { day, hour, minute, second } => {
+                if current_time.weekday() == *day && current_time.hour() == *hour && current_time.minute() == 0 && current_time.second() == 0 {
                     return true
                 }
             },
@@ -56,8 +65,7 @@ impl EventTimeEnum {
                 }
             },
             EventTimeEnum::Every { duration, mut next_time } => {
-                if current_time >= next_time {
-                    next_time = current_time + *duration;
+                if current_time == next_time {
                     return true
                 }
             }
@@ -66,17 +74,18 @@ impl EventTimeEnum {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct TimedEvent {
     name: String,
-    event_time: EventTimeEnum,
-    sender: Sender<DateTime<Utc>>,
+    time: EventTimeEnum,
+    sender: Sender<TimedEvent>,
 }
 
 impl TimedEvent {
-    pub fn new(name: String, event_time: EventTimeEnum, sender: Sender<DateTime<Utc>>) -> Self {
+    pub fn new(name: String, event_time: EventTimeEnum, sender: Sender<TimedEvent>) -> Self {
         TimedEvent {
             name,
-            event_time,
+            time: event_time,
             sender,
         }
     }
@@ -108,13 +117,16 @@ impl TimedEventHandler {
         }
         let mut events_to_remove = vec![];
         for event in schedule.iter_mut() {
-            if event.event_time.is_time(current_time) {
-                match event.sender.send(current_time) {
+            if event.time.event_time(current_time) {
+                match event.sender.send(event.clone()) {
                     Ok(_) => {},
                     Err(_) => {}
                 }
-                if let EventTimeEnum::DateTime { .. } = event.event_time {
+                if let EventTimeEnum::DateTime { .. } = event.time {
                     events_to_remove.push(event.name.clone());
+                }
+                if let EventTimeEnum::Every { duration, mut next_time } = event.time {
+                    next_time = current_time + duration;
                 }
             }
         }
