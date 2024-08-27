@@ -26,6 +26,7 @@ use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use crate::engine::Engine;
 use crate::interaction_handler::InteractionHandler;
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
+use ff_standard_lib::timed_events_handler::TimedEventHandler;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -53,6 +54,8 @@ pub struct FundForgeStrategy {
     subscription_handler: Arc<SubscriptionHandler>,
 
     indicator_handler: Arc<IndicatorHandler>,
+    
+    timed_event_handler: Arc<TimedEventHandler>,
 }
 
 impl FundForgeStrategy {
@@ -130,10 +133,11 @@ impl FundForgeStrategy {
             interaction_handler: Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode)),
             subscription_handler: Arc::new(subscription_handler),
             indicator_handler: Arc::new(IndicatorHandler::new(owner_id.clone(), strategy_mode.clone())),
+            timed_event_handler: Arc::new(TimedEventHandler::new()),
         };
 
         let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), 
-                                 strategy.market_event_handler.clone(), strategy.interaction_handler.clone(), strategy.indicator_handler.clone());
+                                 strategy.market_event_handler.clone(), strategy.interaction_handler.clone(), strategy.indicator_handler.clone(), strategy.timed_event_handler.clone());
         
         Engine::launch(engine).await;
 
