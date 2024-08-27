@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use crate::indicators::values::IndicatorValues;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -5,6 +6,37 @@ use crate::standardized_types::subscriptions::DataSubscription;
 
 pub type IndicatorLongName = String;
 pub type IndicatorName = String;
+
+
+
+#[async_trait]
+pub trait AsyncIndicators: Indicators {
+    /// Updates the indicator with the new data point.
+    /// be aware you need to make update_base_data().await and async fn and use a tokio::Mutex to lock to the type when locking, since this type depends upon interior mutability
+    /// without a lock we have a potential race condition where the timeslice contains multiple data points for a subscription, 
+    /// to cheaply resolve this we simply use a mutex lock inside our type to prevent multple calls to update being ran at same moment
+    ///
+    /// ### Example
+    /// ```rust
+    /// use ff_standard_lib::indicators::indicators_trait::IndicatorName;
+    /// use ff_standard_lib::indicators::values::IndicatorValues;
+    /// use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+    /// use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
+    /// use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
+    ///
+    /// pub struct AverageTrueRange {
+    ///     name: IndicatorName,
+    ///     subscription: DataSubscription,
+    ///    history: RollingWindow<IndicatorValues>,
+    ///     base_data_history: RollingWindow<BaseDataEnum>,
+    ///     is_ready: bool,
+    ///     period: u64,
+    ///     tick_size: f64,
+    ///     lock: tokio::sync::Mutex<()>
+    /// }
+    /// ```
+    async fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues>;
+}
 
 pub trait Indicators {
     
@@ -26,9 +58,6 @@ pub trait Indicators {
 
     /// Returns the subscription for the indicator.
     fn subscription(&self) -> DataSubscription;
-
-    /// Updates the indicator with the new data point.
-    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues>;
 
     /// Resets the indicator to its initial state.
     fn reset(&mut self);

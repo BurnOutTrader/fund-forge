@@ -1,4 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
+use tokio::sync::Mutex;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -23,6 +24,7 @@ pub struct CountConsolidator {
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
     tick_size: f64, //need to add this
+    lock: Mutex<()>
 }
 
 impl CountConsolidator
@@ -49,7 +51,8 @@ impl CountConsolidator
             current_data,
             subscription,
             history: RollingWindow::new(history_to_retain),
-            tick_size
+            tick_size,
+            lock: Mutex::new(()),
         })
     }
 
@@ -75,7 +78,8 @@ impl CountConsolidator
             current_data: current_data,
             subscription,
             history: RollingWindow::new(history_to_retain),
-            tick_size
+            tick_size,
+            lock: Mutex::new(()),
         };
         
         consolidator.warmup(warm_up_to_time, strategy_mode).await;
@@ -83,7 +87,8 @@ impl CountConsolidator
     }
     
     /// Returns a candle if the count is reached
-    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+        let _lock = self.lock.lock().await;
         match base_data {
             BaseDataEnum::Tick(tick) => {
                 let mut candles = vec![];
@@ -183,7 +188,7 @@ impl CountConsolidator
             }
             
             for base_data in slice {
-                self.update(base_data);
+                self.update(base_data).await;
             }
         }
         if strategy_mode != StrategyMode::Backtest {

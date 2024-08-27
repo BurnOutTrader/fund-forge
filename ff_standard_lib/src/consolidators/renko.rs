@@ -10,6 +10,7 @@ use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use tokio::sync::Mutex;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash)]
 #[archive(
@@ -39,6 +40,7 @@ pub struct RenkoConsolidator {
     pub(crate) history: RollingWindow<BaseDataEnum>,
     parameters: RenkoParameters,
     tick_size: f64,
+    lock: Mutex<()>,
 }
 
 impl RenkoConsolidator
@@ -66,7 +68,8 @@ impl RenkoConsolidator
             subscription,
             history: RollingWindow::new(history_to_retain),
             parameters: parameters.clone(),
-            tick_size: tick_size.try_into().unwrap()
+            tick_size: tick_size.try_into().unwrap(),
+            lock: Mutex::new(()),
         })
     }
 
@@ -93,7 +96,8 @@ impl RenkoConsolidator
             subscription,
             history: RollingWindow::new(history_to_retain),
             parameters: parameters.clone(),
-            tick_size: tick_size.try_into().unwrap()
+            tick_size: tick_size.try_into().unwrap(),
+            lock: Mutex::new(()),
         };
         
         consolidator.warmup(warm_up_to_time, strategy_mode).await;
@@ -101,7 +105,8 @@ impl RenkoConsolidator
     }
 
     /// Returns a candle if the count is reached
-    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+        //let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         todo!() //will need to be based on renko parameters
     }
     
@@ -160,7 +165,7 @@ impl RenkoConsolidator
                 break;
             }
             for base_data in slice {
-                self.update(base_data);
+                self.update(base_data).await;
             }
         }
         if strategy_mode != StrategyMode::Backtest {

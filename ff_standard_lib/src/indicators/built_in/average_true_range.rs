@@ -1,13 +1,15 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use ahash::AHashMap;
+use async_trait::async_trait;
+use tokio::sync::Mutex;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::helpers::decimal_calculators::{round_to_tick_size};
-use crate::indicators::indicators_trait::{IndicatorName, Indicators};
+use crate::indicators::indicators_trait::{AsyncIndicators, IndicatorName, Indicators};
 use crate::indicators::values::IndicatorValues;
 
 pub struct AverageTrueRange {
@@ -18,6 +20,7 @@ pub struct AverageTrueRange {
     is_ready: bool,
     period: u64,
     tick_size: f64,
+    lock: Mutex<()>
 }
 
 impl Display for AverageTrueRange {
@@ -33,7 +36,7 @@ impl Display for AverageTrueRange {
 impl AverageTrueRange {
     pub async fn new(name: IndicatorName, subscription: DataSubscription, history_to_retain: u64, period: u64) -> Self {
         let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.clone()).await.unwrap();
-        let mut atr = AverageTrueRange {
+        let atr = AverageTrueRange {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
@@ -41,6 +44,7 @@ impl AverageTrueRange {
             is_ready: false,
             period,
             tick_size,
+            lock: Mutex::new(()),
         };
         atr
     }
@@ -78,20 +82,13 @@ impl AverageTrueRange {
     }
 }
 
-impl Indicators for AverageTrueRange {
-    fn name(&self) -> IndicatorName {
-        self.name.clone()
-    }
-
-    fn subscription(&self) -> DataSubscription {
-        self.subscription.clone()
-    }
-
-    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
+#[async_trait]
+impl AsyncIndicators for AverageTrueRange {
+    async fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
         if !base_data.is_closed() {
             return None
         }
-        
+        let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         self.base_data_history.add(base_data.clone());
         if self.is_ready == false {
             if !self.base_data_history.is_full() {
@@ -100,19 +97,28 @@ impl Indicators for AverageTrueRange {
                 self.is_ready = true;
             }
         }
-        
+
         let atr = self.calculate_true_range();
         if atr == 0.0 {
             return None
         }
- 
+
         let mut plots = AHashMap::new();
         plots.insert("atr".to_string(), atr);
         let result = IndicatorValues::new(self.name(), self.subscription(), plots, base_data.time_created_utc());
         self.history.add(result.clone());
 
-        
         Some(result)
+    }
+}
+
+impl Indicators for AverageTrueRange {
+    fn name(&self) -> IndicatorName {
+        self.name.clone()
+    }
+
+    fn subscription(&self) -> DataSubscription {
+        self.subscription.clone()
     }
 
     fn reset(&mut self) {

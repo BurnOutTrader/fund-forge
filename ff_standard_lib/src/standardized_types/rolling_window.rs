@@ -1,5 +1,4 @@
 use std::collections::{VecDeque};
-use std::fmt::Display;
 
 /// Keeps track of the last N data points.
 /// When the window is full, adding a new data point will remove the oldest data point.

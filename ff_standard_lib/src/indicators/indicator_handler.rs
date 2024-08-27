@@ -3,7 +3,7 @@ use ahash::AHashMap;
 use chrono::{DateTime, Duration, Utc};
 use tokio::sync::RwLock;
 use crate::indicators::indicator_enum::IndicatorEnum;
-use crate::indicators::indicators_trait::{IndicatorName, Indicators};
+use crate::indicators::indicators_trait::{AsyncIndicators, IndicatorName, Indicators};
 use crate::indicators::values::{IndicatorValues};
 use crate::standardized_types::OwnerId;
 use crate::standardized_types::subscriptions::DataSubscription;
@@ -129,7 +129,7 @@ impl IndicatorHandler {
                 let mut values = Vec::new();
                 if let Some(indicators) = indicators.get_mut(&subscription) {
                     for indicator in indicators.values_mut() {
-                        let value = indicator.update_base_data(&data);
+                        let value = indicator.update_base_data(&data).await;
                         if let Some(value) = value {
                             values.push(value);
                         }
@@ -143,7 +143,7 @@ impl IndicatorHandler {
 
         // Await all tasks and collect the results
         let results: Vec<Vec<IndicatorValues>> = futures::future::join_all(tasks).await.into_iter().filter_map(|r| r.ok()).collect();
-        let mut values = results.into_iter().flatten().collect::<Vec<_>>();
+        let values = results.into_iter().flatten().collect::<Vec<_>>();
 
         if !values.is_empty() {
             self.event_buffer.write().await.push(StrategyEvent::IndicatorEvent(self.owner_id.clone(), IndicatorEvents::IndicatorTimeSlice(values)));
@@ -243,7 +243,7 @@ async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicat
                     break;
                 }
                 for base_data in slice {
-                    indicator.update_base_data(base_data);
+                    indicator.update_base_data(base_data).await;
                 }
             }
         }
@@ -254,12 +254,12 @@ async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicat
                     break;
                 }
                 for base_data in slice {
-                    let consolidated = consolidator.update(base_data);
+                    let consolidated = consolidator.update(base_data).await;
                     if consolidated.is_empty() {
                         continue
                     }
                     for data in consolidated {
-                        indicator.update_base_data(&data);
+                        indicator.update_base_data(&data).await;
                     }
                 }
             }

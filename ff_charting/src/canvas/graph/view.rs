@@ -59,14 +59,14 @@ fn zoom(state: &mut ChartState, zoom_in: bool, x: f32) {
     let sensitivity_factor = match zoom_in {
         true => match num_times {
             0..=20 => x.powf(0.0005),
-            20..=50 => x.powf(0.005),
+            21..=50 => x.powf(0.005),
             51..=100 => x.powf(0.05),
             101..=200 => x.powf(1.0),
             _ => x.powf(1.5),
         },
         false => match num_times {
             0..=100 => x.powf(0.005),
-            100..=200 => x.powf(0.0075),
+            101..=200 => x.powf(0.0075),
             201..=300 => x.powf(0.01),
             _ => x.powf(1.0),
         },

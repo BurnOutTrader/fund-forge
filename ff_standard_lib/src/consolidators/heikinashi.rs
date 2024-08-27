@@ -1,4 +1,5 @@
 use chrono::{DateTime, Duration, Utc};
+use tokio::sync::Mutex;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::candlesticks::open_time;
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -19,6 +20,7 @@ pub struct HeikinAshiConsolidator{
     previous_ha_close: f64,
     previous_ha_open: f64,
     tick_size: f64,
+    lock: Mutex<()>,
 }
 
 impl HeikinAshiConsolidator
@@ -39,7 +41,8 @@ impl HeikinAshiConsolidator
         }
     }
 
-    fn new_heikin_ashi_candle(&mut self, new_data: &BaseDataEnum) -> Candle {
+    async fn new_heikin_ashi_candle(&mut self, new_data: &BaseDataEnum) -> Candle {
+        let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         match new_data {
             BaseDataEnum::Candle(candle) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
@@ -137,7 +140,8 @@ impl HeikinAshiConsolidator
             history: RollingWindow::new(history_to_retain),
             previous_ha_close: 0.0,
             previous_ha_open: 0.0,
-            tick_size
+            tick_size,
+            lock: Mutex::new(()),
         })
     }
 
@@ -159,13 +163,15 @@ impl HeikinAshiConsolidator
             history: RollingWindow::new(history_to_retain),
             previous_ha_close: 0.0,
             previous_ha_open: 0.0,
-            tick_size
+            tick_size,
+            lock: Mutex::new(()),
         };
         consolidator.warmup(warm_up_to_time, strategy_mode).await;
         Ok(consolidator)
     }
 
-    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+    pub async fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+        let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         if let Some(current_data) = self.current_data.as_mut() {
             if time >= current_data.time_created_utc() {
                 let return_data = current_data.clone();
@@ -177,9 +183,9 @@ impl HeikinAshiConsolidator
     }
     
     //problem where this is returning a closed candle constantly
-    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         if self.current_data.is_none() {
-            let data = self.new_heikin_ashi_candle(base_data);
+            let data = self.new_heikin_ashi_candle(base_data).await;
             self.current_data = Some(BaseDataEnum::Candle(data));
             let candles = vec![self.current_data.clone().unwrap()];
             return candles;
@@ -188,11 +194,11 @@ impl HeikinAshiConsolidator
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
                 self.history.add(consolidated_bar.clone());
-
-                let new_bar = self.new_heikin_ashi_candle(base_data);
+                let new_bar = self.new_heikin_ashi_candle(base_data).await;
                 self.current_data = Some(BaseDataEnum::Candle(new_bar.clone()));
                 return vec![consolidated_bar, BaseDataEnum::Candle(new_bar)];
             }
+            let _lock = self.lock.lock().await;
             match current_bar {
                 BaseDataEnum::Candle(candle) => {
                     match base_data {
@@ -263,7 +269,6 @@ impl HeikinAshiConsolidator
     }
 
     async fn warmup(&mut self, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
-        //todo if live we will tell the self.subscription.symbol.data_vendor to .update_historical_symbol()... we will wait then continue
         let vendor_resolutions = self.subscription.symbol.data_vendor.resolutions(self.subscription.market_type.clone()).await.unwrap();
         let mut minimum_resolution: Option<Resolution> = None;
         for resolution in vendor_resolutions {
@@ -296,7 +301,7 @@ impl HeikinAshiConsolidator
                 break;
             }
             for base_data in slice {
-                self.update(base_data);
+                self.update(base_data).await;
             }
         }
         if strategy_mode != StrategyMode::Backtest {

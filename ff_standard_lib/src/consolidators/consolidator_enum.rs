@@ -59,19 +59,19 @@ impl ConsolidatorEnum {
     }
 
     /// Updates the consolidator with the new data point.
-    pub fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => {
-                count_consolidator.update(base_data)
+                count_consolidator.update(base_data).await
             },
             ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
-                time_consolidator.update(base_data)
+                time_consolidator.update(base_data).await
             },
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
-                heikin_ashi_consolidator.update(base_data)
+                heikin_ashi_consolidator.update(base_data).await
             }
             ConsolidatorEnum::Renko(renko_consolidator) => {
-                renko_consolidator.update(base_data)
+                renko_consolidator.update(base_data).await
             }
         }
     }
@@ -133,11 +133,11 @@ impl ConsolidatorEnum {
         }
     }
     
-    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+    pub async fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(_) => vec![],
-            ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => time_consolidator.update_time(time),
-            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => heikin_ashi_consolidator.update_time(time),
+            ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => time_consolidator.update_time(time).await,
+            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => heikin_ashi_consolidator.update_time(time).await,
             ConsolidatorEnum::Renko(_) => vec![],
         }
     }

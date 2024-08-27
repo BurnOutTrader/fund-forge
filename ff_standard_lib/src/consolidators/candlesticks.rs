@@ -1,4 +1,5 @@
 use chrono::{DateTime, Duration, Timelike, Utc};
+use tokio::sync::Mutex;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -54,10 +55,12 @@ pub struct CandleStickConsolidator {
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
     tick_size: f64,
+    lock: Mutex<()>,
 }
 
 impl CandleStickConsolidator {
-    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+    pub async fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+        let _lock = self.lock.lock().await;
         if let Some(current_data) = self.current_data.as_mut() {
             if time >= current_data.time_created_utc() {
                 let return_data = current_data.clone();
@@ -68,9 +71,9 @@ impl CandleStickConsolidator {
         vec![]
     }
     
-    fn update_candles(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    async fn update_candles(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         if self.current_data.is_none() {
-            let data = self.new_candle(base_data);
+            let data = self.new_candle(base_data).await;
             self.current_data = Some(BaseDataEnum::Candle(data));
             let candles = vec![self.current_data.clone().unwrap()];
             return candles
@@ -80,10 +83,11 @@ impl CandleStickConsolidator {
                 consolidated_bar.set_is_closed(true);
                 self.history.add(consolidated_bar.clone());
 
-                let new_bar = self.new_candle(base_data);
+                let new_bar = self.new_candle(base_data).await;
                 self.current_data = Some(BaseDataEnum::Candle(new_bar.clone()));
                 return vec![consolidated_bar, BaseDataEnum::Candle(new_bar)]
             }
+            let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
             match current_bar {
                 BaseDataEnum::Candle(candle) => {
                     match base_data {
@@ -119,7 +123,8 @@ impl CandleStickConsolidator {
         panic!("Invalid base data type for Candle consolidator: {}", base_data.base_data_type())
     }
 
-    fn new_quote_bar(&self, new_data: &BaseDataEnum) -> QuoteBar {
+    async fn new_quote_bar(&self, new_data: &BaseDataEnum) -> QuoteBar {
+        let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         let time = open_time(&self.subscription, new_data.time_utc());
         match new_data {
             BaseDataEnum::QuoteBar(bar) => {
@@ -135,9 +140,9 @@ impl CandleStickConsolidator {
     }
 
     /// We can use if time == some multiple of resolution then we can consolidate, we dont need to know the actual algo time, because we can get time from the base_data if self.last_time >
-    fn update_quote_bars(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    async fn update_quote_bars(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         if self.current_data.is_none() {
-            let data = self.new_quote_bar(base_data);
+            let data = self.new_quote_bar(base_data).await;
             self.current_data = Some(BaseDataEnum::QuoteBar(data));
             return vec![self.current_data.clone().unwrap()]
         } else if let Some(current_bar) = self.current_data.as_mut() {
@@ -145,10 +150,11 @@ impl CandleStickConsolidator {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
                 self.history.add(consolidated_bar.clone());
-                let new_bar = self.new_quote_bar(base_data);
+                let new_bar = self.new_quote_bar(base_data).await;
                 self.current_data = Some(BaseDataEnum::QuoteBar(new_bar.clone()));
                 return vec![consolidated_bar, BaseDataEnum::QuoteBar(new_bar)]
             }
+            let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
             match current_bar {
                 BaseDataEnum::QuoteBar(quote_bar) => {
                     match base_data {
@@ -183,7 +189,8 @@ impl CandleStickConsolidator {
         panic!("Invalid base data type for QuoteBar consolidator: {}", base_data.base_data_type())
     }
 
-    fn new_candle(&self, new_data: &BaseDataEnum) -> Candle {
+    async fn new_candle(&self, new_data: &BaseDataEnum) -> Candle {
+        let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         let time = open_time(&self.subscription, new_data.time_utc());
         match new_data {
             BaseDataEnum::Tick(tick) => Candle::new(self.subscription.symbol.clone(), tick.price, tick.volume, time.to_string(), self.subscription.resolution.clone(), self.subscription.candle_type.clone().unwrap()),
@@ -218,6 +225,7 @@ impl CandleStickConsolidator {
             subscription,
             history: RollingWindow::new(history_to_retain),
             tick_size,
+            lock: Mutex::new(()),
         })
     }
 
@@ -245,36 +253,37 @@ impl CandleStickConsolidator {
             subscription,
             history: RollingWindow::new(history_to_retain),
             tick_size,
+            lock: Mutex::new(()),
         };
         consolidator.warmup(warm_up_to_time, strategy_mode).await;
         Ok(consolidator)
     }
 
-    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         match base_data.base_data_type() {
             BaseDataType::Ticks => {
                 if self.subscription.base_data_type == BaseDataType::Candles {
-                    return self.update_candles(base_data);
+                    return self.update_candles(base_data).await;
                 }
             },
             BaseDataType::Quotes => {
                 if self.subscription.base_data_type == BaseDataType::QuoteBars {
-                    return self.update_quote_bars(base_data);
+                    return self.update_quote_bars(base_data).await;
                 }
             },
             BaseDataType::Prices => {
                 if self.subscription.base_data_type == BaseDataType::Candles {
-                    return self.update_candles(base_data);
+                    return self.update_candles(base_data).await;
                 }
             }
             BaseDataType::QuoteBars => {
                 if self.subscription.base_data_type == BaseDataType::QuoteBars {
-                    return self.update_quote_bars(base_data);
+                    return self.update_quote_bars(base_data).await;
                 }
             }
             BaseDataType::Candles => {
                 if self.subscription.base_data_type == BaseDataType::Candles {
-                    return self.update_candles(base_data);
+                    return self.update_candles(base_data).await;
                 }
             }
             BaseDataType::Fundamentals => panic!("Fundamentals are not supported"),
@@ -340,7 +349,7 @@ impl CandleStickConsolidator {
                 break;
             }
             for base_data in slice {
-                self.update(base_data);
+                self.update(base_data).await;
             }
         }
         if strategy_mode != StrategyMode::Backtest {

@@ -2,7 +2,6 @@ use std::sync::Arc;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use tokio::sync::{mpsc, Notify};
-use tokio::sync::mpsc::Receiver;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
@@ -115,7 +114,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                 }*/
                                 if warmup_complete {
                                     if candle.is_closed == true {
-                                        //println!("{}...Candle {}, {}: close price:{} at {}, closed: {}, {}", strategy.time_utc().await, candle.resolution, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                        println!("{}", candle); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                         if count > 2000 {
                                             /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
                                             println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
@@ -181,14 +180,14 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                         IndicatorEvents::IndicatorRemoved(removed_event) => {
                             println!("Indicator Removed: {:?}", removed_event);
                         }
-                        IndicatorEvents::IndicatorTimeSlice(slice_event) => {
+                        IndicatorEvents::IndicatorTimeSlice(_slice_event) => {
 
                             // we can see our auto manged indicator values for here.
                            /* for indicator_values in slice_event {
                                 println!("{}: \n {:?}", indicator_values.name(), indicator_values.values());
                             }*/
 
-                           let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
+                           /*let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
                             if let Some(history) = history {
                                 println!("History: {:?}", history.history());
                             }
@@ -201,7 +200,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             let index: Option<IndicatorValues> = strategy.indicator_index(&IndicatorName::from("heikin_atr_20"), 3).await;
                             if let Some(index) = index {
                                 println!("Index: {:?}", index.values());
-                            }
+                            }*/
                         }
                         IndicatorEvents::Replaced(replace_event) => {
                             println!("Indicator Replaced: {:?}", replace_event);

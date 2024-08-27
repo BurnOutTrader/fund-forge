@@ -1,6 +1,6 @@
 use std::{env};
 use crate::strategy_state::StrategyStartState;
-use tokio::sync::{mpsc, Notify, RwLock};
+use tokio::sync::{mpsc, Notify};
 use std::path::Path;
 use std::sync::Arc;
 use ahash::AHashMap;

@@ -139,9 +139,6 @@ impl SubscriptionHandler {
 
     /// Updates any consolidators with primary data
     pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<TimeSlice> {
-        //this could potentially have a race condition if we have 2x the same data subscription in the same time slice. but this would only happen in back-tests using an incorrect strategy resolution or in 
-        // fast markets where indicators using tick or price data... in should not generally be possible unless done deliberately. I think it is worth keeping simple concurrent performance gain for the risk.
-        
         let mut tasks = vec![];
         for base_data in time_slice.clone() {
             let symbol_subscriptions = self.symbol_subscriptions.clone();
@@ -150,7 +147,7 @@ impl SubscriptionHandler {
                 let symbol = base_data.symbol();
                 let mut symbol_subscriptions = symbol_subscriptions.write().await;
                 if let Some(symbol_handler) =  symbol_subscriptions.get_mut(&symbol) {
-                    symbol_handler.update(&base_data) //todo we need to use interior mutability to update the consolidators across threads, add RWLock or mutex
+                    symbol_handler.update(&base_data).await
                 } else {
                     vec![]
                 }
@@ -168,14 +165,22 @@ impl SubscriptionHandler {
         }
     }
 
-    pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> TimeSlice {
+    pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> Option<TimeSlice> {
         let mut symbol_subscriptions = self.symbol_subscriptions.write().await;
         let mut time_slice = TimeSlice::new();
         
         for (_, symbol_handler) in symbol_subscriptions.iter_mut() {
-            time_slice.extend(symbol_handler.update_time(time.clone())); //todo we need to use interior mutability to update the consolidators across threads, add RWLock or mutex
+            match symbol_handler.update_time(time.clone()).await {
+                Some(data) => {
+                    time_slice.extend(data);
+                },
+                None => {}
+            }
         }
-        time_slice
+        match time_slice.is_empty() {
+            true => None,
+            _ => Some(time_slice)
+        }
     }
     
     
@@ -258,7 +263,7 @@ impl SymbolSubscriptionHandler {
         handler
     }
 
-    pub fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         // Ensure we only process if the symbol matches
         if &self.symbol != base_data.symbol() {
             panic!("Symbol mismatch: {:?} != {:?}", self.symbol, base_data.symbol());
@@ -274,20 +279,23 @@ impl SymbolSubscriptionHandler {
 
         // Iterate over the secondary subscriptions and update them
         for (_, consolidator) in self.secondary_subscriptions.iter_mut() {
-            let data = consolidator.update(&base_data);
+            let data = consolidator.update(&base_data).await;
             consolidated_data.extend(data);
         }
         consolidated_data
     }
 
-    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+    pub async fn update_time(&mut self, time: DateTime<Utc>) -> Option<Vec<BaseDataEnum>> {
         let mut consolidated_data = vec![];
             // Iterate over the secondary subscriptions and update them
         for (_, consolidator) in self.secondary_subscriptions.iter_mut() {
-            let data = consolidator.update_time(time.clone());
+            let data = consolidator.update_time(time.clone()).await;
             consolidated_data.extend(data);
         }
-        consolidated_data
+        match consolidated_data.is_empty() {
+            true => None,
+            false => Some(consolidated_data)
+        }
     }
 
     pub fn set_warmed_up(&mut self) {
