@@ -17,6 +17,7 @@ use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandl
 use crate::interaction_handler::InteractionHandler;
 use crate::market_handlers::MarketHandlerEnum;
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
+use ff_standard_lib::timed_events_handler::TimedEventHandler;
 use crate::strategy_state::StrategyStartState;
 
 //Possibly more accurate engine
@@ -38,6 +39,7 @@ pub(crate) struct Engine {
     market_event_handler: Arc<MarketHandlerEnum>,
     interaction_handler: Arc<InteractionHandler>,
     indicator_handler: Arc<IndicatorHandler>,
+    timed_event_handler: Arc<TimedEventHandler>,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
 }
 
@@ -50,7 +52,8 @@ impl Engine{
                subscription_handler: Arc<SubscriptionHandler>,
                market_event_handler: Arc<MarketHandlerEnum>,
                interaction_handler: Arc<InteractionHandler>,
-               indicator_handler: Arc<IndicatorHandler>) -> Self {
+               indicator_handler: Arc<IndicatorHandler>,
+               timed_event_handler: Arc<TimedEventHandler>) -> Self {
         Engine {
             owner_id,
             notify,
@@ -59,7 +62,8 @@ impl Engine{
             subscription_handler,
             market_event_handler,
             interaction_handler,
-            indicator_handler
+            indicator_handler,
+            timed_event_handler
         }
     }
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
@@ -197,6 +201,7 @@ impl Engine{
                         break 'time_loop
                     }
 
+                    self.timed_event_handler.update_time(time.clone()).await;
                     //check if we have any base data for the time, if we have more then one data point we will consolidate it to the strategy resolution
                     let mut time_slice: TimeSlice = time_slices.range(last_time..=time)
                         .flat_map(|(_, value)| value.iter().cloned())
@@ -219,17 +224,22 @@ impl Engine{
                         last_time = time.clone();
                         continue 'time_loop
                     }
-                    
-                    if let Some(market_event_handler_events) = self.market_event_handler.base_data_upate(&time_slice).await {
-                        strategy_event_slice.extend(market_event_handler_events);
+
+                    let (market_event_handler_events, consolidated_data) = tokio::join!(
+                        self.market_event_handler.base_data_upate(&time_slice),
+                        self.subscription_handler.update_time_slice(&time_slice),
+                    );
+
+                    if let Some(events) = market_event_handler_events {
+                        strategy_event_slice.extend(events);
                     }
 
-                    if let Some(consolidated_data) = self.subscription_handler.update_time_slice(&time_slice).await {
-                        time_slice.extend(consolidated_data);
+                    if let Some(data) = consolidated_data {
+                        time_slice.extend(data);
                     }
-                    
-                    if let Some(buffered_indicator_events)  = self.indicator_handler.update_time_slice(&time_slice).await {
-                        strategy_event_slice.extend(buffered_indicator_events);
+
+                    if let Some(events) = self.indicator_handler.update_time_slice(&time_slice).await {
+                        strategy_event_slice.extend(events);
                     }
 
                     strategy_event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), time_slice));
