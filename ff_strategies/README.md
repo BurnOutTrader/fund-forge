@@ -57,7 +57,8 @@ async fn main() {
         100, 
 
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
-        //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
+        //this allows us full control over how the strategy buffers data and how it processes data, in live trading.
+        // In live trading we can set this to None to skip buffering and send the data directly to the strategy or we can use a buffer to keep live consistency with backtesting.
         Some(Duration::seconds(1))
     ).await;
 }
@@ -161,6 +162,8 @@ async fn main() {
 
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>)  {
     let mut warmup_complete = false;
+    
+    // we can handle our events directly in the `strategy_loop` or we can divert them to other functions or threads.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for strategy_event in event_slice {
             match strategy_event {
@@ -202,6 +205,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 }
                 //todo add more event types 
             }
+            // we can notify the engine that we have processed the message and it can send the next one.
             notify.notify_one();
         }
     }
