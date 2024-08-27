@@ -46,7 +46,6 @@ check_bytes,
 pub enum OrderSide {
     Buy,
     Sell,
-    //Unknown
 }
 
 #[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
@@ -95,7 +94,7 @@ pub enum Resolution {
 
 impl Default for Resolution {
     fn default() -> Self {
-        Resolution::Seconds(0)
+        Resolution::Instant
     }
 }
 
@@ -132,17 +131,6 @@ impl Resolution {
     pub fn is_greater_or_equal(&self, other: &Resolution) -> bool {
         self.as_duration() >= other.as_duration()
     }
-
-    ///Returns the number of seconds in the resolution
-        pub fn file_str(&self) -> String {
-            match self {
-                Resolution::Instant => "I".to_string(),
-                Resolution::Ticks(val) => format!("{}T", val),
-                Resolution::Seconds(val) => format!("{}S", val),
-                Resolution::Minutes(val) => format!("{}M", val),
-                Resolution::Hours(val) => format!("{}H", val),
-            }
-        }
 
     pub fn from_str(resolution_string: &str) -> Option<Self> {
         let resolution_string = resolution_string.to_uppercase().clone();

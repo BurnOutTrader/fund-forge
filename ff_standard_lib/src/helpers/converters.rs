@@ -3,8 +3,9 @@ use std::fmt::Error;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-use chrono::{Datelike, DateTime, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Utc};
-
+use chrono::{DateTime, Datelike, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Timelike, Utc};
+use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::subscriptions::DataSubscription;
 
 /// returns the fixed offset of the from utc time.
 /// Since we are dealing with historical data, we need to adjust for daylight savings etc, so it is not good enough to just use the current offset, we need to pass in the historical date and get the offset at that time for the timezone.
@@ -151,4 +152,42 @@ pub fn next_month(last_time: &DateTime<Utc>) -> DateTime<Utc> {
 
 pub fn fund_forge_formatted_symbol_name(symbol: &str) -> String {
     symbol.replace("/", "-").replace(":", "-").replace("?", "-").replace("_", "-").replace(" ", "-").to_uppercase()
+}
+
+//Returns the open time for a bar, where we only have the current time.
+pub fn open_time(subscription: &DataSubscription, time: DateTime<Utc>) -> DateTime<Utc> {
+    match subscription.resolution {
+        Resolution::Seconds(interval) => {
+            let timestamp = time.timestamp();
+            let rounded_timestamp = timestamp - (timestamp % interval as i64);
+            DateTime::from_timestamp(rounded_timestamp, 0).unwrap()
+        }
+        Resolution::Minutes(interval) => {
+            let minute = time.minute() as i64;
+            let rounded_minute = (minute / interval as i64) * interval as i64;
+            let rounded_time = time
+                .with_minute(rounded_minute as u32)
+                .unwrap()
+                .with_second(0)
+                .unwrap()
+                .with_nanosecond(0)
+                .unwrap();
+            rounded_time
+        }
+        Resolution::Hours(interval) => {
+            let hour = time.hour() as i64;
+            let rounded_hour = (hour / interval as i64) * interval as i64;
+            let rounded_time = time
+                .with_hour(rounded_hour as u32)
+                .unwrap()
+                .with_minute(0)
+                .unwrap()
+                .with_second(0)
+                .unwrap()
+                .with_nanosecond(0)
+                .unwrap();
+            rounded_time
+        }
+        _ => time, // Handle other resolutions if necessary
+    }
 }
