@@ -26,7 +26,7 @@ use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use crate::engine::Engine;
 use crate::interaction_handler::InteractionHandler;
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
-use ff_standard_lib::timed_events_handler::TimedEventHandler;
+use ff_standard_lib::timed_events_handler::{EventTimeEnum, TimedEvent, TimedEventHandler};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -182,36 +182,49 @@ impl FundForgeStrategy {
         self.market_event_handler.send_order(order).await;
     }
     
+    /// see the timed_event_handler.rs for more details
+    pub async fn add_timed_event(&self, timed_event: TimedEvent) {
+        self.timed_event_handler.add_event(timed_event).await;
+    }
+
+    /// see the timed_event_handler.rs for more details
+    pub async fn remove_timed_event(&self, name: String) {
+        self.timed_event_handler.remove_event(name).await;
+    }
+    
+    /// see the indicator_enum.rs for more details
     pub async fn indicator_subscribe(&self, indicator: IndicatorEnum) {
         self.indicator_handler.add_indicator(indicator, self.time_utc().await).await
     }
-    
+
+    /// see the indicator_enum.rs for more details
     pub async fn indicator_unsubscribe(&self, name: &IndicatorName) {
         self.indicator_handler.remove_indicator(name).await
     }
-    
+
+    /// see the indicator_enum.rs for more details
     pub async fn indicator_unsubscribe_subscription(&self, subscription: &DataSubscription) {
         self.indicator_handler.indicators_unsubscribe(subscription).await
     }
-    
+
+    /// see the indicator_enum.rs for more details
     pub async fn indicator_index(&self, name: &IndicatorName, index: u64) -> Option<IndicatorValues> {
         self.indicator_handler.index(name, index).await
     }
-    
+
+    /// see the indicator_enum.rs for more details
     pub async fn indicator_current(&self, name: &IndicatorName) -> Option<IndicatorValues> {
         self.indicator_handler.current(name).await
     }
-    
+
+    /// see the indicator_enum.rs for more details
     pub async fn indicator_history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
         self.indicator_handler.history(name).await
     }
 
+    /// returns the strategy time zone.
     pub fn time_zone(&self) -> &Tz {
         &self.start_state.time_zone
-    }
-
-    pub fn state(&self) -> &StrategyStartState {
-        &self.start_state
     }
 
     pub fn owner_id(&self) -> &OwnerId {

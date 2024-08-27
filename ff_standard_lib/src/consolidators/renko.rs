@@ -1,5 +1,4 @@
-use std::fmt::{Display, Formatter};
-use std::hash::{Hash, Hasher};
+use std::fmt::{Display};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::count::ConsolidatorError;
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -7,11 +6,10 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::enums::{Resolution};
-use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use crate::standardized_types::subscriptions::{DataSubscription};
 
-
-
+//renko parameters will have to be strings so we can implement hash etc
+//todo, just have different kinds of renko consolidators for the different kinds of renko
 /// A consolidator that produces a new piece of data after a certain number of data points have been added.
 /// Supports Ticks only.
 pub struct RenkoConsolidator {
