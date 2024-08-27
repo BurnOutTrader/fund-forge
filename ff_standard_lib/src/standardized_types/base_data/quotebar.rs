@@ -8,6 +8,7 @@ use crate::standardized_types::enums::Resolution;
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
+use crate::standardized_types::TimeString;
 
 /// Represents a single quote bar in a financial chart, commonly used
 /// in the financial technical analysis of price patterns.
@@ -46,7 +47,7 @@ pub struct QuoteBar {
     pub ask_close: f64,
     pub volume: f64,
     pub range: f64,
-    pub time: String,
+    pub time: TimeString,
     pub spread: f64,
     pub is_closed: bool,
     pub resolution: Resolution,

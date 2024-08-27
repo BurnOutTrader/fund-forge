@@ -8,6 +8,7 @@ use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
+use crate::standardized_types::TimeString;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
 #[archive(
@@ -30,7 +31,7 @@ pub struct Quote {
     pub bid: f64,
     pub ask_volume: f64,
     pub bid_volume: f64,
-    pub time: String,
+    pub time: TimeString,
 }
 
 impl Quote {
@@ -43,7 +44,7 @@ impl Quote {
     /// 4. `ask_volume` - The volume of the ask price.
     /// 5. `bid_volume` - The volume of the bid price.
     /// 6. `time` - The time of the quote.
-    pub fn new(symbol: Symbol, ask: f64, bid: f64, ask_volume: f64, bid_volume: f64, time: String) -> Self {
+    pub fn new(symbol: Symbol, ask: f64, bid: f64, ask_volume: f64, bid_volume: f64, time: TimeString) -> Self {
         Quote {
             symbol,
             ask,

@@ -12,3 +12,4 @@ pub mod subscription_handler;
 pub mod strategy_events;
 
 pub type OwnerId = String;
+pub type TimeString = String;
