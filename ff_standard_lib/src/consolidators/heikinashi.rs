@@ -206,7 +206,7 @@ impl HeikinAshiConsolidator
                             candle.high = tick.price.max(candle.high);
                             candle.low = tick.price.min(candle.low);
                             candle.close = tick.price;
-                            candle.range = candle.high - candle.low;
+                            candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             candle.volume += tick.volume;
                             return vec![BaseDataEnum::Candle(candle.clone())];
                         }
@@ -214,7 +214,7 @@ impl HeikinAshiConsolidator
                             candle.high = new_candle.high.max(candle.high);
                             candle.low = new_candle.low.min(candle.low);
                             candle.close = new_candle.close;
-                            candle.range = candle.high - candle.low;
+                            candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             candle.volume += new_candle.volume;
                             return vec![BaseDataEnum::Candle(candle.clone())];
                         }
@@ -222,14 +222,14 @@ impl HeikinAshiConsolidator
                             candle.high = price.price.max(candle.high);
                             candle.low = price.price.min(candle.low);
                             candle.close = price.price;
-                            candle.range = candle.high - candle.low;
+                            candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             return vec![BaseDataEnum::Candle(candle.clone())];
                         }
                         BaseDataEnum::QuoteBar(bar) => {
                             candle.high = bar.bid_high.max(candle.high);
                             candle.low = bar.bid_low.min(candle.low);
                             candle.close = bar.bid_close;
-                            candle.range = candle.high - candle.low;
+                            candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             candle.volume += bar.volume;
                             return vec![BaseDataEnum::Candle(candle.clone())];
                         }
