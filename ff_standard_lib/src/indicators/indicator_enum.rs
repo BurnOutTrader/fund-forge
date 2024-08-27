@@ -1,9 +1,7 @@
-use async_trait::async_trait;
-use tokio::sync::MutexGuard;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
 use crate::indicators::built_in::average_true_range::AverageTrueRange;
-use crate::indicators::indicators_trait::{AsyncIndicators, IndicatorName, Indicators};
+use crate::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::indicators::values::IndicatorValues;
 use crate::standardized_types::rolling_window::RollingWindow;
 
@@ -11,18 +9,8 @@ use crate::standardized_types::rolling_window::RollingWindow;
 /// An enum for all indicators
 /// Custom(Box<dyn Indicators + Send + Sync>) is for custom indicators which we want to handle automatically in the engine
 pub enum IndicatorEnum {
-    Custom(Box<dyn AsyncIndicators + Send + Sync>), //if we use this then we cant use rkyv serialization
+    Custom(Box<dyn Indicators + Send + Sync>), //if we use this then we cant use rkyv serialization
     AverageTrueRange(AverageTrueRange)
-}
-
-#[async_trait]
-impl AsyncIndicators for IndicatorEnum {
-    async fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
-        match self {
-            IndicatorEnum::AverageTrueRange(atr) => atr.update_base_data(base_data).await,
-            IndicatorEnum::Custom(indicator) => indicator.update_base_data(base_data).await
-        }
-    }
 }
 
 impl Indicators for IndicatorEnum {
@@ -30,6 +18,13 @@ impl Indicators for IndicatorEnum {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.name(),
             IndicatorEnum::Custom(indicator) => indicator.name()
+        }
+    }
+
+    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
+        match self {
+            IndicatorEnum::AverageTrueRange(atr) => atr.update_base_data(base_data),
+            IndicatorEnum::Custom(indicator) => indicator.update_base_data(base_data)
         }
     }
 

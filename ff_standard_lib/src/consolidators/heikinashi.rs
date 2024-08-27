@@ -1,16 +1,13 @@
-use chrono::{DateTime, Duration, Utc};
-use tokio::sync::Mutex;
+use chrono::{DateTime, Utc};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
-use crate::consolidators::candlesticks::open_time;
+use crate::helpers::converters::open_time;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use crate::consolidators::count::ConsolidatorError;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::candle::Candle;
-use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::base_data::traits::BaseData;
 
 pub struct HeikinAshiConsolidator{
@@ -20,7 +17,6 @@ pub struct HeikinAshiConsolidator{
     previous_ha_close: f64,
     previous_ha_open: f64,
     tick_size: f64,
-    lock: Mutex<()>,
 }
 
 impl HeikinAshiConsolidator
@@ -41,8 +37,7 @@ impl HeikinAshiConsolidator
         }
     }
 
-    async fn new_heikin_ashi_candle(&mut self, new_data: &BaseDataEnum) -> Candle {
-        let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
+    fn new_heikin_ashi_candle(&mut self, new_data: &BaseDataEnum) -> Candle {
         match new_data {
             BaseDataEnum::Candle(candle) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
@@ -141,37 +136,10 @@ impl HeikinAshiConsolidator
             previous_ha_close: 0.0,
             previous_ha_open: 0.0,
             tick_size,
-            lock: Mutex::new(()),
         })
     }
 
-    pub(crate) async fn new_and_warmup(subscription: DataSubscription, history_to_retain: u64, warm_up_to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> Result<HeikinAshiConsolidator, ConsolidatorError> {
-        if subscription.base_data_type != BaseDataType::Candles {
-            return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for HeikinAshiConsolidator", subscription.base_data_type) });
-        }
-        if let Resolution::Ticks(_) = subscription.resolution {
-            return Err(ConsolidatorError { message: format!("{:?} is an Invalid resolution for TimeConsolidator", subscription.resolution) });
-        }
-
-        let tick_size = match subscription.symbol.data_vendor.tick_size(subscription.symbol.clone()).await {
-            Ok(size) => size,
-            Err(e) => return Err(ConsolidatorError { message: format!("Error getting tick size: {}", e) }),
-        };
-        let mut consolidator = HeikinAshiConsolidator{
-            current_data: None,
-            subscription,
-            history: RollingWindow::new(history_to_retain),
-            previous_ha_close: 0.0,
-            previous_ha_open: 0.0,
-            tick_size,
-            lock: Mutex::new(()),
-        };
-        consolidator.warmup(warm_up_to_time, strategy_mode).await;
-        Ok(consolidator)
-    }
-
-    pub async fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
-        let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
+    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
         if let Some(current_data) = self.current_data.as_mut() {
             if time >= current_data.time_created_utc() {
                 let return_data = current_data.clone();
@@ -183,9 +151,9 @@ impl HeikinAshiConsolidator
     }
     
     //problem where this is returning a closed candle constantly
-    pub(crate) async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         if self.current_data.is_none() {
-            let data = self.new_heikin_ashi_candle(base_data).await;
+            let data = self.new_heikin_ashi_candle(base_data);
             self.current_data = Some(BaseDataEnum::Candle(data));
             let candles = vec![self.current_data.clone().unwrap()];
             return candles;
@@ -194,11 +162,10 @@ impl HeikinAshiConsolidator
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
                 self.history.add(consolidated_bar.clone());
-                let new_bar = self.new_heikin_ashi_candle(base_data).await;
+                let new_bar = self.new_heikin_ashi_candle(base_data);
                 self.current_data = Some(BaseDataEnum::Candle(new_bar.clone()));
                 return vec![consolidated_bar, BaseDataEnum::Candle(new_bar)];
             }
-            let _lock = self.lock.lock().await;
             match current_bar {
                 BaseDataEnum::Candle(candle) => {
                     match base_data {
@@ -242,13 +209,6 @@ impl HeikinAshiConsolidator
         panic!("Invalid base data type for Candle consolidator: {}", base_data.base_data_type())
     }
 
-    pub(crate) fn clear_current_data(&mut self) {
-        self.current_data = None;
-        self.history.clear();
-        self.previous_ha_close = 0.0;
-        self.previous_ha_open = 0.0;
-    }
-
     pub(crate) fn history(&self) -> RollingWindow<BaseDataEnum> {
         self.history.clone()
     }
@@ -265,47 +225,6 @@ impl HeikinAshiConsolidator
         match &self.current_data {
             Some(data) => Some(data.clone()),
             None => None,
-        }
-    }
-
-    async fn warmup(&mut self, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
-        let vendor_resolutions = self.subscription.symbol.data_vendor.resolutions(self.subscription.market_type.clone()).await.unwrap();
-        let mut minimum_resolution: Option<Resolution> = None;
-        for resolution in vendor_resolutions {
-            if minimum_resolution.is_none() {
-                minimum_resolution = Some(resolution);
-            } else {
-                if resolution > minimum_resolution.unwrap() && resolution < self.subscription.resolution {
-                    minimum_resolution = Some(resolution);
-                }
-            }
-        }
-
-        let minimum_resolution = match minimum_resolution.is_none() {
-            true => panic!("{} does not have any resolutions available", self.subscription.symbol.data_vendor),
-            false => minimum_resolution.unwrap()
-        };
-
-        let data_type = match minimum_resolution {
-            Resolution::Ticks(_) => BaseDataType::Ticks,
-            _ => self.subscription.base_data_type.clone()
-        };
-
-        let from_time = to_time - (self.subscription.resolution.as_duration() * self.history.number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
-
-        let base_subscription = DataSubscription::new(self.subscription.symbol.name.clone(), self.subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, self.subscription.market_type.clone());
-        let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
-
-        for (time, slice) in &base_data {
-            if time > &to_time {
-                break;
-            }
-            for base_data in slice {
-                self.update(base_data).await;
-            }
-        }
-        if strategy_mode != StrategyMode::Backtest {
-            //todo() we will get any bars which are not in out serialized history here
         }
     }
 }

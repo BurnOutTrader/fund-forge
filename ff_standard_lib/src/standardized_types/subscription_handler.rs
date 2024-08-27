@@ -279,7 +279,7 @@ impl SymbolSubscriptionHandler {
 
         // Iterate over the secondary subscriptions and update them
         for (_, consolidator) in self.secondary_subscriptions.iter_mut() {
-            let data = consolidator.update(&base_data).await;
+            let data = consolidator.update(&base_data);
             consolidated_data.extend(data);
         }
         consolidated_data
@@ -289,7 +289,7 @@ impl SymbolSubscriptionHandler {
         let mut consolidated_data = vec![];
             // Iterate over the secondary subscriptions and update them
         for (_, consolidator) in self.secondary_subscriptions.iter_mut() {
-            let data = consolidator.update_time(time.clone()).await;
+            let data = consolidator.update_time(time.clone());
             consolidated_data.extend(data);
         }
         match consolidated_data.is_empty() {

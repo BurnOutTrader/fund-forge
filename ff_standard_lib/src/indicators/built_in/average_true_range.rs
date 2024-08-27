@@ -1,15 +1,13 @@
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use ahash::AHashMap;
-use async_trait::async_trait;
-use tokio::sync::Mutex;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::helpers::decimal_calculators::{round_to_tick_size};
-use crate::indicators::indicators_trait::{AsyncIndicators, IndicatorName, Indicators};
+use crate::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::indicators::values::IndicatorValues;
 
 pub struct AverageTrueRange {
@@ -18,9 +16,7 @@ pub struct AverageTrueRange {
     history: RollingWindow<IndicatorValues>,
     base_data_history: RollingWindow<BaseDataEnum>,
     is_ready: bool,
-    period: u64,
     tick_size: f64,
-    lock: Mutex<()>
 }
 
 impl Display for AverageTrueRange {
@@ -42,9 +38,7 @@ impl AverageTrueRange {
             history: RollingWindow::new(history_to_retain),
             base_data_history: RollingWindow::new(period),
             is_ready: false,
-            period,
             tick_size,
-            lock: Mutex::new(()),
         };
         atr
     }
@@ -82,13 +76,15 @@ impl AverageTrueRange {
     }
 }
 
-#[async_trait]
-impl AsyncIndicators for AverageTrueRange {
-    async fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
+impl Indicators for AverageTrueRange {
+    fn name(&self) -> IndicatorName {
+        self.name.clone()
+    }
+
+    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
         if !base_data.is_closed() {
             return None
         }
-        let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         self.base_data_history.add(base_data.clone());
         if self.is_ready == false {
             if !self.base_data_history.is_full() {
@@ -109,12 +105,6 @@ impl AsyncIndicators for AverageTrueRange {
         self.history.add(result.clone());
 
         Some(result)
-    }
-}
-
-impl Indicators for AverageTrueRange {
-    fn name(&self) -> IndicatorName {
-        self.name.clone()
     }
 
     fn subscription(&self) -> DataSubscription {

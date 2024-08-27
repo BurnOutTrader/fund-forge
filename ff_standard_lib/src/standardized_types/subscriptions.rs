@@ -4,7 +4,6 @@ use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Se
 use rkyv::ser::Serializer;
 use rkyv::ser::serializers::AllocSerializer;
 use crate::apis::vendor::DataVendor;
-use crate::consolidators::renko::RenkoParameters;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
@@ -81,7 +80,7 @@ impl Symbol {
 )]
 #[archive_attr(derive(Debug))]
 pub enum CandleType {
-    Renko(RenkoParameters),
+    Renko,
     HeikinAshi,
     CandleStick
 }
@@ -89,8 +88,8 @@ pub enum CandleType {
 impl Display for CandleType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            CandleType::Renko(params) => {
-                write!(f, "{}", format!("Renko: {}", params))
+            CandleType::Renko => {
+                write!(f, "{}", format!("Renko"))
             },
             CandleType::HeikinAshi => {
                 write!(f, "{}", "Heikin Ashi")

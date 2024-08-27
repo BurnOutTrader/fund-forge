@@ -1,10 +1,13 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
+use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::candlesticks::CandleStickConsolidator;
 use crate::consolidators::count::{CountConsolidator};
 use crate::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::consolidators::renko::RenkoConsolidator;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 
@@ -17,61 +20,55 @@ pub enum ConsolidatorEnum {
 }
 
 impl ConsolidatorEnum {
-    
     /// Creates a new consolidator based on the subscription. if is_warmed_up is true, the consolidator will warm up to the to_time on its own.
     pub async fn create_consolidator(is_warmed_up: bool, subscription: DataSubscription, history_to_retain: u64, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> ConsolidatorEnum {
-        //todo return a consolidator error instead of unwrap() so subscription manager can return DataSubscriptionEvent::Failed to the strategy and handle gracefully.
+        //todo handle errors here gracefully
         let is_tick = match subscription.resolution {
             Resolution::Ticks(_) => true,
             _ => false
         };
-        
-        if  is_tick {
+
+        if is_tick {
             return match is_warmed_up {
-                true => ConsolidatorEnum::Count(CountConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap()),
+                true => {
+                    let consolidator = ConsolidatorEnum::Count(CountConsolidator::new(subscription.clone(), history_to_retain).await.unwrap());
+                    ConsolidatorEnum::warmup(consolidator, to_time, strategy_mode).await
+                },
                 false => ConsolidatorEnum::Count(CountConsolidator::new(subscription.clone(), history_to_retain).await.unwrap()),
             }
         }
-        
-        if is_warmed_up {
-            return match &subscription.candle_type {
-                Some(candle_type) => {
-                    match candle_type {
-                        CandleType::Renko(_) => ConsolidatorEnum::Renko(RenkoConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap()),
-                        CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(HeikinAshiConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap()),
-                        CandleType::CandleStick => ConsolidatorEnum::CandleStickConsolidator(CandleStickConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap())
-                    }
-                },
-                None => ConsolidatorEnum::CandleStickConsolidator(CandleStickConsolidator::new_and_warmup(subscription.clone(), history_to_retain, to_time, strategy_mode).await.unwrap())
-            }
-        }
-        
-        match &subscription.candle_type {
+
+        let consolidator = match &subscription.candle_type {
             Some(candle_type) => {
                 match candle_type {
-                    CandleType::Renko(_) => ConsolidatorEnum::Renko(RenkoConsolidator::new(subscription.clone(), history_to_retain).await.unwrap()),
+                    CandleType::Renko => ConsolidatorEnum::Renko(RenkoConsolidator::new(subscription.clone(), history_to_retain).await.unwrap()),
                     CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(HeikinAshiConsolidator::new(subscription.clone(), history_to_retain).await.unwrap()),
                     CandleType::CandleStick => ConsolidatorEnum::CandleStickConsolidator(CandleStickConsolidator::new(subscription.clone(), history_to_retain).await.unwrap())
                 }
             },
-            None => panic!("Candle type is required for this subscription")
+            _ => panic!("Candle type is required for CandleStickConsolidator")
+        };
+        
+        match is_warmed_up {
+            true => ConsolidatorEnum::warmup(consolidator, to_time, strategy_mode).await,
+            false => consolidator
         }
     }
 
     /// Updates the consolidator with the new data point.
-    pub async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => {
-                count_consolidator.update(base_data).await
+                count_consolidator.update(base_data)
             },
             ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
-                time_consolidator.update(base_data).await
+                time_consolidator.update(base_data)
             },
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
-                heikin_ashi_consolidator.update(base_data).await
+                heikin_ashi_consolidator.update(base_data)
             }
             ConsolidatorEnum::Renko(renko_consolidator) => {
-                renko_consolidator.update(base_data).await
+                renko_consolidator.update(base_data)
             }
         }
     }
@@ -85,7 +82,7 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::Renko(renko_consolidator) => &renko_consolidator.subscription,
         }
     }
-    
+
     /// Returns the resolution of the consolidator.
     pub fn resolution(&self) -> &Resolution {
         match self {
@@ -95,7 +92,7 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::Renko(renko_consolidator) => &renko_consolidator.subscription.resolution,
         }
     }
-    
+
     /// Returns the history to retain for the consolidator.
     pub fn history_to_retain(&self) -> u64 {
         match self {
@@ -105,7 +102,7 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.history.number,
         }
     }
-    
+
     pub fn history(&self) -> RollingWindow<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => count_consolidator.history(),
@@ -114,7 +111,7 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.history(),
         }
     }
-    
+
     pub fn current(&self) -> Option<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => count_consolidator.current(),
@@ -132,13 +129,57 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.index(index),
         }
     }
-    
-    pub async fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+
+    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(_) => vec![],
-            ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => time_consolidator.update_time(time).await,
-            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => heikin_ashi_consolidator.update_time(time).await,
+            ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => time_consolidator.update_time(time),
+            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => heikin_ashi_consolidator.update_time(time),
             ConsolidatorEnum::Renko(_) => vec![],
         }
+    }
+
+    pub async fn warmup(mut consolidator: ConsolidatorEnum, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> ConsolidatorEnum {
+        //todo if live we will tell the self.subscription.symbol.data_vendor to .update_historical_symbol()... we will wait then continue
+        let subscription = consolidator.subscription();
+        let vendor_resolutions = subscription.symbol.data_vendor.resolutions(subscription.market_type.clone()).await.unwrap();
+        let mut minimum_resolution: Option<Resolution> = None;
+        for resolution in vendor_resolutions {
+            if minimum_resolution.is_none() {
+                minimum_resolution = Some(resolution);
+            } else {
+                if resolution > minimum_resolution.unwrap() && resolution < subscription.resolution {
+                    minimum_resolution = Some(resolution);
+                }
+            }
+        }
+
+        let minimum_resolution = match minimum_resolution.is_none() {
+            true => panic!("{} does not have any resolutions available", subscription.symbol.data_vendor),
+            false => minimum_resolution.unwrap()
+        };
+
+        let data_type = match minimum_resolution {
+            Resolution::Ticks(_) => BaseDataType::Ticks,
+            _ => subscription.base_data_type.clone()
+        };
+
+        let from_time = to_time - (subscription.resolution.as_duration() * consolidator.history().number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
+
+        let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, subscription.market_type.clone());
+        let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
+
+        for (time, slice) in &base_data {
+            if time > &to_time {
+                break;
+            }
+            for base_data in slice {
+                consolidator.update(base_data);
+            }
+        }
+        if strategy_mode != StrategyMode::Backtest {
+            //todo() we will get any bars which are not in our serialized history here
+        }
+        consolidator
     }
 }

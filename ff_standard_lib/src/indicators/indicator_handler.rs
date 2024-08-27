@@ -1,9 +1,9 @@
 use std::sync::Arc;
 use ahash::AHashMap;
 use chrono::{DateTime, Duration, Utc};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock};
 use crate::indicators::indicator_enum::IndicatorEnum;
-use crate::indicators::indicators_trait::{AsyncIndicators, IndicatorName, Indicators};
+use crate::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::indicators::values::{IndicatorValues};
 use crate::standardized_types::OwnerId;
 use crate::standardized_types::subscriptions::DataSubscription;
@@ -41,21 +41,6 @@ pub struct IndicatorHandler {
     strategy_mode: StrategyMode,
     event_buffer: RwLock<Vec<StrategyEvent>>,
     subscription_map: RwLock<AHashMap<IndicatorName, DataSubscription>>, //used to quickly find the subscription of an indicator by name.
-    //receiver: Receiver<StrategyEvent>,
-    //todo add broadcaster and receiver to decouple handlers. this will allow the handlers to
-    //1. Have interior mutability and remove async locks.
-    //2. Be seperated and insulated from the engine and the strategy.
-    //3. This will allow us to have multiple strategies running in parallel.
-    //4. Live strategies can share the same handler.
-    //5. You could async send all data... run all handlers at the same time, then async collect all buffers.
-
-    // Downside:
-    // 1. Each handler will require its own messaging.
-
-    // How:
-    // strategies starting in backtest mode will launch a function which will generate a new handler.
-    // strategies in live mode will subscribe to an existing handler and launch there own listener function for receiving requests from the strategy.
-    // each handler will have a buffer for events which will be sent to the strategies.
 }
 
 impl IndicatorHandler {
@@ -129,7 +114,7 @@ impl IndicatorHandler {
                 let mut values = Vec::new();
                 if let Some(indicators) = indicators.get_mut(&subscription) {
                     for indicator in indicators.values_mut() {
-                        let value = indicator.update_base_data(&data).await;
+                        let value = indicator.update_base_data(&data);
                         if let Some(value) = value {
                             values.push(value);
                         }
@@ -243,7 +228,7 @@ async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicat
                     break;
                 }
                 for base_data in slice {
-                    indicator.update_base_data(base_data).await;
+                    indicator.update_base_data(base_data);
                 }
             }
         }
@@ -254,12 +239,12 @@ async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicat
                     break;
                 }
                 for base_data in slice {
-                    let consolidated = consolidator.update(base_data).await;
+                    let consolidated = consolidator.update(base_data);
                     if consolidated.is_empty() {
                         continue
                     }
                     for data in consolidated {
-                        indicator.update_base_data(&data).await;
+                        indicator.update_base_data(&data);
                     }
                 }
             }
