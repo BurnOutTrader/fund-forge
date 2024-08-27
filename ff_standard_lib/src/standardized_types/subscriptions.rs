@@ -181,6 +181,19 @@ impl DataSubscription {
         }
     }
     
+    pub fn new_fundamental(symbol_name: String, data_vendor: DataVendor) -> Self {
+        let cleaned_symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
+        let symbol = Symbol::new(cleaned_symbol_name, data_vendor, MarketType::Fundamentals);
+
+        DataSubscription {
+            symbol,
+            resolution: Resolution::Instant,
+            base_data_type: BaseDataType::Fundamentals,
+            market_type: MarketType::Fundamentals,
+            candle_type: None
+        }
+    }
+    
     pub fn from_base_data(symbol_name: String, data_vendor: DataVendor, resolution: Resolution, base_data_type: BaseDataType, market_type: MarketType, candle_type: Option<CandleType>) -> Self {
         let cleaned_symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         let symbol = Symbol::new(cleaned_symbol_name, data_vendor, market_type.clone());

@@ -20,6 +20,7 @@ pub enum MarketType {
     Equities,
     Crypto,
     ETF,
+    Fundamentals,
 }
 
 // Bias
