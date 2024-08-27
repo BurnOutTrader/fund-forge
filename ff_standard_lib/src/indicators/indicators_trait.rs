@@ -8,19 +8,21 @@ pub type IndicatorLongName = String;
 pub type IndicatorName = String;
 
 
-
 #[async_trait]
 pub trait AsyncIndicators: Indicators {
     /// Updates the indicator with the new data point.
     /// be aware you need to make update_base_data().await and async fn and use a tokio::Mutex to lock to the type when locking, since this type depends upon interior mutability
-    /// without a lock we have a potential race condition where the timeslice contains multiple data points for a subscription, 
+    /// without a lock we have a potential race condition where the timeslice contains multiple data points for a subscription,
     /// to cheaply resolve this we simply use a mutex lock inside our type to prevent multple calls to update being ran at same moment
     ///
     /// ### Example
     /// ```rust
-    /// use ff_standard_lib::indicators::indicators_trait::IndicatorName;
+    /// use ahash::AHashMap;
+    /// use async_trait::async_trait;
+    /// use ff_standard_lib::indicators::indicators_trait::{AsyncIndicators, IndicatorName, Indicators};
     /// use ff_standard_lib::indicators::values::IndicatorValues;
     /// use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+    /// use ff_standard_lib::standardized_types::base_data::traits::BaseData;
     /// use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
     /// use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
     ///
@@ -34,12 +36,45 @@ pub trait AsyncIndicators: Indicators {
     ///     tick_size: f64,
     ///     lock: tokio::sync::Mutex<()>
     /// }
+    ///
+    /// #[async_trait]
+    /// impl AsyncIndicators for AverageTrueRange {
+    ///     async fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
+    ///         let _lock = self.lock.lock().await; //todo to protect against race conditions where a time slice contains multiple data points of same subscription when using the IndicatorHandler
+    ///         if !base_data.is_closed() {
+    ///             return None
+    ///         }
+    ///         
+    ///         self.base_data_history.add(base_data.clone());
+    ///         if self.is_ready == false {
+    ///             if !self.base_data_history.is_full() {
+    ///                 return None
+    ///             } else {
+    ///                 self.is_ready = true;
+    ///             }
+    ///         }
+    ///
+    ///         let atr = self.calculate_true_range();
+    ///         if atr == 0.0 {
+    ///             return None
+    ///         }
+    ///
+    ///         let mut plots = AHashMap::new();
+    ///         plots.insert("atr".to_string(), atr);
+    ///         let result = IndicatorValues::new(self.name(), self.subscription(), plots, base_data.time_created_utc());
+    ///         self.history.add(result.clone());
+    ///
+    ///         Some(result)
+    ///     }
+    /// }
+    ///
+    /// impl Indicators for AverageTrueRange { // complete implementation here}
     /// ```
     async fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues>;
 }
 
 pub trait Indicators {
-    
+
     fn name(&self) -> IndicatorName;
 
     /// Returns the name of the indicator with the symbol and data vendor, resolution, base data type and candle type where applicable.
