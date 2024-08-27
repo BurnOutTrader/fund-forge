@@ -11,35 +11,50 @@ async fn main() {
     // we create a channel for the receiving strategy events
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     
-    // we create a notify object to control the message sender channel until we have processed the last message or to speed up the que. 
-    // this gives us full async control over the engine and handlers
-    let notify = Arc::new(Notify::new());
-    
     let strategy = FundForgeStrategy::initialize(
-        Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, 
-        notify.clone(),
-        StrategyMode::Backtest, // Backtest, Live, LivePaper
+        //if none is passed in an id will be generated based on the executing program name this fn will change later as it becomes a full application, 
+        Some(String::from("test")), 
+
+        // we create a notify object to control the message sender channel until we have processed the last message or to speed up the que. 
+        // this gives us full async control over the engine and handlers
+        Arc::new(Notify::new()),
+
+        // Backtest, Live, LivePaper
+        StrategyMode::Backtest, 
+        
         StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. 
-        NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
-        Australia::Sydney, // the strategy time zone
-        Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
+
+        // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+
+        // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+
+        // the strategy time zone (Tz)
+        Australia::Sydney,
+
+        // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
+        Duration::days(3), 
         
         // the initial data subscriptions for the strategy. we can also subscribe or unsubscribe at run time.
         vec![
             DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
             DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-            // we can subscribe to fundamental data and alternative data sources (no actual test data available yet)
+            // we can subscribe to fundamental data and alternative data sources (no fundamental test data available yet)
             DataSubscription::new_fundamental("GDP-USA".to_string(), DataVendor::Test)
             //if using new() default candle type is CandleStick
             DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)
             // we can also specify candle types like HeikinAshi, Renko, CandleStick (more to come). 
             DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, Some(CandleType::HeikinAshi))
         ],
+        // the sender for the strategy events
+        strategy_event_sender,
         
-        strategy_event_sender, // the sender for the strategy events
+        // backtest_delay: An Option<Duration> we can pass in a delay for market replay style backtesting, this will be ignored in live trading.
         None,
-        100, //bars to retain in memory for the initial subscriptions
+
+        //bars to retain in memory for the initial subscriptions
+        100, 
 
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
