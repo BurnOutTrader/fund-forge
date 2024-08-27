@@ -87,7 +87,9 @@ async fn main() {
         100,
 
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
-        //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
+        //this allows us full control over how the strategy buffers data and how it processes data, in live trading. 
+        //Setting this value higher than your base working resolution, has the potential to create race conditions in `handler.update_time_slice()` I have not had it occur in testing but I believe the potential is there if overshooting too far.
+        // You would prbably have to do it delibertely
         Some(Duration::seconds(1))
     ).await;
 
@@ -331,9 +333,9 @@ impl IndicatorValues {
 We can use the inbuilt indicators or create our own custom indicators.
 
 #### Creating Indicators
-For creating custom indicators, we just need to implement the `indicators trait` and either:
+For creating custom indicators, we just need to implement the `AsyncIndicators trait` which also needs `Indicators trait` and either:
 1. Create and hardcode `IndicatorEnum` variant including all matching statements, or
-2. Wrap our indicator in the `IndicatorEnum::Custom(Box<dyn Indicators>)` variant, where it will be used via `Box<dyn Indicators>` dynamic dispatch.
+2. Wrap our indicator in the `IndicatorEnum::Custom(Box<dyn AsyncIndicators + Send + Sync>)` variant, where it will be used via `Box<dyn Indicators>` dynamic dispatch.
 The fist option is the most performant, but if you want to create and test a number of indicators, you can save hardcoding the enum variants by using the second option.
 Once you have tested and are happy with the performance of your custom indicator, you can then hardcode it into the IndicatorEnum.
 You don't actually need to do any of this if you want to manually handle your Indicators in the `fn on_data_received()` function, but if you wrap in the `IndicatorEnum::Custom(Box<dyn Indicators>)` variant, 
