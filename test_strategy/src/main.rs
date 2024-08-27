@@ -7,7 +7,7 @@ use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
-use ff_standard_lib::indicators::indicators_trait::{IndicatorName, Indicators};
+use ff_standard_lib::indicators::indicators_trait::{IndicatorName};
 use ff_standard_lib::indicators::values::IndicatorValues;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
