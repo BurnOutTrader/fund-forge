@@ -20,9 +20,10 @@ async fn main() {
         Arc::new(Notify::new()),
 
         // Backtest, Live, LivePaper
-        StrategyMode::Backtest, 
-        
-        StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. 
+        StrategyMode::Backtest,
+
+        // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. 
+        StrategyInteractionMode::SemiAutomated,  
 
         // Starting date of the backtest is a NaiveDateTime not NaiveDate
         NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(),
