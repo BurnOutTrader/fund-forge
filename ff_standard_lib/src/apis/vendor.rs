@@ -101,8 +101,10 @@ pub mod server_responses {
 pub mod client_requests {
     use std::sync::Arc;
     use async_trait::async_trait;
+    use tokio::sync::Mutex;
     use crate::apis::vendor::DataVendor;
-    use crate::server_connections::{ConnectionType, get_synchronous_communicator};
+    use crate::server_connections::{ConnectionType, get_synchronous_communicator, get_async_reader, get_async_sender};
+    use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
     use crate::servers::communications_sync::SynchronousCommunicator;
     use crate::standardized_types::data_server_messaging::{FundForgeError, SynchronousRequestType, SynchronousResponseType};
     use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
@@ -198,16 +200,25 @@ pub mod client_requests {
 
     impl DataVendor {
         pub async fn synchronous_client(&self) -> Arc<SynchronousCommunicator> {
-            get_synchronous_communicator(ConnectionType::Vendor(self.clone())).await
+            match get_synchronous_communicator(ConnectionType::Vendor(self.clone())).await {
+                Err(e) => panic!("{}", e),
+                Ok(s) => s
+            }
         }
 
-/*        pub async fn async_receiver(&self) -> Arc<Mutex<SecondaryDataReceiver>> {
-            get_readside_client(ConnectionType::Vendor(self.clone())).await
+        pub async fn async_receiver(&self) -> Arc<Mutex<SecondaryDataReceiver>> {
+            match get_async_reader(ConnectionType::Vendor(self.clone())).await {
+                Err(e) => panic!("{}", e),
+                Ok(s) => s
+            }
         }
 
         pub async fn async_sender(&self) -> Arc<Mutex<SecondaryDataSender>> {
-             get_writeside_client(ConnectionType::Vendor(self.clone())).await
-        }*/
+             match get_async_sender(ConnectionType::Vendor(self.clone())).await  {
+                Err(e) => panic!("{}", e),
+                 Ok(s) => s
+            }
+        }
     }
 }
 

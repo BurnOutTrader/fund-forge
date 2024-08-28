@@ -47,6 +47,15 @@ pub mod client_settings {
             let default_settings = ConnectionSettings::default();
             let mut map: HashMap<ConnectionType, ConnectionSettings> = HashMap::new();
             map.insert(ConnectionType::Default, default_settings);
+            
+            let dafault_registry_settings =  ConnectionSettings {
+                ssl_auth_folder: get_resources().join("keys"),
+                server_name: String::from("fundforge"),
+                address:  SocketAddr::from_str("127.0.0.1:8082").unwrap(),
+                address_synchronous: SocketAddr::from_str("127.0.0.1:8083").unwrap()
+            };
+            map.insert(ConnectionType::StrategyRegistry, dafault_registry_settings);
+            
             // save map as server_settings.toml in "../resources" folder
             let mut map_set: HashMap<String, ConnectionSettings> = HashMap::new();
             for (connection_type, settings) in map.iter() {

@@ -1436,8 +1436,6 @@ dependencies = [
  "env_logger",
  "ff_standard_lib",
  "futures",
- "log",
- "mio",
  "rustls",
  "rustls-native-certs",
  "rustls-pemfile",
@@ -1509,6 +1507,23 @@ dependencies = [
 [[package]]
 name = "ff_strategy_registry"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "env_logger",
+ "ff_standard_lib",
+ "ff_strategies",
+ "futures",
+ "once_cell",
+ "rkyv",
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pemfile",
+ "serde",
+ "structopt",
+ "tokio",
+ "tokio-rustls",
+ "webpki-roots",
+]
 
 [[package]]
 name = "flate2"
@@ -2781,7 +2796,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a650543ca06a924e8b371db273b2756685faae30f8487da1b56505a8f78b0c"
 dependencies = [
  "libc",
- "log",
  "wasi",
  "windows-sys 0.48.0",
 ]

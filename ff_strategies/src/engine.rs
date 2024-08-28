@@ -110,8 +110,7 @@ impl Engine{
         todo!("Implement live mode");
         //need implementation for live plus live paper, where accounts are simulated locally. also make a hybrid mode so it trades live plus paper to test the engine functions accurately
     }
-
-
+    
     /// Warm up runs on initialization to get the strategy ready for execution, this can be used to warm up indicators etc., to ensure the strategy has enough history to run from start to finish, without waiting for data.
     /// This is especially useful in live trading scenarios, else you could be waiting days for the strategy to warm up if you are dependent on a long history for your indicators etc. \
     /// \
@@ -134,6 +133,7 @@ impl Engine{
         self.subscription_handler.set_warmup_complete().await;
         self.market_event_handler.set_warm_up_complete().await;
         self.indicator_handler.set_warmup_complete().await;
+        self.timed_event_handler.set_warmup_complete().await;
         let warmup_complete_event = StrategyEvent::WarmUpComplete(self.owner_id.clone());
         //self.notify.notified().await;
         match self.strategy_event_sender.send(vec![warmup_complete_event]).await {

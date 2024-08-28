@@ -160,7 +160,7 @@ pub enum SynchronousResponseType {
 
     /// Responds with a vec<(Resolution, BaseDataType)> which represents all the native resolutions available for the data types from the vendor api (note we only support intraday resolutions, higher resolutions are consolidated by the engine)
     Resolutions(Vec<SubscriptionResolutionType>, MarketType),
-    
+
     /// Provides the client with an error message
     /// Contains a `FundForgeError` which is used to help debug and identify the type of error that occurred.
     /// [`DataServerError`](ff_data_vendors::networks::DataServerError)

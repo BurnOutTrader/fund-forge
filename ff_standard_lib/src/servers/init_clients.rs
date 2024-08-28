@@ -127,3 +127,15 @@ pub(crate) async fn create_api_client(settings: &ConnectionSettings) -> Result<T
     Ok(stream)
 }
 
+
+pub(crate) async fn create_async_api_client(settings: &ConnectionSettings) -> Result<TlsStream<TcpStream>, FundForgeError> {
+    let ca_path = Path::join(&settings.ssl_auth_folder, "rootCA.crt");
+    let stream = match initialise_connection(&settings.address, &ca_path, &settings.server_name).await {
+        Ok(stream) => stream,
+        Err(e) => {
+            return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to connect to server: {}", e)));
+        }
+    };
+
+    Ok(stream)
+}

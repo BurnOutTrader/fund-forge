@@ -14,7 +14,8 @@ use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor, TlsStream};
 use ff_standard_lib::server_connections::ConnectionType;
-use ff_standard_lib::servers::request_handlers::manage_sequential_requests;
+use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
+use ff_standard_lib::servers::request_handlers::{data_server_manage_async_requests, data_server_manage_sequential_requests};
 use ff_standard_lib::servers::settings::client_settings::get_settings;
 use ff_standard_lib::servers::communications_sync::{SecureExternalCommunicator, SynchronousCommunicator};
 
@@ -75,8 +76,8 @@ async fn main() -> io::Result<()> {
 
     Ok(())
 }
-
-/*pub async fn toml_launch(connection_type: ConnectionType) -> JoinHandle<()> {
+/*
+pub async fn toml_launch(connection_type: ConnectionType) -> JoinHandle<()> {
     task::spawn(async move {
         let settings = get_settings(&connection_type).await.unwrap();
 
@@ -138,9 +139,7 @@ pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -
                 }
             };
             let communicator = SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Arc::new(Mutex::new(TlsStream::from(tls_stream))))));
-            manage_sequential_requests(Arc::new(communicator)).await;
-
-            println!("TLS connection established with {:?}", peer_addr);
+            data_server_manage_sequential_requests(Arc::new(communicator)).await;
         }
     })
 }
@@ -172,11 +171,16 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
                 Ok(stream) => stream,
                 Err(e) => {
                     eprintln!("Failed to accept TLS connection: {:?}", e);
-                    continue;
+                    return;
                 }
             };
 
+            let (read_half, write_half) = tokio::io::split(tls_stream);
+            let secondary_sender = SecondaryDataSender::Server(Mutex::new(write_half));
+            let secondary_receiver = SecondaryDataReceiver::Server(read_half);
             println!("TLS connection established with {:?}", peer_addr);
+
+            data_server_manage_async_requests(Arc::new(Mutex::new(secondary_sender)), Arc::new(Mutex::new(secondary_receiver))).await;
         }
     })
 }

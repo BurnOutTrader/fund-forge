@@ -1,10 +1,10 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
-use tokio_rustls::TlsStream;
 use tokio::net::TcpStream;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 use tokio::sync::mpsc::Receiver;
-
+use tokio_rustls::server::{TlsStream as ServerTlsStream};
+use tokio_rustls::TlsStream;
 
 /// With an 8-byte (64-bit) length field, you can represent data sizes up to approximately 17179869184 GB, which is equivalent to 16777216 TB, or 16 exabytes (EB).
 const LENGTH: usize = 8;
@@ -15,6 +15,7 @@ pub type SubscriberId = String;
 pub enum SecondaryDataReceiver {
     InternalReceiver(InternalReceiver),
     ExternalReceiver(ExternalReceiver),
+    Server(ReadHalf<ServerTlsStream<TcpStream>>)
 }
 
 impl SecondaryDataReceiver {
@@ -23,6 +24,17 @@ impl SecondaryDataReceiver {
         match self {
             SecondaryDataReceiver::InternalReceiver(receiver) => receiver.receive().await,
             SecondaryDataReceiver::ExternalReceiver(receiver) => receiver.receive().await,
+            SecondaryDataReceiver::Server(receiver) => {
+                let mut length_bytes = vec![0u8; LENGTH];
+                if receiver.read_exact(&mut length_bytes).await.is_ok() {
+                    let msg_length = u64::from_be_bytes(length_bytes.try_into().ok()?) as usize;
+                    let mut message_body = vec![0u8; msg_length];
+                    if receiver.read_exact(&mut message_body).await.is_ok() {
+                        return Some(message_body);
+                    }
+                }
+                None
+            }
         }
     }
 }
@@ -74,10 +86,12 @@ pub struct SendError {
 pub enum SecondaryDataSender {
     InternalSender(Arc<mpsc::Sender<Vec<u8>>>),
     ExternalSender(Arc<Mutex<WriteHalf<TlsStream<TcpStream>>>>),
+    Server(Mutex<WriteHalf<ServerTlsStream<TcpStream>>>)
 }
 
 impl SecondaryDataSender {
-     async fn send(&mut self, data: &Vec<u8>) -> Result<(), SendError> {
+    //todo, use interior mutability to send
+     async fn send(&self, data: &Vec<u8>) -> Result<(), SendError> {
         match self {
             SecondaryDataSender::InternalSender(sender) => {
                 sender.send(data.clone()).await.map_err(|e| SendError { msg: e.to_string() })
@@ -90,6 +104,16 @@ impl SecondaryDataSender {
                 let len = data.len() as u64;
                 let len_bytes = len.to_be_bytes();
 
+                // Write the length header
+                sender.write_all(&len_bytes).await.map_err(|e| SendError { msg: e.to_string() })?;
+
+                // Write the actual data
+                sender.write_all(&data).await.map_err(|e| SendError { msg: e.to_string() })
+            }
+            SecondaryDataSender::Server(sender) => {
+                let len = data.len() as u64;
+                let len_bytes = len.to_be_bytes();
+                let mut sender = sender.lock().await;
                 // Write the length header
                 sender.write_all(&len_bytes).await.map_err(|e| SendError { msg: e.to_string() })?;
 

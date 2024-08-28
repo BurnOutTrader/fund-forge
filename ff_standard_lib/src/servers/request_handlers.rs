@@ -1,14 +1,18 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
+use tokio::sync::Mutex;
 use crate::apis::brokerage::server_responses::BrokerApiResponse;
 use crate::apis::vendor::server_responses::VendorApiResponse;
 use crate::helpers::converters::load_as_bytes;
 use crate::helpers::get_data_folder;
+use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use crate::servers::communications_sync::SynchronousCommunicator;
+use crate::servers::registry_request_handlers::EventRequest;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use crate::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType};
+use crate::standardized_types::data_server_messaging::{AsyncRequestType, BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType};
 use crate::standardized_types::subscriptions::DataSubscription;
+use crate::traits::bytes::Bytes;
 
 /// Manages sequential requests received through a secondary data receiver and sends responses via a secondary data sender.
 ///
@@ -27,7 +31,7 @@ use crate::standardized_types::subscriptions::DataSubscription;
 /// # Returns
 /// This function does not return a value. It runs indefinitely until the program is terminated or an unrecoverable
 /// error occurs on the channels it listens to or sends data on.
-pub async fn manage_sequential_requests(communicator: Arc<SynchronousCommunicator>) {
+pub async fn data_server_manage_sequential_requests(communicator: Arc<SynchronousCommunicator>) {
     tokio::task::spawn(async move {
         while let Some(data) = communicator.receive(true).await {
             let request = match SynchronousRequestType::from_bytes(&data) {
@@ -80,4 +84,20 @@ pub(crate) async fn base_data_response(subscription: DataSubscription, time: Str
 
     // return the ResponseType::HistoricalBaseData to the server fn that called this fn
     Ok(SynchronousResponseType::HistoricalBaseData(payloads))
+}
+
+pub async fn data_server_manage_async_requests(sender: Arc<Mutex<SecondaryDataSender>>, receiver: Arc<Mutex<SecondaryDataReceiver>>) {
+    tokio::spawn(async move {
+        let mut receiver = receiver.lock().await;
+        while let Some(data) = receiver.receive().await {
+            let request = match AsyncRequestType::from_bytes(&data) {
+                Ok(request) => request,
+                Err(e) => {
+                    println!("Failed to parse request: {:?}", e);
+                    continue;
+                }
+            };
+            println!("Parsed request: {:?}", request);
+        }
+    });
 }
