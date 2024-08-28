@@ -548,16 +548,19 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
 ## TimedEvents 
 TimedEvents are a way to schedule events to occur at a specific time, they are useful for scheduling events like closing orders at a specific time, or sending notifications.
+We can also specify whether the event should fire during warm up.
 ```rust
 fn example() {
     pub enum EventTimeEnum {
         /// Events to occur at on a specific day of the week
         Weekday {
             day: Weekday,
+            fire_in_warmup: bool
         },
         /// Events to occur at a specific hour of the day
         HourOfDay {
             hour: u32,
+            fire_in_warmup: bool
         },
         /// Events to occur at a specific time on a specific day of the week
         TimeOnWeekDay {
@@ -565,21 +568,25 @@ fn example() {
             hour: u32,
             minute: u32,
             second: u32,
+            fire_in_warmup: bool
         },
         /// Events to occur at a specific date and time only once
         DateTime{
             date_time: DateTime<Utc>,
+            fire_in_warmup: bool
         },
         /// Events to occur at a specific time of the day
         TimeOfDay {
             hour: u32,
             minute: u32,
             second: u32,
+            fire_in_warmup: bool
         },
         /// Events to occur at a specific interval
         Every {
             duration: Duration,
             next_time: DateTime<Utc>,
+            fire_in_warmup: bool
         }
     }
 
