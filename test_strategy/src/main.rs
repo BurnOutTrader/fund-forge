@@ -37,7 +37,7 @@ fn set_subscriptions_initial() -> Vec<DataSubscription> {
 
 #[tokio::main]
 async fn main() {
-    initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
+    initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
