@@ -632,3 +632,50 @@ fn example() {
     }
 }
 ```
+
+## HistoryRequest
+We can request history for a subscription in the event loop, this is costly if we are requesting a history not provided by the DataVendor as it will need to be consolidated.
+This function will avoid look ahead bias, it will never return data.time_utc() > strategy.time_utc()
+```rust
+async fn example() {
+    let strategy = FundForgeStrategy::default();
+    
+    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+    let from_time = NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap();
+    let time_zone = Australia/Sydney;
+    
+    // Get the history based on the strategy utc time
+    let history_from_local: BTreeMap<DateTime<Utc>, TimeSlice> = strategy.history_from_local_time(from_time, aud_cad_60m.clone()).await;
+    for (time, slice) in history_from_local {
+        for base_data in slice {
+            println!("{}... {}", time, base_data)
+        }
+    }
+
+    // Get history based on the strategy local time
+    // This history will start from a different date, because the from_time will be parsed using the time_zone, however the end date will be the strategy time for both.
+    let history_from_utc: BTreeMap<DateTime<Utc>, TimeSlice> = strategy.history_from_utc_time(from_time.clone(), time_zone.clone(), aud_cad_60m.clone()).await;
+    for (time, slice) in history_from_utc {
+        for base_data in slice {
+            println!("{}... {}", time, base_data)
+        }
+    }
+    
+    // We can also get a specific date range up to the current strategy time, the strategy methods will protect against look ahead bias.
+    let to_time = NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap();
+    let history_range_from_local = strategy.historical_range_from_local_time(from_time.clone(), to_time.clone(), time_zone.clone(), aud_cad_60m.clone());
+    for (time, slice) in history_range_from_local {
+        for base_data in slice {
+            println!("{}... {}", time, base_data)
+        }
+    }
+
+    // same as the first examples, the start time will be different due to time zone conversion, the end time will be autocorrected if it is > than strategy.time_utc()
+    let history_range_from_utc = strategy.historical_range_from_utc(from_time.clone(), to_time.clone(), aud_cad_60m.clone());
+    for (time, slice) in history_range_from_utc {
+        for base_data in slice {
+            println!("{}... {}", time, base_data)
+        }
+    }
+}
+```
