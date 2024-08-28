@@ -152,40 +152,59 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
     match platform_mode {
         PlatformMode::SingleMachine => {
             // setup sync and async servers for data server
-            let communicator = Arc::new(SynchronousCommunicator::Channels(InternalCommunicator::new(100000, 100000)));
+            let communicator = Arc::new(SynchronousCommunicator::Channels(InternalCommunicator::new(10, 10)));
             data_server_manage_sequential_requests(communicator.clone()).await;
             let mut communicators = SYNCHRONOUS_COMMUNICATORS.lock().await;
             communicators.insert(ConnectionType::Default, communicator);
 
-            let (sender, receiver) = mpsc::channel(1000);
-            let async_sender = SecondaryDataSender::InternalSender(Arc::new(sender));
-            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(receiver));
+            /// sender simulates sending to a server, receiver simulates the server listener
+            let (server_sender, server_receiver) = mpsc::channel(1000);
+            /// sender simulates the servers sender, receiver simulates the clients listener
+            let (client_sender, client_receiver) = mpsc::channel(1000);
+            let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
+            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
             data_server_manage_async_requests(Arc::new(Mutex::new(async_sender)), Arc::new(Mutex::new(async_receiver))).await;
 
+            let mut async_senders = ASYNC_OUTGOING.lock().await;
+            let async_sender = SecondaryDataSender::InternalSender(Arc::new(server_sender));
+            async_senders.insert(ConnectionType::Default, Arc::new(Mutex::new(async_sender)));
+
+            let mut async_receivers = ASYNC_INCOMING.lock().await;
+            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
+            async_receivers.insert(ConnectionType::Default, Arc::new(Mutex::new(async_receiver)));
+
             // setup sync and async servers for registry
-            let communicator = Arc::new(SynchronousCommunicator::Channels(InternalCommunicator::new(100000, 100000)));
+            let communicator = Arc::new(SynchronousCommunicator::Channels(InternalCommunicator::new(1000, 1000)));
             registry_manage_sequential_requests(communicator.clone()).await;
-            let mut communicators = SYNCHRONOUS_COMMUNICATORS.lock().await;
             communicators.insert(ConnectionType::StrategyRegistry, communicator);
 
-            let (sender, receiver) = mpsc::channel(1000);
-            let async_sender = SecondaryDataSender::InternalSender(Arc::new(sender));
-            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(receiver));
+            /// sender simulates sending to a server, receiver simulates the server listener
+            let (server_sender, server_receiver) = mpsc::channel(1000);
+            /// sender simulates the servers sender, receiver simulates the clients listener
+            let (client_sender, client_receiver) = mpsc::channel(1000);
+            let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
+            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
             registry_manage_async_requests(Arc::new(Mutex::new(async_sender)), Arc::new(Mutex::new(async_receiver))).await;
-            
+
+            let async_sender = SecondaryDataSender::InternalSender(Arc::new(server_sender));
+            async_senders.insert(ConnectionType::StrategyRegistry, Arc::new(Mutex::new(async_sender)));
+
+            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
+            async_receivers.insert(ConnectionType::StrategyRegistry, Arc::new(Mutex::new(async_receiver)));
+
             Ok(())
         },
         PlatformMode::MultiMachine => {
             let settings_map_arc = get_settings_map().clone();
             let settings_guard = settings_map_arc.lock().await;
-            
+
             // for each connection type specified in our server_settings.toml we will establish a connection
             for (connection_type, settings) in settings_guard.iter() {
                 //setup sync client
                 let client = create_api_client(settings).await.unwrap();
                 let communicator = Arc::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Arc::new(Mutex::new(client)))));
                 SYNCHRONOUS_COMMUNICATORS.lock().await.insert(connection_type.clone(), communicator);
-                
+
                 // set up async client
                 let async_client = match create_async_api_client(&settings).await {
                     Ok(client) => client,
@@ -197,14 +216,8 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
                 let (read_half, write_half) = io::split(async_client);
                 let async_sender = SecondaryDataSender::ExternalSender(Arc::new(Mutex::new(write_half)));
                 let async_receiver = SecondaryDataReceiver::ExternalReceiver(ExternalReceiver::new(read_half));
-                let mut outgoing_async = ASYNC_OUTGOING.lock().await;
-                if !outgoing_async.contains_key(connection_type) {
-                    outgoing_async.insert(connection_type.clone(), Arc::new(Mutex::new(async_sender)));
-                }
-                let mut incoming_async = ASYNC_INCOMING.lock().await;
-                if !incoming_async.contains_key(connection_type) {
-                    incoming_async.insert(connection_type.clone(), Arc::new(Mutex::new(async_receiver)));
-                }
+                ASYNC_OUTGOING.lock().await.insert(connection_type.clone(), Arc::new(Mutex::new(async_sender)));
+                ASYNC_INCOMING.lock().await.insert(connection_type.clone(), Arc::new(Mutex::new(async_receiver)));
             }
             Ok(())
         }
