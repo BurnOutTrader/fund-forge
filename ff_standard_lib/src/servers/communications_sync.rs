@@ -49,6 +49,7 @@ impl SynchronousCommunicator {
     }
 }
 
+//todo.. this is essentially sending messages to itself, you could just copy the bytes into it and grab them, no need to transfer..idk i think it is pointless.
 pub struct InternalCommunicator {
     client_sender: mpsc::Sender<Vec<u8>>,
     client_receiver: Mutex<mpsc::Receiver<Vec<u8>>>,
