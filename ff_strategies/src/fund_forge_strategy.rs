@@ -1,4 +1,5 @@
 use std::{env};
+use std::collections::BTreeMap;
 use crate::strategy_state::StrategyStartState;
 use tokio::sync::{mpsc, Notify};
 use std::path::Path;
@@ -9,7 +10,7 @@ use chrono_tz::Tz;
 use ff_standard_lib::drawing_objects::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::apis::brokerage::Brokerage;
 use ff_standard_lib::standardized_types::subscription_handler::{SubscriptionHandler};
-use ff_standard_lib::helpers::converters::{time_convert_utc_datetime_to_fixed_offset, time_convert_utc_naive_to_fixed_offset};
+use ff_standard_lib::helpers::converters::{convert_to_utc, time_convert_utc_datetime_to_fixed_offset, time_convert_utc_naive_to_fixed_offset};
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
@@ -22,10 +23,12 @@ use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
 use ff_standard_lib::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::indicators::values::IndicatorValues;
+use ff_standard_lib::standardized_types::base_data::history::range_data;
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use crate::engine::Engine;
 use crate::interaction_handler::InteractionHandler;
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
+use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
@@ -361,6 +364,40 @@ impl FundForgeStrategy {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or("unknown strategy").to_string()
+    }
+    
+    pub async fn history_from_local_time(&self, from_time: NaiveDateTime, time_zone: Tz, subscription: &DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice>  {
+        let start_date =  convert_to_utc(from_time, time_zone);
+        range_data(start_date, self.time_utc().await, subscription.clone()).await
+    }
+
+    pub async fn history_from_utc_time(&self, from_time: NaiveDateTime, subscription: &DataSubscription)-> BTreeMap<DateTime<Utc>, TimeSlice>  {
+        let start_date = DateTime::<Utc>::from_naive_utc_and_offset(from_time, Utc);
+        range_data(start_date, self.time_utc().await, subscription.clone()).await
+    }
+
+    pub async fn historical_range_from_local_time(&self, from_time: NaiveDateTime, to_time: NaiveDateTime, time_zone: Tz, subscription: &DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice>  {
+        let start_date =  convert_to_utc(from_time, time_zone.clone());
+        let end_date = convert_to_utc(to_time, time_zone);
+        
+        let end_date = match end_date > self.time_utc().await {
+            true => self.time_utc().await,
+            false => end_date,
+        };
+        
+        range_data(start_date, end_date, subscription.clone()).await
+    }
+
+    pub async fn historical_range_from_utc_time(&self, from_time: NaiveDateTime, to_time: NaiveDateTime, subscription: &DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice>  {
+        let start_date =   DateTime::<Utc>::from_naive_utc_and_offset(from_time, Utc);
+        let end_date = DateTime::<Utc>::from_naive_utc_and_offset(to_time, Utc);
+
+        let end_date = match end_date > self.time_utc().await {
+            true => self.time_utc().await,
+            false => end_date,
+        };
+
+        range_data(start_date, end_date, subscription.clone()).await
     }
  }
 
