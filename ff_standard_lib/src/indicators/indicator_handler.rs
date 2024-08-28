@@ -205,32 +205,26 @@ async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicat
 
     let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), min_resolution.resolution, min_resolution.base_data_type, subscription.market_type.clone());
     let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
-    
-
-    let from_time = to_time - (subscription.resolution.as_duration() * indicator.history().number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
-
-    let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), min_resolution.resolution, min_resolution.base_data_type, subscription.market_type.clone());
-    let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
 
     match base_subscription == subscription {
         true => {
-            for (time, slice) in &base_data {
-                if time > &to_time {
+            for (time, slice) in base_data {
+                if time > to_time {
                     break;
                 }
                 for base_data in slice {
-                    indicator.update_base_data(base_data);
+                    indicator.update_base_data(&base_data);
                 }
             }
         }
         false => {
             let mut consolidator = ConsolidatorEnum::create_consolidator(true, indicator.subscription().clone(), indicator.history().number, to_time, strategy_mode).await;
-            for (time, slice) in &base_data {
-                if time > &to_time {
+            for (time, slice) in base_data {
+                if time > to_time {
                     break;
                 }
                 for base_data in slice {
-                    let consolidated = consolidator.update(base_data);
+                    let consolidated = consolidator.update(&base_data);
                     if consolidated.is_empty() {
                         continue
                     }
