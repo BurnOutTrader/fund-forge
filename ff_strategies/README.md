@@ -177,6 +177,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                     // The engine is being designed to allow for extremely high levels of user interaction with strategies, 
                     // where strategies can be written to interact with the users analysis through drawing tools.
                 }
+                // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                 StrategyEvent::TimeSlice(_time, time_slice) => {
                     'base_data_loop: for base_data in &time_slice {
                         if !warmup_complete {
@@ -257,6 +258,9 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 Subscriptions can be updated at any time, and the engine will handle the consolidation of data to the required resolution.
 The engine will also warm up indicators and consolidators after the initial warm up cycle, this may result in a momentary pause in the strategy execution during back tests, while the data is fetched, consolidated etc.
 In live trading this will happen in the background, and the strategy will continue to execute.
+Only data we specifically subscribe to be returned to the event loop, if the data is building from ticks and we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
+The SubscriptionHandler will automatically build data from the highest suitable resolution, if you plan on using open bars and you want the best resolution current bar price, you should also subscribe to that resolution,
+This only needs to be done for DataVendors where more than 1 resolution is available as historical data, if the vendor only has tick data, then current consolidated candles etc will always have the most recent tick price included.
 ```rust
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
 
@@ -286,7 +290,8 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // we can also access the subscription for BaseDataEnums 
     // base_data.subscription() which returns a DataSubscription object
     // all objects wrapped in a BaseDataEnum also have a subscription() fn. for example candle.subscription() will return the DataSubscription object.
-    
+
+    //only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         // we can subscribe in the event loop with no problems, the engine can handle this in live and backtest without skipping data. 
         // If the strategy was already warmed up, the consolidator will warm itself up to the maximum number of bars (50 in this case) and have history available. 

@@ -95,12 +95,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 StrategyEvent::DrawingToolEvents(_, drawing_tool_event, _) => {
                     println!("Drawing Tool Event: {:?}", drawing_tool_event);
                 }
-                // our base data is received here and can be handled according to type
-                // we may return data we didn't subscribe to here, if we subscribed to a data type which the vendor can not supply we will return the consolidated data + the data used to create the consolidated data.
                 StrategyEvent::TimeSlice(_time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
                     'base_data_loop: for base_data in &time_slice {
-                        //todo: Already done: The strategy will only receive data for its actual subscriptions, not data used to consolidate subsciptions
+                        // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
@@ -128,10 +126,9 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                         }
 
                                     } else if candle.is_closed == false {
-                                        //Todo Documents, Open bars get sent through with every tick, so you can always access the open bar using highest resolution.
+                                        //Todo Documents, Open bars get sent through with every tick or primary resolution update, so you can always access the open bar using lowest resolution available in the engine.
                                         //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     }
-
 
                                    /*   if count /3 == 0 {
                                            strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
