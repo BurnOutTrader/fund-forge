@@ -206,14 +206,14 @@ pub mod client_requests {
             }
         }
 
-        pub async fn async_receiver(&self) -> Arc<Mutex<SecondaryDataReceiver>> {
+        pub async fn async_receiver(&self) -> Arc<SecondaryDataReceiver> {
             match get_async_reader(ConnectionType::Vendor(self.clone())).await {
                 Err(e) => panic!("{}", e),
                 Ok(s) => s
             }
         }
 
-        pub async fn async_sender(&self) -> Arc<Mutex<SecondaryDataSender>> {
+        pub async fn async_sender(&self) -> Arc<SecondaryDataSender> {
              match get_async_sender(ConnectionType::Vendor(self.clone())).await  {
                 Err(e) => panic!("{}", e),
                  Ok(s) => s

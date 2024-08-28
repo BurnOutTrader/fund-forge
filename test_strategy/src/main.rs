@@ -74,7 +74,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
    /* let mut heikin_atr = AverageTrueRange::new(IndicatorName::from("heikin_atr"), aud_usd_15m.clone(), 100, 14).await;
     let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);*/
-    
+
     let mut warmup_complete = false;
     let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -109,7 +109,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                         println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
                                     }
                                 }*/
-                           
+
                                     if candle.is_closed == true {
                                         println!("{:?}", candle); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                         if count > 2000 {
@@ -136,7 +136,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                       if count / 5 == 0 {
                                        strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
                                       }*/
-                                
+
                             }
                             BaseDataEnum::QuoteBar(_) => {}
                             BaseDataEnum::Tick(tick) => {

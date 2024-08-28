@@ -51,20 +51,18 @@ impl SynchronousCommunicator {
 }
 
 pub struct InternalCommunicator {
-    client_sender: Arc<Mutex<mpsc::Sender<Vec<u8>>>>,
-    client_receiver: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
-    server_sender: Arc<Mutex<mpsc::Sender<Vec<u8>>>>,
-    server_receiver: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
+    client_sender: mpsc::Sender<Vec<u8>>,
+    client_receiver: Mutex<mpsc::Receiver<Vec<u8>>>,
+    server_sender: mpsc::Sender<Vec<u8>>,
+    server_receiver: Mutex<mpsc::Receiver<Vec<u8>>>,
 }
 
 impl InternalCommunicator {
     pub fn new(client_buffer: usize, server_buffer: usize) -> Self {
         let (client_sender, server_receiver) = mpsc::channel(client_buffer);
-        let client_sender = Arc::new(Mutex::new(client_sender));
-        let server_receiver = Arc::new(Mutex::new(server_receiver));
+        let server_receiver = Mutex::new(server_receiver);
         let (server_sender, client_receiver) = mpsc::channel(server_buffer);
-        let server_sender = Arc::new(Mutex::new(server_sender));
-        let client_receiver = Arc::new(Mutex::new(client_receiver));
+        let client_receiver = Mutex::new(client_receiver);
         InternalCommunicator {
             client_sender,
             server_receiver,
@@ -117,30 +115,24 @@ impl InternalCommunicator {
     }
 
     async fn receive_client(&self) -> Option<Vec<u8>> {
-        let receiver = self.client_receiver.clone();
-        let mut receiver = receiver.lock().await;
+        let mut receiver = self.client_receiver.lock().await;
         receiver.recv().await
     }
 
     async fn receive_server(&self) -> Option<Vec<u8>> {
-        let receiver = self.server_receiver.clone();
-        let mut receiver = receiver.lock().await;
+        let mut receiver = self.server_receiver.lock().await;
         receiver.recv().await
     }
 
     async fn server_send(&self, data: Vec<u8>) -> Result<(), SendError> {
-        let sender = self.server_sender.clone();
-        let sender = sender.lock().await;
-        match sender.send(data).await {
+        match self.server_sender.send(data).await {
             Ok(_) => return Ok(()),
             Err(e) => return Err(SendError{msg: format!("Could not send data to client: {}", e)}),
         }
     }
 
     async fn client_send(&self, data: Vec<u8>) -> Result<(), SendError> {
-        let sender = self.client_sender.clone();
-        let sender = sender.lock().await;
-        match sender.send(data).await {
+        match  self.client_sender.send(data).await {
             Ok(_) => return Ok(()),
             Err(e) => return Err(SendError{msg: format!("Could not send data to client: {}", e)}),
         }
@@ -148,12 +140,12 @@ impl InternalCommunicator {
 }
 
 pub struct SecureExternalCommunicator {
-    communicator: Arc<Mutex<TlsStream<TcpStream>>>,
+    communicator: Mutex<TlsStream<TcpStream>>,
 }
 
 impl SecureExternalCommunicator {
 
-    pub fn new(communicator: Arc<Mutex<TlsStream<TcpStream>>>) -> SecureExternalCommunicator {
+    pub fn new(communicator: Mutex<TlsStream<TcpStream>>) -> SecureExternalCommunicator {
         SecureExternalCommunicator {
             communicator,
         }
@@ -164,8 +156,7 @@ impl SecureExternalCommunicator {
             Ok(_) => {},
             Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to send data: {:?}", e))),
         }
-        let communicator = self.communicator.clone();
-        let communicator = &mut *communicator.lock().await;
+        let mut communicator = self.communicator.lock().await;
         let mut length_buffer = [0u8; LENGTH];
         // Read the length header
         match communicator.read_exact(&mut length_buffer).await {
@@ -192,8 +183,7 @@ impl SecureExternalCommunicator {
 
     async fn receive(&self) -> Option<Vec<u8>> {
         let mut length_bytes = vec![0u8; LENGTH];
-        let communicator = self.communicator.clone();
-        let communicator = &mut *communicator.lock().await;
+        let mut communicator = self.communicator.lock().await;
         if communicator.read_exact(&mut length_bytes).await.is_ok() {
             let msg_length = u64::from_be_bytes(length_bytes.try_into().ok()?) as usize;
             let mut message_body = vec![0u8; msg_length];
@@ -205,8 +195,7 @@ impl SecureExternalCommunicator {
     }
 
     async fn send(&self, data: Vec<u8>) -> Result<(), SendError> {
-        let communicator = self.communicator.clone();
-        let communicator = &mut *communicator.lock().await;
+        let mut communicator = self.communicator.lock().await;
 
         let length = (data.len() as u64).to_be_bytes();
 
