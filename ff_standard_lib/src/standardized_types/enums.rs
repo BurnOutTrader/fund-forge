@@ -4,7 +4,7 @@ use chrono::Duration;
 use serde::{Deserialize, Serialize};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use strum_macros::{Display, EnumIter};
-
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
 
 /// Used for internal ff calulcations
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Deserialize, Eq, Hash, Display, PartialOrd, Ord, Debug, EnumIter)]
@@ -72,6 +72,29 @@ pub enum StrategyMode {
     LivePaperTrading,
 }
 
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Hash)]
+#[archive(
+    // This will generate a PartialEq impl between our unarchived and archived
+    // types:
+    compare(PartialEq),
+    // bytecheck can be used to validate your data if you want. To use the safe
+    // API, you have to derive CheckBytes for the archived type:
+    check_bytes,
+)]
+#[archive_attr(derive(Debug))]
+pub struct SubscriptionResolutionType {
+    pub base_data_type: BaseDataType,
+    pub resolution: Resolution
+}
+
+impl SubscriptionResolutionType {
+    pub fn new(resolution: Resolution, base_data_type: BaseDataType) -> Self {
+        SubscriptionResolutionType {
+            resolution,
+            base_data_type,
+        }
+    }
+}
 
 ///The resolution of a data point, which determines the time period it covers.
 

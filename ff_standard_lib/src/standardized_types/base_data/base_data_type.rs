@@ -8,7 +8,7 @@ use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
 
-#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Eq,Hash, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Eq,Hash, PartialOrd, Ord,Copy)]
 #[archive(
 compare(PartialEq),
 check_bytes,

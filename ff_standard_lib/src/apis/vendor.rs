@@ -105,14 +105,14 @@ pub mod client_requests {
     use crate::server_connections::{ConnectionType, get_synchronous_communicator};
     use crate::servers::communications_sync::SynchronousCommunicator;
     use crate::standardized_types::data_server_messaging::{FundForgeError, SynchronousRequestType, SynchronousResponseType};
-    use crate::standardized_types::enums::{MarketType, Resolution};
+    use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
     use crate::standardized_types::subscriptions::Symbol;
 
     #[async_trait]
     pub trait ClientSideDataVendor: Sync + Send {
         /// returns just the symbols available from the DataVendor in the fund forge format
         async fn symbols(&self, market_type: MarketType) -> Result<Vec<Symbol>, FundForgeError>;
-        async fn resolutions(&self, market_type: MarketType) -> Result<Vec<Resolution>, FundForgeError>;
+        async fn resolutions(&self, market_type: MarketType) -> Result<Vec<SubscriptionResolutionType>, FundForgeError>;
         async fn markets(&self) -> Result<Vec<MarketType>, FundForgeError>;
         async fn decimal_accuracy(&self, symbol: Symbol) -> Result<u64, FundForgeError>;
         async fn tick_size(&self, symbol: Symbol) -> Result<f64, FundForgeError>;
@@ -135,7 +135,7 @@ pub mod client_requests {
             }
         }
 
-        async fn resolutions(&self, market_type: MarketType) -> Result<Vec<Resolution>, FundForgeError> {
+        async fn resolutions(&self, market_type: MarketType) -> Result<Vec<SubscriptionResolutionType>, FundForgeError> {
             let api_client = self.synchronous_client().await;
             let request = SynchronousRequestType::Resolutions(self.clone(), market_type);
             let response = match api_client.send_and_receive(request.to_bytes(), false).await {

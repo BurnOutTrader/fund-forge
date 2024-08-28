@@ -6,7 +6,7 @@ use crate::indicators::indicator_enum::IndicatorEnum;
 use crate::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::indicators::values::{IndicatorValues};
 use crate::standardized_types::OwnerId;
-use crate::standardized_types::subscriptions::DataSubscription;
+use crate::standardized_types::subscriptions::{filter_resolutions, DataSubscription};
 use crate::standardized_types::time_slices::TimeSlice;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
@@ -194,31 +194,22 @@ impl IndicatorHandler {
 
 async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicator: IndicatorEnum) -> IndicatorEnum {
     let subscription = indicator.subscription();
-    let vendor_resolutions = subscription.symbol.data_vendor.resolutions(subscription.market_type.clone()).await.unwrap();
-    let mut minimum_resolution: Option<Resolution> = None;
-    for resolution in &vendor_resolutions {
-        if minimum_resolution.is_none() {
-            minimum_resolution = Some(resolution.clone());
-        } else {
-            if resolution > &minimum_resolution.unwrap() && resolution < &subscription.resolution {
-                minimum_resolution = Some(resolution.clone());
-            }
-        }
-    }
-
-    let minimum_resolution = match minimum_resolution.is_none() {
+    let vendor_resolutions = filter_resolutions(subscription.symbol.data_vendor.resolutions(subscription.market_type.clone()).await.unwrap(), subscription.resolution.clone());
+    let max_resolution = vendor_resolutions.iter().max_by_key(|r| r.resolution);
+    let min_resolution = match max_resolution.is_none() {
         true => panic!("{} does not have any resolutions available", subscription.symbol.data_vendor),
-        false => minimum_resolution.unwrap()
-    };
-
-    let data_type = match minimum_resolution {
-        Resolution::Ticks(_) => BaseDataType::Ticks,
-        _ => subscription.base_data_type.clone()
+        false => max_resolution.unwrap()
     };
 
     let from_time = to_time - (subscription.resolution.as_duration() * indicator.history().number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
 
-    let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, subscription.market_type.clone());
+    let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), min_resolution.resolution, min_resolution.base_data_type, subscription.market_type.clone());
+    let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
+    
+
+    let from_time = to_time - (subscription.resolution.as_duration() * indicator.history().number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
+
+    let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), min_resolution.resolution, min_resolution.base_data_type, subscription.market_type.clone());
     let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
 
     match base_subscription == subscription {

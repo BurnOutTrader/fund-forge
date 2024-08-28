@@ -9,7 +9,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
-use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
+use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 
 
 pub enum ConsolidatorEnum {
@@ -142,31 +142,16 @@ impl ConsolidatorEnum {
     pub async fn warmup(mut consolidator: ConsolidatorEnum, to_time: DateTime<Utc>, strategy_mode: StrategyMode) -> ConsolidatorEnum {
         //todo if live we will tell the self.subscription.symbol.data_vendor to .update_historical_symbol()... we will wait then continue
         let subscription = consolidator.subscription();
-        let vendor_resolutions = subscription.symbol.data_vendor.resolutions(subscription.market_type.clone()).await.unwrap();
-        let mut minimum_resolution: Option<Resolution> = None;
-        for resolution in vendor_resolutions {
-            if minimum_resolution.is_none() {
-                minimum_resolution = Some(resolution);
-            } else {
-                if resolution > minimum_resolution.unwrap() && resolution < subscription.resolution {
-                    minimum_resolution = Some(resolution);
-                }
-            }
-        }
-
-        let minimum_resolution = match minimum_resolution.is_none() {
+        let vendor_resolutions = filter_resolutions(subscription.symbol.data_vendor.resolutions(subscription.market_type.clone()).await.unwrap(), consolidator.subscription().resolution);
+        let max_resolution = vendor_resolutions.iter().max_by_key(|r| r.resolution);
+        let min_resolution = match max_resolution.is_none() {
             true => panic!("{} does not have any resolutions available", subscription.symbol.data_vendor),
-            false => minimum_resolution.unwrap()
-        };
-
-        let data_type = match minimum_resolution {
-            Resolution::Ticks(_) => BaseDataType::Ticks,
-            _ => subscription.base_data_type.clone()
+            false => max_resolution.unwrap()
         };
 
         let from_time = to_time - (subscription.resolution.as_duration() * consolidator.history().number as i32) - Duration::days(4); //we go back a bit further in case of holidays or weekends
 
-        let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), minimum_resolution, data_type, subscription.market_type.clone());
+        let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), min_resolution.resolution, min_resolution.base_data_type, subscription.market_type.clone());
         let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
 
         for (time, slice) in &base_data {

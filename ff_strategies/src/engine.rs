@@ -176,6 +176,7 @@ impl Engine{
             self.market_event_handler.update_time(start.clone()).await;
             let mut last_time = start.clone();
             'month_loop: loop {
+                let strategy_subscriptions = self.subscription_handler.strategy_subscriptions().await;
                 let mut time_slices = match self.get_base_time_slices(start.clone()).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -230,19 +231,26 @@ impl Engine{
                         self.subscription_handler.update_time_slice(&time_slice),
                     );
 
+                    if let Some(data) = consolidated_data {
+                        time_slice.extend(data);
+                    }
+                    
+                    let mut strategy_time_slice : TimeSlice = TimeSlice::new();
+                    for base_data in time_slice {
+                        if strategy_subscriptions.contains(&base_data.subscription()) {
+                            strategy_time_slice.push(base_data);
+                        }
+                    }
+
                     if let Some(events) = market_event_handler_events {
                         strategy_event_slice.extend(events);
                     }
 
-                    if let Some(data) = consolidated_data {
-                        time_slice.extend(data);
-                    }
-
-                    if let Some(events) = self.indicator_handler.update_time_slice(&time_slice).await {
+                    if let Some(events) = self.indicator_handler.update_time_slice(&strategy_time_slice).await {
                         strategy_event_slice.extend(events);
                     }
 
-                    strategy_event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), time_slice));
+                    strategy_event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), strategy_time_slice));
                     
                     if !self.send_and_continue(time.clone(), strategy_event_slice, warm_up_completed).await {
                         break 'main_loop

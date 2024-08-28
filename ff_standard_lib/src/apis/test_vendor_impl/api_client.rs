@@ -8,8 +8,9 @@ use crate::apis::brokerage::server_responses::BrokerApiResponse;
 use crate::apis::vendor::DataVendor;
 use crate::apis::vendor::server_responses::VendorApiResponse;
 use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo};
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::data_server_messaging::{FundForgeError, SynchronousResponseType};
-use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::standardized_types::enums::{MarketType, Resolution, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::Symbol;
 
 static TEST_API_CLIENT: OnceCell<Arc<TestVendorApi>> = OnceCell::new();
@@ -62,7 +63,8 @@ impl VendorApiResponse for TestVendorApi {
         if market_type != MarketType::Forex {
             return Err(FundForgeError::ClientSideErrorDebug("Market Type not supported".to_string()));
         }
-        Ok(SynchronousResponseType::Resolutions(vec![Resolution::Ticks(1)], market_type))
+        let data_resolution = SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks);
+        Ok(SynchronousResponseType::Resolutions(vec![data_resolution], market_type))
     }
 
     async fn markets_response(&self) -> Result<SynchronousResponseType, FundForgeError> {

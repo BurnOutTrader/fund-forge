@@ -5,7 +5,7 @@ use rkyv::ser::Serializer;
 use rkyv::ser::serializers::AllocSerializer;
 use crate::apis::vendor::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::standardized_types::enums::{MarketType, Resolution, SubscriptionResolutionType};
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
 
 pub type ExchangeCode = String;
@@ -28,8 +28,9 @@ pub struct Symbol {
 
 impl Symbol {
     pub fn new(name: String, data_vendor: DataVendor,  market_type: MarketType) -> Self {
+        let cleaned_symbol_name = fund_forge_formatted_symbol_name(&name);
         Symbol {
-            name,
+            name: cleaned_symbol_name,
             market_type,
             data_vendor,
         }
@@ -252,4 +253,62 @@ pub enum DataSubscriptionEvent {
     Subscribed(DataSubscription),
     Unsubscribed(DataSubscription),
     Failed(DataSubscription)
+}
+
+pub fn filter_resolutions(available_resolutions: Vec<SubscriptionResolutionType>, data_resolution: Resolution) -> Vec<SubscriptionResolutionType> {
+    if available_resolutions.len() == 1 {
+        return available_resolutions;
+    }
+    available_resolutions
+        .into_iter()
+        .filter(|subscription_resolution_type| match (subscription_resolution_type.resolution, data_resolution) {
+            (Resolution::Ticks(num), Resolution::Ticks(num_2)) => {
+                if num <= num_2 {
+                    true
+                } else {
+                    false
+                }
+            },
+            (Resolution::Seconds(num), Resolution::Seconds(num_2)) => {
+                if num <= num_2 {
+                    true
+                } else {
+                    false
+                }
+            },
+            (Resolution::Minutes(num), Resolution::Minutes(num_2)) => {
+                if num <= num_2 {
+                    true
+                } else {
+                    false
+                }
+            },
+            (Resolution::Hours(num), Resolution::Hours(num_2)) => {
+                if num <= num_2 {
+                    true
+                } else {
+                    false
+                }
+            },
+            (Resolution::Ticks(1), Resolution::Seconds(_)) => {
+                true
+            },
+            (Resolution::Seconds(_), Resolution::Minutes(_)) => {
+                true
+            },
+            (Resolution::Ticks(1), Resolution::Minutes(_)) => {
+                true
+            },
+            (Resolution::Minutes(_), Resolution::Hours(_)) => {
+                true
+            },
+            (Resolution::Ticks(1), Resolution::Hours(_)) => {
+                true
+            },
+            (Resolution::Seconds(_), Resolution::Hours(_)) => {
+                true
+            },
+            _ => false,
+        })
+        .collect()
 }

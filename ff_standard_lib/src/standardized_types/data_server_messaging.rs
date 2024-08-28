@@ -5,7 +5,8 @@ use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::apis::brokerage::Brokerage;
 use crate::apis::vendor::DataVendor;
 use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo};
-use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::enums::{MarketType, Resolution, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
@@ -157,8 +158,9 @@ pub enum SynchronousResponseType {
     /// *  `Vec<Symbol>` for all symbols available on the server, to fullfill this the vendor will need a fn that converts from its instrument format into a `Symbol` object.
     Symbols(Vec<Symbol>, MarketType),
 
-    /// Responds with a vec<Resolution> which represents all the native resolutions available from the vendor api (note we only support intraday resolutions, higher resolutions are consolidated by the engine)
-    Resolutions(Vec<Resolution>, MarketType),
+    /// Responds with a vec<(Resolution, BaseDataType)> which represents all the native resolutions available for the data types from the vendor api (note we only support intraday resolutions, higher resolutions are consolidated by the engine)
+    Resolutions(Vec<SubscriptionResolutionType>, MarketType),
+    
     /// Provides the client with an error message
     /// Contains a `FundForgeError` which is used to help debug and identify the type of error that occurred.
     /// [`DataServerError`](ff_data_vendors::networks::DataServerError)

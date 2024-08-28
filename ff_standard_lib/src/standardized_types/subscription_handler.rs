@@ -5,13 +5,14 @@ use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::data_server_messaging::FundForgeError;
-use crate::standardized_types::enums::{Resolution, StrategyMode};
+use crate::standardized_types::enums::{Resolution, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use ahash::AHashMap;
 use futures::future::join_all;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
+use crate::standardized_types::subscriptions;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -22,16 +23,19 @@ pub struct SubscriptionHandler {
     subscriptions_updated: RwLock<bool>,
     is_warmed_up: Mutex<bool>,
     strategy_mode: StrategyMode,
+    // subscriptions which the strategy actually subscribed to, not the raw data needed to fullfill the subscription.
+    strategy_subscriptions: RwLock<Vec<DataSubscription>>
 }
 
 impl SubscriptionHandler {
     pub async fn new(strategy_mode: StrategyMode) -> Self {
         SubscriptionHandler {
-            fundamental_subscriptions: RwLock::new(vec![]),
-            symbol_subscriptions: Arc::new(RwLock::new(Default::default())),
+            fundamental_subscriptions: Default::default(),
+            symbol_subscriptions: Default::default(),
             subscriptions_updated: RwLock::new(true),
             is_warmed_up: Mutex::new(false),
             strategy_mode,
+            strategy_subscriptions: Default::default(),
         }
     }
 
@@ -53,6 +57,11 @@ impl SubscriptionHandler {
         subscription_events
     }
 
+    pub async fn strategy_subscriptions(&self) -> Vec<DataSubscription> {
+        let strategy_subscriptions = self.strategy_subscriptions.read().await;
+        strategy_subscriptions.clone()
+    }
+
     
     /// Subscribes to a new data subscription
     /// 'new_subscription: DataSubscription' The new subscription to subscribe to.
@@ -66,6 +75,10 @@ impl SubscriptionHandler {
             if !fundamental_subscriptions.contains(&new_subscription) {
                 fundamental_subscriptions.push(new_subscription.clone());
             }
+            let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
+            if !strategy_subscriptions.contains(&new_subscription) {
+                strategy_subscriptions.push(new_subscription.clone());
+            }
             *self.subscriptions_updated.write().await = true;
             return Ok(())
         }
@@ -73,6 +86,10 @@ impl SubscriptionHandler {
         if !symbol_subscriptions.contains_key(&new_subscription.symbol) {
             let symbol_handler = SymbolSubscriptionHandler::new(new_subscription.clone(), self.is_warmed_up.lock().await.clone(), history_to_retain, current_time, self.strategy_mode).await;
             symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
+        }
+        let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
+        if !strategy_subscriptions.contains(&new_subscription) {
+            strategy_subscriptions.push(new_subscription.clone());
         }
         let symbol_handler = symbol_subscriptions.get_mut(&new_subscription.symbol).unwrap();
         symbol_handler.subscribe(new_subscription, history_to_retain, current_time, self.strategy_mode).await;
@@ -93,6 +110,10 @@ impl SubscriptionHandler {
                     *fundamental_subscription != subscription
                 });
             }
+            let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
+            if strategy_subscriptions.contains(&subscription) {
+                strategy_subscriptions.retain(|x| x != &subscription);
+            }
             *self.subscriptions_updated.write().await = true;
             return Ok(())
         }
@@ -101,6 +122,10 @@ impl SubscriptionHandler {
         symbol_handler.unsubscribe(&subscription).await;
         if symbol_handler.active_count == 0 {
             handler.remove(&subscription.symbol);
+        }
+        let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
+        if strategy_subscriptions.contains(&subscription) {
+            strategy_subscriptions.retain(|x| x != &subscription);
         }
         *self.subscriptions_updated.write().await = true;
         Ok(())
@@ -252,10 +277,10 @@ impl SymbolSubscriptionHandler {
     pub async fn new(primary_subscription: DataSubscription, is_warmed_up: bool, history_to_retain: u64, warm_up_to: DateTime<Utc>, strategy_mode: StrategyMode) -> Self {
         let mut handler = SymbolSubscriptionHandler {
             primary_subscription: primary_subscription.clone(),
-            secondary_subscriptions: AHashMap::new(),
+            secondary_subscriptions: Default::default(),
             active_count: 1,
             symbol: primary_subscription.symbol.clone(),
-            subscription_event_buffer: vec![],
+            subscription_event_buffer: Default::default(),
             is_warmed_up,
             primary_history: RollingWindow::new(history_to_retain),
         };
@@ -310,79 +335,41 @@ impl SymbolSubscriptionHandler {
 
     /// This is only used
     async fn select_primary_non_tick_subscription(&mut self, new_subscription: DataSubscription, history_to_retain: u64, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
-        let available_resolutions: Vec<Resolution> = new_subscription.symbol.data_vendor.resolutions(new_subscription.market_type.clone()).await.unwrap();
+        let available_resolutions: Vec<SubscriptionResolutionType> = new_subscription.symbol.data_vendor.resolutions(new_subscription.market_type.clone()).await.unwrap();
         //println!("Available Resolutions: {:?}", available_resolutions);
         if available_resolutions.is_empty() {
             panic!("{} does not have any resolutions available", new_subscription.symbol.data_vendor);
         }
-        let resolutions = self.resolutions(available_resolutions, new_subscription.resolution.clone());
-        if resolutions.is_empty() {
-            panic!("{} does not have any resolutions available for {:?}", new_subscription.symbol.data_vendor, new_subscription);
+        let resolution_types = subscriptions::filter_resolutions(available_resolutions, new_subscription.resolution.clone());
+        if resolution_types.is_empty() {
+            panic!("{} does not have any resolutions available for {:?}, Problem in select_primary_non_tick_subscription or vendor.resolutions() fn", new_subscription.symbol.data_vendor, new_subscription);
         }
-        if !resolutions.contains(&new_subscription.resolution) {
+ 
+        let mut subscription_set = false;
+        //if we have the resolution avaialable from the vendor, just use it.
+        for subscription_resolution_type in &resolution_types {
+            if subscription_resolution_type.resolution == new_subscription.resolution && subscription_resolution_type.base_data_type == new_subscription.base_data_type {
+                self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+                self.primary_subscription = new_subscription.clone();
+                self.primary_history.clear();
+                subscription_set = true;
+                break;
+            }
+        }
+        if !subscription_set {
             self.secondary_subscriptions.insert(new_subscription.clone(), ConsolidatorEnum::create_consolidator(self.is_warmed_up, new_subscription.clone(), history_to_retain, to_time, strategy_mode).await);
+            
             self.active_count += 1;
-        }
-        else {
-            self.subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
-            self.primary_subscription = new_subscription;
-            self.primary_history.clear();
-        }
-    }
 
-    fn resolutions(&self, available_resolutions: Vec<Resolution>, data_resolution: Resolution) -> Vec<Resolution> {
-        available_resolutions
-            .into_iter()
-            .filter(|resolution| match (resolution, &data_resolution) {
-                (Resolution::Ticks(num), Resolution::Ticks(num_2)) => {
-                    if num <= num_2 {
-                        true
-                    } else {
-                        false
-                    }
-                },
-                (Resolution::Seconds(num), Resolution::Seconds(num_2)) => {
-                    if num <= num_2 {
-                        true
-                    } else {
-                        false
-                    }
-                },
-                (Resolution::Minutes(num), Resolution::Minutes(num_2)) => {
-                    if num <= num_2 {
-                        true
-                    } else {
-                        false
-                    }
-                },
-                (Resolution::Hours(num), Resolution::Hours(num_2)) => {
-                    if num <= num_2 {
-                        true
-                    } else {
-                        false
-                    }
-                },
-                (Resolution::Ticks(1), Resolution::Seconds(_)) => {
-                    true
-                },
-                (Resolution::Seconds(_), Resolution::Minutes(_)) => {
-                    true
-                },
-                (Resolution::Ticks(1), Resolution::Minutes(_)) => {
-                    true
-                },
-                (Resolution::Minutes(_), Resolution::Hours(_)) => {
-                    true
-                },
-                (Resolution::Ticks(1), Resolution::Hours(_)) => {
-                    true
-                },
-                (Resolution::Seconds(_), Resolution::Hours(_)) => {
-                    true
-                },
-                _ => false,
-            })
-            .collect()
+            let max_resolution = resolution_types.iter().max_by_key(|r| r.resolution);
+            if let Some(resolution_type) = max_resolution {
+                let subscription = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(),
+                                                         resolution_type.resolution, resolution_type.base_data_type, new_subscription.market_type.clone());
+
+                self.primary_subscription = subscription
+            }
+        }
+        self.active_count += 1;
     }
 
     async fn subscribe(&mut self, new_subscription: DataSubscription, history_to_retain: u64, to_time: DateTime<Utc>, strategy_mode: StrategyMode) {
@@ -391,7 +378,8 @@ impl SymbolSubscriptionHandler {
         }
         match new_subscription.resolution {
             Resolution::Ticks(number) => {
-                if !new_subscription.symbol.data_vendor.resolutions(new_subscription.market_type.clone()).await.unwrap().contains(&Resolution::Ticks(1)) {
+                let res_type_tick = SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks);
+                if !new_subscription.symbol.data_vendor.resolutions(new_subscription.market_type.clone()).await.unwrap().contains(&res_type_tick) {
                     panic!("{} does not have tick data available", new_subscription.symbol.data_vendor);
                 }
                 // we switch to tick data as base resolution for any tick subscription

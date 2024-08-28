@@ -28,8 +28,8 @@ use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, Strat
 
 fn set_subscriptions_initial() -> Vec<DataSubscription> {
     let subscriptions: Vec<DataSubscription> = vec![
-        DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-        DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
+        //DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
+        //DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
         DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)
     ];
     subscriptions
@@ -74,9 +74,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
    /* let mut heikin_atr = AverageTrueRange::new(IndicatorName::from("heikin_atr"), aud_usd_15m.clone(), 100, 14).await;
     let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);*/
-
-
-
+    
     let mut warmup_complete = false;
     let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -84,7 +82,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         //println!("{}... time utc {}", count, strategy.time_utc().await);
         if warmup_complete {
             count += 1;
-            if count == 100 {
+            if count == 10 {
                 strategy.subscriptions_update(vec![aud_usd_3m.clone(), aud_cad_60m.clone()],100).await;
                 // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variat of the same name.
                 let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), aud_usd_3m.clone(), 100, 20).await);
@@ -102,6 +100,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 StrategyEvent::TimeSlice(_time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
                     'base_data_loop: for base_data in &time_slice {
+                        //todo: Already done: The strategy will only receive data for its actual subscriptions, not data used to consolidate subsciptions
                         match base_data {
                             BaseDataEnum::Price(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
@@ -112,7 +111,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                         println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
                                     }
                                 }*/
-                                if warmup_complete {
+                           
                                     if candle.is_closed == true {
                                         println!("{:?}", candle); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                         if count > 2000 {
@@ -140,7 +139,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                       if count / 5 == 0 {
                                        strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
                                       }*/
-                                }
+                                
                             }
                             BaseDataEnum::QuoteBar(_) => {}
                             BaseDataEnum::Tick(tick) => {
