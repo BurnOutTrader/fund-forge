@@ -10,13 +10,12 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
 use structopt::StructOpt;
-use tokio::io::split;
 use tokio::net::TcpListener;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor, TlsStream};
 use ff_standard_lib::server_connections::ConnectionType;
-use ff_standard_lib::servers::communications_async::{ExternalReceiver, SecondaryDataReceiver, SecondaryDataSender};
+use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use ff_standard_lib::servers::settings::client_settings::get_settings;
 use ff_standard_lib::servers::communications_sync::{SecureExternalCommunicator, SynchronousCommunicator};
 use ff_standard_lib::servers::registry_request_handlers::{registry_manage_async_requests, registry_manage_sequential_requests};
@@ -87,7 +86,6 @@ async fn main() -> io::Result<()> {
     if let Err(e) = async_result {
         eprintln!("Asynchronous server failed: {:?}", e);
     }
-    
 
     Ok(())
 }
@@ -122,7 +120,7 @@ pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -
                     continue;
                 }
             };
-            let communicator = SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Arc::new(Mutex::new(TlsStream::from(tls_stream))))));
+            let communicator = SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Mutex::new(TlsStream::from(tls_stream)))));
             registry_manage_sequential_requests(Arc::new(communicator)).await;
 
             println!("TLS connection established with {:?}", peer_addr);

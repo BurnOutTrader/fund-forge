@@ -52,15 +52,16 @@ async fn main() {
             // we can also specify candle types like HeikinAshi, Renko, CandleStick (more to come). 
             DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, Some(CandleType::HeikinAshi))
         ],
+        
+        //bars to retain in memory for the initial subscriptions
+        100,
+        
         // the sender for the strategy events
         strategy_event_sender,
         
         // backtest_delay: An Option<Duration> we can pass in a delay for market replay style backtesting, this will be ignored in live trading.
         None,
-
-        //bars to retain in memory for the initial subscriptions
-        100, 
-
+        
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading.
         // In live trading we can set this to None to skip buffering and send the data directly to the strategy or we can use a buffer to keep live consistency with backtesting.

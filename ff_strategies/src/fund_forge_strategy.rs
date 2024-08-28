@@ -94,9 +94,9 @@ impl FundForgeStrategy {
         time_zone: Tz,
         warmup_duration: Duration,
         subscriptions: Vec<DataSubscription>,
+        retain_history: u64,
         strategy_event_sender: mpsc::Sender<EventTimeSlice>,
         replay_delay_ms: Option<u64>,
-        retain_history: u64,
         buffering_resolution: Option<Duration>,
     ) -> FundForgeStrategy {
         let start_state = StrategyStartState::new(strategy_mode.clone(), start_date, end_date, time_zone.clone(), warmup_duration, buffering_resolution);

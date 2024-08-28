@@ -139,7 +139,7 @@ pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -
                     continue;
                 }
             };
-            let communicator = SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Arc::new(Mutex::new(TlsStream::from(tls_stream))))));
+            let communicator = SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Mutex::new(TlsStream::from(tls_stream)))));
             data_server_manage_sequential_requests(Arc::new(communicator)).await;
         }
     })

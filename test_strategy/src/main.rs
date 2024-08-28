@@ -37,7 +37,7 @@ fn set_subscriptions_initial() -> Vec<DataSubscription> {
 
 #[tokio::main]
 async fn main() {
-    initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
+    initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
@@ -51,9 +51,10 @@ async fn main() {
         Australia::Sydney, // the strategy time zone
         Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         set_subscriptions_initial(), //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+        100,
         strategy_event_sender, // the sender for the strategy events
         None,
-        100,
+        
 
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
