@@ -4,6 +4,7 @@ use std::io::BufReader;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use chrono::Utc;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
@@ -118,7 +119,7 @@ pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -
                 return;
             }
         };
-        println!("Listening on: {}", addr);
+        println!("{} Listening on: {}", Utc::now(), addr);
 
         loop {
             let (stream, peer_addr) = match listener.accept().await {
@@ -128,7 +129,7 @@ pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -
                     continue;
                 }
             };
-            println!("peer_addr: {:?}", peer_addr);
+            println!("{}, peer_addr: {:?}", Utc::now(), peer_addr);
             let acceptor = acceptor.clone();
 
             let tls_stream = match acceptor.accept(stream).await {
@@ -164,7 +165,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
                     continue;
                 }
             };
-            println!("peer_addr: {:?}", peer_addr);
+            println!("{}, peer_addr: {:?}", Utc::now(), peer_addr);
             let acceptor = acceptor.clone();
 
             let tls_stream = match acceptor.accept(stream).await {
