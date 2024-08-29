@@ -21,11 +21,12 @@ pub enum BaseDataType {
     Ticks = 0,
     /// A `Quote` is a data point that represents the current bid and ask prices for a given symbol.
     Quotes = 1,
-    /// A `Price` is a data point that represents the current price of a given symbol.
+    /// A `Price` is a data point that represents the current price or last traded of a given symbol.
     Prices = 2,
     QuoteBars = 3,
     Candles = 4,
     Fundamentals = 5,
+    //OrderBooks = 6,
 }
 
 impl BaseDataType {
@@ -37,6 +38,7 @@ impl BaseDataType {
             BaseDataType::QuoteBars => TypeId::of::<QuoteBar>(),
             BaseDataType::Candles => TypeId::of::<Candle>(),
             BaseDataType::Fundamentals => TypeId::of::<String>(),
+            //BaseDataType::OrderBooks => TypeId::of::<OrderBook>(),
         }
     }
 }
@@ -50,6 +52,7 @@ impl Display for BaseDataType {
             BaseDataType::QuoteBars => write!(f, "quotebars"),
             BaseDataType::Candles => write!(f, "candles"),
             BaseDataType::Fundamentals => write!(f, "fundamentals"),
+            //BaseDataType::OrderBooks => write!(f, "order books"),
         }
     }
 }

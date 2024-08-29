@@ -25,6 +25,7 @@ use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::traits::bytes::Bytes;
 
+
 /// Enum for the different types of base data
 /// This is the main_window enum for all the different types of base data
 /// It is used to store all the different types of base data in a single type

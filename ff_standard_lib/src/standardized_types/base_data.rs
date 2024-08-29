@@ -9,4 +9,5 @@ pub mod tick;
 pub mod fundamental;
 pub mod history;
 pub mod traits;
+pub mod order_book;
 

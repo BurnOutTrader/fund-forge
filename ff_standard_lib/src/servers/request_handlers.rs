@@ -8,7 +8,6 @@ use crate::helpers::converters::load_as_bytes;
 use crate::helpers::get_data_folder;
 use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use crate::servers::communications_sync::SynchronousCommunicator;
-use crate::servers::registry_request_handlers::EventRequest;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::data_server_messaging::{AsyncRequestType, BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType};
 use crate::standardized_types::subscriptions::DataSubscription;

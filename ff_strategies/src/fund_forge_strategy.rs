@@ -365,7 +365,7 @@ impl FundForgeStrategy {
             .and_then(|name| name.to_str())
             .unwrap_or("unknown strategy").to_string()
     }
-    
+
     pub async fn history_from_local_time(&self, from_time: NaiveDateTime, time_zone: Tz, subscription: &DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice>  {
         let start_date =  convert_to_utc(from_time, time_zone);
         range_data(start_date, self.time_utc().await, subscription.clone()).await
@@ -379,12 +379,12 @@ impl FundForgeStrategy {
     pub async fn historical_range_from_local_time(&self, from_time: NaiveDateTime, to_time: NaiveDateTime, time_zone: Tz, subscription: &DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice>  {
         let start_date =  convert_to_utc(from_time, time_zone.clone());
         let end_date = convert_to_utc(to_time, time_zone);
-        
+
         let end_date = match end_date > self.time_utc().await {
             true => self.time_utc().await,
             false => end_date,
         };
-        
+
         range_data(start_date, end_date, subscription.clone()).await
     }
 

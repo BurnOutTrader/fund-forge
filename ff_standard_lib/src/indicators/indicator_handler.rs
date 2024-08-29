@@ -11,9 +11,8 @@ use crate::standardized_types::time_slices::TimeSlice;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
-use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::range_data;
-use crate::standardized_types::enums::{Resolution, StrategyMode};
+use crate::standardized_types::enums::{StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::strategy_events::StrategyEvent;
 

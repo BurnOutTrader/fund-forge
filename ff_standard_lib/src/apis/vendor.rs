@@ -32,14 +32,6 @@ pub enum DataVendor {
     Test,
 }
 
-/*impl Display for DataVendor {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DataVendor::Test => write!(f, "Test"),
-        }
-    }
-}*/
-
 impl FromStr for DataVendor {
     type Err = FundForgeError;
 
@@ -102,7 +94,7 @@ pub mod client_requests {
     use std::sync::Arc;
     use async_trait::async_trait;
     use crate::apis::vendor::DataVendor;
-    use crate::server_connections::{ConnectionType, get_synchronous_communicator, get_async_reader, get_async_sender, PlatformMode};
+    use crate::server_connections::{ConnectionType, get_synchronous_communicator, get_async_reader, get_async_sender};
     use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
     use crate::servers::communications_sync::SynchronousCommunicator;
     use crate::standardized_types::data_server_messaging::{FundForgeError, SynchronousRequestType, SynchronousResponseType};

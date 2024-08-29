@@ -40,7 +40,7 @@ impl Price {
             time,
         }
     }
-    
+
     pub fn resolution(&self) -> Resolution {
         Resolution::Instant
     }

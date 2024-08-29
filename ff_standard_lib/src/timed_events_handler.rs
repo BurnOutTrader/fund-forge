@@ -43,34 +43,34 @@ pub enum EventTimeEnum {
 }
 
 impl EventTimeEnum {
-    pub fn event_time(&mut self, current_time: DateTime<Utc>) -> bool {
+    pub fn event_time(&self, current_time: DateTime<Utc>) -> bool {
         match self {
-            EventTimeEnum::Weekday { day , fire_in_warmup} => {
+            EventTimeEnum::Weekday { day , ..} => {
                 if current_time.weekday() == *day {
                     return true
                 }
             },
-            EventTimeEnum::HourOfDay { hour , fire_in_warmup} => {
+            EventTimeEnum::HourOfDay { hour, ..} => {
                 if current_time.hour() == *hour {
                     return true
                 }
             },
-            EventTimeEnum::TimeOnWeekDay { day, hour, minute, second, fire_in_warmup } => {
-                if current_time.weekday() == *day && current_time.hour() == *hour && current_time.minute() == 0 && current_time.second() == 0 {
+            EventTimeEnum::TimeOnWeekDay { day, hour, minute, second, .. } => {
+                if current_time.weekday() == *day && current_time.hour() == *hour && current_time.minute() == *minute && current_time.second() == *second {
                     return true
                 }
             },
-            EventTimeEnum::DateTime { date_time , fire_in_warmup} => {
+            EventTimeEnum::DateTime { date_time , ..} => {
                 if current_time == *date_time {
                     return true
                 }
             },
-            EventTimeEnum::TimeOfDay { hour, minute, second , fire_in_warmup} => {
+            EventTimeEnum::TimeOfDay { hour, minute, second , ..} => {
                 if current_time.hour() == *hour && current_time.minute() == *minute && current_time.second() == *second {
                     return true
                 }
             },
-            EventTimeEnum::Every { duration, mut next_time , fire_in_warmup} => {
+            EventTimeEnum::Every { duration, mut next_time , ..} => {
                 if current_time == next_time {
                     return true
                 }
@@ -81,22 +81,22 @@ impl EventTimeEnum {
     
     pub fn fire_in_warmup(&self) -> bool {
         match self {
-            EventTimeEnum::Weekday { day , fire_in_warmup} => {
+            EventTimeEnum::Weekday { fire_in_warmup, ..} => {
                 fire_in_warmup.clone()
             },
-            EventTimeEnum::HourOfDay { hour , fire_in_warmup} => {
+            EventTimeEnum::HourOfDay { fire_in_warmup, ..} => {
                 fire_in_warmup.clone()
             },
-            EventTimeEnum::TimeOnWeekDay { day, hour, minute, second, fire_in_warmup } => {
+            EventTimeEnum::TimeOnWeekDay { fire_in_warmup, .. } => {
                 fire_in_warmup.clone()
             },
-            EventTimeEnum::DateTime { date_time , fire_in_warmup} => {
+            EventTimeEnum::DateTime { fire_in_warmup, ..} => {
                 fire_in_warmup.clone()
             },
-            EventTimeEnum::TimeOfDay { hour, minute, second , fire_in_warmup} => {
+            EventTimeEnum::TimeOfDay { fire_in_warmup, ..} => {
                 fire_in_warmup.clone()
             },
-            EventTimeEnum::Every { duration, mut next_time , fire_in_warmup} => {
+            EventTimeEnum::Every { fire_in_warmup, ..} => {
                 fire_in_warmup.clone()
             }
         }

@@ -187,10 +187,6 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
 }
 
 
-
-
-
-
 pub(crate) fn load_certs(path: &Path) -> io::Result<Vec<CertificateDer<'static>>> {
     let certificates =  certs(&mut BufReader::new(File::open(path)?)).collect();
     //println!("certs: {:?}", certs(&mut BufReader::new(File::open(path)?)).collect::<Vec<_>>());

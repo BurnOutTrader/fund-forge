@@ -1,4 +1,3 @@
-use std::fmt::{Display};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::count::ConsolidatorError;
 use crate::standardized_types::rolling_window::RollingWindow;

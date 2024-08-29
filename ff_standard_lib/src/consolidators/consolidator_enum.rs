@@ -6,7 +6,6 @@ use crate::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::consolidators::renko::RenkoConsolidator;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};

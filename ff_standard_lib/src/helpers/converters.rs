@@ -7,13 +7,6 @@ use chrono::{DateTime, Datelike, FixedOffset, NaiveDate, NaiveDateTime, Offset, 
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::DataSubscription;
 
-/// returns the fixed offset of the from utc time.
-/// Since we are dealing with historical data, we need to adjust for daylight savings etc, so it is not good enough to just use the current offset, we need to pass in the historical date and get the offset at that time for the timezone.
-pub fn offset_local_from_utc_time(time_zone: &Tz, utc_time: NaiveDateTime) -> FixedOffset {
-    let tz_offset = time_zone.offset_from_utc_datetime(&utc_time);
-    FixedOffset::east_opt(tz_offset.fix().local_minus_utc()).unwrap()
-}
-
 /// Returns the fixed offset of the from a utc timestamp.
 /// Since we are dealing with historical data, we need to adjust for daylight savings etc, so it is not good enough to just use the current offset, we need to pass in the historical date and get the offset at that time for the timezone.
 pub fn offset_local_from_utc_time_stamp(time_zone: &Tz, time_zone_time: i64, nanos: u32) -> FixedOffset {

@@ -11,7 +11,7 @@ use crate::apis::brokerage::Brokerage;
 use crate::apis::vendor::DataVendor;
 use crate::servers::communications_async::{ExternalReceiver, InternalReceiver, SecondaryDataReceiver, SecondaryDataSender};
 use crate::servers::init_clients::{create_api_client, create_async_api_client};
-use crate::servers::settings::client_settings::{get_settings, get_settings_map};
+use crate::servers::settings::client_settings::{get_settings_map};
 use crate::servers::communications_sync::{InternalCommunicator, SecureExternalCommunicator, SynchronousCommunicator};
 use crate::servers::registry_request_handlers::{registry_manage_async_requests, registry_manage_sequential_requests};
 use crate::servers::request_handlers::{data_server_manage_async_requests, data_server_manage_sequential_requests};
@@ -158,9 +158,9 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
             let mut communicators = SYNCHRONOUS_COMMUNICATORS.write().await;
             communicators.insert(ConnectionType::Default, communicator);
 
-            /// sender simulates sending to a server, receiver simulates the server listener
+            // sender simulates sending to a server, receiver simulates the server listener
             let (server_sender, server_receiver) = mpsc::channel(1000);
-            /// sender simulates the servers sender, receiver simulates the clients listener
+            // sender simulates the servers sender, receiver simulates the clients listener
             let (client_sender, client_receiver) = mpsc::channel(1000);
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
             let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
@@ -179,9 +179,9 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
             registry_manage_sequential_requests(communicator.clone()).await;
             communicators.insert(ConnectionType::StrategyRegistry, communicator);
 
-            /// sender simulates sending to a server, receiver simulates the server listener
+            // sender simulates sending to a server, receiver simulates the server listener
             let (server_sender, server_receiver) = mpsc::channel(1000);
-            /// sender simulates the servers sender, receiver simulates the clients listener
+            // sender simulates the servers sender, receiver simulates the clients listener
             let (client_sender, client_receiver) = mpsc::channel(1000);
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
             let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
