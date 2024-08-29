@@ -99,6 +99,7 @@ pub mod server_responses {
 pub mod client_requests {
     use std::sync::Arc;
     use async_trait::async_trait;
+    use tokio::sync::Mutex;
     use crate::apis::brokerage::Brokerage;
     use crate::server_connections::{ConnectionType, get_synchronous_communicator, get_async_reader, get_async_sender};
     use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
@@ -190,7 +191,7 @@ pub mod client_requests {
             }
         }
         
-        pub async fn async_receiver(&self) -> Arc<SecondaryDataReceiver> {
+        pub async fn async_receiver(&self) -> Arc<Mutex<SecondaryDataReceiver>> {
             match get_async_reader(ConnectionType::Broker(self.clone())).await {
                 Err(e) => panic!("{}", e),
                 Ok(s) => s

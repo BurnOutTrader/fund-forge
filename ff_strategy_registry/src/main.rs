@@ -122,8 +122,6 @@ pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -
             };
             let communicator = SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Mutex::new(TlsStream::from(tls_stream)))));
             registry_manage_sequential_requests(Arc::new(communicator)).await;
-
-            println!("TLS connection established with {:?}", peer_addr);
         }
     })
 }

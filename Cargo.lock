@@ -1655,6 +1655,7 @@ dependencies = [
  "ff_strategies",
  "ff_strategy_registry",
  "test_strategy",
+ "tokio",
 ]
 
 [[package]]

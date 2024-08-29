@@ -77,7 +77,8 @@ impl Engine{
     pub async fn launch(self: Self) {
         task::spawn(async move {
             println!("Engine: Initializing the strategy...");
-
+            let strategy_register_event = EventRequest::RegisterStrategy(self.owner_id.clone(), self.start_state.start_date.to_string()).to_bytes();
+            self.registry_sender.send(&strategy_register_event).await.unwrap();
             let mut subscriptions = self.subscription_handler.primary_subscriptions().await;
             //wait until we have at least one subscription
             while subscriptions.is_empty() {
@@ -111,13 +112,14 @@ impl Engine{
                 }
             }
 
-            let event_bytes = EventRequest::StrategyEventUpdates(events).to_bytes();
-            match self.registry_sender.send(&event_bytes).await {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("Engine: Error forwarding event to registry: {:?}", e);
+            let event_bytes = EventRequest::StrategyEventUpdates(self.owner_id.clone(), events).to_bytes();
+            let sender = self.registry_sender.clone();
+            task::spawn(async move {
+                match sender.send(&event_bytes).await {
+                    Ok(_) => {}
+                    Err(_) => {}
                 }
-            }
+            });
         });
     }
 
@@ -157,13 +159,14 @@ impl Engine{
                 println!("Engine: Error forwarding event: {:?}", e);
             }
         }
-        let event_bytes = EventRequest::StrategyEventUpdates(warmup_complete_event).to_bytes();
-        match self.registry_sender.send(&event_bytes).await {
-            Ok(_) => {}
-            Err(e) => {
-                println!("Engine: Error forwarding event to registry: {:?}", e);
+        let event_bytes = EventRequest::StrategyEventUpdates(self.owner_id.clone(), warmup_complete_event).to_bytes();
+        let sender = self.registry_sender.clone();
+        task::spawn(async move {
+            match sender.send(&event_bytes).await {
+                Ok(_) => {}
+                Err(_) => {}
             }
-        }
+        });
     }
 
     /// Runs the strategy backtest
@@ -308,13 +311,14 @@ impl Engine{
                     println!("Error forwarding event: {:?}", e);
                 }
             }
-            let event_bytes = EventRequest::StrategyEventUpdates(strategy_event).to_bytes();
-            match self.registry_sender.send(&event_bytes).await {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("Engine: Error forwarding event to registry: {:?}", e);
+            let event_bytes = EventRequest::StrategyEventUpdates(self.owner_id.clone(), strategy_event).to_bytes();
+            let sender = self.registry_sender.clone();
+            task::spawn(async move {
+                match sender.send(&event_bytes).await {
+                    Ok(_) => {}
+                    Err(_) => {}
                 }
-            }
+            });
             return true
         }
         false
@@ -328,13 +332,14 @@ impl Engine{
                 println!("Error forwarding event: {:?}", e);
             }
         }
-        let event_bytes = EventRequest::StrategyEventUpdates(strategy_event_slice).to_bytes();
-        match self.registry_sender.send(&event_bytes).await {
-            Ok(_) => {}
-            Err(e) => {
-                println!("Engine: Error forwarding event to registry: {:?}", e);
+        let event_bytes = EventRequest::StrategyEventUpdates(self.owner_id.clone(), strategy_event_slice).to_bytes();
+        let sender = self.registry_sender.clone();
+        task::spawn(async move {
+            match sender.send(&event_bytes).await {
+                Ok(_) => {}
+                Err(_) => {}
             }
-        }
+        });
         // We check if the user has requested a delay between time slices for market replay style backtesting.
         if warm_up_completed {
             match self.interaction_handler.replay_delay_ms().await {
@@ -346,7 +351,6 @@ impl Engine{
             }
         }
         self.notify.notified().await;
-
         true
     }
 }

@@ -2,6 +2,8 @@ use std::sync::Arc;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use tokio::sync::{mpsc, Notify};
+use tokio::sync::mpsc::Sender;
+use tokio::task;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
@@ -25,23 +27,8 @@ use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, Strat
     broker_map
 }*/
 
-
-fn set_subscriptions_initial() -> Vec<DataSubscription> {
-    let subscriptions: Vec<DataSubscription> = vec![
-        //DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-        //DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-        DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)
-    ];
-    subscriptions
-}
-
-#[tokio::main]
-async fn main() {
-    initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
-    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
-    let notify = Arc::new(Notify::new());
-    // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
-    let strategy = FundForgeStrategy::initialize(
+pub async fn create_test_strategy(strategy_event_sender: Sender<EventTimeSlice>, notify: Arc<Notify>) -> FundForgeStrategy {
+    FundForgeStrategy::initialize(
         Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, todo! this needs to be upgraded in the future to be more reliable in Single and Multi machine modes.
         notify.clone(),
         StrategyMode::Backtest, // Backtest, Live, LivePaper
@@ -50,17 +37,40 @@ async fn main() {
         NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney, // the strategy time zone
         Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
-        set_subscriptions_initial(), //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+        vec![DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
         100,
         strategy_event_sender, // the sender for the strategy events
         None,
         
-
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
         Some(Duration::seconds(1))
-    ).await;
+    ).await
+}
 
+// to launch via platform
+pub async fn create_test_strategy_launch() {
+    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
+    let notify = Arc::new(Notify::new());
+    // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
+    let strategy = create_test_strategy(strategy_event_sender, notify.clone()).await;
+    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
+    strategy.indicator_subscribe(heikin_atr_20).await;
+
+    task::spawn(async move {
+        on_data_received(strategy, notify, strategy_event_receiver).await;
+    });
+}
+
+// to launch on separate machine
+#[tokio::main]
+async fn main() {
+    initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
+    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
+    let notify = Arc::new(Notify::new());
+    // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
+    let strategy = create_test_strategy(strategy_event_sender, notify.clone()).await;
+    
     on_data_received(strategy, notify, strategy_event_receiver).await;
 }
 
@@ -84,10 +94,11 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         if warmup_complete {
             count += 1;
             if count == 10 {
-                strategy.subscriptions_update(vec![aud_usd_3m.clone()],100).await;
+                //todo subscribing after launch causes deadlock in multimachine mode
+                //strategy.subscriptions_update(vec![aud_usd_3m.clone()],100).await;
                 // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variat of the same name.
-                let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), aud_usd_3m.clone(), 100, 20).await);
-                strategy.indicator_subscribe(heikin_atr_20).await;
+                //let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
+                //strategy.indicator_subscribe(heikin_atr_20).await;
             }
         }
         for strategy_event in event_slice {

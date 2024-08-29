@@ -23,3 +23,4 @@ ff_application = { path = "ff_application" }
 ff_data_server = { path = "ff_data_server" }
 test_strategy = { path = "test_strategy" }
 ff_strategy_registry = {path = "ff_strategy_registry"}
+tokio = "1.37.0"

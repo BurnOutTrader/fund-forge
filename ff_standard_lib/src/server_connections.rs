@@ -60,7 +60,7 @@ pub enum PlatformMode {
 lazy_static! {
     static ref SYNCHRONOUS_COMMUNICATORS: Arc<RwLock<HashMap<ConnectionType, Arc<SynchronousCommunicator>>>> = Arc::new(RwLock::new(HashMap::new()));
     static ref ASYNC_OUTGOING: Arc<RwLock<HashMap<ConnectionType, Arc<SecondaryDataSender>>>> = Arc::new(RwLock::new(HashMap::new()));
-    static ref ASYNC_INCOMING: Arc<RwLock<HashMap<ConnectionType, Arc<SecondaryDataReceiver>>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref ASYNC_INCOMING: Arc<RwLock<HashMap<ConnectionType, Arc<Mutex<SecondaryDataReceiver>>>>> = Arc::new(RwLock::new(HashMap::new()));
 }
 
 pub async fn get_synchronous_communicator(connection_type: ConnectionType) -> Result<Arc<SynchronousCommunicator>, String> {
@@ -79,7 +79,7 @@ pub async fn get_synchronous_communicator(connection_type: ConnectionType) -> Re
     }
 }
 
-pub async fn get_async_reader(connection_type: ConnectionType) -> Result<Arc<SecondaryDataReceiver>, String> {
+pub async fn get_async_reader(connection_type: ConnectionType) -> Result<Arc<Mutex<SecondaryDataReceiver>>, String> {
     let receivers = ASYNC_INCOMING.read().await;
     match receivers.contains_key(&connection_type) {
         true => {
@@ -172,7 +172,7 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
 
             let mut async_receivers = ASYNC_INCOMING.write().await;
             let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
-            async_receivers.insert(ConnectionType::Default, Arc::new(async_receiver));
+            async_receivers.insert(ConnectionType::Default, Arc::new(Mutex::new(async_receiver)));
 
             // setup sync and async servers for registry
             let communicator = Arc::new(SynchronousCommunicator::Channels(InternalCommunicator::new(1000, 1000)));
@@ -191,7 +191,7 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
             async_senders.insert(ConnectionType::StrategyRegistry, Arc::new(async_sender));
 
             let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
-            async_receivers.insert(ConnectionType::StrategyRegistry, Arc::new(async_receiver));
+            async_receivers.insert(ConnectionType::StrategyRegistry, Arc::new(Mutex::new(async_receiver)));
 
             Ok(())
         },
@@ -218,7 +218,7 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
                 let async_sender = SecondaryDataSender::ExternalSender(Arc::new(Mutex::new(write_half)));
                 let async_receiver = SecondaryDataReceiver::ExternalReceiver(ExternalReceiver::new(read_half));
                 ASYNC_OUTGOING.write().await.insert(connection_type.clone(), Arc::new(async_sender));
-                ASYNC_INCOMING.write().await.insert(connection_type.clone(), Arc::new(async_receiver));
+                ASYNC_INCOMING.write().await.insert(connection_type.clone(), Arc::new(Mutex::new(async_receiver)));
             }
             Ok(())
         }
