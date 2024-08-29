@@ -212,7 +212,7 @@ impl Position {
                 continue;
             }
             match base_data {
-                BaseDataEnum::Price(price) => {
+                BaseDataEnum::TradePrice(price) => {
                     if let Some(highest_recoded_price) = self.highest_recoded_price {
                         if price.price > highest_recoded_price {
                             self.highest_recoded_price = Some(price.price);

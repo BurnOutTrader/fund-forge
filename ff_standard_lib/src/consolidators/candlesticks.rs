@@ -66,7 +66,7 @@ impl CandleStickConsolidator {
                             candle.volume += new_candle.volume;
                             return vec![BaseDataEnum::Candle(candle.clone())]
                         },
-                        BaseDataEnum::Price(price) => {
+                        BaseDataEnum::TradePrice(price) => {
                             candle.high = candle.high.max(price.price);
                             candle.low = candle.low.min(price.price);
                             candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size);
@@ -157,7 +157,7 @@ impl CandleStickConsolidator {
                 consolidated_candle.time = time.to_string();
                 consolidated_candle
             },
-            BaseDataEnum::Price(price) => Candle::new(self.subscription.symbol.clone(), price.price, 0.0, time.to_string(), self.subscription.resolution.clone(), self.subscription.candle_type.clone().unwrap()),
+            BaseDataEnum::TradePrice(price) => Candle::new(self.subscription.symbol.clone(), price.price, 0.0, time.to_string(), self.subscription.resolution.clone(), self.subscription.candle_type.clone().unwrap()),
             _ => panic!("Invalid base data type for Candle consolidator")
         }
     }
@@ -196,7 +196,7 @@ impl CandleStickConsolidator {
                     return self.update_quote_bars(base_data);
                 }
             },
-            BaseDataType::Prices => {
+            BaseDataType::TradePrices => {
                 if self.subscription.base_data_type == BaseDataType::Candles {
                     return self.update_candles(base_data);
                 }

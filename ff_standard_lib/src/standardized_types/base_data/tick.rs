@@ -8,7 +8,7 @@ use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::standardized_types::TimeString;
+use crate::standardized_types::{Price, TimeString};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
 #[archive(
@@ -25,7 +25,7 @@ check_bytes,
 /// 4. `volume` - The volume of the trade.
 pub struct Tick {
     pub symbol: Symbol,
-    pub price: f64,
+    pub price: Price,
     pub time: TimeString,
     pub volume: f64,
 }

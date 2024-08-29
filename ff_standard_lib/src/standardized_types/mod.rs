@@ -13,3 +13,5 @@ pub mod strategy_events;
 
 pub type OwnerId = String;
 pub type TimeString = String;
+
+pub type Price = f64;

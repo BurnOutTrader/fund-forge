@@ -9,7 +9,8 @@ use tokio::sync::{RwLock};
 use tokio::task;
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::subscriptions::{Symbol};
-use crate::standardized_types::TimeString;
+use crate::standardized_types::{Price, TimeString};
+use crate::standardized_types::base_data::quote::BookLevel;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
 #[archive(
@@ -21,6 +22,7 @@ pub struct LevelTwoSubscription {
     pub symbol: Symbol,
     pub time: TimeString,
 }
+
 impl LevelTwoSubscription {
     pub fn new(symbol: Symbol, time: TimeString) -> Self {
 
@@ -39,13 +41,13 @@ impl LevelTwoSubscription {
 #[archive_attr(derive(Debug))]
 pub struct OrderBookUpdate{
     pub symbol: Symbol,
-    pub bid: BTreeMap<u8, f64>,
-    pub ask: BTreeMap<u8, f64>,
+    pub bid: BTreeMap<BookLevel, Price>,
+    pub ask: BTreeMap<BookLevel, Price>,
     time: TimeString,
 }
 
 impl OrderBookUpdate {
-    pub fn new(symbol: Symbol, bid: BTreeMap<u8, f64>, ask: BTreeMap<u8, f64>, time: DateTime<Utc>) -> Self {
+    pub fn new(symbol: Symbol, bid: BTreeMap<BookLevel, Price>, ask: BTreeMap<BookLevel, Price>, time: DateTime<Utc>) -> Self {
         OrderBookUpdate {
             symbol,
             bid,
@@ -66,8 +68,8 @@ impl OrderBookUpdate {
 
 pub struct OrderBook {
     symbol: Symbol,
-    bid: Arc<RwLock<BTreeMap<u8, f64>>>, //make it a retain-able history 
-    ask: Arc<RwLock<BTreeMap<u8, f64>>>,
+    bid: Arc<RwLock<BTreeMap<BookLevel, Price>>>, //make it a retain-able history
+    ask: Arc<RwLock<BTreeMap<BookLevel, Price>>>,
     time: Arc<RwLock<DateTime<Utc>>>,
 }
 
@@ -130,20 +132,28 @@ impl OrderBook {
     pub async fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
         time_local_from_str(time_zone, &self.time_utc().await.to_string())
     }
-    
-    pub async fn ask_index(&self, index: u8) -> Option<f64> {
-        self.ask.read().await.get(&index).cloned()
+
+    pub async fn ask_level(&self, level: BookLevel) -> Option<Price> {
+        self.ask.read().await.get(&level).cloned()
     }
-    
-    pub async fn bid_index(&self, index: u8) -> Option<f64> {
-        self.bid.read().await.get(&index).cloned()
+
+    pub async fn bid_level(&self, level: BookLevel) -> Option<Price> {
+        self.bid.read().await.get(&level).cloned()
     }
-    
-    pub fn get_ask_book(&self) -> Arc<RwLock<BTreeMap<u8, f64>>> {
+
+    pub fn ask_book(&self) -> Arc<RwLock<BTreeMap<BookLevel, Price>>> {
         self.ask.clone()
     }
 
-    pub fn get_bid_book(&self) -> Arc<RwLock<BTreeMap<u8, f64>>> {
+    pub fn bid_book(&self) -> Arc<RwLock<BTreeMap<BookLevel, Price>>> {
         self.bid.clone()
+    }
+    
+    pub async fn ask_snapshot(&self) -> BTreeMap<BookLevel, Price> {
+        self.ask.read().await.clone()
+    }
+
+    pub async fn bid_snapshot(&self) -> BTreeMap<BookLevel, Price> {
+        self.bid.read().await.clone()
     }
 }

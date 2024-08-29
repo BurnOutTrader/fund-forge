@@ -3,7 +3,7 @@ use std::fmt::Display;
 use serde::{Deserialize, Serialize};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::standardized_types::base_data::candle::Candle;
-use crate::standardized_types::base_data::price::Price;
+use crate::standardized_types::base_data::price::TradePrice;
 use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
@@ -22,7 +22,7 @@ pub enum BaseDataType {
     /// A `Quote` is a data point that represents the current bid and ask prices for a given symbol.
     Quotes = 1,
     /// A `Price` is a data point that represents the current price or last traded of a given symbol.
-    Prices = 2,
+    TradePrices = 2,
     QuoteBars = 3,
     Candles = 4,
     Fundamentals = 5,
@@ -34,7 +34,7 @@ impl BaseDataType {
         match self {
             BaseDataType::Ticks => TypeId::of::<Tick>(),
             BaseDataType::Quotes => TypeId::of::<Quote>(),
-            BaseDataType::Prices => TypeId::of::<Price>(),
+            BaseDataType::TradePrices => TypeId::of::<TradePrice>(),
             BaseDataType::QuoteBars => TypeId::of::<QuoteBar>(),
             BaseDataType::Candles => TypeId::of::<Candle>(),
             BaseDataType::Fundamentals => TypeId::of::<String>(),
@@ -48,7 +48,7 @@ impl Display for BaseDataType {
         match self {
             BaseDataType::Ticks => write!(f, "ticks"),
             BaseDataType::Quotes => write!(f, "quotes"),
-            BaseDataType::Prices => write!(f, "prices"),
+            BaseDataType::TradePrices => write!(f, "prices"),
             BaseDataType::QuoteBars => write!(f, "quotebars"),
             BaseDataType::Candles => write!(f, "candles"),
             BaseDataType::Fundamentals => write!(f, "fundamentals"),

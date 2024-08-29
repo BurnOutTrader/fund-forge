@@ -24,6 +24,7 @@ use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
 use ff_standard_lib::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::indicators::values::IndicatorValues;
 use ff_standard_lib::standardized_types::base_data::history::range_data;
+use ff_standard_lib::standardized_types::base_data::order_book::OrderBook;
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use crate::engine::Engine;
 use crate::interaction_handler::InteractionHandler;
@@ -398,6 +399,10 @@ impl FundForgeStrategy {
         };
 
         range_data(start_date, end_date, subscription.clone()).await
+    }
+
+    pub async fn get_order_book(&self, symbol: &Symbol) -> Option<Arc<OrderBook>> {
+        self.market_event_handler.get_order_book(symbol).await
     }
  }
 

@@ -9,7 +9,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
-use crate::standardized_types::TimeString;
+use crate::standardized_types::{Price, TimeString};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Eq, PartialOrd, Ord)]
 #[archive(
@@ -56,12 +56,12 @@ check_bytes,
 #[archive_attr(derive(Debug))]
 pub struct Candle {
     pub symbol: Symbol,
-    pub high: f64,
-    pub low: f64,
-    pub open: f64,
-    pub close: f64,
+    pub high: Price,
+    pub low: Price,
+    pub open: Price,
+    pub close: Price,
     pub volume: f64,
-    pub range: f64,
+    pub range: Price,
     pub time: TimeString,
     pub is_closed: bool,
     pub resolution: Resolution,

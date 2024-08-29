@@ -75,13 +75,20 @@ impl MarketHandlerEnum {
             MarketHandlerEnum::LiveDefault(handler) => handler.set_warm_up_complete().await
         }
     }
+    
+    pub async fn get_order_book(&self, symbol: &Symbol) -> Option<Arc<OrderBook>> {
+        match self {
+            MarketHandlerEnum::BacktestDefault(handler) => handler.get_order_book(symbol).await,
+            MarketHandlerEnum::LiveDefault(handler) => handler.get_order_book(symbol).await
+        }
+    }
 }
 
 pub(crate) struct HistoricalMarketHandler {
     owner_id: String,
     /// The strategy receives its timeslices using strategy events, this is for other processes that need time slices and do not need synchronisation with the strategy
     /// These time slices are sent before they are sent to the strategy as events
-    order_books: RwLock<AHashMap<Symbol, OrderBook>>,
+    order_books: RwLock<AHashMap<Symbol, Arc<OrderBook>>>,
     last_price: RwLock<AHashMap<Symbol, f64>>,
     ledgers: RwLock<AHashMap<Brokerage, HashMap<AccountId, Ledger>>>,
     pub(crate) last_time: RwLock<DateTime<Utc>>,
@@ -100,6 +107,13 @@ impl HistoricalMarketHandler {
             order_cache: Default::default(),
             warm_up_complete: RwLock::new(false),
         }
+    }
+    
+    pub async fn get_order_book(&self, symbol: &Symbol) -> Option<Arc<OrderBook>> {
+        if let Some(book) = self.order_books.read().await.get(symbol) {
+            return Some(book.clone())
+        }
+        None
     }
 
     pub async fn send_order(&self, order: Order) {
@@ -124,7 +138,7 @@ impl HistoricalMarketHandler {
         for base_data in time_slice {
             //println!("Base data: {:?}", base_data.time_created_utc());
             match base_data {
-                BaseDataEnum::Price(ref price) => {
+                BaseDataEnum::TradePrice(ref price) => {
                     let mut last_price = self.last_price.write().await;
                     last_price.insert(price.symbol.clone(), price.price);
                 }
@@ -142,7 +156,7 @@ impl HistoricalMarketHandler {
                 BaseDataEnum::Quote(ref quote) => {
                     let mut order_books = self.order_books.write().await;
                     if !order_books.contains_key(&quote.symbol) {
-                        order_books.insert(quote.symbol.clone(), OrderBook::new(quote.symbol.clone(), quote.time_utc()));
+                        order_books.insert(quote.symbol.clone(), Arc::new(OrderBook::new(quote.symbol.clone(), quote.time_utc())));
                     }
                     if let Some(book) = order_books.get_mut(&quote.symbol) {
                         let mut bid = BTreeMap::new();
@@ -294,12 +308,12 @@ impl HistoricalMarketHandler {
         if let Some(book) = self.order_books.read().await.get(symbol_name) {
             match order_side {
                 OrderSide::Buy => {
-                    if let Some(ask_price) = book.ask_index(0).await {
+                    if let Some(ask_price) = book.ask_level(0).await {
                         return Ok(ask_price)
                     }
                 },
                 OrderSide::Sell => {
-                    if let Some(bid_price) = book.bid_index(0).await {
+                    if let Some(bid_price) = book.bid_level(0).await {
                         return Ok(bid_price)
                     } 
                 },

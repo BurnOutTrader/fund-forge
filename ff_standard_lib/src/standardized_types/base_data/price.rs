@@ -6,6 +6,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::Price;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
@@ -20,13 +21,13 @@ check_bytes,
 /// 1. `symbol` - The symbol of the asset.
 /// 2. `price` - The price of the asset.
 /// 3. `time` - The time the price was recorded.
-pub struct Price {
+pub struct TradePrice {
     pub symbol: Symbol,
-    pub price: f64,
+    pub price: Price,
     pub time: String,
 }
 
-impl Price {
+impl TradePrice {
     /// Create a new `Price` instance.
     /// # Parameters
     /// 1. `symbol` - The symbol of the asset.
@@ -34,7 +35,7 @@ impl Price {
     /// 3. `time` - The time the price was recorded.
     /// 4. `vendor` - The data vendor that provided the price.
     pub fn new(symbol: Symbol, price: f64, time: String) -> Self {
-        Price {
+        TradePrice {
             symbol,
             price,
             time,
@@ -47,7 +48,7 @@ impl Price {
 
     pub fn subscription(&self) -> DataSubscription {
         let symbol = self.symbol.clone();
-        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), Resolution::Instant, BaseDataType::Prices, symbol.market_type.clone(), None)
+        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), Resolution::Instant, BaseDataType::TradePrices, symbol.market_type.clone(), None)
     }
 
     pub fn time_utc(&self) -> DateTime<chrono::Utc> {
@@ -59,13 +60,13 @@ impl Price {
     }
 }
 
-impl Display for Price {
+impl Display for TradePrice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Symbol: {:?}, Price: {}, Time: {}", self.symbol, self.price, self.time)
     }
 }
 
-impl Debug for Price {
+impl Debug for TradePrice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Price")
             .field("symbol", &self.symbol)

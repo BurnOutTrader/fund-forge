@@ -8,8 +8,8 @@ use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::standardized_types::TimeString;
-
+use crate::standardized_types::{Price, TimeString};
+pub type BookLevel = u8;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
 #[archive(
 compare(PartialEq),
@@ -27,12 +27,12 @@ check_bytes,
 /// * `time` - The time of the quote.
 pub struct Quote {
     pub symbol: Symbol,
-    pub ask: f64,
-    pub bid: f64,
+    pub ask: Price,
+    pub bid: Price,
     pub ask_volume: f64,
     pub bid_volume: f64,
     pub time: TimeString,
-    pub book_level: u8
+    pub book_level: BookLevel
 }
 
 impl Quote {
@@ -46,7 +46,7 @@ impl Quote {
     /// 5. `bid_volume` - The volume of the bid price.
     /// 6. `time` - The time of the quote.
     /// 7. `book_level` - The level in the order book where 0 is best bid or best ask
-    pub fn new(symbol: Symbol, ask: f64, bid: f64, ask_volume: f64, bid_volume: f64, time: TimeString, book_level: u8) -> Self {
+    pub fn new(symbol: Symbol, ask: Price, bid: Price, ask_volume: Price, bid_volume: Price, time: TimeString, book_level: BookLevel) -> Self {
         Quote {
             symbol,
             ask,

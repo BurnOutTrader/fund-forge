@@ -101,7 +101,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                     'base_data_loop: for base_data in &time_slice {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
-                            BaseDataEnum::Price(_) => {}
+                            BaseDataEnum::TradePrice(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
                                /* if base_data.subscription() == aud_cad_60m && candle.is_closed {
                                     heikin_atr.update_base_data(base_data);

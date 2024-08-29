@@ -56,7 +56,7 @@ impl HeikinAshiConsolidator
 
                 self.candle_from_base_data(ha_open, ha_high, ha_low, ha_close, candle.volume, time.to_string(), false, ha_high - ha_low)
             },
-            BaseDataEnum::Price(price) => {
+            BaseDataEnum::TradePrice(price) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
                     self.previous_ha_close = price.price;
                     self.previous_ha_open = price.price;
@@ -185,7 +185,7 @@ impl HeikinAshiConsolidator
                             candle.volume += new_candle.volume;
                             return vec![BaseDataEnum::Candle(candle.clone())];
                         }
-                        BaseDataEnum::Price(price) => {
+                        BaseDataEnum::TradePrice(price) => {
                             candle.high = price.price.max(candle.high);
                             candle.low = price.price.min(candle.low);
                             candle.close = price.price;
