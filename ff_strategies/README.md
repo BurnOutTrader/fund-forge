@@ -152,10 +152,9 @@ async fn main() {
         Australia::Sydney, // the strategy time zone
         Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         set_subscriptions_initial(), //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+        100,
         strategy_event_sender, // the sender for the strategy events
         None,
-        100,
-
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading. 
         //Setting this value higher than your base working resolution, has the potential to create race conditions in `handler.update_time_slice()` I have not had it occur in testing but I believe the potential is there if overshooting too far.
