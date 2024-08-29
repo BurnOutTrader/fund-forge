@@ -90,8 +90,7 @@ pub enum SecondaryDataSender {
 }
 
 impl SecondaryDataSender {
-    //todo, use interior mutability to send
-     async fn send(&self, data: &Vec<u8>) -> Result<(), SendError> {
+     pub async fn send(&self, data: &Vec<u8>) -> Result<(), SendError> {
         match self {
             SecondaryDataSender::InternalSender(sender) => {
                 sender.send(data.clone()).await.map_err(|e| SendError { msg: e.to_string() })

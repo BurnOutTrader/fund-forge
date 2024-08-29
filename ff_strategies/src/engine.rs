@@ -8,6 +8,9 @@ use tokio::sync::{Notify};
 use tokio::task;
 use tokio::time::sleep;
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
+use ff_standard_lib::server_connections::{get_async_sender, ConnectionType};
+use ff_standard_lib::servers::communications_async::{SecondaryDataSender, SendError};
+use ff_standard_lib::servers::registry_request_handlers::EventRequest;
 use ff_standard_lib::standardized_types::base_data::history::{generate_file_dates, get_historical_data};
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::{StrategyMode};
@@ -18,6 +21,7 @@ use crate::interaction_handler::InteractionHandler;
 use crate::market_handlers::MarketHandlerEnum;
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use ff_standard_lib::timed_events_handler::TimedEventHandler;
+use ff_standard_lib::traits::bytes::Bytes;
 use crate::strategy_state::StrategyStartState;
 
 //Possibly more accurate engine
@@ -41,11 +45,12 @@ pub(crate) struct Engine {
     indicator_handler: Arc<IndicatorHandler>,
     timed_event_handler: Arc<TimedEventHandler>,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
+    registry_sender: Arc<SecondaryDataSender>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
 impl Engine{
-    pub fn new(owner_id: OwnerId,
+    pub async fn new(owner_id: OwnerId,
                notify: Arc<Notify>,
                start_state: StrategyStartState,
                strategy_event_sender: Sender<EventTimeSlice>,
@@ -63,7 +68,8 @@ impl Engine{
             market_event_handler,
             interaction_handler,
             indicator_handler,
-            timed_event_handler
+            timed_event_handler,
+            registry_sender: get_async_sender(ConnectionType::StrategyRegistry).await.unwrap()
         }
     }
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
@@ -96,11 +102,20 @@ impl Engine{
 
             println!("{:?}", &msg);
             let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg);
+            let events = vec![end_event];
             //self.notify.notified().await;
-            match self.strategy_event_sender.send(vec![end_event]).await {
+            match self.strategy_event_sender.send(events.clone()).await {
                 Ok(_) => {},
                 Err(e) => {
                     println!("Engine: Error forwarding event: {:?}", e);
+                }
+            }
+
+            let event_bytes = EventRequest::StrategyEventUpdates(events).to_bytes();
+            match self.registry_sender.send(&event_bytes).await {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Engine: Error forwarding event to registry: {:?}", e);
                 }
             }
         });
@@ -134,12 +149,19 @@ impl Engine{
         self.market_event_handler.set_warm_up_complete().await;
         self.indicator_handler.set_warmup_complete().await;
         self.timed_event_handler.set_warmup_complete().await;
-        let warmup_complete_event = StrategyEvent::WarmUpComplete(self.owner_id.clone());
+        let warmup_complete_event = vec![StrategyEvent::WarmUpComplete(self.owner_id.clone())];
         //self.notify.notified().await;
-        match self.strategy_event_sender.send(vec![warmup_complete_event]).await {
+        match self.strategy_event_sender.send(warmup_complete_event.clone()).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Engine: Error forwarding event: {:?}", e);
+            }
+        }
+        let event_bytes = EventRequest::StrategyEventUpdates(warmup_complete_event).to_bytes();
+        match self.registry_sender.send(&event_bytes).await {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Engine: Error forwarding event to registry: {:?}", e);
             }
         }
     }
@@ -280,10 +302,17 @@ impl Engine{
             self.subscription_handler.set_subscriptions_updated(false).await;
             let subscription_events = self.subscription_handler.subscription_events().await;
             let strategy_event = vec![StrategyEvent::DataSubscriptionEvents(self.owner_id.clone(), subscription_events, last_time.timestamp())];
-            match self.strategy_event_sender.send(strategy_event).await {
+            match self.strategy_event_sender.send(strategy_event.clone()).await {
                 Ok(_) => {},
                 Err(e) => {
                     println!("Error forwarding event: {:?}", e);
+                }
+            }
+            let event_bytes = EventRequest::StrategyEventUpdates(strategy_event).to_bytes();
+            match self.registry_sender.send(&event_bytes).await {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("Engine: Error forwarding event to registry: {:?}", e);
                 }
             }
             return true
@@ -293,10 +322,17 @@ impl Engine{
 
     async fn send_and_continue(&self, time: DateTime<Utc>, strategy_event_slice: EventTimeSlice, warm_up_completed: bool) -> bool {
         self.market_event_handler.update_time(time.clone()).await;
-        match self.strategy_event_sender.send(strategy_event_slice).await {
+        match self.strategy_event_sender.send(strategy_event_slice.clone()).await {
             Ok(_) => {},
             Err(e) => {
                 println!("Error forwarding event: {:?}", e);
+            }
+        }
+        let event_bytes = EventRequest::StrategyEventUpdates(strategy_event_slice).to_bytes();
+        match self.registry_sender.send(&event_bytes).await {
+            Ok(_) => {}
+            Err(e) => {
+                println!("Engine: Error forwarding event to registry: {:?}", e);
             }
         }
         // We check if the user has requested a delay between time slices for market replay style backtesting.

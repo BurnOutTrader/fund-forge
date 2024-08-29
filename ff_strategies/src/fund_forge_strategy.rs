@@ -141,7 +141,7 @@ impl FundForgeStrategy {
         };
 
         let engine = Engine::new(strategy.owner_id.clone(), notify, start_state, strategy_event_sender.clone(), strategy.subscription_handler.clone(), 
-                                 strategy.market_event_handler.clone(), strategy.interaction_handler.clone(), strategy.indicator_handler.clone(), strategy.timed_event_handler.clone());
+                                 strategy.market_event_handler.clone(), strategy.interaction_handler.clone(), strategy.indicator_handler.clone(), strategy.timed_event_handler.clone()).await;
         
         Engine::launch(engine).await;
 

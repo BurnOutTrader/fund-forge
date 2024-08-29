@@ -1,6 +1,10 @@
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use std::fmt::Error;
+use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use rkyv::ser::Serializer;
+use rkyv::ser::serializers::AllocSerializer;
 use crate::drawing_objects::drawing_object_handler::DrawingToolEvent;
 use crate::indicators::indicator_handler::IndicatorEvents;
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::orders::orders::OrderUpdateEvent;
 use crate::standardized_types::OwnerId;
@@ -140,6 +144,31 @@ impl StrategyEvent {
                 Err(FundForgeError::ClientSideErrorDebug(e.to_string()))
             }
         }
+    }
+
+    pub fn vec_to_aligned(events: Vec<StrategyEvent>) -> AlignedVec {
+        // Create a new serializer
+        let mut serializer = AllocSerializer::<20971520>::default();
+
+        // Serialize the Vec<QuoteBar>
+        serializer.serialize_value(&events).unwrap();
+
+        // Get the serialized bytes
+        let vec = serializer.into_serializer().into_inner();
+        vec
+    }
+
+    pub fn from_array_bytes(data: &Vec<u8>) -> Result<Vec<StrategyEvent>, Error> {
+        let archived_event = match rkyv::check_archived_root::<Vec<StrategyEvent>>(&data[..]){
+            Ok(data) => data,
+            Err(e) => {
+                format!("Failed to deserialize data: {}", e);
+                return Err(Error);
+            },
+        };
+
+        // Assuming you want to work with the archived data directly, or you can deserialize it further
+        Ok(archived_event.deserialize(&mut rkyv::Infallible).unwrap())
     }
 }
 

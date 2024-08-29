@@ -4,6 +4,7 @@ use tokio::sync::Mutex;
 use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use crate::servers::communications_sync::SynchronousCommunicator;
 use crate::standardized_types::data_server_messaging::{FundForgeError};
+use crate::standardized_types::strategy_events::EventTimeSlice;
 use crate::traits::bytes::Bytes;
 
 pub async fn registry_manage_sequential_requests(communicator: Arc<SynchronousCommunicator>) {
@@ -62,7 +63,7 @@ pub async fn registry_manage_async_requests(sender: Arc<Mutex<SecondaryDataSende
 )]
 #[archive_attr(derive(Debug))]
 pub enum EventRequest {
-    Ok
+    StrategyEventUpdates(EventTimeSlice)
 }
 
 impl Bytes<Self> for EventRequest {
