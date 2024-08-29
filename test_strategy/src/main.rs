@@ -54,8 +54,6 @@ pub async fn create_test_strategy_launch() {
     let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = create_test_strategy(strategy_event_sender, notify.clone()).await;
-    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
-    strategy.indicator_subscribe(heikin_atr_20).await;
 
     task::spawn(async move {
         on_data_received(strategy, notify, strategy_event_receiver).await;
@@ -70,6 +68,7 @@ async fn main() {
     let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = create_test_strategy(strategy_event_sender, notify.clone()).await;
+    
     
     on_data_received(strategy, notify, strategy_event_receiver).await;
 }
@@ -94,6 +93,8 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         if warmup_complete {
             count += 1;
             if count == 10 {
+                let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
+                strategy.indicator_subscribe(heikin_atr_20).await;
                 //todo subscribing after launch causes deadlock in multimachine mode
                 //strategy.subscriptions_update(vec![aud_usd_3m.clone()],100).await;
                 // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variat of the same name.

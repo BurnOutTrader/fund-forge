@@ -1,3 +1,4 @@
+use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
 use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, initialize_clients, ConnectionType, PlatformMode};
 use ff_standard_lib::servers::communications_async::SendError;
 use ff_standard_lib::servers::registry_request_handlers::{EventRequest, EventResponse};
@@ -37,12 +38,29 @@ async fn main() {
                             }
                         }
                         StrategyEvent::ShutdownEvent(_, event) => {
+                            //todo, make strategy engine wait for a response on async registry channel before shutting down.
                             println!("received ShutdownEvent: {:?}", event);
                         }
                         StrategyEvent::WarmUpComplete(_) => {
                             println!("received WarmUpComplete");
                         }
-                        StrategyEvent::IndicatorEvent(_, _) => {}
+                        StrategyEvent::IndicatorEvent(_, indicator_event) => {
+                            match indicator_event {
+                                IndicatorEvents::IndicatorAdded(added_event) => {
+                                    println!("Indicator Added: {:?}", added_event);
+                                }
+                                IndicatorEvents::IndicatorRemoved(removed_event) => {
+                                    println!("Indicator Removed: {:?}", removed_event);
+                                }
+                                IndicatorEvents::IndicatorTimeSlice(slice_event) => {
+                                    // we can see our auto manged indicator values for here.
+                                    for indicator_values in slice_event {
+                                        println!("{}: \n {:?}", indicator_values.name(), indicator_values.values());
+                                    }
+                                }
+                                IndicatorEvents::Replaced(_) => {}
+                            }
+                        }
                     }
                 }
             }
