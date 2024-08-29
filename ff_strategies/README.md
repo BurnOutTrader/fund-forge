@@ -679,3 +679,39 @@ async fn example() {
     }
 }
 ```
+
+## OrderBooks 
+If we are using `Quote` data feed or if we have subscribed to a `LevelTwoSubscription`, we can access order books for a symbol.
+To access levels above BookLevel 0 we will need a LevelTwoSubscription. (subscribing to level 2 not yet implemented)
+BookLevel = u8
+Price = f64
+```rust
+async fn example() {
+    let strategy = FundForgeStrategy::default();
+    let symbol = Symbol::new(SymbolName::from("AUD-USD"), DataVendor::Test, MarketType::Forex);
+    
+    // we can get a readable ref to the order book for a symbol
+    let order_book: Option<Arc<OrderBook>> = strategy.get_order_book(&symbol).await; 
+    
+    if let Some(order_book) =  order_book {
+        // we can access the ask or bid book directly and keep a readable copy.
+        let bid_book: Arc<RwLock<BTreeMap<BookLevel, Price>>> = order_book.bid_book();
+        let ask_book: Arc<RwLock<BTreeMap<BookLevel, Price>>> = order_book.ask_book();
+        
+        // then we need to create a read lock on the books, and we can view them in real time.
+        let bid_book = bid_book.read().await;
+        let ask_book = ask_book.read().await;
+        
+        // we can get a cloned snapshot of the book in its current state
+        let ask_snapshot: BTreeMap<BookLevel, Price> = order_book.ask_snapshot().await;
+        let bid_snapshot: BTreeMap<BookLevel, Price> = order_book.bid_snapshot().await;
+        
+        // Or we can access the index of the bid or ask without getting the whole book. 
+        // It is recommended to use this function as accessing the books directly will slow down writing updates.
+        // this returns an Option<Price> as there may not be a Quote available for the BookLevel.
+        let best_bid_ask_level: BookLevel = 0;
+        let bid: Option<Price> = order_book.bid_level(level).await;
+        let ask: Option<Price> = order_book.ask_level(level).await;
+    }
+}
+```
