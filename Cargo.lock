@@ -1420,6 +1420,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "ff_standard_lib",
+ "futures",
  "iced",
  "iced_graphics",
  "rkyv",
@@ -1649,11 +1650,15 @@ checksum = "42703706b716c37f96a77aea830392ad231f44c9e9a67872fa5548707e11b11c"
 name = "fund-forge"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "chrono-tz",
  "ff_application",
+ "ff_charting",
  "ff_data_server",
  "ff_standard_lib",
  "ff_strategies",
  "ff_strategy_registry",
+ "iced",
  "test_strategy",
  "tokio",
 ]

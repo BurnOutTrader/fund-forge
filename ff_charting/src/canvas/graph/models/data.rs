@@ -19,7 +19,7 @@ check_bytes,
 )]
 #[archive_attr(derive(Debug))]
 pub enum SeriesData {
-    CandleStickData(Candle),
+    CandleStick(Candle),
     // Add other variants here...
 }
 
@@ -44,12 +44,12 @@ impl SeriesData {
                     BaseDataEnum::QuoteBar(quotebar)  => {
                         let candle = Candle::from_quotebar(quotebar.clone(), true);
                         prior_candle = Some(candle.clone());
-                        SeriesData::CandleStickData(candle)
+                        SeriesData::CandleStick(candle)
                     },
                     BaseDataEnum::Candle(candle) => {
                         let candle = candle.clone();
                         prior_candle = Some(candle.clone());
-                        SeriesData::CandleStickData(candle.clone())
+                        SeriesData::CandleStick(candle.clone())
                     },
                     _ => panic!("Unimplemented data type"),
                 };
@@ -58,6 +58,7 @@ impl SeriesData {
         }
         data
     }
+    
     pub fn draw_data(frame: &mut  Frame, view: &ChartState, bounds: &Rectangle, range_data: &BTreeMap<i64, Vec<SeriesData>>, logarithmic: bool, time_zone: &Tz)  {
         if range_data.is_empty() {
             return;
@@ -65,7 +66,7 @@ impl SeriesData {
         for (_, data_vec) in range_data {
             for data_object in data_vec {
                 match data_object {
-                    SeriesData::CandleStickData(candle) => {
+                    SeriesData::CandleStick(candle) => {
                         candle.draw_object(frame, view, bounds, logarithmic, &time_zone )
                     },
                     // Add other variants here...
@@ -76,7 +77,7 @@ impl SeriesData {
 
     pub fn time_local(&self, time_zone: &Tz) -> i64 {
         match self {
-            SeriesData::CandleStickData(candle) => {
+            SeriesData::CandleStick(candle) => {
                 candle.time_local(time_zone).timestamp()
             }
         }
@@ -84,7 +85,7 @@ impl SeriesData {
 
     pub fn lowest_value(&self) -> f64 {
         match self {
-            SeriesData::CandleStickData(candle) => {
+            SeriesData::CandleStick(candle) => {
                 candle.low
             }
         }
@@ -92,7 +93,7 @@ impl SeriesData {
 
     pub fn highest_value(&self) -> f64 {
         match self {
-            SeriesData::CandleStickData(candle) => {
+            SeriesData::CandleStick(candle) => {
                 candle.high
             }
         }
@@ -100,7 +101,7 @@ impl SeriesData {
 
     pub fn open_value(&self) -> Option<f64> {
         match self {
-            SeriesData::CandleStickData(candle) => {
+            SeriesData::CandleStick(candle) => {
                 Some(candle.open)
             }
         }
@@ -108,7 +109,7 @@ impl SeriesData {
 
     pub fn close_value(&self) -> Option<f64> {
         match self {
-            SeriesData::CandleStickData(candle) => {
+            SeriesData::CandleStick(candle) => {
                 Some(candle.close)
             }
         }

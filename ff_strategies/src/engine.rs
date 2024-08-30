@@ -103,23 +103,14 @@ impl Engine{
 
             println!("{:?}", &msg);
             let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg);
-            let events = vec![end_event];
+            let events = vec![end_event.clone()];
             //self.notify.notified().await;
-            match self.strategy_event_sender.send(events.clone()).await {
+            match self.strategy_event_sender.send(events).await {
                 Ok(_) => {},
                 Err(e) => {
                     println!("Engine: Error forwarding event: {:?}", e);
                 }
             }
-
-            let event_bytes = EventRequest::StrategyEventUpdates(self.owner_id.clone(), events).to_bytes();
-            let sender = self.registry_sender.clone();
-            task::spawn(async move {
-                match sender.send(&event_bytes).await {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
-            });
         });
     }
 
@@ -159,7 +150,7 @@ impl Engine{
                 println!("Engine: Error forwarding event: {:?}", e);
             }
         }
-        let event_bytes = EventRequest::StrategyEventUpdates(self.owner_id.clone(), warmup_complete_event).to_bytes();
+        let event_bytes = EventRequest::StrategyEventUpdates(warmup_complete_event).to_bytes();
         let sender = self.registry_sender.clone();
         task::spawn(async move {
             match sender.send(&event_bytes).await {
@@ -311,7 +302,7 @@ impl Engine{
                     println!("Error forwarding event: {:?}", e);
                 }
             }
-            let event_bytes = EventRequest::StrategyEventUpdates(self.owner_id.clone(), strategy_event).to_bytes();
+            let event_bytes = EventRequest::StrategyEventUpdates(strategy_event).to_bytes();
             let sender = self.registry_sender.clone();
             task::spawn(async move {
                 match sender.send(&event_bytes).await {
@@ -332,7 +323,7 @@ impl Engine{
                 println!("Error forwarding event: {:?}", e);
             }
         }
-        let event_bytes = EventRequest::StrategyEventUpdates(self.owner_id.clone(), strategy_event_slice).to_bytes();
+        let event_bytes = EventRequest::StrategyEventUpdates(strategy_event_slice).to_bytes();
         let sender = self.registry_sender.clone();
         task::spawn(async move {
             match sender.send(&event_bytes).await {
@@ -342,13 +333,13 @@ impl Engine{
         });
         // We check if the user has requested a delay between time slices for market replay style backtesting.
         if warm_up_completed {
-            match self.interaction_handler.replay_delay_ms().await {
-                Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
-                None => {},
-            }
             if self.interaction_handler.process_controls().await == true {
                 return false
             }
+        }
+        match self.interaction_handler.replay_delay_ms().await {
+            Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
+            None => {},
         }
         self.notify.notified().await;
         true

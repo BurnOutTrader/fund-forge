@@ -10,7 +10,7 @@ pub struct RollingWindow<T> {
     pub(crate) number: u64,
 }
 
-impl<T> RollingWindow<T> {
+impl<T: std::clone::Clone> RollingWindow<T> {
     pub fn new(number: u64) -> Self {
         RollingWindow {
             history: VecDeque::with_capacity(number as usize),
@@ -51,5 +51,10 @@ impl<T> RollingWindow<T> {
     
     pub fn history(&self) -> &VecDeque<T> {
         &self.history
+    }
+
+    pub fn history_as_vec(&self) -> Vec<T> {
+        // Convert VecDeque to Vec
+        self.history.iter().cloned().collect()
     }
 }

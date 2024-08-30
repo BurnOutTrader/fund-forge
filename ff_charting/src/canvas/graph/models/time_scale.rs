@@ -51,7 +51,7 @@ impl Default for TimeScale {
     fn default() -> Self {
         TimeScale {
             settings: GraphElementSettings::light_mode_settings(),
-            resolution: Resolution::default(),
+            resolution: Resolution::Minutes(15),
         }
     }
 }

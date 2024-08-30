@@ -173,7 +173,7 @@ pub async fn range_data(from_time: DateTime<Utc>, to_time: DateTime<Utc>, subscr
             Ok(time_slices) => {
                 time_slices
             },
-            Err(_e) =>continue
+            Err(_e) => continue
         };
 
         if time_slices.len() == 0 {

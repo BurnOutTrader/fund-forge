@@ -177,6 +177,7 @@ impl Candle {
             candle_type
         }
     }
+    
 
     /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
     pub fn time_utc(&self) -> DateTime<chrono::Utc> {

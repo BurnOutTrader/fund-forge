@@ -85,7 +85,7 @@ pub(crate) async fn base_data_response(subscription: DataSubscription, time: Str
     Ok(SynchronousResponseType::HistoricalBaseData(payloads))
 }
 
-pub async fn data_server_manage_async_requests(sender: Arc<Mutex<SecondaryDataSender>>, receiver: Arc<Mutex<SecondaryDataReceiver>>) {
+pub async fn data_server_manage_async_requests(sender: Arc<SecondaryDataSender>, receiver: Arc<Mutex<SecondaryDataReceiver>>) {
     tokio::spawn(async move {
         let mut receiver = receiver.lock().await;
         while let Some(data) = receiver.receive().await {

@@ -160,7 +160,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
             let (read_half, write_half) = tokio::io::split(tls_stream);
             let secondary_sender = SecondaryDataSender::Server(Mutex::new(write_half));
             let secondary_receiver = SecondaryDataReceiver::Server(read_half);
-            registry_manage_async_requests(Arc::new(Mutex::new(secondary_sender)), Arc::new(Mutex::new(secondary_receiver))).await;
+            registry_manage_async_requests(Arc::new(secondary_sender), Arc::new(Mutex::new(secondary_receiver))).await;
 
             println!("TLS connection established with {:?}", peer_addr);
         }

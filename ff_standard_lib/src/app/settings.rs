@@ -183,6 +183,12 @@ pub struct GraphElementSettings {
     pub text_settings: TextSettings,
 }
 
+impl Default for GraphElementSettings {
+    fn default() -> Self {
+        GraphElementSettings::light_mode_settings()
+    }
+}
+
 impl GraphElementSettings {
     pub fn light_mode_settings() -> GraphElementSettings {
         let object_settings = DisplaySettings::light_mode_settings();
@@ -206,12 +212,6 @@ impl GraphElementSettings {
         GraphElementSettings {
             object_settings,
             text_settings,
-        }
-    }
-    pub fn default() -> Self {
-        GraphElementSettings {
-            object_settings: DisplaySettings::default(),
-            text_settings: TextSettings::default(),
         }
     }
 }

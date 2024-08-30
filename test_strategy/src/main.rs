@@ -37,7 +37,7 @@ pub async fn create_test_strategy(strategy_event_sender: Sender<EventTimeSlice>,
         NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney, // the strategy time zone
         Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
-        vec![DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+        vec![DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(3), BaseDataType::Candles, MarketType::Forex)], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
         100,
         strategy_event_sender, // the sender for the strategy events
         None,
@@ -93,8 +93,8 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         if warmup_complete {
             count += 1;
             if count == 10 {
-                let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
-                strategy.indicator_subscribe(heikin_atr_20).await;
+              /*  let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(3), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
+                strategy.indicator_subscribe(heikin_atr_20).await;*/
                 //todo subscribing after launch causes deadlock in multimachine mode
                 //strategy.subscriptions_update(vec![aud_usd_3m.clone()],100).await;
                 // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variat of the same name.

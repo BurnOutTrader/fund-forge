@@ -181,7 +181,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
             let secondary_receiver = SecondaryDataReceiver::Server(read_half);
             println!("TLS connection established with {:?}", peer_addr);
 
-            data_server_manage_async_requests(Arc::new(Mutex::new(secondary_sender)), Arc::new(Mutex::new(secondary_receiver))).await;
+            data_server_manage_async_requests(Arc::new(secondary_sender), Arc::new(Mutex::new(secondary_receiver))).await;
         }
     })
 }

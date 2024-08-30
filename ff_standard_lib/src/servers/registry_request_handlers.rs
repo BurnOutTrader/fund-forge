@@ -28,15 +28,52 @@ pub async fn registry_manage_sequential_requests(communicator: Arc<SynchronousCo
 
 lazy_static! {
     static ref CONNECTED_STRATEGIES: Arc<RwLock<Vec<OwnerId>>> = Arc::new(RwLock::new(Vec::new()));
-    static ref STRATEGY_SUBSCRIBERS: Arc<RwLock<HashMap<OwnerId, Arc<RwLock<Vec<Arc<Mutex<SecondaryDataSender>>>>>>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref STRATEGY_SUBSCRIBTIONS: Arc<RwLock<HashMap<OwnerId, Arc<SecondaryDataSender>>>> = Arc::new(RwLock::new(HashMap::new()));
 }
 
 /// this is used when launching in single machine
-pub async fn registry_manage_async_requests(sender: Arc<Mutex<SecondaryDataSender>>, receiver: Arc<Mutex<SecondaryDataReceiver>>) {
-    let mut owner_id = OwnerId::new();
+pub async fn registry_manage_async_requests(sender: Arc<SecondaryDataSender>, receiver: Arc<Mutex<SecondaryDataReceiver>>) {
     tokio::spawn(async move {
-        let mut receiver = receiver.lock().await;
-        while let Some(data) = receiver.receive().await {
+        let receiver = receiver.clone();
+        let sender = sender;
+        let binding = receiver.clone();
+        let mut listener = binding.lock().await;
+        'register_loop: while let Some(data) = listener.receive().await {
+            let request = match EventRequest::from_bytes(&data) {
+                Ok(request) => request,
+                Err(e) => {
+                    println!("Failed to parse request: {:?}", e);
+                    continue;
+                }
+            };
+            match request {
+                EventRequest::RegisterStrategy(owner, ..) => {
+                    CONNECTED_STRATEGIES.write().await.push(owner.clone());
+                    handle_strategies(owner.clone(), sender, receiver).await;
+                    println!("Registered Strategy: {:?}", owner);
+                    break 'register_loop
+                }
+                EventRequest::RegisterGui => {
+                    // we only support a single GUI instance to save overhead. when one connects another disconnects
+                    let mut subscriptions = STRATEGY_SUBSCRIBTIONS.write().await;
+                    subscriptions.clear();
+                    handle_gui(sender, receiver).await;
+                    println!("Registered Gui");
+                    break 'register_loop
+                }
+                _ => {}
+            };
+        }
+    });
+}
+
+pub async fn handle_strategies(owner_id: OwnerId, sender: Arc<SecondaryDataSender>, receiver: Arc<Mutex<SecondaryDataReceiver>>) {
+    tokio::spawn(async move {
+        let mut safe_shutdown = false;
+        let mut  owner_id = owner_id.clone();
+        let receiver = receiver.clone();
+        let mut listener = receiver.lock().await;
+        'register_loop: while let Some(data) = listener.receive().await {
             let request = match EventRequest::from_bytes(&data) {
                 Ok(request) => request,
                 Err(e) => {
@@ -45,62 +82,71 @@ pub async fn registry_manage_async_requests(sender: Arc<Mutex<SecondaryDataSende
                 }
             };
             match &request {
-                EventRequest::RegisterStrategy(owner, ..) => {
-                    CONNECTED_STRATEGIES.write().await.push(owner.clone());
-                    owner_id = owner.clone();
-                    println!("Registered new strategy: {:?}", owner);
-                }
-                EventRequest::StrategyEventUpdates(owner, slice) => {
+                EventRequest::StrategyEventUpdates(slice) => {
                     //println!("Strategy updates from: {:?}", owner);
-                    owner_id = owner.clone();
-                    forward_to_subscribers(&owner_id, EventResponse::StrategyEventUpdates(owner.clone(), slice.clone())).await
+                    forward_to_subscribers(&owner_id, EventResponse::StrategyEventUpdates(owner_id.clone(), slice.clone())).await;
                 }
-                EventRequest::ListAllStrategies => {
-                    owner_id = "GUI".to_string();
-                    let strategies = CONNECTED_STRATEGIES.read().await.clone();
-                    match strategies.is_empty() {
-                        true => { },
-                        false => sender.lock().await.send(&EventResponse::ListStrategiesResponse(strategies).to_bytes()).await.unwrap()
-                    }
-                }
-                EventRequest::Subscribe(owner) => {
-                    owner_id = "GUI".to_string();
-                    let mut subscribers = STRATEGY_SUBSCRIBERS.write().await;
-                    if !subscribers.contains_key(owner) {
-                        subscribers.insert(owner.clone(), Arc::new(RwLock::new(vec![])));
-                    }
-                    if let Some(subscriber_list) = subscribers.get(owner) {
-                        subscriber_list.write().await.push(sender.clone());
-                        println!("{:?}: subscribed to {:?}", owner_id, owner);
-                        sender.lock().await.send(&EventResponse::Subscribed(owner.clone()).to_bytes()).await.unwrap();
-                    }
-                }
-            };
+                _ => {}
+            }
         }
-        if owner_id == "GUI".to_string() {
-            //STRATEGY_SUBSCRIBERS.write().await.retain(|k| *k != *owner_id);
-            // need a way to remove all subscriptions we subscribed to
-        } else {
-            let mut strategies = CONNECTED_STRATEGIES.write().await;
-            strategies.retain(|k| *k != *owner_id);
-            STRATEGY_SUBSCRIBERS.write().await.remove(&owner_id);
+        if !safe_shutdown {
+            let shutdown_event = EventResponse::StrategyEventUpdates(owner_id.clone(), vec![StrategyEvent::ShutdownEvent(owner_id.clone(), String::from("Strategy Disconnect"))]);
+            forward_to_subscribers(&owner_id, shutdown_event).await;
         }
-        println!("Owner ID: {:?} disconnected", owner_id);
+        CONNECTED_STRATEGIES.write().await.retain(|x| *x != owner_id);
+        println!{"{} Strategy Disconnected", owner_id}
     });
 }
 
 async fn forward_to_subscribers(owner_id: &OwnerId, response: EventResponse) {
     let response_bytes: Vec<u8> = response.to_bytes();
-    if let Some(subscribers_list) = STRATEGY_SUBSCRIBERS.read().await.get(owner_id) {
-        let list = subscribers_list.read().await;
-        for subscriber in list.iter() {
-            match subscriber.lock().await.send(&response_bytes.clone()).await {
-                Ok(_) => {},
-                Err(e) => println!("Failed to send to subscriber: {:?} ", e),
-            }
+    if let Some(subscriber) = STRATEGY_SUBSCRIBTIONS.read().await.get(owner_id) {
+        match subscriber.send(&response_bytes.clone()).await {
+            Ok(_) => {},
+            Err(e) => println!("Failed to send to subscriber: {:?} ", e),
         }
     }
 }
+
+pub async fn handle_gui(sender: Arc<SecondaryDataSender>, receiver: Arc<Mutex<SecondaryDataReceiver>>) {
+    tokio::spawn(async move {
+        let receiver = receiver.clone();
+        let sender = sender.clone();
+        let binding = receiver.clone();
+        let mut listener = binding.lock().await;
+        'register_loop: while let Some(data) = listener.receive().await {
+            let request = match EventRequest::from_bytes(&data) {
+                Ok(request) => request,
+                Err(e) => {
+                    println!("Failed to parse request: {:?}", e);
+                    continue;
+                }
+            };
+            match &request {
+                EventRequest::ListAllStrategies => {
+                    let strategies = CONNECTED_STRATEGIES.read().await.clone();
+                    match strategies.is_empty() {
+                        true => { },
+                        false => sender.send(&EventResponse::ListStrategiesResponse(strategies).to_bytes()).await.unwrap()
+                    }
+                }
+                EventRequest::Subscribe(owner) => {
+                    let mut subscriptions = STRATEGY_SUBSCRIBTIONS.write().await;
+                    if !subscriptions.contains_key(owner) {
+                        subscriptions.insert(owner.clone(), sender.clone());
+                    }
+                    sender.send(&EventResponse::Subscribed(owner.clone()).to_bytes()).await.unwrap()
+                }
+                _ => {}
+            };
+        }
+        let mut subscriptions = STRATEGY_SUBSCRIBTIONS.write().await;
+        subscriptions.clear();
+        println!{"Gui Disconnected"}
+    });
+}
+
+
 
 // this is used when launching in multi-machine
 /*pub async fn registry_manage_async_external(tls_stream: tokio_rustls::server::TlsStream<TcpStream>) {
@@ -128,7 +174,7 @@ async fn forward_to_subscribers(owner_id: &OwnerId, response: EventResponse) {
 pub enum EventResponse {
     StrategyEventUpdates(OwnerId, EventTimeSlice),
     ListStrategiesResponse(Vec<OwnerId>),
-    Subscribed(OwnerId)
+    Subscribed(OwnerId),
 }
 
 impl Bytes<Self> for EventResponse {
@@ -156,7 +202,8 @@ impl Bytes<Self> for EventResponse {
 #[archive_attr(derive(Debug))]
 pub enum EventRequest {
     RegisterStrategy(OwnerId, TimeString),
-    StrategyEventUpdates(OwnerId, EventTimeSlice),
+    RegisterGui,
+    StrategyEventUpdates(EventTimeSlice),
     ListAllStrategies,
     Subscribe(OwnerId),
 }

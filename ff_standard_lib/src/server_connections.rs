@@ -164,7 +164,7 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
             let (client_sender, client_receiver) = mpsc::channel(1000);
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
             let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
-            data_server_manage_async_requests(Arc::new(Mutex::new(async_sender)), Arc::new(Mutex::new(async_receiver))).await;
+            data_server_manage_async_requests(Arc::new(async_sender), Arc::new(Mutex::new(async_receiver))).await;
 
             let mut async_senders = ASYNC_OUTGOING.write().await;
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(server_sender));
@@ -185,7 +185,7 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
             let (client_sender, client_receiver) = mpsc::channel(1000);
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
             let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
-            registry_manage_async_requests(Arc::new(Mutex::new(async_sender)), Arc::new(Mutex::new(async_receiver))).await;
+            registry_manage_async_requests(Arc::new(async_sender), Arc::new(Mutex::new(async_receiver))).await;
 
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(server_sender));
             async_senders.insert(ConnectionType::StrategyRegistry, Arc::new(async_sender));

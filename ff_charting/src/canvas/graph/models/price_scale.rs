@@ -59,7 +59,7 @@ impl PriceScale {
         for (_, data) in data.iter() {
             for data in data.iter() {
                 match data {
-                    SeriesData::CandleStickData(candle_stick) => {
+                    SeriesData::CandleStick(candle_stick) => {
                         last_open_price = Some(candle_stick.open);
                     },
                 }
@@ -73,7 +73,7 @@ impl PriceScale {
         for (_, data) in data.iter() {
             for data in data.iter() {
                 match data {
-                    SeriesData::CandleStickData(candle_stick) => {
+                    SeriesData::CandleStick(candle_stick) => {
                         last_price = Some(candle_stick.close);
                     },
                 }

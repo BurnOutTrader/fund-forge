@@ -1,11 +1,21 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
-use iced::{Color, Rectangle, Renderer, Theme};
+use std::hash::Hash;
+use std::sync::Arc;
+use iced::{event, window, Application, Color, Command, Element, Length, Point, Rectangle, Renderer, Size, Subscription, Theme};
 use iced::event::Status;
 use iced::mouse::{Cursor, Interaction};
-use iced::widget::canvas;
+use iced::widget::{canvas, container, Canvas};
 use iced::widget::canvas::{Event, Frame, Geometry};
-use chrono_tz::Tz;
+use chrono_tz::{Australia, Tz};
+use futures::stream::BoxStream;
+use iced::advanced::{layout, mouse, renderer, widget, Hasher, Layout, Widget};
+use iced::advanced::subscription::{EventStream, Recipe};
+use iced::Length::Fill;
+use iced_graphics::geometry::{Path, Stroke};
+use tokio::sync::mpsc::Receiver;
+use tokio::sync::{mpsc, Mutex, Notify, RwLock};
+use tokio::task;
 use ff_standard_lib::standardized_types::OwnerId;
 use crate::canvas::graph::enums::areas::ChartAreas;
 use crate::canvas::graph::enums::x_scale::XScale;
@@ -18,11 +28,17 @@ use crate::canvas::graph::state::ChartState;
 use crate::canvas::graph::view;
 use crate::clicks::click_location;
 use ff_standard_lib::drawing_objects::drawing_tool_enum::DrawingTool;
-
+use ff_standard_lib::servers::registry_request_handlers::EventResponse;
+use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use ff_standard_lib::standardized_types::base_data::traits::BaseData;
+use ff_standard_lib::standardized_types::enums::Resolution;
+use ff_standard_lib::standardized_types::strategy_events::StrategyEvent;
+use ff_standard_lib::standardized_types::time_slices::TimeSlice;
+use crate::canvas::graph::traits::TimeSeriesGraphElements;
 
 ///  A graph is the canvases object responsible for bringing the other elements that make up a graph, it is responsible for drawing, update and event state.
 /// The state property manages the sections of the graph, scale areas etc and converts position.x and positiion.y into values according to the graph data set.
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct SeriesCanvas {
     pub data: BTreeMap<i64, Vec<SeriesData>>,
     pub background_color: Color,
@@ -38,17 +54,18 @@ pub struct SeriesCanvas {
 
 impl SeriesCanvas {
     pub fn new(owner: OwnerId, data: BTreeMap<i64, Vec<SeriesData>>, background_color: Color, x_scale: XScale, bounds: Rectangle, y_scale: YScale, drawn_objects: Vec<DrawingTool>, crosshair: CrossHair, time_zone: Tz) -> Self {
+        //let data_added = &data.keys().next().unwrap().clone();
         SeriesCanvas {
             data,
             background_color,
-            x_scale,
+            x_scale: x_scale,
             bounds,
-            y_scale,
+            y_scale: y_scale,
             drawn_objects,
             crosshair,
             time_zone,
             owner,
-            data_added: RefCell::new(None)
+            data_added: RefCell::new(None),
         }
     }
 
@@ -65,21 +82,25 @@ impl SeriesCanvas {
         data
     }
 
-    pub fn add_data(&mut self, time: i64, time_series_data: Vec<SeriesData>) {
-        //if the data is bar type this will update the last price, if not then it will have no effect
-        let mut last_open_price: Option<f64> = None;
-        let mut last_price: Option<f64> = None;
+    pub fn update(&mut self, time_slice: TimeSlice) {
+        let time_zone = self.time_zone.clone();
         
-        // Insert the new data
-        if !self.data.contains_key(&time) {
-            self.data.insert(time, Vec::new());
-        }
+        for base_data in time_slice {
+            let time = base_data.time_local(&time_zone).timestamp();
+            //if the data is bar type this will update the last price, if not then it will have no effect
+            let mut last_open_price: Option<f64> = None;
+            let mut last_price: Option<f64> = None;
 
-        // Loop through our new data by type and make any type specific updates
-        let vec = self.data.get_mut(&time).unwrap();
-        for data in time_series_data.iter() {
-            match data {
-                SeriesData::CandleStickData(candle_stick) => {
+            // Insert the new data
+            if !self.data.contains_key(&time) {
+                self.data.insert(time.clone(), Vec::new());
+            }
+
+            // Loop through our new data by type and make any type specific updates
+            
+            let mut data_added = false;
+            match base_data {
+                BaseDataEnum::Candle(candle_stick) => {
                     last_open_price = Some(candle_stick.open);
                     last_price = Some(candle_stick.close);
                     if let Some(last_open_price) = last_open_price {
@@ -88,13 +109,23 @@ impl SeriesCanvas {
                     if let Some(last_price) = last_price {
                         self.y_scale.last_value(last_price)
                     }
+                    
+                    //todo we will need to handle different series on the same chart, update open vs closed bars etc
+                    if let Some(vec) = self.data.get_mut(&time) {
+                        *vec = vec![SeriesData::CandleStick(candle_stick)];
+                        data_added = true
+                    } else {
+                        self.data.insert(candle_stick.time_utc().timestamp(), vec![SeriesData::CandleStick(candle_stick)]);
+                        data_added = true
+                    }
                 },
+                _ => {}
             }
-            vec.push(data.clone());
+            
+            if data_added {
+                *self.data_added.borrow_mut() = Some(time);
+            }
         }
-
-        let mut data_added = self.data_added.borrow_mut();
-        *data_added = Some(time);
     }
 
 
@@ -168,14 +199,11 @@ impl SeriesCanvas {
     }
 }
 
-pub enum ChartMessages {
-    None,
-}
 
-impl canvas::Program<ChartMessages> for SeriesCanvas {
+impl canvas::Program<EventResponse> for SeriesCanvas {
     type State = ChartState;
 
-    fn update(&self, state: &mut Self::State, event: Event, bounds: Rectangle, cursor: Cursor) -> (Status, Option<ChartMessages>) {
+    fn update(&self, state: &mut Self::State, event: Event, bounds: Rectangle, cursor: Cursor) -> (Status, Option<EventResponse>) {
         if bounds.width == 0.0 || bounds.height == 0.0 {
             return (Status::Ignored, None);
         }
@@ -193,14 +221,20 @@ impl canvas::Program<ChartMessages> for SeriesCanvas {
         if self.bounds != bounds {
             state.update_bounds(&bounds, self.y_scale.scale_width(), self.x_scale.scale_height());
         }
-
-        let mut data_added_ref = self.data_added.borrow_mut();
-        if let Some(time) = *data_added_ref {
+        
+        let data_added = self.data_added.borrow().clone();
+        if let Some(time) = data_added {
             if !state.x_locked {
                 let time_difference = time - state.last_x;
                 // Update the state window
-                state.x_start += time_difference;
-                state.x_end = time;
+                if state.x_start == 0 {
+                    state.x_start = time - (self.x_scale.increment_factor() * 250);
+                    state.x_end = time;
+                } else {
+                    state.x_start += time_difference;
+                    state.x_end = time;
+                }
+                
             }
             state.last_x = time;
 
@@ -208,14 +242,15 @@ impl canvas::Program<ChartMessages> for SeriesCanvas {
             self.autoscale_y(state, &data_range);
 
             // Reset data_added to None after processing
-            *data_added_ref = None;
+            let mut data_added = self.data_added.borrow_mut();
+            *data_added = None;
         }
 
 
         match event {
             Event::Mouse(mouse_event) => {
                 match mouse_event {
-                    iced::mouse::Event::WheelScrolled { delta } => {
+                    /*iced::mouse::Event::WheelScrolled { delta } => {
                         if let Some(position) = cursor.position() {
                            if state.drawing_area.contains(position) || state.x_scale_area.contains(position) {
                                state.y_locked = false;
@@ -229,12 +264,12 @@ impl canvas::Program<ChartMessages> for SeriesCanvas {
                                 state.y_locked = true;
                             }
                         }
-                    },
-                    iced::mouse::Event::ButtonReleased(button) => {
+                    },*/
+                   /* iced::mouse::Event::ButtonReleased(button) => {
                         if bounds.contains(cursor.position().unwrap()) {
                             self.double_left_click(state, cursor);
                         }
-                    },
+                    },*/
                     _ => {}
                 }
             }
@@ -255,7 +290,11 @@ impl canvas::Program<ChartMessages> for SeriesCanvas {
         if !self.data.is_empty() {
             let range_data = self.return_range(state.x_start, state.x_end);
             self.autoscale_y(&mut state.clone(), &range_data);
-            SeriesData::draw_data(&mut frame, &state, &bounds, &range_data, self.y_scale.logorithmic(), &self.time_zone);
+            if !self.data.is_empty() {
+                let range_data = self.return_range(state.x_start, state.x_end);
+                self.autoscale_y(&mut state.clone(), &range_data);
+                SeriesData::draw_data(&mut frame, &state, &bounds, &range_data, self.y_scale.logorithmic(), &self.time_zone);
+            }
         }
 
         // if an object is being placed it will be drawn here, but with a lighter tone until it is_ready(), if it fails to be placed it will be removed, we need a system for this.
@@ -281,7 +320,7 @@ impl canvas::Program<ChartMessages> for SeriesCanvas {
         cursor: Cursor,
     ) -> Interaction {
         match cursor {
-            Cursor::Available(point) => {
+            /*Cursor::Available(point) => {
                 if !bounds.contains(cursor.position().unwrap()) {
                     return Interaction::default();
                 }
@@ -294,7 +333,7 @@ impl canvas::Program<ChartMessages> for SeriesCanvas {
                 } else {
                     Interaction::Idle
                 }
-            }
+            }*/
             _ => Interaction::default(),
         }
     }
@@ -326,7 +365,7 @@ pub fn get_lowest_low(data: &BTreeMap<i64, Vec<SeriesData>>) -> f64 {
     }
     low
 }
-
+/*
 impl Default for SeriesCanvas {
     fn default() -> Self {
         SeriesCanvas {
@@ -339,13 +378,121 @@ impl Default for SeriesCanvas {
             crosshair: CrossHair::default(),
             time_zone: Tz::UTC,
             owner: "".to_string(),
-            data_added: RefCell::new(None)
+            data_added: RefCell::new(None),
+        }
+    }
+}*/
+
+
+pub struct GraphFlags {
+    pub receiver: Arc<Mutex<Receiver<EventResponse>>>,
+    pub canvas: SeriesCanvas,
+    pub notify: Arc<Notify>
+}
+
+impl Default for GraphFlags {
+    fn default() -> Self {
+        let (series_sender, series_receiver) = mpsc::channel(1000);
+        Self {
+            receiver: Arc::new(Mutex::new(series_receiver)),
+            canvas: SeriesCanvas::new("test".to_string(), Default::default(), Default::default(), XScale::Time(TimeScale::new(Default::default(), Resolution::Minutes(3))), Default::default(), YScale::Price(PriceScale::default()), vec![], Default::default(), Australia::Sydney),
+            notify: Default::default(),
         }
     }
 }
 
 
+/// Main application struct
+pub struct ChartApp {
+    canvas: SeriesCanvas,
+    pub receiver: Arc<Mutex<Receiver<EventResponse>>>,
+    pub notify: Arc<Notify>
+}
+
+impl Application for ChartApp {
+    type Executor = iced::executor::Default;
+    type Message = EventResponse;
+    type Theme = Theme;
+    type Flags = GraphFlags;
+
+    fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
+        // Initialize the application with a default SeriesCanvas
+        let canvas = flags.canvas.clone();
+        
+        // Return the initial state and an optional command to execute
+        let receiver = flags.receiver.clone();
+        let notify = flags.notify.clone();
+        (ChartApp { canvas, receiver, notify}, Command::none())
+    }
+
+    fn title(&self) -> String {
+        String::from("Series Canvas Chart")
+    }
+
+    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+        match message {
+            EventResponse::StrategyEventUpdates(owner, event_slice) => {
+                for event in event_slice {
+                    match event {
+                        StrategyEvent::OrderEvents(_, _) => {}
+                        StrategyEvent::DataSubscriptionEvents(_, _, _) => {}
+                        StrategyEvent::StrategyControls(_, _, _) => {}
+                        StrategyEvent::DrawingToolEvents(_, _, _) => {}
+                        StrategyEvent::TimeSlice(_, slice) => {
+                            //self.notify.notify_one();
+                            self.canvas.update(slice)
+                        }
+                        StrategyEvent::ShutdownEvent(_, _) => {}
+                        StrategyEvent::WarmUpComplete(_) => {}
+                        StrategyEvent::IndicatorEvent(_, _) => {}
+                    }
+                }
+            }
+            _ => {}
+        }
+        Command::none()
+    }
+
+    fn view(&self) -> Element<Self::Message> {
+        let canvas_element = canvas(&self.canvas)
+            .width(Fill)
+            .height(Fill);
+
+        container(canvas_element)
+            .into()
+    }
+
+    fn subscription(&self) -> iced::Subscription<Self::Message> {
+        //ToDo: I may not need to handle connection here, each strategy can have its own control_center center,
+        // This section will just connect the platform to the data server
+        let messages = iced::Subscription::from_recipe(
+            StrategyWindowRecipe {
+            receiver_arc:  self.receiver.clone(),
+        });
+        
+        iced::Subscription::batch(vec![messages])
+    }
+}
 
 
+pub struct StrategyWindowRecipe {
+    receiver_arc: Arc<Mutex<Receiver<EventResponse>>>,
+}
+
+impl Recipe for StrategyWindowRecipe {
+    type Output = EventResponse;
+
+    fn hash(&self, state: &mut Hasher) {
+        std::any::TypeId::of::<Self>().hash(state);
+    }
+
+    fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<'static, Self::Output> {
+        Box::pin(futures::stream::unfold(self.receiver_arc.clone(), |receiver| async move {
+            let receiver = receiver.clone();
+            let mut lock = receiver.lock().await;
+            lock.recv().await.map(|message| (message, receiver.clone()))
+        }))
+    }
+}
 
 
