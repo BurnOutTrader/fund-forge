@@ -70,8 +70,8 @@ impl EventTimeEnum {
                     return true
                 }
             },
-            EventTimeEnum::Every { duration, mut next_time , ..} => {
-                if current_time == next_time {
+            EventTimeEnum::Every {   next_time , ..} => {
+                if current_time == *next_time {
                     return true
                 }
             }
@@ -160,7 +160,7 @@ impl TimedEventHandler {
                 if let EventTimeEnum::DateTime { .. } = event.time {
                     events_to_remove.push(event.name.clone());
                 }
-                if let EventTimeEnum::Every { duration, mut next_time , fire_in_warmup} = event.time {
+                if let EventTimeEnum::Every { duration, mut next_time , .. } = event.time {
                     next_time = current_time + duration;
                 }
             }

@@ -147,7 +147,18 @@ impl HistoricalMarketHandler {
                     last_price.insert(candle.symbol.clone(), candle.close);
                 }
                 BaseDataEnum::QuoteBar(ref bar) => {
-                    
+                    let mut order_books = self.order_books.write().await;
+                    if !order_books.contains_key(&bar.symbol) {
+                        order_books.insert(bar.symbol.clone(), Arc::new(OrderBook::new(bar.symbol.clone(), bar.time_utc())));
+                    }
+                    if let Some(book) = order_books.get_mut(&bar.symbol) {
+                        let mut bid = BTreeMap::new();
+                        bid.insert(0, bar.bid_close.clone());
+                        let mut ask = BTreeMap::new();
+                        ask.insert(0, bar.ask_close.clone());
+                        let order_book_update = OrderBookUpdate::new(bar.symbol.clone(), bid, ask, bar.time_utc());
+                        book.update(order_book_update).await;
+                    }
                 }
                 BaseDataEnum::Tick(ref tick) => {
                     let mut last_price = self.last_price.write().await;
@@ -304,7 +315,7 @@ impl HistoricalMarketHandler {
         }
     }
 
-    async fn get_market_price(&self, order_side: &OrderSide, symbol_name: &Symbol) -> Result<f64, MarketPriceError> {
+    async fn get_market_price(&self, order_side: &OrderSide, symbol_name: &Symbol) -> Result<f64, String> {
         if let Some(book) = self.order_books.read().await.get(symbol_name) {
             match order_side {
                 OrderSide::Buy => {
@@ -321,12 +332,7 @@ impl HistoricalMarketHandler {
         } else if let Some(last_price) = self.last_price.read().await.get(symbol_name) {
             return Ok(last_price.clone())
         }
-        Err(MarketPriceError::NoPriceFound("No market price found for symbol".into()))
+        Err(String::from("No market price found for symbol"))
     }
-}
-
-#[derive(Debug)]
-pub enum MarketPriceError {
-    NoPriceFound(String),
 }
 

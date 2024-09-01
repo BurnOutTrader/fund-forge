@@ -206,7 +206,7 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
                 // set up async client
                 let async_client = match create_async_api_client(&settings).await {
                     Ok(client) => client,
-                    Err(e) => {
+                    Err(__e) => {
                         println!("{}", format!("Unable to establish connection to: {:?} server @ address: {:?}", connection_type, settings));
                         continue
                     }

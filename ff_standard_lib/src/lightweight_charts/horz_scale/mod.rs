@@ -1,12 +1,12 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::lightweight_charts::horz_scale::horz_scale_trait::HorzScaleItem;
-use crate::lightweight_charts::horz_scale::Ohlc_enum::OhlcData;
+use crate::lightweight_charts::horz_scale::ohlc_enum::OhlcData;
 use crate::lightweight_charts::horz_scale::single_value_data_enum::SingleValueData;
 use crate::standardized_types::TimeStamp;
 
 pub mod horz_scale_trait;
 pub mod single_value_data_enum;
-pub mod Ohlc_enum;
+pub mod ohlc_enum;
 
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]

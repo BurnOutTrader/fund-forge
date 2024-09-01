@@ -3,7 +3,7 @@ use std::sync::Arc;
 use structopt::lazy_static::lazy_static;
 use tokio::sync::{Mutex, RwLock};
 use crate::strategy_registry::strategies::{StrategyRequest, StrategyResponse};
-use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender, SendError};
+use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use crate::standardized_types::OwnerId;
 use crate::standardized_types::strategy_events::EventTimeSlice;
 use crate::strategy_registry::guis::RegistryGuiResponse;
@@ -75,13 +75,12 @@ pub async fn handle_strategies(owner_id: OwnerId, sender: Arc<SecondaryDataSende
         STRATEGY_EVENTS_BUFFER.write().await.insert(owner_id.clone(), Default::default());
 
         println!("Buffer created");
-
-        let mut safe_shutdown = false;
-        let mut  owner_id = owner_id.clone();
+        
+        let owner_id = owner_id.clone();
         let receiver = receiver.clone();
         let mut listener = receiver.lock().await;
 
-        'strategy_loop: while let Some(data) = listener.receive().await {
+        while let Some(data) = listener.receive().await {
             let owner_id = owner_id.clone();
             let sender = sender.clone();
             tokio::spawn(async move {
@@ -95,8 +94,7 @@ pub async fn handle_strategies(owner_id: OwnerId, sender: Arc<SecondaryDataSende
                     StrategyRequest::StrategyEventUpdates(utc_time_stamp, slice) => {
                         forward_to_subscribers(owner_id.clone(), utc_time_stamp, slice).await;
                     }
-                    StrategyRequest::ShutDown(last_time) => {
-                        safe_shutdown = true;
+                    StrategyRequest::ShutDown(_last_time) => {
                         let response = StrategyResponse::ShutDownAcknowledged(owner_id.clone());
                         match sender.send(&response.to_bytes()).await {
                             Ok(_) => {}

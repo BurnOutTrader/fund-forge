@@ -38,7 +38,7 @@ impl RenkoConsolidator
     }
 
     /// Returns a candle if the count is reached
-    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) fn update(&mut self, _base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         //let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         todo!() //will need to be based on renko parameters
     }

@@ -1,4 +1,3 @@
-use std::cell::RefCell;
 use std::collections::{BTreeMap};
 use std::collections::Bound::Included;
 use std::sync::{Arc};
@@ -11,9 +10,8 @@ use tokio::time::sleep;
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
 use ff_standard_lib::strategy_registry::{RegistrationRequest, RegistrationResponse};
 use ff_standard_lib::strategy_registry::strategies::{StrategyRequest, StrategyResponse};
-use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, get_synchronous_communicator, ConnectionType};
-use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender, SendError};
-use ff_standard_lib::servers::communications_sync::SynchronousCommunicator;
+use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, ConnectionType};
+use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use ff_standard_lib::standardized_types::base_data::history::{generate_file_dates, get_historical_data};
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::{StrategyMode};
@@ -148,7 +146,6 @@ impl Engine{
                         StrategyResponse::ShutDownAcknowledged(owner_id) => {
                             println!("Registry Shut Down Acknowledged {}", owner_id)
                         }
-                        _ => {}
                     }
                 }
                 None => {

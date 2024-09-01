@@ -166,7 +166,7 @@ pub async fn range_data(from_time: DateTime<Utc>, to_time: DateTime<Utc>, subscr
     let month_years = generate_file_dates(from_time.clone(), to_time.clone());
     
     let mut data : BTreeMap<DateTime<Utc>, TimeSlice>  = BTreeMap::new();
-    'month_loop: for (_, month_year) in month_years{ //start time already utc
+    for (_, month_year) in month_years{ //start time already utc
         //println!("Getting historical data for: {:?}", month_year);
         // Get the historical data for all subscriptions from the server, parse it into TimeSlices.
         let time_slices = match get_historical_data(vec![subscription.clone()], month_year).await {

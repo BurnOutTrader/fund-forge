@@ -4,7 +4,6 @@ use rkyv::ser::Serializer;
 use rkyv::ser::serializers::AllocSerializer;
 use crate::drawing_objects::drawing_object_handler::DrawingToolEvent;
 use crate::indicators::indicator_handler::IndicatorEvents;
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::orders::orders::OrderUpdateEvent;
 use crate::standardized_types::OwnerId;

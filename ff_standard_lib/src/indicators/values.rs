@@ -1,10 +1,8 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use ahash::AHashMap;
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
-
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
 use crate::indicators::indicators_trait::IndicatorName;
@@ -12,7 +10,6 @@ use crate::standardized_types::Color;
 use crate::standardized_types::subscriptions::DataSubscription;
 
 pub type PlotName = String;
-pub struct ArchivedAHashMap(AHashMap<String, f64>);
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(

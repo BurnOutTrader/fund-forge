@@ -173,7 +173,7 @@ pub struct BarData {
 }
 impl BarData {
     pub  fn new(time_utc: TimeStamp, open: Price, high: Price, low: Price,
-                lose: Price, close: Price, color: Option<Color>) -> Self {
+                close: Price, color: Option<Color>) -> Self {
         Self {
             time_utc,
             open,
