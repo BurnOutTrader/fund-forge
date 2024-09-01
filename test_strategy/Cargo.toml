@@ -12,4 +12,3 @@ chrono = "*"
 rkyv = "*"
 ff_standard_lib = { path = "../ff_standard_lib" }
 ff_strategies = { path = "../ff_strategies" }
-ff_lightweight_charts = { path ="../ff_lightweight_charts"}

@@ -1,16 +1,14 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
-use ahash::AHashMap;
-use ff_lightweight_charts::lwc_wrappers::primitives::Color;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::helpers::decimal_calculators::{round_to_tick_size};
 use crate::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::indicators::values::{IndicatorValue, IndicatorValues};
+use crate::standardized_types::Color;
 
 pub struct AverageTrueRange {
     name: IndicatorName,

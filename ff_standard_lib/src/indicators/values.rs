@@ -4,10 +4,11 @@ use std::str::FromStr;
 use ahash::AHashMap;
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
-use ff_lightweight_charts::lwc_wrappers::primitives::Color;
+
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
 use crate::indicators::indicators_trait::IndicatorName;
+use crate::standardized_types::Color;
 use crate::standardized_types::subscriptions::DataSubscription;
 
 pub type PlotName = String;

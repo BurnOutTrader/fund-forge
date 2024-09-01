@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ff_lightweight_charts = { path ="../ff_lightweight_charts"}
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
 rkyv = { version =  "*", features = ["std", "alloc", "validation"] }

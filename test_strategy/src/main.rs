@@ -4,7 +4,7 @@ use chrono_tz::Australia;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
 use tokio::task;
-use ff_lightweight_charts::lwc_wrappers::primitives::Color;
+use ff_standard_lib::lightweight_charts::primitives::Color;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::app::settings::ColorTemplate;

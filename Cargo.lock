@@ -936,15 +936,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ff_lightweight_charts"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-tz",
- "rkyv",
-]
-
-[[package]]
 name = "ff_standard_lib"
 version = "0.1.0"
 dependencies = [
@@ -955,7 +946,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "env_logger",
- "ff_lightweight_charts",
  "float-cmp",
  "futures",
  "heck 0.4.1",
@@ -1084,7 +1074,6 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "ff_data_server",
- "ff_lightweight_charts",
  "ff_standard_lib",
  "ff_strategies",
  "ff_strategy_registry",
@@ -2723,7 +2712,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
- "ff_lightweight_charts",
  "ff_standard_lib",
  "ff_strategies",
  "rkyv",
