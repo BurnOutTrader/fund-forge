@@ -4,7 +4,7 @@ use std::path::PathBuf;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_path = "/Users/kevmonaghan/Downloads/data/AUD-USD_T_LAST_202301.csv";
 
-    let symbol = Symbol{
+    let symbol = Symbol {
         name: "AUD-USD".to_string(),
         market_type: MarketType::Forex,
         data_vendor: DataVendor::Test,
@@ -12,15 +12,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ticks = load_csv(file_path, symbol.clone())?;
 
-
     let data_map = store_data(ticks);
     let base_data_path = PathBuf::from("/Users/kevmonaghan/Downloads/data/parsed");
 
     if !base_data_path.exists() {
         std::fs::create_dir_all(&base_data_path)?;
     }
-
-
 
     let subscription = DataSubscription {
         symbol: symbol.clone(),
@@ -34,11 +31,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+use ff_standard_lib::standardized_types::base_data::tick::Tick;
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::Path;
-use ff_standard_lib::standardized_types::base_data::tick::Tick;
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
 
 fn load_csv(file_path: &str, symbol: Symbol) -> Result<Vec<Tick>, Box<dyn std::error::Error>> {
     let file = File::open(file_path)?;
@@ -72,12 +69,12 @@ fn load_csv(file_path: &str, symbol: Symbol) -> Result<Vec<Tick>, Box<dyn std::e
 }
 
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
-use std::collections::BTreeMap;
-use std::str::FromStr;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution};
+use std::collections::BTreeMap;
+use std::str::FromStr;
 
 fn store_data(ticks: Vec<Tick>) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
     let mut map = BTreeMap::new();
@@ -89,4 +86,3 @@ fn store_data(ticks: Vec<Tick>) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
 
     map
 }
-

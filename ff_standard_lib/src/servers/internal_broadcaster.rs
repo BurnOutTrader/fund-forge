@@ -29,7 +29,7 @@ impl<T: Clone + Send> StaticInternalBroadcaster<T> {
         for subscriber in &*subscribers {
             match subscriber.send(source_data.clone()).await {
                 Ok(_) => {}
-                Err(_) => {},
+                Err(_) => {}
             }
         }
     }

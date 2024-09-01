@@ -1,23 +1,23 @@
 pub mod client_settings {
+    use crate::helpers::{get_resources, get_toml_file_path};
+    use crate::server_connections::ConnectionType;
+    use crate::standardized_types::data_server_messaging::FundForgeError;
+    use once_cell::sync::Lazy;
+    use serde_derive::{Deserialize, Serialize};
     use std::collections::HashMap;
     use std::net::SocketAddr;
-    use std::path::{PathBuf};
+    use std::path::PathBuf;
     use std::str::FromStr;
     use std::sync::Arc;
-    use serde_derive::{Deserialize, Serialize};
     use tokio::sync::Mutex;
-    use crate::server_connections::{ConnectionType};
-    use crate::standardized_types::data_server_messaging::{FundForgeError};
-    use once_cell::sync::Lazy;
-    use crate::helpers::{get_resources, get_toml_file_path};
 
-    static CONNECTION_SETTINGS: Lazy<Result<Arc<Mutex<HashMap<ConnectionType, ConnectionSettings>>>, FundForgeError>> = Lazy::new(|| {
-        initialise_settings()
-    });
+    static CONNECTION_SETTINGS: Lazy<
+        Result<Arc<Mutex<HashMap<ConnectionType, ConnectionSettings>>>, FundForgeError>,
+    > = Lazy::new(|| initialise_settings());
 
     #[derive(Debug, Serialize, Deserialize)]
     struct SettingsMap {
-        settings: HashMap<String, ConnectionSettings>
+        settings: HashMap<String, ConnectionSettings>,
     }
 
     /// Initializes the client connection settings from a TOML file.
@@ -40,30 +40,29 @@ pub mod client_settings {
     /// This function can return an error in the following cases:
     /// - If there is an error reading from or writing to the TOML file.
     /// - If parsing the TOML content into the expected structure fails.
-    pub fn initialise_settings() -> Result<Arc<Mutex<HashMap<ConnectionType, ConnectionSettings>>>, FundForgeError> {
+    pub fn initialise_settings(
+    ) -> Result<Arc<Mutex<HashMap<ConnectionType, ConnectionSettings>>>, FundForgeError> {
         let toml_file_path = get_toml_file_path();
 
         if !toml_file_path.exists() {
             let default_settings = ConnectionSettings::default();
             let mut map: HashMap<ConnectionType, ConnectionSettings> = HashMap::new();
             map.insert(ConnectionType::Default, default_settings);
-            
-            let dafault_registry_settings =  ConnectionSettings {
+
+            let dafault_registry_settings = ConnectionSettings {
                 ssl_auth_folder: get_resources().join("keys"),
                 server_name: String::from("fundforge"),
-                address:  SocketAddr::from_str("127.0.0.1:8082").unwrap(),
-                address_synchronous: SocketAddr::from_str("127.0.0.1:8083").unwrap()
+                address: SocketAddr::from_str("127.0.0.1:8082").unwrap(),
+                address_synchronous: SocketAddr::from_str("127.0.0.1:8083").unwrap(),
             };
             map.insert(ConnectionType::StrategyRegistry, dafault_registry_settings);
-            
+
             // save map as server_settings.toml in "../resources" folder
             let mut map_set: HashMap<String, ConnectionSettings> = HashMap::new();
             for (connection_type, settings) in map.iter() {
                 map_set.insert(connection_type.to_string(), settings.clone());
             }
-            let settings_map = SettingsMap {
-                settings: map_set
-            };
+            let settings_map = SettingsMap { settings: map_set };
             let toml_content = match toml::to_string(&settings_map) {
                 Ok(content) => content,
                 Err(e) => return Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
@@ -81,13 +80,15 @@ pub mod client_settings {
 
         let mut map: HashMap<ConnectionType, ConnectionSettings> = HashMap::new();
         for (c_type_string, setting) in &settings.settings {
-            map.insert(ConnectionType::from_str(c_type_string).unwrap(), setting.clone());
+            map.insert(
+                ConnectionType::from_str(c_type_string).unwrap(),
+                setting.clone(),
+            );
         }
 
         let map = Arc::new(Mutex::new(map));
         Ok(map)
     }
-
 
     /// Retrieves a shared reference to the global client connection settings map.
     ///
@@ -107,10 +108,8 @@ pub mod client_settings {
     /// message providing details about the initialization error.
     pub fn get_settings_map() -> Arc<Mutex<HashMap<ConnectionType, ConnectionSettings>>> {
         match &*CONNECTION_SETTINGS {
-            Ok(settings_arc) => {
-                settings_arc.clone()
-            },
-            Err(e) => panic!("{:?}", e)
+            Ok(settings_arc) => settings_arc.clone(),
+            Err(e) => panic!("{:?}", e),
         }
     }
 
@@ -131,8 +130,8 @@ pub mod client_settings {
             ConnectionSettings {
                 ssl_auth_folder: get_resources().join("keys"),
                 server_name: String::from("fundforge"),
-                address:  SocketAddr::from_str("127.0.0.1:8080").unwrap(),
-                address_synchronous: SocketAddr::from_str("127.0.0.1:8081").unwrap()
+                address: SocketAddr::from_str("127.0.0.1:8080").unwrap(),
+                address_synchronous: SocketAddr::from_str("127.0.0.1:8081").unwrap(),
             }
         }
     }
@@ -182,14 +181,17 @@ pub mod client_settings {
     ///         }
     ///     }
     /// ```
-    pub async fn get_settings(connection_type:  &ConnectionType) -> Result<ConnectionSettings, FundForgeError> {
+    pub async fn get_settings(
+        connection_type: &ConnectionType,
+    ) -> Result<ConnectionSettings, FundForgeError> {
         let map = get_settings_map().clone();
         let map = map.lock().await;
         if map.contains_key(&connection_type) {
             Ok(map.get(&connection_type).unwrap().clone())
-        }
-        else {
-            Err(FundForgeError::ClientSideErrorDebug(String::from("Connection type not found in settings.")))
+        } else {
+            Err(FundForgeError::ClientSideErrorDebug(String::from(
+                "Connection type not found in settings.",
+            )))
         }
     }
 }

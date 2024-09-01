@@ -1,21 +1,18 @@
-use std::sync::Arc;
-use ahash::AHashMap;
-use tokio::sync::{RwLock, RwLockReadGuard};
-use crate::standardized_types::subscriptions::DataSubscription;
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::drawing_objects::drawing_tool_enum::DrawingTool;
+use crate::standardized_types::subscriptions::DataSubscription;
+use ahash::AHashMap;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use std::sync::Arc;
+use tokio::sync::{RwLock, RwLockReadGuard};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum DrawingToolEvent {
     Add(DrawingTool),
     Remove(DrawingTool),
     Update(DrawingTool),
-    RemoveAll
+    RemoveAll,
 }
 
 pub struct DrawingObjectHandler {
@@ -35,7 +32,9 @@ impl DrawingObjectHandler {
         }
     }
 
-    pub async fn drawing_tools(&self) -> RwLockReadGuard<AHashMap<DataSubscription, Vec<DrawingTool>>> {
+    pub async fn drawing_tools(
+        &self,
+    ) -> RwLockReadGuard<AHashMap<DataSubscription, Vec<DrawingTool>>> {
         self.drawing_objects.read().await
     }
 
@@ -49,7 +48,10 @@ impl DrawingObjectHandler {
         if !drawing_objects.contains_key(&subscription) {
             drawing_objects.insert(subscription.clone(), Vec::new());
         }
-        drawing_objects.get_mut(&subscription).unwrap().push(drawing_tool.clone());
+        drawing_objects
+            .get_mut(&subscription)
+            .unwrap()
+            .push(drawing_tool.clone());
         // self.broadcast_strategy_event(StrategyEvent::DrawingToolEvents(self.owner_id.clone(), DrawingToolEvent::Add(drawing_tool), self.time_utc().timestamp())).await;
     }
 
@@ -61,9 +63,16 @@ impl DrawingObjectHandler {
         let subscription = drawing_tool.subscription();
         let mut drawing_objects = self.drawing_objects.write().await;
         if drawing_objects.contains_key(&subscription) {
-            let index = drawing_objects.get_mut(&subscription).unwrap().iter().position(|x| x.id() == drawing_tool.id());
+            let index = drawing_objects
+                .get_mut(&subscription)
+                .unwrap()
+                .iter()
+                .position(|x| x.id() == drawing_tool.id());
             if let Some(index) = index {
-                drawing_objects.get_mut(&subscription).unwrap().remove(index);
+                drawing_objects
+                    .get_mut(&subscription)
+                    .unwrap()
+                    .remove(index);
             }
         }
         //ToDo: we will have external broadcast to the strategy registry for this
@@ -75,7 +84,11 @@ impl DrawingObjectHandler {
         let subscription = drawing_tool.subscription().clone();
         let mut drawing_objects = self.drawing_objects.write().await;
         if drawing_objects.contains_key(&subscription) {
-            let index = drawing_objects.get_mut(&subscription).unwrap().iter().position(|x| x.id() == drawing_tool.id());
+            let index = drawing_objects
+                .get_mut(&subscription)
+                .unwrap()
+                .iter()
+                .position(|x| x.id() == drawing_tool.id());
             if let Some(index) = index {
                 drawing_objects.get_mut(&subscription).unwrap()[index] = drawing_tool.clone();
             }

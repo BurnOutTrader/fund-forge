@@ -1,8 +1,8 @@
+use crate::servers::communications_async::{SecondaryDataSubscriber, SendError};
+use futures::future::join_all;
 use std::collections::HashMap;
 use std::sync::Arc;
-use futures::future::join_all;
 use tokio::sync::{Mutex, RwLock};
-use crate::servers::communications_async::{SecondaryDataSubscriber, SendError};
 
 pub enum BroadCastType {
     Sequential,
@@ -70,7 +70,9 @@ impl BytesBroadcaster {
             Ok(())
         } else {
             let combined_error_msg = error_messages.join("\n");
-            Err(SendError { msg: combined_error_msg })
+            Err(SendError {
+                msg: combined_error_msg,
+            })
         }
     }
 
@@ -78,14 +80,17 @@ impl BytesBroadcaster {
     async fn broadcast_concurrent(&self, source_data: Vec<u8>) -> Result<(), SendError> {
         let source_data = Arc::new(source_data);
         let subs = self.subscribers.read().await;
-        let futures: Vec<_> = subs.values().map(|subscriber| {
-            let subscriber = Arc::clone(subscriber);
-            let data_clone = Arc::clone(&source_data);
-            tokio::spawn(async move {
-                let mut subscriber = subscriber.lock().await;
-                subscriber.send(&data_clone).await
+        let futures: Vec<_> = subs
+            .values()
+            .map(|subscriber| {
+                let subscriber = Arc::clone(subscriber);
+                let data_clone = Arc::clone(&source_data);
+                tokio::spawn(async move {
+                    let mut subscriber = subscriber.lock().await;
+                    subscriber.send(&data_clone).await
+                })
             })
-        }).collect();
+            .collect();
 
         let results = join_all(futures).await;
         let mut errors: Vec<String> = Vec::new();
@@ -99,7 +104,9 @@ impl BytesBroadcaster {
             Ok(())
         } else {
             let combined_error_msg = errors.join("\n");
-            Err(SendError { msg: combined_error_msg })
+            Err(SendError {
+                msg: combined_error_msg,
+            })
         }
     }
 }

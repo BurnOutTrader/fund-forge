@@ -1,20 +1,17 @@
+use chrono::{DateTime, Datelike, TimeZone, Utc};
+use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
+use ff_standard_lib::standardized_types::enums::StrategyMode;
+use ff_standard_lib::standardized_types::strategy_events::StrategyEvent;
+use ff_standard_lib::standardized_types::OwnerId;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::collections::BTreeMap;
-use std::{fs, io};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use chrono::{Datelike, DateTime, TimeZone, Utc};
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
-use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::OwnerId;
-use ff_standard_lib::standardized_types::strategy_events::StrategyEvent;
+use std::{fs, io};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum ReplayControls {
     Play,
@@ -22,7 +19,7 @@ pub enum ReplayControls {
     Error,
     Pause,
     AwaitStart,
-    Recording
+    Recording,
 }
 
 /// When a new strategy is registered
@@ -31,10 +28,7 @@ pub enum ReplayControls {
 /// 3. We start adding the strategies to a ReplayEventStream.current_events
 /// 4. We record a new file for each month.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct StrategyEventStream {
     current_events: BTreeMap<i64, Vec<StrategyEvent>>,
@@ -42,35 +36,37 @@ pub struct StrategyEventStream {
     folder: String,
     owner_id: OwnerId,
     replay_delay: i64,
-    controls: ReplayControls
-} 
+    controls: ReplayControls,
+}
 
 impl StrategyEventStream {
     pub fn new(strategy_mode: StrategyMode, owner_id: OwnerId) -> StrategyEventStream {
         let base_folder = Path::new("replay");
         let date_time = chrono::Utc::now();
         let time = date_time.format("%Y-%m-%d %H:%M:%S").to_string();
-        
+
         // For backtests we create a new folder by time, for live we load from any existing files.
         let sub_folder = match strategy_mode {
             StrategyMode::Backtest => format!("backtest_{}", time),
             StrategyMode::Live => "live".to_string(),
             StrategyMode::LivePaperTrading => "live_paper_trading".to_string(),
         };
-        
-        let folder = base_folder.join(owner_id.to_string()).join(time).join(sub_folder);
-        
+
+        let folder = base_folder
+            .join(owner_id.to_string())
+            .join(time)
+            .join(sub_folder);
+
         let mut current_events = BTreeMap::new();
         let mut file_number = 1;
         if !folder.exists() {
             std::fs::create_dir_all(&folder).unwrap();
-        }
-        else {
+        } else {
             let (number, events) = StrategyEventStream::load_last_events(&folder);
             current_events = events;
             file_number = number;
         }
-        
+
         StrategyEventStream {
             current_events: current_events,
             file_number,
@@ -80,22 +76,21 @@ impl StrategyEventStream {
             controls: ReplayControls::Recording,
         }
     }
-    
+
     pub fn to_bytes(&self) -> Vec<u8> {
         let vec = rkyv::to_bytes::<_, 100000>(self).unwrap();
         vec.into()
     }
-    
+
     pub fn from_bytes(archived: &[u8]) -> Result<StrategyEventStream, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<StrategyEventStream>(archived) { //Ignore this warning: Trait `Deserialize<UiStreamResponse, SharedDeserializeMap>` is not implemented for `ArchivedUiStreamResponse` [E0277] 
+        match rkyv::from_bytes::<StrategyEventStream>(archived) {
+            //Ignore this warning: Trait `Deserialize<UiStreamResponse, SharedDeserializeMap>` is not implemented for `ArchivedUiStreamResponse` [E0277]
             Ok(response) => Ok(response),
-            Err(e) => {
-                Err(FundForgeError::ClientSideErrorDebug(e.to_string()))
-            }
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
-    
+
     /// Saves the current state of the replay stream
     pub fn save_self(&mut self) {
         let folder = Path::new(&self.folder);
@@ -104,24 +99,22 @@ impl StrategyEventStream {
         let bytes = self.to_bytes();
         file.write_all(&bytes).unwrap();
     }
-    
+
     /// Loads a replay stream from the folder
     pub fn load_or_none(folder: &Path) -> Option<StrategyEventStream> {
         let file_path = folder.join("replay_stream.rkyv");
         let mut file = std::fs::File::open(file_path).unwrap();
         let mut bytes = Vec::new();
         file.read_to_end(&mut bytes).unwrap();
-        match StrategyEventStream::from_bytes(&bytes){
-            Ok(stream) => {
-                Some(stream)
-            },
+        match StrategyEventStream::from_bytes(&bytes) {
+            Ok(stream) => Some(stream),
             Err(e) => {
                 println!("Failed to load replay stream: {:?}", e);
                 return None;
             }
         }
     }
-    
+
     /// Saves the current strategies to a file
     fn save_events(&mut self) {
         if self.current_events.is_empty() {
@@ -133,7 +126,6 @@ impl StrategyEventStream {
         let mut file = std::fs::File::create(file_path).unwrap();
         let bytes = rkyv::to_bytes::<_, 10000>(&self.current_events).unwrap();
         file.write_all(&bytes).unwrap();
-        
     }
 
     /// Adds an event to the current strategies
@@ -151,14 +143,13 @@ impl StrategyEventStream {
             self.file_number += 1;
             self.current_events = BTreeMap::new();
         }
-        if ! self.current_events.contains_key(&time) {
+        if !self.current_events.contains_key(&time) {
             self.current_events.insert(time, vec![event]);
-        }
-        else {
+        } else {
             self.current_events.get_mut(&time).unwrap().push(event);
         }
     }
-    
+
     fn file_name(&self, number: i64) -> String {
         format!("events_{}.rkyv", number)
     }
@@ -167,7 +158,7 @@ impl StrategyEventStream {
         // Check if the directory exists
         if !folder_path.exists() {
             println!("Directory does not exist.");
-            return (1, BTreeMap::new())
+            return (1, BTreeMap::new());
         }
 
         // Iterate through the directory
@@ -180,7 +171,9 @@ impl StrategyEventStream {
                 if path.is_file() {
                     if let Some(file_name) = path.file_name().and_then(|n| n.to_str()) {
                         if let Some(stripped_name) = file_name.strip_prefix("events_") {
-                            if let Ok(number) = stripped_name.trim_end_matches(".rkyv").parse::<i64>() {
+                            if let Ok(number) =
+                                stripped_name.trim_end_matches(".rkyv").parse::<i64>()
+                            {
                                 if number > max_number {
                                     max_number = number;
                                     max_file = Some(path);
@@ -196,11 +189,13 @@ impl StrategyEventStream {
         if let Some(file_path) = max_file {
             let mut file = File::open(file_path).expect("Failed to open the file");
             let mut bytes = Vec::new();
-            file.read_to_end(&mut bytes).expect("Failed to read the file");
-            let events = rkyv::from_bytes::<BTreeMap<i64, Vec<StrategyEvent>>>(&bytes).unwrap_or_else(|e| {
-                println!("Failed to load strategies: {:?}", e);
-                BTreeMap::new()
-            });
+            file.read_to_end(&mut bytes)
+                .expect("Failed to read the file");
+            let events = rkyv::from_bytes::<BTreeMap<i64, Vec<StrategyEvent>>>(&bytes)
+                .unwrap_or_else(|e| {
+                    println!("Failed to load strategies: {:?}", e);
+                    BTreeMap::new()
+                });
             (max_number, events)
         } else {
             println!("No files found in the directory.");
@@ -252,9 +247,9 @@ impl StrategyEventStream {
             eprintln!("Failed to sort files in the folder {}", self.folder);
         }
     }
-    
+
     async fn process_events(&self, events: &Vec<StrategyEvent>) {
-       println!("{:?}", events);
+        println!("{:?}", events);
     }
 }
 

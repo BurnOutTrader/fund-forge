@@ -7,7 +7,6 @@ pub type IndicatorLongName = String;
 pub type IndicatorName = String;
 
 pub trait Indicators {
-
     fn name(&self) -> IndicatorName;
 
     /// Returns the name of the indicator with the symbol and data vendor, resolution, base data type and candle type where applicable.
@@ -16,11 +15,24 @@ pub trait Indicators {
         let subscription = self.subscription();
         match &subscription.candle_type {
             Some(candle_type) => {
-                format!("Average True Range {} {} {} {}: {}", subscription.symbol.name, subscription.symbol.data_vendor, subscription.base_data_type, subscription.resolution, candle_type)
-            },
+                format!(
+                    "Average True Range {} {} {} {}: {}",
+                    subscription.symbol.name,
+                    subscription.symbol.data_vendor,
+                    subscription.base_data_type,
+                    subscription.resolution,
+                    candle_type
+                )
+            }
             None => {
-                format!("Average True Range {} {} {} {}", subscription.symbol.name, subscription.symbol.data_vendor, subscription.base_data_type, subscription.resolution)
-            },
+                format!(
+                    "Average True Range {} {} {} {}",
+                    subscription.symbol.name,
+                    subscription.symbol.data_vendor,
+                    subscription.base_data_type,
+                    subscription.resolution
+                )
+            }
         }
     }
 
@@ -38,7 +50,7 @@ pub trait Indicators {
     /// returns the crrent value, useful for update on tick or price change indicators.
     fn current(&self) -> Option<IndicatorValues>;
 
-    /// returns a rolling window of the indicator, a result is: 
+    /// returns a rolling window of the indicator, a result is:
     ///  ```rust
     /// use ahash::AHashMap;
     /// use chrono::{DateTime, Utc};
@@ -60,4 +72,3 @@ pub trait Indicators {
 
     fn history(&self) -> RollingWindow<IndicatorValues>;
 }
-

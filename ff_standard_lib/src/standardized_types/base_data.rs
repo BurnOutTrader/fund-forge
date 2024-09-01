@@ -2,12 +2,11 @@
 pub mod base_data_enum;
 pub mod base_data_type;
 pub mod candle;
+pub mod fundamental;
+pub mod history;
+pub mod order_book;
 pub mod price;
 pub mod quote;
 pub mod quotebar;
 pub mod tick;
-pub mod fundamental;
-pub mod history;
 pub mod traits;
-pub mod order_book;
-

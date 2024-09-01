@@ -1,12 +1,12 @@
+use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
+use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
-use lazy_static::lazy_static;
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
-use crate::standardized_types::enums::Resolution;
-use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 
 /// defines a task specific to the updating historical data, used to avoid duplicating tasks and causing serialization conflicts
 #[derive(Eq, PartialEq, Clone, Hash, Debug)]
@@ -16,7 +16,8 @@ pub struct UpdateTask {
 }
 
 lazy_static! {
-    static ref DATA_UPDATE_TASKS: Arc<RwLock<HashMap<UpdateTask, Arc<Mutex<JoinHandle<()>>>>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref DATA_UPDATE_TASKS: Arc<RwLock<HashMap<UpdateTask, Arc<Mutex<JoinHandle<()>>>>>> =
+        Arc::new(RwLock::new(HashMap::new()));
 }
 
 /// Creates a new task for updating historical data
@@ -33,11 +34,11 @@ lazy_static! {
 pub async fn data_update_task<F, Fut>(
     data_folder: PathBuf,
     vendor_download_function: F,
-    subscription: DataSubscription)
-    -> Arc<Mutex<JoinHandle<()>>>
-    where
-        F: Fn(DataSubscription, PathBuf) -> Fut + Send + 'static,
-        Fut: Future<Output = ()> + Send + 'static,
+    subscription: DataSubscription,
+) -> Arc<Mutex<JoinHandle<()>>>
+where
+    F: Fn(DataSubscription, PathBuf) -> Fut + Send + 'static,
+    Fut: Future<Output = ()> + Send + 'static,
 {
     let update_task = UpdateTask {
         symbol: subscription.symbol.clone(),

@@ -1,6 +1,6 @@
-use std::str::FromStr;
 use serde::{Serialize, Serializer};
 use serde_derive::Deserialize;
+use std::str::FromStr;
 
 ///The mode sets the base api endpoint
 ///
@@ -14,8 +14,8 @@ pub enum Mode {
 
 impl Serialize for Mode {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-        where
-            S: Serializer,
+    where
+        S: Serializer,
     {
         match self {
             Mode::Live => serializer.serialize_str("live"),

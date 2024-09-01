@@ -1,28 +1,37 @@
+use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::subscriptions::DataSubscription;
+use chrono::{
+    DateTime, Datelike, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Timelike, Utc,
+};
 use chrono_tz::Tz;
 use std::fmt::Error;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-use chrono::{DateTime, Datelike, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Timelike, Utc};
-use crate::standardized_types::enums::Resolution;
-use crate::standardized_types::subscriptions::DataSubscription;
 
 /// Returns the fixed offset of the from a utc timestamp.
 /// Since we are dealing with historical data, we need to adjust for daylight savings etc, so it is not good enough to just use the current offset, we need to pass in the historical date and get the offset at that time for the timezone.
-pub fn offset_local_from_utc_time_stamp(time_zone: &Tz, time_zone_time: i64, nanos: u32) -> FixedOffset {
+pub fn offset_local_from_utc_time_stamp(
+    time_zone: &Tz,
+    time_zone_time: i64,
+    nanos: u32,
+) -> FixedOffset {
     let time = DateTime::from_timestamp(time_zone_time, nanos).unwrap();
     let tz_offset = time_zone.offset_from_utc_datetime(&time.naive_utc());
     FixedOffset::east_opt(tz_offset.fix().local_minus_utc()).unwrap()
 }
 
-pub fn time_local_from_str(time_zone: &Tz, time: &str) -> DateTime<FixedOffset>{
+pub fn time_local_from_str(time_zone: &Tz, time: &str) -> DateTime<FixedOffset> {
     let utc_time: DateTime<Utc> = DateTime::from_str(&time).unwrap();
     time_convert_utc_datetime_to_fixed_offset(time_zone, utc_time)
 }
 
 /// Converts a UTC `NaiveDateTime` to `DateTime<FixedOffset>` for the given timezone.
 /// This accounts for historical timezone changes, including DST.
-pub fn time_convert_utc_naive_to_fixed_offset(time_zone: &Tz, utc_time: NaiveDateTime) -> DateTime<FixedOffset> {
+pub fn time_convert_utc_naive_to_fixed_offset(
+    time_zone: &Tz,
+    utc_time: NaiveDateTime,
+) -> DateTime<FixedOffset> {
     let timezone_aware_datetime = time_zone.from_utc_datetime(&utc_time);
     let fixed_offset = time_zone.offset_from_utc_datetime(&utc_time).fix();
     timezone_aware_datetime.with_timezone(&fixed_offset)
@@ -30,9 +39,7 @@ pub fn time_convert_utc_naive_to_fixed_offset(time_zone: &Tz, utc_time: NaiveDat
 
 pub fn convert_to_utc(naive_date_time: NaiveDateTime, time_zone: Tz) -> DateTime<Utc> {
     // Get the DateTime in the given time zone
-    let fixed_offset_date_time = time_zone
-        .from_local_datetime(&naive_date_time)
-        .unwrap();  // Handle potential None here if necessary
+    let fixed_offset_date_time = time_zone.from_local_datetime(&naive_date_time).unwrap(); // Handle potential None here if necessary
 
     // Convert DateTime<FixedOffset> to DateTime<Utc>
     fixed_offset_date_time.with_timezone(&Utc)
@@ -40,16 +47,25 @@ pub fn convert_to_utc(naive_date_time: NaiveDateTime, time_zone: Tz) -> DateTime
 
 /// Converts a UTC Unix timestamp to `DateTime<FixedOffset>` for the given timezone.
 /// This accounts for historical timezone changes, including DST.
-pub fn time_convert_utc_timestamp_to_fixed_offset(time_zone: &Tz, utc_timestamp: i64, nanos: u32) -> DateTime<FixedOffset> {
+pub fn time_convert_utc_timestamp_to_fixed_offset(
+    time_zone: &Tz,
+    utc_timestamp: i64,
+    nanos: u32,
+) -> DateTime<FixedOffset> {
     let utc_time = DateTime::from_timestamp(utc_timestamp, nanos).expect("Invalid timestamp");
     let timezone_aware_datetime = time_zone.from_utc_datetime(&utc_time.naive_utc());
-    let fixed_offset = time_zone.offset_from_utc_datetime(&utc_time.naive_utc()).fix();
+    let fixed_offset = time_zone
+        .offset_from_utc_datetime(&utc_time.naive_utc())
+        .fix();
     timezone_aware_datetime.with_timezone(&fixed_offset)
 }
 
 /// Converts a `DateTime<Utc>` to `DateTime<FixedOffset>` for the given timezone.
 /// This accounts for historical timezone changes, including DST.
-pub fn time_convert_utc_datetime_to_fixed_offset(time_zone: &Tz, utc_datetime: DateTime<Utc>) -> DateTime<FixedOffset> {
+pub fn time_convert_utc_datetime_to_fixed_offset(
+    time_zone: &Tz,
+    utc_datetime: DateTime<Utc>,
+) -> DateTime<FixedOffset> {
     let naive_utc_time = utc_datetime.naive_utc();
     let timezone_aware_datetime = time_zone.from_utc_datetime(&naive_utc_time);
     let fixed_offset = time_zone.offset_from_utc_datetime(&naive_utc_time).fix();
@@ -60,7 +76,7 @@ pub fn time_convert_utc_datetime_to_fixed_offset(time_zone: &Tz, utc_datetime: D
 /// # Arguments
 /// * `file_path` - A PathBuf object that represents the file path to the file to be loaded.
 pub fn load_as_bytes(file_path: PathBuf) -> Result<Vec<u8>, Error> {
-    let bytes = match fs::read(file_path){
+    let bytes = match fs::read(file_path) {
         Ok(bytes) => bytes,
         Err(_e) => return Err(Error::default()),
     };
@@ -111,12 +127,11 @@ pub fn timestamp_from_str(datetime_string: &str) -> Result<i64, Error> {
                         }
                     }
                     Err(Error::default())
-                },
+                }
             }
         }
     }
 }
-
 
 /// Returns the next month from the last time input, it will be the first day of the next month at hms 00:00:00
 /// Returns the next month from the last time input, it will be the first day of the next month at hms 00:00:00
@@ -144,7 +159,13 @@ pub fn next_month(last_time: &DateTime<Utc>) -> DateTime<Utc> {
 }
 
 pub fn fund_forge_formatted_symbol_name(symbol: &str) -> String {
-    symbol.replace("/", "-").replace(":", "-").replace("?", "-").replace("_", "-").replace(" ", "-").to_uppercase()
+    symbol
+        .replace("/", "-")
+        .replace(":", "-")
+        .replace("?", "-")
+        .replace("_", "-")
+        .replace(" ", "-")
+        .to_uppercase()
 }
 
 //Returns the open time for a bar, where we only have the current time.

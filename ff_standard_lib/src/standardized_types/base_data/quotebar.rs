@@ -1,14 +1,14 @@
-use std::fmt;
-use std::fmt::{Debug, Display};
-use std::str::FromStr;
+use crate::helpers::converters::time_local_from_str;
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
+use crate::standardized_types::{Price, TimeString};
 use chrono::{DateTime, FixedOffset};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::standardized_types::enums::Resolution;
-use crate::helpers::converters::time_local_from_str;
-use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
-use crate::standardized_types::{Price, TimeString};
+use std::fmt;
+use std::fmt::{Debug, Display};
+use std::str::FromStr;
 
 /// Represents a single quote bar in a financial chart, commonly used
 /// in the financial technical analysis of price patterns.
@@ -30,10 +30,7 @@ use crate::standardized_types::{Price, TimeString};
 /// - `spread`: The difference between the highest ask price and the lowest bid price.
 /// - `is_closed`: Indicates whether the quote bar is closed.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct QuoteBar {
     pub symbol: Symbol,
@@ -51,7 +48,7 @@ pub struct QuoteBar {
     pub spread: Price,
     pub is_closed: bool,
     pub resolution: Resolution,
-    pub candle_type: CandleType
+    pub candle_type: CandleType,
 }
 
 impl QuoteBar {
@@ -80,7 +77,15 @@ impl QuoteBar {
     /// - `data_vendor`: The data vendor that provided the quote bar.
     /// - `resolution`: The resolution of the quote bar.
     /// - `candle_type`: The type of candlestick.
-    pub fn new(symbol: Symbol, bid_open: f64, ask_open: f64, volume: f64, time: String, resolution: Resolution, candle_type: CandleType) -> Self {
+    pub fn new(
+        symbol: Symbol,
+        bid_open: f64,
+        ask_open: f64,
+        volume: f64,
+        time: String,
+        resolution: Resolution,
+        candle_type: CandleType,
+    ) -> Self {
         Self {
             symbol,
             bid_high: bid_open,
@@ -97,7 +102,7 @@ impl QuoteBar {
             spread: ask_open - bid_open,
             is_closed: false,
             resolution,
-            candle_type
+            candle_type,
         }
     }
 
@@ -108,8 +113,15 @@ impl QuoteBar {
     pub fn subscription(&self) -> DataSubscription {
         let symbol = self.symbol.clone();
         let resolution = self.resolution();
-        let candle_type= Some(self.candle_type.clone());
-        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), resolution, BaseDataType::QuoteBars, symbol.market_type.clone(), candle_type)
+        let candle_type = Some(self.candle_type.clone());
+        DataSubscription::from_base_data(
+            symbol.name.clone(),
+            symbol.data_vendor.clone(),
+            resolution,
+            BaseDataType::QuoteBars,
+            symbol.market_type.clone(),
+            candle_type,
+        )
     }
 
     /// Creates a new `QuoteBar` instance representing a completed (closed) trading period.
@@ -128,7 +140,21 @@ impl QuoteBar {
     /// - `volume`: The trading volume.
     /// - `time`: The opening time as a Unix timestamp.
     /// - `data_vendor`: The data vendor that provided the quote bar.
-    pub fn from_closed(symbol: Symbol, bid_high: f64, bid_low: f64, bid_open: f64, bid_close: f64, ask_high: f64, ask_low: f64, ask_open: f64, ask_close: f64, volume: f64, time: DateTime<chrono::Utc>, resolution: Resolution, candle_type: CandleType) -> Self {
+    pub fn from_closed(
+        symbol: Symbol,
+        bid_high: f64,
+        bid_low: f64,
+        bid_open: f64,
+        bid_close: f64,
+        ask_high: f64,
+        ask_low: f64,
+        ask_open: f64,
+        ask_close: f64,
+        volume: f64,
+        time: DateTime<chrono::Utc>,
+        resolution: Resolution,
+        candle_type: CandleType,
+    ) -> Self {
         Self {
             symbol,
             bid_high,
@@ -145,7 +171,7 @@ impl QuoteBar {
             spread: ask_high - bid_low,
             is_closed: true,
             resolution,
-            candle_type
+            candle_type,
         }
     }
 
@@ -163,7 +189,22 @@ impl Display for QuoteBar {
         write!(
             f,
             "{},{:?},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
-            self.resolution, self.symbol, self.bid_high, self.bid_low, self.bid_open, self.bid_close, self.ask_high, self.ask_low, self.ask_open, self.ask_close, self.volume, self.range, self.spread, self.time, self.is_closed, self.candle_type
+            self.resolution,
+            self.symbol,
+            self.bid_high,
+            self.bid_low,
+            self.bid_open,
+            self.bid_close,
+            self.ask_high,
+            self.ask_low,
+            self.ask_open,
+            self.ask_close,
+            self.volume,
+            self.range,
+            self.spread,
+            self.time,
+            self.is_closed,
+            self.candle_type
         )
     }
 }
@@ -177,8 +218,3 @@ impl Debug for QuoteBar {
         )
     }
 }
-
-
-
-
-

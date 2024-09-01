@@ -1,6 +1,8 @@
+use ff_standard_lib::standardized_types::strategy_events::{
+    StrategyControls, StrategyInteractionMode,
+};
 use std::time::Duration;
 use tokio::sync::RwLock;
-use ff_standard_lib::standardized_types::strategy_events::{StrategyControls, StrategyInteractionMode};
 
 pub struct InteractionHandler {
     control_state: RwLock<StrategyControls>,
@@ -9,7 +11,10 @@ pub struct InteractionHandler {
 }
 
 impl InteractionHandler {
-    pub fn new(replay_delay_ms: Option<u64>, _interaction_mode: StrategyInteractionMode) -> InteractionHandler {
+    pub fn new(
+        replay_delay_ms: Option<u64>,
+        _interaction_mode: StrategyInteractionMode,
+    ) -> InteractionHandler {
         InteractionHandler {
             control_state: RwLock::new(StrategyControls::Continue),
             replay_delay_ms: RwLock::new(replay_delay_ms),

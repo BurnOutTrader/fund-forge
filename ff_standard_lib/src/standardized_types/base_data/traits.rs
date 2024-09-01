@@ -1,15 +1,15 @@
-use chrono::{DateTime, FixedOffset, Utc};
-use chrono_tz::Tz;
 use crate::apis::vendor::DataVendor;
 use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::subscriptions::Symbol;
+use chrono::{DateTime, FixedOffset, Utc};
+use chrono_tz::Tz;
 
 /// Properties are used to update the data que during strategy execution.
 pub trait BaseData {
     fn symbol_name(&self) -> Symbol;
 
     /// The time of the data point in the specified FixedOffset time zone.
-    fn time_local(&self, time_zone:  &Tz) -> DateTime<FixedOffset>;
+    fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset>;
 
     /// UTC time of the data point.
     fn time_utc(&self) -> DateTime<Utc>;
@@ -17,7 +17,6 @@ pub trait BaseData {
     fn time_created_local(&self, time_zone: &Tz) -> DateTime<FixedOffset>;
 
     fn data_vendor(&self) -> DataVendor;
-
 
     fn market_type(&self) -> MarketType;
 }

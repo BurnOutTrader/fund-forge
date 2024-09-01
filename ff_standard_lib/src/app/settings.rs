@@ -1,22 +1,15 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
-pub enum ColorTheme{
+pub enum ColorTheme {
     Dark,
-    Light
+    Light,
 }
 
-
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct ColorTemplate {
     /// Red component, 0.0 - 1.0
@@ -33,9 +26,7 @@ impl ColorTemplate {
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> ColorTemplate {
         ColorTemplate { r, g, b, a }
     }
-
 }
-
 
 /// `DisplaySettings` is a struct that holds the configuration for the display of a chart element.
 ///
@@ -44,10 +35,7 @@ impl ColorTemplate {
 /// * `size`: The size of the chart element.
 /// * `show`: A boolean indicating whether the chart element should be shown.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct DisplaySettings {
     /// The color of the chart element.
@@ -58,10 +46,7 @@ pub struct DisplaySettings {
     pub show: bool,
 }
 
-
-
 impl DisplaySettings {
-
     pub fn from_color_theme(color_theme: ColorTheme) -> DisplaySettings {
         match color_theme {
             ColorTheme::Dark => DisplaySettings::dark_mode_settings(),
@@ -78,11 +63,7 @@ impl DisplaySettings {
     }
 
     pub fn new(color: ColorTemplate, size: f32, show: bool) -> Self {
-        DisplaySettings {
-            color,
-            size,
-            show,
-        }
+        DisplaySettings { color, size, show }
     }
 }
 
@@ -90,7 +71,7 @@ impl Default for DisplaySettings {
     fn default() -> Self {
         DisplaySettings {
             show: true,
-            color:  ColorTemplate::new(0.24, 0.24, 0.24, 0.4),
+            color: ColorTemplate::new(0.24, 0.24, 0.24, 0.4),
             size: 1.0,
         }
     }
@@ -104,10 +85,7 @@ impl Default for DisplaySettings {
 /// * `show`: A boolean indicating whether the text should be shown.
 /// * `style`: The style of the font used for the text.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct TextSettings {
     /// The color of the text.
@@ -119,7 +97,6 @@ pub struct TextSettings {
 }
 
 impl TextSettings {
-
     pub fn from_color_theme(color_theme: ColorTheme) -> TextSettings {
         match color_theme {
             ColorTheme::Dark => TextSettings::dark_mode_settings(),
@@ -128,18 +105,14 @@ impl TextSettings {
     }
 
     pub fn new(color: ColorTemplate, size: f32, show: bool) -> Self {
-        TextSettings {
-            color,
-            size,
-            show,
-        }
+        TextSettings { color, size, show }
     }
 
-    pub fn light_mode_settings() ->TextSettings {
+    pub fn light_mode_settings() -> TextSettings {
         TextSettings::new(ColorTemplate::new(0.1, 0.1, 0.1, 1.0), 12.0, true)
     }
 
-    pub fn dark_mode_settings() ->TextSettings {
+    pub fn dark_mode_settings() -> TextSettings {
         TextSettings::new(ColorTemplate::new(0.7, 0.7, 0.7, 1.0), 12.0, true)
     }
 }
@@ -155,10 +128,7 @@ impl Default for TextSettings {
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct GraphElementSettings {
     /// The settings for the chart element.

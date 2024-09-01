@@ -1,17 +1,28 @@
-use std::fmt;
-use std::fmt::{Debug};
-use chrono::Duration;
-use serde::{Deserialize, Serialize};
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use strum_macros::{Display, EnumIter};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use chrono::Duration;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use std::fmt::Debug;
+use strum_macros::{Display, EnumIter};
 
 /// Used for internal ff calulcations
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Deserialize, Eq, Hash, Display, PartialOrd, Ord, Debug, EnumIter)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Clone,
+    Serialize_rkyv,
+    Deserialize_rkyv,
+    Archive,
+    PartialEq,
+    Deserialize,
+    Eq,
+    Hash,
+    Display,
+    PartialOrd,
+    Ord,
+    Debug,
+    EnumIter,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum MarketType {
     Forex,
@@ -24,11 +35,23 @@ pub enum MarketType {
 }
 
 // Bias
-#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Serialize_rkyv,
+    Deserialize_rkyv,
+    Archive,
+    PartialOrd,
+    Eq,
+    Ord,
+    PartialEq,
+    Copy,
+    Debug,
+    Display,
+    Hash,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// A bias is a general direction of the market. It can be bullish, bearish, or neutral.
 pub enum Bias {
@@ -37,11 +60,23 @@ pub enum Bias {
     Neutral,
 }
 
-#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Serialize_rkyv,
+    Deserialize_rkyv,
+    Archive,
+    PartialOrd,
+    Eq,
+    Ord,
+    PartialEq,
+    Copy,
+    Debug,
+    Display,
+    Hash,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// The `Side` enum is used to specify the side of a trade.
 pub enum OrderSide {
@@ -49,11 +84,23 @@ pub enum OrderSide {
     Sell,
 }
 
-#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Serialize_rkyv,
+    Deserialize_rkyv,
+    Archive,
+    PartialOrd,
+    Eq,
+    Ord,
+    PartialEq,
+    Copy,
+    Debug,
+    Display,
+    Hash,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum PositionSide {
     Long,
@@ -61,10 +108,7 @@ pub enum PositionSide {
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Copy)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum StrategyMode {
     Backtest,
@@ -72,7 +116,21 @@ pub enum StrategyMode {
     LivePaperTrading,
 }
 
-#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Hash)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Serialize_rkyv,
+    Deserialize_rkyv,
+    Archive,
+    PartialOrd,
+    Eq,
+    Ord,
+    PartialEq,
+    Copy,
+    Debug,
+    Hash,
+)]
 #[archive(
     // This will generate a PartialEq impl between our unarchived and archived
     // types:
@@ -84,7 +142,7 @@ pub enum StrategyMode {
 #[archive_attr(derive(Debug))]
 pub struct SubscriptionResolutionType {
     pub base_data_type: BaseDataType,
-    pub resolution: Resolution
+    pub resolution: Resolution,
 }
 
 impl SubscriptionResolutionType {
@@ -98,7 +156,21 @@ impl SubscriptionResolutionType {
 
 ///The resolution of a data point, which determines the time period it covers.
 
-#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Hash)]
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Serialize_rkyv,
+    Deserialize_rkyv,
+    Archive,
+    PartialOrd,
+    Eq,
+    Ord,
+    PartialEq,
+    Copy,
+    Debug,
+    Hash,
+)]
 #[archive(
 // This will generate a PartialEq impl between our unarchived and archived
 // types:
@@ -123,11 +195,10 @@ impl Default for Resolution {
 }
 
 impl Resolution {
-
     /// Returns the number of seconds in the resolution
     /// Ticks always return 0 as this fn is used to determine close times of time series based data from the opening time
 
-     pub fn as_duration(&self) -> Duration {
+    pub fn as_duration(&self) -> Duration {
         match self {
             Resolution::Instant => Duration::zero(),
             Resolution::Ticks(_) => Duration::zero(),
@@ -136,14 +207,14 @@ impl Resolution {
             Resolution::Hours(val) => Duration::hours(*val as i64),
         }
     }
-    
+
     pub fn number_of(&self) -> u64 {
         match self {
             Resolution::Instant => 0,
             Resolution::Ticks(val) => val.clone(),
-            Resolution::Seconds(val) =>  val.clone(),
-            Resolution::Minutes(val) =>  val.clone(),
-            Resolution::Hours(val) =>  val.clone(),
+            Resolution::Seconds(val) => val.clone(),
+            Resolution::Minutes(val) => val.clone(),
+            Resolution::Hours(val) => val.clone(),
         }
     }
 
@@ -167,7 +238,7 @@ impl Resolution {
             "S" => Some(Resolution::Seconds(number)),
             "M" => Some(Resolution::Minutes(number)),
             "H" => Some(Resolution::Hours(number)),
-            _ => None
+            _ => None,
         }
     }
 
@@ -179,7 +250,6 @@ impl Resolution {
             Resolution::Minutes(val) => format!("{}-M", val),
             Resolution::Hours(val) => format!("{}-H", val),
         }
-
     }
 }
 /// eg: Second(5) would represent a 5-Second resolution

@@ -1,26 +1,23 @@
-use std::collections::BTreeMap;
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
+use crate::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
+use crate::indicators::indicators_trait::IndicatorName;
+use crate::standardized_types::subscriptions::DataSubscription;
+use crate::standardized_types::Color;
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
-use crate::indicators::indicators_trait::IndicatorName;
-use crate::standardized_types::Color;
-use crate::standardized_types::subscriptions::DataSubscription;
+use std::collections::BTreeMap;
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
 pub type PlotName = String;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct IndicatorValue {
     pub plot_name: PlotName,
     pub value: f64,
-    pub color: Option<Color>
+    pub color: Option<Color>,
 }
 
 impl IndicatorValue {
@@ -28,26 +25,23 @@ impl IndicatorValue {
         Self {
             plot_name,
             value,
-            color
+            color,
         }
     }
 }
 
 /// A struct that represents the values of an indicator at a specific time.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct IndicatorValues {
     name: IndicatorName,
     time: String,
     subscription: DataSubscription,
-    values: BTreeMap<PlotName, IndicatorValue>
+    values: BTreeMap<PlotName, IndicatorValue>,
 }
 
-impl Display for IndicatorValues{
+impl Display for IndicatorValues {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut values_string = String::new();
         for (plot_name, plot) in &self.values {
@@ -58,15 +52,20 @@ impl Display for IndicatorValues{
 }
 
 impl IndicatorValues {
-    pub fn new(name: IndicatorName, subscription: DataSubscription, values: BTreeMap<PlotName, IndicatorValue>, time: DateTime<Utc>) -> Self {
+    pub fn new(
+        name: IndicatorName,
+        subscription: DataSubscription,
+        values: BTreeMap<PlotName, IndicatorValue>,
+        time: DateTime<Utc>,
+    ) -> Self {
         Self {
             name,
             subscription,
             values,
-            time: time.to_string()
+            time: time.to_string(),
         }
     }
-    
+
     pub fn name(&self) -> &IndicatorName {
         &self.name
     }
@@ -85,9 +84,9 @@ impl IndicatorValues {
     pub fn get_plot(&self, plot_name: &PlotName) -> Option<IndicatorValue> {
         self.values.get(plot_name).cloned()
     }
-    
+
     /// get all the values `values: &AHashMap<PlotName, f64>`
-    pub fn values(&self) ->  BTreeMap<PlotName, IndicatorValue> {
+    pub fn values(&self) -> BTreeMap<PlotName, IndicatorValue> {
         self.values.clone()
     }
 

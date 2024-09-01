@@ -1,30 +1,26 @@
-use std::fmt::Error;
-use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use rkyv::ser::Serializer;
-use rkyv::ser::serializers::AllocSerializer;
 use crate::drawing_objects::drawing_object_handler::DrawingToolEvent;
 use crate::indicators::indicator_handler::IndicatorEvents;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::orders::orders::OrderUpdateEvent;
-use crate::standardized_types::OwnerId;
-use crate::standardized_types::subscriptions::{DataSubscriptionEvent};
+use crate::standardized_types::subscriptions::DataSubscriptionEvent;
 use crate::standardized_types::time_slices::TimeSlice;
+use crate::standardized_types::OwnerId;
+use rkyv::ser::serializers::AllocSerializer;
+use rkyv::ser::Serializer;
+use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use std::fmt::Error;
 
 /// Used to determine if a strategy takes certain event inputs from the Ui.
 /// A trader can still effect the strategy via the broker, but the strategy will not take any input from the Ui unless in SemiAutomated mode.
 /// In replays this allows us to signal when the event was created by the strategy or the Ui.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Copy)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum StrategyInteractionMode {
     /// Takes subscription and orders input from the ui as well as programmatically
     SemiAutomated,
     /// Takes no input from the Ui
     Automated,
-    
 }
 
 /*#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Copy)]
@@ -58,10 +54,7 @@ pub enum OrderEvent {
 /// It is prudent not to broadcast every piece of data to every subscriber, for example passing a message to inform the strategy about an event that it created has the potential to create an infinite feedback loop.
 /// In the context of adding a subscriber, if we were to pass this event internally, it would inform the strategy that a new subscriber has been added, which would then send the same message again, and so on.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum StrategyEvent {
     /// Communicates order-related strategies between the UI, strategy, and brokerage connections.
@@ -98,20 +91,18 @@ pub enum StrategyEvent {
     /// - `i64`: A timestamp indicating when the event was created.
     DrawingToolEvents(OwnerId, DrawingToolEvent, i64),
 
-
     /// Records time slices for playback, excluding backtests.
     ///
     /// # Parameters
     /// - `OwnerId`: The unique identifier of the owner (strategy).
     /// - `TimeSlice`: The time slice data.
     TimeSlice(OwnerId, TimeSlice),
-    
-    //IndicatorSlice(OwnerId, IndicatorResults),
 
+    //IndicatorSlice(OwnerId, IndicatorResults),
     ShutdownEvent(OwnerId, String),
-    
+
     WarmUpComplete(OwnerId),
-    
+
     IndicatorEvent(OwnerId, IndicatorEvents),
 }
 
@@ -137,11 +128,10 @@ impl StrategyEvent {
 
     pub fn from_bytes(archived: &[u8]) -> Result<StrategyEvent, FundForgeError> {
         let archived_without_delimiter = &archived[..archived.len() - 2];
-        match rkyv::from_bytes::<StrategyEvent>(archived_without_delimiter) { //Ignore this warning: Trait `Deserialize<StrategyEvent, SharedDeserializeMap>` is not implemented for `ArchivedUiStreamResponse` [E0277]
+        match rkyv::from_bytes::<StrategyEvent>(archived_without_delimiter) {
+            //Ignore this warning: Trait `Deserialize<StrategyEvent, SharedDeserializeMap>` is not implemented for `ArchivedUiStreamResponse` [E0277]
             Ok(message) => Ok(message),
-            Err(e) => {
-                Err(FundForgeError::ClientSideErrorDebug(e.to_string()))
-            }
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
 
@@ -158,12 +148,12 @@ impl StrategyEvent {
     }
 
     pub fn from_array_bytes(data: &Vec<u8>) -> Result<Vec<StrategyEvent>, Error> {
-        let archived_event = match rkyv::check_archived_root::<Vec<StrategyEvent>>(&data[..]){
+        let archived_event = match rkyv::check_archived_root::<Vec<StrategyEvent>>(&data[..]) {
             Ok(data) => data,
             Err(e) => {
                 format!("Failed to deserialize data: {}", e);
                 return Err(Error);
-            },
+            }
         };
 
         // Assuming you want to work with the archived data directly, or you can deserialize it further
@@ -171,51 +161,33 @@ impl StrategyEvent {
     }
 }
 
-
 /// The event that is sent to the Strategy Register Service when a strategy is shutdown programmatically.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum ShutdownEvent {
     Error(String),
-    Success(String)
+    Success(String),
 }
 
-
-
-
-
-
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum PlotEvent {
     Add(Plot),
     Remove(Plot),
-    Update(Plot)
+    Update(Plot),
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum Plot {
-    PLACEHOLDER
+    PLACEHOLDER,
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Used to remotely control_center the strategy
 pub enum StrategyControls {
@@ -229,8 +201,7 @@ pub enum StrategyControls {
     /// Used to start strategies.
     Start,
     /// Used to set the delay time, to speed up or slow down backtests
-    Delay(Option<u64>)
+    Delay(Option<u64>),
 }
 
 pub type EventTimeSlice = Vec<StrategyEvent>;
-

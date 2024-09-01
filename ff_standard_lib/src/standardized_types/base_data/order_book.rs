@@ -1,22 +1,19 @@
-use std::collections::BTreeMap;
-use std::str::FromStr;
-use std::sync::{Arc};
+use crate::helpers::converters::time_local_from_str;
+use crate::standardized_types::base_data::quote::BookLevel;
+use crate::standardized_types::subscriptions::Symbol;
+use crate::standardized_types::{Price, TimeString};
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
 use futures::future::join_all;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use tokio::sync::{RwLock};
+use std::collections::BTreeMap;
+use std::str::FromStr;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio::task;
-use crate::helpers::converters::time_local_from_str;
-use crate::standardized_types::subscriptions::{Symbol};
-use crate::standardized_types::{Price, TimeString};
-use crate::standardized_types::base_data::quote::BookLevel;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct LevelTwoSubscription {
     pub symbol: Symbol,
@@ -25,21 +22,14 @@ pub struct LevelTwoSubscription {
 
 impl LevelTwoSubscription {
     pub fn new(symbol: Symbol, time: TimeString) -> Self {
-
-        LevelTwoSubscription {
-            symbol,
-            time,
-        }
+        LevelTwoSubscription { symbol, time }
     }
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
-pub struct OrderBookUpdate{
+pub struct OrderBookUpdate {
     pub symbol: Symbol,
     pub bid: BTreeMap<BookLevel, Price>,
     pub ask: BTreeMap<BookLevel, Price>,
@@ -47,7 +37,12 @@ pub struct OrderBookUpdate{
 }
 
 impl OrderBookUpdate {
-    pub fn new(symbol: Symbol, bid: BTreeMap<BookLevel, Price>, ask: BTreeMap<BookLevel, Price>, time: DateTime<Utc>) -> Self {
+    pub fn new(
+        symbol: Symbol,
+        bid: BTreeMap<BookLevel, Price>,
+        ask: BTreeMap<BookLevel, Price>,
+        time: DateTime<Utc>,
+    ) -> Self {
         OrderBookUpdate {
             symbol,
             bid,
@@ -64,7 +59,6 @@ impl OrderBookUpdate {
         time_local_from_str(time_zone, &self.time)
     }
 }
-
 
 pub struct OrderBook {
     symbol: Symbol,
@@ -148,7 +142,7 @@ impl OrderBook {
     pub fn bid_book(&self) -> Arc<RwLock<BTreeMap<BookLevel, Price>>> {
         self.bid.clone()
     }
-    
+
     pub async fn ask_snapshot(&self) -> BTreeMap<BookLevel, Price> {
         self.ask.read().await.clone()
     }

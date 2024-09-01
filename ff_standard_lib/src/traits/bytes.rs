@@ -1,4 +1,4 @@
-use rkyv::{AlignedVec};
+use rkyv::AlignedVec;
 
 use crate::standardized_types::data_server_messaging::FundForgeError;
 
@@ -15,8 +15,3 @@ pub trait VecBytes<T> {
 
     fn from_array_bytes(data: &Vec<u8>) -> Result<Vec<T>, core::fmt::Error>;
 }
-
-
-
-
-

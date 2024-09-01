@@ -1,19 +1,16 @@
-use std::fmt::{Debug, Display};
-use std::str::FromStr;
+use crate::helpers::converters::time_local_from_str;
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::enums::{Bias, Resolution};
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
+use crate::standardized_types::TimeString;
 use chrono::{DateTime, FixedOffset};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::standardized_types::enums::{Bias, Resolution};
-use crate::helpers::converters::{time_local_from_str};
-use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::standardized_types::TimeString;
+use std::fmt::{Debug, Display};
+use std::str::FromStr;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// The `Fundamental` struct can be used to store any other data that is not a `Price`, `Quote`, `Tick`, `QuoteBar` or `Candle` and feed it into the algorithm `fn on_data_updates()` \
 /// \
@@ -54,7 +51,15 @@ impl Fundamental {
     /// 6. `name` - `String` The name of the fundamental data: This can be used in the `ff_data_server` to specify how the server is to pull the data from the specified broker, this allows max versatility with minimum hard coding, or re-coding of the engine.
     /// 7. `bias` - `Bias` enum The bias of the fundamental data `Bias` enum variant.
     /// 8. `data_vendor` - `DataVendor` enum The data vendor of the fundamental data `DataVendor` enum variant.
-    pub fn new(symbol: Symbol, time: TimeString, value: Option<f64>, value_string: Option<String>, value_bytes: Option<Vec<u8>>, name: String, bias: Bias) -> Self {
+    pub fn new(
+        symbol: Symbol,
+        time: TimeString,
+        value: Option<f64>,
+        value_string: Option<String>,
+        value_bytes: Option<Vec<u8>>,
+        name: String,
+        bias: Bias,
+    ) -> Self {
         Self {
             symbol,
             time,
@@ -72,7 +77,14 @@ impl Fundamental {
 
     pub fn subscription(&self) -> DataSubscription {
         let symbol = self.symbol.clone();
-        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), Resolution::Instant, BaseDataType::Fundamentals, symbol.market_type.clone(), None)
+        DataSubscription::from_base_data(
+            symbol.name.clone(),
+            symbol.data_vendor.clone(),
+            Resolution::Instant,
+            BaseDataType::Fundamentals,
+            symbol.market_type.clone(),
+            None,
+        )
     }
 
     pub fn time_utc(&self) -> DateTime<chrono::Utc> {

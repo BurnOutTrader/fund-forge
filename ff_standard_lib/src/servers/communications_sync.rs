@@ -1,9 +1,9 @@
-use tokio::sync::{mpsc, Mutex};
-use tokio_rustls::TlsStream;
-use tokio::net::TcpStream;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use crate::servers::communications_async::SendError;
 use crate::standardized_types::data_server_messaging::FundForgeError;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::TcpStream;
+use tokio::sync::{mpsc, Mutex};
+use tokio_rustls::TlsStream;
 
 /// With an 8-byte (64-bit) length field, you can represent data sizes up to approximately 17179869184 GB, which is equivalent to 16777216 TB, or 16 exabytes (EB).
 const LENGTH: usize = 8;
@@ -17,34 +17,56 @@ pub enum SynchronousCommunicator {
 impl SynchronousCommunicator {
     pub fn new(communicator: SynchronousCommunicator) -> Self {
         match communicator {
-             SynchronousCommunicator::Channels(communicator) => return SynchronousCommunicator::Channels(communicator),
-             SynchronousCommunicator::TlsConnections(communicator) => SynchronousCommunicator::TlsConnections(communicator),
+            SynchronousCommunicator::Channels(communicator) => {
+                return SynchronousCommunicator::Channels(communicator)
+            }
+            SynchronousCommunicator::TlsConnections(communicator) => {
+                SynchronousCommunicator::TlsConnections(communicator)
+            }
         }
     }
 
-
-    pub async fn send_and_receive(&self, data: Vec<u8>, server: bool) -> Result<Vec<u8>, FundForgeError> {
+    pub async fn send_and_receive(
+        &self,
+        data: Vec<u8>,
+        server: bool,
+    ) -> Result<Vec<u8>, FundForgeError> {
         match self {
-            SynchronousCommunicator::Channels(communicator) => communicator.send_and_receive(data, server).await,
-            SynchronousCommunicator::TlsConnections(communicator) => return communicator.send_and_receive(data).await,
+            SynchronousCommunicator::Channels(communicator) => {
+                communicator.send_and_receive(data, server).await
+            }
+            SynchronousCommunicator::TlsConnections(communicator) => {
+                return communicator.send_and_receive(data).await
+            }
         }
     }
 
-    pub async fn send_no_response(&self, data: Vec<u8>, server: bool) -> Result<(), FundForgeError> {
-         let result = match self {
-              SynchronousCommunicator::Channels(communicator) => communicator.send(data, server).await,
-              SynchronousCommunicator::TlsConnections(communicator) => communicator.send(data).await,
+    pub async fn send_no_response(
+        &self,
+        data: Vec<u8>,
+        server: bool,
+    ) -> Result<(), FundForgeError> {
+        let result = match self {
+            SynchronousCommunicator::Channels(communicator) => {
+                communicator.send(data, server).await
+            }
+            SynchronousCommunicator::TlsConnections(communicator) => communicator.send(data).await,
         };
         match result {
             Ok(_) => Ok(()),
-            Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to send data: {:?}", e))),
+            Err(e) => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Failed to send data: {:?}",
+                    e
+                )))
+            }
         }
     }
 
     pub async fn receive(&self, server: bool) -> Option<Vec<u8>> {
         match self {
             SynchronousCommunicator::Channels(communicator) => communicator.receive(server).await,
-             SynchronousCommunicator::TlsConnections(communicator) =>  communicator.receive().await,
+            SynchronousCommunicator::TlsConnections(communicator) => communicator.receive().await,
         }
     }
 }
@@ -67,7 +89,7 @@ impl InternalCommunicator {
             client_sender,
             server_receiver,
             server_sender,
-            client_receiver
+            client_receiver,
         }
     }
 
@@ -78,7 +100,11 @@ impl InternalCommunicator {
         }
     }
 
-    pub async fn send_and_receive(&self, data: Vec<u8>, server: bool) -> Result<Vec<u8>, FundForgeError> {
+    pub async fn send_and_receive(
+        &self,
+        data: Vec<u8>,
+        server: bool,
+    ) -> Result<Vec<u8>, FundForgeError> {
         match server {
             true => self.server_send_and_receive(data).await,
             false => self.client_send_and_receive(data).await,
@@ -94,23 +120,41 @@ impl InternalCommunicator {
 
     async fn server_send_and_receive(&self, data: Vec<u8>) -> Result<Vec<u8>, FundForgeError> {
         match self.server_send(data).await {
-            Ok(_) => {},
-            Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to send data: {:?}", e))),
+            Ok(_) => {}
+            Err(e) => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Failed to send data: {:?}",
+                    e
+                )))
+            }
         }
         match self.receive_server().await {
             Some(data) => return Ok(data),
-            None => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to receive data"))),
+            None => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Failed to receive data"
+                )))
+            }
         }
     }
 
     async fn client_send_and_receive(&self, data: Vec<u8>) -> Result<Vec<u8>, FundForgeError> {
         match self.client_send(data).await {
-            Ok(_) => {},
-            Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to send data: {:?}", e))),
+            Ok(_) => {}
+            Err(e) => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Failed to send data: {:?}",
+                    e
+                )))
+            }
         }
         match self.receive_client().await {
             Some(data) => return Ok(data),
-            None => return Err(FundForgeError::ClientSideErrorDebug(format!("No data received"))),
+            None => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "No data received"
+                )))
+            }
         }
     }
 
@@ -127,14 +171,22 @@ impl InternalCommunicator {
     async fn server_send(&self, data: Vec<u8>) -> Result<(), SendError> {
         match self.server_sender.send(data).await {
             Ok(_) => return Ok(()),
-            Err(e) => return Err(SendError{msg: format!("Could not send data to client: {}", e)}),
+            Err(e) => {
+                return Err(SendError {
+                    msg: format!("Could not send data to client: {}", e),
+                })
+            }
         }
     }
 
     async fn client_send(&self, data: Vec<u8>) -> Result<(), SendError> {
-        match  self.client_sender.send(data).await {
+        match self.client_sender.send(data).await {
             Ok(_) => return Ok(()),
-            Err(e) => return Err(SendError{msg: format!("Could not send data to client: {}", e)}),
+            Err(e) => {
+                return Err(SendError {
+                    msg: format!("Could not send data to client: {}", e),
+                })
+            }
         }
     }
 }
@@ -144,25 +196,30 @@ pub struct SecureExternalCommunicator {
 }
 
 impl SecureExternalCommunicator {
-
     pub fn new(communicator: Mutex<TlsStream<TcpStream>>) -> SecureExternalCommunicator {
-        SecureExternalCommunicator {
-            communicator,
-        }
+        SecureExternalCommunicator { communicator }
     }
 
     pub async fn send_and_receive(&self, data: Vec<u8>) -> Result<Vec<u8>, FundForgeError> {
         match self.send(data).await {
-            Ok(_) => {},
-            Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to send data: {:?}", e))),
+            Ok(_) => {}
+            Err(e) => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Failed to send data: {:?}",
+                    e
+                )))
+            }
         }
         let mut communicator = self.communicator.lock().await;
         let mut length_buffer = [0u8; LENGTH];
         // Read the length header
         match communicator.read_exact(&mut length_buffer).await {
-            Ok(_) =>{} ,
+            Ok(_) => {}
             Err(e) => {
-                return Err(FundForgeError::ServerErrorDebug(format!("Failed to read the length header: {}", e)));
+                return Err(FundForgeError::ServerErrorDebug(format!(
+                    "Failed to read the length header: {}",
+                    e
+                )));
             }
         }
         // Convert the length buffer to a usize
@@ -173,9 +230,12 @@ impl SecureExternalCommunicator {
 
         // Read the message
         match communicator.read_exact(&mut message).await {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
-                return Err(FundForgeError::ServerErrorDebug(format!("Failed to read the message: {}", e)));
+                return Err(FundForgeError::ServerErrorDebug(format!(
+                    "Failed to read the message: {}",
+                    e
+                )));
             }
         }
         Ok(message)
@@ -201,7 +261,7 @@ impl SecureExternalCommunicator {
 
         // Write the length header
         match communicator.write_all(&length).await {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => return Err(SendError { msg: e.to_string() }),
         }
 

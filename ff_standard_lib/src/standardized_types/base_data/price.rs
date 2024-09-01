@@ -1,19 +1,16 @@
-use std::fmt::{Debug, Display};
-use std::str::FromStr;
-use chrono::{DateTime, FixedOffset};
-use chrono_tz::Tz;
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
-use crate::standardized_types::Price;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
+use crate::standardized_types::Price;
+use chrono::{DateTime, FixedOffset};
+use chrono_tz::Tz;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use std::fmt::{Debug, Display};
+use std::str::FromStr;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// The `Price` struct is used to represent the price of an asset at a given time.
 ///
@@ -48,7 +45,14 @@ impl TradePrice {
 
     pub fn subscription(&self) -> DataSubscription {
         let symbol = self.symbol.clone();
-        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), Resolution::Instant, BaseDataType::TradePrices, symbol.market_type.clone(), None)
+        DataSubscription::from_base_data(
+            symbol.name.clone(),
+            symbol.data_vendor.clone(),
+            Resolution::Instant,
+            BaseDataType::TradePrices,
+            symbol.market_type.clone(),
+            None,
+        )
     }
 
     pub fn time_utc(&self) -> DateTime<chrono::Utc> {
@@ -62,7 +66,11 @@ impl TradePrice {
 
 impl Display for TradePrice {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Symbol: {:?}, Price: {}, Time: {}", self.symbol, self.price, self.time)
+        write!(
+            f,
+            "Symbol: {:?}, Price: {}, Time: {}",
+            self.symbol, self.price, self.time
+        )
     }
 }
 

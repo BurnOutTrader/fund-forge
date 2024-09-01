@@ -1,8 +1,6 @@
-
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::app::settings::GraphElementSettings;
 use crate::standardized_types::subscriptions::DataSubscription;
-
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 
 /// A struct that represents a vertical line on the graph.
 ///
@@ -15,10 +13,7 @@ use crate::standardized_types::subscriptions::DataSubscription;
 /// * `id`: The unique ID of the vertical line.
 /// * `is_ready`: A boolean indicating whether the vertical line is ready to be drawn.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct VerticleLine {
     pub x_alignment: Option<i64>,
@@ -30,8 +25,12 @@ pub struct VerticleLine {
 }
 
 impl VerticleLine {
-
-    pub fn new_time_series(id:String, settings: GraphElementSettings, subscription: DataSubscription, is_ready: bool) -> Self {
+    pub fn new_time_series(
+        id: String,
+        settings: GraphElementSettings,
+        subscription: DataSubscription,
+        is_ready: bool,
+    ) -> Self {
         Self {
             x_alignment: None,
             settings,
@@ -42,7 +41,13 @@ impl VerticleLine {
         }
     }
 
-    pub fn new(id:String, settings: GraphElementSettings, subscription: DataSubscription, x_increment_factor: i64, is_ready: bool) -> Self {
+    pub fn new(
+        id: String,
+        settings: GraphElementSettings,
+        subscription: DataSubscription,
+        x_increment_factor: i64,
+        is_ready: bool,
+    ) -> Self {
         Self {
             x_alignment: None,
             settings,
@@ -52,11 +57,11 @@ impl VerticleLine {
             subscription,
         }
     }
-    
+
     pub fn id(&self) -> &str {
         &self.id
     }
-    
+
     /*pub fn draw(&self, time_zone: &Tz, state: &ChartState, frame: &mut canvas::Frame, cursor: iced::mouse::Cursor) {
         if let Some(utc_time) = self.x_alignment {
             let time = DrawingTool::x_alignment(utc_time, time_zone);
@@ -104,10 +109,7 @@ impl VerticleLine {
 /// * `id`: The unique ID of the horizontal line.
 /// * `is_ready`: A boolean indicating whether the horizontal line is ready to be drawn.
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct HorizontalLine {
     pub price: Option<f64>,
@@ -120,36 +122,48 @@ pub struct HorizontalLine {
 }
 
 impl HorizontalLine {
-
-    pub fn new_time_series(id: String, settings: GraphElementSettings, subscription: DataSubscription, logarithmic: bool, is_ready: bool) -> Self {
+    pub fn new_time_series(
+        id: String,
+        settings: GraphElementSettings,
+        subscription: DataSubscription,
+        logarithmic: bool,
+        is_ready: bool,
+    ) -> Self {
         Self {
-            price : None,
+            price: None,
             settings,
             x_increment_factor: subscription.resolution.as_seconds(),
             id,
             logarithmic,
             is_ready,
-            subscription
+            subscription,
         }
     }
 
-    pub fn new(id: String, settings: GraphElementSettings, x_increment_factor:  i64, subscription: DataSubscription, logarithmic: bool, is_ready: bool) -> Self {
+    pub fn new(
+        id: String,
+        settings: GraphElementSettings,
+        x_increment_factor: i64,
+        subscription: DataSubscription,
+        logarithmic: bool,
+        is_ready: bool,
+    ) -> Self {
         Self {
-            price : None,
+            price: None,
             settings,
             x_increment_factor,
             id,
             is_ready,
             logarithmic,
-            subscription
+            subscription,
         }
     }
-    
+
     pub fn id(&self) -> &str {
         &self.id
     }
 
-  /*  pub fn process_click(&mut self, view: &ChartState, click: Click) {
+    /*  pub fn process_click(&mut self, view: &ChartState, click: Click) {
         let price = view.value_at_y(click.position.y, self.logarithmic);
         self.is_ready = true;
         self.update_price(price);
@@ -159,7 +173,7 @@ impl HorizontalLine {
         self.price = Some(price);
     }
 
-   /* pub fn draw(&self, view: &ChartState, frame: &mut canvas::Frame, cursor: iced::mouse::Cursor) {
+    /* pub fn draw(&self, view: &ChartState, frame: &mut canvas::Frame, cursor: iced::mouse::Cursor) {
         let position = match self.is_ready {
             false => if let Some(cursor_position) = cursor.position() {
                 cursor_position

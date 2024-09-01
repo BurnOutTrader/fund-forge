@@ -1,16 +1,15 @@
+use crate::servers::settings::client_settings::ConnectionSettings;
+use crate::standardized_types::data_server_messaging::FundForgeError;
+use rustls::pki_types::ServerName;
+use rustls::ClientConfig;
 use std::fs::File;
 use std::io::BufReader;
 use std::net::SocketAddr;
-use std::path::{Path};
+use std::path::Path;
 use std::sync::Arc;
-use rustls::ClientConfig;
-use rustls::pki_types::ServerName;
 use tokio::io::{ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, TlsStream};
-use crate::servers::settings::client_settings::ConnectionSettings;
-use crate::standardized_types::data_server_messaging::FundForgeError;
-
 
 /// Initializes a TLS connection to a specified server address using a given CA certificate file and server name.
 ///
@@ -44,19 +43,35 @@ use crate::standardized_types::data_server_messaging::FundForgeError;
 /// - Failure to parse the CA certificate.
 /// - Failure to connect to the server address.
 /// - Failure to complete the TLS handshake, including errors related to server name parsing or certificate verification.
-async fn initialise_connection(addr: &SocketAddr, ca_file: &Path, server_name: &String) -> Result<TlsStream<TcpStream>, FundForgeError> {
+async fn initialise_connection(
+    addr: &SocketAddr,
+    ca_file: &Path,
+    server_name: &String,
+) -> Result<TlsStream<TcpStream>, FundForgeError> {
     let mut root_cert_store = rustls::RootCertStore::empty();
     let file = match File::open(ca_file) {
-        Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to open CA certificate file: {}", e))),
+        Err(e) => {
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Failed to open CA certificate file: {}",
+                e
+            )))
+        }
         Ok(file) => file,
     };
     let mut pem = BufReader::new(file);
     for cert in rustls_pemfile::certs(&mut pem) {
         match cert {
             Ok(cert) => {
-                root_cert_store.add(cert).map_err(|_| FundForgeError::ClientSideErrorDebug("Failed to add CA certificate".to_string()))?;
-            },
-            Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to parse CA certificate: {}", e))),
+                root_cert_store.add(cert).map_err(|_| {
+                    FundForgeError::ClientSideErrorDebug("Failed to add CA certificate".to_string())
+                })?;
+            }
+            Err(e) => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Failed to parse CA certificate: {}",
+                    e
+                )))
+            }
         }
     }
 
@@ -66,21 +81,32 @@ async fn initialise_connection(addr: &SocketAddr, ca_file: &Path, server_name: &
 
     let connector = TlsConnector::from(Arc::new(config));
     let stream = match TcpStream::connect(addr).await {
-        Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to connect to server: {}", e))),
+        Err(e) => {
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Failed to connect to server: {}",
+                e
+            )))
+        }
         Ok(stream) => stream,
     };
 
     let server_name = match ServerName::try_from(server_name.to_string()) {
         Ok(server_name) => server_name,
         Err(e) => {
-            return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to parse server name: {}", e)));
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Failed to parse server name: {}",
+                e
+            )));
         }
     };
 
-     match connector.connect(server_name, stream).await {
+    match connector.connect(server_name, stream).await {
         Ok(stream) => Ok(TlsStream::from(stream)),
         Err(e) => {
-            return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to connect to server: {}", e)));
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Failed to connect to server: {}",
+                e
+            )));
         }
     }
 }
@@ -103,39 +129,67 @@ async fn initialise_connection(addr: &SocketAddr, ca_file: &Path, server_name: &
 /// This function can return a `FundForgeError::ClientSideErrorDebug` containing a detailed error message if the connection
 /// fails or if there's an issue with the server name or CA file.
 #[allow(dead_code)]
-pub(crate) async fn create_split_api_client(settings: &ConnectionSettings) -> Result<(ReadHalf<TlsStream<TcpStream>>, WriteHalf<TlsStream<TcpStream>>), FundForgeError> {
+pub(crate) async fn create_split_api_client(
+    settings: &ConnectionSettings,
+) -> Result<
+    (
+        ReadHalf<TlsStream<TcpStream>>,
+        WriteHalf<TlsStream<TcpStream>>,
+    ),
+    FundForgeError,
+> {
     let ca_path = Path::join(&settings.ssl_auth_folder, "rootCA.crt");
-    let stream = match initialise_connection(&settings.address, &ca_path, &settings.server_name).await {
-        Ok(stream) => stream,
-        Err(e) => {
-            return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to connect to server: {}", e)));
-        }
-    };
+    let stream =
+        match initialise_connection(&settings.address, &ca_path, &settings.server_name).await {
+            Ok(stream) => stream,
+            Err(e) => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Failed to connect to server: {}",
+                    e
+                )));
+            }
+        };
 
     Ok(tokio::io::split(stream))
 }
 
-pub(crate) async fn create_api_client(settings: &ConnectionSettings) -> Result<TlsStream<TcpStream>, FundForgeError> {
+pub(crate) async fn create_api_client(
+    settings: &ConnectionSettings,
+) -> Result<TlsStream<TcpStream>, FundForgeError> {
     let ca_path = Path::join(&settings.ssl_auth_folder, "rootCA.crt");
-    let stream = match initialise_connection(&settings.address_synchronous, &ca_path, &settings.server_name).await {
+    let stream = match initialise_connection(
+        &settings.address_synchronous,
+        &ca_path,
+        &settings.server_name,
+    )
+    .await
+    {
         Ok(stream) => stream,
         Err(e) => {
-            return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to connect to server: {}", e)));
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Failed to connect to server: {}",
+                e
+            )));
         }
     };
 
     Ok(stream)
 }
 
-
-pub(crate) async fn create_async_api_client(settings: &ConnectionSettings) -> Result<TlsStream<TcpStream>, FundForgeError> {
+pub(crate) async fn create_async_api_client(
+    settings: &ConnectionSettings,
+) -> Result<TlsStream<TcpStream>, FundForgeError> {
     let ca_path = Path::join(&settings.ssl_auth_folder, "rootCA.crt");
-    let stream = match initialise_connection(&settings.address, &ca_path, &settings.server_name).await {
-        Ok(stream) => stream,
-        Err(e) => {
-            return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to connect to server: {}", e)));
-        }
-    };
+    let stream =
+        match initialise_connection(&settings.address, &ca_path, &settings.server_name).await {
+            Ok(stream) => stream,
+            Err(e) => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Failed to connect to server: {}",
+                    e
+                )));
+            }
+        };
 
     Ok(stream)
 }

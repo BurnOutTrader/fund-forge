@@ -1,4 +1,3 @@
-
 /*
 pub ProductEnum {
 
@@ -93,7 +92,7 @@ impl ViewableProduct for ProductEnum {
             ProductEnum::OandaProduct(instrument) => instrument.display_precision as usize,
         }
     }
-    
+
     /// Returns a cleaned version of the instrument's symbol.
     ///
     /// This method processes the `ProductEnum` to extract and clean the symbol of the contained `ProductEnum::Variant`.
@@ -136,4 +135,3 @@ pub fn products_from_array_bytes(data: &Vec<u8>) -> Result<Vec<ProductEnum>, cor
     // Assuming you want to work with the archived data directly, or you can deserialize it further
     Ok(archived_price_data.deserialize(&mut rkyv::Infallible).unwrap())
 }*/
-

@@ -1,14 +1,16 @@
-use std::sync::Arc;
-use tokio::sync::{Mutex};
-use crate::strategy_registry::{RegistrationRequest};
 use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use crate::strategy_registry::handle_gui::handle_gui;
 use crate::strategy_registry::handle_strategies::handle_strategies;
+use crate::strategy_registry::RegistrationRequest;
 use crate::traits::bytes::Bytes;
-
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// this is used when launching in single machine
-pub async fn registry_manage_async_requests(sender: Arc<SecondaryDataSender>, receiver: Arc<Mutex<SecondaryDataReceiver>>) {
+pub async fn registry_manage_async_requests(
+    sender: Arc<SecondaryDataSender>,
+    receiver: Arc<Mutex<SecondaryDataReceiver>>,
+) {
     tokio::spawn(async move {
         let receiver = receiver.clone();
         let sender = sender;
@@ -25,11 +27,11 @@ pub async fn registry_manage_async_requests(sender: Arc<SecondaryDataSender>, re
             match request {
                 RegistrationRequest::Strategy(owner) => {
                     handle_strategies(owner.clone(), sender, receiver).await;
-                    break 'register_loop
+                    break 'register_loop;
                 }
                 RegistrationRequest::Gui => {
                     handle_gui(sender, receiver).await;
-                    break 'register_loop
+                    break 'register_loop;
                 }
                 _ => {}
             };

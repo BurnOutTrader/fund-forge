@@ -1,22 +1,21 @@
-use std::str::FromStr;
-use chrono::{DateTime, FixedOffset, Utc};
-use chrono_tz::Tz;
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use serde_derive::{Deserialize, Serialize};
-use strum_macros::Display;
 use crate::apis::brokerage::Brokerage;
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::OrderSide;
-use crate::standardized_types::OwnerId;
 use crate::standardized_types::subscriptions::Symbol;
+use crate::standardized_types::OwnerId;
+use chrono::{DateTime, FixedOffset, Utc};
+use chrono_tz::Tz;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use serde_derive::{Deserialize, Serialize};
+use std::str::FromStr;
+use strum_macros::Display;
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum OrderError {
     InvalidPrice,
@@ -29,24 +28,22 @@ pub enum OrderError {
     OrderAlreadyFilled,
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum TimeInForce {
     GTC,
     IOC,
     FOK,
-    Day
+    Day,
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum OrderType {
     Limit,
@@ -65,11 +62,10 @@ pub enum OrderType {
     ExitShort,
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum OrderState {
     Created,
@@ -80,12 +76,8 @@ pub enum OrderState {
     Rejected(String),
 }
 
-
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct Order {
     pub owner_id: OwnerId,
@@ -113,10 +105,25 @@ impl Order {
     pub fn update_time_created_utc(&mut self, time: DateTime<Utc>) {
         self.time_created_utc = time.to_string();
     }
-    
-    pub fn market_order(owner_id: OwnerId, symbol: Symbol, brokerage: Brokerage, quantity: u64, side: OrderSide, tag: String, account_id: AccountId, time: DateTime<Utc>) -> Self {
+
+    pub fn market_order(
+        owner_id: OwnerId,
+        symbol: Symbol,
+        brokerage: Brokerage,
+        quantity: u64,
+        side: OrderSide,
+        tag: String,
+        account_id: AccountId,
+        time: DateTime<Utc>,
+    ) -> Self {
         Order {
-            id: format!("{}-{}-{}-{}", brokerage, symbol.name, time.timestamp_millis(), side),
+            id: format!(
+                "{}-{}-{}-{}",
+                brokerage,
+                symbol.name,
+                time.timestamp_millis(),
+                side
+            ),
             owner_id,
             symbol,
             brokerage,
@@ -138,9 +145,23 @@ impl Order {
         }
     }
 
-    pub fn exit_long(owner_id: OwnerId, symbol: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId, time: DateTime<Utc>) -> Self {
+    pub fn exit_long(
+        owner_id: OwnerId,
+        symbol: Symbol,
+        brokerage: Brokerage,
+        quantity: u64,
+        tag: String,
+        account_id: AccountId,
+        time: DateTime<Utc>,
+    ) -> Self {
         Order {
-            id: format!("{}-{}-{}-{}", brokerage, symbol.name, time.timestamp_millis(), OrderSide::Sell),
+            id: format!(
+                "{}-{}-{}-{}",
+                brokerage,
+                symbol.name,
+                time.timestamp_millis(),
+                OrderSide::Sell
+            ),
             owner_id,
             symbol,
             brokerage,
@@ -162,9 +183,23 @@ impl Order {
         }
     }
 
-    pub fn exit_short(owner_id: OwnerId, symbol: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId, time: DateTime<Utc>) -> Self {
+    pub fn exit_short(
+        owner_id: OwnerId,
+        symbol: Symbol,
+        brokerage: Brokerage,
+        quantity: u64,
+        tag: String,
+        account_id: AccountId,
+        time: DateTime<Utc>,
+    ) -> Self {
         Order {
-            id: format!("{}-{}-{}-{}", brokerage, symbol.name, time.timestamp_millis(), OrderSide::Buy),
+            id: format!(
+                "{}-{}-{}-{}",
+                brokerage,
+                symbol.name,
+                time.timestamp_millis(),
+                OrderSide::Buy
+            ),
             owner_id,
             symbol,
             brokerage,
@@ -186,9 +221,23 @@ impl Order {
         }
     }
 
-    pub fn enter_long(owner_id: OwnerId, symbol: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId, time: DateTime<Utc>) -> Self {
+    pub fn enter_long(
+        owner_id: OwnerId,
+        symbol: Symbol,
+        brokerage: Brokerage,
+        quantity: u64,
+        tag: String,
+        account_id: AccountId,
+        time: DateTime<Utc>,
+    ) -> Self {
         Order {
-            id: format!("{}-{}-{}-{}", brokerage, symbol.name, time.timestamp_millis(), OrderSide::Buy),
+            id: format!(
+                "{}-{}-{}-{}",
+                brokerage,
+                symbol.name,
+                time.timestamp_millis(),
+                OrderSide::Buy
+            ),
             owner_id,
             symbol,
             brokerage,
@@ -210,9 +259,23 @@ impl Order {
         }
     }
 
-    pub fn enter_short(owner_id: OwnerId, symbol: Symbol, brokerage: Brokerage, quantity: u64, tag: String, account_id: AccountId, time: DateTime<Utc>) -> Self {
+    pub fn enter_short(
+        owner_id: OwnerId,
+        symbol: Symbol,
+        brokerage: Brokerage,
+        quantity: u64,
+        tag: String,
+        account_id: AccountId,
+        time: DateTime<Utc>,
+    ) -> Self {
         Order {
-            id: format!("{}-{}-{}-{}", brokerage, symbol.name, time.timestamp_millis(), OrderSide::Sell),
+            id: format!(
+                "{}-{}-{}-{}",
+                brokerage,
+                symbol.name,
+                time.timestamp_millis(),
+                OrderSide::Sell
+            ),
             owner_id,
             symbol,
             brokerage,
@@ -235,11 +298,17 @@ impl Order {
     }
 
     pub fn can_cancel(&self) -> bool {
-        if self.state == OrderState::Created || self.state == OrderState::Accepted || self.state == OrderState::PartiallyFilled {
-           match self.order_type {
-               OrderType::Limit | OrderType::StopLimit | OrderType::TrailingStopLoss | OrderType::MarketIfTouched => return true,
-               _ => return false
-           }
+        if self.state == OrderState::Created
+            || self.state == OrderState::Accepted
+            || self.state == OrderState::PartiallyFilled
+        {
+            match self.order_type {
+                OrderType::Limit
+                | OrderType::StopLimit
+                | OrderType::TrailingStopLoss
+                | OrderType::MarketIfTouched => return true,
+                _ => return false,
+            }
         }
         false
     }
@@ -254,40 +323,33 @@ impl Order {
     pub fn time_filled_utc(&self) -> Option<DateTime<Utc>> {
         match &self.time_filled_utc {
             Some(time) => Some(DateTime::from_str(time).unwrap()),
-            None => None
+            None => None,
         }
     }
 
     pub fn time_filled_local(&self, time_zone: &Tz) -> Option<DateTime<FixedOffset>> {
         match &self.time_filled_utc {
             Some(time) => Some(time_local_from_str(time_zone, time)),
-            None => None
+            None => None,
         }
     }
 }
 
-
 pub type OrderId = String;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Display)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum OrderChangeType {
     LimitPrice(f64),
     TriggerPrice(f64),
     TimeInForce(TimeInForce),
     Quantity(u64),
-    Tag(String)
+    Tag(String),
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Display)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Represents the various states and updates an order can undergo in the trading system.
 ///
@@ -297,12 +359,9 @@ pub enum OrderUpdateEvent {
 
     Filled(Order),
 
-
     PartiallyFilled(Order),
 
-
     Cancelled(Order),
-
 
     Rejected(Order),
 
@@ -369,11 +428,10 @@ impl OrderUpdateEvent {
 
     fn from_bytes(archived: &[u8]) -> Result<OrderUpdateEvent, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<OrderUpdateEvent>(archived) { //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+        match rkyv::from_bytes::<OrderUpdateEvent>(archived) {
+            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
             Ok(response) => Ok(response),
-            Err(e) => {
-                Err(FundForgeError::ClientSideErrorDebug(e.to_string()))
-            }
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
 }

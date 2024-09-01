@@ -1,4 +1,4 @@
-use std::collections::{VecDeque};
+use std::collections::VecDeque;
 
 /// Keeps track of the last N data points.
 /// When the window is full, adding a new data point will remove the oldest data point.
@@ -40,7 +40,7 @@ impl<T: std::clone::Clone> RollingWindow<T> {
     pub fn is_full(&self) -> bool {
         self.history.len() as u64 == self.number
     }
-    
+
     pub fn is_empty(&self) -> bool {
         self.history.is_empty()
     }
@@ -48,7 +48,7 @@ impl<T: std::clone::Clone> RollingWindow<T> {
     pub fn clear(&mut self) {
         self.history.clear();
     }
-    
+
     pub fn history(&self) -> &VecDeque<T> {
         &self.history
     }

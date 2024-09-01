@@ -1,13 +1,15 @@
-use crate::standardized_types::time_slices::TimeSlice;
-use crate::standardized_types::time_slices::UnstructuredSlice;
-use std::collections::{btree_map, BTreeMap, Bound, HashMap};
-use chrono::{DateTime, Utc};
+use crate::helpers::converters::next_month;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType};
-use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::helpers::converters::next_month;
+use crate::standardized_types::data_server_messaging::{
+    BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType,
+};
 use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
+use crate::standardized_types::time_slices::TimeSlice;
+use crate::standardized_types::time_slices::UnstructuredSlice;
+use chrono::{DateTime, Utc};
+use std::collections::{btree_map, BTreeMap, Bound, HashMap};
 
 /// Method responsible for getting historical data for a specific subscription.
 /// Users should use this method to get historical data for a specific subscription/subscriptions
@@ -39,7 +41,9 @@ use crate::standardized_types::enums::Resolution;
 /// The TimeSlice is a type `Vec<BaseDataEnum>` that occurred at that moment in time. any kind of of `BaseDataEnum` can be mixed into this list.
 /// ```rust
 /// ```
-async fn unstructured_que_builder(slices: Vec<UnstructuredSlice>) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
+async fn unstructured_que_builder(
+    slices: Vec<UnstructuredSlice>,
+) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
     if slices.len() == 0 {
         println!("No TimeSlices to process");
         return None;
@@ -48,15 +52,16 @@ async fn unstructured_que_builder(slices: Vec<UnstructuredSlice>) -> Option<BTre
     let mut time_slices: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
     // Deserialize and get time for sorting
     for unstructured_slice in slices {
-        let base_data: Vec<BaseDataEnum> = match BaseDataEnum::from_array_bytes(&unstructured_slice.data) {
-            Ok(data) => data,
-            Err(_) => return None
-        };
+        let base_data: Vec<BaseDataEnum> =
+            match BaseDataEnum::from_array_bytes(&unstructured_slice.data) {
+                Ok(data) => data,
+                Err(_) => return None,
+            };
 
         for data in base_data {
             let time = data.time_created_utc();
             if let btree_map::Entry::Vacant(e) = time_slices.entry(time) {
-                let time_slice : TimeSlice = vec![data];
+                let time_slice: TimeSlice = vec![data];
                 e.insert(time_slice);
             } else if let Some(time_slice) = time_slices.get_mut(&time) {
                 time_slice.push(data);
@@ -66,12 +71,12 @@ async fn unstructured_que_builder(slices: Vec<UnstructuredSlice>) -> Option<BTre
     Some(time_slices)
 }
 
-pub fn build_data_que(base_data: Vec<BaseDataEnum> ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
+pub fn build_data_que(base_data: Vec<BaseDataEnum>) -> BTreeMap<DateTime<Utc>, TimeSlice> {
     let mut time_slices: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
     for data in base_data {
         let time = data.time_created_utc();
         if let btree_map::Entry::Vacant(e) = time_slices.entry(time) {
-            let time_slice : TimeSlice = vec![data];
+            let time_slice: TimeSlice = vec![data];
             e.insert(time_slice);
         } else if let Some(time_slice) = time_slices.get_mut(&time) {
             time_slice.push(data);
@@ -104,27 +109,34 @@ pub fn build_data_que(base_data: Vec<BaseDataEnum> ) -> BTreeMap<DateTime<Utc>, 
 /// Allowing you to update all subscriptions at the same time more accurately and efficiently.
 /// This method is for when you only want to get historical data for a single subscription.
 /// If the data is available with the vendor but not the server, it will be downloaded, this can take a long time, the data will continue to download so long as the server is running, even after the strategy stops.
-pub async fn get_historical_data(subscriptions: Vec<DataSubscription>, time: DateTime<Utc>) -> Result<BTreeMap<DateTime<Utc>, TimeSlice>, FundForgeError> {
-    let mut payloads : Vec<BaseDataPayload> = Vec::new();
+pub async fn get_historical_data(
+    subscriptions: Vec<DataSubscription>,
+    time: DateTime<Utc>,
+) -> Result<BTreeMap<DateTime<Utc>, TimeSlice>, FundForgeError> {
+    let mut payloads: Vec<BaseDataPayload> = Vec::new();
 
     for sub in &subscriptions {
-        let request : SynchronousRequestType = SynchronousRequestType::HistoricalBaseData {
+        let request: SynchronousRequestType = SynchronousRequestType::HistoricalBaseData {
             subscriptions: sub.clone(),
             time: time.to_string(),
         };
         let synchronous_communicator = sub.symbol.data_vendor.synchronous_client().await;
 
-        let response = synchronous_communicator.send_and_receive(request.to_bytes(), false).await;
+        let response = synchronous_communicator
+            .send_and_receive(request.to_bytes(), false)
+            .await;
 
         match response {
             Ok(response) => {
                 let response = SynchronousResponseType::from_bytes(&response).unwrap();
                 match response {
-                    SynchronousResponseType::HistoricalBaseData(payload) => payloads.extend(payload),
+                    SynchronousResponseType::HistoricalBaseData(payload) => {
+                        payloads.extend(payload)
+                    }
                     SynchronousResponseType::Error(e) => panic!("Error: {}", e),
                     _ => panic!("Invalid response type from server"),
                 }
-            },
+            }
             Err(e) => panic!("Error: {}", e),
         }
     }
@@ -145,35 +157,48 @@ pub async fn get_historical_data(subscriptions: Vec<DataSubscription>, time: Dat
     // structure our slices into time slices and arrange by time
     let tree = match unstructured_que_builder(slices).await {
         Some(time_slices) => Ok(time_slices),
-        None => Err(FundForgeError::ClientSideErrorDebug("Error getting historical data for all subscriptions".to_string()))
+        None => Err(FundForgeError::ClientSideErrorDebug(
+            "Error getting historical data for all subscriptions".to_string(),
+        )),
     };
 
     // return the time slices as a BTreeMap ordered by time
     tree
 }
 
-pub fn get_lowest_resolution(all_symbol_subscriptions: &HashMap<Symbol, Vec<DataSubscription>>, symbol: &Symbol) -> Option<Resolution> {
-    all_symbol_subscriptions.get(symbol).and_then(|subscriptions| {
-        subscriptions.iter().min_by_key(|sub| &sub.resolution).map(|sub| sub.resolution.clone())
-    })
+pub fn get_lowest_resolution(
+    all_symbol_subscriptions: &HashMap<Symbol, Vec<DataSubscription>>,
+    symbol: &Symbol,
+) -> Option<Resolution> {
+    all_symbol_subscriptions
+        .get(symbol)
+        .and_then(|subscriptions| {
+            subscriptions
+                .iter()
+                .min_by_key(|sub| &sub.resolution)
+                .map(|sub| sub.resolution.clone())
+        })
 }
 
-pub async fn range_data(from_time: DateTime<Utc>, to_time: DateTime<Utc>, subscription: DataSubscription) -> BTreeMap<DateTime<Utc>, TimeSlice> {
+pub async fn range_data(
+    from_time: DateTime<Utc>,
+    to_time: DateTime<Utc>,
+    subscription: DataSubscription,
+) -> BTreeMap<DateTime<Utc>, TimeSlice> {
     if from_time > to_time {
         panic!("From time cannot be greater than to time");
     }
-    
+
     let month_years = generate_file_dates(from_time.clone(), to_time.clone());
-    
-    let mut data : BTreeMap<DateTime<Utc>, TimeSlice>  = BTreeMap::new();
-    for (_, month_year) in month_years{ //start time already utc
+
+    let mut data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
+    for (_, month_year) in month_years {
+        //start time already utc
         //println!("Getting historical data for: {:?}", month_year);
         // Get the historical data for all subscriptions from the server, parse it into TimeSlices.
         let time_slices = match get_historical_data(vec![subscription.clone()], month_year).await {
-            Ok(time_slices) => {
-                time_slices
-            },
-            Err(_e) => continue
+            Ok(time_slices) => time_slices,
+            Err(_e) => continue,
         };
 
         if time_slices.len() == 0 {
@@ -181,13 +206,20 @@ pub async fn range_data(from_time: DateTime<Utc>, to_time: DateTime<Utc>, subscr
         }
 
         let range = (Bound::Included(from_time), Bound::Included(to_time));
-        data.extend(time_slices.range(range).map(|(k, v)| (k.clone(), v.clone())));
+        data.extend(
+            time_slices
+                .range(range)
+                .map(|(k, v)| (k.clone(), v.clone())),
+        );
     }
     data
 }
 
-pub fn generate_file_dates(mut start_time: DateTime<Utc>, end_time: DateTime<Utc>) -> BTreeMap<i32, DateTime<Utc>> {
-    let mut month_years : BTreeMap<i32, DateTime<Utc>> = BTreeMap::new();
+pub fn generate_file_dates(
+    mut start_time: DateTime<Utc>,
+    end_time: DateTime<Utc>,
+) -> BTreeMap<i32, DateTime<Utc>> {
+    let mut month_years: BTreeMap<i32, DateTime<Utc>> = BTreeMap::new();
     let mut msg_count = 0;
     while &start_time < &end_time {
         msg_count += 1;

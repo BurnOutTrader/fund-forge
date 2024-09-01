@@ -1,24 +1,20 @@
-use ahash::AHashMap;
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::apis::brokerage::Brokerage;
-use crate::standardized_types::enums::{PositionSide};
-use crate::standardized_types::subscriptions::{Symbol};
-use tokio::sync::RwLock;
 use crate::apis::brokerage::client_requests::ClientSideBrokerage;
+use crate::apis::brokerage::Brokerage;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::standardized_types::enums::PositionSide;
+use crate::standardized_types::subscriptions::Symbol;
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
-
+use ahash::AHashMap;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use tokio::sync::RwLock;
 
 // B
 pub type AccountId = String;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum AccountCurrency {
     AUD,
@@ -50,7 +46,11 @@ pub struct Ledger {
 
 impl Ledger {
     pub fn new(account_info: AccountInfo) -> Self {
-        let positions = account_info.positions.into_iter().map(|position| (position.symbol_name.clone(), position)).collect();
+        let positions = account_info
+            .positions
+            .into_iter()
+            .map(|position| (position.symbol_name.clone(), position))
+            .collect();
         let ledger = Self {
             account_id: account_info.account_id,
             brokerage: account_info.brokerage,
@@ -64,7 +64,12 @@ impl Ledger {
         ledger
     }
 
-    pub fn paper_account_init(account_id: AccountId, brokerage: Brokerage, cash_value: f64, currency: AccountCurrency) -> Self {
+    pub fn paper_account_init(
+        account_id: AccountId,
+        brokerage: Brokerage,
+        cash_value: f64,
+        currency: AccountCurrency,
+    ) -> Self {
         let account = Self {
             account_id,
             brokerage,
@@ -81,16 +86,27 @@ impl Ledger {
     pub async fn exit_position_paper(&mut self, symbol_name: &Symbol) {
         let mut positions = self.positions.write().await;
         if !positions.contains_key(symbol_name) {
-            return
+            return;
         }
         let position = positions.remove(symbol_name).unwrap();
-        let margin_freed = self.brokerage.margin_required(&symbol_name, position.quantity).await;
+        let margin_freed = self
+            .brokerage
+            .margin_required(&symbol_name, position.quantity)
+            .await;
         self.cash_available += margin_freed;
         self.cash_used -= margin_freed;
-        self.positions_closed.write().await.insert(symbol_name.clone(), position);
+        self.positions_closed
+            .write()
+            .await
+            .insert(symbol_name.clone(), position);
     }
 
-    pub async fn enter_short_paper(&mut self, symbol_name: Symbol, quantity: u64, price: f64) -> Result<(), FundForgeError> {
+    pub async fn enter_short_paper(
+        &mut self,
+        symbol_name: Symbol,
+        quantity: u64,
+        price: f64,
+    ) -> Result<(), FundForgeError> {
         let mut positions = self.positions.write().await;
         if let Some(position) = positions.get(&symbol_name) {
             if position.side == PositionSide::Short {
@@ -99,16 +115,29 @@ impl Ledger {
         }
         let margin_required = self.brokerage.margin_required(&symbol_name, quantity).await;
         if self.cash_available < margin_required {
-            return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
+            return Err(FundForgeError::ClientSideErrorDebug(
+                "Insufficient funds".to_string(),
+            ));
         }
-        let position = Position::enter(symbol_name.clone(), self.brokerage.clone(), PositionSide::Long, quantity, price);
+        let position = Position::enter(
+            symbol_name.clone(),
+            self.brokerage.clone(),
+            PositionSide::Long,
+            quantity,
+            price,
+        );
         positions.insert(symbol_name.clone(), position);
         self.cash_available -= margin_required;
         self.cash_used += margin_required;
         Ok(())
     }
 
-    pub async fn enter_long_paper(&mut self, symbol_name: Symbol, quantity: u64, price: f64) -> Result<(), FundForgeError> {
+    pub async fn enter_long_paper(
+        &mut self,
+        symbol_name: Symbol,
+        quantity: u64,
+        price: f64,
+    ) -> Result<(), FundForgeError> {
         let mut positions = self.positions.write().await;
         if let Some(position) = positions.get(&symbol_name) {
             if position.side == PositionSide::Long {
@@ -117,9 +146,17 @@ impl Ledger {
         }
         let margin_required = self.brokerage.margin_required(&symbol_name, quantity).await;
         if self.cash_available < margin_required {
-            return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
+            return Err(FundForgeError::ClientSideErrorDebug(
+                "Insufficient funds".to_string(),
+            ));
         }
-        let position: Position = Position::enter(symbol_name.clone(), self.brokerage.clone(), PositionSide::Long, quantity, price);
+        let position: Position = Position::enter(
+            symbol_name.clone(),
+            self.brokerage.clone(),
+            PositionSide::Long,
+            quantity,
+            price,
+        );
         positions.insert(symbol_name.clone(), position);
         self.cash_available -= margin_required;
         self.cash_used += margin_required;
@@ -171,10 +208,7 @@ impl Ledger {
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct Position {
     pub symbol_name: Symbol,
@@ -189,7 +223,13 @@ pub struct Position {
 }
 
 impl Position {
-    pub fn enter(symbol_name: Symbol, brokerage: Brokerage, side: PositionSide, quantity: u64, average_price: f64) -> Self {
+    pub fn enter(
+        symbol_name: Symbol,
+        brokerage: Brokerage,
+        side: PositionSide,
+        quantity: u64,
+        average_price: f64,
+    ) -> Self {
         Self {
             symbol_name,
             brokerage,
@@ -303,10 +343,7 @@ impl Position {
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct AccountInfo {
     pub account_id: AccountId,
@@ -327,12 +364,10 @@ impl Bytes<Self> for AccountInfo {
 
     fn from_bytes(archived: &[u8]) -> Result<AccountInfo, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<AccountInfo>(archived) { //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+        match rkyv::from_bytes::<AccountInfo>(archived) {
+            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
             Ok(response) => Ok(response),
-            Err(e) => {
-                Err(FundForgeError::ClientSideErrorDebug(e.to_string()))
-            }
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
 }
-

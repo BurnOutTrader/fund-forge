@@ -35,6 +35,10 @@ impl RateLimiter {
 
     /// Tries to acquire a permit from the rate limiter. If no permits are available, it waits.
     pub async fn acquire(&self) {
-        self.semaphore.acquire().await.expect("Semaphore closed").forget();
+        self.semaphore
+            .acquire()
+            .await
+            .expect("Semaphore closed")
+            .forget();
     }
 }

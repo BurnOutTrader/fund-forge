@@ -1,18 +1,29 @@
-use std::any::TypeId;
-use std::fmt::Display;
-use serde::{Deserialize, Serialize};
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::price::TradePrice;
 use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use serde::{Deserialize, Serialize};
+use std::any::TypeId;
+use std::fmt::Display;
 
-#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Eq,Hash, PartialOrd, Ord,Copy)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Serialize,
+    Deserialize,
+    Clone,
+    Serialize_rkyv,
+    Deserialize_rkyv,
+    Archive,
+    PartialEq,
+    Debug,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Copy,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// The `BaseDataType` enum is used to specify the type of data that is being fed into the algorithm. \
 /// Not to be confused with the `DataType` enum which is used to specify the type of data that is being requested from the data provider. \
@@ -56,5 +67,3 @@ impl Display for BaseDataType {
         }
     }
 }
-
-

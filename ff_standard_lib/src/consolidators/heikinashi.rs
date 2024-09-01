@@ -1,16 +1,16 @@
-use chrono::{DateTime, Utc};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
+use crate::consolidators::count::ConsolidatorError;
 use crate::helpers::converters::open_time;
-use crate::standardized_types::rolling_window::RollingWindow;
+use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
-use crate::consolidators::count::ConsolidatorError;
-use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::rolling_window::RollingWindow;
+use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
+use chrono::{DateTime, Utc};
 
-pub struct HeikinAshiConsolidator{
+pub struct HeikinAshiConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
@@ -19,9 +19,18 @@ pub struct HeikinAshiConsolidator{
     tick_size: f64,
 }
 
-impl HeikinAshiConsolidator
-{
-    fn candle_from_base_data(&self, ha_open: f64, ha_high: f64, ha_low: f64, ha_close: f64, volume: f64, time: String, is_closed: bool, range: f64) -> Candle {
+impl HeikinAshiConsolidator {
+    fn candle_from_base_data(
+        &self,
+        ha_open: f64,
+        ha_high: f64,
+        ha_low: f64,
+        ha_close: f64,
+        volume: f64,
+        time: String,
+        is_closed: bool,
+        range: f64,
+    ) -> Candle {
         Candle {
             symbol: self.subscription.symbol.clone(),
             open: ha_open,
@@ -44,8 +53,14 @@ impl HeikinAshiConsolidator
                     self.previous_ha_close = candle.close;
                     self.previous_ha_open = candle.open;
                 }
-                let ha_close = round_to_tick_size((candle.open + candle.high + candle.low + candle.close) / 4.0, self.tick_size);
-                let ha_open = round_to_tick_size((self.previous_ha_open + self.previous_ha_close) / 2.0, self.tick_size);
+                let ha_close = round_to_tick_size(
+                    (candle.open + candle.high + candle.low + candle.close) / 4.0,
+                    self.tick_size,
+                );
+                let ha_open = round_to_tick_size(
+                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    self.tick_size,
+                );
                 let ha_high = candle.high.max(ha_open).max(ha_close);
                 let ha_low = candle.low.min(ha_open).min(ha_close);
 
@@ -54,15 +69,27 @@ impl HeikinAshiConsolidator
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
-                self.candle_from_base_data(ha_open, ha_high, ha_low, ha_close, candle.volume, time.to_string(), false, ha_high - ha_low)
-            },
+                self.candle_from_base_data(
+                    ha_open,
+                    ha_high,
+                    ha_low,
+                    ha_close,
+                    candle.volume,
+                    time.to_string(),
+                    false,
+                    ha_high - ha_low,
+                )
+            }
             BaseDataEnum::TradePrice(price) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
                     self.previous_ha_close = price.price;
                     self.previous_ha_open = price.price;
                 }
                 let ha_close = price.price;
-                let ha_open = round_to_tick_size((self.previous_ha_open + self.previous_ha_close) / 2.0, self.tick_size);
+                let ha_open = round_to_tick_size(
+                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    self.tick_size,
+                );
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -71,15 +98,27 @@ impl HeikinAshiConsolidator
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
-                self.candle_from_base_data(ha_open, ha_high, ha_low, ha_close, 0.0, time.to_string(), false, ha_high - ha_low)
-            },
+                self.candle_from_base_data(
+                    ha_open,
+                    ha_high,
+                    ha_low,
+                    ha_close,
+                    0.0,
+                    time.to_string(),
+                    false,
+                    ha_high - ha_low,
+                )
+            }
             BaseDataEnum::QuoteBar(bar) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
                     self.previous_ha_close = bar.bid_close;
                     self.previous_ha_open = bar.bid_close;
                 }
                 let ha_close = bar.bid_close;
-                let ha_open = round_to_tick_size((self.previous_ha_open + self.previous_ha_close) / 2.0, self.tick_size);
+                let ha_open = round_to_tick_size(
+                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    self.tick_size,
+                );
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -88,15 +127,27 @@ impl HeikinAshiConsolidator
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
-                self.candle_from_base_data(ha_open, ha_high, ha_low, ha_close, bar.volume, time.to_string(), false, ha_high - ha_low)
-            },
+                self.candle_from_base_data(
+                    ha_open,
+                    ha_high,
+                    ha_low,
+                    ha_close,
+                    bar.volume,
+                    time.to_string(),
+                    false,
+                    ha_high - ha_low,
+                )
+            }
             BaseDataEnum::Tick(tick) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
                     self.previous_ha_close = tick.price;
                     self.previous_ha_open = tick.price;
                 }
                 let ha_close = tick.price;
-                let ha_open = round_to_tick_size((self.previous_ha_open + self.previous_ha_close) / 2.0, self.tick_size);
+                let ha_open = round_to_tick_size(
+                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    self.tick_size,
+                );
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -105,30 +156,60 @@ impl HeikinAshiConsolidator
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
-                self.candle_from_base_data(ha_open, ha_high, ha_low, ha_close, tick.volume, time.to_string(), false, ha_high - ha_low)
-            },
-            _ => panic!("Invalid base data type for Heikin Ashi calculation")
+                self.candle_from_base_data(
+                    ha_open,
+                    ha_high,
+                    ha_low,
+                    ha_close,
+                    tick.volume,
+                    time.to_string(),
+                    false,
+                    ha_high - ha_low,
+                )
+            }
+            _ => panic!("Invalid base data type for Heikin Ashi calculation"),
         }
     }
 }
 
-impl HeikinAshiConsolidator
-{
-    pub(crate) async fn new(subscription: DataSubscription, history_to_retain: u64) -> Result<HeikinAshiConsolidator, ConsolidatorError> {
+impl HeikinAshiConsolidator {
+    pub(crate) async fn new(
+        subscription: DataSubscription,
+        history_to_retain: u64,
+    ) -> Result<HeikinAshiConsolidator, ConsolidatorError> {
         if subscription.base_data_type != BaseDataType::Candles {
-            return Err(ConsolidatorError { message: format!("{} is an Invalid base data type for HeikinAshiConsolidator", subscription.base_data_type) });
+            return Err(ConsolidatorError {
+                message: format!(
+                    "{} is an Invalid base data type for HeikinAshiConsolidator",
+                    subscription.base_data_type
+                ),
+            });
         }
 
         if let Some(candle_type) = &subscription.candle_type {
             if candle_type != &CandleType::HeikinAshi {
-                return Err(ConsolidatorError { message: format!("{:?} is an Invalid candle type for HeikinAshiConsolidator", candle_type) });
+                return Err(ConsolidatorError {
+                    message: format!(
+                        "{:?} is an Invalid candle type for HeikinAshiConsolidator",
+                        candle_type
+                    ),
+                });
             }
         }
-        let tick_size = match subscription.symbol.data_vendor.tick_size(subscription.symbol.clone()).await {
+        let tick_size = match subscription
+            .symbol
+            .data_vendor
+            .tick_size(subscription.symbol.clone())
+            .await
+        {
             Ok(size) => size,
-            Err(e) => return Err(ConsolidatorError { message: format!("Error getting tick size: {}", e) }),
+            Err(e) => {
+                return Err(ConsolidatorError {
+                    message: format!("Error getting tick size: {}", e),
+                })
+            }
         };
-        
+
         Ok(HeikinAshiConsolidator {
             current_data: None,
             subscription,
@@ -150,7 +231,7 @@ impl HeikinAshiConsolidator
         }
         vec![]
     }
-    
+
     //problem where this is returning a closed candle constantly
     pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
         if self.current_data.is_none() {
@@ -168,52 +249,62 @@ impl HeikinAshiConsolidator
                 return vec![consolidated_bar, BaseDataEnum::Candle(new_bar)];
             }
             match current_bar {
-                BaseDataEnum::Candle(candle) => {
-                    match base_data {
-                        BaseDataEnum::Tick(tick) => {
-                            candle.high = tick.price.max(candle.high);
-                            candle.low = tick.price.min(candle.low);
-                            candle.close = tick.price;
-                            candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
-                            candle.volume += tick.volume;
-                            return vec![BaseDataEnum::Candle(candle.clone())];
-                        }
-                        BaseDataEnum::Candle(new_candle) => {
-                            candle.high = new_candle.high.max(candle.high);
-                            candle.low = new_candle.low.min(candle.low);
-                            candle.close = new_candle.close;
-                            candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
-                            candle.volume += new_candle.volume;
-                            return vec![BaseDataEnum::Candle(candle.clone())];
-                        }
-                        BaseDataEnum::TradePrice(price) => {
-                            candle.high = price.price.max(candle.high);
-                            candle.low = price.price.min(candle.low);
-                            candle.close = price.price;
-                            candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
-                            return vec![BaseDataEnum::Candle(candle.clone())];
-                        }
-                        BaseDataEnum::QuoteBar(bar) => {
-                            candle.high = bar.bid_high.max(candle.high);
-                            candle.low = bar.bid_low.min(candle.low);
-                            candle.close = bar.bid_close;
-                            candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
-                            candle.volume += bar.volume;
-                            return vec![BaseDataEnum::Candle(candle.clone())];
-                        }
-                        _ => panic!("Invalid base data type for Heikin Ashi consolidator: {}", base_data.base_data_type()),
+                BaseDataEnum::Candle(candle) => match base_data {
+                    BaseDataEnum::Tick(tick) => {
+                        candle.high = tick.price.max(candle.high);
+                        candle.low = tick.price.min(candle.low);
+                        candle.close = tick.price;
+                        candle.range =
+                            round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                        candle.volume += tick.volume;
+                        return vec![BaseDataEnum::Candle(candle.clone())];
                     }
-                }
-                _ => panic!("Invalid base data type for Candle consolidator: {}", base_data.base_data_type()),
+                    BaseDataEnum::Candle(new_candle) => {
+                        candle.high = new_candle.high.max(candle.high);
+                        candle.low = new_candle.low.min(candle.low);
+                        candle.close = new_candle.close;
+                        candle.range =
+                            round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                        candle.volume += new_candle.volume;
+                        return vec![BaseDataEnum::Candle(candle.clone())];
+                    }
+                    BaseDataEnum::TradePrice(price) => {
+                        candle.high = price.price.max(candle.high);
+                        candle.low = price.price.min(candle.low);
+                        candle.close = price.price;
+                        candle.range =
+                            round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                        return vec![BaseDataEnum::Candle(candle.clone())];
+                    }
+                    BaseDataEnum::QuoteBar(bar) => {
+                        candle.high = bar.bid_high.max(candle.high);
+                        candle.low = bar.bid_low.min(candle.low);
+                        candle.close = bar.bid_close;
+                        candle.range =
+                            round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                        candle.volume += bar.volume;
+                        return vec![BaseDataEnum::Candle(candle.clone())];
+                    }
+                    _ => panic!(
+                        "Invalid base data type for Heikin Ashi consolidator: {}",
+                        base_data.base_data_type()
+                    ),
+                },
+                _ => panic!(
+                    "Invalid base data type for Candle consolidator: {}",
+                    base_data.base_data_type()
+                ),
             }
         }
-        panic!("Invalid base data type for Candle consolidator: {}", base_data.base_data_type())
+        panic!(
+            "Invalid base data type for Candle consolidator: {}",
+            base_data.base_data_type()
+        )
     }
 
     pub(crate) fn history(&self) -> RollingWindow<BaseDataEnum> {
         self.history.clone()
     }
-    
 
     pub(crate) fn index(&self, index: u64) -> Option<BaseDataEnum> {
         match self.history.get(index) {

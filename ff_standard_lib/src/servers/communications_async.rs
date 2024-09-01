@@ -1,9 +1,9 @@
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
-use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex};
 use tokio::sync::mpsc::Receiver;
-use tokio_rustls::server::{TlsStream as ServerTlsStream};
+use tokio::sync::{mpsc, Mutex};
+use tokio_rustls::server::TlsStream as ServerTlsStream;
 use tokio_rustls::TlsStream;
 
 /// With an 8-byte (64-bit) length field, you can represent data sizes up to approximately 17179869184 GB, which is equivalent to 16777216 TB, or 16 exabytes (EB).
@@ -15,7 +15,7 @@ pub type SubscriberId = String;
 pub enum SecondaryDataReceiver {
     InternalReceiver(InternalReceiver),
     ExternalReceiver(ExternalReceiver),
-    Server(ReadHalf<ServerTlsStream<TcpStream>>)
+    Server(ReadHalf<ServerTlsStream<TcpStream>>),
 }
 
 impl SecondaryDataReceiver {
@@ -46,9 +46,7 @@ pub struct InternalReceiver {
 
 impl InternalReceiver {
     pub fn new(receiver: Receiver<Vec<u8>>) -> Self {
-        Self {
-            receiver
-        }
+        Self { receiver }
     }
     async fn receive(&mut self) -> Option<Vec<u8>> {
         self.receiver.recv().await
@@ -86,15 +84,16 @@ pub struct SendError {
 pub enum SecondaryDataSender {
     InternalSender(Arc<mpsc::Sender<Vec<u8>>>),
     ExternalSender(Arc<Mutex<WriteHalf<TlsStream<TcpStream>>>>),
-    Server(Mutex<WriteHalf<ServerTlsStream<TcpStream>>>)
+    Server(Mutex<WriteHalf<ServerTlsStream<TcpStream>>>),
 }
 
 impl SecondaryDataSender {
-     pub async fn send(&self, data: &Vec<u8>) -> Result<(), SendError> {
+    pub async fn send(&self, data: &Vec<u8>) -> Result<(), SendError> {
         match self {
-            SecondaryDataSender::InternalSender(sender) => {
-                sender.send(data.clone()).await.map_err(|e| SendError { msg: e.to_string() })
-            },
+            SecondaryDataSender::InternalSender(sender) => sender
+                .send(data.clone())
+                .await
+                .map_err(|e| SendError { msg: e.to_string() }),
             SecondaryDataSender::ExternalSender(sender) => {
                 // Lock the mutex to get mutable access
                 let mut sender = sender.lock().await;
@@ -104,20 +103,32 @@ impl SecondaryDataSender {
                 let len_bytes = len.to_be_bytes();
 
                 // Write the length header
-                sender.write_all(&len_bytes).await.map_err(|e| SendError { msg: e.to_string() })?;
+                sender
+                    .write_all(&len_bytes)
+                    .await
+                    .map_err(|e| SendError { msg: e.to_string() })?;
 
                 // Write the actual data
-                sender.write_all(&data).await.map_err(|e| SendError { msg: e.to_string() })
+                sender
+                    .write_all(&data)
+                    .await
+                    .map_err(|e| SendError { msg: e.to_string() })
             }
             SecondaryDataSender::Server(sender) => {
                 let len = data.len() as u64;
                 let len_bytes = len.to_be_bytes();
                 let mut sender = sender.lock().await;
                 // Write the length header
-                sender.write_all(&len_bytes).await.map_err(|e| SendError { msg: e.to_string() })?;
+                sender
+                    .write_all(&len_bytes)
+                    .await
+                    .map_err(|e| SendError { msg: e.to_string() })?;
 
                 // Write the actual data
-                sender.write_all(&data).await.map_err(|e| SendError { msg: e.to_string() })
+                sender
+                    .write_all(&data)
+                    .await
+                    .map_err(|e| SendError { msg: e.to_string() })
             }
         }
     }
@@ -135,7 +146,7 @@ impl SecondaryDataSubscriber {
         Arc::new(Mutex::new(Self { id, sender }))
     }
 
-    pub  async fn send(&mut self, source_data: &Vec<u8>) -> Result<(), SendError> {
+    pub async fn send(&mut self, source_data: &Vec<u8>) -> Result<(), SendError> {
         self.sender.send(source_data).await
     }
 }

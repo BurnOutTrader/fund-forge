@@ -1,27 +1,30 @@
-use std::sync::Arc;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
-use tokio::sync::{mpsc, Notify};
-use tokio::sync::mpsc::Sender;
-use tokio::task;
-use ff_standard_lib::lightweight_charts::primitives::Color;
-use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::app::settings::ColorTemplate;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
-use ff_standard_lib::indicators::indicators_trait::{IndicatorName};
+use ff_standard_lib::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::indicators::values::IndicatorValues;
+use ff_standard_lib::lightweight_charts::primitives::Color;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
-use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent};
-use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent, StrategyInteractionMode};
-
+use ff_standard_lib::standardized_types::strategy_events::{
+    EventTimeSlice, StrategyEvent, StrategyInteractionMode,
+};
+use ff_standard_lib::standardized_types::subscriptions::{
+    CandleType, DataSubscription, DataSubscriptionEvent,
+};
+use ff_strategies::fund_forge_strategy::FundForgeStrategy;
+use std::sync::Arc;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::{mpsc, Notify};
+use tokio::task;
 
 /*fn defualt_broker_map() -> HashMap<DataVendor, Brokerage> {
     let mut broker_map = HashMap::new();
@@ -29,25 +32,41 @@ use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, Strat
     broker_map
 }*/
 
-pub async fn create_test_strategy(strategy_event_sender: Sender<EventTimeSlice>, notify: Arc<Notify>) -> FundForgeStrategy {
+pub async fn create_test_strategy(
+    strategy_event_sender: Sender<EventTimeSlice>,
+    notify: Arc<Notify>,
+) -> FundForgeStrategy {
     FundForgeStrategy::initialize(
         Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, todo! this needs to be upgraded in the future to be more reliable in Single and Multi machine modes.
         notify.clone(),
-        StrategyMode::Backtest, // Backtest, Live, LivePaper
-        StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2023, 03, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2023, 03, 21).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
-        Australia::Sydney, // the strategy time zone
+        StrategyMode::Backtest,                 // Backtest, Live, LivePaper
+        StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
+        NaiveDate::from_ymd_opt(2023, 03, 15)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2023, 03, 21)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        Australia::Sydney,                      // the strategy time zone
         Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
-        vec![DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, CandleType::CandleStick)], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+        vec![DataSubscription::new_custom(
+            "AUD-USD".to_string(),
+            DataVendor::Test,
+            Resolution::Minutes(15),
+            BaseDataType::Candles,
+            MarketType::Forex,
+            CandleType::CandleStick,
+        )], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
         100,
         strategy_event_sender, // the sender for the strategy events
         None,
-        
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
-        Some(Duration::seconds(1))
-    ).await
+        Some(Duration::seconds(1)),
+    )
+    .await
 }
 
 // to launch via platform
@@ -65,17 +84,23 @@ pub async fn create_test_strategy_launch() {
 // to launch on separate machine
 #[tokio::main]
 async fn main() {
-    initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
+    initialize_clients(&PlatformMode::MultiMachine)
+        .await
+        .unwrap();
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = create_test_strategy(strategy_event_sender, notify.clone()).await;
-    
+
     on_data_received(strategy, notify, strategy_event_receiver).await;
 }
 
 /// Here we listen for incoming data and build our custom strategy logic. this is where the magic happens.
-pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>)  {
+pub async fn on_data_received(
+    strategy: FundForgeStrategy,
+    notify: Arc<Notify>,
+    mut event_receiver: mpsc::Receiver<EventTimeSlice>,
+) {
     //notify.notify_one();
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
@@ -83,7 +108,21 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     //let aud_usd_3m = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
 
     // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
-    let mut heikin_atr = AverageTrueRange::new(IndicatorName::from("heikin_atr"), DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, CandleType::CandleStick), 100, 14, Some(Color::new(54, 54, 54))).await; //todo having color isn't decoupled
+    let mut heikin_atr = AverageTrueRange::new(
+        IndicatorName::from("heikin_atr"),
+        DataSubscription::new_custom(
+            "AUD-USD".to_string(),
+            DataVendor::Test,
+            Resolution::Minutes(15),
+            BaseDataType::Candles,
+            MarketType::Forex,
+            CandleType::CandleStick,
+        ),
+        100,
+        14,
+        Some(Color::new(54, 54, 54)),
+    )
+    .await; //todo having color isn't decoupled
     let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);
 
     let mut warmup_complete = false;
@@ -94,12 +133,26 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         if warmup_complete {
             count += 1;
             if count == 10 {
-              /*  let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(3), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
+                /*  let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(3), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
                 strategy.indicator_subscribe(heikin_atr_20).await;*/
                 //todo subscribing after launch causes deadlock in multimachine mode
                 //strategy.subscriptions_update(vec![aud_usd_3m.clone()],100).await;
                 // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variat of the same name.
-                let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
+                let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
+                    AverageTrueRange::new(
+                        IndicatorName::from("heikin_atr_20"),
+                        DataSubscription::new(
+                            "AUD-CAD".to_string(),
+                            DataVendor::Test,
+                            Resolution::Minutes(15),
+                            BaseDataType::Candles,
+                            MarketType::Forex,
+                        ),
+                        100,
+                        20,
+                    )
+                    .await,
+                );
                 //strategy.indicator_subscribe(heikin_atr_20).await;
             }
         }
@@ -116,7 +169,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                         match base_data {
                             BaseDataEnum::TradePrice(_) => {}
                             BaseDataEnum::Candle(ref candle) => {
-                               /* if base_data.subscription() == aud_cad_60m && candle.is_closed {
+                                /* if base_data.subscription() == aud_cad_60m && candle.is_closed {
                                     heikin_atr.update_base_data(base_data);
                                     if heikin_atr.is_ready() {
                                         let atr = heikin_atr.current();
@@ -124,39 +177,42 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                     }
                                 }*/
 
-                                    if candle.is_closed == true {
-                                        println!("{:?}", candle); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                                        if count > 2000 {
-                                            /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
-                                            println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
-                                            //let data_current = &strategy.data_current(&subscription).await;
-                                            //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
+                                if candle.is_closed == true {
+                                    println!("{:?}", candle); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    if count > 2000 {
+                                        /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
+                                        println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
+                                        //let data_current = &strategy.data_current(&subscription).await;
+                                        //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
 
 
-                                            let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
-                                            println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
-                                            let data_current = &strategy.bar_current(&subscription).await;
-                                            println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);*/
-                                        }
-
-                                    } else if candle.is_closed == false {
-                                        //Todo Documents, Open bars get sent through with every tick or primary resolution update, so you can always access the open bar using lowest resolution available in the engine.
-                                        //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                        let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
+                                        println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
+                                        let data_current = &strategy.bar_current(&subscription).await;
+                                        println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);*/
                                     }
+                                } else if candle.is_closed == false {
+                                    //Todo Documents, Open bars get sent through with every tick or primary resolution update, so you can always access the open bar using lowest resolution available in the engine.
+                                    //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                }
 
-                                   /*   if count /3 == 0 {
-                                           strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
-                                      }
-                                      if count / 5 == 0 {
-                                       strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
-                                      }*/
-
+                                /*   if count /3 == 0 {
+                                     strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
+                                }
+                                if count / 5 == 0 {
+                                 strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
+                                }*/
                             }
                             BaseDataEnum::QuoteBar(_) => {}
                             BaseDataEnum::Tick(tick) => {
                                 if !warmup_complete {
                                     // we could manually warm up indicators etc here.
-                                    println!("{}...{} Tick: {}", strategy.time_utc().await, tick.symbol.name, base_data.time_created_utc());
+                                    println!(
+                                        "{}...{} Tick: {}",
+                                        strategy.time_utc().await,
+                                        tick.symbol.name,
+                                        base_data.time_created_utc()
+                                    );
                                 }
                             }
                             BaseDataEnum::Quote(_) => {}
@@ -191,13 +247,16 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             println!("Indicator Removed: {:?}", removed_event);
                         }
                         IndicatorEvents::IndicatorTimeSlice(slice_event) => {
-
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice_event {
-                                println!("{}: \n {:?}", indicator_values.name(), indicator_values.values());
+                                println!(
+                                    "{}: \n {:?}",
+                                    indicator_values.name(),
+                                    indicator_values.values()
+                                );
                             }
 
-                           /*let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
+                            /*let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
                             if let Some(history) = history {
                                 println!("History: {:?}", history.history());
                             }
@@ -218,7 +277,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                     }
 
                     // we could also get the automanaged indicator values from teh strategy at any time.
-
                 }
             }
             notify.notify_one();

@@ -1,24 +1,28 @@
+use chrono::Utc;
+use ff_standard_lib::server_connections::ConnectionType;
+use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
+use ff_standard_lib::servers::communications_sync::{
+    SecureExternalCommunicator, SynchronousCommunicator,
+};
+use ff_standard_lib::servers::request_handlers::{
+    data_server_manage_async_requests, data_server_manage_sequential_requests,
+};
+use ff_standard_lib::servers::settings::client_settings::get_settings;
+use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+use rustls::ServerConfig;
+use rustls_pemfile::{certs, private_key};
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use chrono::Utc;
-use rustls::pki_types::{CertificateDer, PrivateKeyDer};
-use rustls::ServerConfig;
-use rustls_pemfile::{certs, private_key};
 use structopt::StructOpt;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor, TlsStream};
-use ff_standard_lib::server_connections::ConnectionType;
-use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
-use ff_standard_lib::servers::request_handlers::{data_server_manage_async_requests, data_server_manage_sequential_requests};
-use ff_standard_lib::servers::settings::client_settings::get_settings;
-use ff_standard_lib::servers::communications_sync::{SecureExternalCommunicator, SynchronousCommunicator};
 
 #[derive(Debug)]
 pub enum StartUpMode {
@@ -29,19 +33,32 @@ pub enum StartUpMode {
 #[derive(Debug, StructOpt)]
 struct ServerLaunchOptions {
     /// Sets the data folder
-    #[structopt(short = "f", long = "data_folder", parse(from_os_str), default_value = "/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data")]
+    #[structopt(
+        short = "f",
+        long = "data_folder",
+        parse(from_os_str),
+        default_value = "/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data"
+    )]
     pub data_folder: PathBuf,
 
-    #[structopt(short = "l", long = "ssl_folder", parse(from_os_str), default_value = "/Users/kevmonaghan/RustroverProjects/fund-forge/resources/keys")]
+    #[structopt(
+        short = "l",
+        long = "ssl_folder",
+        parse(from_os_str),
+        default_value = "/Users/kevmonaghan/RustroverProjects/fund-forge/resources/keys"
+    )]
     pub ssl_auth_folder: PathBuf,
 
-    #[structopt(short = "s", long = "synchronous_address", default_value = "0.0.0.0:8080")]
+    #[structopt(
+        short = "s",
+        long = "synchronous_address",
+        default_value = "0.0.0.0:8080"
+    )]
     pub listener_address: String,
 
     #[structopt(short = "p", long = "async_address", default_value = "0.0.0.0:8081")]
     pub async_listener_address: String,
-
-/*    #[structopt(short = "c", long = "connection_type"]
+    /*    #[structopt(short = "c", long = "connection_type"]
     pub start_up_mode: String,*/
 }
 
@@ -54,14 +71,18 @@ async fn main() -> io::Result<()> {
     let key = Path::join(&options.ssl_auth_folder, "key.pem");
 
     let certs = load_certs(&cert).unwrap();
-    let key = load_keys(&key).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "No keys found")).unwrap();
+    let key = load_keys(&key)
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "No keys found"))
+        .unwrap();
 
     let config = rustls::ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
-        .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err)).unwrap();
+        .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))
+        .unwrap();
 
-    let sync_server_handle = synchronous_server(config.clone().into(), settings.address_synchronous).await;
+    let sync_server_handle =
+        synchronous_server(config.clone().into(), settings.address_synchronous).await;
     let async_server_handle = async_server(config.into(), settings.address).await;
 
     let sync_result = sync_server_handle.await;
@@ -109,7 +130,7 @@ pub async fn toml_launch(connection_type: ConnectionType) -> JoinHandle<()> {
     })
 }*/
 
-pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()>  {
+pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()> {
     task::spawn(async move {
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let listener = match TcpListener::bind(&addr).await {
@@ -139,13 +160,16 @@ pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -
                     continue;
                 }
             };
-            let communicator = SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Mutex::new(TlsStream::from(tls_stream)))));
+            let communicator =
+                SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(
+                    SecureExternalCommunicator::new(Mutex::new(TlsStream::from(tls_stream))),
+                ));
             data_server_manage_sequential_requests(Arc::new(communicator)).await;
         }
     })
 }
 
-pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()>  {
+pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()> {
     task::spawn(async move {
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let listener = match TcpListener::bind(&addr).await {
@@ -181,18 +205,20 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
             let secondary_receiver = SecondaryDataReceiver::Server(read_half);
             println!("TLS connection established with {:?}", peer_addr);
 
-            data_server_manage_async_requests(Arc::new(secondary_sender), Arc::new(Mutex::new(secondary_receiver))).await;
+            data_server_manage_async_requests(
+                Arc::new(secondary_sender),
+                Arc::new(Mutex::new(secondary_receiver)),
+            )
+            .await;
         }
     })
 }
 
-
 pub(crate) fn load_certs(path: &Path) -> io::Result<Vec<CertificateDer<'static>>> {
-    let certificates =  certs(&mut BufReader::new(File::open(path)?)).collect();
+    let certificates = certs(&mut BufReader::new(File::open(path)?)).collect();
     //println!("certs: {:?}", certs(&mut BufReader::new(File::open(path)?)).collect::<Vec<_>>());
     certificates
 }
-
 
 pub(crate) fn load_keys(path: &Path) -> Option<PrivateKeyDer<'static>> {
     let file = match File::open(path) {
@@ -201,6 +227,3 @@ pub(crate) fn load_keys(path: &Path) -> Option<PrivateKeyDer<'static>> {
     };
     private_key(&mut BufReader::new(file)).unwrap()
 }
-
-
-

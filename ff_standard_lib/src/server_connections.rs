@@ -1,21 +1,27 @@
-use std::collections::{HashMap};
-use std::str::FromStr;
-use std::sync::Arc;
+use crate::apis::brokerage::Brokerage;
+use crate::apis::vendor::DataVendor;
+use crate::servers::communications_async::{
+    ExternalReceiver, InternalReceiver, SecondaryDataReceiver, SecondaryDataSender,
+};
+use crate::servers::communications_sync::{
+    InternalCommunicator, SecureExternalCommunicator, SynchronousCommunicator,
+};
+use crate::servers::init_clients::{create_api_client, create_async_api_client};
+use crate::servers::registry_request_handlers::registry_manage_async_requests;
+use crate::servers::request_handlers::{
+    data_server_manage_async_requests, data_server_manage_sequential_requests,
+};
+use crate::servers::settings::client_settings::get_settings_map;
+use crate::standardized_types::data_server_messaging::FundForgeError;
 use heck::ToPascalCase;
 use lazy_static::lazy_static;
 use serde_derive::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::Arc;
 use strum_macros::Display;
 use tokio::io;
 use tokio::sync::{mpsc, Mutex, RwLock};
-use crate::apis::brokerage::Brokerage;
-use crate::apis::vendor::DataVendor;
-use crate::servers::communications_async::{ExternalReceiver, InternalReceiver, SecondaryDataReceiver, SecondaryDataSender};
-use crate::servers::init_clients::{create_api_client, create_async_api_client};
-use crate::servers::settings::client_settings::{get_settings_map};
-use crate::servers::communications_sync::{InternalCommunicator, SecureExternalCommunicator, SynchronousCommunicator};
-use crate::servers::registry_request_handlers::{registry_manage_async_requests};
-use crate::servers::request_handlers::{data_server_manage_async_requests, data_server_manage_sequential_requests};
-use crate::standardized_types::data_server_messaging::FundForgeError;
 
 /// A wrapper to allow us to pass in either a `Brokerage` or a `DataVendor`
 /// # Variants
@@ -26,7 +32,7 @@ pub enum ConnectionType {
     Vendor(DataVendor),
     Broker(Brokerage),
     Default,
-    StrategyRegistry
+    StrategyRegistry,
 }
 
 impl FromStr for ConnectionType {
@@ -40,12 +46,15 @@ impl FromStr for ConnectionType {
             _ if s.starts_with("Broker:") => {
                 let data = s.trim_start_matches("Broker:").trim();
                 Ok(ConnectionType::Broker(Brokerage::from_str(data)?))
-            },
+            }
             _ if s.starts_with("Vendor:") => {
                 let data = s.trim_start_matches("Vendor:").trim();
                 Ok(ConnectionType::Vendor(DataVendor::from_str(data)?))
-            },
-            _ => Err(FundForgeError::ClientSideErrorDebug(format!("Connection Type {} is not recognized", s))),
+            }
+            _ => Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Connection Type {} is not recognized",
+                s
+            ))),
         }
     }
 }
@@ -53,65 +62,66 @@ impl FromStr for ConnectionType {
 #[derive(Debug, Display, Clone)]
 pub enum PlatformMode {
     SingleMachine,
-    MultiMachine
+    MultiMachine,
 }
 
 //todo, need to remove as many mutexs as possible, make all types use interior mutability.
 lazy_static! {
-    static ref SYNCHRONOUS_COMMUNICATORS: Arc<RwLock<HashMap<ConnectionType, Arc<SynchronousCommunicator>>>> = Arc::new(RwLock::new(HashMap::new()));
-    static ref ASYNC_OUTGOING: Arc<RwLock<HashMap<ConnectionType, Arc<SecondaryDataSender>>>> = Arc::new(RwLock::new(HashMap::new()));
-    static ref ASYNC_INCOMING: Arc<RwLock<HashMap<ConnectionType, Arc<Mutex<SecondaryDataReceiver>>>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref SYNCHRONOUS_COMMUNICATORS: Arc<RwLock<HashMap<ConnectionType, Arc<SynchronousCommunicator>>>> =
+        Arc::new(RwLock::new(HashMap::new()));
+    static ref ASYNC_OUTGOING: Arc<RwLock<HashMap<ConnectionType, Arc<SecondaryDataSender>>>> =
+        Arc::new(RwLock::new(HashMap::new()));
+    static ref ASYNC_INCOMING: Arc<RwLock<HashMap<ConnectionType, Arc<Mutex<SecondaryDataReceiver>>>>> =
+        Arc::new(RwLock::new(HashMap::new()));
 }
 
-pub async fn get_synchronous_communicator(connection_type: ConnectionType) -> Result<Arc<SynchronousCommunicator>, String> {
+pub async fn get_synchronous_communicator(
+    connection_type: ConnectionType,
+) -> Result<Arc<SynchronousCommunicator>, String> {
     let communicators = SYNCHRONOUS_COMMUNICATORS.read().await;
     match communicators.contains_key(&connection_type) {
-        true => {
-            match communicators.get(&connection_type) {
-                None => Err(format!("Unable to connect to server {}", connection_type)),
-                Some(s) => Ok(s.clone())
-            }
+        true => match communicators.get(&connection_type) {
+            None => Err(format!("Unable to connect to server {}", connection_type)),
+            Some(s) => Ok(s.clone()),
         },
         false => match communicators.get(&ConnectionType::Default) {
             None => Err(format!("Unable to connect to server {}", connection_type)),
-            Some(s) => Ok(s.clone())
-        }
+            Some(s) => Ok(s.clone()),
+        },
     }
 }
 
-pub async fn get_async_reader(connection_type: ConnectionType) -> Result<Arc<Mutex<SecondaryDataReceiver>>, String> {
+pub async fn get_async_reader(
+    connection_type: ConnectionType,
+) -> Result<Arc<Mutex<SecondaryDataReceiver>>, String> {
     let receivers = ASYNC_INCOMING.read().await;
     match receivers.contains_key(&connection_type) {
-        true => {
-            match receivers.get(&connection_type) {
-                None => Err(format!("Unable to connect to server {}", connection_type)),
-                Some(s) => Ok(s.clone())
-            }
+        true => match receivers.get(&connection_type) {
+            None => Err(format!("Unable to connect to server {}", connection_type)),
+            Some(s) => Ok(s.clone()),
         },
         false => match receivers.get(&ConnectionType::Default) {
             None => Err(format!("Unable to connect to server {}", connection_type)),
-            Some(s) => Ok(s.clone())
-        }
+            Some(s) => Ok(s.clone()),
+        },
     }
 }
 
-pub async fn get_async_sender(connection_type: ConnectionType) -> Result<Arc<SecondaryDataSender>, String> {
+pub async fn get_async_sender(
+    connection_type: ConnectionType,
+) -> Result<Arc<SecondaryDataSender>, String> {
     let senders = ASYNC_OUTGOING.read().await;
     match senders.contains_key(&connection_type) {
-        true => {
-            match senders.get(&connection_type) {
-                None => Err(format!("Unable to connect to server {}", connection_type)),
-                Some(s) => Ok(s.clone())
-            }
+        true => match senders.get(&connection_type) {
+            None => Err(format!("Unable to connect to server {}", connection_type)),
+            Some(s) => Ok(s.clone()),
         },
         false => match senders.get(&ConnectionType::Default) {
             None => Err(format!("Unable to connect to server {}", connection_type)),
-            Some(s) => Ok(s.clone())
-        }
+            Some(s) => Ok(s.clone()),
+        },
     }
 }
-
-
 
 /// Initializes clients based on the specified platform mode.
 ///
@@ -153,7 +163,9 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
     match platform_mode {
         PlatformMode::SingleMachine => {
             // setup sync and async servers for data server
-            let communicator = Arc::new(SynchronousCommunicator::Channels(InternalCommunicator::new(10, 10)));
+            let communicator = Arc::new(SynchronousCommunicator::Channels(
+                InternalCommunicator::new(10, 10),
+            ));
             data_server_manage_sequential_requests(communicator.clone()).await;
             let mut communicators = SYNCHRONOUS_COMMUNICATORS.write().await;
             communicators.insert(ConnectionType::Default, communicator);
@@ -163,33 +175,51 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
             // sender simulates the servers sender, receiver simulates the clients listener
             let (client_sender, client_receiver) = mpsc::channel(1000);
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
-            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
-            data_server_manage_async_requests(Arc::new(async_sender), Arc::new(Mutex::new(async_receiver))).await;
+            let async_receiver =
+                SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
+            data_server_manage_async_requests(
+                Arc::new(async_sender),
+                Arc::new(Mutex::new(async_receiver)),
+            )
+            .await;
 
             let mut async_senders = ASYNC_OUTGOING.write().await;
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(server_sender));
             async_senders.insert(ConnectionType::Default, Arc::new(async_sender));
 
             let mut async_receivers = ASYNC_INCOMING.write().await;
-            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
-            async_receivers.insert(ConnectionType::Default, Arc::new(Mutex::new(async_receiver)));
+            let async_receiver =
+                SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
+            async_receivers.insert(
+                ConnectionType::Default,
+                Arc::new(Mutex::new(async_receiver)),
+            );
 
             // sender simulates sending to a server, receiver simulates the server listener
             let (server_sender, server_receiver) = mpsc::channel(1000);
             // sender simulates the servers sender, receiver simulates the clients listener
             let (client_sender, client_receiver) = mpsc::channel(1000);
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
-            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
-            registry_manage_async_requests(Arc::new(async_sender), Arc::new(Mutex::new(async_receiver))).await;
+            let async_receiver =
+                SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
+            registry_manage_async_requests(
+                Arc::new(async_sender),
+                Arc::new(Mutex::new(async_receiver)),
+            )
+            .await;
 
             let async_sender = SecondaryDataSender::InternalSender(Arc::new(server_sender));
             async_senders.insert(ConnectionType::StrategyRegistry, Arc::new(async_sender));
 
-            let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
-            async_receivers.insert(ConnectionType::StrategyRegistry, Arc::new(Mutex::new(async_receiver)));
+            let async_receiver =
+                SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
+            async_receivers.insert(
+                ConnectionType::StrategyRegistry,
+                Arc::new(Mutex::new(async_receiver)),
+            );
 
             Ok(())
-        },
+        }
         PlatformMode::MultiMachine => {
             let settings_map_arc = get_settings_map().clone();
             let settings_guard = settings_map_arc.lock().await;
@@ -199,23 +229,42 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
                 //setup sync client
                 if connection_type != &ConnectionType::StrategyRegistry {
                     let client = create_api_client(settings).await.unwrap();
-                    let communicator = Arc::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Mutex::new(client))));
-                    SYNCHRONOUS_COMMUNICATORS.write().await.insert(connection_type.clone(), communicator);
+                    let communicator = Arc::new(SynchronousCommunicator::TlsConnections(
+                        SecureExternalCommunicator::new(Mutex::new(client)),
+                    ));
+                    SYNCHRONOUS_COMMUNICATORS
+                        .write()
+                        .await
+                        .insert(connection_type.clone(), communicator);
                 }
 
                 // set up async client
                 let async_client = match create_async_api_client(&settings).await {
                     Ok(client) => client,
                     Err(__e) => {
-                        println!("{}", format!("Unable to establish connection to: {:?} server @ address: {:?}", connection_type, settings));
-                        continue
+                        println!(
+                            "{}",
+                            format!(
+                                "Unable to establish connection to: {:?} server @ address: {:?}",
+                                connection_type, settings
+                            )
+                        );
+                        continue;
                     }
                 };
                 let (read_half, write_half) = io::split(async_client);
-                let async_sender = SecondaryDataSender::ExternalSender(Arc::new(Mutex::new(write_half)));
-                let async_receiver = SecondaryDataReceiver::ExternalReceiver(ExternalReceiver::new(read_half));
-                ASYNC_OUTGOING.write().await.insert(connection_type.clone(), Arc::new(async_sender));
-                ASYNC_INCOMING.write().await.insert(connection_type.clone(), Arc::new(Mutex::new(async_receiver)));
+                let async_sender =
+                    SecondaryDataSender::ExternalSender(Arc::new(Mutex::new(write_half)));
+                let async_receiver =
+                    SecondaryDataReceiver::ExternalReceiver(ExternalReceiver::new(read_half));
+                ASYNC_OUTGOING
+                    .write()
+                    .await
+                    .insert(connection_type.clone(), Arc::new(async_sender));
+                ASYNC_INCOMING.write().await.insert(
+                    connection_type.clone(),
+                    Arc::new(Mutex::new(async_receiver)),
+                );
             }
             Ok(())
         }

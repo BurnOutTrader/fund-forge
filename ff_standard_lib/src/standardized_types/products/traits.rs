@@ -1,6 +1,6 @@
-use std::time::Duration;
-use iso_currency::Currency;
 use crate::standardized_types::subscriptions::Symbol;
+use iso_currency::Currency;
+use std::time::Duration;
 
 /// Represents a futures product, providing essential properties specific to futures contracts.
 ///
@@ -18,13 +18,13 @@ pub trait FuturesProduct {
 
     /// Returns the time remaining until the futures contract expires.
     ///
-    /// The Tick value is used to determine the cash value of each tick. 
+    /// The Tick value is used to determine the cash value of each tick.
     /// eg: NQ tick value is 20 USD
     ///
     /// # Returns
     /// A `f64` value of 1 tick in underlying currency.
     fn tick_value(&self) -> f64;
-    
+
     /// The size of 1 tick.
     /// The tick size is used to calculate the number of ticks etc.
     /// Eg: NQ TickSize = 0.25
@@ -54,7 +54,7 @@ pub trait ForexProduct {
     /// # Returns
     /// A `u32` representing the pip location in the instrument's price quote.
     fn pip_location(&self) -> u32;
-    
+
     /// Returns the base currency of the Forex instrument.
     ///
     /// The base currency is the first currency in a currency pair quotation, against which the second currency (quote currency) is measured.
@@ -62,8 +62,8 @@ pub trait ForexProduct {
     ///
     /// # Returns
     /// A `Currency` representing the base currency of the instrument.
-    fn currency_base(&self) -> Currency; 
-    
+    fn currency_base(&self) -> Currency;
+
     /// Returns the quote currency of the Forex instrument.
     ///
     /// The quote currency is the second currency in a currency pair quotation, which is used to determine the value of the base currency.
@@ -74,11 +74,10 @@ pub trait ForexProduct {
     fn currency_quote(&self) -> Currency;
 }
 
-
 /// Represents a Cfd product, providing essential Cfd-specific properties.
-/// 
+///
 /// These methods are used to access properties unique to Cfd instruments, such as the underlying currency
- pub trait CfdProduct {
+pub trait CfdProduct {
     /// Returns the quote currency of the CFD instrument.
     ///
     /// This is the currency in which the price of the CFD is denominated. Understanding the quote currency is essential for evaluating the monetary value of trades and positions within the CFD market.
@@ -128,17 +127,17 @@ pub trait TradableProduct {
     /// Returns the min tradeable amount for the instrument.
     /// If the min tradeable amount is not know consider just returning 1 or 0.xxx minimum decimal helpers unit
     fn min_tradeable_amount(&self) -> u64;
-    
+
     /// Returns the maximum amount that can be traded for the instrument.
     /// If no maximum amount is specified with the brokerage, specify f64::MAX.
     fn max_tradeable_amount(&self) -> u64;
-    
+
     /// Rounds the trade size to the nearest multiple of the brokerage's minimum tradeable amount.
     fn round_trade_size(&self, original_size: u64) -> u64;
 
-    /// `margin_rate()` fn is crucial for determining how much a trader needs to deposit 
-    /// to open a position with that particular instrument. If the instrument has a `margin_rate()` 
-    /// of 0.02 (or 2%), and a trader wants to open a position that's nominally valued at $50,000, 
+    /// `margin_rate()` fn is crucial for determining how much a trader needs to deposit
+    /// to open a position with that particular instrument. If the instrument has a `margin_rate()`
+    /// of 0.02 (or 2%), and a trader wants to open a position that's nominally valued at $50,000,
     /// the calculation for the required margin would be:
     ///
     /// Required Margin = $50,000 × 0.02 = $1,000
@@ -146,14 +145,14 @@ pub trait TradableProduct {
     /// This means the trader needs to have at least $1,000 in their trading account to open this position.
     /// If the brokerage doesn't have a `margin_rate()` function, this function should return 1.0 to represent required cash is 100% of the value of the instrument.
     fn margin_rate(&self) -> f64;
-    
+
     /// Returns the required margin for the instrument holding the specified quantity overnight.
     /// if the brokerage doesn't have a `overnight_margin_requirement()` function, this function should return the quantity * price.
-    /// 
+    ///
     /// # Returns
     /// `f64` The margin requirement in the underlying market currency.
     fn overnight_margin_requirement(&self, quantity: u64, entry_price: f64) -> f64;
-    
+
     /// Returns the required margin for the instrument holding the specified quantity during trading hours.
     /// if the brokerage doesn't have a `overnight_margin_requirement()` function, this function should return the quantity * price.
     /// # Returns

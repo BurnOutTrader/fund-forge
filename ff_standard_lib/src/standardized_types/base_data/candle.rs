@@ -1,25 +1,24 @@
-use std::fmt;
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
-use chrono::{DateTime, FixedOffset};
-use chrono_tz::Tz;
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
 use crate::standardized_types::{Price, TimeString};
+use chrono::{DateTime, FixedOffset};
+use chrono_tz::Tz;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use std::fmt;
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Eq, PartialOrd, Ord)]
-#[archive(
-compare(PartialEq),
-check_bytes,
+#[derive(
+    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Eq, PartialOrd, Ord,
 )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum CandleCalculationType {
     HeikenAshi,
-    Candle
+    Candle,
 }
 
 impl Default for CandleCalculationType {
@@ -73,13 +72,22 @@ impl Display for Candle {
         write!(
             f,
             "{:?},{},{},{},{},{},{},{},{},{},{}",
-            self.symbol, self.resolution, self.high, self.low, self.open, self.close, self.volume, self.range, self.time, self.is_closed, self.candle_type
+            self.symbol,
+            self.resolution,
+            self.high,
+            self.low,
+            self.open,
+            self.close,
+            self.volume,
+            self.range,
+            self.time,
+            self.is_closed,
+            self.candle_type
         )
     }
 }
 
 impl Candle {
-
     pub fn resolution(&self) -> Resolution {
         self.resolution.clone()
     }
@@ -87,11 +95,18 @@ impl Candle {
     pub fn subscription(&self) -> DataSubscription {
         let symbol = self.symbol.clone();
         let resolution = self.resolution();
-        let candle_type= Some(self.candle_type.clone());
-        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), resolution, BaseDataType::Candles, symbol.market_type.clone(), candle_type)
+        let candle_type = Some(self.candle_type.clone());
+        DataSubscription::from_base_data(
+            symbol.name.clone(),
+            symbol.data_vendor.clone(),
+            resolution,
+            BaseDataType::Candles,
+            symbol.market_type.clone(),
+            candle_type,
+        )
     }
 
-    pub fn from_quotebar(quotebar: QuoteBar,  bid: bool) -> Self {
+    pub fn from_quotebar(quotebar: QuoteBar, bid: bool) -> Self {
         let high = match bid {
             true => quotebar.bid_high,
             false => quotebar.ask_high,
@@ -120,11 +135,11 @@ impl Candle {
             volume: quotebar.volume,
             range: high - low,
             resolution: quotebar.resolution,
-            candle_type: CandleType::CandleStick
+            candle_type: CandleType::CandleStick,
         }
     }
     /// Mutates the raw candle data into the required CandleStickType
-/*    pub fn mutate_candle(&mut self, candle_calculation_type: &CandleCalculationType, prior_candle: &Option<Candle>) {
+    /*    pub fn mutate_candle(&mut self, candle_calculation_type: &CandleCalculationType, prior_candle: &Option<Candle>) {
         match candle_calculation_type {
             CandleCalculationType::Candle => {
                 return
@@ -162,7 +177,14 @@ impl Candle {
     /// - `volume`: The trading volume.
     /// - `time`: The opening time as a Unix timestamp.
     ///
-    pub fn new(symbol: Symbol, open: f64, volume: f64, time: TimeString, resolution: Resolution, candle_type: CandleType) -> Self {
+    pub fn new(
+        symbol: Symbol,
+        open: f64,
+        volume: f64,
+        time: TimeString,
+        resolution: Resolution,
+        candle_type: CandleType,
+    ) -> Self {
         Self {
             symbol,
             high: open,
@@ -174,10 +196,9 @@ impl Candle {
             time,
             is_closed: false,
             resolution,
-            candle_type
+            candle_type,
         }
     }
-    
 
     /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
     pub fn time_utc(&self) -> DateTime<chrono::Utc> {
@@ -200,7 +221,17 @@ impl Candle {
     /// - `close`: The closing price.
     /// - `volume`: The trading volume.
     /// - `time`: The opening time as a Unix timestamp.
-    pub fn from_closed(symbol: Symbol, high: f64, low: f64, open: f64, close: f64, volume: f64, time: DateTime<chrono::Utc>, resolution: Resolution, candle_type: CandleType) -> Self {
+    pub fn from_closed(
+        symbol: Symbol,
+        high: f64,
+        low: f64,
+        open: f64,
+        close: f64,
+        volume: f64,
+        time: DateTime<chrono::Utc>,
+        resolution: Resolution,
+        candle_type: CandleType,
+    ) -> Self {
         Self {
             symbol,
             high,
@@ -247,19 +278,3 @@ impl fmt::Debug for Candle {
         )
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

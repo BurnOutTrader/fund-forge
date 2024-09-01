@@ -1,20 +1,17 @@
-use std::fmt;
-use std::fmt::{Debug};
-use std::str::FromStr;
-use chrono::{DateTime, FixedOffset};
-use chrono_tz::Tz;
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::{Price, TimeString};
+use chrono::{DateTime, FixedOffset};
+use chrono_tz::Tz;
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use std::fmt;
+use std::fmt::Debug;
+use std::str::FromStr;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
-#[archive(
-compare(PartialEq),
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// A `Tick` is a single trade in a financial market.
 ///
@@ -31,7 +28,6 @@ pub struct Tick {
 }
 
 impl Tick {
-
     /// Create a new `Tick` instance.
     ///
     /// # Parameters
@@ -56,7 +52,14 @@ impl Tick {
 
     pub fn subscription(&self) -> DataSubscription {
         let symbol = self.symbol.clone();
-        DataSubscription::from_base_data(symbol.name.clone(), symbol.data_vendor.clone(), Resolution::Instant, BaseDataType::Ticks, symbol.market_type.clone(), None)
+        DataSubscription::from_base_data(
+            symbol.name.clone(),
+            symbol.data_vendor.clone(),
+            Resolution::Instant,
+            BaseDataType::Ticks,
+            symbol.market_type.clone(),
+            None,
+        )
     }
 
     pub fn time_utc(&self) -> DateTime<chrono::Utc> {
@@ -87,5 +90,3 @@ impl fmt::Debug for Tick {
         )
     }
 }
-
-

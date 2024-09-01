@@ -1,5 +1,5 @@
-use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive, Zero};
+use rust_decimal::Decimal;
 
 /// Safely divides two f64 values using Decimal for precision.
 /// Panics if the divisor is zero or if conversion fails.
@@ -28,7 +28,6 @@ pub fn round_to_tick_size(value: f64, tick_size: f64) -> f64 {
     let truncated_str = rounded_str.trim_end_matches('0').trim_end_matches('.'); // Remove trailing zeros and decimal point if necessary
     truncated_str.parse::<f64>().unwrap_or(rounded_value) // Convert back to f64
 }
-
 
 /// Calculates the average of a vector of floating-point numbers using Decimal for high precision.
 /// Skips NaN values and entries associated with zero quantity if applicable.
@@ -88,15 +87,20 @@ pub fn calculate_weighted_average_price(orders: &BTreeMap<OrderId, Order>) -> f6
 
 #[cfg(test)]
 mod tests {
-    use float_cmp::approx_eq;
     use super::*;
+    use float_cmp::approx_eq;
     use rust_decimal::Decimal;
 
     #[test]
     fn test_calculate_average_high_precision() {
         let prices = vec![0.00000001, 0.00000002, 0.00000003, 0.00000004];
         let average = average_of_f64(&prices);
-        assert!(approx_eq!(f64, average, 0.000000025, epsilon = 0.0000000001));
+        assert!(approx_eq!(
+            f64,
+            average,
+            0.000000025,
+            epsilon = 0.0000000001
+        ));
 
         let prices_high_range = vec![100000.0, 200000.0, 300000.0];
         let average = average_of_f64(&prices_high_range);

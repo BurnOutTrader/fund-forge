@@ -1,13 +1,9 @@
-
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::lightweight_charts::horz_scale::horz_scale_trait::HorzScaleItem;
 use crate::standardized_types::{Color, Price, TimeStamp};
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// In place of traits I am using EnumVariant(Struct) to allow easier 0 copy serde. \
 /// A base interface for a data point of single-value series.
@@ -24,14 +20,13 @@ pub enum SingleValueData {
     HistogramData(HistogramData),
     /// Structure describing a single item of data for line series.
     /// https://tradingview.github.io/lightweight-charts/docs/api/interfaces/LineData
-    LineData(LineData)
+    LineData(LineData),
 }
-
 
 impl HorzScaleItem for SingleValueData {
     ///The utc time stamp of the data. use timestamp_local(Tz) to localise charts
     fn timestamp_utc(&self) -> TimeStamp {
-        match self  {
+        match self {
             SingleValueData::AreaData(area) => area.timestamp_utc(),
             SingleValueData::BaselineData(line) => line.timestamp_utc(),
             SingleValueData::HistogramData(hist) => hist.timestamp_utc(),
@@ -67,10 +62,7 @@ impl SingleValueData {
 }*/
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Structure describing a single item of data for area series.
 /// https://tradingview.github.io/lightweight-charts/docs/api/interfaces/AreaData
@@ -92,7 +84,6 @@ pub struct AreaData {
 
     /// The price value of the data.
     value: Price,
-
     // Optional customValues: Record<string, unknown>
     // Additional custom values which will be ignored by the library, but could be used by plugins.
     //pub custom_values: Option<HashMap<String, String>>
@@ -110,10 +101,7 @@ impl HorzScaleItem for AreaData {
 }*/
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Structure describing a single item of data for baseline series.
 /// https://tradingview.github.io/lightweight-charts/docs/api/interfaces/BaselineData
@@ -147,7 +135,6 @@ pub struct BaselineData {
 
     /// The price value of the data.
     pub value: Price,
-
     // Optional customValues: Record<string, unknown>
     // Additional custom values which will be ignored by the library, but could be used by plugins.
     //pub custom_values: Option<HashMap<String, String>>
@@ -165,10 +152,7 @@ impl HorzScaleItem for BaselineData {
 }*/
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Structure describing a single item of data for histogram series.
 /// https://tradingview.github.io/lightweight-charts/docs/api/interfaces/HistogramData
@@ -182,7 +166,6 @@ pub struct HistogramData {
 
     /// The price value of the data.
     pub value: Price,
-
     // Optional customValues: Record<string, unknown>
     // Additional custom values which will be ignored by the library, but could be used by plugins.
     //pub custom_values: Option<HashMap<String, String>>
@@ -200,10 +183,7 @@ impl HorzScaleItem for HistogramData {
 }*/
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(
-    compare(PartialEq),
-    check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Structure describing a single item of data for line series.
 /// https://tradingview.github.io/lightweight-charts/docs/api/interfaces/LineData
@@ -217,18 +197,17 @@ pub struct LineData {
 
     /// The price value of the data.
     pub value: Price,
-
     // Optional customValues: Record<string, unknown>
     // Additional custom values which will be ignored by the library, but could be used by plugins.
     //pub custom_values: Option<HashMap<String, String>>
 }
 
 impl LineData {
-    pub  fn new(time_utc: TimeStamp, color: Option<Color>, value: Price) -> Self {
+    pub fn new(time_utc: TimeStamp, color: Option<Color>, value: Price) -> Self {
         Self {
             time_utc,
             color,
-            value
+            value,
         }
     }
 }
@@ -243,4 +222,3 @@ impl HorzScaleItem for LineData {
         self.custom_values.clone()
     }
 }*/
-

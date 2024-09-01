@@ -1,7 +1,3 @@
-use std::fmt::{Debug, Display};
-use std::net::{SocketAddr, ToSocketAddrs};
-use rkyv::{Archive, Deserialize, Serialize};
-use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use crate::apis::brokerage::Brokerage;
 use crate::apis::vendor::DataVendor;
 use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo};
@@ -9,12 +5,28 @@ use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
+use rkyv::{Archive, Deserialize, Serialize};
+use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
+use std::fmt::{Debug, Display};
+use std::net::{SocketAddr, ToSocketAddrs};
 
 /// An Api key String
 pub type ApiKey = String;
 
 /// A socket Address in String format
-#[derive(Clone, Serialize, Deserialize, Archive, Debug, SerdeSerialize, SerdeDeserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Clone,
+    Serialize,
+    Deserialize,
+    Archive,
+    Debug,
+    SerdeSerialize,
+    SerdeDeserialize,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+)]
 #[archive(
 // This will generate a PartialEq impl between our unarchived and archived
 // types:
@@ -88,7 +100,7 @@ pub enum SynchronousRequestType {
     SymbolsVendor(DataVendor, MarketType),
     SymbolsBroker(Brokerage, MarketType),
 
-     /// Requests a list of resolutions available with the `DataVendor` from the server
+    /// Requests a list of resolutions available with the `DataVendor` from the server
     Resolutions(DataVendor, MarketType),
 
     AccountCurrency(Brokerage, AccountId),
@@ -98,7 +110,7 @@ pub enum SynchronousRequestType {
     Markets(DataVendor),
 
     TickSize(DataVendor, Symbol),
-    
+
     DecimalAccuracy(DataVendor, Symbol),
 }
 
@@ -108,12 +120,11 @@ impl SynchronousRequestType {
         vec.into()
     }
     pub fn from_bytes(archived: &[u8]) -> Result<SynchronousRequestType, FundForgeError> {
-            // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<SynchronousRequestType>(archived) { //Ignore this warning: Trait `Deserialize<RequestType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+        // If the archived bytes do not end with the delimiter, proceed as before
+        match rkyv::from_bytes::<SynchronousRequestType>(archived) {
+            //Ignore this warning: Trait `Deserialize<RequestType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
             Ok(response) => Ok(response),
-            Err(e) => {
-                Err(FundForgeError::ClientSideErrorDebug(e.to_string()))
-            }
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
 }
@@ -172,7 +183,7 @@ pub enum SynchronousResponseType {
     Markets(Vec<MarketType>),
 
     TickSize(Symbol, f64),
-    
+
     DecimalAccuracy(Symbol, u64),
 }
 
@@ -183,11 +194,10 @@ impl SynchronousResponseType {
     }
     pub fn from_bytes(archived: &[u8]) -> Result<SynchronousResponseType, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<SynchronousResponseType>(archived) { //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+        match rkyv::from_bytes::<SynchronousResponseType>(archived) {
+            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
             Ok(response) => Ok(response),
-            Err(e) => {
-                Err(FundForgeError::ClientSideErrorDebug(e.to_string()))
-            }
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
 }
@@ -227,9 +237,13 @@ impl Debug for FundForgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FundForgeError::InvalidApiKey => write!(f, "InvalidApiKey"),
-            FundForgeError::InvalidRequestType(request_type) => write!(f, "InvalidRequestType: {}", request_type),
+            FundForgeError::InvalidRequestType(request_type) => {
+                write!(f, "InvalidRequestType: {}", request_type)
+            }
             FundForgeError::ServerErrorDebug(debug) => write!(f, "ServerErrorDebug: {}", debug),
-            FundForgeError::ClientSideErrorDebug(debug) => write!(f, "ClientSideErrorDebug: {}", debug),
+            FundForgeError::ClientSideErrorDebug(debug) => {
+                write!(f, "ClientSideErrorDebug: {}", debug)
+            }
             FundForgeError::UnknownBlameError(debug) => write!(f, "UnknownBlameError: {}", debug),
             FundForgeError::ConnectionNotFound(debug) => write!(f, "ConnectionNotFound {}:", debug),
         }
@@ -240,16 +254,20 @@ impl Display for FundForgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             FundForgeError::InvalidApiKey => write!(f, "InvalidApiKey"),
-            FundForgeError::InvalidRequestType(request_type) => write!(f, "InvalidRequestType: {}", request_type),
+            FundForgeError::InvalidRequestType(request_type) => {
+                write!(f, "InvalidRequestType: {}", request_type)
+            }
             FundForgeError::ServerErrorDebug(debug) => write!(f, "ServerErrorDebug: {}", debug),
-            FundForgeError::ClientSideErrorDebug(debug) => write!(f, "ClientSideErrorDebug: {}", debug),
+            FundForgeError::ClientSideErrorDebug(debug) => {
+                write!(f, "ClientSideErrorDebug: {}", debug)
+            }
             FundForgeError::UnknownBlameError(debug) => write!(f, "UnknownBlameError: {}", debug),
-            FundForgeError::ConnectionNotFound(debug) => write!(f, "ConnectionNotFound: {}:", debug),
+            FundForgeError::ConnectionNotFound(debug) => {
+                write!(f, "ConnectionNotFound: {}:", debug)
+            }
         }
     }
 }
-
-
 
 #[derive(Clone, Serialize, Deserialize, Archive, Debug)]
 #[archive(
@@ -277,11 +295,10 @@ impl Bytes<Self> for AsyncRequestType {
 
     fn from_bytes(archived: &[u8]) -> Result<AsyncRequestType, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<AsyncRequestType>(archived) { //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+        match rkyv::from_bytes::<AsyncRequestType>(archived) {
+            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
             Ok(response) => Ok(response),
-            Err(e) => {
-                Err(FundForgeError::ClientSideErrorDebug(e.to_string()))
-            }
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
 }
@@ -310,12 +327,10 @@ impl Bytes<Self> for AsyncResponseType {
 
     fn from_bytes(archived: &[u8]) -> Result<AsyncResponseType, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<AsyncResponseType>(archived) { //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+        match rkyv::from_bytes::<AsyncResponseType>(archived) {
+            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
             Ok(response) => Ok(response),
-            Err(e) => {
-                Err(FundForgeError::ClientSideErrorDebug(e.to_string()))
-            }
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
 }
-
