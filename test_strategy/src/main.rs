@@ -4,6 +4,7 @@ use chrono_tz::Australia;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
 use tokio::task;
+use ff_lightweight_charts::lwc_wrappers::primitives::Color;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::app::settings::ColorTemplate;
@@ -82,7 +83,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     //let aud_usd_3m = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
 
     // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
-    let mut heikin_atr = AverageTrueRange::new(IndicatorName::from("heikin_atr"), DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, CandleType::CandleStick), 100, 14, Some(Color::)).await; //todo having color isn't decoupled
+    let mut heikin_atr = AverageTrueRange::new(IndicatorName::from("heikin_atr"), DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, CandleType::CandleStick), 100, 14, Some(Color::new(54, 54, 54))).await; //todo having color isn't decoupled
     let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);
 
     let mut warmup_complete = false;
