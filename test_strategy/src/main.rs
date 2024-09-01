@@ -6,6 +6,7 @@ use tokio::sync::mpsc::Sender;
 use tokio::task;
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use ff_standard_lib::apis::vendor::DataVendor;
+use ff_standard_lib::app::settings::ColorTemplate;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
@@ -33,11 +34,11 @@ pub async fn create_test_strategy(strategy_event_sender: Sender<EventTimeSlice>,
         notify.clone(),
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2023, 03, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2023, 03, 21).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney, // the strategy time zone
         Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
-        vec![DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(3), BaseDataType::Candles, MarketType::Forex)], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+        vec![DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, CandleType::CandleStick)], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
         100,
         strategy_event_sender, // the sender for the strategy events
         None,
@@ -69,7 +70,6 @@ async fn main() {
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = create_test_strategy(strategy_event_sender, notify.clone()).await;
     
-    
     on_data_received(strategy, notify, strategy_event_receiver).await;
 }
 
@@ -79,11 +79,11 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // Spawn a new task to listen for incoming data
     //println!("Subscriptions: {:? }", strategy.subscriptions().await);
     //let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
-    let aud_usd_3m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(3), BaseDataType::Candles, MarketType::Forex);
+    //let aud_usd_3m = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
 
     // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
-   /* let mut heikin_atr = AverageTrueRange::new(IndicatorName::from("heikin_atr"), aud_usd_15m.clone(), 100, 14).await;
-    let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);*/
+    let mut heikin_atr = AverageTrueRange::new(IndicatorName::from("heikin_atr"), DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, CandleType::CandleStick), 100, 14, Some(Color::)).await; //todo having color isn't decoupled
+    let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);
 
     let mut warmup_complete = false;
     let mut count = 0;
@@ -98,7 +98,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 //todo subscribing after launch causes deadlock in multimachine mode
                 //strategy.subscriptions_update(vec![aud_usd_3m.clone()],100).await;
                 // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variat of the same name.
-                //let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
+                let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
                 //strategy.indicator_subscribe(heikin_atr_20).await;
             }
         }

@@ -6,7 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ff_charting = { path = "../ff_charting"}
 ff_standard_lib = { path = "../ff_standard_lib"}
 chrono = "*"
 tokio = { version = "*", features = ["full", "macros"] }

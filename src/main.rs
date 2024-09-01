@@ -1,72 +1,46 @@
-use tokio::sync::{mpsc, Mutex, Notify, RwLock};
-use tokio::task;
-use chrono_tz::Australia;
-use ff_charting::canvas::graph::canvas::{ChartApp, GraphFlags, SeriesCanvas};
-use ff_charting::canvas::graph::enums::x_scale::XScale;
-use ff_charting::canvas::graph::enums::y_scale::YScale;
+use tokio::sync::{mpsc,RwLock};
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
 use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, initialize_clients, ConnectionType, PlatformMode};
-use ff_standard_lib::servers::communications_async::SendError;
-use ff_standard_lib::servers::registry_request_handlers::{EventRequest, EventResponse};
-use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::strategy_events::StrategyEvent;
 use ff_standard_lib::traits::bytes::Bytes;
-use iced::{Application, Settings, Command, Element, Color, Theme};
-use iced::widget::canvas::{Canvas};
-use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
-use chrono::{DateTime, NaiveDate, Utc}; // Replace with your own modules
-use iced::window;
-use tokio::time::sleep;
-use ff_charting::canvas::graph::models::data::SeriesData;
-use ff_charting::canvas::graph::models::price_scale::PriceScale;
-use ff_charting::canvas::graph::models::time_scale::TimeScale;
 use ff_standard_lib::apis::vendor::DataVendor;
-use ff_standard_lib::app::settings::GraphElementSettings;
-use ff_standard_lib::consolidators::consolidator_enum::ConsolidatorEnum;
-use ff_standard_lib::helpers::converters::convert_to_utc;
+use ff_standard_lib::strategy_registry::guis::{GuiRequest, RegistryGuiResponse};
+use ff_standard_lib::strategy_registry::{RegistrationRequest};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
-use ff_standard_lib::standardized_types::base_data::history::range_data;
-use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
-use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
+use ff_standard_lib::standardized_types::base_data::candle::Candle;
+use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, };
+use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription};
+
 
 #[tokio::main]
 async fn main() {
     initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
+    let async_sender = get_async_sender(ConnectionType::StrategyRegistry).await.unwrap();
+    let register_event = RegistrationRequest::Gui.to_bytes();
     let registry_reader = get_async_reader(ConnectionType::StrategyRegistry).await.unwrap();
-    let asnc_sender = get_async_sender(ConnectionType::StrategyRegistry).await.unwrap();
-
-    let events = vec![EventRequest::RegisterGui.to_bytes(), EventRequest::Subscribe(String::from("test")).to_bytes()];
-
-    for event in events {
-        match asnc_sender.send(&event).await {
-            Ok(_) => {}
-            Err(_) => {}
-        }
-    }
+    async_sender.send(&register_event).await.unwrap();
+    registry_reader.lock().await.receive().await.unwrap();
+    let subscribe_event = GuiRequest::Subscribe(String::from("test")).to_bytes();
+    async_sender.send(&subscribe_event).await.unwrap();
+    let (series_sender, series_receiver) = mpsc::channel(1000);
 
     let mut is_warmed_up = Arc::new(RwLock::new(false));
-    let (series_sender, series_receiver) = mpsc::channel(1000);
-    let notify = Arc::new(Notify::new());
-    let notified = notify.clone();
-    let warm_up_bars: Arc<RwLock<BTreeMap<i64, Vec<SeriesData>>>> = Arc::new(RwLock::new(BTreeMap::new()));
-    let bars = warm_up_bars.clone();
 
-    let subscription = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(3), BaseDataType::Candles, MarketType::Forex);
+
+    let subscription = DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, CandleType::CandleStick);
+    let bars : Vec<Candle> = Vec::new();
     let warm = is_warmed_up.clone();
     tokio::spawn(async move {
-        let notified = notified.clone();
         let warm = warm.clone();
         let mut receiver = registry_reader.lock().await;
+        let subscription = subscription.clone();
         'listener_loop: while let Some(msg) = receiver.receive().await {
-            let response = EventResponse::from_bytes(&msg).unwrap();
+            let response = RegistryGuiResponse::from_bytes(&msg).unwrap();
             //series_sender.send(response.clone()).await.unwrap();
             match &response {
-                EventResponse::StrategyEventUpdates(_, events) => {
+                RegistryGuiResponse::StrategyEventUpdates(owner, time, events) => {
                     for event in events {
                         match event {
                             StrategyEvent::OrderEvents(_, _) => {}
@@ -76,30 +50,22 @@ async fn main() {
                             StrategyEvent::StrategyControls(_, _, _) => {}
                             StrategyEvent::DrawingToolEvents(_, _, _) => {}
                             StrategyEvent::TimeSlice(_, slice) => {
-                                let mut bars = warm_up_bars.write().await;
                                 for data in slice {
                                     if data.subscription() != subscription {
                                         continue
                                     }
-                                    if !*warm.write().await {
-                                        match data {
-                                            BaseDataEnum::Candle(candle) => {
-                                                println!("{}", candle);
-                                                if !*warm.read().await {
-                                                    match bars.get_mut(&data.time_utc().timestamp()) {
-                                                        Some(mut vec) => {
-                                                            vec.push(SeriesData::CandleStick(candle.clone()))
-                                                        }
-                                                        None => {
-                                                            bars.insert(data.time_utc().timestamp(), vec![SeriesData::CandleStick(candle.clone())]);
-                                                        }
-                                                    }
+
+                                    match data {
+                                        BaseDataEnum::Candle(candle) => {
+                                            if !*warm.read().await {
+                                                if candle.is_closed {
+                                                    println!("{}", candle);
                                                 }
+                                            } else {
+                                                let _send = series_sender.send(response.clone()).await;
                                             }
-                                            _ => {}
                                         }
-                                    } else {
-                                        series_sender.send(response.clone()).await;
+                                        _ => {}
                                     }
                                 }
                             }
@@ -132,46 +98,16 @@ async fn main() {
                         }
                     }
                 }
-                EventResponse::ListStrategiesResponse(_) => {
+                RegistryGuiResponse::ListStrategiesResponse(_) => {
                     println!("received ListStrategiesResponse response: {:?}", response);
                 }
-                EventResponse::Subscribed(_) => {
-                    println!("received Subscribed response: {:?}", response);
+                RegistryGuiResponse::Subscribed(owner, buffer) => {
+                    println!("received Subscribed response: {:?}", owner);
+                }
+                RegistryGuiResponse::Unsubscribed(owner) => {
+                    println!("received unSubscribe response: {:?}", response);
                 }
             }
-            //notified.notified().await;
         }
     });
-
-    let mut warmed = is_warmed_up.read().await.clone();
-    while !warmed {
-        sleep(Duration::from_millis(10));
-        warmed = is_warmed_up.read().await.clone();
-    }
-    
-    println!("bars count {}", bars.read().await.len());
-    let bars = bars.write().await.clone();
-    
-    //let consolidator = ConsolidatorEnum::warmup(consolidator, convert_to_utc(to, Australia::Sydney), StrategyMode::Backtest).await;
-    let canvas = SeriesCanvas::new("test".to_string(), bars.clone(), Default::default(), XScale::Time(TimeScale::new(Default::default(),
-                                               Resolution::Minutes(3))), Default::default(), YScale::Price(PriceScale::default()), vec![], Default::default(), Australia::Sydney);
-    let flags = GraphFlags {
-        receiver: Arc::new(Mutex::new(series_receiver)),
-        canvas,
-        notify: notify.clone()
-    };
-    let settings = Settings {
-        window: window::Settings {
-            resizable: true,
-            ..window::Settings::default()
-        },
-        flags,
-        ..Settings::default()
-    };
-
-    // Run the Iced application
-    match ChartApp::run(settings) {
-        Ok(_) => {}
-        Err(_) => {}
-    }
 }

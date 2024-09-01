@@ -152,14 +152,19 @@ impl ConsolidatorEnum {
 
         let base_subscription = DataSubscription::new(subscription.symbol.name.clone(), subscription.symbol.data_vendor.clone(), min_resolution.resolution, min_resolution.base_data_type, subscription.market_type.clone());
         let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
-
-        for (time, slice) in &base_data {
-            if time > &to_time {
-                break;
+        
+        let mut last_time = from_time;
+        let subscription_resolution_duration = Duration::seconds(1);
+        while last_time < to_time {
+            let time = last_time + subscription_resolution_duration;
+            if let Some(slice) = base_data.get(&time) {
+                for base_data in slice {
+                    consolidator.update(base_data);
+                }
+            } else {
+                consolidator.update_time(time);
             }
-            for base_data in slice {
-                consolidator.update(base_data);
-            }
+            last_time = time;
         }
         if strategy_mode != StrategyMode::Backtest {
             //todo() we will get any bars which are not in our serialized history here

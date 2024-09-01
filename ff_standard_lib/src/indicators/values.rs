@@ -1,8 +1,10 @@
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use ahash::AHashMap;
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
+use ff_lightweight_charts::lwc_wrappers::primitives::Color;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
 use crate::indicators::indicators_trait::IndicatorName;
@@ -18,8 +20,19 @@ pub struct ArchivedAHashMap(AHashMap<String, f64>);
 )]
 #[archive_attr(derive(Debug))]
 pub struct IndicatorValue {
-    pub name: PlotName,
+    pub plot_name: PlotName,
     pub value: f64,
+    pub color: Option<Color>
+}
+
+impl IndicatorValue {
+    pub fn new(plot_name: PlotName, value: f64, color: Option<Color>) -> Self {
+        Self {
+            plot_name,
+            value,
+            color
+        }
+    }
 }
 
 /// A struct that represents the values of an indicator at a specific time.
@@ -33,33 +46,25 @@ pub struct IndicatorValues {
     name: IndicatorName,
     time: String,
     subscription: DataSubscription,
-    values: Vec<IndicatorValue>
+    values: BTreeMap<PlotName, IndicatorValue>
 }
 
-impl Display for IndicatorValues {
+impl Display for IndicatorValues{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut values_string = String::new();
-        for plot in &self.values {
-            values_string.push_str(&format!("{}: {}\n", plot.name, plot.value));
+        for (plot_name, plot) in &self.values {
+            values_string.push_str(&format!("{}: {}\n", plot_name, plot.value));
         }
         write!(f, "{}, {}, {}", self.name, self.subscription, values_string)
     }
 }
 
 impl IndicatorValues {
-    pub fn new(name: IndicatorName, subscription: DataSubscription, values: AHashMap<PlotName, f64>, time: DateTime<Utc>) -> Self {
-        let mut modified_values = Vec::new();
-        for (key, value) in values {
-            let plot = IndicatorValue {
-                name: key,
-                value
-            };
-            modified_values.push(plot);
-        }
+    pub fn new(name: IndicatorName, subscription: DataSubscription, values: BTreeMap<PlotName, IndicatorValue>, time: DateTime<Utc>) -> Self {
         Self {
             name,
             subscription,
-            values: modified_values,
+            values,
             time: time.to_string()
         }
     }
@@ -79,30 +84,17 @@ impl IndicatorValues {
     }
 
     /// get the value of a plot by name
-    pub fn get_plot(&self, plot_name: &PlotName) -> Option<f64> {
-        for plot in &self.values {
-            if plot.name == *plot_name {
-                return Some(plot.value);
-            }
-        }
-        None
+    pub fn get_plot(&self, plot_name: &PlotName) -> Option<IndicatorValue> {
+        self.values.get(plot_name).cloned()
     }
     
     /// get all the values `values: &AHashMap<PlotName, f64>`
-    pub fn values(&self) -> AHashMap<PlotName, f64> {
-        let mut values = AHashMap::new();
-        for plot in &self.values {
-            values.insert(plot.name.clone(), plot.value);
-        }
-        values
+    pub fn values(&self) ->  BTreeMap<PlotName, IndicatorValue> {
+        self.values.clone()
     }
 
     /// insert a value into the values
-    pub(crate) fn insert(&mut self, plot_name: PlotName, value: f64) {
-        let plot = IndicatorValue {
-            name: plot_name,
-            value
-        };
-        self.values.push(plot);
+    pub(crate) fn insert(&mut self, plot_name: PlotName, value: IndicatorValue) {
+        self.values.insert(plot_name, value);
     }
 }

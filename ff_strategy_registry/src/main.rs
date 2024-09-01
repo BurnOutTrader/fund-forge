@@ -18,7 +18,7 @@ use ff_standard_lib::server_connections::ConnectionType;
 use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use ff_standard_lib::servers::settings::client_settings::get_settings;
 use ff_standard_lib::servers::communications_sync::{SecureExternalCommunicator, SynchronousCommunicator};
-use ff_standard_lib::servers::registry_request_handlers::{registry_manage_async_requests, registry_manage_sequential_requests};
+use ff_standard_lib::servers::registry_request_handlers::{registry_manage_async_requests};
 
 pub(crate) fn load_certs(path: &Path) -> io::Result<Vec<CertificateDer<'static>>> {
     let certificates =  certs(&mut BufReader::new(File::open(path)?)).collect();
@@ -72,58 +72,16 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err)).unwrap();
 
-
-    let sync_server_handle = synchronous_server(config.clone().into(), settings.address_synchronous).await;
+    
     let async_server_handle = async_server(config.into(), settings.address).await;
 
-    let sync_result = sync_server_handle.await;
     let async_result = async_server_handle.await;
-
-    if let Err(e) = sync_result {
-        eprintln!("Synchronous server failed: {:?}", e);
-    }
 
     if let Err(e) = async_result {
         eprintln!("Asynchronous server failed: {:?}", e);
     }
 
     Ok(())
-}
-
-pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()>  {
-    task::spawn(async move {
-        let acceptor = TlsAcceptor::from(Arc::new(config));
-        let listener = match TcpListener::bind(&addr).await {
-            Ok(listener) => listener,
-            Err(e) => {
-                eprintln!("Failed to listen on {}: {}", addr, e);
-                return;
-            }
-        };
-        println!("Listening on: {}", addr);
-
-        loop {
-            let (stream, peer_addr) = match listener.accept().await {
-                Ok((stream, peer_addr)) => (stream, peer_addr),
-                Err(e) => {
-                    eprintln!("Failed to accept TLS connection: {:?}", e);
-                    continue;
-                }
-            };
-            println!("{}, peer_addr: {:?}", Utc::now(), peer_addr);
-            let acceptor = acceptor.clone();
-
-            let tls_stream = match acceptor.accept(stream).await {
-                Ok(stream) => stream,
-                Err(e) => {
-                    eprintln!("Failed to accept TLS connection: {:?}", e);
-                    continue;
-                }
-            };
-            let communicator = SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Mutex::new(TlsStream::from(tls_stream)))));
-            registry_manage_sequential_requests(Arc::new(communicator)).await;
-        }
-    })
 }
 
 pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()>  {

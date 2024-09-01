@@ -217,20 +217,9 @@ async fn warmup(to_time: DateTime<Utc>, strategy_mode: StrategyMode, mut indicat
             }
         }
         false => {
-            let mut consolidator = ConsolidatorEnum::create_consolidator(true, indicator.subscription().clone(), indicator.history().number, to_time, strategy_mode).await;
-            for (time, slice) in base_data {
-                if time > to_time {
-                    break;
-                }
-                for base_data in slice {
-                    let consolidated = consolidator.update(&base_data);
-                    if consolidated.is_empty() {
-                        continue
-                    }
-                    for data in consolidated {
-                        indicator.update_base_data(&data);
-                    }
-                }
+            let mut consolidator = ConsolidatorEnum::create_consolidator(true, indicator.subscription().clone(), indicator.history().number * 2, to_time, strategy_mode).await;
+            for data in consolidator.history().history_as_vec() {
+                indicator.update_base_data(&data);
             }
         }
     }

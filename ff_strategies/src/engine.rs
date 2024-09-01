@@ -1,16 +1,19 @@
+use std::cell::RefCell;
 use std::collections::{BTreeMap};
 use std::collections::Bound::Included;
 use std::sync::{Arc};
 use std::time::Duration as StdDuration;
 use chrono::{DateTime, Datelike, Utc};
 use tokio::sync::mpsc::{Sender};
-use tokio::sync::{Notify};
+use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task;
 use tokio::time::sleep;
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
-use ff_standard_lib::server_connections::{get_async_sender, ConnectionType};
-use ff_standard_lib::servers::communications_async::{SecondaryDataSender, SendError};
-use ff_standard_lib::servers::registry_request_handlers::EventRequest;
+use ff_standard_lib::strategy_registry::{RegistrationRequest, RegistrationResponse};
+use ff_standard_lib::strategy_registry::strategies::{StrategyRequest, StrategyResponse};
+use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, get_synchronous_communicator, ConnectionType};
+use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender, SendError};
+use ff_standard_lib::servers::communications_sync::SynchronousCommunicator;
 use ff_standard_lib::standardized_types::base_data::history::{generate_file_dates, get_historical_data};
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::{StrategyMode};
@@ -45,7 +48,9 @@ pub(crate) struct Engine {
     indicator_handler: Arc<IndicatorHandler>,
     timed_event_handler: Arc<TimedEventHandler>,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
-    registry_sender: Arc<SecondaryDataSender>
+    registry_sender: Arc<SecondaryDataSender>,
+    registry_receiver: Arc<Mutex<SecondaryDataReceiver>>,
+    last_time: RwLock<DateTime<Utc>>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -69,7 +74,9 @@ impl Engine{
             interaction_handler,
             indicator_handler,
             timed_event_handler,
-            registry_sender: get_async_sender(ConnectionType::StrategyRegistry).await.unwrap()
+            registry_sender: get_async_sender(ConnectionType::StrategyRegistry).await.unwrap(),
+            registry_receiver: get_async_reader(ConnectionType::StrategyRegistry).await.unwrap(),
+            last_time: RwLock::new(Default::default())
         }
     }
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
@@ -77,8 +84,21 @@ impl Engine{
     pub async fn launch(self: Self) {
         task::spawn(async move {
             println!("Engine: Initializing the strategy...");
-            let strategy_register_event = EventRequest::RegisterStrategy(self.owner_id.clone(), self.start_state.start_date.to_string()).to_bytes();
+            let strategy_register_event = RegistrationRequest::Strategy(self.owner_id.clone()).to_bytes();
             self.registry_sender.send(&strategy_register_event).await.unwrap();
+            match self.registry_receiver.lock().await.receive().await {
+                Some(response) => {
+                    let registration_response = RegistrationResponse::from_bytes(&response).unwrap();
+                    match registration_response {
+                        RegistrationResponse::Success => {}
+                        RegistrationResponse::Error(e) => panic!("Failed to register strategy: {:?}", e)
+                    }
+                }
+                None => {
+                    panic!("No response from the strategy registry")
+                }
+            }
+            
             let mut subscriptions = self.subscription_handler.primary_subscriptions().await;
             //wait until we have at least one subscription
             while subscriptions.is_empty() {
@@ -111,6 +131,30 @@ impl Engine{
                     println!("Engine: Error forwarding event: {:?}", e);
                 }
             }
+            
+            let sender = self.registry_sender.clone();
+            let shutdown_slice_event = StrategyRequest::StrategyEventUpdates(self.last_time.read().await.timestamp(), vec![end_event]);
+            match sender.send(&shutdown_slice_event.to_bytes()).await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
+            
+            let shutdown_warning_event = StrategyRequest::ShutDown(self.last_time.read().await.timestamp());
+            self.registry_sender.send(&shutdown_warning_event.to_bytes()).await.unwrap();
+            match self.registry_receiver.lock().await.receive().await {
+                Some(response) => {
+                    let shutdown_response = StrategyResponse::from_bytes(&response).unwrap();
+                    match shutdown_response {
+                        StrategyResponse::ShutDownAcknowledged(owner_id) => {
+                            println!("Registry Shut Down Acknowledged {}", owner_id)
+                        }
+                        _ => {}
+                    }
+                }
+                None => {
+                    panic!("No response from the strategy registry")
+                }
+            }
         });
     }
 
@@ -135,7 +179,7 @@ impl Engine{
         };
 
         // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
-        let month_years = generate_file_dates(self.start_state.start_date - self.start_state.warmup_duration , start_time.clone());
+        let month_years = generate_file_dates(self.start_state.start_date - self.start_state.warmup_duration, start_time.clone());
         self.historical_data_feed(month_years, start_time.clone(), false).await;
 
         self.subscription_handler.set_warmup_complete().await;
@@ -150,7 +194,7 @@ impl Engine{
                 println!("Engine: Error forwarding event: {:?}", e);
             }
         }
-        let event_bytes = EventRequest::StrategyEventUpdates(warmup_complete_event).to_bytes();
+        let event_bytes = StrategyRequest::StrategyEventUpdates(self.last_time.read().await.timestamp(), warmup_complete_event).to_bytes();
         let sender = self.registry_sender.clone();
         task::spawn(async move {
             match sender.send(&event_bytes).await {
@@ -189,6 +233,7 @@ impl Engine{
     async fn historical_data_feed(&self, month_years: BTreeMap<i32, DateTime<Utc>>, end_time: DateTime<Utc>, warm_up_completed: bool) {
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
+            *self.last_time.write().await = start.clone();
             self.market_event_handler.update_time(start.clone()).await;
             let mut last_time = start.clone();
             'month_loop: loop {
@@ -206,6 +251,7 @@ impl Engine{
                     let time = last_time + self.start_state.buffer_resolution;
 
                     if time > end_time {
+                        *self.last_time.write().await = last_time.clone();
                         break 'main_loop
                     }
                     if time.month() != start.month() {
@@ -213,7 +259,7 @@ impl Engine{
                     }
 
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
-                    if self.subscriptions_updated(last_time).await {
+                    if self.subscriptions_updated(last_time.clone()).await {
                         end_month = false;
                         break 'time_loop
                     }
@@ -235,6 +281,7 @@ impl Engine{
                         } 
                         if !strategy_event_slice.is_empty() {
                             if !self.send_and_continue(time.clone(), strategy_event_slice, warm_up_completed).await {
+                                *self.last_time.write().await = last_time.clone();
                                 break 'main_loop
                             }
                         }
@@ -269,6 +316,7 @@ impl Engine{
                     strategy_event_slice.push(StrategyEvent::TimeSlice(self.owner_id.clone(), strategy_time_slice));
                     
                     if !self.send_and_continue(time.clone(), strategy_event_slice, warm_up_completed).await {
+                        *self.last_time.write().await = last_time.clone();
                         break 'main_loop
                     }
                    
@@ -288,6 +336,7 @@ impl Engine{
                     break 'month_loop
                 }
             }
+            *self.last_time.write().await = last_time.clone();
         }
     }
 
@@ -302,7 +351,7 @@ impl Engine{
                     println!("Error forwarding event: {:?}", e);
                 }
             }
-            let event_bytes = EventRequest::StrategyEventUpdates(strategy_event).to_bytes();
+            let event_bytes = StrategyRequest::StrategyEventUpdates(last_time.timestamp(), strategy_event).to_bytes();
             let sender = self.registry_sender.clone();
             task::spawn(async move {
                 match sender.send(&event_bytes).await {
@@ -323,7 +372,7 @@ impl Engine{
                 println!("Error forwarding event: {:?}", e);
             }
         }
-        let event_bytes = EventRequest::StrategyEventUpdates(strategy_event_slice).to_bytes();
+        let event_bytes = StrategyRequest::StrategyEventUpdates(time.timestamp(), strategy_event_slice).to_bytes();
         let sender = self.registry_sender.clone();
         task::spawn(async move {
             match sender.send(&event_bytes).await {
@@ -336,10 +385,11 @@ impl Engine{
             if self.interaction_handler.process_controls().await == true {
                 return false
             }
-        }
-        match self.interaction_handler.replay_delay_ms().await {
-            Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
-            None => {},
+
+            match self.interaction_handler.replay_delay_ms().await {
+                Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
+                None => {},
+            }
         }
         self.notify.notified().await;
         true

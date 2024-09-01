@@ -13,7 +13,7 @@ use crate::servers::communications_async::{ExternalReceiver, InternalReceiver, S
 use crate::servers::init_clients::{create_api_client, create_async_api_client};
 use crate::servers::settings::client_settings::{get_settings_map};
 use crate::servers::communications_sync::{InternalCommunicator, SecureExternalCommunicator, SynchronousCommunicator};
-use crate::servers::registry_request_handlers::{registry_manage_async_requests, registry_manage_sequential_requests};
+use crate::servers::registry_request_handlers::{registry_manage_async_requests};
 use crate::servers::request_handlers::{data_server_manage_async_requests, data_server_manage_sequential_requests};
 use crate::standardized_types::data_server_messaging::FundForgeError;
 
@@ -174,11 +174,6 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
             let async_receiver = SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
             async_receivers.insert(ConnectionType::Default, Arc::new(Mutex::new(async_receiver)));
 
-            // setup sync and async servers for registry
-            let communicator = Arc::new(SynchronousCommunicator::Channels(InternalCommunicator::new(1000, 1000)));
-            registry_manage_sequential_requests(communicator.clone()).await;
-            communicators.insert(ConnectionType::StrategyRegistry, communicator);
-
             // sender simulates sending to a server, receiver simulates the server listener
             let (server_sender, server_receiver) = mpsc::channel(1000);
             // sender simulates the servers sender, receiver simulates the clients listener
@@ -202,9 +197,11 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
             // for each connection type specified in our server_settings.toml we will establish a connection
             for (connection_type, settings) in settings_guard.iter() {
                 //setup sync client
-                let client = create_api_client(settings).await.unwrap();
-                let communicator = Arc::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Mutex::new(client))));
-                SYNCHRONOUS_COMMUNICATORS.write().await.insert(connection_type.clone(), communicator);
+                if connection_type != &ConnectionType::StrategyRegistry {
+                    let client = create_api_client(settings).await.unwrap();
+                    let communicator = Arc::new(SynchronousCommunicator::TlsConnections(SecureExternalCommunicator::new(Mutex::new(client))));
+                    SYNCHRONOUS_COMMUNICATORS.write().await.insert(connection_type.clone(), communicator);
+                }
 
                 // set up async client
                 let async_client = match create_async_api_client(&settings).await {

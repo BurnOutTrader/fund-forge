@@ -142,7 +142,8 @@ impl HeikinAshiConsolidator
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
         if let Some(current_data) = self.current_data.as_mut() {
             if time >= current_data.time_created_utc() {
-                let return_data = current_data.clone();
+                let mut return_data = current_data.clone();
+                return_data.set_is_closed(true);
                 self.current_data = None;
                 return vec![return_data];
             }

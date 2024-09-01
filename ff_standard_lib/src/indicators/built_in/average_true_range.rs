@@ -1,6 +1,8 @@
+use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use ahash::AHashMap;
+use ff_lightweight_charts::lwc_wrappers::primitives::Color;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -8,7 +10,7 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::helpers::decimal_calculators::{round_to_tick_size};
 use crate::indicators::indicators_trait::{IndicatorName, Indicators};
-use crate::indicators::values::IndicatorValues;
+use crate::indicators::values::{IndicatorValue, IndicatorValues};
 
 pub struct AverageTrueRange {
     name: IndicatorName,
@@ -17,6 +19,7 @@ pub struct AverageTrueRange {
     base_data_history: RollingWindow<BaseDataEnum>,
     is_ready: bool,
     tick_size: f64,
+    plot_color: Option<Color>
 }
 
 impl Display for AverageTrueRange {
@@ -30,7 +33,7 @@ impl Display for AverageTrueRange {
 }
 
 impl AverageTrueRange {
-    pub async fn new(name: IndicatorName, subscription: DataSubscription, history_to_retain: u64, period: u64) -> Self {
+    pub async fn new(name: IndicatorName, subscription: DataSubscription, history_to_retain: u64, period: u64, plot_color: Option<Color>) -> Self {
         let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.clone()).await.unwrap();
         let atr = AverageTrueRange {
             name,
@@ -39,6 +42,7 @@ impl AverageTrueRange {
             base_data_history: RollingWindow::new(period),
             is_ready: false,
             tick_size,
+            plot_color
         };
         atr
     }
@@ -99,12 +103,14 @@ impl Indicators for AverageTrueRange {
             return None
         }
 
-        let mut plots = AHashMap::new();
-        plots.insert("atr".to_string(), atr);
-        let result = IndicatorValues::new(self.name(), self.subscription(), plots, base_data.time_created_utc());
-        self.history.add(result.clone());
+        let mut plots =  BTreeMap::new();
+        let name = "atr".to_string();
+        plots.insert(name, IndicatorValue::new("atr".to_string(), atr, self.plot_color.clone()));
+        let values = IndicatorValues::new(self.name.clone(), self.subscription.clone(), plots, Default::default());
+        
+        self.history.add(values.clone());
 
-        Some(result)
+        Some(values)
     }
 
     fn subscription(&self) -> DataSubscription {

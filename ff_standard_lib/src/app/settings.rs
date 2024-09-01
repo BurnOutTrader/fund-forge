@@ -1,4 +1,3 @@
-use iced::Color;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
@@ -31,10 +30,6 @@ pub struct ColorTemplate {
 }
 
 impl ColorTemplate {
-    pub fn iced_color(&self) -> Color {
-        Color::from_rgba(self.r, self.g, self.b, self.a)
-    }
-
     pub fn new(r: f32, g: f32, b: f32, a: f32) -> ColorTemplate {
         ColorTemplate { r, g, b, a }
     }
@@ -72,13 +67,6 @@ impl DisplaySettings {
             ColorTheme::Dark => DisplaySettings::dark_mode_settings(),
             ColorTheme::Light => DisplaySettings::light_mode_settings(),
         }
-    }
-
-    pub fn fade_color(&self) -> Color {
-        Color::from_rgba(self.color.r, self.color.g, self.color.b, 0.3)
-    }
-    pub fn color(&self) -> Color {
-        self.color.iced_color()
     }
 
     pub fn light_mode_settings() -> DisplaySettings {
@@ -145,10 +133,6 @@ impl TextSettings {
             size,
             show,
         }
-    }
-
-    pub fn color(&self) -> Color {
-        self.color.iced_color()
     }
 
     pub fn light_mode_settings() ->TextSettings {

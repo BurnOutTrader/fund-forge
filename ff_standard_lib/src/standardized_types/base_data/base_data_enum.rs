@@ -1,3 +1,4 @@
+use ff_lightweight_charts::lwc_wrappers::horz_scale::single_value_data_enum::SingleValueData;
 use std::collections::{BTreeMap};
 use std::fmt::{Display, Error, Formatter};
 use std::fs::File;
@@ -7,6 +8,10 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use chrono::{DateTime, FixedOffset, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
+use ff_lightweight_charts::lwc_wrappers::horz_scale::HorizontalScaleItem;
+use ff_lightweight_charts::lwc_wrappers::horz_scale::Ohlc_enum::{CandleStickData, OhlcData};
+use ff_lightweight_charts::lwc_wrappers::horz_scale::single_value_data_enum::LineData;
+use ff_lightweight_charts::lwc_wrappers::primitives::Color;
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rkyv::ser::Serializer;
 use rkyv::ser::serializers::AllocSerializer;
@@ -200,6 +205,18 @@ impl BaseDataEnum {
             _ => true,
         }
     }
+
+    /// Converts the data into a lightweight charts compatible Horizontal Scale Item (X scale)
+    fn to_horizontal_scale_item(&self, color: Option<Color>) -> Vec<HorizontalScaleItem> {
+        match self {
+            BaseDataEnum::TradePrice(tp) => vec![HorizontalScaleItem::SingleValueData(SingleValueData::LineData(LineData::new( tp.time_utc().timestamp(), color, tp.price)))],
+            BaseDataEnum::Candle(c) => vec![HorizontalScaleItem::OhlcData(OhlcData::CandleStickData(CandleStickData::new(c.time_utc().timestamp(), c.open, c.high, c.low, c.close, None, None, None)))],
+            BaseDataEnum::QuoteBar(qb) => vec![HorizontalScaleItem::OhlcData(OhlcData::CandleStickData(CandleStickData::new(qb.time_utc().timestamp(), qb.bid_open, qb.bid_high, qb.bid_low, qb.bid_close, None, None, None)))],
+            BaseDataEnum::Tick(t) => vec![HorizontalScaleItem::SingleValueData(SingleValueData::LineData(LineData::new( t.time_utc().timestamp(), color, t.price)))],
+            BaseDataEnum::Quote(q) => vec![HorizontalScaleItem::SingleValueData(SingleValueData::LineData(LineData::new( q.time_utc().timestamp(), color.clone(), q.bid))), HorizontalScaleItem::SingleValueData(SingleValueData::LineData(LineData::new( q.time_utc().timestamp(), color, q.ask)))],
+            BaseDataEnum::Fundamental(f) => vec![HorizontalScaleItem::SingleValueData(SingleValueData::LineData(LineData::new( f.time_utc().timestamp(), color, f.value.unwrap_or_default())))]
+        }
+    }
     
     /// Links `BaseDataEnum` to a `BaseDataType`
     pub fn base_data_type(&self) -> BaseDataType {
@@ -213,7 +230,7 @@ impl BaseDataEnum {
         }
     }
     
-    pub fn set_is_closed(&mut self, is_closed: bool) {
+    pub(crate) fn set_is_closed(&mut self, is_closed: bool) {
         match self {
             BaseDataEnum::Candle(candle) => candle.is_closed = is_closed,
             BaseDataEnum::QuoteBar(bar) => bar.is_closed = is_closed,
