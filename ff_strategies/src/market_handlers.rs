@@ -144,7 +144,7 @@ impl HistoricalMarketHandler {
         for base_data in time_slice {
             //println!("Base data: {:?}", base_data.time_created_utc());
             match base_data {
-                BaseDataEnum::TradePrice(ref price) => {
+                BaseDataEnum::Price(ref price) => {
                     let mut last_price = self.last_price.write().await;
                     last_price.insert(price.symbol.clone(), price.price);
                 }
@@ -277,8 +277,8 @@ impl HistoricalMarketHandler {
                     panic!("TrailingGuaranteedStopLoss orders not supported in backtest")
                 }
                 OrderType::EnterLong => {
-                    if ledger.is_short(&order.symbol).await {
-                        ledger.exit_position_paper(&order.symbol).await;
+                    if ledger.is_short(&order.symbol.name).await {
+                        ledger.exit_position_paper(&order.symbol.name).await;
                     }
                     let market_price = self
                         .get_market_price(&OrderSide::Buy, &order.symbol)
@@ -286,7 +286,7 @@ impl HistoricalMarketHandler {
                         .unwrap();
                     match ledger
                         .enter_long_paper(
-                            order.symbol.clone(),
+                            &order.symbol.name,
                             order.quantity_ordered.clone(),
                             market_price,
                         )
@@ -312,8 +312,8 @@ impl HistoricalMarketHandler {
                     }
                 }
                 OrderType::EnterShort => {
-                    if ledger.is_long(&order.symbol).await {
-                        ledger.exit_position_paper(&order.symbol).await;
+                    if ledger.is_long(&order.symbol.name).await {
+                        ledger.exit_position_paper(&order.symbol.name).await;
                     }
                     let market_price = self
                         .get_market_price(&OrderSide::Buy, &order.symbol)
@@ -321,7 +321,7 @@ impl HistoricalMarketHandler {
                         .unwrap();
                     match ledger
                         .enter_short_paper(
-                            order.symbol.clone(),
+                            order.symbol.name.clone(),
                             order.quantity_ordered.clone(),
                             market_price,
                         )
@@ -347,7 +347,7 @@ impl HistoricalMarketHandler {
                     }
                 }
                 OrderType::ExitLong => {
-                    if ledger.is_long(&order.symbol).await {
+                    if ledger.is_long(&order.symbol.name).await {
                         order.state = OrderState::Filled;
                         let market_price = self
                             .get_market_price(&OrderSide::Buy, &order.symbol)
@@ -369,7 +369,7 @@ impl HistoricalMarketHandler {
                     }
                 }
                 OrderType::ExitShort => {
-                    if ledger.is_short(&order.symbol).await {
+                    if ledger.is_short(&order.symbol.name).await {
                         order.state = OrderState::Filled;
                         let market_price = self
                             .get_market_price(&OrderSide::Buy, &order.symbol)

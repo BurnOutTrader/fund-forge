@@ -3,12 +3,13 @@ use crate::apis::brokerage::Brokerage;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::PositionSide;
-use crate::standardized_types::subscriptions::Symbol;
+use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
 use ahash::AHashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use tokio::sync::RwLock;
+use crate::standardized_types::Price;
 
 // B
 pub type AccountId = String;
@@ -40,8 +41,9 @@ pub struct Ledger {
     pub cash_available: f64,
     pub currency: AccountCurrency,
     pub cash_used: f64,
-    pub positions: RwLock<AHashMap<Symbol, Position>>,
-    pub positions_closed: RwLock<AHashMap<Symbol, Position>>,
+    pub positions: RwLock<AHashMap<SymbolName, Position>>,
+    pub positions_closed: RwLock<AHashMap<SymbolName, Position>>,
+    pub positions_counter: RwLock<AHashMap<SymbolName, u64>>,
 }
 
 impl Ledger {
@@ -51,6 +53,7 @@ impl Ledger {
             .into_iter()
             .map(|position| (position.symbol_name.clone(), position))
             .collect();
+
         let ledger = Self {
             account_id: account_info.account_id,
             brokerage: account_info.brokerage,
@@ -60,6 +63,7 @@ impl Ledger {
             cash_used: account_info.cash_used,
             positions: RwLock::new(positions),
             positions_closed: RwLock::new(AHashMap::new()),
+            positions_counter: Default::default(),
         };
         ledger
     }
@@ -79,11 +83,25 @@ impl Ledger {
             cash_used: 0.0,
             positions: RwLock::new(AHashMap::new()),
             positions_closed: RwLock::new(AHashMap::new()),
+            positions_counter: Default::default(),
         };
         account
     }
 
-    pub async fn exit_position_paper(&mut self, symbol_name: &Symbol) {
+    pub async fn generate_id(&self, symbol_name: &SymbolName) -> PositionId {
+        let mut positions_count = self.positions_counter.write().await;
+        let symbol_positions_count = positions_count.get_mut(symbol_name);
+        let id = if let Some(mut count) = symbol_positions_count {
+            *count += 1;
+            count.clone()
+        } else {
+            positions_count.insert(symbol_name.clone(), 1);
+            1
+        };
+        format!("{}-{}", symbol_name, id)
+    }
+
+    pub async fn exit_position_paper(&mut self, symbol_name: &SymbolName) {
         let mut positions = self.positions.write().await;
         if !positions.contains_key(symbol_name) {
             return;
@@ -91,7 +109,7 @@ impl Ledger {
         let position = positions.remove(symbol_name).unwrap();
         let margin_freed = self
             .brokerage
-            .margin_required(&symbol_name, position.quantity)
+            .margin_required(symbol_name.clone(), position.quantity)
             .await;
         self.cash_available += margin_freed;
         self.cash_used -= margin_freed;
@@ -103,7 +121,7 @@ impl Ledger {
 
     pub async fn enter_short_paper(
         &mut self,
-        symbol_name: Symbol,
+        symbol_name: SymbolName,
         quantity: u64,
         price: f64,
     ) -> Result<(), FundForgeError> {
@@ -113,18 +131,21 @@ impl Ledger {
                 // we will need to modify our average price and quantity
             }
         }
-        let margin_required = self.brokerage.margin_required(&symbol_name, quantity).await;
+        let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
         if self.cash_available < margin_required {
             return Err(FundForgeError::ClientSideErrorDebug(
                 "Insufficient funds".to_string(),
             ));
         }
+
+
         let position = Position::enter(
             symbol_name.clone(),
             self.brokerage.clone(),
             PositionSide::Long,
             quantity,
             price,
+            self.generate_id(&symbol_name).await
         );
         positions.insert(symbol_name.clone(), position);
         self.cash_available -= margin_required;
@@ -134,17 +155,17 @@ impl Ledger {
 
     pub async fn enter_long_paper(
         &mut self,
-        symbol_name: Symbol,
+        symbol_name: &SymbolName,
         quantity: u64,
         price: f64,
     ) -> Result<(), FundForgeError> {
         let mut positions = self.positions.write().await;
-        if let Some(position) = positions.get(&symbol_name) {
+        if let Some(position) = positions.get(symbol_name) {
             if position.side == PositionSide::Long {
                 // we will need to modify our average price and quantity
             }
         }
-        let margin_required = self.brokerage.margin_required(&symbol_name, quantity).await;
+        let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
         if self.cash_available < margin_required {
             return Err(FundForgeError::ClientSideErrorDebug(
                 "Insufficient funds".to_string(),
@@ -156,6 +177,7 @@ impl Ledger {
             PositionSide::Long,
             quantity,
             price,
+            self.generate_id(symbol_name).await
         );
         positions.insert(symbol_name.clone(), position);
         self.cash_available -= margin_required;
@@ -170,9 +192,9 @@ impl Ledger {
         }
     }
 
-    pub async fn is_long(&self, symbol: &Symbol) -> bool {
+    pub async fn is_long(&self, symbol_name: &SymbolName) -> bool {
         let positions = self.positions.read().await;
-        if let Some(position) = positions.get(symbol) {
+        if let Some(position) = positions.get(symbol_name) {
             if position.side == PositionSide::Long {
                 return true;
             }
@@ -180,9 +202,9 @@ impl Ledger {
         false
     }
 
-    pub async fn is_short(&self, symbol: &Symbol) -> bool {
+    pub async fn is_short(&self, symbol_name: &SymbolName) -> bool {
         let positions = self.positions.read().await;
-        if let Some(position) = positions.get(symbol) {
+        if let Some(position) = positions.get(symbol_name) {
             if position.side == PositionSide::Short {
                 return true;
             }
@@ -190,9 +212,9 @@ impl Ledger {
         false
     }
 
-    pub async fn is_flat(&self, symbol: &Symbol) -> bool {
+    pub async fn is_flat(&self, symbol_name: &SymbolName) -> bool {
         let positions = self.positions.read().await;
-        if let Some(_) = positions.get(symbol) {
+        if let Some(_) = positions.get(symbol_name) {
             false
         } else {
             true
@@ -207,28 +229,31 @@ impl Ledger {
     }
 }
 
+pub type PositionId = String;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct Position {
-    pub symbol_name: Symbol,
+    pub symbol_name: SymbolName,
     pub brokerage: Brokerage,
     pub side: PositionSide,
     pub quantity: u64,
-    pub average_price: f64,
+    pub average_price: Price,
     pub pnl_raw: Option<f64>,
-    pub highest_recoded_price: Option<f64>,
-    pub lowest_recoded_price: Option<f64>,
+    pub highest_recoded_price: Price,
+    pub lowest_recoded_price: Price,
     pub is_closed: bool,
+    pub id: PositionId
 }
 
 impl Position {
     pub fn enter(
-        symbol_name: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         side: PositionSide,
         quantity: u64,
         average_price: f64,
+        id: PositionId
     ) -> Self {
         Self {
             symbol_name,
@@ -237,9 +262,10 @@ impl Position {
             quantity,
             average_price,
             pnl_raw: None,
-            highest_recoded_price: None,
-            lowest_recoded_price: None,
+            highest_recoded_price: average_price,
+            lowest_recoded_price: average_price,
             is_closed: false,
+            id,
         }
     }
 
@@ -248,92 +274,44 @@ impl Position {
             return;
         }
         for base_data in time_slice {
-            if &self.symbol_name != base_data.symbol() {
+            if self.symbol_name != base_data.symbol().name {
                 continue;
             }
             match base_data {
-                BaseDataEnum::TradePrice(price) => {
-                    if let Some(highest_recoded_price) = self.highest_recoded_price {
-                        if price.price > highest_recoded_price {
-                            self.highest_recoded_price = Some(price.price);
-                        }
-                    } else {
-                        self.highest_recoded_price = Some(price.price);
-                    }
-                    if let Some(lowest_recoded_price) = self.lowest_recoded_price {
-                        if price.price < lowest_recoded_price {
-                            self.lowest_recoded_price = Some(price.price);
-                        }
-                    } else {
-                        self.lowest_recoded_price = Some(price.price);
-                    }
+                BaseDataEnum::Price(price) => {
+                    self.highest_recoded_price = self.highest_recoded_price.max(price.price);
+                    self.lowest_recoded_price = self.lowest_recoded_price.min(price.price);
                 }
                 BaseDataEnum::Candle(candle) => {
-                    if let Some(highest_recoded_price) = self.highest_recoded_price {
-                        if candle.high > highest_recoded_price {
-                            self.highest_recoded_price = Some(candle.high);
-                        }
-                    } else {
-                        self.highest_recoded_price = Some(candle.high);
-                    }
-
-                    if let Some(lowest_recoded_price) = self.lowest_recoded_price {
-                        if candle.low < lowest_recoded_price {
-                            self.lowest_recoded_price = Some(candle.low);
-                        }
-                    } else {
-                        self.lowest_recoded_price = Some(candle.low);
-                    }
+                    self.highest_recoded_price = self.highest_recoded_price.max(candle.high);
+                    self.lowest_recoded_price = self.lowest_recoded_price.min(candle.low);
                 }
                 BaseDataEnum::QuoteBar(bar) => {
-                    if let Some(highest_recoded_price) = self.highest_recoded_price {
-                        if bar.ask_high > highest_recoded_price {
-                            self.highest_recoded_price = Some(bar.ask_high);
+                    match self.side {
+                        PositionSide::Long => {
+                            self.highest_recoded_price = self.highest_recoded_price.max(bar.ask_high);
+                            self.lowest_recoded_price = self.lowest_recoded_price.min(bar.ask_low);
                         }
-                    } else {
-                        self.highest_recoded_price = Some(bar.ask_high);
-                    }
-
-                    if let Some(lowest_recoded_price) = self.lowest_recoded_price {
-                        if bar.bid_low < lowest_recoded_price {
-                            self.lowest_recoded_price = Some(bar.bid_low);
+                        PositionSide::Short => {
+                            self.highest_recoded_price = self.highest_recoded_price.max(bar.bid_high);
+                            self.lowest_recoded_price = self.lowest_recoded_price.min(bar.bid_low);
                         }
-                    } else {
-                        self.lowest_recoded_price = Some(bar.bid_low);
                     }
                 }
                 BaseDataEnum::Tick(tick) => {
-                    if let Some(highest_recoded_price) = self.highest_recoded_price {
-                        if tick.price > highest_recoded_price {
-                            self.highest_recoded_price = Some(tick.price);
-                        }
-                    } else {
-                        self.highest_recoded_price = Some(tick.price);
-                    }
-
-                    if let Some(lowest_recoded_price) = self.lowest_recoded_price {
-                        if tick.price < lowest_recoded_price {
-                            self.lowest_recoded_price = Some(tick.price);
-                        }
-                    } else {
-                        self.lowest_recoded_price = Some(tick.price);
-                    }
+                    self.highest_recoded_price = self.highest_recoded_price.max(tick.price);
+                    self.lowest_recoded_price = self.lowest_recoded_price.min(tick.price);
                 }
                 BaseDataEnum::Quote(quote) => {
-                    if let Some(highest_recoded_price) = self.highest_recoded_price {
-                        if quote.ask > highest_recoded_price {
-                            self.highest_recoded_price = Some(quote.ask);
+                    match self.side {
+                        PositionSide::Long => {
+                            self.highest_recoded_price = self.highest_recoded_price.max(quote.ask);
+                            self.lowest_recoded_price = self.lowest_recoded_price.min(quote.ask);
                         }
-                    } else {
-                        self.highest_recoded_price = Some(quote.ask);
-                    }
-
-                    if let Some(lowest_recoded_price) = self.lowest_recoded_price {
-                        if quote.bid < lowest_recoded_price {
-                            self.lowest_recoded_price = Some(quote.bid);
+                        PositionSide::Short => {
+                            self.highest_recoded_price = self.highest_recoded_price.max(quote.bid);
+                            self.lowest_recoded_price = self.lowest_recoded_price.min(quote.bid);
                         }
-                    } else {
-                        self.lowest_recoded_price = Some(quote.bid);
                     }
                 }
                 BaseDataEnum::Fundamental(_) => (),

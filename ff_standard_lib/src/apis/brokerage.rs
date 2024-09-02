@@ -2,7 +2,7 @@ use crate::apis::brokerage::server_responses::BrokerApiResponse;
 use crate::apis::test_vendor_impl::api_client::get_test_api_client;
 use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, Ledger};
 use crate::standardized_types::data_server_messaging::FundForgeError;
-use crate::standardized_types::subscriptions::Symbol;
+use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
@@ -44,7 +44,7 @@ pub enum Brokerage {
 }
 
 impl Brokerage {
-    pub async fn margin_required(&self, _symbol_name: &Symbol, quantity: u64) -> f64 {
+    pub async fn margin_required(&self, symbol_name: SymbolName, quantity: u64) -> f64 { //todo make this [art of the trait
         match self {
             Brokerage::Test => quantity as f64 * 2500.0,
         }

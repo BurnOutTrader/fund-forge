@@ -80,7 +80,7 @@ impl HeikinAshiConsolidator {
                     ha_high - ha_low,
                 )
             }
-            BaseDataEnum::TradePrice(price) => {
+            BaseDataEnum::Price(price) => {
                 if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
                     self.previous_ha_close = price.price;
                     self.previous_ha_open = price.price;
@@ -167,6 +167,35 @@ impl HeikinAshiConsolidator {
                     ha_high - ha_low,
                 )
             }
+            BaseDataEnum::Quote(quote) => {
+                if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
+                    self.previous_ha_close = quote.bid;
+                    self.previous_ha_open = quote.bid;
+                }
+                let ha_close = quote.bid;
+                let ha_open = round_to_tick_size(
+                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    self.tick_size,
+                );
+                let ha_high = ha_close.max(ha_open);
+                let ha_low = ha_close.min(ha_open);
+
+                // Update previous Heikin Ashi values for next bar
+                self.previous_ha_close = ha_close;
+                self.previous_ha_open = ha_open;
+                let time = open_time(&self.subscription, new_data.time_utc());
+
+                self.candle_from_base_data(
+                    ha_open,
+                    ha_high,
+                    ha_low,
+                    ha_close,
+                    0.0,
+                    time.to_string(),
+                    false,
+                    ha_high - ha_low,
+                )
+            }
             _ => panic!("Invalid base data type for Heikin Ashi calculation"),
         }
     }
@@ -177,7 +206,7 @@ impl HeikinAshiConsolidator {
         subscription: DataSubscription,
         history_to_retain: u64,
     ) -> Result<HeikinAshiConsolidator, ConsolidatorError> {
-        if subscription.base_data_type != BaseDataType::Candles {
+        if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(ConsolidatorError {
                 message: format!(
                     "{} is an Invalid base data type for HeikinAshiConsolidator",
@@ -268,7 +297,7 @@ impl HeikinAshiConsolidator {
                         candle.volume += new_candle.volume;
                         return vec![BaseDataEnum::Candle(candle.clone())];
                     }
-                    BaseDataEnum::TradePrice(price) => {
+                    BaseDataEnum::Price(price) => {
                         candle.high = price.price.max(candle.high);
                         candle.low = price.price.min(candle.low);
                         candle.close = price.price;
@@ -283,6 +312,22 @@ impl HeikinAshiConsolidator {
                         candle.range =
                             round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                         candle.volume += bar.volume;
+                        return vec![BaseDataEnum::Candle(candle.clone())];
+                    }
+                    BaseDataEnum::Quote(quote) => {
+                        candle.high = candle.high.max(quote.bid);
+                        candle.low = candle.low.min(quote.bid);
+                        candle.close = quote.bid;
+                        candle.range =
+                            round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                        return vec![BaseDataEnum::Candle(candle.clone())];
+                    }
+                    BaseDataEnum::Tick(tick) => {
+                        candle.high = candle.high.max(tick.price);
+                        candle.low = candle.low.min(tick.price);
+                        candle.close = tick.price;
+                        candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                            round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                         return vec![BaseDataEnum::Candle(candle.clone())];
                     }
                     _ => panic!(

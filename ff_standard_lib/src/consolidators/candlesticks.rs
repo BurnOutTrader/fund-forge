@@ -66,7 +66,7 @@ impl CandleStickConsolidator {
                         candle.volume += new_candle.volume;
                         return vec![BaseDataEnum::Candle(candle.clone())];
                     }
-                    BaseDataEnum::TradePrice(price) => {
+                    BaseDataEnum::Price(price) => {
                         candle.high = candle.high.max(price.price);
                         candle.low = candle.low.min(price.price);
                         candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size);
@@ -200,7 +200,7 @@ impl CandleStickConsolidator {
                 consolidated_candle.time = time.to_string();
                 consolidated_candle
             }
-            BaseDataEnum::TradePrice(price) => Candle::new(
+            BaseDataEnum::Price(price) => Candle::new(
                 self.subscription.symbol.clone(),
                 price.price,
                 0.0,

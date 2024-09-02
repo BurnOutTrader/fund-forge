@@ -91,7 +91,7 @@ pub enum StrategyEvent {
     /// - `i64`: A timestamp indicating when the event was created.
     DrawingToolEvents(OwnerId, DrawingToolEvent, i64),
 
-    /// Records time slices for playback, excluding backtests.
+    /// Contains strategy BaseDataEnum's as TimeSlice.
     ///
     /// # Parameters
     /// - `OwnerId`: The unique identifier of the owner (strategy).
@@ -104,6 +104,9 @@ pub enum StrategyEvent {
     WarmUpComplete(OwnerId),
 
     IndicatorEvent(OwnerId, IndicatorEvents),
+
+
+    PositionEvents(OwnerId, )
 }
 
 impl StrategyEvent {
@@ -117,6 +120,7 @@ impl StrategyEvent {
             StrategyEvent::ShutdownEvent(owner_id, _) => owner_id.clone(),
             StrategyEvent::WarmUpComplete(owner_id) => owner_id.clone(),
             StrategyEvent::IndicatorEvent(owner_id, _) => owner_id.clone(),
+            StrategyEvent::PositionEvents(owner_id) => owner_id.clone()
         }
     }
 

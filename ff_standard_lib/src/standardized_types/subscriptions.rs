@@ -9,7 +9,7 @@ use std::fmt;
 use std::fmt::{Debug, Display, Error, Formatter};
 
 pub type ExchangeCode = String;
-
+pub type SymbolName = String;
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash,
 )]
@@ -23,13 +23,13 @@ check_bytes,
 )]
 #[archive_attr(derive(Debug))]
 pub struct Symbol {
-    pub name: String,
+    pub name: SymbolName,
     pub market_type: MarketType,
     pub data_vendor: DataVendor,
 }
 
 impl Symbol {
-    pub fn new(name: String, data_vendor: DataVendor, market_type: MarketType) -> Self {
+    pub fn new(name: SymbolName, data_vendor: DataVendor, market_type: MarketType) -> Self {
         let cleaned_symbol_name = fund_forge_formatted_symbol_name(&name);
         Symbol {
             name: cleaned_symbol_name,

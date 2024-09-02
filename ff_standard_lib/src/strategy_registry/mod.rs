@@ -7,6 +7,7 @@ pub mod guis;
 pub mod handle_gui;
 pub mod handle_strategies;
 pub mod strategies;
+pub mod strategy_commands;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(compare(PartialEq), check_bytes)]

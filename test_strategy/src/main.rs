@@ -48,7 +48,7 @@ pub async fn create_test_strategy(
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
-        Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
+        Duration::days(6), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![DataSubscription::new_custom(
             "AUD-USD".to_string(),
             DataVendor::Test,
@@ -62,7 +62,7 @@ pub async fn create_test_strategy(
         None,
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
-        Some(Duration::milliseconds(300)),
+        Some(Duration::seconds(1)),
     )
     .await
 }
@@ -104,7 +104,7 @@ pub async fn on_data_received(
                 "AUD-CAD".to_string(),
                 DataVendor::Test,
                 Resolution::Minutes(15),
-                BaseDataType::Candles,
+                BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
             100,
@@ -129,8 +129,11 @@ pub async fn on_data_received(
                     'base_data_loop: for base_data in &time_slice {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
-                            BaseDataEnum::TradePrice(_) => {}
-                            BaseDataEnum::Candle(_candle) => {
+                            BaseDataEnum::Price(_) => {}
+                            BaseDataEnum::Candle(candle) => {
+                                if candle.is_closed == true {
+                                    println!("{}", candle);
+                                }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 if quotebar.is_closed == true {
@@ -233,6 +236,7 @@ pub async fn on_data_received(
 
                     // we could also get the automanaged indicator values from teh strategy at any time.
                 }
+                StrategyEvent::PositionEvents(_) => {}
             }
             notify.notify_one();
             //simulate work
