@@ -1,13 +1,11 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use ff_standard_lib::apis::vendor::DataVendor;
-use ff_standard_lib::app::settings::ColorTemplate;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
 use ff_standard_lib::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::indicators::values::IndicatorValues;
-use ff_standard_lib::lightweight_charts::primitives::Color;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -25,7 +23,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, Notify};
 use tokio::task;
-
+use ff_standard_lib::standardized_types::Color;
 /*fn defualt_broker_map() -> HashMap<DataVendor, Brokerage> {
     let mut broker_map = HashMap::new();
     broker_map.insert(DataVendor::Test, Brokerage::Test);
@@ -150,6 +148,7 @@ pub async fn on_data_received(
                         ),
                         100,
                         20,
+                        Some(Color::new(50,50,50))
                     )
                     .await,
                 );

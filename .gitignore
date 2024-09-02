@@ -6,13 +6,14 @@
 /.obsidian/core-plugins.json
 /.obsidian/core-plugins-migration.json
 /.obsidian/workspace.json
-ff_data_server/data/test/Forex/ticks/1-T/**/AUD-CAD/*.rkyv
-ff_data_server/data/test/Forex/ticks/1-T/**/AUD-USD/*.rkyv
-ff_data_server/data/test/Forex/ticks/1-T/AUD-CAD/AUD-CAD_1-T_2023-03.rkyv
-ff_data_server/data/test/Forex/ticks/1-T/AUD-USD/AUD-USD_1-T_2023-01.rkyv
-ff_data_server/data/test/Forex/ticks/1-T/AUD-USD/AUD-USD_1-T_2023-02.rkyv
-ff_data_server/data/test/Forex/ticks/1-T/AUD-USD/AUD-USD_1-T_2023-03.rkyv
-
+ff_data_server/data/test/Forex/quotes/I/AUD-USD/AUD-USD_I_2023-01.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-USD/AUD-USD_I_2023-02.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-USD/AUD-USD_I_2023-03.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-USD/AUD-USD_I_2023-04.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2023-01.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2023-02.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2023-03.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2023-04.rkyv
 
 # Added by cargo
 #
