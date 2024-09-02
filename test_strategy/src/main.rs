@@ -53,7 +53,7 @@ pub async fn create_test_strategy(
             "AUD-USD".to_string(),
             DataVendor::Test,
             Resolution::Minutes(15),
-            BaseDataType::Candles,
+            BaseDataType::QuoteBars,
             MarketType::Forex,
             CandleType::CandleStick,
         )], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
@@ -62,7 +62,7 @@ pub async fn create_test_strategy(
         None,
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
-        Some(Duration::seconds(1)),
+        Some(Duration::milliseconds(300)),
     )
     .await
 }
@@ -99,62 +99,25 @@ pub async fn on_data_received(
     notify: Arc<Notify>,
     mut event_receiver: mpsc::Receiver<EventTimeSlice>,
 ) {
-    //notify.notify_one();
-    // Spawn a new task to listen for incoming data
-    //println!("Subscriptions: {:? }", strategy.subscriptions().await);
-    //let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
-    //let aud_usd_3m = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
-
-    // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
-    let mut heikin_atr = AverageTrueRange::new(
-        IndicatorName::from("heikin_atr"),
-        DataSubscription::new_custom(
-            "AUD-USD".to_string(),
-            DataVendor::Test,
-            Resolution::Minutes(15),
-            BaseDataType::Candles,
-            MarketType::Forex,
-            CandleType::CandleStick,
-        ),
-        100,
-        14,
-        Some(Color::new(54, 54, 54)),
-    )
-    .await; //todo having color isn't decoupled
-    let mut heikin_atr_history: RollingWindow<IndicatorValues> = RollingWindow::new(100);
+    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
+        AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new(
+                "AUD-CAD".to_string(),
+                DataVendor::Test,
+                Resolution::Minutes(15),
+                BaseDataType::Candles,
+                MarketType::Forex,
+            ),
+            100,
+            20,
+            Some(Color::new(50,50,50))
+        )
+            .await,
+    );
+    strategy.indicator_subscribe(heikin_atr_20).await;
 
     let mut warmup_complete = false;
     let mut count = 0;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        //println!("{}... time local {}", count, strategy.time_local().await);
-        //println!("{}... time utc {}", count, strategy.time_utc().await);
-        if warmup_complete {
-            count += 1;
-            if count == 10 {
-                /*  let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(3), BaseDataType::Candles, MarketType::Forex), 100, 20).await);
-                strategy.indicator_subscribe(heikin_atr_20).await;*/
-                //todo subscribing after launch causes deadlock in multimachine mode
-                //strategy.subscriptions_update(vec![aud_usd_3m.clone()],100).await;
-                // let's make another indicator to be handled by the IndicatorHandler, we need to wrap this as an indicator enum variat of the same name.
-                let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
-                    AverageTrueRange::new(
-                        IndicatorName::from("heikin_atr_20"),
-                        DataSubscription::new(
-                            "AUD-CAD".to_string(),
-                            DataVendor::Test,
-                            Resolution::Minutes(15),
-                            BaseDataType::Candles,
-                            MarketType::Forex,
-                        ),
-                        100,
-                        20,
-                        Some(Color::new(50,50,50))
-                    )
-                    .await,
-                );
-                //strategy.indicator_subscribe(heikin_atr_20).await;
-            }
-        }
         for strategy_event in event_slice {
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
@@ -167,17 +130,11 @@ pub async fn on_data_received(
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::TradePrice(_) => {}
-                            BaseDataEnum::Candle(ref candle) => {
-                                /* if base_data.subscription() == aud_cad_60m && candle.is_closed {
-                                    heikin_atr.update_base_data(base_data);
-                                    if heikin_atr.is_ready() {
-                                        let atr = heikin_atr.current();
-                                        println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
-                                    }
-                                }*/
-
-                                if candle.is_closed == true {
-                                    println!("{:?}", candle); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                            BaseDataEnum::Candle(_candle) => {
+                            }
+                            BaseDataEnum::QuoteBar(quotebar) => {
+                                if quotebar.is_closed == true {
+                                    println!("{}", quotebar); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     if count > 2000 {
                                         /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
                                         println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
@@ -190,7 +147,7 @@ pub async fn on_data_received(
                                         let data_current = &strategy.bar_current(&subscription).await;
                                         println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);*/
                                     }
-                                } else if candle.is_closed == false {
+                                } else if quotebar.is_closed == false {
                                     //Todo Documents, Open bars get sent through with every tick or primary resolution update, so you can always access the open bar using lowest resolution available in the engine.
                                     //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                 }
@@ -202,7 +159,6 @@ pub async fn on_data_received(
                                  strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
                                 }*/
                             }
-                            BaseDataEnum::QuoteBar(_) => {}
                             BaseDataEnum::Tick(tick) => {
                                 if !warmup_complete {
                                     // we could manually warm up indicators etc here.

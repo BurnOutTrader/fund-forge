@@ -4,7 +4,6 @@ pub mod consolidators;
 pub mod drawing_objects;
 pub mod helpers;
 pub mod indicators;
-pub mod lightweight_charts;
 pub mod server_connections;
 pub mod servers;
 pub mod standardized_types;

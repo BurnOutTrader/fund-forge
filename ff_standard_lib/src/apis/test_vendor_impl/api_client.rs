@@ -86,7 +86,7 @@ impl VendorApiResponse for TestVendorApi {
             ));
         }
         let data_resolution =
-            SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks);
+            SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes);
         Ok(SynchronousResponseType::Resolutions(
             vec![data_resolution],
             market_type,

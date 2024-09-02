@@ -92,6 +92,27 @@ pub enum CandleType {
     CandleStick,
 }
 
+impl CandleType {
+    pub fn from_str(string_ref: &str) -> Result<Self, String> {
+        match string_ref.to_lowercase().as_str() {
+            "Renko" => Ok(CandleType::Renko),
+            "HeikinAshi" => Ok(CandleType::HeikinAshi),
+            "CandleStick" => Ok(CandleType::CandleStick),
+            // "order books" => Ok(BaseDataType::OrderBooks),
+            _ => Err(format!("Unknown BaseDataType: {}", string_ref)),
+        }
+    }
+
+    // Convert from BaseDataType to string
+    pub fn to_string(&self) -> String {
+        match self {
+            CandleType::Renko => "Renko".to_string(),
+            CandleType::HeikinAshi => "HeikinAshi".to_string(),
+            CandleType::CandleStick => "CandleStick".to_string(),
+        }
+    }
+}
+
 impl Display for CandleType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {

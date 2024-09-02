@@ -2,7 +2,7 @@
 name = "fund-forge"
 version = "0.1.0"
 edition = "2021"
-
+authors = ["Kevin Monaghan"]
 [workspace]
 members = [
     "ff_standard_lib",

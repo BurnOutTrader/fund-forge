@@ -135,12 +135,16 @@ impl CandleStickConsolidator {
                         quote_bar.ask_low = quote_bar.ask_low.min(quote.ask);
                         quote_bar.bid_high = quote_bar.bid_high.max(quote.bid);
                         quote_bar.bid_low = quote_bar.bid_low.min(quote.bid);
+                        quote_bar.ask_close = quote.ask;
+                        quote_bar.bid_close = quote.bid;
                         quote_bar.range = round_to_tick_size(
                             quote_bar.ask_high - quote_bar.bid_low,
                             self.tick_size,
                         );
-                        quote_bar.ask_close = quote.ask;
-                        quote_bar.bid_close = quote.bid;
+                        quote_bar.spread = round_to_tick_size(
+                            quote_bar.ask_close - quote_bar.bid_close,
+                            self.tick_size,
+                        );
                         return vec![BaseDataEnum::QuoteBar(quote_bar.clone())];
                     }
                     BaseDataEnum::QuoteBar(bar) => {
@@ -148,13 +152,17 @@ impl CandleStickConsolidator {
                         quote_bar.ask_low = quote_bar.ask_low.min(bar.ask_low);
                         quote_bar.bid_high = quote_bar.bid_high.max(bar.bid_high);
                         quote_bar.bid_low = bar.bid_low.min(bar.bid_low);
+                        quote_bar.ask_close = bar.ask_close;
+                        quote_bar.bid_close = bar.bid_close;
+                        quote_bar.volume += bar.volume;
                         quote_bar.range = round_to_tick_size(
                             quote_bar.ask_high - quote_bar.bid_low,
                             self.tick_size,
                         );
-                        quote_bar.ask_close = bar.ask_close;
-                        quote_bar.bid_close = bar.bid_close;
-                        quote_bar.volume += bar.volume;
+                        quote_bar.spread = round_to_tick_size(
+                            quote_bar.ask_close - quote_bar.bid_close,
+                            self.tick_size,
+                        );
                         return vec![BaseDataEnum::QuoteBar(quote_bar.clone())];
                     }
                     _ => panic!(

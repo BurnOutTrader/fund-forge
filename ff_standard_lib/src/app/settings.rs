@@ -1,4 +1,6 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use serde_derive::{Deserialize, Serialize};
+use crate::standardized_types::Color;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -34,12 +36,12 @@ impl ColorTemplate {
 /// * `color`: The color of the chart element.
 /// * `size`: The size of the chart element.
 /// * `show`: A boolean indicating whether the chart element should be shown.
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Deserialize, Serialize)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct DisplaySettings {
     /// The color of the chart element.
-    pub color: ColorTemplate,
+    pub color: Color,
     /// The size of the chart element.
     pub size: f32,
     /// A boolean indicating whether the chart element should be shown.
@@ -55,14 +57,14 @@ impl DisplaySettings {
     }
 
     pub fn light_mode_settings() -> DisplaySettings {
-        DisplaySettings::new(ColorTemplate::new(0.01, 0.01, 0.01, 0.2), 1.0, true)
+        DisplaySettings::new(Color::new(50, 50, 50), 1.0, true)
     }
 
     pub fn dark_mode_settings() -> DisplaySettings {
-        DisplaySettings::new(ColorTemplate::new(0.24, 0.24, 0.24, 0.4), 1.0, true)
+        DisplaySettings::new(Color::new(50, 50, 50), 1.0, true)
     }
 
-    pub fn new(color: ColorTemplate, size: f32, show: bool) -> Self {
+    pub fn new(color: Color, size: f32, show: bool) -> Self {
         DisplaySettings { color, size, show }
     }
 }
@@ -71,7 +73,7 @@ impl Default for DisplaySettings {
     fn default() -> Self {
         DisplaySettings {
             show: true,
-            color: ColorTemplate::new(0.24, 0.24, 0.24, 0.4),
+            color: Color::new(50, 50, 50),
             size: 1.0,
         }
     }

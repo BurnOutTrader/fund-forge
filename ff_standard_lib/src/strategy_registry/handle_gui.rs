@@ -1,7 +1,7 @@
 use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use crate::strategy_registry::guis::{GuiRequest, RegistryGuiResponse};
 use crate::strategy_registry::handle_strategies::{
-    clear_subscriptions, get_connected_strategies, get_events_buffer, get_subscribers,
+    clear_subscriptions, get_connected_strategies, get_events_buffer,
     subscribe_to_strategy, unsubscribe_from_strategy,
 };
 use crate::strategy_registry::RegistrationResponse;
@@ -25,7 +25,7 @@ pub async fn handle_gui(
         let sender = sender.clone();
         let binding = receiver.clone();
         let mut listener = binding.lock().await;
-        'gui_loop: while let Some(data) = listener.receive().await {
+         while let Some(data) = listener.receive().await {
             let sender = sender.clone();
             tokio::spawn(async move {
                 let request = match GuiRequest::from_bytes(&data) {

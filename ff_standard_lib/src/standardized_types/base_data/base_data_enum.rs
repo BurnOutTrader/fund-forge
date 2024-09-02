@@ -2,9 +2,6 @@ use crate::apis::vendor::DataVendor;
 use crate::helpers::converters::{
     fund_forge_formatted_symbol_name, load_as_bytes, time_convert_utc_datetime_to_fixed_offset,
 };
-use crate::lightweight_charts::horz_scale::ohlc_enum::{CandleStickData, OhlcData};
-use crate::lightweight_charts::horz_scale::single_value_data_enum::{LineData, SingleValueData};
-use crate::lightweight_charts::horz_scale::HorizontalScaleItem;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
@@ -16,7 +13,6 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::standardized_types::Color;
 use crate::traits::bytes::Bytes;
 use chrono::{DateTime, FixedOffset, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
@@ -244,65 +240,6 @@ impl BaseDataEnum {
         }
     }
 
-    /// Converts the data into a lightweight charts compatible Horizontal Scale Item (X scale)
-    fn to_horizontal_scale_item(&self, color: Option<Color>) -> Vec<HorizontalScaleItem> {
-        match self {
-            BaseDataEnum::TradePrice(tp) => vec![HorizontalScaleItem::SingleValueData(
-                SingleValueData::LineData(LineData::new(
-                    tp.time_utc().timestamp(),
-                    color,
-                    tp.price,
-                )),
-            )],
-            BaseDataEnum::Candle(c) => vec![HorizontalScaleItem::OhlcData(
-                OhlcData::CandleStickData(CandleStickData::new(
-                    c.time_utc().timestamp(),
-                    c.open,
-                    c.high,
-                    c.low,
-                    c.close,
-                    None,
-                    None,
-                    None,
-                )),
-            )],
-            BaseDataEnum::QuoteBar(qb) => vec![HorizontalScaleItem::OhlcData(
-                OhlcData::CandleStickData(CandleStickData::new(
-                    qb.time_utc().timestamp(),
-                    qb.bid_open,
-                    qb.bid_high,
-                    qb.bid_low,
-                    qb.bid_close,
-                    None,
-                    None,
-                    None,
-                )),
-            )],
-            BaseDataEnum::Tick(t) => vec![HorizontalScaleItem::SingleValueData(
-                SingleValueData::LineData(LineData::new(t.time_utc().timestamp(), color, t.price)),
-            )],
-            BaseDataEnum::Quote(q) => vec![
-                HorizontalScaleItem::SingleValueData(SingleValueData::LineData(LineData::new(
-                    q.time_utc().timestamp(),
-                    color.clone(),
-                    q.bid,
-                ))),
-                HorizontalScaleItem::SingleValueData(SingleValueData::LineData(LineData::new(
-                    q.time_utc().timestamp(),
-                    color,
-                    q.ask,
-                ))),
-            ],
-            BaseDataEnum::Fundamental(f) => vec![HorizontalScaleItem::SingleValueData(
-                SingleValueData::LineData(LineData::new(
-                    f.time_utc().timestamp(),
-                    color,
-                    f.value.unwrap_or_default(),
-                )),
-            )],
-        }
-    }
-
     /// Links `BaseDataEnum` to a `BaseDataType`
     pub fn base_data_type(&self) -> BaseDataType {
         match self {
@@ -342,12 +279,12 @@ impl BaseDataEnum {
     /// Returns the formatted file name for a `PriceData` file based on the `Subscription` and file date complete with .rkyv extension.
     pub fn file_name(subscription: &DataSubscription, date_time: &DateTime<Utc>) -> String {
         let cleaned_symbol = fund_forge_formatted_symbol_name(&subscription.symbol.name);
-        return format!(
+        format!(
             "{}_{}_{}.rkyv",
             cleaned_symbol,
             subscription.resolution.to_string(),
             date_time.format("%Y-%m").to_string()
-        );
+        )
     }
 
     /// Returns the path to the folder for all `Vec<Candle>` files based on the `Subscription`.

@@ -6,6 +6,7 @@ use crate::standardized_types::base_data::tick::Tick;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde::{Deserialize, Serialize};
 use std::any::TypeId;
+use std::fmt;
 use std::fmt::Display;
 
 #[derive(
@@ -39,8 +40,8 @@ pub enum BaseDataType {
     Fundamentals = 5,
     //OrderBooks = 6,
 }
-
 impl BaseDataType {
+    // Function to get the TypeId of the associated data type
     pub fn get_type_id(&self) -> TypeId {
         match self {
             BaseDataType::Ticks => TypeId::of::<Tick>(),
@@ -52,18 +53,38 @@ impl BaseDataType {
             //BaseDataType::OrderBooks => TypeId::of::<OrderBook>(),
         }
     }
+
+    // Convert from string to BaseDataType
+    pub fn from_str(string_ref: &str) -> Result<Self, String> {
+        match string_ref.to_lowercase().as_str() {
+            "Ticks" => Ok(BaseDataType::Ticks),
+            "Quotes" => Ok(BaseDataType::Quotes),
+            "Prices" => Ok(BaseDataType::TradePrices),
+            "Quotebars" => Ok(BaseDataType::QuoteBars),
+            "Candles" => Ok(BaseDataType::Candles),
+            "Fundamentals" => Ok(BaseDataType::Fundamentals),
+            // "order books" => Ok(BaseDataType::OrderBooks),
+            _ => Err(format!("Unknown BaseDataType: {}", string_ref)),
+        }
+    }
+
+    // Convert from BaseDataType to string
+    pub fn to_string(&self) -> String {
+        match self {
+            BaseDataType::Ticks => "Ticks".to_string(),
+            BaseDataType::Quotes => "Quotes".to_string(),
+            BaseDataType::TradePrices => "Prices".to_string(),
+            BaseDataType::QuoteBars => "Quotebars".to_string(),
+            BaseDataType::Candles => "Candles".to_string(),
+            BaseDataType::Fundamentals => "Fundamentals".to_string(),
+            //BaseDataType::OrderBooks => "order books".to_string(),
+        }
+    }
 }
 
+// Implement Display for BaseDataType
 impl Display for BaseDataType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            BaseDataType::Ticks => write!(f, "ticks"),
-            BaseDataType::Quotes => write!(f, "quotes"),
-            BaseDataType::TradePrices => write!(f, "prices"),
-            BaseDataType::QuoteBars => write!(f, "quotebars"),
-            BaseDataType::Candles => write!(f, "candles"),
-            BaseDataType::Fundamentals => write!(f, "fundamentals"),
-            //BaseDataType::OrderBooks => write!(f, "order books"),
-        }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_string())
     }
 }

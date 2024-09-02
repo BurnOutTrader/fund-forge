@@ -17,8 +17,9 @@ pub type TimeString = String;
 pub type Price = f64;
 
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use serde_derive::{Deserialize, Serialize};
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Deserialize, Serialize)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct Color {
