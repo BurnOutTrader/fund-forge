@@ -3,7 +3,7 @@ use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::OrderSide;
-use crate::standardized_types::subscriptions::Symbol;
+use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::standardized_types::OwnerId;
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
@@ -81,7 +81,7 @@ pub enum OrderState {
 #[archive_attr(derive(Debug))]
 pub struct Order {
     pub owner_id: OwnerId,
-    pub symbol: Symbol,
+    pub symbol_name: SymbolName,
     pub brokerage: Brokerage,
     pub quantity_ordered: u64,
     pub quantity_filled: u64,
@@ -108,7 +108,7 @@ impl Order {
 
     pub fn market_order(
         owner_id: OwnerId,
-        symbol: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         side: OrderSide,
@@ -120,12 +120,12 @@ impl Order {
             id: format!(
                 "{}-{}-{}-{}",
                 brokerage,
-                symbol.name,
+                symbol_name,
                 time.timestamp_millis(),
                 side
             ),
             owner_id,
-            symbol,
+            symbol_name,
             brokerage,
             quantity_ordered: quantity,
             quantity_filled: 0,
@@ -147,7 +147,7 @@ impl Order {
 
     pub fn exit_long(
         owner_id: OwnerId,
-        symbol: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -158,12 +158,12 @@ impl Order {
             id: format!(
                 "{}-{}-{}-{}",
                 brokerage,
-                symbol.name,
+                symbol_name,
                 time.timestamp_millis(),
                 OrderSide::Sell
             ),
             owner_id,
-            symbol,
+            symbol_name,
             brokerage,
             quantity_ordered: quantity,
             quantity_filled: 0,
@@ -185,7 +185,7 @@ impl Order {
 
     pub fn exit_short(
         owner_id: OwnerId,
-        symbol: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -196,12 +196,12 @@ impl Order {
             id: format!(
                 "{}-{}-{}-{}",
                 brokerage,
-                symbol.name,
+                symbol_name,
                 time.timestamp_millis(),
                 OrderSide::Buy
             ),
             owner_id,
-            symbol,
+            symbol_name,
             brokerage,
             quantity_ordered: quantity,
             quantity_filled: 0,
@@ -223,7 +223,7 @@ impl Order {
 
     pub fn enter_long(
         owner_id: OwnerId,
-        symbol: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -234,12 +234,12 @@ impl Order {
             id: format!(
                 "{}-{}-{}-{}",
                 brokerage,
-                symbol.name,
+                symbol_name,
                 time.timestamp_millis(),
                 OrderSide::Buy
             ),
             owner_id,
-            symbol,
+            symbol_name,
             brokerage,
             quantity_ordered: quantity,
             quantity_filled: 0,
@@ -261,7 +261,7 @@ impl Order {
 
     pub fn enter_short(
         owner_id: OwnerId,
-        symbol: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -272,12 +272,12 @@ impl Order {
             id: format!(
                 "{}-{}-{}-{}",
                 brokerage,
-                symbol.name,
+                symbol_name,
                 time.timestamp_millis(),
                 OrderSide::Sell
             ),
             owner_id,
-            symbol,
+            symbol_name,
             brokerage,
             quantity_ordered: quantity,
             quantity_filled: 0,
@@ -383,15 +383,15 @@ impl OrderUpdateEvent {
         }
     }
 
-    pub fn symbol(&self) -> &Symbol {
+    pub fn symbol_name(&self) -> &SymbolName {
         match self {
-            OrderUpdateEvent::Accepted(order) => &order.symbol,
-            OrderUpdateEvent::Filled(order) => &order.symbol,
-            OrderUpdateEvent::PartiallyFilled(order) => &order.symbol,
-            OrderUpdateEvent::Cancelled(order) => &order.symbol,
-            OrderUpdateEvent::Rejected(order) => &order.symbol,
-            OrderUpdateEvent::Updated(order) => &order.symbol,
-            OrderUpdateEvent::UpdateRejected(order) => &order.symbol,
+            OrderUpdateEvent::Accepted(order) => &order.symbol_name,
+            OrderUpdateEvent::Filled(order) => &order.symbol_name,
+            OrderUpdateEvent::PartiallyFilled(order) => &order.symbol_name,
+            OrderUpdateEvent::Cancelled(order) => &order.symbol_name,
+            OrderUpdateEvent::Rejected(order) => &order.symbol_name,
+            OrderUpdateEvent::Updated(order) => &order.symbol_name,
+            OrderUpdateEvent::UpdateRejected(order) => &order.symbol_name,
         }
     }
 

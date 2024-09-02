@@ -27,7 +27,7 @@ use ff_standard_lib::standardized_types::strategy_events::{
     EventTimeSlice, StrategyEvent, StrategyInteractionMode,
 };
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
@@ -196,7 +196,7 @@ impl FundForgeStrategy {
     pub async fn enter_long(
         &self,
         account_id: AccountId,
-        symbol_name: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -216,7 +216,7 @@ impl FundForgeStrategy {
     pub async fn enter_short(
         &self,
         account_id: AccountId,
-        symbol_name: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -236,7 +236,7 @@ impl FundForgeStrategy {
     pub async fn exit_long(
         &self,
         account_id: AccountId,
-        symbol_name: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -256,7 +256,7 @@ impl FundForgeStrategy {
     pub async fn exit_short(
         &self,
         account_id: AccountId,
-        symbol_name: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -276,7 +276,7 @@ impl FundForgeStrategy {
     pub async fn buy_market(
         &self,
         account_id: AccountId,
-        symbol_name: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -297,7 +297,7 @@ impl FundForgeStrategy {
     pub async fn sell_market(
         &self,
         account_id: AccountId,
-        symbol_name: Symbol,
+        symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -602,7 +602,7 @@ impl FundForgeStrategy {
         range_data(start_date, end_date, subscription.clone()).await
     }
 
-    pub async fn get_order_book(&self, symbol: &Symbol) -> Option<Arc<OrderBook>> {
-        self.market_event_handler.get_order_book(symbol).await
+    pub async fn get_order_book(&self, symbol_name: &SymbolName) -> Option<Arc<OrderBook>> {
+        self.market_event_handler.get_order_book(symbol_name).await
     }
 }

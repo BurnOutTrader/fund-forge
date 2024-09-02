@@ -9,7 +9,7 @@ use ff_standard_lib::standardized_types::orders::orders::{
     Order, OrderState, OrderType, OrderUpdateEvent,
 };
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
-use ff_standard_lib::standardized_types::subscriptions::Symbol;
+use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::standardized_types::OwnerId;
 use std::collections::{BTreeMap, HashMap};
@@ -82,20 +82,24 @@ impl MarketHandlerEnum {
         }
     }
 
-    pub async fn get_order_book(&self, symbol: &Symbol) -> Option<Arc<OrderBook>> {
+    pub async fn get_order_book(&self, symbol_name: &SymbolName) -> Option<Arc<OrderBook>> {
         match self {
-            MarketHandlerEnum::BacktestDefault(handler) => handler.get_order_book(symbol).await,
-            MarketHandlerEnum::LiveDefault(handler) => handler.get_order_book(symbol).await,
+            MarketHandlerEnum::BacktestDefault(handler) => handler.get_order_book(symbol_name).await,
+            MarketHandlerEnum::LiveDefault(handler) => handler.get_order_book(symbol_name).await,
         }
     }
 }
+
+
 
 pub(crate) struct HistoricalMarketHandler {
     owner_id: String,
     /// The strategy receives its timeslices using strategy events, this is for other processes that need time slices and do not need synchronisation with the strategy
     /// These time slices are sent before they are sent to the strategy as events
-    order_books: RwLock<AHashMap<Symbol, Arc<OrderBook>>>,
-    last_price: RwLock<AHashMap<Symbol, f64>>,
+    //
+    // 3. Option 1 is the best, In live trading we will be selecting the brokerage, the vendor is irrelevant, and we will ofcourse chose the best price, os maybe here we should use best bid and best ask.
+    order_books: RwLock<AHashMap<SymbolName, Arc<OrderBook>>>,
+    last_price: RwLock<AHashMap<SymbolName, f64>>,
     ledgers: RwLock<AHashMap<Brokerage, HashMap<AccountId, Ledger>>>,
     pub(crate) last_time: RwLock<DateTime<Utc>>,
     pub order_cache: RwLock<Vec<Order>>,
@@ -115,8 +119,8 @@ impl HistoricalMarketHandler {
         }
     }
 
-    pub async fn get_order_book(&self, symbol: &Symbol) -> Option<Arc<OrderBook>> {
-        if let Some(book) = self.order_books.read().await.get(symbol) {
+    pub async fn get_order_book(&self, symbol_name: &SymbolName) -> Option<Arc<OrderBook>> {
+        if let Some(book) = self.order_books.read().await.get(symbol_name) {
             return Some(book.clone());
         }
         None
@@ -146,21 +150,21 @@ impl HistoricalMarketHandler {
             match base_data {
                 BaseDataEnum::Price(ref price) => {
                     let mut last_price = self.last_price.write().await;
-                    last_price.insert(price.symbol.clone(), price.price);
+                    last_price.insert(price.symbol.name.clone(), price.price);
                 }
                 BaseDataEnum::Candle(ref candle) => {
                     let mut last_price = self.last_price.write().await;
-                    last_price.insert(candle.symbol.clone(), candle.close);
+                    last_price.insert(candle.symbol.name.clone(), candle.close);
                 }
                 BaseDataEnum::QuoteBar(ref bar) => {
                     let mut order_books = self.order_books.write().await;
-                    if !order_books.contains_key(&bar.symbol) {
+                    if !order_books.contains_key(&bar.symbol.name) {
                         order_books.insert(
-                            bar.symbol.clone(),
+                            bar.symbol.name.clone(),
                             Arc::new(OrderBook::new(bar.symbol.clone(), bar.time_utc())),
                         );
                     }
-                    if let Some(book) = order_books.get_mut(&bar.symbol) {
+                    if let Some(book) = order_books.get_mut(&bar.symbol.name) {
                         let mut bid = BTreeMap::new();
                         bid.insert(0, bar.bid_close.clone());
                         let mut ask = BTreeMap::new();
@@ -172,17 +176,17 @@ impl HistoricalMarketHandler {
                 }
                 BaseDataEnum::Tick(ref tick) => {
                     let mut last_price = self.last_price.write().await;
-                    last_price.insert(tick.symbol.clone(), tick.price);
+                    last_price.insert(tick.symbol.name.clone(), tick.price);
                 }
                 BaseDataEnum::Quote(ref quote) => {
                     let mut order_books = self.order_books.write().await;
-                    if !order_books.contains_key(&quote.symbol) {
+                    if !order_books.contains_key(&quote.symbol.name) {
                         order_books.insert(
-                            quote.symbol.clone(),
+                            quote.symbol.name.clone(),
                             Arc::new(OrderBook::new(quote.symbol.clone(), quote.time_utc())),
                         );
                     }
-                    if let Some(book) = order_books.get_mut(&quote.symbol) {
+                    if let Some(book) = order_books.get_mut(&quote.symbol.name) {
                         let mut bid = BTreeMap::new();
                         bid.insert(quote.book_level.clone(), quote.bid.clone());
                         let mut ask = BTreeMap::new();
@@ -277,16 +281,16 @@ impl HistoricalMarketHandler {
                     panic!("TrailingGuaranteedStopLoss orders not supported in backtest")
                 }
                 OrderType::EnterLong => {
-                    if ledger.is_short(&order.symbol.name).await {
-                        ledger.exit_position_paper(&order.symbol.name).await;
+                    if ledger.is_short(&order.symbol_name).await {
+                        ledger.exit_position_paper(&order.symbol_name).await;
                     }
                     let market_price = self
-                        .get_market_price(&OrderSide::Buy, &order.symbol)
+                        .get_market_price(&OrderSide::Buy, &order.symbol_name)
                         .await
                         .unwrap();
                     match ledger
                         .enter_long_paper(
-                            &order.symbol.name,
+                            &order.symbol_name,
                             order.quantity_ordered.clone(),
                             market_price,
                         )
@@ -312,16 +316,16 @@ impl HistoricalMarketHandler {
                     }
                 }
                 OrderType::EnterShort => {
-                    if ledger.is_long(&order.symbol.name).await {
-                        ledger.exit_position_paper(&order.symbol.name).await;
+                    if ledger.is_long(&order.symbol_name).await {
+                        ledger.exit_position_paper(&order.symbol_name).await;
                     }
                     let market_price = self
-                        .get_market_price(&OrderSide::Buy, &order.symbol)
+                        .get_market_price(&OrderSide::Buy, &order.symbol_name)
                         .await
                         .unwrap();
                     match ledger
                         .enter_short_paper(
-                            order.symbol.name.clone(),
+                            order.symbol_name.clone(),
                             order.quantity_ordered.clone(),
                             market_price,
                         )
@@ -347,10 +351,10 @@ impl HistoricalMarketHandler {
                     }
                 }
                 OrderType::ExitLong => {
-                    if ledger.is_long(&order.symbol.name).await {
+                    if ledger.is_long(&order.symbol_name).await {
                         order.state = OrderState::Filled;
                         let market_price = self
-                            .get_market_price(&OrderSide::Buy, &order.symbol)
+                            .get_market_price(&OrderSide::Buy, &order.symbol_name)
                             .await
                             .unwrap();
                         order.average_fill_price = Some(market_price);
@@ -369,10 +373,10 @@ impl HistoricalMarketHandler {
                     }
                 }
                 OrderType::ExitShort => {
-                    if ledger.is_short(&order.symbol.name).await {
+                    if ledger.is_short(&order.symbol_name).await {
                         order.state = OrderState::Filled;
                         let market_price = self
-                            .get_market_price(&OrderSide::Buy, &order.symbol)
+                            .get_market_price(&OrderSide::Buy, &order.symbol_name)
                             .await
                             .unwrap();
                         order.average_fill_price = Some(market_price);
@@ -418,8 +422,9 @@ impl HistoricalMarketHandler {
     async fn get_market_price(
         &self,
         order_side: &OrderSide,
-        symbol_name: &Symbol,
+        symbol_name: &SymbolName,
     ) -> Result<f64, String> {
+
         if let Some(book) = self.order_books.read().await.get(symbol_name) {
             match order_side {
                 OrderSide::Buy => {
