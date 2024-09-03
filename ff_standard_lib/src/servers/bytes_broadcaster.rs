@@ -43,6 +43,18 @@ impl BytesBroadcaster {
         subs.remove(&id);
     }
 
+    pub async fn send_subscriber(&self, id: usize, data: Vec<u8>) {
+        let subscribers = self.subscribers.clone();
+        tokio::spawn(async move {
+            if let Some(subscriber) = subscribers.read().await.get(&id) {
+                match subscriber.send(&data).await {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
+            }
+        });
+    }
+
     pub async fn broadcast(&self, source_data: &Vec<u8>) -> Result<(), SendError> {
         match self.broadcast_type {
             BroadCastType::Sequential => self.broadcast_sequential(source_data).await,

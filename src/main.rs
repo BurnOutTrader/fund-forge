@@ -83,8 +83,9 @@ impl Application for FundForgeApplication {
             RegistryGuiResponse::ListStrategiesResponse{backtest, live, live_paper} => {
                 println!("backtest: {:?}, live: {:?}, live paper: {:?}, ",  backtest, live, live_paper)
             }
-            RegistryGuiResponse::Subscribed(_, _) => {}
-            RegistryGuiResponse::Unsubscribed(_) => {}
+            RegistryGuiResponse::Buffer { buffer } => {
+
+            }
         }
         Command::none()
     }

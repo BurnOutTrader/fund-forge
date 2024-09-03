@@ -27,6 +27,10 @@ pub(crate) async fn broadcast(bytes: &Vec<u8>) {
     }
 }
 
+pub(crate) async fn send_subscriber(id: usize, bytes: Vec<u8>) {
+    GUI_BROADCATSER.send_subscriber(id, bytes).await
+}
+
 pub(crate) async fn subscribe(sender: Arc<SecondaryDataSender>) -> usize {
     GUI_BROADCATSER.subscribe(sender).await
 }
@@ -47,20 +51,13 @@ pub(crate) async fn get_live_paper_connected_strategies() -> Vec<OwnerId> {
     LIVE_PAPER_CONNECTED_STRATEGIES.read().await.clone()
 }
 
-pub(crate) async fn get_events_buffer(owner_id: &OwnerId) -> Option<BTreeMap<i64, EventTimeSlice>> {
+pub(crate) async fn get_events_buffer() -> BTreeMap<OwnerId, BTreeMap<i64, EventTimeSlice>> {
     let buffer = STRATEGY_EVENTS_BUFFER.read().await;
-    let buffer = buffer.get(owner_id);
-    if let Some(buffer) = buffer {
-        let mut buffered = buffer.write().await;
-        let return_buffer = buffered.clone();
-        buffered.clear();
-        match return_buffer.is_empty() {
-            true => None,
-            false => Some(return_buffer),
-        }
-    } else {
-        None
+    let mut return_buffer: BTreeMap<OwnerId, BTreeMap<i64, EventTimeSlice>> = BTreeMap::new();
+    for (id, map) in &*buffer {
+        return_buffer.insert(id.clone(), map.read().await.clone());
     }
+    return_buffer
 }
 
 async fn handle_registration(owner_id: OwnerId, mode: StrategyMode) -> Result<RegistrationResponse, RegistrationResponse> {
@@ -82,6 +79,12 @@ async fn handle_registration(owner_id: OwnerId, mode: StrategyMode) -> Result<Re
             Err(response)
         }
         false => {
+            tokio::spawn(async move {
+                let live = get_live_connected_strategies().await;
+                let backtest = get_backtest_connected_strategies().await;
+                let live_paper = get_live_paper_connected_strategies().await;
+                broadcast(&RegistryGuiResponse::ListStrategiesResponse { live, backtest, live_paper }.to_bytes()).await;
+            });
             registry.push(owner_id);
             let response = RegistrationResponse::Success;
             Ok(response)
@@ -102,6 +105,12 @@ async fn handle_disconnect(owner_id: OwnerId, mode: StrategyMode) {
         }
     };
     registry.write().await.retain(| x | x != &owner_id );
+    tokio::spawn(async move {
+        let live = get_live_connected_strategies().await;
+        let backtest = get_backtest_connected_strategies().await;
+        let live_paper = get_live_paper_connected_strategies().await;
+        broadcast(&RegistryGuiResponse::ListStrategiesResponse { live, backtest, live_paper }.to_bytes()).await;
+    });
 }
 
 pub async fn handle_strategies(

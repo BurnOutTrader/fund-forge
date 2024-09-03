@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 #[archive_attr(derive(Debug))]
 pub enum GuiRequest {
     ListAllStrategies,
+    RequestBuffers
 }
 
 impl Bytes<Self> for GuiRequest {
@@ -34,8 +35,7 @@ impl Bytes<Self> for GuiRequest {
 pub enum RegistryGuiResponse {
     StrategyEventUpdates(OwnerId, i64, EventTimeSlice),
     ListStrategiesResponse{backtest: Vec<OwnerId>, live: Vec<OwnerId>, live_paper: Vec<OwnerId>},
-    Subscribed(OwnerId, Option<BTreeMap<i64, EventTimeSlice>>),
-    Unsubscribed(OwnerId),
+    Buffer {buffer: BTreeMap<OwnerId, BTreeMap<i64, EventTimeSlice>> },
 }
 
 impl Bytes<Self> for RegistryGuiResponse {
