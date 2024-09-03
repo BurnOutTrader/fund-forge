@@ -163,11 +163,7 @@ impl TimedEventHandler {
                 if let EventTimeEnum::DateTime { .. } = event.time {
                     events_to_remove.push(event.name.clone());
                 }
-                if let EventTimeEnum::Every {
-                    duration,
-                    mut next_time,
-                    ..
-                } = event.time
+                if let EventTimeEnum::Every { duration, mut next_time,..} = event.time
                 {
                     next_time = current_time + duration;
                 }

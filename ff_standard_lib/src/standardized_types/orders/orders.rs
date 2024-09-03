@@ -3,7 +3,7 @@ use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::OrderSide;
-use crate::standardized_types::subscriptions::{Symbol, SymbolName};
+use crate::standardized_types::subscriptions::{SymbolName};
 use crate::standardized_types::OwnerId;
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;

@@ -6,6 +6,8 @@ The strategy object returned from `initialize()` is a fully owned object, and we
 It is best practice to use the strategies methods to interact with the strategy rather than calling on any private fields directly.
 strategy methods only need a reference to the strategy object, and will handle all the necessary locking and thread safety for you.
 It is possible to wrap the strategy in Arc if you need to pass it to multiple threads, all functionality will remain.
+The strategy object is an owned object, however it does not need to be owned or mutable to access strategy methods, all methods can be called with only a reference to the strategy object, this
+allows us to pass our strategy in an Arc to any other threads or functions and still utilise its full functionality, the strategy is protected from misuse by using interior mutability.
 ```rust
 #[tokio::main]
 async fn main() {
@@ -103,7 +105,7 @@ If you subscriptions are empty, you will need to add some at the start of your `
 #### `replay_delay_ms: Option<u64>:` 
 The delay in milliseconds between time slices for market replay style backtesting. this will be ignored in live trading.
 
-#### `retain_history: usize:` 
+#### `retain_history: u64:` 
 The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
 any additional subscriptions added later will be able to specify their own history requirements.
 
@@ -209,6 +211,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 StrategyEvent::IndicatorEvent(_, _) => {
 
                 }
+                StrategyEvent::PositionEvents(_) => {}
                 //todo add more event types 
             }
             // we can notify the engine that we have processed the message and it can send the next one.
@@ -256,11 +259,21 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
 ## Subscriptions
 Subscriptions can be updated at any time, and the engine will handle the consolidation of data to the required resolution.
-The engine will also warm up indicators and consolidators after the initial warm up cycle, this may result in a momentary pause in the strategy execution during back tests, while the data is fetched, consolidated etc.
-In live trading this will happen in the background, and the strategy will continue to execute.
-Only data we specifically subscribe to be returned to the event loop, if the data is building from ticks and we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
+The engine will also warm up indicators and consolidators after the initial warm up cycle, this may result in a momentary pause in the strategy runtime during back tests, while the data is fetched, consolidated etc.
+In live trading this will happen in the background as an async task, and the strategy will continue to execute as normal.
+Only data we specifically subscribe to will be returned to the event loop, if the data is building from ticks and we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
 The SubscriptionHandler will automatically build data from the highest suitable resolution, if you plan on using open bars and you want the best resolution current bar price, you should also subscribe to that resolution,
 This only needs to be done for DataVendors where more than 1 resolution is available as historical data, if the vendor only has tick data, then current consolidated candles etc will always have the most recent tick price included.
+```rust
+// we can access resolution as a Duration with resolution.as_duration() or resolution.as_seconds();
+pub enum Resolution {
+    Instant,
+    Ticks(u64),
+    Seconds(u64),
+    Minutes(u64),
+    Hours(u64),
+}
+```
 ```rust
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
 
@@ -436,7 +449,7 @@ impl IndicatorValues {
 We can use the inbuilt indicators or create our own custom indicators.
 
 #### Creating Indicators
-For creating custom indicators, we just need to implement the `AsyncIndicators trait` which also needs `Indicators trait` and either:
+For creating custom indicators, we just need to implement the `Indicators trait` and either:
 1. Create and hardcode `IndicatorEnum` variant including all matching statements, or
 2. Wrap our indicator in the `IndicatorEnum::Custom(Box<dyn AsyncIndicators + Send + Sync>)` variant, where it will be used via `Box<dyn Indicators>` dynamic dispatch.
 The fist option is the most performant, but if you want to create and test a number of indicators, you can save hardcoding the enum variants by using the second option.
@@ -494,8 +507,8 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                                     heikin_atr_history.add(heikin_atr.current());
                                
                                     // we can also get the value at a specific index, current bar (closed) is index 0, 1 bar ago is index 1 etc.
-                                    let atr = heikin_atr.index(2);
-                                    println!("{}...{} ATR 2 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
+                                    let atr = heikin_atr.index(3);
+                                    println!("{}...{} ATR 3 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
                                     
                                     //or we can use our own history to get the value at a specific index
                                     let atr = heikin_atr_history.get(10);
@@ -694,7 +707,7 @@ async fn example() {
     let order_book: Option<Arc<OrderBook>> = strategy.get_order_book(&symbol).await; 
     
     if let Some(order_book) =  order_book {
-        // we can access the ask or bid book directly and keep a readable copy.
+        // we can access the ask or bid book directly and keep a readable ref. in the future this will return a read only ref to the actual book in real strategy time
         let bid_book: Arc<RwLock<BTreeMap<BookLevel, Price>>> = order_book.bid_book();
         let ask_book: Arc<RwLock<BTreeMap<BookLevel, Price>>> = order_book.ask_book();
         
@@ -710,8 +723,48 @@ async fn example() {
         // It is recommended to use this function as accessing the books directly will slow down writing updates.
         // this returns an Option<Price> as there may not be a Quote available for the BookLevel.
         let best_bid_ask_level: BookLevel = 0;
-        let bid: Option<Price> = order_book.bid_level(level).await;
-        let ask: Option<Price> = order_book.ask_level(level).await;
+        let bid: Option<Price> = order_book.bid_level(best_bid_ask_level).await;
+        let ask: Option<Price> = order_book.ask_level(best_bid_ask_level).await;
     }
+}
+```
+
+## Placing Orders
+The matching engines are interchangable, currently there is a Live engine and a Backtesting engine. These are defined by a `MarketHandlerEnum` variant.
+We can customise matching engines for backtesting specific strategies.
+A Triangular arbitrage strategy may need a more complex Market handler than a standard price action strategy.
+In backtesting a new ledger will be instantiated for each AccountID.
+This is in its infancy, market handlers are very raw and untested and the way they are instantiated and interact with the engine will change in future updates.
+
+```rust
+async fn example() {
+    let strategy = FundForgeStrategy::default();
+
+    // Example inputs for account_id, symbol_name, brokerage, etc.
+    let account_id: AccountId = AccountId::from("account123");
+    let symbol_name: SymbolName = SymbolName::from("AAPL");
+    let brokerage: Brokerage = Brokerage.Test;
+    let quantity: u64 = 100.0; //u64 to allow crypto
+    let tag = String::from("Example Trade");
+
+    // Enter a long position and close any existing short position on the same account / symbol
+    strategy.enter_long(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+
+    // Enter a short position and close any existing short position on the same account / symbol
+    strategy.enter_short(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+
+    // Exit a long position
+    strategy.exit_long(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+
+    // Exit a short position
+    strategy.exit_short(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+
+    // Place a market buy order
+    strategy.buy_market(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+
+    // Place a market sell order
+    strategy.sell_market(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+    
+    //todo Add more supported orders.
 }
 ```

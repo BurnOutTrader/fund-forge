@@ -1,5 +1,4 @@
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
-use crate::consolidators::count::ConsolidatorError;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
@@ -22,7 +21,7 @@ impl RenkoConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         history_to_retain: u64,
-    ) -> Result<Self, ConsolidatorError> {
+    ) -> Result<Self, String> {
         let current_data = match &subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(
                 subscription.symbol.clone(),
@@ -33,12 +32,11 @@ impl RenkoConsolidator {
                 subscription.candle_type.clone().unwrap(),
             ),
             _ => {
-                return Err(ConsolidatorError {
-                    message: format!(
+                return Err( format!(
                         "{} is an Invalid base data type for CountConsolidator",
                         subscription.base_data_type
                     ),
-                })
+                )
             }
         };
 

@@ -14,13 +14,6 @@ pub async fn handle_gui(
     receiver: Arc<Mutex<SecondaryDataReceiver>>,
 ) {
     tokio::spawn(async move {
-        let register_response = RegistrationResponse::Success.to_bytes();
-        match sender.send(&register_response).await {
-            Ok(_) => {
-                println!("Registered Gui");
-            }
-            Err(_) => return,
-        }
         let receiver = receiver.clone();
         let sender = sender.clone();
         let binding = receiver.clone();

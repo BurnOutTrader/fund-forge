@@ -2,12 +2,18 @@
 ## Strategies
 Once you have followed the setup instructions below, you can play with a test strategy by reviewing https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md
 
+## Gui
+Basic charting functionality was tested months ago. The code base has since been refactored and charting now supports live streams. A local gui is in production using rust iced.
+
+Old video of testing charting algorithm https://youtu.be/BU9TU3e1-UY
+
 ## Architecture
 An object-oriented, Rust based, Algorithmic Trading Platform designed to be as flexible as possible, allowing for both local and remote api instances, and a variety of api types. 
 The platform is designed to be as fast as possible, using `rkyv` for serialization and deserialization and network messaging, and `tokio` for async communication.
+The full potential of using rkyv will be unlocked in future versions.
 see: https://github.com/rkyv/rkyv
 
-I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance. 
+I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance.
 
 The architecture of fund forge designed to allow for "monolithic" or "microservices" runtime depending on:
 ```rust
@@ -16,6 +22,9 @@ pub enum PlatformMode {
     MultiMachine
 }
 ```
+'ff_strategy_registry': decouples backend systems/the engine to allow front end Gui implementations in any language. 
+'ff_data_servers': decouples api instances from any specific server and allows a microservices approach to maintaining api connections.
+
 Most of the complexity has been abstracted away from the end user and any switch to Multi-Machine mode is as simple as individually launching servers and specifying a few connection settings (ip address etc) in the `server_settings.toml` file.
 
 In `PlatformMode::SingleMachine`: all api communication is done locally by launching the handlers in `ff_standard_lib::servers::request_handlers` which will receive requests from the strategy or ui and provide appropriate responses. In this mode all `DataVendor` and `Brokerage` Apis are launched locally.

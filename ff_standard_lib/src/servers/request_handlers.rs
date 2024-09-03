@@ -110,7 +110,7 @@ pub(crate) async fn base_data_response(
 }
 
 pub async fn data_server_manage_async_requests(
-    sender: Arc<SecondaryDataSender>,
+    _sender: Arc<SecondaryDataSender>,
     receiver: Arc<Mutex<SecondaryDataReceiver>>,
 ) {
     tokio::spawn(async move {

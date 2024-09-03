@@ -3,7 +3,7 @@ use crate::apis::brokerage::Brokerage;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::PositionSide;
-use crate::standardized_types::subscriptions::{Symbol, SymbolName};
+use crate::standardized_types::subscriptions::{SymbolName};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
 use ahash::AHashMap;
@@ -91,7 +91,7 @@ impl Ledger {
     pub async fn generate_id(&self, symbol_name: &SymbolName) -> PositionId {
         let mut positions_count = self.positions_counter.write().await;
         let symbol_positions_count = positions_count.get_mut(symbol_name);
-        let id = if let Some(mut count) = symbol_positions_count {
+        let id = if let Some(count) = symbol_positions_count {
             *count += 1;
             count.clone()
         } else {

@@ -1,5 +1,4 @@
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
-use crate::consolidators::count::ConsolidatorError;
 use crate::helpers::converters::open_time;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -205,24 +204,22 @@ impl HeikinAshiConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         history_to_retain: u64,
-    ) -> Result<HeikinAshiConsolidator, ConsolidatorError> {
+    ) -> Result<HeikinAshiConsolidator, String> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
-            return Err(ConsolidatorError {
-                message: format!(
+            return Err(format!(
                     "{} is an Invalid base data type for HeikinAshiConsolidator",
                     subscription.base_data_type
                 ),
-            });
+            );
         }
 
         if let Some(candle_type) = &subscription.candle_type {
             if candle_type != &CandleType::HeikinAshi {
-                return Err(ConsolidatorError {
-                    message: format!(
+                return Err(format!(
                         "{:?} is an Invalid candle type for HeikinAshiConsolidator",
                         candle_type
                     ),
-                });
+                );
             }
         }
         let tick_size = match subscription
@@ -233,9 +230,8 @@ impl HeikinAshiConsolidator {
         {
             Ok(size) => size,
             Err(e) => {
-                return Err(ConsolidatorError {
-                    message: format!("Error getting tick size: {}", e),
-                })
+                return Err(format!("Error getting tick size: {}", e),
+                )
             }
         };
 
@@ -319,14 +315,6 @@ impl HeikinAshiConsolidator {
                         candle.low = candle.low.min(quote.bid);
                         candle.close = quote.bid;
                         candle.range =
-                            round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
-                        return vec![BaseDataEnum::Candle(candle.clone())];
-                    }
-                    BaseDataEnum::Tick(tick) => {
-                        candle.high = candle.high.max(tick.price);
-                        candle.low = candle.low.min(tick.price);
-                        candle.close = tick.price;
-                        candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                         return vec![BaseDataEnum::Candle(candle.clone())];
                     }

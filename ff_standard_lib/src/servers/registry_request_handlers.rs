@@ -33,7 +33,6 @@ pub async fn registry_manage_async_requests(
                     handle_gui(sender, receiver).await;
                     break 'register_loop;
                 }
-                _ => {}
             };
         }
     });

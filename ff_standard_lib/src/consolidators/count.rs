@@ -7,10 +7,6 @@ use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;
 
-#[derive(Debug)]
-pub struct ConsolidatorError {
-    pub(crate) message: String,
-}
 
 /// A consolidator that produces a new piece of data after a certain number of data points have been added.
 /// Supports Ticks only.
@@ -27,16 +23,11 @@ impl CountConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         history_to_retain: u64,
-    ) -> Result<Self, ConsolidatorError> {
+    ) -> Result<Self, String> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
             _ => {
-                return Err(ConsolidatorError {
-                    message: format!(
-                        "{:?} is an Invalid resolution for CountConsolidator",
-                        subscription.resolution
-                    ),
-                })
+                return Err(format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution))
             }
         };
 
@@ -50,12 +41,12 @@ impl CountConsolidator {
                 subscription.candle_type.clone().unwrap(),
             ),
             _ => {
-                return Err(ConsolidatorError {
-                    message: format!(
+                return Err(
+                    format!(
                         "{} is an Invalid base data type for CountConsolidator",
                         subscription.base_data_type
                     ),
-                })
+                )
             }
         };
 
@@ -67,9 +58,8 @@ impl CountConsolidator {
         {
             Ok(size) => size,
             Err(e) => {
-                return Err(ConsolidatorError {
-                    message: format!("Error getting tick size: {}", e),
-                })
+                return Err(format!("Error getting tick size: {}", e),
+                )
             }
         };
 

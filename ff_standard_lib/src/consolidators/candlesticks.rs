@@ -1,5 +1,4 @@
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
-use crate::consolidators::count::ConsolidatorError;
 use crate::helpers::converters;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -215,23 +214,21 @@ impl CandleStickConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         history_to_retain: u64,
-    ) -> Result<Self, ConsolidatorError> {
+    ) -> Result<Self, String> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
-            return Err(ConsolidatorError {
-                message: format!(
+            return Err(format!(
                     "{} is an Invalid base data type for TimeConsolidator",
                     subscription.base_data_type
                 ),
-            });
+            );
         }
 
         if let Resolution::Ticks(_) = subscription.resolution {
-            return Err(ConsolidatorError {
-                message: format!(
+            return Err(format!(
                     "{:?} is an Invalid resolution for TimeConsolidator",
                     subscription.resolution
                 ),
-            });
+            );
         }
 
         let tick_size = match subscription
@@ -242,9 +239,8 @@ impl CandleStickConsolidator {
         {
             Ok(size) => size,
             Err(e) => {
-                return Err(ConsolidatorError {
-                    message: format!("Error getting tick size: {}", e),
-                })
+                return Err(format!("Error getting tick size: {}", e),
+                )
             }
         };
 
