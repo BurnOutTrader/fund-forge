@@ -25,8 +25,8 @@ pub async fn registry_manage_async_requests(
                 }
             };
             match request {
-                RegistrationRequest::Strategy(owner) => {
-                    handle_strategies(owner.clone(), sender, receiver).await;
+                RegistrationRequest::Strategy(owner, mode) => {
+                    handle_strategies(owner.clone(), sender, receiver, mode).await;
                     break 'register_loop;
                 }
                 RegistrationRequest::Gui => {

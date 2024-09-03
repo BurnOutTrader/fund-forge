@@ -121,7 +121,7 @@ impl BrokerApiResponse for TestVendorApi {
         self.basedata_symbols_response(market_type).await
     }
 
-    async fn account_currency_reponse(
+    async fn account_currency_response(
         &self,
         account_id: AccountId,
     ) -> Result<SynchronousResponseType, FundForgeError> {

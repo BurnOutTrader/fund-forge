@@ -1,4 +1,4 @@
-use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
+use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender, SendError};
 use crate::standardized_types::strategy_events::EventTimeSlice;
 use crate::standardized_types::OwnerId;
 use crate::strategy_registry::guis::RegistryGuiResponse;
@@ -9,42 +9,45 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use structopt::lazy_static::lazy_static;
 use tokio::sync::{Mutex, RwLock};
+use crate::servers::bytes_broadcaster::{BroadCastType, BytesBroadcaster};
+use crate::standardized_types::enums::StrategyMode;
 
 lazy_static! {
-    static ref CONNECTED_STRATEGIES: Arc<RwLock<Vec<OwnerId>>> = Arc::new(RwLock::new(Vec::new()));
-    static ref STRATEGY_SUBSCRIBTIONS: Arc<RwLock<HashMap<OwnerId, Arc<SecondaryDataSender>>>> =
-        Arc::new(RwLock::new(HashMap::new()));
-    static ref STRATEGY_EVENTS_BUFFER: Arc<RwLock<HashMap<OwnerId, Arc<RwLock<BTreeMap<i64, EventTimeSlice>>>>>> =
-        Arc::new(RwLock::new(HashMap::new()));
+    static ref LIVE_CONNECTED_STRATEGIES: Arc<RwLock<Vec<OwnerId>>> = Arc::new(RwLock::new(Vec::new()));
+    static ref BACKTEST_CONNECTED_STRATEGIES: Arc<RwLock<Vec<OwnerId>>> = Arc::new(RwLock::new(Vec::new()));
+    static ref LIVE_PAPER_CONNECTED_STRATEGIES: Arc<RwLock<Vec<OwnerId>>> = Arc::new(RwLock::new(Vec::new()));
+    static ref GUI_BROADCATSER: BytesBroadcaster = BytesBroadcaster::new(BroadCastType::Concurrent);
+    static ref STRATEGY_EVENTS_BUFFER: Arc<RwLock<HashMap<OwnerId, Arc<RwLock<BTreeMap<i64, EventTimeSlice>>>>>> = Arc::new(RwLock::new(HashMap::new()));
 }
 
-pub async fn get_subscribers(owner_id: &OwnerId) -> Option<Arc<SecondaryDataSender>> {
-    match STRATEGY_SUBSCRIBTIONS.read().await.get(owner_id) {
-        None => None,
-        Some(subscriber) => Some(subscriber.clone()),
+pub(crate) async fn broadcast(bytes: &Vec<u8>) {
+    match GUI_BROADCATSER.broadcast(bytes).await {
+        Ok(_) => {}
+        Err(e) => println!("failed to broadcast {:?}", e)
     }
 }
 
-pub async fn get_connected_strategies() -> Vec<OwnerId> {
-    CONNECTED_STRATEGIES.read().await.clone()
+pub(crate) async fn subscribe(sender: Arc<SecondaryDataSender>) -> usize {
+    GUI_BROADCATSER.subscribe(sender).await
 }
 
-pub async fn clear_subscriptions() {
-    STRATEGY_SUBSCRIBTIONS.write().await.clear()
+pub(crate) async fn unsubscribe(id: usize) {
+    GUI_BROADCATSER.unsubscribe(id).await
 }
 
-pub async fn subscribe_to_strategy(to_owner: OwnerId, sender: Arc<SecondaryDataSender>) {
-    STRATEGY_SUBSCRIBTIONS
-        .write()
-        .await
-        .insert(to_owner, sender);
+pub(crate) async fn get_live_connected_strategies() -> Vec<OwnerId> {
+    LIVE_CONNECTED_STRATEGIES.read().await.clone()
 }
 
-pub async fn unsubscribe_from_strategy(owner: OwnerId) {
-    STRATEGY_SUBSCRIBTIONS.write().await.remove(&owner);
+pub(crate) async fn get_backtest_connected_strategies() -> Vec<OwnerId> {
+    BACKTEST_CONNECTED_STRATEGIES.read().await.clone()
 }
 
-pub async fn get_events_buffer(owner_id: &OwnerId) -> Option<BTreeMap<i64, EventTimeSlice>> {
+pub(crate) async fn get_live_paper_connected_strategies() -> Vec<OwnerId> {
+    LIVE_PAPER_CONNECTED_STRATEGIES.read().await.clone()
+}
+
+pub(crate) async fn get_events_buffer(owner_id: &OwnerId) -> Option<BTreeMap<i64, EventTimeSlice>> {
     let buffer = STRATEGY_EVENTS_BUFFER.read().await;
     let buffer = buffer.get(owner_id);
     if let Some(buffer) = buffer {
@@ -60,32 +63,64 @@ pub async fn get_events_buffer(owner_id: &OwnerId) -> Option<BTreeMap<i64, Event
     }
 }
 
+async fn handle_registration(owner_id: OwnerId, mode: StrategyMode) -> Result<RegistrationResponse, RegistrationResponse> {
+    let registry = match mode {
+        StrategyMode::Backtest => {
+            BACKTEST_CONNECTED_STRATEGIES.clone()
+        }
+        StrategyMode::Live => {
+            LIVE_CONNECTED_STRATEGIES.clone()
+        }
+        StrategyMode::LivePaperTrading => {
+            LIVE_PAPER_CONNECTED_STRATEGIES.clone()
+        }
+    };
+    let mut registry = registry.write().await;
+    match registry.contains(&owner_id) {
+        true => {
+            let response = RegistrationResponse::Error(format!("Strategy registry contains an active strategy with this name: {}. Please change owner_id to run strategies in parallel", owner_id));
+            Err(response)
+        }
+        false => {
+            registry.push(owner_id);
+            let response = RegistrationResponse::Success;
+            Ok(response)
+        }
+    }
+}
+
+async fn handle_disconnect(owner_id: OwnerId, mode: StrategyMode) {
+    let registry = match mode {
+        StrategyMode::Backtest => {
+            BACKTEST_CONNECTED_STRATEGIES.clone()
+        }
+        StrategyMode::Live => {
+            LIVE_CONNECTED_STRATEGIES.clone()
+        }
+        StrategyMode::LivePaperTrading => {
+            LIVE_PAPER_CONNECTED_STRATEGIES.clone()
+        }
+    };
+    registry.write().await.retain(| x | x != &owner_id );
+}
+
 pub async fn handle_strategies(
     owner_id: OwnerId,
     sender: Arc<SecondaryDataSender>,
     receiver: Arc<Mutex<SecondaryDataReceiver>>,
+    mode: StrategyMode
 ) {
     tokio::spawn(async move {
-        if CONNECTED_STRATEGIES.write().await.contains(&owner_id) {
-            let response = RegistrationResponse::Error(format!(
-                "{}: strategy already registered, please rename strategy",
-                owner_id.clone()
-            ))
-            .to_bytes();
-            match sender.send(&response).await {
-                Ok(_) => return,
-                Err(_) => return,
+        let response =  handle_registration(owner_id.clone(), mode.clone()).await;
+        match response {
+            Ok(r) => {
+                sender.send(&r.to_bytes()).await.unwrap();
             }
-        } else {
-            let register_response = RegistrationResponse::Success.to_bytes();
-            match sender.send(&register_response).await {
-                Ok(_) => {
-                    println!("Registered Strategy: {:?}", owner_id);
-                }
-                Err(_) => return,
+            Err(e) => {
+                sender.send(&e.to_bytes()).await.unwrap();
+                return;
             }
         }
-
         STRATEGY_EVENTS_BUFFER
             .write()
             .await
@@ -107,7 +142,14 @@ pub async fn handle_strategies(
                 };
                 match request {
                     StrategyRequest::StrategyEventUpdates(utc_time_stamp, slice) => {
-                        forward_to_subscribers(owner_id.clone(), utc_time_stamp, slice).await;
+                        tokio::spawn(async move {
+                            let response = RegistryGuiResponse::StrategyEventUpdates(
+                                owner_id.clone(),
+                                utc_time_stamp.clone(),
+                                slice,
+                            );
+                            broadcast(&response.to_bytes()).await
+                        });
                     }
                     StrategyRequest::ShutDown(_last_time) => {
                         let response = StrategyResponse::ShutDownAcknowledged(owner_id.clone());
@@ -115,43 +157,12 @@ pub async fn handle_strategies(
                             Ok(_) => {}
                             Err(_) => {}
                         }
-                        CONNECTED_STRATEGIES
-                            .write()
-                            .await
-                            .retain(|x| *x != owner_id);
-                        println! {"{} Strategy Disconnected", owner_id}
+                        handle_disconnect(owner_id.clone(), mode.clone()).await;
                     }
                 }
             });
         }
+        handle_disconnect(owner_id.clone(), mode.clone()).await;
+        println! {"{} Strategy Disconnected", owner_id}
     });
-}
-
-async fn forward_to_subscribers(owner_id: OwnerId, utc_time_stamp: i64, slice: EventTimeSlice) {
-    match get_subscribers(&owner_id).await {
-        None => {
-            let buffer = STRATEGY_EVENTS_BUFFER.read().await;
-            let buffer = buffer.get(&owner_id);
-            if let Some(buffer) = buffer {
-                let mut buffer = buffer.write().await;
-                if let Some(time_slice) = buffer.get_mut(&utc_time_stamp) {
-                    time_slice.extend(slice.clone());
-                } else {
-                    buffer.insert(utc_time_stamp.clone(), slice.clone());
-                }
-            }
-        }
-        Some(subscriber) => {
-            let response = RegistryGuiResponse::StrategyEventUpdates(
-                owner_id.clone(),
-                utc_time_stamp.clone(),
-                slice,
-            )
-            .to_bytes();
-            match subscriber.send(&response).await {
-                Ok(_) => {}
-                Err(e) => println!("Failed to send to subscriber: {:?} ", e),
-            }
-        }
-    }
 }

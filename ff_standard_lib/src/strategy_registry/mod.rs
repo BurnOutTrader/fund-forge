@@ -2,6 +2,7 @@ use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::OwnerId;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use crate::standardized_types::enums::StrategyMode;
 
 pub mod guis;
 pub mod handle_gui;
@@ -13,7 +14,7 @@ pub mod strategy_commands;
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum RegistrationRequest {
-    Strategy(OwnerId),
+    Strategy(OwnerId, StrategyMode),
     Gui,
 }
 

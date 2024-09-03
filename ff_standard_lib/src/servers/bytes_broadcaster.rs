@@ -1,4 +1,4 @@
-use crate::servers::communications_async::{SecondaryDataSubscriber, SendError};
+use crate::servers::communications_async::{SecondaryDataSender, SecondaryDataSubscriber, SendError};
 use futures::future::join_all;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,7 +11,7 @@ pub enum BroadCastType {
 
 /// Manages subscriptions to incoming data, any concurrent process that needs a copy of this objects  primary data source can become a `SecondaryDataSubscriber` and thus will receive a copy of the data stream.
 pub struct BytesBroadcaster {
-    subscribers: Arc<RwLock<HashMap<String, Arc<Mutex<SecondaryDataSubscriber>>>>>,
+    subscribers: Arc<RwLock<HashMap<usize, Arc<SecondaryDataSender>>>>,
     broadcast_type: BroadCastType,
 }
 
@@ -29,21 +29,18 @@ impl BytesBroadcaster {
     }
 
     /// adds the subscriber to the subscriptions for this manager
-    pub async fn subscribe(&self, subscriber: SecondaryDataSubscriber) {
-        let sender = Arc::new(Mutex::new(subscriber));
+    pub async fn subscribe(&self, subscriber: Arc<SecondaryDataSender>) -> usize {
         let mut subs = self.subscribers.write().await;
         // Clone the Arc to get a new reference to the same subscriber
         // No need to lock the subscriber here since you're not accessing its interior
-        let id = {
-            let subscriber_guard = sender.lock().await;
-            subscriber_guard.id.clone()
-        };
-        subs.insert(id, sender);
+        let id = subs.len() + 1;
+        subs.insert(id, subscriber);
+        id
     }
 
-    pub async fn unsubscribe(&self, id: &str) {
+    pub async fn unsubscribe(&self, id: usize) {
         let mut subs = self.subscribers.write().await;
-        subs.remove(id);
+        subs.remove(&id);
     }
 
     pub async fn broadcast(&self, source_data: &Vec<u8>) -> Result<(), SendError> {
@@ -59,7 +56,6 @@ impl BytesBroadcaster {
         let mut error_messages = Vec::new();
 
         for subscriber in subs.values() {
-            let mut subscriber = subscriber.lock().await;
             match subscriber.send(source_data).await {
                 Ok(_) => {}
                 Err(e) => error_messages.push(e.msg),
@@ -86,7 +82,6 @@ impl BytesBroadcaster {
                 let subscriber = Arc::clone(subscriber);
                 let data_clone = Arc::clone(&source_data);
                 tokio::spawn(async move {
-                    let mut subscriber = subscriber.lock().await;
                     subscriber.send(&data_clone).await
                 })
             })

@@ -3,11 +3,12 @@ use chrono::{Datelike, TimeZone, Utc};
 use iced::{Point, Rectangle};
 use iced::alignment::Horizontal;
 use iced::widget::canvas::{Frame};
-use iced_graphics::geometry::{Path, Text};
+use iced_graphics::geometry::{Path, Style, Text};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use ff_standard_lib::app::settings::GraphElementSettings;
 use ff_standard_lib::standardized_types::enums::Resolution;
+use crate::canvas::graph::models::crosshair::color_from_template;
 use crate::canvas::graph::state::ChartState;
 
 
@@ -117,7 +118,7 @@ impl TimeScale {
             let mut text = Text {
                 content: time_and_importance.time_string.to_string(),
                 position: Point::new(true_x, scale_bounds.center_y() - self.settings.text_settings.size / 2.0),
-                color: self.settings.text_settings.color(),
+                color: color_from_template(&self.settings.text_settings.color),
                 size: iced::Pixels(self.settings.text_settings.size),
                 ..Default::default()
             };
@@ -186,7 +187,7 @@ impl TimeScale {
                 if self.settings.object_settings.show {
                     frame.stroke(&grid.grid_line, iced_graphics::geometry::Stroke {
                         width: self.settings.object_settings.size,
-                        style: self.settings.object_settings.color().into(),
+                        style: Style::from(color_from_template(&self.settings.object_settings.color)),
                         ..Default::default()
                     });
                 }

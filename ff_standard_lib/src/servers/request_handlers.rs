@@ -59,7 +59,7 @@ pub async fn data_server_manage_sequential_requests(communicator: Arc<Synchronou
                     vendor.resolutions_response(market_type).await
                 }
                 SynchronousRequestType::AccountCurrency(broker, account_id) => {
-                    broker.account_currency_reponse(account_id).await
+                    broker.account_currency_response(account_id).await
                 }
                 SynchronousRequestType::AccountInfo(broker, account_id) => {
                     broker.account_info_response(account_id).await

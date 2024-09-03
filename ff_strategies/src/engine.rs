@@ -91,7 +91,7 @@ impl Engine {
         task::spawn(async move {
             println!("Engine: Initializing the strategy...");
             let strategy_register_event =
-                RegistrationRequest::Strategy(self.owner_id.clone()).to_bytes();
+                RegistrationRequest::Strategy(self.owner_id.clone(), self.start_state.mode.clone()).to_bytes();
             self.registry_sender
                 .send(&strategy_register_event)
                 .await
@@ -101,10 +101,8 @@ impl Engine {
                     let registration_response =
                         RegistrationResponse::from_bytes(&response).unwrap();
                     match registration_response {
-                        RegistrationResponse::Success => {}
-                        RegistrationResponse::Error(e) => {
-                            panic!("Failed to register strategy: {:?}", e)
-                        }
+                        RegistrationResponse::Success => println!("Registered with data server"),
+                        RegistrationResponse::Error(e) => panic!("Failed to register strategy: {:?}", e)
                     }
                 }
                 None => {

@@ -1,8 +1,9 @@
 use iced::{Color, Point, Rectangle, Size};
 use iced::widget::canvas;
-use iced_graphics::geometry::{LineDash, Path, Stroke};
+use iced_graphics::geometry::{LineDash, Path, Stroke, Style};
 use std::collections::BTreeMap;
 use ff_standard_lib::app::settings::GraphElementSettings;
+use crate::canvas::graph::models::crosshair::color_from_template;
 use crate::canvas::graph::models::data::SeriesData;
 use crate::canvas::graph::state::ChartState;
 
@@ -105,7 +106,7 @@ impl PriceScale {
             None => return
         };
 
-        let last_price_color= match self.last_open_price{
+        let last_price_color= match self.last_open_price {
             Some(last_open_price) => {
                 if self.last_price > last_open_price {
                     Color::from_rgb(0.0, 0.8, 0.0)
@@ -115,7 +116,7 @@ impl PriceScale {
                     Color::from_rgb(0.0, 0.0, 0.8)
                 }
             },
-            None => self.last_price_settings.object_settings.color()
+            None => Color::from_rgb(0.0, 0.0, 0.8)
         };
 
         // Format the last price text with the specified decimal precision
@@ -214,7 +215,7 @@ impl PriceScale {
                 );
                 frame.stroke(&grid_line, iced_graphics::geometry::Stroke {
                     width: self.settings.object_settings.size,
-                    style: self.settings.object_settings.color().into(),
+                    style: Style::from(color_from_template(&self.settings.object_settings.color)),
                     ..Default::default()
                 });
             }
@@ -231,7 +232,7 @@ impl PriceScale {
                 frame.fill_text(canvas::Text {
                     content: label,
                     position: text_point,
-                    color: self.settings.text_settings.color(),
+                    color: color_from_template(&self.settings.text_settings.color),
                     size: iced::Pixels(self.settings.text_settings.size),
                     ..Default::default()
                 });
@@ -247,7 +248,7 @@ impl PriceScale {
             frame.fill_text(canvas::Text {
                 content: last_price_text,
                 position: Point::new(last_p_rectangle.x, last_p_rectangle.y),
-                color: self.settings.text_settings.color(),
+                color:  color_from_template(&self.settings.text_settings.color),
                 size: iced::Pixels(self.last_price_settings.text_settings.size),
                 ..Default::default()
             });

@@ -10,7 +10,7 @@ pub enum ColorTheme {
     Light,
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Deserialize, Serialize)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct ColorTemplate {
@@ -41,7 +41,7 @@ impl ColorTemplate {
 #[archive_attr(derive(Debug))]
 pub struct DisplaySettings {
     /// The color of the chart element.
-    pub color: Color,
+    pub color: ColorTemplate,
     /// The size of the chart element.
     pub size: f32,
     /// A boolean indicating whether the chart element should be shown.
@@ -57,14 +57,14 @@ impl DisplaySettings {
     }
 
     pub fn light_mode_settings() -> DisplaySettings {
-        DisplaySettings::new(Color::new(50, 50, 50), 1.0, true)
+        DisplaySettings::new(ColorTemplate::new(0.7, 0.7, 0.7, 1.0), 1.0, true)
     }
 
     pub fn dark_mode_settings() -> DisplaySettings {
-        DisplaySettings::new(Color::new(50, 50, 50), 1.0, true)
+        DisplaySettings::new(ColorTemplate::new(0.0, 0.0, 0.0, 1.0), 1.0, true)
     }
 
-    pub fn new(color: Color, size: f32, show: bool) -> Self {
+    pub fn new(color: ColorTemplate, size: f32, show: bool) -> Self {
         DisplaySettings { color, size, show }
     }
 }
@@ -73,7 +73,7 @@ impl Default for DisplaySettings {
     fn default() -> Self {
         DisplaySettings {
             show: true,
-            color: Color::new(50, 50, 50),
+            color: ColorTemplate::new(0.7, 0.7, 0.7, 1.0),
             size: 1.0,
         }
     }

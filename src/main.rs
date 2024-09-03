@@ -1,43 +1,46 @@
 use std::hash::Hash;
-use std::intrinsics::mir::Len;
 use std::sync::Arc;
-use iced::{futures, Application, Command, Element, Theme};
+use iced::{futures, Application, Command, Element, Settings, Theme};
 use iced::advanced::Hasher;
 use iced::advanced::subscription::{EventStream, Recipe};
 use iced::futures::executor::block_on;
 use iced::futures::stream::BoxStream;
 use iced::Length::Fill;
-use iced::widget::{canvas, container};
-use tokio::sync::{Mutex, Notify};
-use ff_charting::canvas::graph::canvas::SeriesCanvas;
+use iced::widget::{canvas, container, Text};
+use tokio::runtime::Runtime;
+use tokio::sync::{Mutex};
 use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, initialize_clients, ConnectionType, PlatformMode};
 use ff_standard_lib::servers::communications_async::SecondaryDataReceiver;
+use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::strategy_events::StrategyEvent;
 use ff_standard_lib::strategy_registry::guis::RegistryGuiResponse;
 use ff_standard_lib::strategy_registry::RegistrationRequest;
 use ff_standard_lib::traits::bytes::Bytes;
 
-#[tokio::main]
-async fn main() {
-    initialize_clients(&PlatformMode::MultiMachine).await?;
 
-    iced::application(
-        "Fund Forge",
-        Default::default()
-    ).run()
+fn main() {
+    let runtime = Runtime::new().unwrap();
+    // Run the async code inside the runtime
+    runtime.block_on(async {
+        let result = initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
+    });
+    match FundForgeApplication::run(Settings::default()) {
+        Ok(_) => {}
+        Err(e) => println!("Error running fund forge: {}", e)
+    }
 }
 
 
 
 /// Main application struct
 pub struct FundForgeApplication {
-    //canvas: SeriesCanvas,
+    backtest_strategies: Vec<OwnerId>
 }
 
 impl FundForgeApplication {
     pub fn new() -> Self {
         FundForgeApplication{
-
+            backtest_strategies: vec![]
         }
     }
 }
@@ -53,7 +56,7 @@ impl Application for FundForgeApplication {
     }
 
     fn title(&self) -> String {
-        String::from("Series Canvas Chart")
+        String::from("Fund Forge")
     }
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
@@ -68,7 +71,7 @@ impl Application for FundForgeApplication {
                         StrategyEvent::TimeSlice(_, slice) => {
                             //self.notify.notify_one();
                             //self.canvas.update(slice);
-                            println!("{:?}" slice)
+                            println!("{:?}", slice)
                         }
                         StrategyEvent::ShutdownEvent(_, _) => {}
                         StrategyEvent::WarmUpComplete(_) => {}
@@ -77,18 +80,23 @@ impl Application for FundForgeApplication {
                     }
                 }
             }
-            _ => {}
+            RegistryGuiResponse::ListStrategiesResponse{backtest, live, live_paper} => {
+                println!("backtest: {:?}, live: {:?}, live paper: {:?}, ",  backtest, live, live_paper)
+            }
+            RegistryGuiResponse::Subscribed(_, _) => {}
+            RegistryGuiResponse::Unsubscribed(_) => {}
         }
         Command::none()
     }
 
     fn view(&self) -> Element<Self::Message> {
-        let canvas_element = canvas(&self.canvas)
+        Text::new("fund forge").into()
+       /* let canvas_element = canvas(&self.canvas)
             .width(Fill)
             .height(Fill);
 
         container(canvas_element)
-            .into()
+            .into()*/
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
@@ -119,7 +127,7 @@ impl Recipe for StrategyWindowRecipe {
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<'static, Self::Output> {
         Box::pin(futures::stream::unfold(self.registry_reader.clone(), |receiver| async move {
             let mut locked_receiver = receiver.lock().await;
-            locked_receiver.receive().await.map(|message| (message, receiver.clone()))
+            locked_receiver.receive().await.map(|message| (RegistryGuiResponse::from_bytes(&message).unwrap(), receiver.clone()))
         }))
     }
 }

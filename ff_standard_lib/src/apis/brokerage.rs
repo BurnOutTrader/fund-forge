@@ -94,7 +94,7 @@ pub mod server_responses {
             &self,
             market_type: MarketType,
         ) -> Result<SynchronousResponseType, FundForgeError>;
-        async fn account_currency_reponse(
+        async fn account_currency_response(
             &self,
             account_id: AccountId,
         ) -> Result<SynchronousResponseType, FundForgeError>;
@@ -116,12 +116,12 @@ pub mod server_responses {
             api_client.symbols_response(market_type).await
         }
 
-        async fn account_currency_reponse(
+        async fn account_currency_response(
             &self,
             account_id: AccountId,
         ) -> Result<SynchronousResponseType, FundForgeError> {
             let api_client = broker_api_object(self).await;
-            api_client.account_currency_reponse(account_id).await
+            api_client.account_currency_response(account_id).await
         }
 
         async fn account_info_response(

@@ -184,7 +184,7 @@ pub enum SynchronousResponseType {
 
     TickSize(Symbol, f64),
 
-    DecimalAccuracy(Symbol, u64),
+    DecimalAccuracy(Symbol, u8),
 }
 
 impl SynchronousResponseType {

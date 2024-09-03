@@ -156,7 +156,7 @@ pub mod client_requests {
             market_type: MarketType,
         ) -> Result<Vec<SubscriptionResolutionType>, FundForgeError>;
         async fn markets(&self) -> Result<Vec<MarketType>, FundForgeError>;
-        async fn decimal_accuracy(&self, symbol: Symbol) -> Result<u64, FundForgeError>;
+        async fn decimal_accuracy(&self, symbol: Symbol) -> Result<u8, FundForgeError>;
         async fn tick_size(&self, symbol: Symbol) -> Result<f64, FundForgeError>;
     }
 
@@ -216,7 +216,7 @@ pub mod client_requests {
             }
         }
 
-        async fn decimal_accuracy(&self, symbol: Symbol) -> Result<u64, FundForgeError> {
+        async fn decimal_accuracy(&self, symbol: Symbol) -> Result<u8, FundForgeError> {
             let api_client = self.synchronous_client().await;
             let request = SynchronousRequestType::DecimalAccuracy(self.clone(), symbol);
             let response = match api_client.send_and_receive(request.to_bytes(), false).await {

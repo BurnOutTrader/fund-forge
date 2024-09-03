@@ -1,22 +1,26 @@
 use iced::widget::canvas;
 use iced::mouse::Cursor;
-use iced_graphics::geometry::{LineDash, Path, Stroke};
+use iced_graphics::geometry::{LineDash, Path, Stroke, Style};
 use iced::Point;
 use chrono::{DateTime};
+use iced_graphics::core::Color;
 use ff_standard_lib::app::settings::{ColorTemplate, DisplaySettings, GraphElementSettings, TextSettings};
-use ff_standard_lib::standardized_types::Color;
 use crate::canvas::graph::state::ChartState;
 
 
 const TIME_LABEL_FORMAT: &str = "%Y-%m-%d %H:%M:%S";
-const CROSSHAIRDASHLENGTH: f32 = 5.0;
-const CROSSHAIRGAPLENGTH: f32 = 5.0;
+const CROSSHAIR_DASH_LENGTH: f32 = 5.0;
+const CROSSHAIR_GAP_LENGTH: f32 = 5.0;
+
+pub fn color_from_template(color_template: &ColorTemplate) -> Color {
+    Color::new(color_template.r, color_template.g, color_template.b, color_template.a)
+}
 
 #[derive(Debug, Clone)]
 pub struct CrossHair {
     pub settings: GraphElementSettings,
     pub logarithmic: bool,
-    pub decimal_precision: usize,
+    pub decimal_precision: u8,
 }
 
 impl Default for CrossHair {
@@ -30,39 +34,39 @@ impl Default for CrossHair {
 }
 
 impl CrossHair {
-    pub fn light_mode_settings(decimal_precision: usize, logarithmic: bool) -> Self {
+    pub fn light_mode_settings(decimal_precision: u8, logarithmic: bool) -> Self {
         let text_settings = TextSettings {
-            color: ColorTemplate::new(0.02, 0.02, 0.02, 1.0),
+            color: ColorTemplate::new(0.7, 0.7, 0.7, 1.0),
             size: 12.0,
             show: true,
         };
         let object_settings = DisplaySettings {
-            color: Color::new(50, 50, 50),
+            color: ColorTemplate::new(0.7, 0.7, 0.7, 1.0),
             size: 1.0,
             show: true,
         };
         let settings = GraphElementSettings::new(object_settings, text_settings);
         Self {
-            settings: settings,
+            settings,
             logarithmic,
             decimal_precision,
         }
     }
 
-    pub fn dark_mode_settings(decimal_precision: usize, logarithmic: bool) -> Self {
+    pub fn dark_mode_settings(decimal_precision: u8, logarithmic: bool) -> Self {
         let text_settings = TextSettings {
             color:  ColorTemplate::new(0.4, 0.4, 0.4, 1.0),
             size: 12.0,
             show: true,
         };
         let object_settings = DisplaySettings {
-            color:  Color::new(50, 50, 50),
+            color:  ColorTemplate::new(0.0, 0.0, 0.0, 1.0),
             size: 1.0,
             show: true,
         };
         let settings = GraphElementSettings::new(object_settings, text_settings);
         Self {
-            settings: settings,
+            settings,
             logarithmic,
             decimal_precision,
         }
@@ -78,13 +82,13 @@ impl CrossHair {
             return;
         }
 
-        let segments = vec![CROSSHAIRDASHLENGTH, CROSSHAIRGAPLENGTH];
+        let segments = vec![CROSSHAIR_DASH_LENGTH, CROSSHAIR_GAP_LENGTH];
         let line_dash = LineDash {
             segments: &segments,
             offset: 1,
         };
         let stroke = Stroke {
-            style: self.settings.object_settings.color().into(),
+            style: Style::from(color_from_template(&self.settings.object_settings.color)),
             width: self.settings.object_settings.size,
             line_cap: Default::default(),
             line_join: Default::default(),
@@ -96,15 +100,15 @@ impl CrossHair {
             Point::new(view.drawing_area.x, position.y),
             Point::new(view.drawing_area.x + view.drawing_area.width, position.y),
         );
-        frame.stroke(&horizontal_line, stroke.clone().with_color(self.settings.object_settings.color()));
+        frame.stroke(&horizontal_line, stroke.clone().with_color(color_from_template(&self.settings.object_settings.color)));
 
         // Calculate price and draw price label
         let price = view.value_at_y(position.y, self.logarithmic);
-        let price_label = format!("{:.*}", self.decimal_precision, price);
+        let price_label = format!("{:.*}", self.decimal_precision as usize, price);
         frame.fill_text(canvas::Text {
             content: price_label,
             position: Point::new(view.drawing_area.x + view.drawing_area.width - (self.settings.text_settings.size * self.decimal_precision as f32), position.y),
-            color: self.settings.text_settings.color(),
+            color: color_from_template(&self.settings.text_settings.color),
             size: iced::Pixels(self.settings.text_settings.size),
             ..Default::default()
         });
@@ -119,7 +123,7 @@ impl CrossHair {
             Point::new(position.x, view.drawing_area.y),
             Point::new(position.x, view.drawing_area.y + view.drawing_area.height),
         );
-        frame.stroke(&vertical_line, stroke.with_color(self.settings.object_settings.color()));
+        frame.stroke(&vertical_line, stroke.with_color(color_from_template(&self.settings.object_settings.color)));
         // Adjust the x-coordinate of the position
 
         let time = view.value_at_x(position.x);
@@ -138,7 +142,7 @@ impl CrossHair {
         frame.fill_text(canvas::Text {
             content: time_label,
             position: Point::new(position_x, view.drawing_area.y + view.drawing_area.height - self.settings.text_settings.size),
-            color: self.settings.text_settings.color(),
+            color: color_from_template(&self.settings.text_settings.color),
             size: iced::Pixels(self.settings.text_settings.size),
             ..Default::default()
         });
