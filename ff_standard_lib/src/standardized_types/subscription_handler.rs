@@ -183,7 +183,6 @@ impl SubscriptionHandler {
 
     /// Updates any consolidators with primary data
     pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<TimeSlice> {
-
         // we need to keep a map of the open bars, we only want the most recently created open bar, else we will have to many bars
         let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
 

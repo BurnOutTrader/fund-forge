@@ -158,7 +158,7 @@ pub async fn get_async_sender(
 ///        assert!(result.is_ok(), "ensure ff_data_server is launched for multi machine tests");
 ///    }
 /// ```
-pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), FundForgeError> {
+pub async fn initialize_clients(platform_mode: &PlatformMode, gui_enabled: bool) -> Result<(), FundForgeError> {
     //initialize_strategy_registry(platform_mode.clone()).await;
     match platform_mode {
         PlatformMode::SingleMachine => {
@@ -195,28 +195,30 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
                 Arc::new(Mutex::new(async_receiver)),
             );
 
-            // sender simulates sending to a server, receiver simulates the server listener
-            let (server_sender, server_receiver) = mpsc::channel(1000);
-            // sender simulates the servers sender, receiver simulates the clients listener
-            let (client_sender, client_receiver) = mpsc::channel(1000);
-            let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
-            let async_receiver =
-                SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
-            registry_manage_async_requests(
-                Arc::new(async_sender),
-                Arc::new(Mutex::new(async_receiver)),
-            )
-            .await;
+            if gui_enabled {
+                // sender simulates sending to a server, receiver simulates the server listener
+                let (server_sender, server_receiver) = mpsc::channel(1000);
+                // sender simulates the servers sender, receiver simulates the clients listener
+                let (client_sender, client_receiver) = mpsc::channel(1000);
+                let async_sender = SecondaryDataSender::InternalSender(Arc::new(client_sender));
+                let async_receiver =
+                    SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(server_receiver));
+                registry_manage_async_requests(
+                    Arc::new(async_sender),
+                    Arc::new(Mutex::new(async_receiver)),
+                )
+                    .await;
 
-            let async_sender = SecondaryDataSender::InternalSender(Arc::new(server_sender));
-            async_senders.insert(ConnectionType::StrategyRegistry, Arc::new(async_sender));
+                let async_sender = SecondaryDataSender::InternalSender(Arc::new(server_sender));
+                async_senders.insert(ConnectionType::StrategyRegistry, Arc::new(async_sender));
 
-            let async_receiver =
-                SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
-            async_receivers.insert(
-                ConnectionType::StrategyRegistry,
-                Arc::new(Mutex::new(async_receiver)),
-            );
+                let async_receiver =
+                    SecondaryDataReceiver::InternalReceiver(InternalReceiver::new(client_receiver));
+                async_receivers.insert(
+                    ConnectionType::StrategyRegistry,
+                    Arc::new(Mutex::new(async_receiver)),
+                );
+            }
 
             Ok(())
         }
@@ -226,6 +228,9 @@ pub async fn initialize_clients(platform_mode: &PlatformMode) -> Result<(), Fund
 
             // for each connection type specified in our server_settings.toml we will establish a connection
             for (connection_type, settings) in settings_guard.iter() {
+                if !gui_enabled && connection_type == &ConnectionType::StrategyRegistry {
+                    continue
+                }
                 //setup sync client
                 if connection_type != &ConnectionType::StrategyRegistry {
                     let client = create_api_client(settings).await.unwrap();

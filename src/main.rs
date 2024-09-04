@@ -24,7 +24,7 @@ use ff_standard_lib::traits::bytes::Bytes;
 
 #[tokio::main]
 async fn main() {
-    // Run the async code inside the runtime
+   /* // Run the async code inside the runtime
     block_on(async {
         let result = initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
     });
@@ -55,7 +55,7 @@ async fn main() {
     match FundForgeApplication::run(Settings::with_flags(flags)) {
         Ok(_) => {}
         Err(e) => println!("Error running fund forge: {}", e)
-    }
+    }*/
 }
 
 pub struct Flags {

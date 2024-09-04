@@ -19,15 +19,9 @@ use ff_standard_lib::standardized_types::subscriptions::CandleType::CandleStick;
 /// 1. Put all the csv data into one folder
 /// 2. Configure the subscription properties and directory path
 fn main() -> Result<(), Box<dyn Error>> {
-    let dir_path = "/Users/kevmonaghan/Downloads/AUD-CAD";
-    let base_data_path = PathBuf::from("/Users/kevmonaghan/Downloadss/data/parsed");
-
-    if !base_data_path.exists() {
-        fs::create_dir_all(&base_data_path)?;
-    }
 
     let symbol = Symbol {
-        name: "AUD-CAD".to_string(),
+        name: "CAD-JPY".to_string(),
         market_type: MarketType::Forex,
         data_vendor: DataVendor::Test,
     };
@@ -35,11 +29,23 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Define subscription
     let subscription = DataSubscription {
         symbol: symbol.clone(),
-        resolution: Resolution::Minutes(1),
-        base_data_type: BaseDataType::Candles,
+        resolution: Resolution::Instant,
+        base_data_type: BaseDataType::Quotes,
         market_type: MarketType::Forex,
-        candle_type: Some(CandleType::CandleStick),
+        candle_type: None,
     };
+
+
+    let dir_path = format!("/Users/kevmonaghan/Downloads/{}", symbol.name);
+    let base_data_path = PathBuf::from("/Users/kevmonaghan/Downloadss/data/parsed");
+
+    if !base_data_path.exists() {
+        fs::create_dir_all(&base_data_path)?;
+    }
+
+
+
+
 
 /*    let subscription_quotes = DataSubscription {
         symbol: symbol.clone(),
@@ -138,7 +144,7 @@ fn load_csv_quotes(file_path: &str, symbol: Symbol) -> Result<BTreeMap<DateTime<
         let parts: Vec<&str> = line.split(',').collect();
 
         let time = parts.get(0).expect("REASON").to_string();
-        let format = "%Y%m%d %H%M%S"; // Format including milliseconds
+        let format = "%Y%m%d %H%M%S%f"; // Format including milliseconds
         let naive_datetime = NaiveDateTime::parse_from_str(&time, format).unwrap();
 
         // Convert NaiveDateTime to DateTime<Utc>

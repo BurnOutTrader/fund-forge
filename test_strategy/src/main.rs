@@ -30,11 +30,17 @@ use ff_standard_lib::standardized_types::Color;
     broker_map
 }*/
 
-pub async fn create_test_strategy(
-    strategy_event_sender: Sender<EventTimeSlice>,
-    notify: Arc<Notify>,
-) -> FundForgeStrategy {
-    FundForgeStrategy::initialize(
+
+// to launch on separate machine
+#[tokio::main]
+async fn main() {
+    const GUI_ENABLED: bool = false;
+    initialize_clients(&PlatformMode::MultiMachine, GUI_ENABLED).await.unwrap();
+
+    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
+    let notify = Arc::new(Notify::new());
+    // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
+    let strategy = FundForgeStrategy::initialize(
         Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, todo! this needs to be upgraded in the future to be more reliable in Single and Multi machine modes.
         notify.clone(),
         StrategyMode::Backtest,                 // Backtest, Live, LivePaper
@@ -63,33 +69,8 @@ pub async fn create_test_strategy(
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
         Some(Duration::milliseconds(250)),
-        true
-    )
-    .await
-}
-
-// to launch via platform
-pub async fn create_test_strategy_launch() {
-    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
-    let notify = Arc::new(Notify::new());
-    // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
-    let strategy = create_test_strategy(strategy_event_sender, notify.clone()).await;
-
-    task::spawn(async move {
-        on_data_received(strategy, notify, strategy_event_receiver).await;
-    });
-}
-
-// to launch on separate machine
-#[tokio::main]
-async fn main() {
-    initialize_clients(&PlatformMode::MultiMachine)
-        .await
-        .unwrap();
-    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
-    let notify = Arc::new(Notify::new());
-    // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
-    let strategy = create_test_strategy(strategy_event_sender, notify.clone()).await;
+        GUI_ENABLED
+    ).await;
 
     on_data_received(strategy, notify, strategy_event_receiver).await;
 }
