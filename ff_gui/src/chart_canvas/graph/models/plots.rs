@@ -1,5 +1,5 @@
 use ff_standard_lib::app::settings::GraphElementSettings;
-use crate::canvas::graph::enums::plots::PlotStyle;
+use crate::chart_canvas::graph::enums::plots::PlotStyle;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct XYPlot {

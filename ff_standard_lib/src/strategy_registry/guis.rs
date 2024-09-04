@@ -4,6 +4,8 @@ use crate::standardized_types::OwnerId;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::collections::BTreeMap;
+use crate::standardized_types::enums::StrategyMode;
+use crate::standardized_types::subscriptions::DataSubscription;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -35,6 +37,8 @@ impl Bytes<Self> for GuiRequest {
 pub enum RegistryGuiResponse {
     StrategyEventUpdates(OwnerId, i64, EventTimeSlice),
     ListStrategiesResponse{backtest: Vec<OwnerId>, live: Vec<OwnerId>, live_paper: Vec<OwnerId>},
+    StrategyAdded(OwnerId, StrategyMode, Vec<DataSubscription>),
+    StrategyDisconnect(OwnerId),
     Buffer {buffer: BTreeMap<OwnerId, BTreeMap<i64, EventTimeSlice>> },
 }
 

@@ -1,7 +1,7 @@
 use iced::mouse::Button;
 use iced::Point;
-use crate::canvas::graph::enums::areas::ChartAreas;
-use crate::canvas::graph::state::ChartState;
+use crate::chart_canvas::graph::enums::areas::ChartAreas;
+use crate::chart_canvas::graph::state::ChartState;
 
 #[derive(Clone, PartialEq, Copy)]
 pub struct Click {

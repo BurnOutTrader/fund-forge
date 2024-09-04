@@ -1,7 +1,7 @@
 use iced::Rectangle;
 use iced::widget::canvas::Frame;
-use crate::canvas::graph::models::time_scale::TimeScale;
-use crate::canvas::graph::state::ChartState;
+use crate::chart_canvas::graph::models::time_scale::TimeScale;
+use crate::chart_canvas::graph::state::ChartState;
 
 #[derive(Debug, Clone)]
 pub enum XScale {

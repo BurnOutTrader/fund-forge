@@ -62,7 +62,7 @@ impl VerticleLine {
         &self.id
     }
 
-    /*pub fn draw(&self, time_zone: &Tz, state: &ChartState, frame: &mut canvas::Frame, cursor: iced::mouse::Cursor) {
+    /*pub fn draw(&self, time_zone: &Tz, state: &ChartState, frame: &mut chart_canvas::Frame, cursor: iced::mouse::Cursor) {
         if let Some(utc_time) = self.x_alignment {
             let time = DrawingTool::x_alignment(utc_time, time_zone);
             let position = match self.is_ready {
@@ -93,7 +93,7 @@ impl VerticleLine {
 
             let width = self.settings.object_settings.size;
             let height = state.drawing_area.height;
-            let line = canvas::Path::line(Point::new(position.x, state.drawing_area.y), Point::new(position.x, state.drawing_area.y + height));
+            let line = chart_canvas::Path::line(Point::new(position.x, state.drawing_area.y), Point::new(position.x, state.drawing_area.y + height));
             frame.stroke(&line, Stroke::default().with_color(color).with_width(width));
         }
     }*/
@@ -173,7 +173,7 @@ impl HorizontalLine {
         self.price = Some(price);
     }
 
-    /* pub fn draw(&self, view: &ChartState, frame: &mut canvas::Frame, cursor: iced::mouse::Cursor) {
+    /* pub fn draw(&self, view: &ChartState, frame: &mut chart_canvas::Frame, cursor: iced::mouse::Cursor) {
         let position = match self.is_ready {
             false => if let Some(cursor_position) = cursor.position() {
                 cursor_position
@@ -199,7 +199,7 @@ impl HorizontalLine {
         };
 
         let width = view.drawing_area.width ;
-        let line = canvas::Path::line(Point::new(position.x, view.drawing_area.x), Point::new(view.drawing_area.x, position.y + width));
+        let line = chart_canvas::Path::line(Point::new(position.x, view.drawing_area.x), Point::new(view.drawing_area.x, position.y + width));
         frame.stroke(&line, Stroke::default().with_color(color).with_width( self.settings.object_settings.size));
 
     }*/

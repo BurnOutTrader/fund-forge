@@ -3,6 +3,7 @@ use crate::standardized_types::OwnerId;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::standardized_types::enums::StrategyMode;
+use crate::standardized_types::subscriptions::DataSubscription;
 
 pub mod guis;
 pub mod handle_gui;
@@ -14,7 +15,7 @@ pub mod strategy_commands;
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum RegistrationRequest {
-    Strategy(OwnerId, StrategyMode),
+    Strategy(OwnerId, StrategyMode, Vec<DataSubscription>),
     Gui,
 }
 

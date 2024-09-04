@@ -5,7 +5,7 @@ use iced::Point;
 use chrono::{DateTime};
 use iced_graphics::core::Color;
 use ff_standard_lib::app::settings::{ColorTemplate, DisplaySettings, GraphElementSettings, TextSettings};
-use crate::canvas::graph::state::ChartState;
+use crate::chart_canvas::graph::state::ChartState;
 
 
 const TIME_LABEL_FORMAT: &str = "%Y-%m-%d %H:%M:%S";

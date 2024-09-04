@@ -20,8 +20,8 @@ lazy_static! {
     static ref STRATEGY_EVENTS_BUFFER: Arc<RwLock<HashMap<OwnerId, Arc<RwLock<BTreeMap<i64, EventTimeSlice>>>>>> = Arc::new(RwLock::new(HashMap::new()));
 }
 
-pub(crate) async fn broadcast(bytes: &Vec<u8>) {
-    GUI_BROADCATSER.broadcast(bytes).await;
+pub(crate) async fn broadcast(bytes: Vec<u8>) {
+    GUI_BROADCATSER.broadcast(&bytes).await;
 }
 
 pub(crate) async fn send_subscriber(id: usize, bytes: Vec<u8>) {
@@ -76,12 +76,6 @@ async fn handle_registration(owner_id: OwnerId, mode: StrategyMode) -> Result<Re
             Err(response)
         }
         false => {
-            tokio::spawn(async move {
-                let live = get_live_connected_strategies().await;
-                let backtest = get_backtest_connected_strategies().await;
-                let live_paper = get_live_paper_connected_strategies().await;
-                broadcast(&RegistryGuiResponse::ListStrategiesResponse { live, backtest, live_paper }.to_bytes()).await;
-            });
             registry.push(owner_id);
             let response = RegistrationResponse::Success;
             Ok(response)
@@ -102,12 +96,8 @@ async fn handle_disconnect(owner_id: OwnerId, mode: StrategyMode) {
         }
     };
     registry.write().await.retain(| x | x != &owner_id );
-    tokio::spawn(async move {
-        let live = get_live_connected_strategies().await;
-        let backtest = get_backtest_connected_strategies().await;
-        let live_paper = get_live_paper_connected_strategies().await;
-        broadcast(&RegistryGuiResponse::ListStrategiesResponse { live, backtest, live_paper }.to_bytes()).await;
-    });
+    let strategy_shutdown = RegistryGuiResponse::StrategyDisconnect(owner_id);
+    broadcast(strategy_shutdown.to_bytes()).await;
 }
 
 pub async fn handle_strategies(
@@ -137,7 +127,7 @@ pub async fn handle_strategies(
         let owner_id = owner_id.clone();
         let receiver = receiver.clone();
         let mut listener = receiver.lock().await;
-
+        let mut good_shutdown = false;
         while let Some(data) = listener.receive().await {
             let owner_id = owner_id.clone();
             let sender = sender.clone();
@@ -153,7 +143,7 @@ pub async fn handle_strategies(
                             utc_time_stamp.clone(),
                             slice,
                         );
-                        broadcast(&response.to_bytes()).await
+                        broadcast(response.to_bytes()).await
                     }
                     StrategyRequest::ShutDown(_last_time) => {
                         let response = StrategyResponse::ShutDownAcknowledged(owner_id.clone());
@@ -162,11 +152,14 @@ pub async fn handle_strategies(
                             Err(_) => {}
                         }
                         handle_disconnect(owner_id.clone(), mode.clone()).await;
+                        good_shutdown = true;
                     }
                 }
             });
         }
-        handle_disconnect(owner_id.clone(), mode.clone()).await;
+        if !good_shutdown {
+            handle_disconnect(owner_id.clone(), mode.clone()).await;
+        }
         println! {"{} Strategy Disconnected", owner_id}
     });
 }

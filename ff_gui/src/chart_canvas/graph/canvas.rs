@@ -18,15 +18,15 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, Mutex, Notify, RwLock};
 use tokio::task;
 use ff_standard_lib::standardized_types::OwnerId;
-use crate::canvas::graph::enums::areas::ChartAreas;
-use crate::canvas::graph::enums::x_scale::XScale;
-use crate::canvas::graph::enums::y_scale::YScale;
-use crate::canvas::graph::models::crosshair::CrossHair;
-use crate::canvas::graph::models::data::SeriesData;
-use crate::canvas::graph::models::price_scale::PriceScale;
-use crate::canvas::graph::models::time_scale::TimeScale;
-use crate::canvas::graph::state::ChartState;
-use crate::canvas::graph::view;
+use crate::chart_canvas::graph::enums::areas::ChartAreas;
+use crate::chart_canvas::graph::enums::x_scale::XScale;
+use crate::chart_canvas::graph::enums::y_scale::YScale;
+use crate::chart_canvas::graph::models::crosshair::CrossHair;
+use crate::chart_canvas::graph::models::data::SeriesData;
+use crate::chart_canvas::graph::models::price_scale::PriceScale;
+use crate::chart_canvas::graph::models::time_scale::TimeScale;
+use crate::chart_canvas::graph::state::ChartState;
+use crate::chart_canvas::graph::view;
 use crate::clicks::click_location;
 use ff_standard_lib::drawing_objects::drawing_tool_enum::DrawingTool;
 use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, ConnectionType};
@@ -39,28 +39,26 @@ use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::strategy_registry::guis::RegistryGuiResponse;
 use ff_standard_lib::strategy_registry::RegistrationRequest;
 use ff_standard_lib::traits::bytes::Bytes;
-use crate::canvas::graph::traits::TimeSeriesGraphElements;
+use crate::chart_canvas::graph::traits::TimeSeriesGraphElements;
 
 ///  A graph is the canvases object responsible for bringing the other elements that make up a graph, it is responsible for drawing, update and event state.
 /// The state property manages the sections of the graph, scale areas etc and converts position.x and positiion.y into values according to the graph data set.
 #[derive(Debug, Clone)]
-pub struct SeriesCanvas {
+pub struct ChartCanvas {
     pub data: BTreeMap<i64, Vec<SeriesData>>,
     pub background_color: Color,
     pub x_scale: XScale,
     pub bounds: Rectangle,
     pub y_scale: YScale,
-    pub drawn_objects: Vec<DrawingTool>, //ToDO need to manually update the drawing tools for each canvas as it cant be async
+    pub drawn_objects: Vec<DrawingTool>, //ToDO need to manually update the drawing tools for each chart_canvas as it cant be async
     pub crosshair: CrossHair,
     pub time_zone: Tz,
-    pub owner: OwnerId,
-    pub data_added: RefCell<Option<i64>>, // if data is added we hold the x_value of the data here so that we can update our state in update().
+    pub data_added: Option<i64>, //todo... THIS WAS REMOVED FROM UPDATE ETC if data is added we hold the x_value of the data here so that we can update our state in update().
 }
 
-impl SeriesCanvas {
-    pub fn new(owner: OwnerId, data: BTreeMap<i64, Vec<SeriesData>>, background_color: Color, x_scale: XScale, bounds: Rectangle, y_scale: YScale, drawn_objects: Vec<DrawingTool>, crosshair: CrossHair, time_zone: Tz) -> Self {
-        //let data_added = &data.keys().next().unwrap().clone();
-        SeriesCanvas {
+impl ChartCanvas {
+    pub fn new(data: BTreeMap<i64, Vec<SeriesData>>, background_color: Color, x_scale: XScale, bounds: Rectangle, y_scale: YScale, drawn_objects: Vec<DrawingTool>, crosshair: CrossHair, time_zone: Tz) -> Self {
+        ChartCanvas {
             data,
             background_color,
             x_scale,
@@ -69,8 +67,7 @@ impl SeriesCanvas {
             drawn_objects,
             crosshair,
             time_zone,
-            owner,
-            data_added: RefCell::new(None),
+            data_added: None,
         }
     }
 
@@ -87,49 +84,68 @@ impl SeriesCanvas {
         data
     }
 
-    pub fn update(&mut self, time_slice: TimeSlice) {
+    pub fn update(&mut self, base_data: &BaseDataEnum) {
+        println!("{}", base_data);
+        self.data_added = None;
         let time_zone = self.time_zone.clone();
-        
-        for base_data in time_slice {
-            let time = base_data.time_local(&time_zone).timestamp();
-            //if the data is bar type this will update the last price, if not then it will have no effect
-            let mut last_open_price: Option<f64> = None;
-            let mut last_price: Option<f64> = None;
 
-            // Insert the new data
-            if !self.data.contains_key(&time) {
-                self.data.insert(time.clone(), Vec::new());
-            }
+        let time = base_data.time_local(&time_zone).timestamp();
+        //if the data is bar type this will update the last price, if not then it will have no effect
+        let mut last_open_price: Option<f64> = None;
+        let mut last_price: Option<f64> = None;
 
-            // Loop through our new data by type and make any type specific updates
-            
-            let mut data_added = false;
-            match base_data {
-                BaseDataEnum::Candle(candle_stick) => {
-                    last_open_price = Some(candle_stick.open);
-                    last_price = Some(candle_stick.close);
-                    if let Some(last_open_price) = last_open_price {
-                        self.y_scale.last_comparison_value(last_open_price)
+        // Insert the new data
+        if !self.data.contains_key(&time) {
+            self.data.insert(time.clone(), Vec::new());
+        }
+
+        // Loop through our new data by type and make any type specific updates
+
+        let mut data_added = false;
+        match base_data {
+            BaseDataEnum::Candle(candle_stick) => {
+                last_open_price = Some(candle_stick.open);
+                last_price = Some(candle_stick.close);
+                if let Some(last_open_price) = last_open_price {
+                    self.y_scale.last_comparison_value(last_open_price)
+                }
+                if let Some(last_price) = last_price {
+                    self.y_scale.last_value(last_price)
+                }
+
+                if let Some(vec) = self.data.get_mut(&time) {
+                    // Collect the indices of elements to remove
+                    let mut indices_to_remove = Vec::new();
+                    let mut data_added = false;
+
+                    for (i, data) in vec.iter_mut().enumerate() {
+                        if data.time_utc() == candle_stick.time_utc().timestamp() {
+                            indices_to_remove.push(i);
+                        }
                     }
-                    if let Some(last_price) = last_price {
-                        self.y_scale.last_value(last_price)
+
+                    // Remove elements in reverse order to avoid shifting indices
+                    for &i in indices_to_remove.iter().rev() {
+                        vec.remove(i);
                     }
-                    
-                    //todo we will need to handle different series on the same chart, update open vs closed bars etc
-                    if let Some(vec) = self.data.get_mut(&time) {
-                        *vec = vec![SeriesData::CandleStick(candle_stick)];
-                        data_added = true
-                    } else {
-                        self.data.insert(candle_stick.time_utc().timestamp(), vec![SeriesData::CandleStick(candle_stick)]);
-                        data_added = true
-                    }
-                },
-                _ => {}
-            }
-            
-            if data_added {
-                *self.data_added.borrow_mut() = Some(time);
-            }
+
+                    // Add the new candle stick data
+                    vec.push(SeriesData::CandleStick(candle_stick.clone()));
+                    data_added = true;
+                } else {
+                    // Insert a new vector if the time key does not exist
+                    self.data.insert(
+                        candle_stick.time_utc().timestamp(),
+                        vec![SeriesData::CandleStick(candle_stick.clone())],
+                    );
+                    data_added = true;
+                }
+            },
+            _ => {}
+        }
+
+        if data_added {
+            self.data_added = Some(time);
         }
     }
 
@@ -205,7 +221,7 @@ impl SeriesCanvas {
 }
 
 
-impl canvas::Program<RegistryGuiResponse> for SeriesCanvas {
+impl canvas::Program<RegistryGuiResponse> for ChartCanvas {
     type State = ChartState;
 
     fn update(&self, state: &mut Self::State, event: Event, bounds: Rectangle, cursor: Cursor) -> (Status, Option<RegistryGuiResponse>) {
@@ -226,9 +242,8 @@ impl canvas::Program<RegistryGuiResponse> for SeriesCanvas {
         if self.bounds != bounds {
             state.update_bounds(&bounds, self.y_scale.scale_width(), self.x_scale.scale_height());
         }
-        
-        let data_added = self.data_added.borrow().clone();
-        if let Some(time) = data_added {
+
+        if let Some(time) = self.data_added {
             if !state.x_locked {
                 let time_difference = time - state.last_x;
                 // Update the state window
@@ -245,10 +260,6 @@ impl canvas::Program<RegistryGuiResponse> for SeriesCanvas {
 
             let data_range = self.return_range(state.x_start, state.x_end);
             self.autoscale_y(state, &data_range);
-
-            // Reset data_added to None after processing
-            let mut data_added = self.data_added.borrow_mut();
-            *data_added = None;
         }
 
 

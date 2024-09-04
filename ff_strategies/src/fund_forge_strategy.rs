@@ -104,6 +104,7 @@ impl FundForgeStrategy {
         strategy_event_sender: mpsc::Sender<EventTimeSlice>,
         replay_delay_ms: Option<u64>,
         buffering_resolution: Option<Duration>,
+        gui_enabled: bool
     ) -> FundForgeStrategy {
         let start_state = StrategyStartState::new(
             strategy_mode.clone(),
@@ -177,8 +178,8 @@ impl FundForgeStrategy {
             strategy.interaction_handler.clone(),
             strategy.indicator_handler.clone(),
             strategy.timed_event_handler.clone(),
-        )
-        .await;
+            gui_enabled
+        ).await;
 
         Engine::launch(engine).await;
 

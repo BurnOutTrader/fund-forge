@@ -3,9 +3,9 @@ use iced::widget::canvas;
 use iced_graphics::geometry::{LineDash, Path, Stroke, Style};
 use std::collections::BTreeMap;
 use ff_standard_lib::app::settings::GraphElementSettings;
-use crate::canvas::graph::models::crosshair::color_from_template;
-use crate::canvas::graph::models::data::SeriesData;
-use crate::canvas::graph::state::ChartState;
+use crate::chart_canvas::graph::models::crosshair::color_from_template;
+use crate::chart_canvas::graph::models::data::SeriesData;
+use crate::chart_canvas::graph::state::ChartState;
 
 #[derive(Debug, Clone)]
 pub struct PriceScale {

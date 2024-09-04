@@ -8,8 +8,8 @@ use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use ff_standard_lib::app::settings::GraphElementSettings;
 use ff_standard_lib::standardized_types::enums::Resolution;
-use crate::canvas::graph::models::crosshair::color_from_template;
-use crate::canvas::graph::state::ChartState;
+use crate::chart_canvas::graph::models::crosshair::color_from_template;
+use crate::chart_canvas::graph::state::ChartState;
 
 
 /// A struct that holds the configuration for the display of a chart element.

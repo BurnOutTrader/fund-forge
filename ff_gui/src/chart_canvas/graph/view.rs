@@ -1,5 +1,5 @@
 use iced::mouse::ScrollDelta;
-use crate::canvas::graph::state::ChartState;
+use crate::chart_canvas::graph::state::ChartState;
 
 
 /// Zooms the price scale in or out by adjusting the GraphState.y_high and GraphState.y_low properties

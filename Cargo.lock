@@ -1406,22 +1406,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ff_charting"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "chrono-tz",
- "ff_standard_lib",
- "futures",
- "iced",
- "iced_graphics",
- "rkyv",
- "strum",
- "strum_macros",
- "tokio",
-]
-
-[[package]]
 name = "ff_data_server"
 version = "0.1.0"
 dependencies = [
@@ -1437,6 +1421,22 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "webpki-roots",
+]
+
+[[package]]
+name = "ff_gui"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "ff_standard_lib",
+ "futures",
+ "iced",
+ "iced_graphics",
+ "rkyv",
+ "strum",
+ "strum_macros",
+ "tokio",
 ]
 
 [[package]]
@@ -1642,8 +1642,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "chrono-tz",
- "ff_charting",
  "ff_data_server",
+ "ff_gui",
  "ff_standard_lib",
  "ff_strategies",
  "ff_strategy_registry",

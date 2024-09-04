@@ -1,24 +1,24 @@
+use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::sync::Arc;
-use chrono::{DateTime, Utc};
 use iced::{futures, Application, Command, Element, Settings, Theme};
 use iced::advanced::Hasher;
 use iced::advanced::subscription::{EventStream, Recipe};
 use iced::futures::executor::block_on;
 use iced::futures::stream::BoxStream;
-use iced::Length::Fill;
-use iced::subscription::unfold;
-use iced::widget::{canvas, container, Text};
-use tokio::runtime::Runtime;
+use iced::widget::{Text};
 use tokio::sync::{Mutex};
-use tokio::sync::mpsc::{channel, Receiver};
+use tokio::sync::mpsc::{channel, Receiver, Sender};
+use ff_gui::strategy_view::strategy_view::StrategyView;
 use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, initialize_clients, ConnectionType, PlatformMode};
-use ff_standard_lib::server_connections::ConnectionType::Default;
-use ff_standard_lib::servers::communications_async::SecondaryDataReceiver;
+use ff_standard_lib::servers::communications_async::SecondaryDataSender;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
+use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::strategy_events::StrategyEvent;
-use ff_standard_lib::strategy_registry::guis::RegistryGuiResponse;
+use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
+use ff_standard_lib::strategy_registry::guis::{GuiRequest, RegistryGuiResponse};
 use ff_standard_lib::strategy_registry::RegistrationRequest;
 use ff_standard_lib::traits::bytes::Bytes;
 
@@ -32,6 +32,8 @@ async fn main() {
     let sender = block_on(get_async_sender(ConnectionType::StrategyRegistry)).unwrap();
     let register_gui = RegistrationRequest::Gui.to_bytes();
     block_on(sender.send(&register_gui)).unwrap();
+    let request_strategies = GuiRequest::ListAllStrategies.to_bytes();
+    block_on(sender.send(&request_strategies)).unwrap();
     let receiver = block_on(get_async_reader(ConnectionType::StrategyRegistry)).unwrap();
 
     let (gui_sender, gui_receiver) = channel(1000);
@@ -47,6 +49,7 @@ async fn main() {
 
     let flags = Flags {
         receiver: gui_receiver,
+        registry_sender: sender
     };
 
     match FundForgeApplication::run(Settings::with_flags(flags)) {
@@ -56,23 +59,53 @@ async fn main() {
 }
 
 pub struct Flags {
-    receiver: Receiver<RegistryGuiResponse>
+    receiver: Receiver<RegistryGuiResponse>,
+    registry_sender: Arc<SecondaryDataSender>
 }
 
 /// Main application struct
 pub struct FundForgeApplication {
-    backtest_strategies: Vec<OwnerId>,
     receiver: Arc<Mutex<Receiver<RegistryGuiResponse>>>,
-    last_time: i64
+    last_time: i64,
+    strategy_views: BTreeMap<OwnerId, StrategyView>,
+    strategy_view_senders: BTreeMap<OwnerId, Sender<StrategyEvent>>,
+    registry_sender: Arc<SecondaryDataSender>
 }
 
 impl FundForgeApplication {
-    pub fn new(receiver: Receiver<RegistryGuiResponse>) -> Self {
+    pub fn new(receiver: Receiver<RegistryGuiResponse>,  registry_sender: Arc<SecondaryDataSender>) -> Self {
         FundForgeApplication{
-            backtest_strategies: vec![],
             receiver: Arc::new(Mutex::new(receiver)),
-            last_time: 0
+            last_time: 0,
+            strategy_views: BTreeMap::new(),
+            strategy_view_senders: BTreeMap::new(),
+            registry_sender
         }
+    }
+
+    fn add_strategy(&mut self, owner_id: OwnerId, strategy_mode: StrategyMode, subscriptions: Vec<DataSubscription>) {
+        let (sender, receiver) = channel(1000);
+        let strategy_view = StrategyView::new(owner_id.clone(), strategy_mode, subscriptions, receiver);
+        self.strategy_view_senders.insert(owner_id.clone(), sender);
+        self.strategy_views.insert(owner_id, strategy_view);
+    }
+
+    fn update_strategies_map(&mut self, backtest: Vec<OwnerId>, live: Vec<OwnerId>, live_paper: Vec<OwnerId>) {
+       /* for owner_id in backtest {
+            if !self.strategy_views.contains_key(&owner_id) {
+                self.add_strategy(owner_id, StrategyMode::Backtest)
+            }
+        }
+        for owner_id in live {
+            if !self.strategy_views.contains_key(&owner_id) {
+                self.add_strategy(owner_id, StrategyMode::Live)
+            }
+        }
+        for owner_id in live_paper {
+            if !self.strategy_views.contains_key(&owner_id) {
+                self.add_strategy(owner_id, StrategyMode::LivePaperTrading)
+            }
+        }*/
     }
 }
 
@@ -83,7 +116,7 @@ impl Application for FundForgeApplication {
     type Flags = Flags;
 
     fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        (FundForgeApplication::new(flags.receiver), Command::none())
+        (FundForgeApplication::new(flags.receiver, flags.registry_sender), Command::none())
     }
 
     fn title(&self) -> String {
@@ -92,40 +125,19 @@ impl Application for FundForgeApplication {
 
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
-            RegistryGuiResponse::StrategyEventUpdates(owner, time_stamp, event_slice) => {
-                for event in event_slice {
-                    match event {
-                        StrategyEvent::OrderEvents(_, _) => {}
-                        StrategyEvent::DataSubscriptionEvents(_, _, _) => {}
-                        StrategyEvent::StrategyControls(_, _, _) => {}
-                        StrategyEvent::DrawingToolEvents(_, _, _) => {}
-                        StrategyEvent::TimeSlice(_, time, slice) => {
-                            //self.notify.notify_one();
-                            //self.canvas.update(slice);
-                            for data in slice {
-                                if data.is_closed() {
-                                    println!("{:?}", data.time_utc());
-                                    if data.time_utc().timestamp() == self.last_time {
-                                        panic!();
-                                    }
-                                    self.last_time = data.time_utc().timestamp();
-                                } else {
-                                    //println!("Open bar time {:?}", time);
-                                }
-                            }
-                        }
-                        StrategyEvent::ShutdownEvent(_, _) => {}
-                        StrategyEvent::WarmUpComplete(_) => {
-                            println!("warm up complete");
-                        }
-                        StrategyEvent::IndicatorEvent(_, _) => {}
-                        StrategyEvent::PositionEvents(_) => {}
-                    }
-                }
-            }
             RegistryGuiResponse::ListStrategiesResponse{backtest, live, live_paper} => {
-                println!("backtest: {:?}, live: {:?}, live paper: {:?}, ",  backtest, live, live_paper)
+
+            },
+            RegistryGuiResponse::StrategyAdded(owner_id, strategy_mode, subscriptions) => {
+                self.add_strategy(owner_id, strategy_mode, subscriptions);
+            },
+            RegistryGuiResponse::StrategyDisconnect(owner_id) => {
+
             }
+            RegistryGuiResponse::StrategyEventUpdates(..) => {
+
+            }
+
             RegistryGuiResponse::Buffer { buffer } => {
 
             }
@@ -136,7 +148,7 @@ impl Application for FundForgeApplication {
     fn view(&self) -> Element<Self::Message> {
         Text::new("fund forge").into()
        /*
-       let canvas_element = canvas(&self.canvas)
+       let canvas_element = chart_canvas(&self.chart_canvas)
             .width(Fill)
             .height(Fill);
 

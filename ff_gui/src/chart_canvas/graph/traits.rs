@@ -3,7 +3,7 @@ use iced::{Color, Point, Rectangle, Size};
 use iced::widget::canvas::Frame;
 use iced_graphics::geometry::{Path, Stroke};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
-use crate::canvas::graph::state::ChartState;
+use crate::chart_canvas::graph::state::ChartState;
 
 /// Trait used for all objects that plot on time series chart, used to return geometry which matched the bounds and number of objects, thus geometry can be easily cached.
 pub trait TimeSeriesGraphElements {

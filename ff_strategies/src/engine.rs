@@ -26,7 +26,8 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task;
 use tokio::time::sleep;
-
+use ff_standard_lib::standardized_types::strategy_events::StrategyEvent::DataSubscriptionEvents;
+use ff_standard_lib::strategy_registry::guis::GuiRequest;
 //Possibly more accurate engine
 /*todo Use this for saving and loading data, it will make smaller file sizes and be less handling for consolidator, we can then just update historical data once per week on sunday and load last week from broker.
   use Create a date (you can use DateTime<Utc>, Local, or NaiveDate)
@@ -51,6 +52,7 @@ pub(crate) struct Engine {
     registry_sender: Arc<SecondaryDataSender>,
     registry_receiver: Arc<Mutex<SecondaryDataReceiver>>,
     last_time: RwLock<DateTime<Utc>>,
+    gui_enabled: bool,
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -65,6 +67,7 @@ impl Engine {
         interaction_handler: Arc<InteractionHandler>,
         indicator_handler: Arc<IndicatorHandler>,
         timed_event_handler: Arc<TimedEventHandler>,
+        gui_enabled: bool
     ) -> Self {
         Engine {
             owner_id,
@@ -83,6 +86,7 @@ impl Engine {
                 .await
                 .unwrap(),
             last_time: RwLock::new(Default::default()),
+            gui_enabled
         }
     }
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
@@ -90,31 +94,33 @@ impl Engine {
     pub async fn launch(self: Self) {
         task::spawn(async move {
             println!("Engine: Initializing the strategy...");
-            let strategy_register_event =
-                RegistrationRequest::Strategy(self.owner_id.clone(), self.start_state.mode.clone()).to_bytes();
-            self.registry_sender
-                .send(&strategy_register_event)
-                .await
-                .unwrap();
-            match self.registry_receiver.lock().await.receive().await {
-                Some(response) => {
-                    let registration_response =
-                        RegistrationResponse::from_bytes(&response).unwrap();
-                    match registration_response {
-                        RegistrationResponse::Success => println!("Registered with data server"),
-                        RegistrationResponse::Error(e) => panic!("Failed to register strategy: {:?}", e)
+            if self.gui_enabled {
+                let strategy_register_event =
+                    RegistrationRequest::Strategy(self.owner_id.clone(), self.start_state.mode.clone(), self.subscription_handler.strategy_subscriptions().await).to_bytes();
+                self.registry_sender
+                    .send(&strategy_register_event)
+                    .await
+                    .unwrap();
+                match self.registry_receiver.lock().await.receive().await {
+                    Some(response) => {
+                        let registration_response =
+                            RegistrationResponse::from_bytes(&response).unwrap();
+                        match registration_response {
+                            RegistrationResponse::Success => println!("Registered with data server"),
+                            RegistrationResponse::Error(e) => panic!("Failed to register strategy: {:?}", e)
+                        }
+                    }
+                    None => {
+                        panic!("No response from the strategy registry")
                     }
                 }
-                None => {
-                    panic!("No response from the strategy registry")
-                }
-            }
 
-            let mut subscriptions = self.subscription_handler.primary_subscriptions().await;
-            //wait until we have at least one subscription
-            while subscriptions.is_empty() {
-                sleep(StdDuration::from_secs(1)).await;
-                subscriptions = self.subscription_handler.primary_subscriptions().await;
+                let mut subscriptions = self.subscription_handler.primary_subscriptions().await;
+                //wait until we have at least one subscription
+                while subscriptions.is_empty() {
+                    sleep(StdDuration::from_secs(1)).await;
+                    subscriptions = self.subscription_handler.primary_subscriptions().await;
+                }
             }
 
             self.warmup().await;
@@ -143,33 +149,37 @@ impl Engine {
                 }
             }
 
-            let sender = self.registry_sender.clone();
-            let shutdown_slice_event = StrategyRequest::StrategyEventUpdates(
-                self.last_time.read().await.timestamp(),
-                vec![end_event],
-            );
-            match sender.send(&shutdown_slice_event.to_bytes()).await {
-                Ok(_) => {}
-                Err(_) => {}
+            if self.gui_enabled {
+                let sender = self.registry_sender.clone();
+                let shutdown_slice_event = StrategyRequest::StrategyEventUpdates(
+                    self.last_time.read().await.timestamp(),
+                    vec![end_event],
+                );
+                match sender.send(&shutdown_slice_event.to_bytes()).await {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
             }
 
-            let shutdown_warning_event =
-                StrategyRequest::ShutDown(self.last_time.read().await.timestamp());
-            self.registry_sender
-                .send(&shutdown_warning_event.to_bytes())
-                .await
-                .unwrap();
-            match self.registry_receiver.lock().await.receive().await {
-                Some(response) => {
-                    let shutdown_response = StrategyResponse::from_bytes(&response).unwrap();
-                    match shutdown_response {
-                        StrategyResponse::ShutDownAcknowledged(owner_id) => {
-                            println!("Registry Shut Down Acknowledged {}", owner_id)
+            if self.gui_enabled {
+                let shutdown_warning_event =
+                    StrategyRequest::ShutDown(self.last_time.read().await.timestamp());
+                self.registry_sender
+                    .send(&shutdown_warning_event.to_bytes())
+                    .await
+                    .unwrap();
+                match self.registry_receiver.lock().await.receive().await {
+                    Some(response) => {
+                        let shutdown_response = StrategyResponse::from_bytes(&response).unwrap();
+                        match shutdown_response {
+                            StrategyResponse::ShutDownAcknowledged(owner_id) => {
+                                println!("Registry Shut Down Acknowledged {}", owner_id)
+                            }
                         }
                     }
-                }
-                None => {
-                    panic!("No response from the strategy registry")
+                    None => {
+                        panic!("No response from the strategy registry")
+                    }
                 }
             }
         });
@@ -217,18 +227,21 @@ impl Engine {
                 println!("Engine: Error forwarding event: {:?}", e);
             }
         }
-        let event_bytes = StrategyRequest::StrategyEventUpdates(
-            self.last_time.read().await.timestamp(),
-            warmup_complete_event,
-        )
-        .to_bytes();
-        let sender = self.registry_sender.clone();
-        task::spawn(async move {
-            match sender.send(&event_bytes).await {
-                Ok(_) => {}
-                Err(_) => {}
-            }
-        });
+
+        if self.gui_enabled {
+            let event_bytes = StrategyRequest::StrategyEventUpdates(
+                self.last_time.read().await.timestamp(),
+                warmup_complete_event,
+            )
+                .to_bytes();
+            let sender = self.registry_sender.clone();
+            task::spawn(async move {
+                match sender.send(&event_bytes).await {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
+            });
+        }
     }
 
     /// Runs the strategy backtest
@@ -406,26 +419,24 @@ impl Engine {
                 subscription_events,
                 last_time.timestamp(),
             )];
-            match self
-                .strategy_event_sender
-                .send(strategy_event.clone())
-                .await
-            {
+            match self.strategy_event_sender.send(strategy_event.clone()).await {
                 Ok(_) => {}
                 Err(e) => {
                     println!("Error forwarding event: {:?}", e);
                 }
             }
-            let event_bytes =
-                StrategyRequest::StrategyEventUpdates(last_time.timestamp(), strategy_event)
-                    .to_bytes();
-            let sender = self.registry_sender.clone();
-            task::spawn(async move {
-                match sender.send(&event_bytes).await {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
-            });
+            if self.gui_enabled {
+                let event_bytes =
+                    StrategyRequest::StrategyEventUpdates(last_time.timestamp(), strategy_event)
+                        .to_bytes();
+                let sender = self.registry_sender.clone();
+                task::spawn(async move {
+                    match sender.send(&event_bytes).await {
+                        Ok(_) => {}
+                        Err(_) => {}
+                    }
+                });
+            }
             return true;
         }
         false

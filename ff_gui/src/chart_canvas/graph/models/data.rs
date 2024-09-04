@@ -8,8 +8,8 @@ use ff_standard_lib::helpers::converters::time_convert_utc_datetime_to_fixed_off
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::candle::{Candle};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use crate::canvas::graph::state::ChartState;
-use crate::canvas::graph::traits::TimeSeriesGraphElements;
+use crate::chart_canvas::graph::state::ChartState;
+use crate::chart_canvas::graph::traits::TimeSeriesGraphElements;
 
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
@@ -79,6 +79,14 @@ impl SeriesData {
         match self {
             SeriesData::CandleStick(candle) => {
                 candle.time_local(time_zone).timestamp()
+            }
+        }
+    }
+
+    pub fn time_utc(&self) -> i64 {
+        match self {
+            SeriesData::CandleStick(candle) => {
+                candle.time_utc().timestamp()
             }
         }
     }
