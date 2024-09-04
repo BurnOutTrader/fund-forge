@@ -1,5 +1,6 @@
 use std::hash::Hash;
 use std::sync::Arc;
+use chrono::{DateTime, Utc};
 use iced::{futures, Application, Command, Element, Settings, Theme};
 use iced::advanced::Hasher;
 use iced::advanced::subscription::{EventStream, Recipe};
@@ -12,7 +13,9 @@ use tokio::runtime::Runtime;
 use tokio::sync::{Mutex};
 use tokio::sync::mpsc::{channel, Receiver};
 use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, initialize_clients, ConnectionType, PlatformMode};
+use ff_standard_lib::server_connections::ConnectionType::Default;
 use ff_standard_lib::servers::communications_async::SecondaryDataReceiver;
+use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::strategy_events::StrategyEvent;
 use ff_standard_lib::strategy_registry::guis::RegistryGuiResponse;
@@ -59,14 +62,16 @@ pub struct Flags {
 /// Main application struct
 pub struct FundForgeApplication {
     backtest_strategies: Vec<OwnerId>,
-    receiver: Arc<Mutex<Receiver<RegistryGuiResponse>>>
+    receiver: Arc<Mutex<Receiver<RegistryGuiResponse>>>,
+    last_time: i64
 }
 
 impl FundForgeApplication {
     pub fn new(receiver: Receiver<RegistryGuiResponse>) -> Self {
         FundForgeApplication{
             backtest_strategies: vec![],
-            receiver: Arc::new(Mutex::new(receiver))
+            receiver: Arc::new(Mutex::new(receiver)),
+            last_time: 0
         }
     }
 }
@@ -94,13 +99,25 @@ impl Application for FundForgeApplication {
                         StrategyEvent::DataSubscriptionEvents(_, _, _) => {}
                         StrategyEvent::StrategyControls(_, _, _) => {}
                         StrategyEvent::DrawingToolEvents(_, _, _) => {}
-                        StrategyEvent::TimeSlice(_, slice) => {
+                        StrategyEvent::TimeSlice(_, time, slice) => {
                             //self.notify.notify_one();
                             //self.canvas.update(slice);
-                            //println!("{:?}", slice)
+                            for data in slice {
+                                if data.is_closed() {
+                                    println!("{:?}", data.time_utc());
+                                    if data.time_utc().timestamp() == self.last_time {
+                                        panic!();
+                                    }
+                                    self.last_time = data.time_utc().timestamp();
+                                } else {
+                                    //println!("Open bar time {:?}", time);
+                                }
+                            }
                         }
                         StrategyEvent::ShutdownEvent(_, _) => {}
-                        StrategyEvent::WarmUpComplete(_) => {}
+                        StrategyEvent::WarmUpComplete(_) => {
+                            println!("warm up complete");
+                        }
                         StrategyEvent::IndicatorEvent(_, _) => {}
                         StrategyEvent::PositionEvents(_) => {}
                     }
@@ -118,12 +135,14 @@ impl Application for FundForgeApplication {
 
     fn view(&self) -> Element<Self::Message> {
         Text::new("fund forge").into()
-       /* let canvas_element = canvas(&self.canvas)
+       /*
+       let canvas_element = canvas(&self.canvas)
             .width(Fill)
             .height(Fill);
 
         container(canvas_element)
-            .into()*/
+            .into()
+            */
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {

@@ -1,4 +1,5 @@
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
+use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -74,10 +75,9 @@ impl CountConsolidator {
     }
 
     /// Returns a candle if the count is reached
-    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
         match base_data {
             BaseDataEnum::Tick(tick) => {
-                let mut candles = vec![];
                 if self.counter == 0 {
                     self.current_data.symbol = base_data.symbol().clone();
                     self.current_data.time = tick.time.clone();
@@ -101,7 +101,6 @@ impl CountConsolidator {
                     self.counter = 0;
                     let consolidated_data = BaseDataEnum::Candle(consolidated_candle.clone());
                     self.history.add(consolidated_data.clone());
-                    candles.push(consolidated_data);
                     self.current_data = match self.subscription.base_data_type {
                         BaseDataType::Ticks => Candle::new(
                             self.subscription.symbol.clone(),
@@ -116,10 +115,10 @@ impl CountConsolidator {
                             self.subscription.base_data_type
                         ),
                     };
+                    ConsolidatedData::with_closed(BaseDataEnum::Candle(self.current_data.clone()), BaseDataEnum::Candle(consolidated_candle))
                 } else {
-                    candles.push(BaseDataEnum::Candle(self.current_data.clone()));
+                    ConsolidatedData::with_open(BaseDataEnum::Candle(self.current_data.clone()))
                 }
-                candles
             }
             _ => panic!(
                 "Invalid base data type for CountConsolidator: {}",

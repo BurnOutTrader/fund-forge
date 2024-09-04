@@ -1648,6 +1648,7 @@ dependencies = [
  "ff_strategies",
  "ff_strategy_registry",
  "iced",
+ "iced_futures",
  "test_strategy",
  "tokio",
 ]

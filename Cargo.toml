@@ -26,4 +26,5 @@ ff_strategy_registry = {path = "ff_strategy_registry"}
 tokio = "*"
 chrono = "*"
 chrono-tz = "*"
-iced = { version = "*" }
+iced = { version = "*"}
+iced_futures = { version = "*" }

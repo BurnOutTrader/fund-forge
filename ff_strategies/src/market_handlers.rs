@@ -54,7 +54,7 @@ impl MarketHandlerEnum {
 
     //Updates the market handler with incoming data and returns any triggered events
     // TimeSlice: A collection of base data to update the handler with
-    pub async fn base_data_upate(&self, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
+    pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
         match self {
             MarketHandlerEnum::BacktestDefault(handler) => handler.on_data_update(time_slice).await,
             MarketHandlerEnum::LiveDefault(handler) => handler.on_data_update(time_slice).await, //ToDo we will need a historical handler just to warm up the strategy

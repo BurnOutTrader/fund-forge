@@ -78,7 +78,7 @@ impl ConsolidatorEnum {
     }
 
     /// Updates the consolidator with the new data point.
-    pub fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => count_consolidator.update(base_data),
             ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
@@ -176,16 +176,16 @@ impl ConsolidatorEnum {
         }
     }
 
-    pub fn update_time(&mut self, time: DateTime<Utc>) -> Vec<BaseDataEnum> {
+    pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
         match self {
-            ConsolidatorEnum::Count(_) => vec![],
+            ConsolidatorEnum::Count(_) => None,
             ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
                 time_consolidator.update_time(time)
             }
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 heikin_ashi_consolidator.update_time(time)
             }
-            ConsolidatorEnum::Renko(_) => vec![],
+            ConsolidatorEnum::Renko(_) => None,
         }
     }
 
@@ -234,6 +234,7 @@ impl ConsolidatorEnum {
             if let Some(slice) = base_data.get(&time) {
                 for base_data in slice {
                     consolidator.update(base_data);
+                    consolidator.update_time(time);
                 }
             } else {
                 consolidator.update_time(time);
@@ -246,3 +247,25 @@ impl ConsolidatorEnum {
         consolidator
     }
 }
+
+pub struct ConsolidatedData {
+    pub open_data: BaseDataEnum,
+    pub closed_data: Option<BaseDataEnum>
+}
+
+impl ConsolidatedData {
+    pub fn with_closed(open_data: BaseDataEnum, closed_data:BaseDataEnum) -> Self {
+        Self {
+            open_data,
+            closed_data: Some(closed_data)
+        }
+    }
+
+    pub fn with_open(open_data: BaseDataEnum) -> Self {
+        Self {
+            open_data,
+            closed_data: None
+        }
+    }
+}
+

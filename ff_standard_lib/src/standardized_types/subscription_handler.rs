@@ -1,5 +1,6 @@
+use std::collections::BTreeMap;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
-use crate::consolidators::consolidator_enum::ConsolidatorEnum;
+use crate::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::data_server_messaging::FundForgeError;
@@ -13,6 +14,7 @@ use chrono::{DateTime, Utc};
 use futures::future::join_all;
 use std::sync::Arc;
 use tokio::sync::{Mutex, RwLock};
+use crate::standardized_types::base_data::traits::BaseData;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -73,15 +75,17 @@ impl SubscriptionHandler {
         history_to_retain: u64,
         current_time: DateTime<Utc>,
     ) -> Result<(), FundForgeError> {
+
+        let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
+        if !strategy_subscriptions.contains(&new_subscription) {
+            strategy_subscriptions.push(new_subscription.clone());
+        }
+
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
             //subscribe to fundamental
             let mut fundamental_subscriptions = self.fundamental_subscriptions.write().await;
             if !fundamental_subscriptions.contains(&new_subscription) {
                 fundamental_subscriptions.push(new_subscription.clone());
-            }
-            let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
-            if !strategy_subscriptions.contains(&new_subscription) {
-                strategy_subscriptions.push(new_subscription.clone());
             }
             *self.subscriptions_updated.write().await = true;
             return Ok(());
@@ -97,10 +101,6 @@ impl SubscriptionHandler {
             )
             .await;
             symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
-        }
-        let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
-        if !strategy_subscriptions.contains(&new_subscription) {
-            strategy_subscriptions.push(new_subscription.clone());
         }
         let symbol_handler = symbol_subscriptions
             .get_mut(&new_subscription.symbol)
@@ -183,33 +183,34 @@ impl SubscriptionHandler {
 
     /// Updates any consolidators with primary data
     pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<TimeSlice> {
-        let mut tasks = vec![];
-        for base_data in time_slice.clone() {
-            let symbol_subscriptions = self.symbol_subscriptions.clone();
-            let task = tokio::spawn(async move {
-                let base_data = base_data.clone();
-                let symbol = base_data.symbol();
-                let mut symbol_subscriptions = symbol_subscriptions.write().await;
-                if let Some(symbol_handler) = symbol_subscriptions.get_mut(&symbol) {
-                    symbol_handler.update(&base_data).await
-                } else {
-                    vec![]
-                }
-            });
 
-            tasks.push(task);
+        // we need to keep a map of the open bars, we only want the most recently created open bar, else we will have to many bars
+        let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
+
+        // we collect the closed bars in a separate vec, because we need all of them.
+        let mut closed_bars = Vec::new();
+
+        let symbol_subscriptions = self.symbol_subscriptions.clone();
+        let mut symbol_subscriptions = symbol_subscriptions.write().await;
+        for base_data in time_slice {
+            if let Some(handler) = symbol_subscriptions.get_mut(&base_data.symbol()) {
+                let data = handler.update(base_data).await;
+                for consolidated_bars in data {
+                    if let Some(consolidated_bar) = consolidated_bars.closed_data {
+                        closed_bars.push(consolidated_bar);
+                    }
+                    open_bars.insert(consolidated_bars.open_data.subscription(), consolidated_bars.open_data);
+                }
+            }
         }
 
-        // Await all tasks and collect the results
-        let results: Vec<Vec<BaseDataEnum>> = join_all(tasks)
-            .await
-            .into_iter()
-            .filter_map(|r| r.ok())
-            .collect();
-
-        match results.is_empty() {
+        // now we need to combine our open and closed bars
+        for (_, data) in open_bars {
+            closed_bars.push(data)
+        }
+        match closed_bars.is_empty() {
             true => None,
-            false => Some(results.into_iter().flatten().collect()),
+            false => Some(closed_bars),
         }
     }
 
@@ -348,30 +349,22 @@ impl SymbolSubscriptionHandler {
         handler
     }
 
-    pub async fn update(&mut self, base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
-        // Ensure we only process if the symbol matches
-        if &self.symbol != base_data.symbol() {
-            panic!(
-                "Symbol mismatch: {:?} != {:?}",
-                self.symbol,
-                base_data.symbol()
-            );
-        }
-        self.primary_history.add(base_data.clone());
-        let mut consolidated_data = vec![];
-
-        // Read the secondary subscriptions
-
+    pub async fn update(&mut self, base_data_enum: &BaseDataEnum) -> Vec<ConsolidatedData> {
+         // Read the secondary subscriptions
         if self.secondary_subscriptions.is_empty() {
             return vec![];
         }
 
-        // Iterate over the secondary subscriptions and update them
-        for (_, consolidator) in self.secondary_subscriptions.iter_mut() {
-            let data = consolidator.update(&base_data);
-            consolidated_data.extend(data);
+        if base_data_enum.subscription() != self.primary_subscription {
+            return vec![]
         }
-        consolidated_data
+
+        let mut data = vec![];
+        //todo this doesnt work because the data subscription is never the consolidator subscription
+        for (_, mut consolidator) in &mut self.secondary_subscriptions {
+            data.push(consolidator.update(base_data_enum))
+        }
+        data
     }
 
     pub async fn update_time(&mut self, time: DateTime<Utc>) -> Option<Vec<BaseDataEnum>> {
@@ -429,9 +422,7 @@ impl SymbolSubscriptionHandler {
         let mut subscription_set = false;
         //if we have the resolution avaialable from the vendor, just use it.
         for subscription_resolution_type in &resolution_types {
-            if subscription_resolution_type.resolution == new_subscription.resolution
-                && subscription_resolution_type.base_data_type == new_subscription.base_data_type
-            {
+            if subscription_resolution_type.resolution == new_subscription.resolution && subscription_resolution_type.base_data_type == new_subscription.base_data_type {
                 self.subscription_event_buffer
                     .push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
                 self.primary_subscription = new_subscription.clone();

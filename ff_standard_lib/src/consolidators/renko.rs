@@ -1,4 +1,5 @@
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
+use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
@@ -56,7 +57,7 @@ impl RenkoConsolidator {
     }
 
     /// Returns a candle if the count is reached
-    pub(crate) fn update(&mut self, _base_data: &BaseDataEnum) -> Vec<BaseDataEnum> {
+    pub(crate) fn update(&mut self, _base_data: &BaseDataEnum) -> ConsolidatedData {
         //let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         todo!() //will need to be based on renko parameters
     }

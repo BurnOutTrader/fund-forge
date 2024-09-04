@@ -311,32 +311,18 @@ impl Engine {
                     let mut strategy_event_slice: EventTimeSlice = EventTimeSlice::new();
                     // if we don't have base data we update any objects which need to be updated with the time
                     if time_slice.is_empty() {
-                        if let Some(consolidated_data) = self
-                            .subscription_handler
-                            .update_consolidators_time(time.clone())
-                            .await
-                        {
-                            if let Some(buffered_indicator_events) = self
-                                .indicator_handler
-                                .update_time_slice(&consolidated_data)
-                                .await
-                            {
-                                strategy_event_slice.extend(buffered_indicator_events);
+                        if let Some(consolidated_data) = self.subscription_handler.update_consolidators_time(time.clone()).await {
+                            if let Some(buffered_indicator_events) = self.indicator_handler.update_time_slice(time.clone(), &consolidated_data).await {
+                                strategy_event_slice.push(buffered_indicator_events);
                             }
                             strategy_event_slice.push(StrategyEvent::TimeSlice(
                                 self.owner_id.clone(),
+                                time.to_string(),
                                 consolidated_data,
                             ));
                         }
                         if !strategy_event_slice.is_empty() {
-                            if !self
-                                .send_and_continue(
-                                    time.clone(),
-                                    strategy_event_slice,
-                                    warm_up_completed,
-                                )
-                                .await
-                            {
+                            if !self.send_and_continue(time.clone(), strategy_event_slice, warm_up_completed).await {
                                 *self.last_time.write().await = last_time.clone();
                                 break 'main_loop;
                             }
@@ -346,12 +332,17 @@ impl Engine {
                     }
 
                     let (market_event_handler_events, consolidated_data) = tokio::join!(
-                        self.market_event_handler.base_data_upate(&time_slice),
+                        self.market_event_handler.update_time_slice(&time_slice),
                         self.subscription_handler.update_time_slice(&time_slice),
                     );
 
                     if let Some(data) = consolidated_data {
                         time_slice.extend(data);
+                    }
+
+                    // we also need to check if we have any consolidated data by time, in case the time slice doesn't contain data for the specific subscription.
+                    if let Some(consolidated_data) = self.subscription_handler.update_consolidators_time(time.clone()).await {
+                        time_slice.extend(consolidated_data)
                     }
 
                     let mut strategy_time_slice: TimeSlice = TimeSlice::new();
@@ -365,16 +356,13 @@ impl Engine {
                         strategy_event_slice.extend(events);
                     }
 
-                    if let Some(events) = self
-                        .indicator_handler
-                        .update_time_slice(&strategy_time_slice)
-                        .await
-                    {
-                        strategy_event_slice.extend(events);
+                    if let Some(event) = self.indicator_handler.update_time_slice(time.clone(), &strategy_time_slice).await {
+                        strategy_event_slice.push(event);
                     }
 
                     strategy_event_slice.push(StrategyEvent::TimeSlice(
                         self.owner_id.clone(),
+                        time.to_string(),
                         strategy_time_slice,
                     ));
 

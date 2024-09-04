@@ -4,7 +4,7 @@ use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::orders::orders::OrderUpdateEvent;
 use crate::standardized_types::subscriptions::DataSubscriptionEvent;
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::standardized_types::OwnerId;
+use crate::standardized_types::{OwnerId, TimeString};
 use rkyv::ser::serializers::AllocSerializer;
 use rkyv::ser::Serializer;
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -95,8 +95,9 @@ pub enum StrategyEvent {
     ///
     /// # Parameters
     /// - `OwnerId`: The unique identifier of the owner (strategy).
+    /// - "TimeString": The time of the slice event
     /// - `TimeSlice`: The time slice data.
-    TimeSlice(OwnerId, TimeSlice),
+    TimeSlice(OwnerId, TimeString, TimeSlice),
 
     //IndicatorSlice(OwnerId, IndicatorResults),
     ShutdownEvent(OwnerId, String),
@@ -116,7 +117,7 @@ impl StrategyEvent {
             StrategyEvent::DataSubscriptionEvents(owner_id, _, _) => owner_id.clone(),
             StrategyEvent::StrategyControls(owner_id, _, _) => owner_id.clone(),
             StrategyEvent::DrawingToolEvents(owner_id, _, _) => owner_id.clone(),
-            StrategyEvent::TimeSlice(owner_id, _) => owner_id.clone(),
+            StrategyEvent::TimeSlice(owner_id,_, _) => owner_id.clone(),
             StrategyEvent::ShutdownEvent(owner_id, _) => owner_id.clone(),
             StrategyEvent::WarmUpComplete(owner_id) => owner_id.clone(),
             StrategyEvent::IndicatorEvent(owner_id, _) => owner_id.clone(),

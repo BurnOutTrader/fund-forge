@@ -148,14 +148,12 @@ pub async fn handle_strategies(
                 };
                 match request {
                     StrategyRequest::StrategyEventUpdates(utc_time_stamp, slice) => {
-                        tokio::spawn(async move {
-                            let response = RegistryGuiResponse::StrategyEventUpdates(
-                                owner_id.clone(),
-                                utc_time_stamp.clone(),
-                                slice,
-                            );
-                            //broadcast(&response.to_bytes()).await
-                        });
+                        let response = RegistryGuiResponse::StrategyEventUpdates(
+                            owner_id.clone(),
+                            utc_time_stamp.clone(),
+                            slice,
+                        );
+                        broadcast(&response.to_bytes()).await
                     }
                     StrategyRequest::ShutDown(_last_time) => {
                         let response = StrategyResponse::ShutDownAcknowledged(owner_id.clone());

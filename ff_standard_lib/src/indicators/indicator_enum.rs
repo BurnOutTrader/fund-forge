@@ -20,6 +20,7 @@ impl Indicators for IndicatorEnum {
         }
     }
 
+    /// We need to be sure to handle open and closed bars in our update method, for example AverageTrueRange will not update when base_data.is_closed() == false
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.update_base_data(base_data),

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
 use crate::indicators::indicator_enum::IndicatorEnum;
@@ -9,7 +10,7 @@ use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::strategy_events::StrategyEvent;
 use crate::standardized_types::subscriptions::{filter_resolutions, DataSubscription};
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::standardized_types::OwnerId;
+use crate::standardized_types::{OwnerId, TimeString};
 use ahash::AHashMap;
 use chrono::{DateTime, Duration, Utc};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -22,7 +23,7 @@ use tokio::sync::RwLock;
 pub enum IndicatorEvents {
     IndicatorAdded(IndicatorName),
     IndicatorRemoved(IndicatorName),
-    IndicatorTimeSlice(Vec<IndicatorValues>),
+    IndicatorTimeSlice(TimeString, Vec<IndicatorValues>),
     Replaced(IndicatorName),
 }
 
@@ -123,53 +124,30 @@ impl IndicatorHandler {
         }
     }
 
-    pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
+    pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) -> Option<StrategyEvent> {
         //this could potentially have a race condition if we have 2x the same data subscription in the same time slice. but this would only happen in back-tests using an incorrect strategy resolution or in
         // fast markets where indicators using tick or price data... in should not generally be possible unless done deliberately. I think it is worth keeping simple concurrent performance gain for the risk.
-        let mut tasks = vec![];
-        for data in time_slice.clone() {
-            let indicators = self.indicators.clone();
-            let task = tokio::spawn(async move {
-                let subscription = data.subscription();
-                let mut indicators = indicators.write().await;
-                let mut values = Vec::new();
-                if let Some(indicators) = indicators.get_mut(&subscription) {
-                    for indicator in indicators.values_mut() {
-                        let value = indicator.update_base_data(&data);
-                        if let Some(value) = value {
-                            values.push(value);
-                        }
+        let mut values = TimeSlice::new();
+
+        // todo, we need to update the indicators, collect the values and only return the latest value for each one
+        let mut results : BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
+        let mut indicators = self.indicators.write().await;
+        for data in time_slice {
+            let subscription = data.subscription();
+            if let Some(indicators) = indicators.get_mut(&subscription) {
+                for (name, indicator) in indicators {
+                    let data = indicator.update_base_data(data);
+                    if let Some(indicator_data) = data {
+                        results.insert(name.clone(), indicator_data);
                     }
                 }
-                values
-            });
-
-            tasks.push(task);
+            }
         }
-
-        // Await all tasks and collect the results
-        let results: Vec<Vec<IndicatorValues>> = futures::future::join_all(tasks)
-            .await
-            .into_iter()
-            .filter_map(|r| r.ok())
-            .collect();
-        let values = results.into_iter().flatten().collect::<Vec<_>>();
-
-        if !values.is_empty() {
-            self.event_buffer
-                .write()
-                .await
-                .push(StrategyEvent::IndicatorEvent(
-                    self.owner_id.clone(),
-                    IndicatorEvents::IndicatorTimeSlice(values),
-                ));
+        if results.is_empty() {
+            return None
         }
-
-        let events = self.get_event_buffer().await;
-        match events.is_empty() {
-            true => None,
-            false => Some(events),
-        }
+        let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
+        Some(StrategyEvent::IndicatorEvent( self.owner_id.clone(), IndicatorEvents::IndicatorTimeSlice(time.to_string(), results_vec)))
     }
 
     pub async fn history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {

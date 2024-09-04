@@ -99,7 +99,7 @@ pub async fn on_data_received(
     notify: Arc<Notify>,
     mut event_receiver: mpsc::Receiver<EventTimeSlice>,
 ) {
-    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
+ /*   let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new(
                 "AUD-CAD".to_string(),
                 DataVendor::Test,
@@ -113,7 +113,7 @@ pub async fn on_data_received(
         )
             .await,
     );
-    strategy.indicator_subscribe(heikin_atr_20).await;
+    strategy.indicator_subscribe(heikin_atr_20).await;*/
 
     let mut warmup_complete = false;
     let mut count = 0;
@@ -124,7 +124,7 @@ pub async fn on_data_received(
                 StrategyEvent::DrawingToolEvents(_, drawing_tool_event, _) => {
                     println!("Drawing Tool Event: {:?}", drawing_tool_event);
                 }
-                StrategyEvent::TimeSlice(_time, time_slice) => {
+                StrategyEvent::TimeSlice(_owner , time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
                     'base_data_loop: for base_data in &time_slice {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
@@ -137,7 +137,7 @@ pub async fn on_data_received(
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 if quotebar.is_closed == true {
-                                    println!("{}", quotebar); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    println!("Closed bar time {}", time); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     if count > 2000 {
                                         /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
                                         println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
@@ -150,9 +150,8 @@ pub async fn on_data_received(
                                         let data_current = &strategy.bar_current(&subscription).await;
                                         println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);*/
                                     }
-                                } else if quotebar.is_closed == false {
-                                    //Todo Documents, Open bars get sent through with every tick or primary resolution update, so you can always access the open bar using lowest resolution available in the engine.
-                                    //println!("{}...Open Candle {}: close:{} at {}, is_closed: {}, candle_type: {:?}", strategy.time_utc().await, candle.symbol.name, candle.close, base_data.time_created_utc(), candle.is_closed, candle.candle_type); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                } else if !quotebar.is_closed {
+                                    //println!("Open bar time: {}", time)
                                 }
 
                                 /*   if count /3 == 0 {
@@ -204,7 +203,7 @@ pub async fn on_data_received(
                         IndicatorEvents::IndicatorRemoved(removed_event) => {
                             println!("Indicator Removed: {:?}", removed_event);
                         }
-                        IndicatorEvents::IndicatorTimeSlice(slice_event) => {
+                        IndicatorEvents::IndicatorTimeSlice(_time, slice_event) => {
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice_event {
                                 println!(
