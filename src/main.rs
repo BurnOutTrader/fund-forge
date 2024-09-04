@@ -6,9 +6,11 @@ use iced::advanced::subscription::{EventStream, Recipe};
 use iced::futures::executor::block_on;
 use iced::futures::stream::BoxStream;
 use iced::Length::Fill;
+use iced::subscription::unfold;
 use iced::widget::{canvas, container, Text};
 use tokio::runtime::Runtime;
 use tokio::sync::{Mutex};
+use tokio::sync::mpsc::{channel, Receiver};
 use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, initialize_clients, ConnectionType, PlatformMode};
 use ff_standard_lib::servers::communications_async::SecondaryDataReceiver;
 use ff_standard_lib::standardized_types::OwnerId;
@@ -17,30 +19,54 @@ use ff_standard_lib::strategy_registry::guis::RegistryGuiResponse;
 use ff_standard_lib::strategy_registry::RegistrationRequest;
 use ff_standard_lib::traits::bytes::Bytes;
 
-
-fn main() {
-    let runtime = Runtime::new().unwrap();
+#[tokio::main]
+async fn main() {
     // Run the async code inside the runtime
-    runtime.block_on(async {
+    block_on(async {
         let result = initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
     });
-    match FundForgeApplication::run(Settings::default()) {
+
+    let sender = block_on(get_async_sender(ConnectionType::StrategyRegistry)).unwrap();
+    let register_gui = RegistrationRequest::Gui.to_bytes();
+    block_on(sender.send(&register_gui)).unwrap();
+    let receiver = block_on(get_async_reader(ConnectionType::StrategyRegistry)).unwrap();
+
+    let (gui_sender, gui_receiver) = channel(1000);
+    tokio::spawn(async move {
+        let mut locked_receiver = receiver.lock().await;
+        while let Some(msg) = locked_receiver.receive().await {
+            match gui_sender.send(RegistryGuiResponse::from_bytes(&msg).unwrap()).await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
+        }
+    });
+
+    let flags = Flags {
+        receiver: gui_receiver,
+    };
+
+    match FundForgeApplication::run(Settings::with_flags(flags)) {
         Ok(_) => {}
         Err(e) => println!("Error running fund forge: {}", e)
     }
 }
 
-
+pub struct Flags {
+    receiver: Receiver<RegistryGuiResponse>
+}
 
 /// Main application struct
 pub struct FundForgeApplication {
-    backtest_strategies: Vec<OwnerId>
+    backtest_strategies: Vec<OwnerId>,
+    receiver: Arc<Mutex<Receiver<RegistryGuiResponse>>>
 }
 
 impl FundForgeApplication {
-    pub fn new() -> Self {
+    pub fn new(receiver: Receiver<RegistryGuiResponse>) -> Self {
         FundForgeApplication{
-            backtest_strategies: vec![]
+            backtest_strategies: vec![],
+            receiver: Arc::new(Mutex::new(receiver))
         }
     }
 }
@@ -49,10 +75,10 @@ impl Application for FundForgeApplication {
     type Executor = iced::executor::Default;
     type Message = RegistryGuiResponse;
     type Theme = Theme;
-    type Flags = ();
+    type Flags = Flags;
 
     fn new(flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        (FundForgeApplication::new(), Command::none())
+        (FundForgeApplication::new(flags.receiver), Command::none())
     }
 
     fn title(&self) -> String {
@@ -71,7 +97,7 @@ impl Application for FundForgeApplication {
                         StrategyEvent::TimeSlice(_, slice) => {
                             //self.notify.notify_one();
                             //self.canvas.update(slice);
-                            println!("{:?}", slice)
+                            //println!("{:?}", slice)
                         }
                         StrategyEvent::ShutdownEvent(_, _) => {}
                         StrategyEvent::WarmUpComplete(_) => {}
@@ -101,13 +127,9 @@ impl Application for FundForgeApplication {
     }
 
     fn subscription(&self) -> iced::Subscription<Self::Message> {
-        let sender = block_on(get_async_sender(ConnectionType::StrategyRegistry)).unwrap();
-        let register_gui = RegistrationRequest::Gui.to_bytes();
-        block_on(sender.send(&register_gui)).unwrap();
-        let receiver = block_on(get_async_reader(ConnectionType::StrategyRegistry)).unwrap();
         let messages = iced::Subscription::from_recipe(
             StrategyWindowRecipe {
-                registry_reader:  receiver,
+                registry_reader:  self.receiver.clone(),
             });
         iced::Subscription::batch(vec![messages])
     }
@@ -115,7 +137,7 @@ impl Application for FundForgeApplication {
 
 
 pub struct StrategyWindowRecipe {
-    registry_reader: Arc<Mutex<SecondaryDataReceiver>>
+    registry_reader: Arc<Mutex<Receiver<RegistryGuiResponse>>>,
 }
 
 impl Recipe for StrategyWindowRecipe {
@@ -128,7 +150,7 @@ impl Recipe for StrategyWindowRecipe {
     fn stream(self: Box<Self>, _input: EventStream) -> BoxStream<'static, Self::Output> {
         Box::pin(futures::stream::unfold(self.registry_reader.clone(), |receiver| async move {
             let mut locked_receiver = receiver.lock().await;
-            locked_receiver.receive().await.map(|message| (RegistryGuiResponse::from_bytes(&message).unwrap(), receiver.clone()))
+            locked_receiver.recv().await.map(|message| (message, receiver.clone()))
         }))
     }
 }

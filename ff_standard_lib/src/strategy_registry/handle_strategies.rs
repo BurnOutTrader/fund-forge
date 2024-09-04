@@ -21,10 +21,7 @@ lazy_static! {
 }
 
 pub(crate) async fn broadcast(bytes: &Vec<u8>) {
-    match GUI_BROADCATSER.broadcast(bytes).await {
-        Ok(_) => {}
-        Err(e) => println!("failed to broadcast {:?}", e)
-    }
+    GUI_BROADCATSER.broadcast(bytes).await;
 }
 
 pub(crate) async fn send_subscriber(id: usize, bytes: Vec<u8>) {
@@ -157,7 +154,7 @@ pub async fn handle_strategies(
                                 utc_time_stamp.clone(),
                                 slice,
                             );
-                            broadcast(&response.to_bytes()).await
+                            //broadcast(&response.to_bytes()).await
                         });
                     }
                     StrategyRequest::ShutDown(_last_time) => {
