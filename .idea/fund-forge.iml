@@ -11,17 +11,17 @@
       <sourceFolder url="file://$MODULE_DIR$/ff_strategies/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test_strategy/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/ff_charting/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_strategy_registry/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test_data_parser/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_lightweight_charts/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ff_gui/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ff-data-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff-registry-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_application/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_standard_lib/target" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_lightweight_charts/target" />
-      <excludeFolder url="file://$MODULE_DIR$/ff_charting/target" />
+      <excludeFolder url="file://$MODULE_DIR$/ff_gui/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
