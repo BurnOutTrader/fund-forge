@@ -37,7 +37,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 
     let dir_path = format!("/Users/kevmonaghan/Downloads/{}", symbol.name);
-    let base_data_path = PathBuf::from("/Users/kevmonaghan/Downloadss/data/parsed");
+    let base_data_path = PathBuf::from("/Users/kevmonaghan/Downloads/data/parsed");
 
     if !base_data_path.exists() {
         fs::create_dir_all(&base_data_path)?;
