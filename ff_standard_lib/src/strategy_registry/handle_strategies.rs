@@ -2,7 +2,7 @@ use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataS
 use crate::standardized_types::strategy_events::EventTimeSlice;
 use crate::standardized_types::OwnerId;
 use crate::strategy_registry::guis::RegistryGuiResponse;
-use crate::strategy_registry::strategies::{StrategyRequest, StrategyResponse};
+use crate::strategy_registry::strategies::{StrategyRegistryForward, StrategyResponse};
 use crate::strategy_registry::RegistrationResponse;
 use crate::traits::bytes::Bytes;
 use std::collections::{BTreeMap, HashMap};
@@ -132,12 +132,12 @@ pub async fn handle_strategies(
             let owner_id = owner_id.clone();
             let sender = sender.clone();
             tokio::spawn(async move {
-                let request = match StrategyRequest::from_bytes(&data) {
+                let request = match StrategyRegistryForward::from_bytes(&data) {
                     Ok(request) => request,
                     Err(_) => return,
                 };
                 match request {
-                    StrategyRequest::StrategyEventUpdates(utc_time_stamp, slice) => {
+                    StrategyRegistryForward::StrategyEventUpdates(utc_time_stamp, slice) => {
                         let response = RegistryGuiResponse::StrategyEventUpdates(
                             owner_id.clone(),
                             utc_time_stamp.clone(),
@@ -145,7 +145,7 @@ pub async fn handle_strategies(
                         );
                         broadcast(response.to_bytes()).await
                     }
-                    StrategyRequest::ShutDown(_last_time) => {
+                    StrategyRegistryForward::ShutDown(_last_time) => {
                         let response = StrategyResponse::ShutDownAcknowledged(owner_id.clone());
                         match sender.send(&response.to_bytes()).await {
                             Ok(_) => {}

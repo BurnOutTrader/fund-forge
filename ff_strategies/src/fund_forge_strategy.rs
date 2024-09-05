@@ -130,24 +130,7 @@ impl FundForgeStrategy {
 
         let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
         if !subscriptions.is_empty() {
-            for subscription in subscriptions {
-                subscription_handler
-                    .subscribe(subscription.clone(), retain_history, start_time.to_utc())
-                    .await
-                    .unwrap();
-            }
-            let subscription_events = subscription_handler.subscription_events().await;
-            let strategy_event = vec![StrategyEvent::DataSubscriptionEvents(
-                owner_id.clone(),
-                subscription_events,
-                start_time.timestamp(),
-            )];
-            match strategy_event_sender.send(strategy_event).await {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("Error forwarding event: {:?}", e);
-                }
-            }
+            subscription_handler.set_subsciptions(subscriptions, retain_history, start_time.to_utc() - warmup_duration).await;
             subscription_handler.set_subscriptions_updated(false).await;
         }
 
@@ -420,34 +403,22 @@ impl FundForgeStrategy {
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
     pub async fn subscribe(&self, subscription: DataSubscription, retain_history: u64) {
-        match self
+        self
             .subscription_handler
             .subscribe(subscription.clone(), retain_history, self.time_utc().await)
             .await
-        {
-            Ok(_) => {}
-            Err(e) => {
-                println!("Error subscribing: {:?}", e);
-            }
-        }
     }
 
     /// Unsubscribes from a subscription.
     pub async fn unsubscribe(&self, subscription: DataSubscription) {
-        match self
+        self
             .subscription_handler
             .unsubscribe(subscription.clone())
-            .await
-        {
-            Ok(_) => {
-                self.indicator_handler
+            .await;
+
+        self.indicator_handler
                     .indicators_unsubscribe(&subscription)
-                    .await
-            }
-            Err(e) => {
-                println!("Error subscribing: {:?}", e);
-            }
-        }
+                    .await;
     }
 
     /// Sets the subscriptions for the strategy using the subscriptions_closure.
@@ -457,44 +428,7 @@ impl FundForgeStrategy {
         subscriptions: Vec<DataSubscription>,
         retain_history: u64,
     ) {
-        let current_subscriptions = self.subscription_handler.subscriptions().await;
-        //toDo sort subscriptions so lowest resolution comes first on iter for performance boost later
-
-        // We subscribe to the new subscriptions and unsubscribe from the old ones
-        for subscription in &subscriptions {
-            if !current_subscriptions.contains(&subscription) {
-                match self
-                    .subscription_handler
-                    .subscribe(subscription.clone(), retain_history, self.time_utc().await)
-                    .await
-                {
-                    Ok(_) => {}
-                    Err(e) => {
-                        println!("Error subscribing: {:?}", e);
-                    }
-                }
-            }
-        }
-
-        // Unsubscribe from the old subscriptions
-        for subscription in current_subscriptions {
-            if !subscriptions.contains(&subscription) {
-                match self
-                    .subscription_handler
-                    .unsubscribe(subscription.clone())
-                    .await
-                {
-                    Ok(_) => {
-                        self.indicator_handler
-                            .indicators_unsubscribe(&subscription)
-                            .await
-                    }
-                    Err(e) => {
-                        println!("Error unsubscribing: {:?}", e);
-                    }
-                }
-            }
-        }
+        self.subscription_handler.set_subsciptions(subscriptions,retain_history, self.time_utc().await).await;
     }
 
     /// returns the nth last bar at the specified index. 1 = 1 bar ago, 0 = current bar.

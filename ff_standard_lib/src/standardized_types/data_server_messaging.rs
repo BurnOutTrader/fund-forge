@@ -320,11 +320,6 @@ pub enum AsyncResponseType {
 }
 
 impl Bytes<Self> for AsyncResponseType {
-    fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 2048>(self).unwrap();
-        vec.into()
-    }
-
     fn from_bytes(archived: &[u8]) -> Result<AsyncResponseType, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
         match rkyv::from_bytes::<AsyncResponseType>(archived) {
@@ -332,5 +327,10 @@ impl Bytes<Self> for AsyncResponseType {
             Ok(response) => Ok(response),
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let vec = rkyv::to_bytes::<_, 2048>(self).unwrap();
+        vec.into()
     }
 }

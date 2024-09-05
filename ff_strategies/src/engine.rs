@@ -14,13 +14,14 @@ use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, Strat
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::standardized_types::OwnerId;
-use ff_standard_lib::strategy_registry::strategies::{StrategyRequest, StrategyResponse};
+use ff_standard_lib::strategy_registry::strategies::{StrategyRegistryForward, StrategyResponse};
 use ff_standard_lib::strategy_registry::{RegistrationRequest, RegistrationResponse};
 use ff_standard_lib::timed_events_handler::TimedEventHandler;
 use ff_standard_lib::traits::bytes::Bytes;
 use std::collections::BTreeMap;
 use std::collections::Bound::Included;
 use std::sync::Arc;
+use std::thread;
 use std::time::Duration as StdDuration;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{Mutex, Notify, RwLock};
@@ -62,7 +63,7 @@ impl Engine {
         notify: Arc<Notify>,
         start_state: StrategyStartState,
         strategy_event_sender: Sender<EventTimeSlice>,
-        subscription_handler: Arc<SubscriptionHandler>,
+        subscription_handler: Arc<SubscriptionHandler>, //todo, since we are on a seperate thread the engine should take ownership of these and the strategy should just send message requests through a synchronous channel and await responses
         market_event_handler: Arc<MarketHandlerEnum>,
         interaction_handler: Arc<InteractionHandler>,
         indicator_handler: Arc<IndicatorHandler>,
@@ -125,7 +126,7 @@ impl Engine {
         if self.gui_enabled {
             let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg);
             let sender = self.registry_sender.clone();
-            let shutdown_slice_event = StrategyRequest::StrategyEventUpdates(
+            let shutdown_slice_event = StrategyRegistryForward::StrategyEventUpdates(
                 self.last_time.read().await.timestamp(),
                 vec![end_event],
             );
@@ -134,7 +135,7 @@ impl Engine {
                 Err(_) => {} }
 
             let shutdown_warning_event =
-                StrategyRequest::ShutDown(self.last_time.read().await.timestamp());
+                StrategyRegistryForward::ShutDown(self.last_time.read().await.timestamp());
             self.registry_sender
                 .send(&shutdown_warning_event.to_bytes())
                 .await
@@ -157,34 +158,39 @@ impl Engine {
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
     /// Calling this method will start the strategy running.
     pub async fn launch(self: Self) {
-        task::spawn(async move {
-            println!("Engine: Initializing the strategy...");
-            self.register_strategy().await;
-            self.warmup().await;
-            println!("Engine: Start {:?} ", self.start_state.mode);
-            let msg = match self.start_state.mode {
-                StrategyMode::Backtest => {
-                    self.run_backtest().await;
-                    "Engine: Backtest complete".to_string()
+        thread::spawn(move|| {
+            // Run the engine logic on a dedicated OS thread
+            tokio::runtime::Runtime::new().unwrap().block_on(async {
+                println!("Engine: Initializing the strategy...");
+                if self.gui_enabled {
+                    self.register_strategy().await;
                 }
-                // All other modes use the live engine, just with different fns from the engine
-                _ => {
-                    self.run_live().await;
-                    "Engine: Live complete".to_string()
-                }
-            };
+                self.warmup().await;
+                println!("Engine: Start {:?} ", self.start_state.mode);
+                let msg = match self.start_state.mode {
+                    StrategyMode::Backtest => {
+                        self.run_backtest().await;
+                        "Engine: Backtest complete".to_string()
+                    }
+                    // All other modes use the live engine, just with different fns from the engine
+                    _ => {
+                        self.run_live().await;
+                        "Engine: Live complete".to_string()
+                    }
+                };
 
-            println!("{:?}", &msg);
-            let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg.clone());
-            let events = vec![end_event.clone()];
-            //self.notify.notified().await;
-            match self.strategy_event_sender.send(events).await {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("Engine: Error forwarding event: {:?}", e);
+                println!("{:?}", &msg);
+                let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg.clone());
+                let events = vec![end_event.clone()];
+                //self.notify.notified().await;
+                match self.strategy_event_sender.send(events).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        println!("Engine: Error forwarding event: {:?}", e);
+                    }
                 }
-            }
-            self.deregister_strategy(msg).await;
+                self.deregister_strategy(msg).await;
+            });
         });
     }
 
@@ -232,7 +238,7 @@ impl Engine {
         }
 
         if self.gui_enabled {
-            let event_bytes = StrategyRequest::StrategyEventUpdates(
+            let event_bytes = StrategyRegistryForward::StrategyEventUpdates(
                 self.last_time.read().await.timestamp(),
                 warmup_complete_event,
             )
@@ -318,7 +324,7 @@ impl Engine {
                     }
 
                     self.timed_event_handler.update_time(time.clone()).await;
-                    //check if we have any base data for the time, if we have more then one data point we will consolidate it to the strategy resolution
+                    // Collect data from the range
                     let mut time_slice: TimeSlice = time_slices
                         .range(last_time..=time)
                         .flat_map(|(_, value)| value.iter().cloned())
@@ -412,7 +418,7 @@ impl Engine {
     }
 
     async fn subscriptions_updated(&self, last_time: DateTime<Utc>) -> bool {
-        if self.subscription_handler.subscriptions_updated().await {
+        if self.subscription_handler.get_subscriptions_updated().await {
             self.subscription_handler
                 .set_subscriptions_updated(false)
                 .await;
@@ -431,7 +437,7 @@ impl Engine {
 
             if self.gui_enabled {
                 let event_bytes =
-                    StrategyRequest::StrategyEventUpdates(last_time.timestamp(), strategy_event)
+                    StrategyRegistryForward::StrategyEventUpdates(last_time.timestamp(), strategy_event)
                         .to_bytes();
                 let sender = self.registry_sender.clone();
                 task::spawn(async move {
@@ -473,7 +479,7 @@ impl Engine {
 
         // if using gui we send the data to the registry todo this will probably change later and we will send direct to gui.
         if self.gui_enabled {
-            let event_bytes = StrategyRequest::StrategyEventUpdates(time.timestamp(), strategy_event_slice).to_bytes();
+            let event_bytes = StrategyRegistryForward::StrategyEventUpdates(time.timestamp(), strategy_event_slice).to_bytes();
             let sender = self.registry_sender.clone();
             task::spawn(async move {
                 match sender.send(&event_bytes).await {

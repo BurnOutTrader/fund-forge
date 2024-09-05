@@ -44,9 +44,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
 
-
-
-
 /*    let subscription_quotes = DataSubscription {
         symbol: symbol.clone(),
         resolution: Resolution::Instant,

@@ -30,20 +30,20 @@ impl Bytes<Self> for StrategyResponse {
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
-pub enum StrategyRequest {
+pub enum StrategyRegistryForward {
     ShutDown(i64),
     StrategyEventUpdates(i64, EventTimeSlice),
 }
 
-impl Bytes<Self> for StrategyRequest {
+impl Bytes<Self> for StrategyRegistryForward {
     fn to_bytes(&self) -> Vec<u8> {
         let vec = rkyv::to_bytes::<_, 100000>(self).unwrap();
         vec.into()
     }
 
-    fn from_bytes(archived: &[u8]) -> Result<StrategyRequest, FundForgeError> {
+    fn from_bytes(archived: &[u8]) -> Result<StrategyRegistryForward, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<StrategyRequest>(archived) {
+        match rkyv::from_bytes::<StrategyRegistryForward>(archived) {
             //Ignore this warning: Trait `Deserialize<UiStreamResponse, SharedDeserializeMap>` is not implemented for `ArchivedUiStreamResponse` [E0277]
             Ok(response) => Ok(response),
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),

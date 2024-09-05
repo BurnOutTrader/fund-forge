@@ -72,14 +72,12 @@ async fn main() -> io::Result<()> {
 
     let certs = load_certs(&cert).unwrap();
     let key = load_keys(&key)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "No keys found"))
-        .unwrap();
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "No keys found"))?;
 
     let config = rustls::ServerConfig::builder()
         .with_no_client_auth()
         .with_single_cert(certs, key)
-        .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))
-        .unwrap();
+        .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
     let sync_server_handle =
         synchronous_server(config.clone().into(), settings.address_synchronous).await;
