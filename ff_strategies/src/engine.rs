@@ -104,12 +104,12 @@ impl Engine {
                     let registration_response =
                         RegistrationResponse::from_bytes(&response).unwrap();
                     match registration_response {
-                        RegistrationResponse::Success => println!("Registered with data server"),
-                        RegistrationResponse::Error(e) => panic!("Failed to register strategy: {:?}", e)
+                        RegistrationResponse::Success => println!("Engine: Registered with data server"),
+                        RegistrationResponse::Error(e) => panic!("Engine: Failed to register strategy: {:?}", e)
                     }
                 }
                 None => {
-                    panic!("No response from the strategy registry")
+                    panic!("Engine: No response from the strategy registry")
                 }
             }
 
@@ -145,12 +145,12 @@ impl Engine {
                     let shutdown_response = StrategyResponse::from_bytes(&response).unwrap();
                     match shutdown_response {
                         StrategyResponse::ShutDownAcknowledged(owner_id) => {
-                            println!("Registry Shut Down Acknowledged {}", owner_id)
+                            println!("Engine: Registry Shut Down Acknowledged {}", owner_id)
                         }
                     }
                 }
                 None => {
-                    panic!("No response from the strategy registry")
+                    eprintln!("Engine: No response from the strategy registry")
                 }
             }
         }
@@ -186,7 +186,7 @@ impl Engine {
                 match self.strategy_event_sender.send(events).await {
                     Ok(_) => {}
                     Err(e) => {
-                        println!("Engine: Error forwarding event: {:?}", e);
+                        eprintln!("Engine: Error forwarding event: {:?}", e);
                     }
                 }
                 self.deregister_strategy(msg).await;
@@ -233,7 +233,7 @@ impl Engine {
         {
             Ok(_) => {}
             Err(e) => {
-                println!("Engine: Error forwarding event: {:?}", e);
+                eprintln!("Engine: Error forwarding event: {:?}", e);
             }
         }
 
@@ -251,6 +251,7 @@ impl Engine {
                 }
             });
         }
+        println!("Engine: Strategy Warm up complete")
     }
 
     /// Runs the strategy backtest
@@ -300,8 +301,8 @@ impl Engine {
                 let mut month_time_slices = match self.get_base_time_slices(start.clone()).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
-                        println!("Error getting historical data for: {:?}: {:?}", start, e);
-                        break 'month_loop;
+                        eprintln!("Engine: Error getting historical data for: {:?}: {:?}", start, e);
+                        continue;
                     }
                 };
 
@@ -432,7 +433,7 @@ impl Engine {
             match self.strategy_event_sender.send(strategy_event.clone()).await {
                 Ok(_) => {}
                 Err(e) => {
-                    println!("Error forwarding event: {:?}", e);
+                    eprintln!("Engine: Error forwarding event: {:?}", e);
                 }
             }
 
@@ -463,14 +464,16 @@ impl Engine {
         match self.strategy_event_sender.send(strategy_event_slice.clone()).await {
             Ok(_) => {}
             Err(e) => {
-                println!("Error forwarding event: {:?}", e);
+                eprintln!("Engine: Error forwarding event: {:?}", e);
             }
         }
         // We check if the user has requested a delay between time slices for market replay style backtesting.
         if warm_up_completed {
-            if self.interaction_handler.process_controls().await == true {
+
+            //todo, make this more efficient
+           /* if self.interaction_handler.process_controls().await == true {
                 return false;
-            }
+            }*/
 
             match self.interaction_handler.replay_delay_ms().await {
                 Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
