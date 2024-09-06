@@ -296,8 +296,8 @@ impl Engine {
             let mut last_time = start.clone();
             'month_loop: loop {
                 let strategy_subscriptions =
-                    self.subscription_handler.strategy_subscriptions().await;
-                let mut time_slices = match self.get_base_time_slices(start.clone()).await {
+                self.subscription_handler.strategy_subscriptions().await;
+                let mut month_time_slices = match self.get_base_time_slices(start.clone()).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
                         println!("Error getting historical data for: {:?}: {:?}", start, e);
@@ -325,7 +325,7 @@ impl Engine {
 
                     self.timed_event_handler.update_time(time.clone()).await;
                     // Collect data from the range
-                    let mut time_slice: TimeSlice = time_slices
+                    let mut time_slice: TimeSlice = month_time_slices
                         .range(last_time..=time)
                         .flat_map(|(_, value)| value.iter().cloned())
                         .collect();
@@ -396,16 +396,17 @@ impl Engine {
                         break 'main_loop;
                     }
 
-                    let keys_to_remove: Vec<_> = time_slices
+                    // it might be faster not to do this, depending how btree works, we might be restructuring our map for a performance hit.
+              /*      let keys_to_remove: Vec<_> = month_time_slices
                         .range((Included(last_time), Included(time)))
                         .map(|(key, _)| key.clone())
                         .collect();
 
                     if !keys_to_remove.is_empty() {
                         for key in keys_to_remove {
-                            time_slices.remove(&key);
+                            month_time_slices.remove(&key);
                         }
-                    }
+                    }*/
 
                     last_time = time.clone();
                 }
