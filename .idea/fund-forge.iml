@@ -15,6 +15,7 @@
       <sourceFolder url="file://$MODULE_DIR$/test_data_parser/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_lightweight_charts/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_gui/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ff_multi_machine_data/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ff-data-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff-registry-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_application/target" />

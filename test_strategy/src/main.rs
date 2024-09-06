@@ -35,7 +35,7 @@ use ff_standard_lib::standardized_types::Color;
 #[tokio::main]
 async fn main() {
     const GUI_ENABLED: bool = false;
-    initialize_clients(&PlatformMode::MultiMachine, GUI_ENABLED).await.unwrap();
+    initialize_clients(&PlatformMode::SingleMachine, GUI_ENABLED).await.unwrap();
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let notify = Arc::new(Notify::new());
