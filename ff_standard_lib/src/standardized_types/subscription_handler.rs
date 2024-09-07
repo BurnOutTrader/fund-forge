@@ -12,6 +12,7 @@ use ahash::AHashMap;
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use async_std::io::WriteExt;
+use dashmap::DashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tokio::sync::RwLock;
@@ -27,7 +28,7 @@ pub enum SubscriptionHandlerResponse {
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
     /// Manages the subscriptions of specific symbols
-    symbol_subscriptions: Arc<RwLock<AHashMap<Symbol, SymbolSubscriptionHandler>>>,
+    symbol_subscriptions: DashMap<Symbol, SymbolSubscriptionHandler>,
     fundamental_subscriptions: RwLock<Vec<DataSubscription>>,
     /// Keeps a record when the strategy has updated its subscriptions, so we can pause the backtest to fetch new data.
     subscriptions_updated: RwLock<bool>,
@@ -60,16 +61,16 @@ impl SubscriptionHandler {
     /// This lets the handler know that it needs to manually warm up any future subscriptions.
     pub async fn set_warmup_complete(&self) {
         *self.is_warmed_up.write().await = true;
-        for symbol_handler in self.symbol_subscriptions.read().await.values() {
-            symbol_handler.set_warmed_up().await;
+        for symbol_handler in self.symbol_subscriptions.iter() {
+            symbol_handler.value().set_warmed_up().await;
         }
     }
 
     /// Returns all the subscription events that have occurred since the last time this method was called.
     pub async fn subscription_events(&self) -> Vec<DataSubscriptionEvent> {
         let mut subscription_events = vec![];
-        for symbol_handler in self.symbol_subscriptions.read().await.values() {
-            subscription_events.extend(symbol_handler.get_subscription_event_buffer().await);
+        for symbol_handler in self.symbol_subscriptions.iter() {
+            subscription_events.extend(symbol_handler.value().get_subscription_event_buffer().await);
         }
         subscription_events
     }
@@ -106,7 +107,7 @@ impl SubscriptionHandler {
             return;
         }
 
-        if !self.symbol_subscriptions.read().await.contains_key(&new_subscription.symbol) {
+        if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
             let symbol_handler = SymbolSubscriptionHandler::new(
                 new_subscription.clone(),
                 self.is_warmed_up.read().await.clone(),
@@ -115,14 +116,10 @@ impl SubscriptionHandler {
                 self.strategy_mode,
             )
             .await;
-            self.symbol_subscriptions.write().await.insert(new_subscription.symbol.clone(), symbol_handler);
+            self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
         }
-        let subsciption_handler = self.symbol_subscriptions.read().await;
-        let symbol_handler = subsciption_handler
-            .get(&new_subscription.symbol)
-            .unwrap();
 
-        symbol_handler
+        self.symbol_subscriptions.get(&new_subscription.symbol).unwrap()
             .subscribe(
                 new_subscription,
                 history_to_retain,
@@ -170,11 +167,10 @@ impl SubscriptionHandler {
             *self.subscriptions_updated.write().await = true;
             return;
         }
-        let mut handler = self.symbol_subscriptions.write().await;
-        let symbol_handler = handler.get(&subscription.symbol).unwrap();
-        symbol_handler.unsubscribe(&subscription).await;
-        if *symbol_handler.active_count.read().await == 0 {
-            handler.remove(&subscription.symbol);
+
+        self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
+        if *self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count.read().await == 0 {
+            self.symbol_subscriptions.remove(&subscription.symbol);
         }
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         if strategy_subscriptions.contains(&subscription) {
@@ -196,8 +192,8 @@ impl SubscriptionHandler {
     /// They are not consolidators, but are the primary source of data for the consolidators.
     pub async fn primary_subscriptions(&self) -> Vec<DataSubscription> {
         let mut primary_subscriptions = vec![];
-        for symbol_handler in self.symbol_subscriptions.read().await.values() {
-            primary_subscriptions.push(symbol_handler.primary_subscription().await);
+        for symbol_handler in self.symbol_subscriptions.iter() {
+            primary_subscriptions.push(symbol_handler.value().primary_subscription().await);
         }
         primary_subscriptions
     }
@@ -205,8 +201,8 @@ impl SubscriptionHandler {
     /// Returns all the subscriptions including primary and consolidators
     pub async fn subscriptions(&self) -> Vec<DataSubscription> {
         let mut all_subscriptions = vec![];
-        for symbol_handler in self.symbol_subscriptions.read().await.values() {
-            all_subscriptions.append(&mut symbol_handler.all_subscriptions().await);
+        for symbol_handler in self.symbol_subscriptions.iter() {
+            all_subscriptions.append(&mut symbol_handler.value().all_subscriptions().await);
         }
         for subscription in self.fundamental_subscriptions.read().await.iter() {
             all_subscriptions.push(subscription.clone());
@@ -220,20 +216,20 @@ impl SubscriptionHandler {
         let mut closed_bars = Vec::new();
 
         // Clone the Arc to the symbol subscriptions.
-        let symbol_subscriptions = self.symbol_subscriptions.clone();
+        //let symbol_subscriptions = self.symbol_subscriptions.clone();
 
         // Create a FuturesUnordered to collect all futures and run them concurrently.
         let mut update_futures = FuturesUnordered::new();
 
         for base_data in time_slice.iter() {
             let symbol = base_data.symbol();
-            let symbol_subscriptions = symbol_subscriptions.clone(); // Clone the Arc for each task.
+           // let symbol_subscriptions = symbol_subscriptions.clone(); // Clone the Arc for each task.
             let base_data = base_data.clone(); // Clone base_data to avoid borrowing issues.
 
             // Add the future to the FuturesUnordered.
             update_futures.push(async move {
                 // Get a read guard inside the async block to avoid lifetime issues.
-                if let Some(handler) = symbol_subscriptions.read().await.get(&symbol) {
+                if let Some(handler) = self.symbol_subscriptions.get(&symbol) {
                     handler.update(&base_data).await
                 } else {
                     Vec::new() // Return empty if handler is not found.
@@ -264,14 +260,11 @@ impl SubscriptionHandler {
     }
 
     pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> Option<TimeSlice> {
-        let symbol_subscriptions = self.symbol_subscriptions.clone();
-        let symbol_subscriptions = symbol_subscriptions.read().await;
-
-        let futures: Vec<_> = symbol_subscriptions.iter().map(|(_, symbol_handler)| {
+        let futures: Vec<_> = self.symbol_subscriptions.iter().map(|(symbol_handler)| {
             let time = time.clone();
             // Creating async blocks that will run concurrently
             async move {
-                symbol_handler.update_time(time).await
+                symbol_handler.value().update_time(time).await
             }
         }).collect();
 
@@ -302,8 +295,6 @@ impl SubscriptionHandler {
         }
         if let Some(symbol_subscription) = self
             .symbol_subscriptions
-            .read()
-            .await
             .get(&subscription.symbol)
         {
             if let Some(consolidator) = symbol_subscription
@@ -326,8 +317,6 @@ impl SubscriptionHandler {
         }
         if let Some(symbol_subscription) = self
             .symbol_subscriptions
-            .read()
-            .await
             .get(&subscription.symbol)
         {
             if let Some(consolidator) = symbol_subscription
@@ -347,8 +336,7 @@ impl SubscriptionHandler {
             return None;
         }
 
-        let symbol_subscriptions = self.symbol_subscriptions.read().await;
-        if let Some(symbol_subscription) = symbol_subscriptions.get(&subscription.symbol) {
+        if let Some(symbol_subscription) = self.symbol_subscriptions.get(&subscription.symbol) {
             let primary_subscription = symbol_subscription.primary_subscription().await;
             if &primary_subscription == subscription {
                 return None;
