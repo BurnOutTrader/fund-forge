@@ -65,7 +65,7 @@ impl RenkoConsolidator {
         self.history.clone()
     }
 
-    pub(crate) fn index(&self, index: u64) -> Option<BaseDataEnum> {
+    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
         match self.history.get(index) {
             Some(data) => Some(data.clone()),
             None => None,

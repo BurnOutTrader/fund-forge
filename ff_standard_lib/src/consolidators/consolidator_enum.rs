@@ -124,7 +124,7 @@ impl ConsolidatorEnum {
     }
 
     /// Returns the history to retain for the consolidator.
-    pub fn history_to_retain(&self) -> u64 {
+    pub fn history_to_retain(&self) -> usize {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => count_consolidator.history.number,
             ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
@@ -163,7 +163,7 @@ impl ConsolidatorEnum {
         }
     }
 
-    pub fn index(&self, index: u64) -> Option<BaseDataEnum> {
+    pub fn index(&self, index: usize) -> Option<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(count_consolidator) => count_consolidator.index(index),
             ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {

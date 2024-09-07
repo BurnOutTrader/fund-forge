@@ -332,7 +332,7 @@ impl FundForgeStrategy {
     pub async fn indicator_index(
         &self,
         name: &IndicatorName,
-        index: u64,
+        index: usize,
     ) -> Option<IndicatorValues> {
         self.indicator_handler.index(name, index).await
     }
@@ -435,7 +435,7 @@ impl FundForgeStrategy {
     pub async fn bar_index(
         &self,
         subscription: &DataSubscription,
-        index: u64,
+        index: usize,
     ) -> Option<BaseDataEnum> {
         self.subscription_handler
             .bar_index(subscription, index)

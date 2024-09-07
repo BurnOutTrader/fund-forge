@@ -45,7 +45,7 @@ pub trait Indicators {
     fn reset(&mut self);
 
     /// Returns the indicator results at the given index.
-    fn index(&self, index: u64) -> Option<IndicatorValues>;
+    fn index(&self, index: usize) -> Option<IndicatorValues>;
 
     /// returns the crrent value, useful for update on tick or price change indicators.
     fn current(&self) -> Option<IndicatorValues>;

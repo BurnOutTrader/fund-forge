@@ -1,36 +1,43 @@
 use std::collections::VecDeque;
 
-/// Keeps track of the last N data points.
-/// When the window is full, adding a new data point will remove the oldest data point.
-/// The data points are stored in a VecDeque.
-/// The data points can be accessed by index. where 0 is the latest data point.
 #[derive(Clone, Debug)]
 pub struct RollingWindow<T> {
-    pub(crate) history: VecDeque<T>,
-    pub(crate) number: u64,
+    pub(crate) history: Vec<T>,
+    pub(crate) number: usize,
 }
 
 impl<T: std::clone::Clone> RollingWindow<T> {
     pub fn new(number: u64) -> Self {
         RollingWindow {
-            history: VecDeque::with_capacity(number as usize),
-            number,
+            history: Vec::with_capacity(number as usize),
+            number: number as usize,
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.history.clear()
+    }
+
+    pub fn is_empty(&self) -> bool   {
+        self.history.is_empty()
     }
 
     pub fn add(&mut self, data: T) {
-        if self.history.len() as u64 == self.number {
-            self.history.pop_back(); // Remove the oldest data
+        // Add the latest data at the front
+        self.history.insert(0, data);
+
+        // Remove the oldest data if we exceed the desired number
+        if self.history.len() > self.number {
+            self.history.pop(); // Remove the last element
         }
-        self.history.push_front(data); // Add the latest data at the front
     }
 
     pub fn last(&self) -> Option<&T> {
-        self.history.front()
+        self.history.first() // The latest data is at index 0
     }
 
-    pub fn get(&self, index: u64) -> Option<&T> {
-        self.history.get(index as usize)
+    pub fn get(&self, index: usize) -> Option<&T> {
+        self.history.get(index)
     }
 
     pub fn len(&self) -> usize {
@@ -38,23 +45,10 @@ impl<T: std::clone::Clone> RollingWindow<T> {
     }
 
     pub fn is_full(&self) -> bool {
-        self.history.len() as u64 == self.number
+        self.history.len() == self.number
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.history.is_empty()
-    }
-
-    pub fn clear(&mut self) {
-        self.history.clear();
-    }
-
-    pub fn history(&self) -> &VecDeque<T> {
-        &self.history
-    }
-
-    pub fn history_as_vec(&self) -> Vec<T> {
-        // Convert VecDeque to Vec
-        self.history.iter().cloned().collect()
+    pub fn history(&self) -> Vec<T> {
+        self.history.clone()
     }
 }

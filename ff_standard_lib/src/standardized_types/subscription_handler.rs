@@ -310,7 +310,7 @@ impl SubscriptionHandler {
     pub async fn bar_index(
         &self,
         subscription: &DataSubscription,
-        index: u64,
+        index: usize,
     ) -> Option<BaseDataEnum> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return None;
@@ -479,7 +479,7 @@ impl SymbolSubscriptionHandler {
             if subscription_resolution_type.resolution == new_subscription.resolution && subscription_resolution_type.base_data_type == new_subscription.base_data_type {
                 self.subscription_event_buffer.write().await.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
                 *primary_subscription = new_subscription.clone();
-                self.primary_history.write().await.clear();
+                self.primary_history.write().await.history.clear();
                 subscription_set = true;
                 break;
             }

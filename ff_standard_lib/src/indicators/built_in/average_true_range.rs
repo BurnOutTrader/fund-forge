@@ -142,7 +142,7 @@ impl Indicators for AverageTrueRange {
         self.base_data_history.clear();
     }
 
-    fn index(&self, index: u64) -> Option<IndicatorValues> {
+    fn index(&self, index: usize) -> Option<IndicatorValues> {
         if !self.is_ready {
             return None;
         }

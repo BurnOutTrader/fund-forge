@@ -179,7 +179,7 @@ impl IndicatorHandler {
         None
     }
 
-    pub async fn index(&self, name: &IndicatorName, index: u64) -> Option<IndicatorValues> {
+    pub async fn index(&self, name: &IndicatorName, index: usize) -> Option<IndicatorValues> {
         let indicators = self.indicators.read().await;
         let subscription = match self.subscription_map.read().await.get(name) {
             Some(sub) => sub.clone(),
@@ -248,12 +248,12 @@ async fn warmup(
             let consolidator = ConsolidatorEnum::create_consolidator(
                 true,
                 indicator.subscription().clone(),
-                indicator.history().number * 2,
+                (indicator.history().number * 2) as u64,
                 to_time,
                 strategy_mode,
             )
             .await;
-            for data in consolidator.history().history_as_vec() {
+            for data in consolidator.history().history {
                 indicator.update_base_data(&data);
             }
         }

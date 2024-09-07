@@ -42,7 +42,7 @@ impl Indicators for IndicatorEnum {
         }
     }
 
-    fn index(&self, index: u64) -> Option<IndicatorValues> {
+    fn index(&self, index: usize) -> Option<IndicatorValues> {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.index(index),
             IndicatorEnum::Custom(indicator) => indicator.index(index),
