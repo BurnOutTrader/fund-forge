@@ -10,6 +10,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::time_slices::UnstructuredSlice;
 use chrono::{DateTime, Utc};
 use std::collections::{btree_map, BTreeMap, Bound, HashMap};
+use futures::executor::block_on;
 
 /// Method responsible for getting historical data for a specific subscription.
 /// Users should use this method to get historical data for a specific subscription/subscriptions
@@ -45,7 +46,7 @@ async fn unstructured_que_builder(
     slices: Vec<UnstructuredSlice>,
 ) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
     if slices.len() == 0 {
-        println!("No TimeSlices to process");
+        eprintln!("No TimeSlices to process");
         return None;
     }
 
@@ -55,7 +56,10 @@ async fn unstructured_que_builder(
         let base_data: Vec<BaseDataEnum> =
             match BaseDataEnum::from_array_bytes(&unstructured_slice.data) {
                 Ok(data) => data,
-                Err(_) => return None,
+                Err(e) => {
+                    eprintln!("Engine: Failed to deserialize bytes array: {}", e);
+                    return None
+                },
             };
 
         for data in base_data {
@@ -113,31 +117,44 @@ pub async fn get_historical_data(
     subscriptions: Vec<DataSubscription>,
     time: DateTime<Utc>,
 ) -> Result<BTreeMap<DateTime<Utc>, TimeSlice>, FundForgeError> {
-    let mut payloads: Vec<BaseDataPayload> = Vec::new();
 
-    for sub in &subscriptions {
-        let request: SynchronousRequestType = SynchronousRequestType::HistoricalBaseData {
-            subscriptions: sub.clone(),
-            time: time.to_string(),
-        };
-        let synchronous_communicator = sub.symbol.data_vendor.synchronous_client().await;
+    // we cant use the HistoricalBaseDataMany variant since we might have a unique api for each vendor, therefore we need to send the messages async here and collect the futures.
+    let futures: Vec<_> = subscriptions.iter().map(|(sub)| {
+        let sub = sub.clone();
+        async move {
+            let request: SynchronousRequestType = SynchronousRequestType::HistoricalBaseData {
+                subscription: sub.clone(),
+                time: time.to_string(),
+            };
+            let synchronous_communicator = block_on(sub.symbol.data_vendor.synchronous_client());
 
-        let response = synchronous_communicator
-            .send_and_receive(request.to_bytes(), false)
-            .await;
+            let response = block_on(synchronous_communicator
+                .send_and_receive(request.to_bytes(), false));
 
-        match response {
-            Ok(response) => {
-                let response = SynchronousResponseType::from_bytes(&response).unwrap();
-                match response {
-                    SynchronousResponseType::HistoricalBaseData(payload) => {
-                        payloads.extend(payload)
+            match response {
+                Ok(response) => {
+                    let response = SynchronousResponseType::from_bytes(&response).unwrap();
+                    match response {
+                        SynchronousResponseType::HistoricalBaseData(payload) => {
+                            Ok(payload)
+                        }
+                        SynchronousResponseType::Error(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Error: {}", e))),
+                        _ => Err(FundForgeError::ClientSideErrorDebug("Error getting historical data".to_string())),
                     }
-                    SynchronousResponseType::Error(e) => panic!("Error: {}", e),
-                    _ => panic!("Invalid response type from server"),
                 }
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Error: {}", e))),
             }
-            Err(e) => panic!("Error: {}", e),
+        }
+    }).collect();
+
+    let mut results:Vec<Result<BaseDataPayload, FundForgeError>> = futures::future::join_all(futures).await;
+
+    let mut payloads: Vec<BaseDataPayload> = vec![];
+
+    for result in results.iter_mut() {
+        match result {
+            Ok(data) => payloads.push(data.to_owned()),
+            Err(e) => eprintln!("Engine: Failed to get data: {:?}", e),
         }
     }
 

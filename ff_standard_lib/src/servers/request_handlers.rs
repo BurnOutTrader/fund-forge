@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use crate::apis::brokerage::server_responses::BrokerApiResponse;
 use crate::apis::vendor::server_responses::VendorApiResponse;
 use crate::helpers::converters::load_as_bytes;
@@ -15,6 +16,7 @@ use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tokio::task;
 
 /// Manages sequential requests received through a secondary data receiver and sends responses via a secondary data sender.
 ///
@@ -46,9 +48,9 @@ pub async fn data_server_manage_sequential_requests(communicator: Arc<Synchronou
 
             let response = match request {
                 SynchronousRequestType::HistoricalBaseData {
-                    subscriptions,
+                    subscription,
                     time,
-                } => base_data_response(subscriptions, time).await,
+                } => base_data_response(subscription, time).await,
                 SynchronousRequestType::SymbolsVendor(vendor, market) => {
                     vendor.basedata_symbols_response(market).await
                 }
@@ -70,6 +72,9 @@ pub async fn data_server_manage_sequential_requests(communicator: Arc<Synchronou
                 }
                 SynchronousRequestType::TickSize(vendor, symbol) => {
                     vendor.tick_size_response(symbol).await
+                }
+                SynchronousRequestType::HistoricalBaseDataMany { time, subscriptions } => {
+                    base_data_many_response(subscriptions, time).await
                 }
             };
 
@@ -94,19 +99,64 @@ pub(crate) async fn base_data_response(
     let time: DateTime<Utc> = time.parse().unwrap();
 
     // now we can load the data from the file system
-    let mut payloads: Vec<BaseDataPayload> = Vec::new();
+
     let file = BaseDataEnum::file_path(&data_folder, &subscription, &time).unwrap();
     //println!("file path: {:?}", file);
-    if file.exists() {
-        let data = load_as_bytes(file).unwrap();
-        payloads.push(BaseDataPayload {
+    let payload = if file.exists() {
+        let data = load_as_bytes(file.clone()).unwrap();
+        Some(BaseDataPayload {
             bytes: data,
             subscription: subscription.clone(),
-        });
+        })
+    } else {
+        None
+    };
+
+    match payload {
+        None => Err(FundForgeError::ServerErrorDebug(format!("No such file: {:?}", file))),
+        Some(payload) => Ok(SynchronousResponseType::HistoricalBaseData(payload))
+    }
+}
+
+pub(crate) async fn base_data_many_response(
+    subscriptions: Vec<DataSubscription>,
+    time: String,
+) -> Result<SynchronousResponseType, FundForgeError> {
+    let data_folder = PathBuf::from(get_data_folder());
+    let time: DateTime<Utc> = time.parse().unwrap();
+
+    let futures: Vec<_> = subscriptions.iter().map(|(sub)| {
+        let time = time.clone();
+        let folder = data_folder.clone();
+        let sub = sub.clone();
+        let time = time.clone();
+        // Creating async blocks that will run concurrently
+        async move {
+            let file = BaseDataEnum::file_path(&folder, &sub, &time).unwrap();
+            //println!("file path: {:?}", file);
+            if file.exists() {
+                let data = load_as_bytes(file).unwrap();
+                Some(BaseDataPayload {
+                    bytes: data,
+                    subscription: sub.clone(),
+                });
+            }
+            None
+        }
+    }).collect();
+
+    let mut results:Vec<Option<BaseDataPayload>> = futures::future::join_all(futures).await;
+
+    let mut payloads: Vec<BaseDataPayload> = vec![];
+
+    for result in results.iter_mut() {
+        if let Some(data) = result {
+            payloads.push(data.to_owned());
+        }
     }
 
     // return the ResponseType::HistoricalBaseData to the server fn that called this fn
-    Ok(SynchronousResponseType::HistoricalBaseData(payloads))
+    Ok(SynchronousResponseType::HistoricalBaseDataMany(payloads))
 }
 
 pub async fn data_server_manage_async_requests(

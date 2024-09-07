@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use crate::apis::brokerage::Brokerage;
 use crate::apis::vendor::DataVendor;
 use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo};
@@ -89,7 +90,12 @@ pub enum SynchronousRequestType {
     /// * `subscriptions: Vec<Subscription>`
     /// * `time: String,`
     HistoricalBaseData {
-        subscriptions: DataSubscription,
+        subscription: DataSubscription,
+        time: String,
+    },
+
+    HistoricalBaseDataMany {
+        subscriptions: Vec<DataSubscription>,
         time: String,
     },
 
@@ -162,7 +168,9 @@ pub enum SynchronousResponseType {
     /// This is for generic history requests, Responds with `payload` as `Payload` which contains:
     /// ## HistoricalBaseData Fields
     /// * `payloads` as `Vec<Payload>`
-    HistoricalBaseData(Vec<BaseDataPayload>),
+    HistoricalBaseData(BaseDataPayload),
+
+    HistoricalBaseDataMany(Vec<BaseDataPayload>),
 
     /// Responds with `instruments` as `Vec<InstrumentEnum>` which contains:
     /// *  `Vec<Symbol>` for all symbols available on the server, to fullfill this the vendor will need a fn that converts from its instrument format into a `Symbol` object.
