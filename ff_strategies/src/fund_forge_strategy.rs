@@ -130,7 +130,7 @@ impl FundForgeStrategy {
 
         let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
         if !subscriptions.is_empty() {
-            subscription_handler.set_subsciptions(subscriptions, retain_history, start_time.to_utc() - warmup_duration).await;
+            subscription_handler.set_subscriptions(subscriptions, retain_history, start_time.to_utc() - warmup_duration).await;
             subscription_handler.set_subscriptions_updated(false).await;
         }
 
@@ -428,7 +428,7 @@ impl FundForgeStrategy {
         subscriptions: Vec<DataSubscription>,
         retain_history: u64,
     ) {
-        self.subscription_handler.set_subsciptions(subscriptions,retain_history, self.time_utc().await).await;
+        self.subscription_handler.set_subscriptions(subscriptions, retain_history, self.time_utc().await).await;
     }
 
     /// returns the nth last bar at the specified index. 1 = 1 bar ago, 0 = current bar.
