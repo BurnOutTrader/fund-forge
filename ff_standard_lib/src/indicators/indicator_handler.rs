@@ -127,7 +127,6 @@ impl IndicatorHandler {
     pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) -> Option<StrategyEvent> {
         //this could potentially have a race condition if we have 2x the same data subscription in the same time slice. but this would only happen in back-tests using an incorrect strategy resolution or in
         // fast markets where indicators using tick or price data... in should not generally be possible unless done deliberately. I think it is worth keeping simple concurrent performance gain for the risk.
-        let mut values = TimeSlice::new();
 
         // todo, we need to update the indicators, collect the values and only return the latest value for each one
         let mut results : BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();

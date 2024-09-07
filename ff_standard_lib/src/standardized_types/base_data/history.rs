@@ -12,7 +12,7 @@ use chrono::{DateTime, Utc};
 use std::collections::{btree_map, BTreeMap, Bound, HashMap};
 use futures::executor::block_on;
 
-/// Method responsible for structuring raw historical data into combined time slices, where all data points a combined into data.time_created() time slices.
+/// Method responsible for structuring raw historical data into combined time slices, where all data points a combined into BTreeMap<DateTime<Utc>, TimeSlice> where data.time_created() is key and value is TimeSlice.
 ///
 /// # Arguments
 /// * `subscriptions` - The subscriptions to get the historical data for, this doesn't actually subscribe your strategy to the symbol, it just defines the request we are making to get the correct data. This is a `Vec<Subscription>` objects.
@@ -38,7 +38,7 @@ use futures::executor::block_on;
 /// The TimeSlice is a type `Vec<BaseDataEnum>` that occurred at that moment in time. any kind of of `BaseDataEnum` can be mixed into this list.
 /// ```rust
 /// ```
-async fn unstructured_que_builder(
+async fn structured_que_builder(
     slices: Vec<UnstructuredSlice>,
 ) -> Option<BTreeMap<DateTime<Utc>, TimeSlice>> {
     if slices.len() == 0 {
@@ -115,7 +115,7 @@ pub async fn get_historical_data(
 ) -> Result<BTreeMap<DateTime<Utc>, TimeSlice>, FundForgeError> {
 
     // we cant use the HistoricalBaseDataMany variant since we might have a unique api for each vendor, therefore we need to send the messages async here and collect the futures.
-    let futures: Vec<_> = subscriptions.iter().map(|(sub)| {
+    let futures: Vec<_> = subscriptions.iter().map(|sub| {
         let sub = sub.clone();
         async move {
             let request: SynchronousRequestType = SynchronousRequestType::HistoricalBaseData {
@@ -168,7 +168,7 @@ pub async fn get_historical_data(
     }
 
     // structure our slices into time slices and arrange by time
-    let tree = match unstructured_que_builder(slices).await {
+    let tree = match structured_que_builder(slices).await {
         Some(time_slices) => Ok(time_slices),
         None => Err(FundForgeError::ClientSideErrorDebug(
             "Error getting historical data for all subscriptions".to_string(),

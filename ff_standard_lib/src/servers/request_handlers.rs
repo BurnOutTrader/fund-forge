@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use crate::apis::brokerage::server_responses::BrokerApiResponse;
 use crate::apis::vendor::server_responses::VendorApiResponse;
 use crate::helpers::converters::load_as_bytes;
@@ -16,7 +15,6 @@ use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::task;
 
 /// Manages sequential requests received through a secondary data receiver and sends responses via a secondary data sender.
 ///
@@ -125,7 +123,7 @@ pub(crate) async fn base_data_many_response(
     let data_folder = PathBuf::from(get_data_folder());
     let time: DateTime<Utc> = time.parse().unwrap();
 
-    let futures: Vec<_> = subscriptions.iter().map(|(sub)| {
+    let futures: Vec<_> = subscriptions.iter().map(|sub| {
         let time = time.clone();
         let folder = data_folder.clone();
         let sub = sub.clone();

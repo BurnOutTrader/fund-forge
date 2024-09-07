@@ -1,4 +1,4 @@
-use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender, SendError};
+use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use crate::standardized_types::strategy_events::EventTimeSlice;
 use crate::standardized_types::OwnerId;
 use crate::strategy_registry::guis::RegistryGuiResponse;
