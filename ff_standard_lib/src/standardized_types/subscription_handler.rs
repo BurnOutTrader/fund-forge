@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -30,7 +31,7 @@ pub struct SubscriptionHandler {
     fundamental_subscriptions: RwLock<Vec<DataSubscription>>,
     /// Keeps a record when the strategy has updated its subscriptions, so we can pause the backtest to fetch new data.
     subscriptions_updated: RwLock<bool>,
-    is_warmed_up: RwLock<bool>,
+    is_warmed_up: AtomicBool,
     strategy_mode: StrategyMode,
     // subscriptions which the strategy actually subscribed to, not the raw data needed to full-fill the subscription.
     strategy_subscriptions: RwLock<Vec<DataSubscription>>,
@@ -49,7 +50,7 @@ impl SubscriptionHandler {
             fundamental_subscriptions: Default::default(),
             symbol_subscriptions: Default::default(),
             subscriptions_updated: RwLock::new(true),
-            is_warmed_up: RwLock::new(false),
+            is_warmed_up: AtomicBool::new(false),
             strategy_mode,
             strategy_subscriptions: Default::default(),
         }
@@ -58,7 +59,7 @@ impl SubscriptionHandler {
     /// Sets the SubscriptionHandler as warmed up, so we can start processing data.
     /// This lets the handler know that it needs to manually warm up any future subscriptions.
     pub async fn set_warmup_complete(&self) {
-        *self.is_warmed_up.write().await = true;
+        self.is_warmed_up.store(true, Ordering::SeqCst);
         for symbol_handler in self.symbol_subscriptions.iter() {
             symbol_handler.value().set_warmed_up().await;
         }
@@ -108,7 +109,7 @@ impl SubscriptionHandler {
         if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
             let symbol_handler = SymbolSubscriptionHandler::new(
                 new_subscription.clone(),
-                self.is_warmed_up.read().await.clone(),
+                self.is_warmed_up.load(Ordering::SeqCst),
                 history_to_retain,
                 current_time,
                 self.strategy_mode,
