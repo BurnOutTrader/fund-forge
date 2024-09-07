@@ -169,7 +169,7 @@ impl SubscriptionHandler {
         }
 
         self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
-        if *self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count.read().await == 0 {
+        if self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count() == 0 {
             self.symbol_subscriptions.remove(&subscription.symbol);
         }
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
@@ -362,8 +362,6 @@ pub struct SymbolSubscriptionHandler {
     primary_subscription: RwLock<DataSubscription>,
     /// The secondary subscriptions are consolidators that are used to consolidate data from the primary subscription.
     secondary_subscriptions: DashMap<DataSubscription, ConsolidatorEnum>,
-    /// Count the subscriptions so we can delete the object if it is no longer being used
-    active_count: RwLock<i32>,
     symbol: Symbol,
     subscription_event_buffer: RwLock<Vec<DataSubscriptionEvent>>,
     is_warmed_up: AtomicBool,
@@ -381,7 +379,6 @@ impl SymbolSubscriptionHandler {
         let mut handler = SymbolSubscriptionHandler {
             primary_subscription: RwLock::new(primary_subscription.clone()),
             secondary_subscriptions: Default::default(),
-            active_count: RwLock::new(1),
             symbol: primary_subscription.symbol.clone(),
             subscription_event_buffer: Default::default(),
             is_warmed_up: AtomicBool::new(is_warmed_up),
@@ -396,6 +393,10 @@ impl SymbolSubscriptionHandler {
             )
             .await;
         handler
+    }
+
+    pub fn active_count(&self) -> usize {
+        self.secondary_subscriptions.len()
     }
 
     pub async fn update(&self, base_data_enum: &BaseDataEnum) -> Vec<ConsolidatedData> {
@@ -473,7 +474,6 @@ impl SymbolSubscriptionHandler {
 
         let mut subscription_set = false;
         let mut primary_subscription = self.primary_subscription.write().await;
-        let mut active_count = self.active_count.write().await;
         //if we have the resolution avaialable from the vendor, just use it.
         for subscription_resolution_type in &resolution_types {
             if subscription_resolution_type.resolution == new_subscription.resolution && subscription_resolution_type.base_data_type == new_subscription.base_data_type {
@@ -497,8 +497,6 @@ impl SymbolSubscriptionHandler {
                 .await,
             );
 
-            *active_count += 1;
-
             let max_resolution = resolution_types.iter().max_by_key(|r| r.resolution);
             if let Some(resolution_type) = max_resolution {
                 let subscription = DataSubscription::new(
@@ -512,7 +510,6 @@ impl SymbolSubscriptionHandler {
                 *primary_subscription = subscription
             }
         }
-        *active_count += 1;
     }
 
     async fn subscribe(
@@ -526,8 +523,6 @@ impl SymbolSubscriptionHandler {
             return;
         }
 
-
-        let mut active_count = self.active_count.write().await;
         let mut subscription_event_buffer = self.subscription_event_buffer.write().await;
         match new_subscription.resolution {
             Resolution::Ticks(number) => {
@@ -608,18 +603,15 @@ impl SymbolSubscriptionHandler {
                 }
             }
         }
-        *active_count += 1;
     }
 
     async fn unsubscribe(&self, subscription: &DataSubscription) {
-        let mut active_count = self.active_count.write().await;
         let mut subscription_event_buffer = self.subscription_event_buffer.write().await;
 
         if subscription == &*self.primary_subscription.read().await {
             if self.secondary_subscriptions.is_empty() {
                 subscription_event_buffer
                     .push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
-                *active_count -= 1;
                 return;
             }
         } else {
@@ -627,7 +619,6 @@ impl SymbolSubscriptionHandler {
             self.secondary_subscriptions.remove(subscription);
             subscription_event_buffer
                 .push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
-            *active_count -= 1;
         }
     }
 
