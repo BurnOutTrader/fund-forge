@@ -30,7 +30,7 @@ pub struct SubscriptionHandler {
     symbol_subscriptions: DashMap<Symbol, SymbolSubscriptionHandler>,
     fundamental_subscriptions: RwLock<Vec<DataSubscription>>,
     /// Keeps a record when the strategy has updated its subscriptions, so we can pause the backtest to fetch new data.
-    subscriptions_updated: RwLock<bool>,
+    subscriptions_updated: AtomicBool,
     is_warmed_up: AtomicBool,
     strategy_mode: StrategyMode,
     // subscriptions which the strategy actually subscribed to, not the raw data needed to full-fill the subscription.
@@ -49,7 +49,7 @@ impl SubscriptionHandler {
         SubscriptionHandler {
             fundamental_subscriptions: Default::default(),
             symbol_subscriptions: Default::default(),
-            subscriptions_updated: RwLock::new(true),
+            subscriptions_updated: AtomicBool::new(true),
             is_warmed_up: AtomicBool::new(false),
             strategy_mode,
             strategy_subscriptions: Default::default(),
@@ -102,7 +102,7 @@ impl SubscriptionHandler {
             if !fundamental_subscriptions.contains(&new_subscription) {
                 fundamental_subscriptions.push(new_subscription.clone());
             }
-            *self.subscriptions_updated.write().await = true;
+            self.subscriptions_updated.store(true, Ordering::SeqCst);
             return;
         }
 
@@ -127,7 +127,7 @@ impl SubscriptionHandler {
             )
             .await;
 
-        *self.subscriptions_updated.write().await = true;
+        self.subscriptions_updated.store(true, Ordering::SeqCst);
     }
 
     pub async fn set_subscriptions(
@@ -145,7 +145,7 @@ impl SubscriptionHandler {
         for sub in new_subscription {
            self.subscribe(sub.clone(),history_to_retain.clone(), current_time.clone()).await;
         }
-         *self.subscriptions_updated.write().await = true;
+        self.subscriptions_updated.store(true, Ordering::SeqCst);
     }
 
     /// Unsubscribes from a data subscription
@@ -163,7 +163,7 @@ impl SubscriptionHandler {
             if strategy_subscriptions.contains(&subscription) {
                 strategy_subscriptions.retain(|x| x != &subscription);
             }
-            *self.subscriptions_updated.write().await = true;
+            self.subscriptions_updated.store(true, Ordering::SeqCst);
             return;
         }
 
@@ -175,15 +175,15 @@ impl SubscriptionHandler {
         if strategy_subscriptions.contains(&subscription) {
             strategy_subscriptions.retain(|x| x != &subscription);
         }
-        *self.subscriptions_updated.write().await = true;
+        self.subscriptions_updated.store(true, Ordering::SeqCst);
     }
 
     pub async fn get_subscriptions_updated(&self) -> bool {
-        self.subscriptions_updated.read().await.clone()
+        self.subscriptions_updated.load(Ordering::SeqCst)
     }
 
     pub async fn set_subscriptions_updated(&self, updated: bool) {
-        *self.subscriptions_updated.write().await = updated;
+        self.subscriptions_updated.store(updated, Ordering::SeqCst);
     }
 
     /// Returns all the primary subscriptions
