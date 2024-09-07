@@ -12,11 +12,7 @@ use chrono::{DateTime, Utc};
 use std::collections::{btree_map, BTreeMap, Bound, HashMap};
 use futures::executor::block_on;
 
-/// Method responsible for getting historical data for a specific subscription.
-/// Users should use this method to get historical data for a specific subscription/subscriptions
-///
-/// This method can be used to get a `Option<Vec<TimeSlice>>` for a `Subscription` from the `ff_data_server` instance.
-/// It could be used to get the historical data and view a symbol without actually subscribing the algorithm.
+/// Method responsible for structuring raw historical data into combined time slices, where all data points a combined into data.time_created() time slices.
 ///
 /// # Arguments
 /// * `subscriptions` - The subscriptions to get the historical data for, this doesn't actually subscribe your strategy to the symbol, it just defines the request we are making to get the correct data. This is a `Vec<Subscription>` objects.
