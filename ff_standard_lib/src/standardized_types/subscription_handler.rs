@@ -26,8 +26,9 @@ pub enum SubscriptionHandlerResponse {
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
-    /// Manages the subscriptions of specific symbols
+    /// Manages the consolidators of specific symbols
     symbol_subscriptions: DashMap<Symbol, SymbolSubscriptionHandler>,
+    /// fundamental data is not consolidated and so it does not need special handlers
     fundamental_subscriptions: RwLock<Vec<DataSubscription>>,
     /// Keeps a record when the strategy has updated its subscriptions, so we can pause the backtest to fetch new data.
     subscriptions_updated: AtomicBool,
@@ -365,7 +366,7 @@ pub struct SymbolSubscriptionHandler {
     active_count: RwLock<i32>,
     symbol: Symbol,
     subscription_event_buffer: RwLock<Vec<DataSubscriptionEvent>>,
-    is_warmed_up: RwLock<bool>,
+    is_warmed_up: AtomicBool,
     primary_history: RwLock<RollingWindow<BaseDataEnum>>,
 }
 
@@ -383,7 +384,7 @@ impl SymbolSubscriptionHandler {
             active_count: RwLock::new(1),
             symbol: primary_subscription.symbol.clone(),
             subscription_event_buffer: Default::default(),
-            is_warmed_up: RwLock::new(is_warmed_up),
+            is_warmed_up: AtomicBool::new(is_warmed_up),
             primary_history: RwLock::new(RollingWindow::new(history_to_retain)),
         };
         handler
@@ -431,7 +432,7 @@ impl SymbolSubscriptionHandler {
     }
 
     pub async fn set_warmed_up(&self) {
-        *self.is_warmed_up.write().await = true;
+        self.is_warmed_up.store(true, Ordering::SeqCst);
     }
 
     pub async fn get_subscription_event_buffer(&self) -> Vec<DataSubscriptionEvent> {
@@ -487,7 +488,7 @@ impl SymbolSubscriptionHandler {
             self.secondary_subscriptions.insert(
                 new_subscription.clone(),
                 ConsolidatorEnum::create_consolidator(
-                    self.is_warmed_up.read().await.clone(),
+                    self.is_warmed_up.load(Ordering::SeqCst),
                     new_subscription.clone(),
                     history_to_retain,
                     to_time,
@@ -549,7 +550,7 @@ impl SymbolSubscriptionHandler {
                 // we switch to tick data as base resolution for any tick subscription
                 if number > 1 {
                     let consolidator = ConsolidatorEnum::create_consolidator(
-                        self.is_warmed_up.read().await.clone(),
+                        self.is_warmed_up.load(Ordering::SeqCst),
                         new_subscription.clone(),
                         history_to_retain,
                         to_time,
@@ -593,7 +594,7 @@ impl SymbolSubscriptionHandler {
                 } else {
                     //if we have no problem with adding new the resolution we can just add the new subscription as a consolidator
                     let consolidator = ConsolidatorEnum::create_consolidator(
-                        self.is_warmed_up.read().await.clone(),
+                        self.is_warmed_up.load(Ordering::SeqCst),
                         new_subscription.clone(),
                         history_to_retain,
                         to_time,
