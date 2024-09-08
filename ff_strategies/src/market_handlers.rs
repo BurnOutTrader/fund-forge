@@ -90,6 +90,27 @@ impl MarketHandlerEnum {
             MarketHandlerEnum::LiveDefault(handler) => handler.get_order_book(symbol_name).await,
         }
     }
+
+    pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        match self {
+            MarketHandlerEnum::BacktestDefault(handler) => handler.is_long(brokerage, account_id, symbol_name).await,
+            MarketHandlerEnum::LiveDefault(handler) => handler.is_long(brokerage, account_id, symbol_name).await
+        }
+    }
+
+    pub async fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        match self {
+            MarketHandlerEnum::BacktestDefault(handler) =>handler.is_short(brokerage, account_id, symbol_name).await,
+            MarketHandlerEnum::LiveDefault(handler) => handler.is_short(brokerage, account_id, symbol_name).await,
+        }
+    }
+
+    pub async fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        match self {
+            MarketHandlerEnum::BacktestDefault(handler) => handler.is_flat(brokerage, account_id, symbol_name).await,
+            MarketHandlerEnum::LiveDefault(handler) => handler.is_flat(brokerage, account_id, symbol_name).await
+        }
+    }
 }
 
 
@@ -431,5 +452,35 @@ impl HistoricalMarketHandler {
             return Ok(last_price.clone());
         }
         Err(String::from("No market price found for symbol"))
+    }
+
+    pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        if let Some(ledger_map) = self.ledgers.get(brokerage) {
+            if let Some(broker_ledgers) = ledger_map.get(account_id) {
+                return broker_ledgers.value().is_long(symbol_name).await
+            }
+            return true
+        }
+        true
+    }
+
+    pub async fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        if let Some(ledger_map) = self.ledgers.get(brokerage) {
+            if let Some(broker_ledgers) = ledger_map.get(account_id) {
+                return broker_ledgers.value().is_short(symbol_name).await
+            }
+            return true
+        }
+        true
+    }
+
+    pub async fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        if let Some(ledger_map) = self.ledgers.get(brokerage) {
+            if let Some(broker_ledgers) = ledger_map.get(account_id) {
+                return broker_ledgers.value().is_flat(symbol_name).await
+            }
+            return true
+        }
+        true
     }
 }

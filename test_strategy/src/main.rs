@@ -16,6 +16,10 @@ use ff_standard_lib::standardized_types::subscriptions::{
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
+use ff_standard_lib::apis::brokerage::Brokerage;
+use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
+use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
+use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 
 // to launch on separate machine
 #[tokio::main]
@@ -44,12 +48,12 @@ async fn main() {
         vec![DataSubscription::new_custom(
                 "AUD-CAD".to_string(),
                 DataVendor::Test,
-                Resolution::Minutes(15),
+                Resolution::Minutes(3),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
-             DataSubscription::new_custom(
+             /*DataSubscription::new_custom(
                  "AUD-CAD".to_string(),
                  DataVendor::Test,
                  Resolution::Minutes(3),
@@ -88,8 +92,8 @@ async fn main() {
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::CandleStick,
-             )], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
-        100,
+             )*/], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+        5,
         strategy_event_sender, // the sender for the strategy events
         None,
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
@@ -123,8 +127,13 @@ pub async fn on_data_received(
     );
     strategy.indicator_subscribe(heikin_atr_20).await;*/
 
+    let brokerage = Brokerage::Test;
+    let account = AccountId::from("1");
+
     let mut warmup_complete = false;
     let mut count = 0;
+    let history : RollingWindow<QuoteBar> = RollingWindow::new(10);
+
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for strategy_event in event_slice {
             match strategy_event {
@@ -144,30 +153,34 @@ pub async fn on_data_received(
                                 }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
+                                if !warmup_complete {
+                                    continue;
+                                }
                                 if quotebar.is_closed == true {
                                     println!("Closed bar time {}", time); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                                    if count > 2000 {
-                                        /*let three_bars_ago = &strategy.bar_index(&subscription, 3).await;
-                                        println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
-                                        //let data_current = &strategy.data_current(&subscription).await;
-                                        //println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);
+                                    let subscription = quotebar.subscription();
 
+                                    //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
+                                    let last_bar = match history.get(1) {
+                                        None => continue,
+                                        Some(bar) => bar
+                                    };
 
-                                        let three_bars_ago = &strategy.bar_index(&subscription, 10).await;
-                                        println!("{}...{} Three bars ago: {:?}", count, subscription.symbol.name, three_bars_ago);
-                                        let data_current = &strategy.bar_current(&subscription).await;
-                                        println!("{}...{} Current data: {:?}", count, subscription.symbol.name, data_current);*/
+                                    let bars_2 = match history.get(2) {
+                                        None => continue,
+                                        Some(bar) => bar
+                                    };
+
+                                    if quotebar.bid_close > last_bar.bid_high && last_bar.bid_close > bars_2.bid_high {
+                                        strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1, String::from("Enter Long")).await;
+                                        println!("Enter Long");
+                                    } else if quotebar.bid_close < last_bar.bid_low && last_bar.bid_close < bars_2.bid_low {
+                                        strategy.enter_short(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1, String::from("Enter Long")).await;
+                                        println!("Enter Short");
                                     }
                                 } else if !quotebar.is_closed {
                                     //println!("Open bar time: {}", time)
                                 }
-
-                                /*   if count /3 == 0 {
-                                     strategy.enter_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
-                                }
-                                if count / 5 == 0 {
-                                 strategy.exit_long("1".to_string(), candle.symbol.clone(), Brokerage::Test, 1, "Entry".to_string()).await;
-                                }*/
                             }
                             BaseDataEnum::Tick(tick) => {
                                 if !warmup_complete {

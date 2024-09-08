@@ -177,6 +177,18 @@ impl FundForgeStrategy {
         false
     }
 
+    pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        self.market_event_handler.is_long(brokerage, account_id, symbol_name).await
+    }
+
+    pub async fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        self.market_event_handler.is_flat(brokerage, account_id, symbol_name).await
+    }
+
+    pub async fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        self.market_event_handler.is_short(brokerage, account_id, symbol_name).await
+    }
+
     pub async fn enter_long(
         &self,
         account_id: AccountId,

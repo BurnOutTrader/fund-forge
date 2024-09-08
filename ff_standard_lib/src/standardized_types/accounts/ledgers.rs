@@ -6,9 +6,8 @@ use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::{SymbolName};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
-use ahash::AHashMap;
+use dashmap::DashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use tokio::sync::RwLock;
 use crate::standardized_types::Price;
 
 // B
@@ -41,9 +40,9 @@ pub struct Ledger {
     pub cash_available: f64,
     pub currency: AccountCurrency,
     pub cash_used: f64,
-    pub positions: RwLock<AHashMap<SymbolName, Position>>,
-    pub positions_closed: RwLock<AHashMap<SymbolName, Position>>,
-    pub positions_counter: RwLock<AHashMap<SymbolName, u64>>,
+    pub positions: DashMap<SymbolName, Position>,
+    pub positions_closed: DashMap<SymbolName, Position>,
+    pub positions_counter: DashMap<SymbolName, u64>,
 }
 
 impl Ledger {
@@ -61,9 +60,9 @@ impl Ledger {
             cash_available: account_info.cash_available,
             currency: account_info.currency,
             cash_used: account_info.cash_used,
-            positions: RwLock::new(positions),
-            positions_closed: RwLock::new(AHashMap::new()),
-            positions_counter: Default::default(),
+            positions,
+            positions_closed: DashMap::new(),
+            positions_counter: DashMap::new(),
         };
         ledger
     }
@@ -81,42 +80,34 @@ impl Ledger {
             cash_available: cash_value,
             currency,
             cash_used: 0.0,
-            positions: RwLock::new(AHashMap::new()),
-            positions_closed: RwLock::new(AHashMap::new()),
-            positions_counter: Default::default(),
+            positions: DashMap::new(),
+            positions_closed: DashMap::new(),
+            positions_counter: DashMap::new(),
         };
         account
     }
 
     pub async fn generate_id(&self, symbol_name: &SymbolName) -> PositionId {
-        let mut positions_count = self.positions_counter.write().await;
-        let symbol_positions_count = positions_count.get_mut(symbol_name);
-        let id = if let Some(count) = symbol_positions_count {
-            *count += 1;
-            count.clone()
-        } else {
-            positions_count.insert(symbol_name.clone(), 1);
-            1
-        };
-        format!("{}-{}", symbol_name, id)
+        self.positions_counter.entry(symbol_name.clone())
+            .and_modify(|value| *value += 1)  // Increment the value if the key exists
+            .or_insert(1);
+
+        format!("{}-{}", symbol_name, self.positions_counter.get(symbol_name).unwrap().value().clone())
     }
 
     pub async fn exit_position_paper(&mut self, symbol_name: &SymbolName) {
-        let mut positions = self.positions.write().await;
-        if !positions.contains_key(symbol_name) {
+        if !self.positions.contains_key(symbol_name) {
             return;
         }
-        let position = positions.remove(symbol_name).unwrap();
+        let (_, position) = self.positions.remove(symbol_name).unwrap();
         let margin_freed = self
             .brokerage
             .margin_required(symbol_name.clone(), position.quantity)
             .await;
+
         self.cash_available += margin_freed;
         self.cash_used -= margin_freed;
-        self.positions_closed
-            .write()
-            .await
-            .insert(symbol_name.clone(), position);
+        self.positions_closed.insert(symbol_name.clone(), position);
     }
 
     pub async fn enter_short_paper(
@@ -125,8 +116,7 @@ impl Ledger {
         quantity: u64,
         price: f64,
     ) -> Result<(), FundForgeError> {
-        let mut positions = self.positions.write().await;
-        if let Some(position) = positions.get(&symbol_name) {
+        if let Some(position) = self.positions.get(&symbol_name) {
             if position.side == PositionSide::Short {
                 // we will need to modify our average price and quantity
             }
@@ -138,7 +128,6 @@ impl Ledger {
             ));
         }
 
-
         let position = Position::enter(
             symbol_name.clone(),
             self.brokerage.clone(),
@@ -147,7 +136,7 @@ impl Ledger {
             price,
             self.generate_id(&symbol_name).await
         );
-        positions.insert(symbol_name.clone(), position);
+        self.positions.insert(symbol_name.clone(), position);
         self.cash_available -= margin_required;
         self.cash_used += margin_required;
         Ok(())
@@ -159,8 +148,7 @@ impl Ledger {
         quantity: u64,
         price: f64,
     ) -> Result<(), FundForgeError> {
-        let mut positions = self.positions.write().await;
-        if let Some(position) = positions.get(symbol_name) {
+        if let Some(position) = self.positions.get(symbol_name) {
             if position.side == PositionSide::Long {
                 // we will need to modify our average price and quantity
             }
@@ -179,7 +167,7 @@ impl Ledger {
             price,
             self.generate_id(symbol_name).await
         );
-        positions.insert(symbol_name.clone(), position);
+        self.positions.insert(symbol_name.clone(), position);
         self.cash_available -= margin_required;
         self.cash_used += margin_required;
         Ok(())
@@ -193,8 +181,7 @@ impl Ledger {
     }
 
     pub async fn is_long(&self, symbol_name: &SymbolName) -> bool {
-        let positions = self.positions.read().await;
-        if let Some(position) = positions.get(symbol_name) {
+        if let Some(position) = self.positions.get(symbol_name) {
             if position.side == PositionSide::Long {
                 return true;
             }
@@ -203,8 +190,7 @@ impl Ledger {
     }
 
     pub async fn is_short(&self, symbol_name: &SymbolName) -> bool {
-        let positions = self.positions.read().await;
-        if let Some(position) = positions.get(symbol_name) {
+        if let Some(position) = self.positions.get(symbol_name) {
             if position.side == PositionSide::Short {
                 return true;
             }
@@ -213,8 +199,7 @@ impl Ledger {
     }
 
     pub async fn is_flat(&self, symbol_name: &SymbolName) -> bool {
-        let positions = self.positions.read().await;
-        if let Some(_) = positions.get(symbol_name) {
+        if let Some(_) = self.positions.get(symbol_name) {
             false
         } else {
             true
@@ -222,9 +207,8 @@ impl Ledger {
     }
 
     pub async fn on_data_update(&self, time_slice: TimeSlice) {
-        let mut positions = self.positions.write().await;
-        for position in positions.values_mut() {
-            position.update_base_data(&time_slice);
+        for mut position in self.positions.iter_mut() {
+            position.value_mut().update_base_data(&time_slice);
         }
     }
 }
