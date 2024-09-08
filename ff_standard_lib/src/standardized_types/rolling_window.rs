@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 
 #[derive(Clone, Debug)]
 pub struct RollingWindow<T> {
