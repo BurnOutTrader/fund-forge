@@ -336,7 +336,7 @@ impl Engine {
                     if time_slice.is_empty() {
                         if let Some(consolidated_data) = self.subscription_handler.update_consolidators_time(time.clone()).await {
                             if let Some(buffered_indicator_events) = self.indicator_handler.update_time_slice(time.clone(), &consolidated_data).await {
-                                strategy_event_slice.push(buffered_indicator_events);
+                                strategy_event_slice.extend(buffered_indicator_events);
                             }
                             strategy_event_slice.push(StrategyEvent::TimeSlice(
                                 self.owner_id.clone(),
@@ -380,7 +380,7 @@ impl Engine {
                     }
 
                     if let Some(event) = self.indicator_handler.update_time_slice(time.clone(), &strategy_time_slice).await {
-                        strategy_event_slice.push(event);
+                        strategy_event_slice.extend(event);
                     }
 
                     strategy_event_slice.push(StrategyEvent::TimeSlice(

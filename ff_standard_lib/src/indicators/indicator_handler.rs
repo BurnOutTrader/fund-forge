@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
 use crate::indicators::indicator_enum::IndicatorEnum;
@@ -30,7 +31,7 @@ pub enum IndicatorRequest {}
 
 pub struct IndicatorHandler {
     indicators: DashMap<DataSubscription, DashMap<IndicatorName, IndicatorEnum>>,
-    is_warm_up_complete: RwLock<bool>,
+    is_warm_up_complete: AtomicBool,
     owner_id: OwnerId,
     strategy_mode: StrategyMode,
     event_buffer: RwLock<Vec<StrategyEvent>>,
@@ -41,7 +42,7 @@ impl IndicatorHandler {
     pub fn new(owner_id: OwnerId, strategy_mode: StrategyMode) -> Self {
         Self {
             indicators: Default::default(),
-            is_warm_up_complete: RwLock::new(false),
+            is_warm_up_complete: AtomicBool::new(false),
             owner_id,
             strategy_mode,
             event_buffer: Default::default(),
@@ -57,7 +58,7 @@ impl IndicatorHandler {
     }
 
     pub async fn set_warmup_complete(&self) {
-        *self.is_warm_up_complete.write().await = true;
+        self.is_warm_up_complete.store(true, Ordering::SeqCst);
     }
 
     pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) {
@@ -68,9 +69,8 @@ impl IndicatorHandler {
         }
 
         let name = indicator.name().clone();
-        let warm_up_complete = *self.is_warm_up_complete.read().await;
 
-        match warm_up_complete {
+        match self.is_warm_up_complete.load(Ordering::SeqCst) {
             true => warmup(time, self.strategy_mode.clone(), indicator).await,
             false => indicator,
         };
@@ -122,7 +122,7 @@ impl IndicatorHandler {
         }
     }
 
-    pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) -> Option<StrategyEvent> {
+    pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
         let mut results: BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
 
         for data in time_slice {
@@ -144,7 +144,10 @@ impl IndicatorHandler {
         }
 
         let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
-        Some(StrategyEvent::IndicatorEvent( self.owner_id.clone(), IndicatorEvents::IndicatorTimeSlice(time.to_string(), results_vec)))
+        let values_slice = StrategyEvent::IndicatorEvent( self.owner_id.clone(), IndicatorEvents::IndicatorTimeSlice(time.to_string(), results_vec));
+        let mut buffer = self.get_event_buffer().await;
+        buffer.push(values_slice);
+        Some(buffer)
     }
 
     pub async fn history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
