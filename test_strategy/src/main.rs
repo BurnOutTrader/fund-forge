@@ -1,35 +1,21 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use ff_standard_lib::apis::vendor::DataVendor;
-use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
-use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
-use ff_standard_lib::indicators::indicators_trait::IndicatorName;
-use ff_standard_lib::indicators::values::IndicatorValues;
 use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
-use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use ff_standard_lib::standardized_types::strategy_events::{
     EventTimeSlice, StrategyEvent, StrategyInteractionMode,
 };
 use ff_standard_lib::standardized_types::subscriptions::{
-    CandleType, DataSubscription, DataSubscriptionEvent,
+    CandleType, DataSubscription,
 };
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use std::sync::Arc;
-use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, Notify};
-use tokio::task;
-use ff_standard_lib::standardized_types::Color;
-/*fn defualt_broker_map() -> HashMap<DataVendor, Brokerage> {
-    let mut broker_map = HashMap::new();
-    broker_map.insert(DataVendor::Test, Brokerage::Test);
-    broker_map
-}*/
-
 
 // to launch on separate machine
 #[tokio::main]
@@ -63,7 +49,7 @@ async fn main() {
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
-            DataSubscription::new_custom(
+            /*DataSubscription::new_custom(
                  "EUR-USD".to_string(),
                  DataVendor::Test,
                  Resolution::Minutes(15),
@@ -94,7 +80,7 @@ async fn main() {
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
                 CandleType::CandleStick,
-            )], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+            )*/], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
         100,
         strategy_event_sender, // the sender for the strategy events
         None,
