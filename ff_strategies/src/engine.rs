@@ -110,18 +110,15 @@ impl BackTestEngine {
     }
 
     async fn warmup(&self) {
-        let start_time = match self.start_state.mode {
-            StrategyMode::Backtest => self.start_state.start_date.to_utc(),
-            //If Live we return the current time in utc time
-            _ => Utc::now(),
-        };
+        let end_time = self.start_state.start_date.to_utc();
 
         // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
         let month_years = generate_file_dates(
             self.start_state.start_date - self.start_state.warmup_duration,
-            start_time.clone(),
+            end_time.clone(),
         );
-        self.historical_data_feed(month_years, start_time.clone(), false)
+
+        self.historical_data_feed(month_years, end_time.clone(), false)
             .await;
 
         self.subscription_handler.set_warmup_complete().await;
@@ -163,7 +160,6 @@ impl BackTestEngine {
         month_start: DateTime<Utc>,
         primary_subscriptions: &Vec<DataSubscription>
     ) -> Result<BTreeMap<DateTime<Utc>, TimeSlice>, FundForgeError> {
-        //println!("Month Loop Subscriptions: {:?}", subscriptions);
         match get_historical_data(primary_subscriptions.clone(), month_start).await {
             Ok(time_slices) => Ok(time_slices),
             Err(e) => Err(e),
@@ -345,10 +341,9 @@ impl BackTestEngine {
         }
         // We check if the user has requested a delay between time slices for market replay style backtesting.
         if warm_up_completed {
-            //todo, make this more efficient
-           /* if self.interaction_handler.process_controls().await == true {
+            if self.interaction_handler.process_controls().await == true {
                 return false;
-            }*/
+            }
 
             match self.interaction_handler.replay_delay_ms().await {
                 Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
