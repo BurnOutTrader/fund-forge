@@ -132,7 +132,7 @@ pub async fn on_data_received(
 
     let mut warmup_complete = false;
     let mut count = 0;
-    let history : RollingWindow<QuoteBar> = RollingWindow::new(10);
+    let mut history : RollingWindow<QuoteBar> = RollingWindow::new(10);
 
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for strategy_event in event_slice {
@@ -158,7 +158,7 @@ pub async fn on_data_received(
                                 }
                                 if quotebar.is_closed == true {
                                     println!("Closed bar time {}", time); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                                    let subscription = quotebar.subscription();
+                                    history.add(quotebar.clone());
 
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
                                     let last_bar = match history.get(1) {

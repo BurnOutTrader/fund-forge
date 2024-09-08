@@ -438,18 +438,18 @@ impl HistoricalMarketHandler {
         if let Some(book) = self.order_books.get(symbol_name) {
             match order_side {
                 OrderSide::Buy => {
-                    if let Some(ask_price) = book.ask_level(0).await {
+                    if let Some(ask_price) = book.value().ask_level(0).await {
                         return Ok(ask_price);
                     }
                 }
                 OrderSide::Sell => {
-                    if let Some(bid_price) = book.bid_level(0).await {
+                    if let Some(bid_price) = book.value().bid_level(0).await {
                         return Ok(bid_price);
                     }
                 }
             }
         } else if let Some(last_price) = self.last_price.get(symbol_name) {
-            return Ok(last_price.clone());
+            return Ok(last_price.value().clone());
         }
         Err(String::from("No market price found for symbol"))
     }

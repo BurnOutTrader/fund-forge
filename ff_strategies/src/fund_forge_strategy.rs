@@ -191,8 +191,8 @@ impl FundForgeStrategy {
 
     pub async fn enter_long(
         &self,
-        account_id: AccountId,
         symbol_name: SymbolName,
+        account_id: AccountId,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -211,8 +211,8 @@ impl FundForgeStrategy {
 
     pub async fn enter_short(
         &self,
-        account_id: AccountId,
         symbol_name: SymbolName,
+        account_id: AccountId,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -231,8 +231,8 @@ impl FundForgeStrategy {
 
     pub async fn exit_long(
         &self,
-        account_id: AccountId,
         symbol_name: SymbolName,
+        account_id: AccountId,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
@@ -251,8 +251,8 @@ impl FundForgeStrategy {
 
     pub async fn exit_short(
         &self,
-        account_id: AccountId,
         symbol_name: SymbolName,
+        account_id: AccountId,
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
