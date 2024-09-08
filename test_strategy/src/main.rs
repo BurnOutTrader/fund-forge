@@ -166,15 +166,22 @@ pub async fn on_data_received(
                                         Some(bar) => bar
                                     };
 
-                                    let bars_2 = match history.get(2) {
+                                    let two_bars_ago = match history.get(2) {
                                         None => continue,
                                         Some(bar) => bar
                                     };
 
-                                    if quotebar.bid_close > last_bar.bid_high && last_bar.bid_close > bars_2.bid_high && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await {
+                                    if quotebar.bid_close > last_bar.bid_high
+                                        && last_bar.bid_close > two_bars_ago.bid_high
+                                        && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
+                                    {
                                         strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1, String::from("Enter Long")).await;
                                         println!("Enter Long");
-                                    } else if quotebar.bid_close < last_bar.bid_low && last_bar.bid_close < bars_2.bid_low && !strategy.is_short(&brokerage, &account, &quotebar.symbol.name).await{
+                                    }
+                                    else if quotebar.bid_close < last_bar.bid_low
+                                        && last_bar.bid_close < two_bars_ago.bid_low
+                                        && !strategy.is_short(&brokerage, &account, &quotebar.symbol.name).await
+                                    {
                                         strategy.enter_short(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1, String::from("Enter Short")).await;
                                         println!("Enter Short");
                                     }
