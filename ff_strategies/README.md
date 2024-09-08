@@ -264,6 +264,7 @@ In live trading this will happen in the background as an async task, and the str
 Only data we specifically subscribe to will be returned to the event loop, if the data is building from ticks and we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
 The SubscriptionHandler will automatically build data from the highest suitable resolution, if you plan on using open bars and you want the best resolution current bar price, you should also subscribe to that resolution,
 This only needs to be done for DataVendors where more than 1 resolution is available as historical data, if the vendor only has tick data, then current consolidated candles etc will always have the most recent tick price included.
+
 ```rust
 // we can access resolution as a Duration with resolution.as_duration() or resolution.as_seconds();
 pub enum Resolution {
@@ -315,6 +316,21 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     }
 }
 ```
+
+### Subscription Performance Impacts
+In back-testing using multiple symbols will slow down the engine only relative to the size of the primary data set, since the Subscription manager updates consolidators concurrently,
+adding additional subscriptions per symbol has a minimal impact on performance on multithreaded systems, if you are subscribed to 1 minute bars, you can subscribe to 10min, 15min, 60min simultaneously
+and expect no noticeable impact from the additional consolidators.
+
+In back-testing subscribing to multiple symbols, will have a linear performance impact, with each symbol subscribed we are increasing the size of the data which must be sorted into our primary data feed by n(1).
+This is one downside of the microservice API instances, we need to check each symbol data vendor api address and request the data per symbol.
+If you are backtesting a large number of symbols, you will see a delay in the backtest as we pull new primary resolution data from the data server 1 symbol at a time.
+I have made some functions to make this concurrent but using them would involve hard coding the platform to only allow 1 data server instance for all DataVendor apis and eliminate the possibility of using api microservices.
+I felt the trade-off of longer back-tests was worth it. 
+
+Even if we were receiving the data concurrently it would still have to be validated into TimeSlices 1 data point at a time, so we could not reduce the impact much regardless.
+
+In live trading the above problem would only be an issue if we were constantly requesting for history of very low resolution data sets for many symbols, this can always be overcome with code and so it is not an issue.
 
 ## Retained History
 The consolidators will retain history when specified during subscription.

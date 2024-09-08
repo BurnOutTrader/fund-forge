@@ -15,14 +15,6 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tokio::sync::RwLock;
 
-pub enum SubscriptionHandlerRequest {
-
-}
-
-pub enum SubscriptionHandlerResponse {
-
-}
-
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
     /// Manages the consolidators of specific symbols
@@ -35,13 +27,6 @@ pub struct SubscriptionHandler {
     strategy_mode: StrategyMode,
     // subscriptions which the strategy actually subscribed to, not the raw data needed to full-fill the subscription.
     strategy_subscriptions: RwLock<Vec<DataSubscription>>,
-    //request_receiver: Receiver<SubscriptionHandlerRequest>, //engine and strategy will share the same sender
-    //engine_sender: Sender<SubscriptionHandlerResponse>,
-    //strategy_sender: Sender<SubscriptionHandlerResponse>
-    //todo: get a benchmarking tool
-    // todo: I need to remove the lock nesting.
-    //todo: consider make the symbol handlers have a receiver/ sender this would remove the need for locks on the SubscriptionHandler
-    // todo: Then we can use sender and receiver for the consolidator object and we could avoid needing mutability at the upper levels and only have it at lower levels
 }
 
 impl SubscriptionHandler {

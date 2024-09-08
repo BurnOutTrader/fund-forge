@@ -49,44 +49,52 @@ async fn main() {
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
-            /*DataSubscription::new_custom(
-                 "EUR-USD".to_string(),
+             DataSubscription::new_custom(
+                 "AUD-CAD".to_string(),
+                 DataVendor::Test,
+                 Resolution::Minutes(3),
+                 BaseDataType::QuoteBars,
+                 MarketType::Forex,
+                 CandleType::CandleStick,
+             ),
+             DataSubscription::new_custom(
+                 "AUD-CAD".to_string(),
+                 DataVendor::Test,
+                 Resolution::Seconds(15),
+                 BaseDataType::QuoteBars,
+                 MarketType::Forex,
+                 CandleType::CandleStick,
+             ),
+             DataSubscription::new_custom(
+                 "USD-HUF".to_string(),
                  DataVendor::Test,
                  Resolution::Minutes(15),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::CandleStick,
              ),
-            DataSubscription::new_custom(
-                "CAD-JPY".to_string(),
-                DataVendor::Test,
-                Resolution::Minutes(15),
-                BaseDataType::QuoteBars,
-                MarketType::Forex,
-                CandleType::CandleStick,
-            ),
-            DataSubscription::new_custom(
-                "AUD-USD".to_string(),
-                DataVendor::Test,
-                Resolution::Minutes(15),
-                BaseDataType::QuoteBars,
-                MarketType::Forex,
-                CandleType::CandleStick,
-            ),
-            DataSubscription::new_custom(
-                "USD-HUF".to_string(),
-                DataVendor::Test,
-                Resolution::Minutes(15),
-                BaseDataType::QuoteBars,
-                MarketType::Forex,
-                CandleType::CandleStick,
-            )*/], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+             DataSubscription::new_custom(
+                 "USD-HUF".to_string(),
+                 DataVendor::Test,
+                 Resolution::Minutes(3),
+                 BaseDataType::QuoteBars,
+                 MarketType::Forex,
+                 CandleType::CandleStick,
+             ),
+             DataSubscription::new_custom(
+                 "USD-HUF".to_string(),
+                 DataVendor::Test,
+                 Resolution::Seconds(15),
+                 BaseDataType::QuoteBars,
+                 MarketType::Forex,
+                 CandleType::CandleStick,
+             )], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
         100,
         strategy_event_sender, // the sender for the strategy events
         None,
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
-        Some(Duration::minutes(5)),
+        Some(Duration::seconds(1)),
         GUI_ENABLED
     ).await;
 
