@@ -11,10 +11,9 @@ use crate::standardized_types::strategy_events::StrategyEvent;
 use crate::standardized_types::subscriptions::{filter_resolutions, DataSubscription};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::{OwnerId, TimeString};
-use ahash::AHashMap;
 use chrono::{DateTime, Duration, Utc};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use std::sync::Arc;
+use dashmap::DashMap;
 use tokio::sync::RwLock;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
@@ -30,12 +29,12 @@ pub enum IndicatorEvents {
 pub enum IndicatorRequest {}
 
 pub struct IndicatorHandler {
-    indicators: Arc<RwLock<AHashMap<DataSubscription, AHashMap<IndicatorName, IndicatorEnum>>>>,
+    indicators: DashMap<DataSubscription, DashMap<IndicatorName, IndicatorEnum>>,
     is_warm_up_complete: RwLock<bool>,
     owner_id: OwnerId,
     strategy_mode: StrategyMode,
     event_buffer: RwLock<Vec<StrategyEvent>>,
-    subscription_map: RwLock<AHashMap<IndicatorName, DataSubscription>>, //used to quickly find the subscription of an indicator by name.
+    subscription_map: DashMap<IndicatorName, DataSubscription>, //used to quickly find the subscription of an indicator by name.
 }
 
 impl IndicatorHandler {
@@ -62,44 +61,43 @@ impl IndicatorHandler {
     }
 
     pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) {
-        let mut indicators = self.indicators.write().await;
-        let indicators = indicators
-            .entry(indicator.subscription())
-            .or_insert_with(|| AHashMap::new());
+        let subscription = indicator.subscription();
+
+        if !self.indicators.contains_key(&subscription) {
+            self.indicators.insert(subscription.clone(), DashMap::new());
+        }
+
         let name = indicator.name().clone();
         let warm_up_complete = *self.is_warm_up_complete.read().await;
-        let indicator = match warm_up_complete {
+
+        match warm_up_complete {
             true => warmup(time, self.strategy_mode.clone(), indicator).await,
             false => indicator,
         };
-        self.subscription_map
-            .write()
-            .await
-            .insert(name.clone(), indicator.subscription().clone());
-        match indicators.insert(name.clone(), indicator) {
-            Some(_) => self
+
+        if !self.subscription_map.contains_key(&name) {
+            self
                 .event_buffer
                 .write()
                 .await
                 .push(StrategyEvent::IndicatorEvent(
-                    self.owner_id.clone(),
-                    IndicatorEvents::Replaced(name.clone()),
-                )),
-            None => self
+                self.owner_id.clone(),
+                IndicatorEvents::IndicatorAdded(name.clone())))
+        } else {
+            self
                 .event_buffer
                 .write()
                 .await
                 .push(StrategyEvent::IndicatorEvent(
-                    self.owner_id.clone(),
-                    IndicatorEvents::IndicatorAdded(name.clone()),
-                )),
+                self.owner_id.clone(),
+                IndicatorEvents::Replaced(name.clone())));
         }
+        self.subscription_map.insert(name.clone(), subscription.clone());
     }
 
     pub async fn remove_indicator(&self, indicator: &IndicatorName) {
-        let mut indicators = self.indicators.write().await;
         if let Some(map) =
-            indicators.get_mut(&self.subscription_map.read().await.get(indicator).unwrap())
+            self.indicators.get_mut(&self.subscription_map.get(indicator).unwrap())
         {
             if map.remove(indicator).is_some() {
                 self.event_buffer
@@ -109,49 +107,52 @@ impl IndicatorHandler {
                         self.owner_id.clone(),
                         IndicatorEvents::IndicatorRemoved(indicator.clone()),
                     ));
-                self.subscription_map.write().await.remove(indicator);
+                self.subscription_map.remove(indicator);
             }
         }
-        self.subscription_map.write().await.remove(indicator);
+        self.subscription_map.remove(indicator);
     }
 
-    pub async fn indicators_unsubscribe(&self, subscription: &DataSubscription) {
-        self.indicators.write().await.remove(subscription);
-        for (name, sub) in self.subscription_map.read().await.iter() {
-            if sub == subscription {
-                self.subscription_map.write().await.remove(name);
+    pub async fn indicators_unsubscribe_subscription(&self, subscription: &DataSubscription) {
+        self.indicators.remove(subscription);
+        for sub in self.subscription_map.iter() {
+            if sub.value() == subscription {
+                self.subscription_map.remove(sub.key());
             }
         }
     }
 
     pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) -> Option<StrategyEvent> {
-        let mut results : BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
-        let mut indicators = self.indicators.write().await;
+        let mut results: BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
+
         for data in time_slice {
-            let subscription = data.subscription();
-            if let Some(indicators) = indicators.get_mut(&subscription) {
-                for (name, indicator) in indicators {
-                    let data = indicator.update_base_data(data);
+            let subscription = data.subscription(); // Assume subscription() is a method on BaseDataEnum
+
+            if let Some(mut indicators_by_sub) = self.indicators.get_mut(&subscription) {
+                // Use the `iter_mut()` method to iterate over mutable references to key-value pairs in the DashMap
+                for mut indicators_dash_map in indicators_by_sub.iter_mut() {
+                    let data = indicators_dash_map.value_mut().update_base_data(data); // Assume update_base_data() is defined
                     if let Some(indicator_data) = data {
-                        results.insert(name.clone(), indicator_data);
+                        results.insert(indicators_dash_map.key().clone(), indicator_data);
                     }
                 }
             }
         }
+
         if results.is_empty() {
-            return None
+            return None;
         }
+
         let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
         Some(StrategyEvent::IndicatorEvent( self.owner_id.clone(), IndicatorEvents::IndicatorTimeSlice(time.to_string(), results_vec)))
     }
 
     pub async fn history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
-        let indicators = self.indicators.write().await;
-        let subscription = match self.subscription_map.read().await.get(&name) {
+        let subscription = match self.subscription_map.get(&name) {
             Some(sub) => sub.clone(),
             None => return None,
         };
-        if let Some(map) = indicators.get(&subscription) {
+        if let Some(map) = self.indicators.get(&subscription) {
             if let Some(indicator) = map.get(&name) {
                 let history = indicator.history();
                 return match history.is_empty() {
@@ -164,13 +165,12 @@ impl IndicatorHandler {
     }
 
     pub async fn current(&self, name: &IndicatorName) -> Option<IndicatorValues> {
-        let indicators = self.indicators.read().await;
-        let subscription = match self.subscription_map.read().await.get(name) {
+        let subscription = match self.subscription_map.get(name) {
             Some(sub) => sub.clone(),
             None => return None,
         };
-        if let Some(map) = indicators.get(&subscription) {
-            for indicator in map.values() {
+        if let Some(map) = self.indicators.get(&subscription) {
+            for indicator in map.value() {
                 if &indicator.name() == name {
                     return indicator.current();
                 }
@@ -180,13 +180,12 @@ impl IndicatorHandler {
     }
 
     pub async fn index(&self, name: &IndicatorName, index: usize) -> Option<IndicatorValues> {
-        let indicators = self.indicators.read().await;
-        let subscription = match self.subscription_map.read().await.get(name) {
+        let subscription = match self.subscription_map.get(name) {
             Some(sub) => sub.clone(),
             None => return None,
         };
-        if let Some(map) = indicators.get(&subscription) {
-            for indicator in map.values() {
+        if let Some(map) = self.indicators.get(&subscription) {
+            for indicator in map.value() {
                 if &indicator.name() == name {
                     return indicator.index(index);
                 }

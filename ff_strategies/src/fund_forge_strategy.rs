@@ -324,7 +324,7 @@ impl FundForgeStrategy {
     /// see the indicator_enum.rs for more details
     pub async fn indicator_unsubscribe_subscription(&self, subscription: &DataSubscription) {
         self.indicator_handler
-            .indicators_unsubscribe(subscription)
+            .indicators_unsubscribe_subscription(subscription)
             .await
     }
 
@@ -417,7 +417,7 @@ impl FundForgeStrategy {
             .await;
 
         self.indicator_handler
-                    .indicators_unsubscribe(&subscription)
+                    .indicators_unsubscribe_subscription(&subscription)
                     .await;
     }
 
