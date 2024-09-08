@@ -10,7 +10,6 @@ use crate::standardized_types::subscriptions;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Utc};
-use async_std::io::WriteExt;
 use dashmap::DashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
