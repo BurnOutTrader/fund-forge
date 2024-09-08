@@ -50,11 +50,15 @@ impl IndicatorHandler {
         }
     }
 
-    async fn get_event_buffer(&self) -> Vec<StrategyEvent> {
+    pub async fn get_event_buffer(&self) -> Option<Vec<StrategyEvent>> {
         let mut buffer = self.event_buffer.write().await;
         let buffer_cached = buffer.clone();
         buffer.clear();
-        buffer_cached
+
+        match buffer.is_empty() {
+            true => None,
+            false => Some(buffer_cached)
+        }
     }
 
     pub async fn set_warmup_complete(&self) {
@@ -122,13 +126,13 @@ impl IndicatorHandler {
         }
     }
 
-    pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
+    pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) -> Option<StrategyEvent> {
         let mut results: BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
 
         for data in time_slice {
             let subscription = data.subscription(); // Assume subscription() is a method on BaseDataEnum
 
-            if let Some(mut indicators_by_sub) = self.indicators.get_mut(&subscription) {
+            if let Some(indicators_by_sub) = self.indicators.get_mut(&subscription) {
                 // Use the `iter_mut()` method to iterate over mutable references to key-value pairs in the DashMap
                 for mut indicators_dash_map in indicators_by_sub.iter_mut() {
                     let data = indicators_dash_map.value_mut().update_base_data(data); // Assume update_base_data() is defined
@@ -144,10 +148,7 @@ impl IndicatorHandler {
         }
 
         let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
-        let values_slice = StrategyEvent::IndicatorEvent( self.owner_id.clone(), IndicatorEvents::IndicatorTimeSlice(time.to_string(), results_vec));
-        let mut buffer = self.get_event_buffer().await;
-        buffer.push(values_slice);
-        Some(buffer)
+        Some(StrategyEvent::IndicatorEvent( self.owner_id.clone(), IndicatorEvents::IndicatorTimeSlice(time.to_string(), results_vec)))
     }
 
     pub async fn history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
