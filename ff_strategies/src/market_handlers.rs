@@ -11,9 +11,11 @@ use ff_standard_lib::standardized_types::orders::orders::{
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use ff_standard_lib::standardized_types::OwnerId;
+use ff_standard_lib::standardized_types::{OwnerId, Price};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use dashmap::DashMap;
 use tokio::sync::RwLock;
 /*lazy_static! LIVE_MARKET_EVENT_HANDLER {
 
@@ -98,12 +100,12 @@ pub(crate) struct HistoricalMarketHandler {
     /// These time slices are sent before they are sent to the strategy as events
     //
     // 3. Option 1 is the best, In live trading we will be selecting the brokerage, the vendor is irrelevant, and we will ofcourse chose the best price, os maybe here we should use best bid and best ask.
-    order_books: RwLock<AHashMap<SymbolName, Arc<OrderBook>>>,
-    last_price: RwLock<AHashMap<SymbolName, f64>>,
-    ledgers: RwLock<AHashMap<Brokerage, HashMap<AccountId, Ledger>>>,
+    order_books: DashMap<SymbolName, Arc<OrderBook>>,
+    last_price: DashMap<SymbolName, Price>,
+    ledgers: DashMap<Brokerage, DashMap<AccountId, Ledger>>,
     pub(crate) last_time: RwLock<DateTime<Utc>>,
     pub order_cache: RwLock<Vec<Order>>,
-    warm_up_complete: RwLock<bool>,
+    warm_up_complete: AtomicBool,
 }
 
 impl HistoricalMarketHandler {
@@ -115,12 +117,12 @@ impl HistoricalMarketHandler {
             ledgers: Default::default(),
             last_time: RwLock::new(start_time),
             order_cache: Default::default(),
-            warm_up_complete: RwLock::new(false),
+            warm_up_complete: AtomicBool::new(false),
         }
     }
 
     pub async fn get_order_book(&self, symbol_name: &SymbolName) -> Option<Arc<OrderBook>> {
-        if let Some(book) = self.order_books.read().await.get(symbol_name) {
+        if let Some(book) = self.order_books.get(symbol_name) {
             return Some(book.clone());
         }
         None
@@ -135,36 +137,33 @@ impl HistoricalMarketHandler {
     }
 
     pub async fn set_warm_up_complete(&self) {
-        *self.warm_up_complete.write().await = true;
+        self.warm_up_complete.store(true, Ordering::SeqCst);
     }
 
     /// only primary data gets to here, so we can update our order books etc
     pub(crate) async fn on_data_update(&self, time_slice: &TimeSlice) -> Option<EventTimeSlice> {
-        for ledger in self.ledgers.read().await.values() {
-            for ledger in ledger.values() {
-                ledger.on_data_update(time_slice.clone()).await;
+        for brokerage_map in self.ledgers.iter() {
+            for ledger in brokerage_map.value() {
+                ledger.value().on_data_update(time_slice.clone()).await;
             }
         }
         for base_data in time_slice {
             //println!("Base data: {:?}", base_data.time_created_utc());
             match base_data {
                 BaseDataEnum::Price(ref price) => {
-                    let mut last_price = self.last_price.write().await;
-                    last_price.insert(price.symbol.name.clone(), price.price);
+                    self.last_price.insert(price.symbol.name.clone(), price.price);
                 }
                 BaseDataEnum::Candle(ref candle) => {
-                    let mut last_price = self.last_price.write().await;
-                    last_price.insert(candle.symbol.name.clone(), candle.close);
+                    self.last_price.insert(candle.symbol.name.clone(), candle.close);
                 }
                 BaseDataEnum::QuoteBar(ref bar) => {
-                    let mut order_books = self.order_books.write().await;
-                    if !order_books.contains_key(&bar.symbol.name) {
-                        order_books.insert(
+                    if !self.order_books.contains_key(&bar.symbol.name) {
+                        self.order_books.insert(
                             bar.symbol.name.clone(),
                             Arc::new(OrderBook::new(bar.symbol.clone(), bar.time_utc())),
                         );
                     }
-                    if let Some(book) = order_books.get_mut(&bar.symbol.name) {
+                    if let Some(book) = self.order_books.get_mut(&bar.symbol.name) {
                         let mut bid = BTreeMap::new();
                         bid.insert(0, bar.bid_close.clone());
                         let mut ask = BTreeMap::new();
@@ -175,18 +174,16 @@ impl HistoricalMarketHandler {
                     }
                 }
                 BaseDataEnum::Tick(ref tick) => {
-                    let mut last_price = self.last_price.write().await;
-                    last_price.insert(tick.symbol.name.clone(), tick.price);
+                    self.last_price.insert(tick.symbol.name.clone(), tick.price);
                 }
                 BaseDataEnum::Quote(ref quote) => {
-                    let mut order_books = self.order_books.write().await;
-                    if !order_books.contains_key(&quote.symbol.name) {
-                        order_books.insert(
+                    if !self.order_books.contains_key(&quote.symbol.name) {
+                        self.order_books.insert(
                             quote.symbol.name.clone(),
                             Arc::new(OrderBook::new(quote.symbol.clone(), quote.time_utc())),
                         );
                     }
-                    if let Some(book) = order_books.get_mut(&quote.symbol.name) {
+                    if let Some(book) = self.order_books.get_mut(&quote.symbol.name) {
                         let mut bid = BTreeMap::new();
                         bid.insert(quote.book_level.clone(), quote.bid.clone());
                         let mut ask = BTreeMap::new();
@@ -199,7 +196,7 @@ impl HistoricalMarketHandler {
                 BaseDataEnum::Fundamental(_) => (),
             }
         }
-        if *self.warm_up_complete.read().await {
+        if self.warm_up_complete.load(Ordering::SeqCst){
             self.backtest_matching_engine().await
         } else {
             None
@@ -217,16 +214,12 @@ impl HistoricalMarketHandler {
         let remaining_orders: Vec<Order> = Vec::new();
         for order in &mut *orders {
             //1. If we don't have a brokerage + account create one
-            if !self.ledgers.read().await.contains_key(&order.brokerage) {
+            if !self.ledgers.contains_key(&order.brokerage) {
                 self.ledgers
-                    .write()
-                    .await
-                    .insert(order.brokerage.clone(), HashMap::new());
+                    .insert(order.brokerage.clone(), DashMap::new());
             }
             if !self
                 .ledgers
-                .read()
-                .await
                 .get(&order.brokerage)
                 .unwrap()
                 .contains_key(&order.account_id)
@@ -240,18 +233,16 @@ impl HistoricalMarketHandler {
                     )
                     .await;
                 self.ledgers
-                    .write()
-                    .await
                     .get_mut(&order.brokerage)
                     .unwrap()
                     .insert(order.account_id.clone(), ledger);
             }
 
             //2. send the order to the ledger to be handled
-            let mut ledgers = self.ledgers.write().await;
-            let ledger = ledgers
+            let mut brokerage_ledger = self.ledgers
                 .get_mut(&order.brokerage)
-                .unwrap()
+                .unwrap();
+            let mut ledger = brokerage_ledger
                 .get_mut(&order.account_id)
                 .unwrap();
 
@@ -406,14 +397,12 @@ impl HistoricalMarketHandler {
 
     pub(crate) async fn process_ledgers(&self) {
         // Acquire a read lock on the RwLock
-        let ledgers = self.ledgers.read().await;
-
         // Iterate over the HashMap while holding the read lock
-        for (brokerage, accounts) in ledgers.iter() {
-            for (account_id, ledger) in accounts.iter() {
+        for brokerage_map in self.ledgers.iter() {
+            for map in brokerage_map.iter() {
                 println!(
                     "Brokerage: {:?} Account: {:?} Ledger: {:?}",
-                    brokerage, account_id, ledger
+                    brokerage_map.key(), map.key().clone(), map.value().clone()
                 );
             }
         }
@@ -423,9 +412,9 @@ impl HistoricalMarketHandler {
         &self,
         order_side: &OrderSide,
         symbol_name: &SymbolName,
-    ) -> Result<f64, String> {
+    ) -> Result<Price, String> {
 
-        if let Some(book) = self.order_books.read().await.get(symbol_name) {
+        if let Some(book) = self.order_books.get(symbol_name) {
             match order_side {
                 OrderSide::Buy => {
                     if let Some(ask_price) = book.ask_level(0).await {
@@ -438,7 +427,7 @@ impl HistoricalMarketHandler {
                     }
                 }
             }
-        } else if let Some(last_price) = self.last_price.read().await.get(symbol_name) {
+        } else if let Some(last_price) = self.last_price.get(symbol_name) {
             return Ok(last_price.clone());
         }
         Err(String::from("No market price found for symbol"))
