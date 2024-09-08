@@ -1,5 +1,5 @@
 use crate::interaction_handler::InteractionHandler;
-use crate::market_handlers::MarketHandlerEnum;
+use crate::market_handlers::{HistoricalMarketHandler, MarketHandlerEnum};
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
@@ -19,16 +19,13 @@ use ff_standard_lib::strategy_registry::{RegistrationRequest, RegistrationRespon
 use ff_standard_lib::timed_events_handler::TimedEventHandler;
 use ff_standard_lib::traits::bytes::Bytes;
 use std::collections::BTreeMap;
-use std::collections::Bound::Included;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration as StdDuration;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task;
-use tokio::time::sleep;
-use ff_standard_lib::standardized_types::strategy_events::StrategyEvent::DataSubscriptionEvents;
-use ff_standard_lib::strategy_registry::guis::GuiRequest;
+use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 //Possibly more accurate engine
 /*todo Use this for saving and loading data, it will make smaller file sizes and be less handling for consolidator, we can then just update historical data once per week on sunday and load last week from broker.
   use Create a date (you can use DateTime<Utc>, Local, or NaiveDate)
@@ -40,7 +37,7 @@ use ff_standard_lib::strategy_registry::guis::GuiRequest;
   The date 2023-08-19 is in ISO week 33 of the year 2023
 */
 
-pub(crate) struct Engine {
+pub(crate) struct BackTestEngine {
     owner_id: OwnerId,
     start_state: StrategyStartState,
     strategy_event_sender: Sender<EventTimeSlice>,
@@ -50,14 +47,12 @@ pub(crate) struct Engine {
     indicator_handler: Arc<IndicatorHandler>,
     timed_event_handler: Arc<TimedEventHandler>,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
-    registry_sender: Arc<SecondaryDataSender>,
-    registry_receiver: Arc<Mutex<SecondaryDataReceiver>>,
     last_time: RwLock<DateTime<Utc>>,
     gui_enabled: bool,
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
-impl Engine {
+impl BackTestEngine {
     pub async fn new(
         owner_id: OwnerId,
         notify: Arc<Notify>,
@@ -70,7 +65,7 @@ impl Engine {
         timed_event_handler: Arc<TimedEventHandler>,
         gui_enabled: bool
     ) -> Self {
-        Engine {
+        BackTestEngine {
             owner_id,
             notify,
             start_state,
@@ -80,132 +75,41 @@ impl Engine {
             interaction_handler,
             indicator_handler,
             timed_event_handler,
-            registry_sender: get_async_sender(ConnectionType::StrategyRegistry)
-                .await
-                .unwrap(),
-            registry_receiver: get_async_reader(ConnectionType::StrategyRegistry)
-                .await
-                .unwrap(),
             last_time: RwLock::new(Default::default()),
             gui_enabled
         }
     }
 
-    async fn register_strategy(&self) {
-        if self.gui_enabled {
-            let strategy_register_event =
-                RegistrationRequest::Strategy(self.owner_id.clone(), self.start_state.mode.clone(), self.subscription_handler.strategy_subscriptions().await).to_bytes();
-            self.registry_sender
-                .send(&strategy_register_event)
-                .await
-                .unwrap();
-            match self.registry_receiver.lock().await.receive().await {
-                Some(response) => {
-                    let registration_response =
-                        RegistrationResponse::from_bytes(&response).unwrap();
-                    match registration_response {
-                        RegistrationResponse::Success => println!("Engine: Registered with data server"),
-                        RegistrationResponse::Error(e) => panic!("Engine: Failed to register strategy: {:?}", e)
-                    }
-                }
-                None => {
-                    panic!("Engine: No response from the strategy registry")
-                }
-            }
-
-            let mut subscriptions = self.subscription_handler.primary_subscriptions().await;
-            //wait until we have at least one subscription
-            while subscriptions.is_empty() {
-                sleep(StdDuration::from_secs(1)).await;
-                subscriptions = self.subscription_handler.primary_subscriptions().await;
-            }
-        }
-    }
-
-    async fn deregister_strategy(&self, msg: String) {
-        if self.gui_enabled {
-            let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg);
-            let sender = self.registry_sender.clone();
-            let shutdown_slice_event = StrategyRegistryForward::StrategyEventUpdates(
-                self.last_time.read().await.timestamp(),
-                vec![end_event],
-            );
-            match sender.send(&shutdown_slice_event.to_bytes()).await {
-                Ok(_) => {}
-                Err(_) => {} }
-
-            let shutdown_warning_event =
-                StrategyRegistryForward::ShutDown(self.last_time.read().await.timestamp());
-            self.registry_sender
-                .send(&shutdown_warning_event.to_bytes())
-                .await
-                .unwrap();
-            match self.registry_receiver.lock().await.receive().await {
-                Some(response) => {
-                    let shutdown_response = StrategyResponse::from_bytes(&response).unwrap();
-                    match shutdown_response {
-                        StrategyResponse::ShutDownAcknowledged(owner_id) => {
-                            println!("Engine: Registry Shut Down Acknowledged {}", owner_id)
-                        }
-                    }
-                }
-                None => {
-                    eprintln!("Engine: No response from the strategy registry")
-                }
-            }
-        }
-    }
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
     /// Calling this method will start the strategy running.
     pub async fn launch(self: Self) {
+        println!("Engine: Initializing the strategy...");
         thread::spawn(move|| {
+            if self.start_state.mode != StrategyMode::Backtest {
+                panic!("Incorrect Engine instance for {:?}", self.start_state.mode)
+            }
             // Run the engine logic on a dedicated OS thread
             tokio::runtime::Runtime::new().unwrap().block_on(async {
-                println!("Engine: Initializing the strategy...");
-                if self.gui_enabled {
-                    self.register_strategy().await;
-                }
+                println!("Engine: Warming up the strategy...");
                 self.warmup().await;
-                println!("Engine: Start {:?} ", self.start_state.mode);
-                let msg = match self.start_state.mode {
-                    StrategyMode::Backtest => {
-                        self.run_backtest().await;
-                        "Engine: Backtest complete".to_string()
-                    }
-                    // All other modes use the live engine, just with different fns from the engine
-                    _ => {
-                        self.run_live().await;
-                        "Engine: Live complete".to_string()
-                    }
-                };
 
-                println!("{:?}", &msg);
-                let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg.clone());
+                println!("Engine: Start {:?} ", self.start_state.mode);
+                self.run_backtest().await;
+
+                println!("Engine: Backtest complete");
+                let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), String::from("Success"));
                 let events = vec![end_event.clone()];
-                //self.notify.notified().await;
                 match self.strategy_event_sender.send(events).await {
                     Ok(_) => {}
                     Err(e) => {
                         eprintln!("Engine: Error forwarding event: {:?}", e);
                     }
                 }
-                self.deregister_strategy(msg).await;
             });
         });
     }
 
-    pub async fn run_live(&self) {
-        todo!("Implement live mode");
-        //need implementation for live plus live paper, where accounts are simulated locally. also make a hybrid mode so it trades live plus paper to test the engine functions accurately
-    }
-
-    /// Warm up runs on initialization to get the strategy ready for execution, this can be used to warm up indicators etc., to ensure the strategy has enough history to run from start to finish, without waiting for data.
-    /// This is especially useful in live trading scenarios, else you could be waiting days for the strategy to warm up if you are dependent on a long history for your indicators etc. \
-    /// \
-    /// An alternative to the warmup, would be using the `history` method to get historical data for a specific subscription, and then manually warm up the indicators during re-balancing or adding new subscriptions.
-    /// You don't need to be subscribed to an instrument to get the history, so that method is a good alternative for strategies that dynamically subscribe to instruments.
     async fn warmup(&self) {
-        println!("Engine: Warming up the strategy...");
         let start_time = match self.start_state.mode {
             StrategyMode::Backtest => self.start_state.start_date.to_utc(),
             //If Live we return the current time in utc time
@@ -236,21 +140,6 @@ impl Engine {
                 eprintln!("Engine: Error forwarding event: {:?}", e);
             }
         }
-
-        if self.gui_enabled {
-            let event_bytes = StrategyRegistryForward::StrategyEventUpdates(
-                self.last_time.read().await.timestamp(),
-                warmup_complete_event,
-            )
-                .to_bytes();
-            let sender = self.registry_sender.clone();
-            task::spawn(async move {
-                match sender.send(&event_bytes).await {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
-            });
-        }
         println!("Engine: Strategy Warm up complete")
     }
 
@@ -267,17 +156,15 @@ impl Engine {
             .await;
 
         self.market_event_handler.process_ledgers().await;
-
-        // If we have reached the end of the backtest, we check that the last time recorded is not in the future, if it is, we set it to the current time.
     }
 
     async fn get_base_time_slices(
         &self,
         month_start: DateTime<Utc>,
+        primary_subscriptions: &Vec<DataSubscription>
     ) -> Result<BTreeMap<DateTime<Utc>, TimeSlice>, FundForgeError> {
-        let subscriptions = self.subscription_handler.primary_subscriptions().await;
         //println!("Month Loop Subscriptions: {:?}", subscriptions);
-        match get_historical_data(subscriptions.clone(), month_start).await {
+        match get_historical_data(primary_subscriptions.clone(), month_start).await {
             Ok(time_slices) => Ok(time_slices),
             Err(e) => Err(e),
         }
@@ -296,9 +183,9 @@ impl Engine {
             self.market_event_handler.update_time(start.clone()).await;
             let mut last_time = start.clone();
             'month_loop: loop {
-                let strategy_subscriptions =
-                self.subscription_handler.strategy_subscriptions().await;
-                let mut month_time_slices = match self.get_base_time_slices(start.clone()).await {
+                let strategy_subscriptions = self.subscription_handler.strategy_subscriptions().await;
+                let primary_subscriptions = self.subscription_handler.primary_subscriptions().await;
+                let mut month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
                         eprintln!("Engine: Error getting historical data for: {:?}: {:?}", start, e);
@@ -319,7 +206,7 @@ impl Engine {
                     }
 
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
-                    if self.subscriptions_updated(last_time.clone()).await {
+                    if self.subscriptions_updated(last_time.clone(), &primary_subscriptions).await {
                         end_month = false;
                         break 'time_loop;
                     }
@@ -404,18 +291,6 @@ impl Engine {
                         break 'main_loop;
                     }
 
-                    // it might be faster not to do this, depending how btree works, we might be restructuring our map for a performance hit.
-              /*      let keys_to_remove: Vec<_> = month_time_slices
-                        .range((Included(last_time), Included(time)))
-                        .map(|(key, _)| key.clone())
-                        .collect();
-
-                    if !keys_to_remove.is_empty() {
-                        for key in keys_to_remove {
-                            month_time_slices.remove(&key);
-                        }
-                    }*/
-
                     last_time = time.clone();
                 }
                 if end_month {
@@ -426,37 +301,31 @@ impl Engine {
         }
     }
 
-    async fn subscriptions_updated(&self, last_time: DateTime<Utc>) -> bool {
+    async fn subscriptions_updated(&self, last_time: DateTime<Utc>, primary_subscriptions: &Vec<DataSubscription>) -> bool {
         if self.subscription_handler.get_subscriptions_updated().await {
             self.subscription_handler
                 .set_subscriptions_updated(false)
                 .await;
+
             let subscription_events = self.subscription_handler.subscription_events().await;
             let strategy_event = vec![StrategyEvent::DataSubscriptionEvents(
                 self.owner_id.clone(),
                 subscription_events,
                 last_time.timestamp(),
             )];
+
             match self.strategy_event_sender.send(strategy_event.clone()).await {
                 Ok(_) => {}
                 Err(e) => {
                     eprintln!("Engine: Error forwarding event: {:?}", e);
                 }
             }
-
-            if self.gui_enabled {
-                let event_bytes =
-                    StrategyRegistryForward::StrategyEventUpdates(last_time.timestamp(), strategy_event)
-                        .to_bytes();
-                let sender = self.registry_sender.clone();
-                task::spawn(async move {
-                    match sender.send(&event_bytes).await {
-                        Ok(_) => {}
-                        Err(_) => {}
-                    }
-                });
+            // if the primary subscriptions havent changed then we don't need to break the backtest event loop
+            let new_primary_subscriptions = self.subscription_handler.primary_subscriptions().await;
+            return match *primary_subscriptions == new_primary_subscriptions {
+                true => false,
+                false => true
             }
-            return true;
         }
         false
     }
@@ -476,7 +345,6 @@ impl Engine {
         }
         // We check if the user has requested a delay between time slices for market replay style backtesting.
         if warm_up_completed {
-
             //todo, make this more efficient
            /* if self.interaction_handler.process_controls().await == true {
                 return false;
@@ -487,20 +355,88 @@ impl Engine {
                 None => {}
             }
         }
-
-        // if using gui we send the data to the registry todo this will probably change later and we will send direct to gui.
-        if self.gui_enabled {
-            let event_bytes = StrategyRegistryForward::StrategyEventUpdates(time.timestamp(), strategy_event_slice).to_bytes();
-            let sender = self.registry_sender.clone();
-            task::spawn(async move {
-                match sender.send(&event_bytes).await {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
-            });
-        }
-
         self.notify.notified().await;
         true
+    }
+}
+
+pub struct RegistryHandler {
+    owner_id: OwnerId,
+    registry_sender: Arc<SecondaryDataSender>,
+    registry_receiver: Arc<Mutex<SecondaryDataReceiver>>,
+}
+
+impl RegistryHandler {
+    pub async fn new(owner_id: OwnerId) -> Self {
+        Self {
+            owner_id,
+            registry_sender: get_async_sender(ConnectionType::StrategyRegistry).await.unwrap(),
+            registry_receiver: get_async_reader(ConnectionType::StrategyRegistry).await.unwrap(),
+        }
+    }
+
+    pub async fn register_strategy(&self, mode: StrategyMode, subscriptions: Vec<DataSubscription>) {
+        let strategy_register_event =
+            RegistrationRequest::Strategy(self.owner_id.clone(), mode, subscriptions).to_bytes();
+        self.registry_sender
+            .send(&strategy_register_event)
+            .await
+            .unwrap();
+        match self.registry_receiver.lock().await.receive().await {
+            Some(response) => {
+                let registration_response =
+                    RegistrationResponse::from_bytes(&response).unwrap();
+                match registration_response {
+                    RegistrationResponse::Success => println!("Engine: Registered with data server"),
+                    RegistrationResponse::Error(e) => panic!("Engine: Failed to register strategy: {:?}", e)
+                }
+            }
+            None => {
+                panic!("Engine: No response from the strategy registry")
+            }
+        }
+    }
+
+    pub async fn deregister_strategy(&self, msg: String, last_time: DateTime<Utc>) {
+        let end_event = StrategyEvent::ShutdownEvent(self.owner_id.clone(), msg);
+        let sender = self.registry_sender.clone();
+        let shutdown_slice_event = StrategyRegistryForward::StrategyEventUpdates(
+            last_time.timestamp(),
+            vec![end_event],
+        );
+        match sender.send(&shutdown_slice_event.to_bytes()).await {
+            Ok(_) => {}
+            Err(_) => {} }
+
+        let shutdown_warning_event =
+            StrategyRegistryForward::ShutDown(last_time.timestamp());
+        self.registry_sender
+            .send(&shutdown_warning_event.to_bytes())
+            .await
+            .unwrap();
+        match self.registry_receiver.lock().await.receive().await {
+            Some(response) => {
+                let shutdown_response = StrategyResponse::from_bytes(&response).unwrap();
+                match shutdown_response {
+                    StrategyResponse::ShutDownAcknowledged(owner_id) => {
+                        println!("Engine: Registry Shut Down Acknowledged {}", owner_id)
+                    }
+                }
+            }
+            None => {
+                eprintln!("Engine: No response from the strategy registry")
+            }
+        }
+    }
+
+    pub async fn forward_events(&self, time: DateTime<Utc>, strategy_event_slice: Vec<StrategyEvent>) {
+        let event_bytes = StrategyRegistryForward::StrategyEventUpdates(time.timestamp(), strategy_event_slice).to_bytes();
+        let sender = self.registry_sender.clone();
+        task::spawn(async move {
+            match sender.send(&event_bytes).await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
+        });
     }
 }

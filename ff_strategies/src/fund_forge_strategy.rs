@@ -1,6 +1,5 @@
-use crate::engine::Engine;
+use crate::engine::BackTestEngine;
 use crate::interaction_handler::InteractionHandler;
-use crate::market_handlers::MarketHandlerEnum;
 use crate::strategy_state::StrategyStartState;
 use ahash::AHashMap;
 use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime, Utc};
@@ -36,6 +35,7 @@ use std::env;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
+use crate::market_handlers::MarketHandlerEnum;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -151,7 +151,7 @@ impl FundForgeStrategy {
             timed_event_handler: Arc::new(TimedEventHandler::new()),
         };
 
-        let engine = Engine::new(
+        let engine = BackTestEngine::new(
             strategy.owner_id.clone(),
             notify,
             start_state,
@@ -164,7 +164,7 @@ impl FundForgeStrategy {
             gui_enabled
         ).await;
 
-        Engine::launch(engine).await;
+        BackTestEngine::launch(engine).await;
 
         strategy
     }
