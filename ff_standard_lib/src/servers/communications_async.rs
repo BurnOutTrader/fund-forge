@@ -146,7 +146,7 @@ impl SecondaryDataSubscriber {
         Arc::new(Mutex::new(Self { id, sender }))
     }
 
-    pub async fn send(&mut self, source_data: &Vec<u8>) -> Result<(), SendError> {
+    pub async fn send(&self, source_data: &Vec<u8>) -> Result<(), SendError> {
         self.sender.send(source_data).await
     }
 }
