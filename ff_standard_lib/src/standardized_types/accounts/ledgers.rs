@@ -146,8 +146,8 @@ impl Ledger {
         };
 
         let break_even = total_trades - wins - losses;
-        format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Risk Reward: {}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}",
-                self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, self.booked_pnl + self.open_pnl, wins, losses,  break_even, total_trades)
+        format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}",
+                self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, profit_factor, pnl, wins, losses,  break_even, total_trades) //todo, check against self.pnl
     }
 
     pub fn paper_account_init(
@@ -321,6 +321,7 @@ impl Ledger {
             .await;
 
         old_position.booked_pnl += old_position.open_pnl;
+        self.booked_pnl += old_position.open_pnl;
         self.cash_available += margin_freed + old_position.open_pnl;
         self.cash_used -= margin_freed + old_position.open_pnl;
         self.cash_value +=  old_position.open_pnl;
@@ -486,11 +487,14 @@ impl Position {
 
 
 fn calculate_pnl(side: &PositionSide, entry_price: f64, market_price: f64, tick_size: f64, value_per_tick: f64, quantity: u64, base_currency: &AccountCurrency, account_currency: &AccountCurrency, time: &DateTime<Utc>) -> f64 {
-    match side {
-        PositionSide::Long => round_to_tick_size(market_price - entry_price, tick_size)  * (value_per_tick * quantity as f64),
-        PositionSide::Short =>  round_to_tick_size(entry_price - market_price, tick_size)  * (value_per_tick * quantity as f64)
-    }
-    //todo add historical currency conversion
+    let pnl = match side {
+        PositionSide::Long => round_to_tick_size(market_price - entry_price, tick_size) * (value_per_tick * quantity as f64),
+        PositionSide::Short => round_to_tick_size(entry_price - market_price, tick_size) * (value_per_tick * quantity as f64),
+    };
+
+    // Placeholder for currency conversion if needed
+    // let pnl = convert_currency(pnl, base_currency, account_currency, time);
+    pnl
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
