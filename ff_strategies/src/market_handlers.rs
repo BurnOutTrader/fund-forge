@@ -143,9 +143,10 @@ impl HistoricalMarketHandler {
                         *last_time.write().await = time;
                     }
                     MarketHandlerUpdate::TimeSlice(time_slice) => {
-                        for brokerage_map in ledgers.iter() {
-                            for ledger in brokerage_map.value() {
-                                ledger.value().on_data_update(time_slice.clone()).await;
+                        let last_time_utc = last_time.read().await.clone();
+                        for mut brokerage_map in ledgers.iter_mut() {
+                            for mut ledger in brokerage_map.value_mut().iter_mut() {
+                                ledger.value_mut().on_data_update(time_slice.clone(), &last_time_utc).await;
                             }
                         }
                         for base_data in time_slice {
@@ -345,7 +346,7 @@ async fn backtest_matching_engine(
                 if is_filled {
                     order.quantity_filled = order.quantity_ordered;
                     order.time_filled_utc = Some(last_time_utc.to_string());
-                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, last_time_utc).await {
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc).await {
                         Ok(_) => fill_order(order.clone(), &mut events),
                         Err(e) => reject_order(e.to_string(), order.clone(), &mut events)
                     }
@@ -354,7 +355,7 @@ async fn backtest_matching_engine(
                 }
             }
             OrderType::Market => {
-                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, last_time_utc).await {
+                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc).await {
                     Ok(_) => fill_order(order.clone(), &mut events),
                     Err(e) => reject_order(e.to_string(), order.clone(), &mut events)
                 }
@@ -367,7 +368,7 @@ async fn backtest_matching_engine(
                 if is_filled {
                     order.quantity_filled = order.quantity_ordered;
                     order.time_filled_utc = Some(last_time_utc.to_string());
-                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, last_time_utc).await {
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc).await {
                         Ok(_) => fill_order(order.clone(), &mut events),
                         Err(e) => reject_order(e.to_string(), order.clone(), &mut events)
                     }
@@ -385,7 +386,7 @@ async fn backtest_matching_engine(
                 if is_filled {
                     order.quantity_filled = order.quantity_ordered;
                     order.time_filled_utc = Some(last_time_utc.to_string());
-                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, last_time_utc).await {
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc).await {
                         Ok(_) => fill_order(order.clone(), &mut events),
                         Err(e) => reject_order(e.to_string(), order.clone(), &mut events)
                     }
@@ -397,7 +398,7 @@ async fn backtest_matching_engine(
                 if ledger.is_short(&order.symbol_name).await {
                     ledger.exit_position_paper(&order.symbol_name).await;
                 }
-                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, last_time_utc).await {
+                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc).await {
                     Ok(_) => {
                         fill_order(order.clone(), &mut events);
                     }
@@ -409,14 +410,14 @@ async fn backtest_matching_engine(
                     ledger.exit_position_paper(&order.symbol_name).await;
                 }
 
-                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, last_time_utc).await {
+                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc).await {
                     Ok(_) => fill_order(order.clone(), &mut events),
                     Err(e) => reject_order(e.to_string(), order.clone(), &mut events)
                 }
             }
             OrderType::ExitLong => {
                 if ledger.is_long(&order.symbol_name).await {
-                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, last_time_utc).await {
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc).await {
                         Ok(_) => fill_order(order.clone(), &mut events),
                         Err(e) => reject_order(e.to_string(), order.clone(), &mut events)
                     }
@@ -427,7 +428,7 @@ async fn backtest_matching_engine(
             }
             OrderType::ExitShort => {
                 if ledger.is_short(&order.symbol_name).await {
-                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, last_time_utc).await {
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc).await {
                         Ok(_) => fill_order(order.clone(), &mut events),
                         Err(e) => reject_order(e.to_string(), order.clone(), &mut events)
                     }

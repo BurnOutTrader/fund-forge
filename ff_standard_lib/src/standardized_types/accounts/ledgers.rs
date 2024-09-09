@@ -72,6 +72,8 @@ pub struct Ledger {
     pub positions_closed: DashMap<SymbolName, Vec<Position>>,
     pub positions_counter: DashMap<SymbolName, u64>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
+    pub open_pnl: f64,
+    pub booked_pnl: f64,
 }
 
 
@@ -94,6 +96,8 @@ impl Ledger {
             positions_closed: DashMap::new(),
             positions_counter: DashMap::new(),
             symbol_info: DashMap::new(),
+            open_pnl: 0.0,
+            booked_pnl: 0.0,
         };
         ledger
     }
@@ -121,13 +125,29 @@ impl Ledger {
             }
         }
 
-        let (risk_reward, win_rate) = match total_trades > 0 && wins > 0 {
-            true => (round_to_decimals(win_pnl / loss_pnl, 2), round_to_decimals((wins as f64 / losses as f64) * 100.0, 2)),
-            false => (0.0, 0.0)
+        let risk_reward = if losses > 0 {
+            win_pnl / -loss_pnl// negate loss_pnl for correct calculation
+        } else {
+            0.0
         };
+
+        // Calculate profit factor
+        let profit_factor = if loss_pnl != 0.0 {
+            win_pnl / -loss_pnl// negate loss_pnl
+        } else {
+            0.0
+        };
+
+        // Calculate win rate
+        let win_rate = if total_trades > 0 {
+            wins as f64 / total_trades as f64 * 100.0
+        } else {
+            0.0
+        };
+
         let break_even = total_trades - wins - losses;
-        format!("Brokerage: {}, Account: {}, Balance: {}, Win Rate: {}%, Risk Reward: {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {} Total Trades: {}",
-                self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, pnl, wins, losses,  break_even, total_trades)
+        format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Risk Reward: {}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}",
+                self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, self.booked_pnl + self.open_pnl, wins, losses,  break_even, total_trades)
     }
 
     pub fn paper_account_init(
@@ -147,6 +167,8 @@ impl Ledger {
             positions_closed: DashMap::new(),
             positions_counter: DashMap::new(),
             symbol_info: DashMap::new(),
+            open_pnl: 0.0,
+            booked_pnl: 0.0,
         };
         account
     }
@@ -165,11 +187,12 @@ impl Ledger {
         quantity: u64,
         price: Price,
         side: OrderSide,
-        time: DateTime<Utc>
+        time: &DateTime<Utc>
     ) -> Result<(), FundForgeError>
     {
         // Check if there's an existing position for the given symbol
         if self.positions.contains_key(symbol_name) {
+            let symbol_info = self.symbol_info.get(symbol_name).unwrap().value().clone();
             let (_, mut existing_position) = self.positions.remove(symbol_name).unwrap();
             let existing_quantity = existing_position.quantity;
             let existing_price = existing_position.average_price;
@@ -190,16 +213,11 @@ impl Ledger {
             }
             if is_reducing {
                 // Calculate the booked PnL from open PnL for the reduced position
-                let booked_pnl = match existing_position.side {
-                    PositionSide::Long => {
-                        (existing_price- price) * quantity as f64 //todo Add a quantity multiplier for $ per tick.. will need to use number of ticks
-                    }
-                    PositionSide::Short => {
-                        (price - existing_price) * quantity as f64 //todo Add a quantity multiplier for $ per tick.. will need to use number of ticks
-                    }
-                };
+                let booked_pnl = calculate_pnl(&existing_position.side,  existing_price, price, symbol_info.tick_size,  symbol_info.value_per_tick, quantity, &self.currency, &symbol_info.pnl_currency, time);
                 existing_position.open_pnl -= booked_pnl;
                 existing_position.booked_pnl += booked_pnl;
+                self.booked_pnl += booked_pnl;
+                self.open_pnl -= booked_pnl;
                 // Update the position by reducing the quantity
                 existing_position.quantity -= quantity;
 
@@ -212,11 +230,11 @@ impl Ledger {
                     } else {
                         self.positions_closed.get_mut(&existing_position.symbol_name).unwrap().value_mut().push(existing_position.clone());
                     }
+                    existing_position.is_closed = true;
                     self.positions.remove(&existing_position.symbol_name);
                 } else {
                     // Calculate remaining open PnL based on remaining quantity
-                    existing_position.open_pnl = (price - existing_position.average_price)
-                        * existing_position.quantity as f64;
+                    existing_position.open_pnl =calculate_pnl(&existing_position.side, existing_position.average_price, price, symbol_info.tick_size, symbol_info.value_per_tick, existing_position.quantity, &symbol_info.pnl_currency, &self.currency, time);
                     self.positions.insert(symbol_name.clone(), existing_position);
                 }
 
@@ -237,20 +255,9 @@ impl Ledger {
                 existing_position.average_price =
                     ((existing_quantity as f64 * existing_price) + (quantity as f64 * price))
                         / (existing_quantity + quantity) as f64;
+
                 // Update the total quantity
                 existing_position.quantity += quantity;
-                // Calculate the new open PnL based on the current price
-
-                match existing_position.side {
-                    PositionSide::Long => {
-                        existing_position.open_pnl = (price - existing_position.average_price)
-                            * existing_position.quantity as f64;
-                    }
-                    PositionSide::Short => {
-                        existing_position.open_pnl = (existing_position.average_price - price)
-                            * existing_position.quantity as f64;
-                    }
-                }
 
                 // Deduct margin from cash available
                 self.cash_available -= margin_required;
@@ -287,8 +294,9 @@ impl Ledger {
                 side,
                 quantity,
                 price,
-                self.generate_id(&symbol_name, time, side).await,
-                self.symbol_info.get(symbol_name).unwrap().value().clone()
+                self.generate_id(&symbol_name, time.clone(), side).await,
+                self.symbol_info.get(symbol_name).unwrap().value().clone(),
+                self.currency.clone()
             );
 
             // Insert the new position into the positions map
@@ -358,10 +366,13 @@ impl Ledger {
         }
     }
 
-    pub async fn on_data_update(&self, time_slice: TimeSlice) {
+    pub async fn on_data_update(&mut self, time_slice: TimeSlice, time: &DateTime<Utc>) {
+        let mut open_pnl = 0.0;
         for mut position in self.positions.iter_mut() {
-            position.value_mut().update_base_data(&time_slice);
+            position.value_mut().update_base_data(&time_slice, time);
+            open_pnl += position.open_pnl;
         }
+        self.open_pnl = open_pnl;
     }
 }
 
@@ -381,7 +392,8 @@ pub struct Position {
     pub lowest_recoded_price: Price,
     pub is_closed: bool,
     pub id: PositionId,
-    pub symbol_info: SymbolInfo
+    pub symbol_info: SymbolInfo,
+    account_currency: AccountCurrency
 }
 
 impl Position {
@@ -392,7 +404,8 @@ impl Position {
         quantity: u64,
         average_price: f64,
         id: PositionId,
-        symbol_info: SymbolInfo
+        symbol_info: SymbolInfo,
+        account_currency: AccountCurrency
     ) -> Self {
 
         Self {
@@ -407,11 +420,12 @@ impl Position {
             lowest_recoded_price: average_price,
             is_closed: false,
             id,
-            symbol_info
+            symbol_info,
+            account_currency
         }
     }
 
-    pub fn update_base_data(&mut self, time_slice: &TimeSlice) {
+    pub fn update_base_data(&mut self, time_slice: &TimeSlice, time: &DateTime<Utc>) {
         if self.is_closed {
             return;
         }
@@ -423,71 +437,44 @@ impl Position {
                 BaseDataEnum::Price(price) => {
                     self.highest_recoded_price = self.highest_recoded_price.max(price.price);
                     self.lowest_recoded_price = self.lowest_recoded_price.min(price.price);
-                    match self.side {
-                        PositionSide::Long => {
-                            // For a long position, profit is gained when current price is above the average price
-                            self.open_pnl = round_to_tick_size((price.price - self.average_price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
-                        }
-                        PositionSide::Short => {
-                            // For a short position, profit is gained when current price is below the average price
-                            self.open_pnl = round_to_tick_size((self.average_price - price.price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
-                        }
-                    }
+                    self.open_pnl = calculate_pnl(&self.side, self.average_price, price.price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
                 }
                 BaseDataEnum::Candle(candle) => {
                     self.highest_recoded_price = self.highest_recoded_price.max(candle.high);
                     self.lowest_recoded_price = self.lowest_recoded_price.min(candle.low);
-                    match self.side {
-                        PositionSide::Long => {
-                            // For a long position, profit is gained when current price is above the average price
-                            self.open_pnl = round_to_tick_size((candle.close - self.average_price) * self.quantity as f64, self.symbol_info.tick_size) * (self.symbol_info.value_per_tick * self.quantity as f64 );
-                        }
-                        PositionSide::Short => {
-                            // For a short position, profit is gained when current price is below the average price
-                            self.open_pnl = round_to_tick_size((self.average_price - candle.close) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
-                        }
-                    }
+                    self.open_pnl = calculate_pnl(&self.side, self.average_price, candle.close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
                 }
                 BaseDataEnum::QuoteBar(bar) => {
                     match self.side {
                         PositionSide::Long => {
                             self.highest_recoded_price = self.highest_recoded_price.max(bar.ask_high);
                             self.lowest_recoded_price = self.lowest_recoded_price.min(bar.ask_low);
-                            self.open_pnl = round_to_tick_size((bar.ask_close - self.average_price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
+                            self.open_pnl = calculate_pnl(&self.side, self.average_price, bar.ask_close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
                         }
                         PositionSide::Short => {
                             self.highest_recoded_price = self.highest_recoded_price.max(bar.bid_high);
                             self.lowest_recoded_price = self.lowest_recoded_price.min(bar.bid_low);
-                            self.open_pnl = round_to_tick_size((self.average_price - bar.bid_close) * self.quantity as f64, self.symbol_info.tick_size) * (self.symbol_info.value_per_tick * self.quantity as f64 );
+                            self.open_pnl = calculate_pnl(&self.side, self.average_price, bar.bid_close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
                         }
                     }
+
                 }
                 BaseDataEnum::Tick(tick) => {
                     self.highest_recoded_price = self.highest_recoded_price.max(tick.price);
                     self.lowest_recoded_price = self.lowest_recoded_price.min(tick.price);
-
-                    match self.side {
-                        PositionSide::Long => {
-                            // For a long position, profit is gained when current price is above the average price
-                            self.open_pnl = round_to_tick_size((tick.price - self.average_price) * self.quantity as f64,self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
-                        }
-                        PositionSide::Short => {
-                            // For a short position, profit is gained when current price is below the average price
-                            self.open_pnl = round_to_tick_size((self.average_price - tick.price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
-                        }
-                    }
+                    self.open_pnl = calculate_pnl(&self.side, self.average_price, tick.price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
                 }
                 BaseDataEnum::Quote(quote) => {
                     match self.side {
                         PositionSide::Long => {
                             self.highest_recoded_price = self.highest_recoded_price.max(quote.ask);
                             self.lowest_recoded_price = self.lowest_recoded_price.min(quote.ask);
-                            self.open_pnl = round_to_tick_size((quote.ask - self.average_price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
+                            self.open_pnl = calculate_pnl(&self.side, self.average_price, quote.ask, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
                         }
                         PositionSide::Short => {
                             self.highest_recoded_price = self.highest_recoded_price.max(quote.bid);
                             self.lowest_recoded_price = self.lowest_recoded_price.min(quote.bid);
-                            self.open_pnl = round_to_tick_size((self.average_price - quote.bid) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
+                            self.open_pnl = calculate_pnl(&self.side, self.average_price, quote.bid, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
                         }
                     }
                 }
@@ -495,6 +482,15 @@ impl Position {
             }
         }
     }
+}
+
+
+fn calculate_pnl(side: &PositionSide, entry_price: f64, market_price: f64, tick_size: f64, value_per_tick: f64, quantity: u64, base_currency: &AccountCurrency, account_currency: &AccountCurrency, time: &DateTime<Utc>) -> f64 {
+    match side {
+        PositionSide::Long => round_to_tick_size(market_price - entry_price, tick_size)  * (value_per_tick * quantity as f64),
+        PositionSide::Short =>  round_to_tick_size(entry_price - market_price, tick_size)  * (value_per_tick * quantity as f64)
+    }
+    //todo add historical currency conversion
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
