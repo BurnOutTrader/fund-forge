@@ -169,9 +169,10 @@ impl Ledger {
     ) -> Result<(), FundForgeError>
     {
         // Check if there's an existing position for the given symbol
-        if let Some(mut existing_position) = self.positions.get_mut(symbol_name) {
-            let existing_quantity = existing_position.value().quantity;
-            let existing_price = existing_position.value().average_price;
+        if self.positions.contains_key(symbol_name) {
+            let (_, mut existing_position) = self.positions.remove(symbol_name).unwrap();
+            let existing_quantity = existing_position.quantity;
+            let existing_price = existing_position.average_price;
             let mut is_reducing = false;
             match existing_position.side {
                 PositionSide::Long => {
@@ -189,7 +190,7 @@ impl Ledger {
             }
             if is_reducing {
                 // Calculate the booked PnL from open PnL for the reduced position
-                let booked_pnl = match existing_position.value().side {
+                let booked_pnl = match existing_position.side {
                     PositionSide::Long => {
                         (existing_price- price) * quantity as f64 //todo Add a quantity multiplier for $ per tick.. will need to use number of ticks
                     }
@@ -197,25 +198,26 @@ impl Ledger {
                         (price - existing_price) * quantity as f64 //todo Add a quantity multiplier for $ per tick.. will need to use number of ticks
                     }
                 };
-                existing_position.value_mut().open_pnl -= booked_pnl;
-                existing_position.value_mut().booked_pnl += booked_pnl;
+                existing_position.open_pnl -= booked_pnl;
+                existing_position.booked_pnl += booked_pnl;
                 // Update the position by reducing the quantity
-                existing_position.value_mut().quantity -= quantity;
+                existing_position.quantity -= quantity;
 
                 // Update PnL: if the entire position is closed, set PnL to 0
-                if existing_position.value().quantity == 0 {
-                    existing_position.value_mut().booked_pnl += existing_position.open_pnl;
-                    existing_position.value_mut().open_pnl = 0.0;
+                if existing_position.quantity == 0 {
+                    existing_position.booked_pnl += existing_position.open_pnl;
+                    existing_position.open_pnl = 0.0;
                     if !self.positions_closed.contains_key(&existing_position.symbol_name) {
-                        self.positions_closed.insert(existing_position.symbol_name.clone(), vec![existing_position.value().clone()]);
+                        self.positions_closed.insert(existing_position.symbol_name.clone(), vec![existing_position.clone()]);
                     } else {
-                        self.positions_closed.get_mut(&existing_position.symbol_name).unwrap().value_mut().push(existing_position.value().clone());
+                        self.positions_closed.get_mut(&existing_position.symbol_name).unwrap().value_mut().push(existing_position.clone());
                     }
                     self.positions.remove(&existing_position.symbol_name);
                 } else {
                     // Calculate remaining open PnL based on remaining quantity
-                    existing_position.value_mut().open_pnl = (price - existing_position.value().average_price)
-                        * existing_position.value().quantity as f64;
+                    existing_position.open_pnl = (price - existing_position.average_price)
+                        * existing_position.quantity as f64;
+                    self.positions.insert(symbol_name.clone(), existing_position);
                 }
 
                 // Add booked PnL to account cash and adjust cash used
@@ -232,28 +234,28 @@ impl Ledger {
                 }
 
                 // If adding to the short position, calculate the new average price
-                existing_position.value_mut().average_price =
+                existing_position.average_price =
                     ((existing_quantity as f64 * existing_price) + (quantity as f64 * price))
                         / (existing_quantity + quantity) as f64;
                 // Update the total quantity
-                existing_position.value_mut().quantity += quantity;
+                existing_position.quantity += quantity;
                 // Calculate the new open PnL based on the current price
 
-                match existing_position.value().side {
+                match existing_position.side {
                     PositionSide::Long => {
-                        existing_position.value_mut().open_pnl = (price - existing_position.value().average_price)
-                            * existing_position.value().quantity as f64;
+                        existing_position.open_pnl = (price - existing_position.average_price)
+                            * existing_position.quantity as f64;
                     }
                     PositionSide::Short => {
-                        existing_position.value_mut().open_pnl = (existing_position.value().average_price - price)
-                            * existing_position.value().quantity as f64;
+                        existing_position.open_pnl = (existing_position.average_price - price)
+                            * existing_position.quantity as f64;
                     }
                 }
 
                 // Deduct margin from cash available
                 self.cash_available -= margin_required;
                 self.cash_used += margin_required;
-
+                self.positions.insert(symbol_name.clone(), existing_position);
                 Ok(())
             }
         } else {
@@ -265,7 +267,10 @@ impl Ledger {
             }
 
             if !self.symbol_info.contains_key(symbol_name) {
-                let symbol_info = self.brokerage.symbol_info(symbol_name.clone()).await.unwrap(); //todo handle properly later, will require changing how we handle Err(e) in the market handler
+                let symbol_info = match self.brokerage.symbol_info(symbol_name.clone()).await {
+                    Ok(info) => info,
+                    Err(_) => return Err(FundForgeError::ClientSideErrorDebug(format!("No Symbol info for: {}", symbol_name)))
+                };
                 self.symbol_info.insert(symbol_name.clone(),symbol_info);
             }
 
@@ -287,11 +292,7 @@ impl Ledger {
             );
 
             // Insert the new position into the positions map
-            if !self.positions_closed.contains_key(&position.symbol_name) {
-                self.positions_closed.insert(position.symbol_name.clone(), vec![position]);
-            } else {
-                self.positions_closed.get_mut(&position.symbol_name).unwrap().value_mut().push(position);
-            }
+            self.positions.insert(position.symbol_name.clone(), position);
 
             // Adjust the account cash to reflect the new position's margin requirement
             self.cash_available -= margin_required;
