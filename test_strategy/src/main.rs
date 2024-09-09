@@ -161,7 +161,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
-                                    let last_bar = match history.get(1) {
+                                    let last_bar = match history.get(2) {
                                         None => {
                                             println!("Strategy: No history");
                                             continue;
@@ -169,16 +169,16 @@ pub async fn on_data_received(
                                         Some(bar) => bar
                                     };
 
-                                    let two_bars_ago = match history.get(2) {
+                          /*          let two_bars_ago = match history.get(2) {
                                         None => {
                                             println!("Strategy: No history");
                                             continue;
                                         },
                                         Some(bar) => bar
-                                    };
+                                    };*/
 
                                     if quotebar.bid_close > last_bar.bid_high
-                                        //&& last_bar.bid_close > two_bars_ago.bid_high
+                                        //&& last_bar.bid_close > two_bars_ago.bid_high //todo if no positions, then the history is not working
                                         && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
                                         strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long")).await;
