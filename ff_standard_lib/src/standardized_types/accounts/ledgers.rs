@@ -22,17 +22,8 @@ pub type AccountId = String;
 #[archive_attr(derive(Debug))]
 pub enum AccountCurrency {
     AUD,
-    NZD,
-    EUR,
-    GBP,
-    CHF,
-    JPY,
-    SGD,
-    HKD,
     USD,
     BTC,
-    ETH,
-    USDT,
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
@@ -75,8 +66,6 @@ pub struct Ledger {
     pub open_pnl: f64,
     pub booked_pnl: f64,
 }
-
-
 impl Ledger {
     pub fn new(account_info: AccountInfo) -> Self {
         let positions = account_info
@@ -192,56 +181,35 @@ impl Ledger {
     {
         // Check if there's an existing position for the given symbol
         if self.positions.contains_key(symbol_name) {
-            let symbol_info = self.symbol_info.get(symbol_name).unwrap().value().clone();
             let (_, mut existing_position) = self.positions.remove(symbol_name).unwrap();
-            let existing_quantity = existing_position.quantity;
-            let existing_price = existing_position.average_price;
-            let mut is_reducing = false;
-            match existing_position.side {
+            let is_reducing = match existing_position.side {
                 PositionSide::Long => {
                     match side {
-                        OrderSide::Buy => is_reducing = false,
-                        OrderSide::Sell => is_reducing = true
+                        OrderSide::Buy => false,
+                        OrderSide::Sell => true
                     }
                 }
                 PositionSide::Short => {
                     match side {
-                        OrderSide::Buy => is_reducing = false,
-                        OrderSide::Sell => is_reducing = true,
+                        OrderSide::Buy => false,
+                        OrderSide::Sell => true,
                     }
                 }
-            }
+            };
             if is_reducing {
-                // Calculate the booked PnL from open PnL for the reduced position
-                let booked_pnl = calculate_pnl(&existing_position.side,  existing_price, price, symbol_info.tick_size,  symbol_info.value_per_tick, quantity, &self.currency, &symbol_info.pnl_currency, time);
-                existing_position.open_pnl -= booked_pnl;
-                existing_position.booked_pnl += booked_pnl;
-                self.booked_pnl += booked_pnl;
-                self.open_pnl -= booked_pnl;
-                // Update the position by reducing the quantity
-                existing_position.quantity -= quantity;
-
+                self.booked_pnl += existing_position.reduce_position_size(price, quantity, time);
                 // Update PnL: if the entire position is closed, set PnL to 0
-                if existing_position.quantity == 0 {
-                    existing_position.booked_pnl += existing_position.open_pnl;
-                    existing_position.open_pnl = 0.0;
-                    if !self.positions_closed.contains_key(&existing_position.symbol_name) {
-                        self.positions_closed.insert(existing_position.symbol_name.clone(), vec![existing_position.clone()]);
-                    } else {
-                        self.positions_closed.get_mut(&existing_position.symbol_name).unwrap().value_mut().push(existing_position.clone());
-                    }
-                    existing_position.is_closed = true;
-                    self.positions.remove(&existing_position.symbol_name);
-                } else {
-                    // Calculate remaining open PnL based on remaining quantity
-                    existing_position.open_pnl =calculate_pnl(&existing_position.side, existing_position.average_price, price, symbol_info.tick_size, symbol_info.value_per_tick, existing_position.quantity, &symbol_info.pnl_currency, &self.currency, time);
+                if !existing_position.is_closed {
                     self.positions.insert(symbol_name.clone(), existing_position);
+                } else {
+                    if !self.positions_closed.contains_key(symbol_name) {
+                        self.positions_closed.insert(symbol_name.clone(), vec![existing_position]);
+                    } else {
+                        if let Some(mut positions) = self.positions_closed.get_mut(symbol_name) {
+                            positions.value_mut().push(existing_position);
+                        }
+                    }
                 }
-
-                // Add booked PnL to account cash and adjust cash used
-                self.cash_available += booked_pnl;
-                self.cash_used -= booked_pnl;
-
                 Ok(())
             } else {
                 // Calculate the margin required for adding more to the short position
@@ -251,13 +219,7 @@ impl Ledger {
                     return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
                 }
 
-                // If adding to the short position, calculate the new average price
-                existing_position.average_price =
-                    ((existing_quantity as f64 * existing_price) + (quantity as f64 * price))
-                        / (existing_quantity + quantity) as f64;
-
-                // Update the total quantity
-                existing_position.quantity += quantity;
+                existing_position.add_to_position(price, quantity);
 
                 // Deduct margin from cash available
                 self.cash_available -= margin_required;
@@ -320,13 +282,13 @@ impl Ledger {
             .margin_required(symbol_name.clone(), old_position.quantity)
             .await;
 
+        old_position.is_closed = true;
         old_position.booked_pnl += old_position.open_pnl;
         self.booked_pnl += old_position.open_pnl;
         self.cash_available += margin_freed + old_position.open_pnl;
         self.cash_used -= margin_freed + old_position.open_pnl;
         self.cash_value +=  old_position.open_pnl;
         old_position.open_pnl = 0.0;
-        old_position.is_closed = true;
         if !self.positions_closed.contains_key(&old_position.symbol_name) {
             self.positions_closed.insert(old_position.symbol_name.clone(), vec![old_position]);
         } else {
@@ -424,6 +386,28 @@ impl Position {
             symbol_info,
             account_currency
         }
+    }
+
+    pub fn reduce_position_size(&mut self, market_price: Price, quantity: u64, time: &DateTime<Utc>) -> f64 {
+        let booked_pnl = calculate_pnl(&self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+        self.booked_pnl = booked_pnl;
+        self.open_pnl -= booked_pnl;
+        self.quantity -= quantity;
+        self.is_closed = self.quantity <= 0;
+        if self.is_closed {
+            self.open_pnl = 0.0;
+        }
+        booked_pnl
+    }
+
+    pub fn add_to_position(&mut self, market_price: Price, quantity: u64) {
+        // If adding to the short position, calculate the new average price
+        self.average_price =
+            ((self.quantity as f64 * self.average_price) + (quantity as f64 * market_price))
+                / (self.quantity + quantity) as f64;
+
+        // Update the total quantity
+        self.quantity += quantity;
     }
 
     pub fn update_base_data(&mut self, time_slice: &TimeSlice, time: &DateTime<Utc>) {

@@ -181,13 +181,13 @@ pub async fn on_data_received(
                                         //&& last_bar.bid_close > two_bars_ago.bid_high
                                         && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await //todo I think this is returning wrong value as no trades entered
                                     {
-                                        strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 100000, String::from("Enter Long")).await;
+                                        strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long")).await;
                                     }
                                     else if quotebar.bid_close < quotebar.bid_open
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
                                         && strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await //todo I think this is returning wrong value as no trades entered
                                     {
-                                        strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 100000, String::from("Exit Long")).await;
+                                        strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Exit Long")).await;
                                     }
                                 } else if !quotebar.is_closed {
                                     //println!("Open bar time: {}", time)
