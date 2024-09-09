@@ -134,8 +134,6 @@ impl Ledger {
             0.0
         };
 
-        //println!("Cash Value: {}", self.cash_value);
-
         let break_even = total_trades - wins - losses;
         format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}",
                 self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, profit_factor, pnl, wins, losses,  break_even, total_trades) //todo, check against self.pnl
@@ -186,24 +184,12 @@ impl Ledger {
         // Check if there's an existing position for the given symbol
         if self.positions.contains_key(symbol_name) {
             let (_, mut existing_position) = self.positions.remove(symbol_name).unwrap();
-            let is_reducing = match existing_position.side {
-                PositionSide::Long => {
-                    match side {
-                        OrderSide::Buy => false,
-                        OrderSide::Sell => true
-                    }
-                }
-                PositionSide::Short => {
-                    match side {
-                        OrderSide::Buy => false,
-                        OrderSide::Sell => true,
-                    }
-                }
-            };
+            let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell) || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
             if is_reducing {
                 let pnl = existing_position.reduce_position_size(price, quantity, time);
                 self.booked_pnl += pnl;
                 self.cash_available += pnl;
+                self.cash_used -= self.brokerage.margin_required_historical(symbol_name.clone(), quantity).await;
                 self.cash_value = self.cash_available + self.cash_used;
                 // Update PnL: if the entire position is closed, set PnL to 0
                 if !existing_position.is_closed {
@@ -220,7 +206,7 @@ impl Ledger {
                 Ok(())
             } else {
                 // Calculate the margin required for adding more to the short position
-                let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
+                let margin_required = self.brokerage.margin_required_historical(symbol_name.clone(), quantity).await;
                 // Check if the available cash is sufficient to cover the margin
                 if self.cash_available < margin_required {
                     return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
@@ -239,7 +225,7 @@ impl Ledger {
             }
         } else {
             // No existing position, create a new one
-            let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
+            let margin_required = self.brokerage.margin_required_historical(symbol_name.clone(), quantity).await;
             // Check if the available cash is sufficient to cover the margin
             if self.cash_available < margin_required {
                 return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
@@ -277,7 +263,7 @@ impl Ledger {
             // Adjust the account cash to reflect the new position's margin requirement
             self.cash_available -= margin_required;
             self.cash_used += margin_required;
-
+            self.cash_value = self.cash_available + self.cash_used;
             Ok(())
         }
     }
@@ -289,14 +275,14 @@ impl Ledger {
         let (_, mut old_position) = self.positions.remove(symbol_name).unwrap();
         let margin_freed = self
             .brokerage
-            .margin_required(symbol_name.clone(), old_position.quantity)
+            .margin_required_historical(symbol_name.clone(), old_position.quantity)
             .await;
 
         old_position.is_closed = true;
         old_position.booked_pnl += old_position.open_pnl;
         self.booked_pnl += old_position.open_pnl;
         self.cash_available += margin_freed + old_position.open_pnl;
-        self.cash_used -= margin_freed + old_position.open_pnl;
+        self.cash_used -= margin_freed;
         self.cash_value +=  old_position.open_pnl;
         old_position.open_pnl = 0.0;
         if !self.positions_closed.contains_key(&old_position.symbol_name) {

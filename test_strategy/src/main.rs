@@ -161,7 +161,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
-                              /*      let last_bar = match history.get(1) {
+                                    let last_bar = match history.get(1) {
                                         None => {
                                             println!("Strategy: No history");
                                             continue;
@@ -175,17 +175,17 @@ pub async fn on_data_received(
                                             continue;
                                         },
                                         Some(bar) => bar
-                                    };*/
+                                    };
 
-                                    if quotebar.bid_close > quotebar.bid_open
+                                    if quotebar.bid_close > last_bar.bid_high
                                         //&& last_bar.bid_close > two_bars_ago.bid_high
-                                        && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await //todo I think this is returning wrong value as no trades entered
+                                        && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
                                         strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long")).await;
                                     }
-                                    else if quotebar.bid_close < quotebar.bid_open
+                                    else if quotebar.bid_close < last_bar.bid_low
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
-                                        && strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await //todo I think this is returning wrong value as no trades entered
+                                        && strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
                                         strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Exit Long")).await;
                                     }
