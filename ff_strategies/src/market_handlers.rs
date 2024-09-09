@@ -396,20 +396,11 @@ async fn backtest_matching_engine(
                 if ledger.is_short(&order.symbol_name).await {
                     ledger.exit_position_paper(&order.symbol_name).await;
                 }
-
-                match ledger
-                    .enter_long_paper(
-                        &order.symbol_name,
-                        order.quantity_ordered.clone(),
-                        market_price,
-                        last_time.read().await.clone()
-                    )
-                    .await
-                {
+                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_filled, market_price, order.side, last_time_utc).await {
                     Ok(_) => {
                         fill_order(order.clone(), &mut events);
                     }
-                    Err(e) =>  {
+                    Err(_) =>  {
                         let reason = "Insufficient Margin".to_string();
                         reject_order(reason, order.clone(), &mut events)
                     }
@@ -420,17 +411,9 @@ async fn backtest_matching_engine(
                     ledger.exit_position_paper(&order.symbol_name).await;
                 }
 
-                match ledger
-                    .enter_short_paper(
-                        &order.symbol_name,
-                        order.quantity_ordered.clone(),
-                        market_price,
-                        last_time.read().await.clone()
-                    )
-                    .await
-                {
+                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_filled, market_price, order.side, last_time_utc).await {
                     Ok(_) => fill_order(order.clone(), &mut events),
-                    Err(e) =>  {
+                    Err(_) =>  {
                         let reason = "Insufficient Margin".to_string();
                         reject_order(reason, order.clone(), &mut events)
                     }
@@ -438,7 +421,13 @@ async fn backtest_matching_engine(
             }
             OrderType::ExitLong => {
                 if ledger.is_long(&order.symbol_name).await {
-                    fill_order(order.clone(), &mut events);
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_filled, market_price, order.side, last_time_utc).await {
+                        Ok(_) => fill_order(order.clone(), &mut events),
+                        Err(_) =>  {
+                            let reason = "Insufficient Margin".to_string();
+                            reject_order(reason, order.clone(), &mut events)
+                        }
+                    }
                 } else {
                     let reason = "No long position to exit".to_string();
                     reject_order(reason, order.clone(), &mut events);
@@ -446,7 +435,13 @@ async fn backtest_matching_engine(
             }
             OrderType::ExitShort => {
                 if ledger.is_short(&order.symbol_name).await {
-                    fill_order(order.clone(), &mut events);
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_filled, market_price, order.side, last_time_utc).await {
+                        Ok(_) => fill_order(order.clone(), &mut events),
+                        Err(_) =>  {
+                            let reason = "Insufficient Margin".to_string();
+                            reject_order(reason, order.clone(), &mut events)
+                        }
+                    }
                 } else {
                     let reason = "No short position to exit".to_string();
                     reject_order(reason, order.clone(), &mut events);

@@ -71,8 +71,9 @@ impl Ledger {
     }
 
     pub fn print(&self) -> String {
-        let mut total_trades = 0;
-        let mut wins = 0;
+        let mut total_trades: usize = 0;
+        let mut losses: usize = 0;
+        let mut wins: usize = 0;
         let mut win_pnl = 0.0;
         let mut loss_pnl = 0.0;
         let mut pnl = 0.0;
@@ -84,16 +85,21 @@ impl Ledger {
                     win_pnl += position.booked_pnl;
                 } else {
                     loss_pnl += position.booked_pnl;
+                    if position.booked_pnl < 0.0 {
+                        losses += 1;
+                    }
                 }
                 pnl += position.booked_pnl;
             }
         }
 
         let (risk_reward, win_rate) = match total_trades > 0 && wins > 0 {
-            true => (round_to_decimals(win_pnl / loss_pnl, 2), round_to_decimals((wins as f64 / total_trades as f64) * 100.0, 2)),
+            true => (round_to_decimals(win_pnl / loss_pnl, 2), round_to_decimals((wins as f64 / losses as f64) * 100.0, 2)),
             false => (0.0, 0.0)
         };
-        format!("Brokerage: {}, Account: {}, Win Rate: {}%, Risk Reward: {}, Total profit: {}, Total Wins: {}, Total Trades: {}", self.brokerage, self.account_id, win_rate, risk_reward, pnl, wins, total_trades)
+        let break_even = total_trades - wins - losses;
+        format!("Brokerage: {}, Account: {}, Balance: {}, Win Rate: {}%, Risk Reward: {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {} Total Trades: {}",
+                self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, pnl, wins, losses,  break_even, total_trades)
     }
 
     pub fn paper_account_init(
@@ -135,113 +141,91 @@ impl Ledger {
     {
         // Check if there's an existing position for the given symbol
         if let Some(mut existing_position) = self.positions.get_mut(symbol_name) {
-            let existing_quantity = existing_position.quantity;
-            let existing_price = existing_position.average_price;
-
+            let existing_quantity = existing_position.value().quantity;
+            let existing_price = existing_position.value().average_price;
+            let mut is_reducing = false;
             match existing_position.side {
                 PositionSide::Long => {
                     match side {
-                        OrderSide::Buy => {
-                            // Calculate the margin required for adding more to the position
-                            let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
-                            // Check if the available cash is sufficient to cover the margin
-                            if self.cash_available < margin_required {
-                                return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
-                            }
-                            // If adding to the position, calculate the new average price
-                            existing_position.average_price =
-                                ((existing_quantity as f64 * existing_price) + (quantity as f64 * price))
-                                    / (existing_quantity + quantity) as f64;
-                            // Update the total quantity
-                            existing_position.quantity += quantity;
-                            // Calculate the new open PnL based on the current price
-                            existing_position.open_pnl = (price - existing_position.average_price)
-                                * existing_position.quantity as f64;
-
-                            // Deduct margin from cash available
-                            self.cash_available -= margin_required;
-                            self.cash_used += margin_required;
-
-                            Ok(())
-                        }
-                        OrderSide::Sell => {
-                            // Calculate the booked PnL from open PnL for the reduced position
-                            let quantity_sold = quantity.min(existing_quantity);
-                            let booked_pnl = (price - existing_price) * quantity_sold as f64;
-                            existing_position.booked_pnl += booked_pnl;
-                            // Update the position by reducing the quantity
-                            existing_position.quantity -= quantity_sold;
-
-                            // Update PnL: if the entire position is closed, set PnL to 0
-                            if existing_position.quantity == 0 {
-                                existing_position.open_pnl = 0.0;
-                                existing_position.average_price = 0.0;
-                            } else {
-                                // Calculate remaining open PnL based on remaining quantity
-                                existing_position.open_pnl = (price - existing_position.average_price)
-                                    * existing_position.quantity as f64;
-                            }
-
-                            // Add booked PnL to account cash and adjust cash used
-                            self.cash_available += booked_pnl;
-                            self.cash_used -= booked_pnl;
-
-                            Ok(())
-                        }
+                        OrderSide::Buy => is_reducing = false,
+                        OrderSide::Sell => is_reducing = true
                     }
                 }
                 PositionSide::Short => {
                     match side {
-                        OrderSide::Buy => {
-                            // Calculate the booked PnL from open PnL for the reduced position
-                            let quantity_bought = quantity.min(existing_quantity);
-                            let booked_pnl = (existing_price - price) * quantity_bought as f64;
-                            existing_position.booked_pnl += booked_pnl;
-                            // Update the position by reducing the quantity
-                            existing_position.quantity -= quantity_bought;
-
-                            // Update PnL: if the entire position is closed, set PnL to 0
-                            if existing_position.quantity == 0 {
-                                existing_position.open_pnl = 0.0;
-                                existing_position.average_price = 0.0;
-                            } else {
-                                // Calculate remaining open PnL based on remaining quantity
-                                existing_position.open_pnl = (existing_position.average_price - price)
-                                    * existing_position.quantity as f64;
-                            }
-
-                            // Add booked PnL to account cash and adjust cash used
-                            self.cash_available += booked_pnl;
-                            self.cash_used -= booked_pnl;
-
-                            Ok(())
-                        }
-                        OrderSide::Sell => {
-                            // Calculate the margin required for adding more to the short position
-                            let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
-                            // Check if the available cash is sufficient to cover the margin
-                            if self.cash_available < margin_required {
-                                return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
-                            }
-
-                            // If adding to the short position, calculate the new average price
-                            existing_position.average_price =
-                                ((existing_quantity as f64 * existing_price) + (quantity as f64 * price))
-                                    / (existing_quantity + quantity) as f64;
-                            // Update the total quantity
-                            existing_position.quantity += quantity;
-                            // Calculate the new open PnL based on the current price
-                            existing_position.open_pnl = (existing_position.average_price - price)
-                                * existing_position.quantity as f64;
-
-                            // Deduct margin from cash available
-                            self.cash_available -= margin_required;
-                            self.cash_used += margin_required;
-
-                            Ok(())
-                        }
+                        OrderSide::Buy => is_reducing = false,
+                        OrderSide::Sell => is_reducing = true,
                     }
                 }
+            }
+            if is_reducing {
+                // Calculate the booked PnL from open PnL for the reduced position
+                let booked_pnl = match existing_position.value().side {
+                    PositionSide::Long => {
+                        (existing_price- price) * quantity as f64 //todo Add a quantity multiplier for $ per tick.. will need to use number of ticks
+                    }
+                    PositionSide::Short => {
+                        (price - existing_price) * quantity as f64 //todo Add a quantity multiplier for $ per tick.. will need to use number of ticks
+                    }
+                };
+                existing_position.value_mut().open_pnl -= booked_pnl;
+                existing_position.value_mut().booked_pnl += booked_pnl;
+                // Update the position by reducing the quantity
+                existing_position.value_mut().quantity -= quantity;
+
+                // Update PnL: if the entire position is closed, set PnL to 0
+                if existing_position.value().quantity == 0 {
+                    existing_position.value_mut().booked_pnl += existing_position.open_pnl;
+                    existing_position.value_mut().open_pnl = 0.0;
+                    if !self.positions_closed.contains_key(&existing_position.symbol_name) {
+                        self.positions_closed.insert(existing_position.symbol_name.clone(), vec![existing_position.value().clone()]);
+                    } else {
+                        self.positions_closed.get_mut(&existing_position.symbol_name).unwrap().value_mut().push(existing_position.value().clone());
+                    }
+                    self.positions.remove(&existing_position.symbol_name);
+                } else {
+                    // Calculate remaining open PnL based on remaining quantity
+                    existing_position.value_mut().open_pnl = (price - existing_position.value().average_price)
+                        * existing_position.value().quantity as f64;
+                }
+
+                // Add booked PnL to account cash and adjust cash used
+                self.cash_available += booked_pnl;
+                self.cash_used -= booked_pnl;
+
+                Ok(())
+            } else {
+                // Calculate the margin required for adding more to the short position
+                let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
+                // Check if the available cash is sufficient to cover the margin
+                if self.cash_available < margin_required {
+                    return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
+                }
+
+                // If adding to the short position, calculate the new average price
+                existing_position.value_mut().average_price =
+                    ((existing_quantity as f64 * existing_price) + (quantity as f64 * price))
+                        / (existing_quantity + quantity) as f64;
+                // Update the total quantity
+                existing_position.value_mut().quantity += quantity;
+                // Calculate the new open PnL based on the current price
+
+                match existing_position.value().side {
+                    PositionSide::Long => {
+                        existing_position.value_mut().open_pnl = (price - existing_position.value().average_price)
+                            * existing_position.value().quantity as f64;
+                    }
+                    PositionSide::Short => {
+                        existing_position.value_mut().open_pnl = (existing_position.value().average_price - price)
+                            * existing_position.value().quantity as f64;
+                    }
+                }
+
+                // Deduct margin from cash available
+                self.cash_available -= margin_required;
+                self.cash_used += margin_required;
+
+                Ok(())
             }
         } else {
             // No existing position, create a new one
@@ -268,7 +252,11 @@ impl Ledger {
             );
 
             // Insert the new position into the positions map
-            self.positions.insert(symbol_name.clone(), position);
+            if !self.positions_closed.contains_key(&position.symbol_name) {
+                self.positions_closed.insert(position.symbol_name.clone(), vec![position]);
+            } else {
+                self.positions_closed.get_mut(&position.symbol_name).unwrap().value_mut().push(position);
+            }
 
             // Adjust the account cash to reflect the new position's margin requirement
             self.cash_available -= margin_required;
@@ -289,118 +277,16 @@ impl Ledger {
             .await;
 
         old_position.booked_pnl += old_position.open_pnl;
-        self.cash_available += margin_freed + old_position.booked_pnl;
-        self.cash_used -= margin_freed + old_position.booked_pnl;
-        self.cash_value +=  old_position.booked_pnl;
+        self.cash_available += margin_freed + old_position.open_pnl;
+        self.cash_used -= margin_freed + old_position.open_pnl;
+        self.cash_value +=  old_position.open_pnl;
+        old_position.open_pnl = 0.0;
         old_position.is_closed = true;
-
-        match old_position.booked_pnl > 0.0 {
-            true => {}
-            false => {}
-        }
         if !self.positions_closed.contains_key(&old_position.symbol_name) {
             self.positions_closed.insert(old_position.symbol_name.clone(), vec![old_position]);
         } else {
             self.positions_closed.get_mut(&old_position.symbol_name).unwrap().value_mut().push(old_position);
         }
-    }
-
-    pub async fn enter_short_paper(
-        &mut self,
-        symbol_name: &SymbolName,
-        quantity: u64,
-        price: Price,
-        time: DateTime<Utc>
-    ) -> Result<(), FundForgeError> {
-        if let Some(position) = self.positions.get(symbol_name) {
-            if position.value().side == PositionSide::Short {
-                // we will need to modify our average price and quantity
-            } else if position.value().side == PositionSide::Long {
-                let (_, mut old_position) = self.positions.remove(symbol_name).unwrap();
-                let margin_freed = self
-                    .brokerage
-                    .margin_required(symbol_name.clone(), old_position.quantity)
-                    .await;
-
-                old_position.booked_pnl += old_position.open_pnl;
-                self.cash_available += margin_freed + old_position.booked_pnl;
-                self.cash_used -= margin_freed + old_position.booked_pnl;
-                self.cash_value +=  old_position.booked_pnl;
-                old_position.is_closed = true;
-                if !self.positions_closed.contains_key(&old_position.symbol_name) {
-                    self.positions_closed.insert(old_position.symbol_name.clone(), vec![old_position]);
-                } else {
-                    self.positions_closed.get_mut(&old_position.symbol_name).unwrap().value_mut().push(old_position);
-                }
-            }
-        }
-        let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
-        if self.cash_available < margin_required {
-            return Err(FundForgeError::ClientSideErrorDebug(
-                "Insufficient funds".to_string(),
-            ));
-        }
-
-        let position = Position::enter(
-            symbol_name.clone(),
-            self.brokerage.clone(),
-            PositionSide::Long,
-            quantity,
-            price,
-            self.generate_id(&symbol_name, time, PositionSide::Short).await
-        );
-        self.positions.insert(symbol_name.clone(), position);
-        self.cash_available -= margin_required;
-        self.cash_used += margin_required;
-        Ok(())
-    }
-
-    pub async fn enter_long_paper(
-        &mut self,
-        symbol_name: &SymbolName,
-        quantity: u64,
-        price: Price,
-        time: DateTime<Utc>
-    ) -> Result<(), FundForgeError> {
-        if let Some(position) = self.positions.get(symbol_name) {
-            if position.value().side == PositionSide::Long {
-                // we will need to modify our average price and quantity
-            } else if position.value().side == PositionSide::Short {
-                let (_, mut old_position) = self.positions.remove(symbol_name).unwrap();
-                let margin_freed = self
-                    .brokerage
-                    .margin_required(symbol_name.clone(), old_position.quantity)
-                    .await;
-                old_position.booked_pnl += old_position.open_pnl;
-                self.cash_available += margin_freed + old_position.booked_pnl;
-                self.cash_used -= margin_freed + old_position.booked_pnl;
-                self.cash_value +=  old_position.booked_pnl;
-                old_position.is_closed = true;
-                if !self.positions_closed.contains_key(&old_position.symbol_name) {
-                    self.positions_closed.insert(old_position.symbol_name.clone(), vec![old_position]);
-                } else {
-                    self.positions_closed.get_mut(&old_position.symbol_name).unwrap().value_mut().push(old_position);
-                }
-            }
-        }
-        let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
-        if self.cash_available < margin_required {
-            return Err(FundForgeError::ClientSideErrorDebug(
-                "Insufficient funds".to_string(),
-            ));
-        }
-        let position: Position = Position::enter(
-            symbol_name.clone(),
-            self.brokerage.clone(),
-            PositionSide::Long,
-            quantity,
-            price,
-            self.generate_id(&symbol_name, time, PositionSide::Long).await
-        );
-        self.positions.insert(symbol_name.clone(), position);
-        self.cash_available -= margin_required;
-        self.cash_used += margin_required;
-        Ok(())
     }
 
     pub async fn account_init(account_id: AccountId, brokerage: Brokerage) -> Self {
