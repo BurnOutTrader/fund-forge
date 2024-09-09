@@ -44,7 +44,7 @@ impl RenkoConsolidator {
         let tick_size = subscription
             .symbol
             .data_vendor
-            .tick_size(subscription.symbol.clone())
+            .tick_size(subscription.symbol.name.clone())
             .await
             .unwrap();
 

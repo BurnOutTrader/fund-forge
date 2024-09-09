@@ -2,11 +2,11 @@ use crate::apis::brokerage::server_responses::BrokerApiResponse;
 use crate::apis::brokerage::Brokerage;
 use crate::apis::vendor::server_responses::VendorApiResponse;
 use crate::apis::vendor::DataVendor;
-use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo};
+use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo, SymbolInfo};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::data_server_messaging::{FundForgeError, SynchronousResponseType};
 use crate::standardized_types::enums::{MarketType, Resolution, SubscriptionResolutionType};
-use crate::standardized_types::subscriptions::Symbol;
+use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use async_trait::async_trait;
 use once_cell::sync::OnceCell;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -99,16 +99,16 @@ impl VendorApiResponse for TestVendorApi {
 
     async fn decimal_accuracy_response(
         &self,
-        symbol: Symbol,
+        symbol_name: SymbolName,
     ) -> Result<SynchronousResponseType, FundForgeError> {
-        Ok(SynchronousResponseType::DecimalAccuracy(symbol, 5))
+        Ok(SynchronousResponseType::DecimalAccuracy(5))
     }
 
     async fn tick_size_response(
         &self,
-        symbol: Symbol,
+        symbol_name: SymbolName,
     ) -> Result<SynchronousResponseType, FundForgeError> {
-        Ok(SynchronousResponseType::TickSize(symbol, 0.00001))
+        Ok(SynchronousResponseType::TickSize(0.00001))
     }
 }
 
@@ -146,5 +146,11 @@ impl BrokerApiResponse for TestVendorApi {
         };
         let response = SynchronousResponseType::AccountInfo(info);
         Ok(response)
+    }
+
+    async fn symbol_info_response(&self, symbol_name: SymbolName) -> Result<SynchronousResponseType, FundForgeError> {
+        match symbol_name {
+            _ => Ok(SynchronousResponseType::SymbolInfo(SymbolInfo::new(symbol_name, AccountCurrency::USD, 0.01, 0.00001)))
+        }
     }
 }

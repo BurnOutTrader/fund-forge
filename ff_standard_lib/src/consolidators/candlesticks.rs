@@ -236,7 +236,7 @@ impl CandleStickConsolidator {
         let tick_size = match subscription
             .symbol
             .data_vendor
-            .tick_size(subscription.symbol.clone())
+            .tick_size(subscription.symbol.name.clone())
             .await
         {
             Ok(size) => size,

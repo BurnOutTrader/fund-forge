@@ -15,6 +15,7 @@ use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use crate::apis::brokerage::client_requests::ClientSideBrokerage;
 
 /// Manages sequential requests received through a secondary data receiver and sends responses via a secondary data sender.
 ///
@@ -65,14 +66,17 @@ pub async fn data_server_manage_sequential_requests(communicator: Arc<Synchronou
                     broker.account_info_response(account_id).await
                 }
                 SynchronousRequestType::Markets(vendor) => vendor.markets_response().await,
-                SynchronousRequestType::DecimalAccuracy(vendor, symbol) => {
-                    vendor.decimal_accuracy_response(symbol).await
+                SynchronousRequestType::DecimalAccuracy(vendor, symbol_name) => {
+                    vendor.decimal_accuracy_response(symbol_name).await
                 }
-                SynchronousRequestType::TickSize(vendor, symbol) => {
-                    vendor.tick_size_response(symbol).await
+                SynchronousRequestType::TickSize(vendor, symbol_name) => {
+                    vendor.tick_size_response(symbol_name).await
                 }
                 SynchronousRequestType::HistoricalBaseDataMany { time, subscriptions } => {
                     base_data_many_response(subscriptions, time).await
+                }
+                SynchronousRequestType::SymbolInfo(broker, symbol_name) => {
+                    broker.symbol_info_response(symbol_name).await
                 }
             };
 

@@ -87,6 +87,7 @@ pub mod server_responses {
     };
     use crate::standardized_types::enums::MarketType;
     use async_trait::async_trait;
+    use crate::standardized_types::subscriptions::SymbolName;
 
     /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
     #[async_trait]
@@ -104,6 +105,8 @@ pub mod server_responses {
             &self,
             account_id: AccountId,
         ) -> Result<SynchronousResponseType, FundForgeError>;
+
+        async fn symbol_info_response(&self, symbol_name: SymbolName) -> Result<SynchronousResponseType, FundForgeError>;
     }
 
     /// Responses
@@ -132,6 +135,11 @@ pub mod server_responses {
             let api_client = broker_api_object(self).await;
             api_client.account_info_response(account_id).await
         }
+
+        async fn symbol_info_response(&self, symbol_name: SymbolName) -> Result<SynchronousResponseType, FundForgeError> {
+            let api_client = broker_api_object(self).await;
+            api_client.symbol_info_response(symbol_name).await
+        }
     }
 }
 
@@ -142,12 +150,12 @@ pub mod client_requests {
     };
     use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
     use crate::servers::communications_sync::SynchronousCommunicator;
-    use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, Ledger};
+    use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, Ledger, SymbolInfo};
     use crate::standardized_types::data_server_messaging::{
         FundForgeError, SynchronousRequestType, SynchronousResponseType,
     };
     use crate::standardized_types::enums::MarketType;
-    use crate::standardized_types::subscriptions::Symbol;
+    use crate::standardized_types::subscriptions::{Symbol, SymbolName};
     use async_trait::async_trait;
     use std::sync::Arc;
     use tokio::sync::Mutex;
@@ -163,6 +171,8 @@ pub mod client_requests {
         ) -> Result<AccountCurrency, FundForgeError>;
 
         async fn init_ledger(&self, account_id: AccountId) -> Result<Ledger, FundForgeError>;
+
+        async fn symbol_info(&self, symbol_name: SymbolName) -> Result<SymbolInfo, FundForgeError>;
     }
 
     #[async_trait]
@@ -216,6 +226,23 @@ pub mod client_requests {
             };
             match response {
                 SynchronousResponseType::AccountInfo(account_info) => Ok(Ledger::new(account_info)),
+                SynchronousResponseType::Error(e) => Err(e),
+                _ => Err(FundForgeError::ClientSideErrorDebug(
+                    "Invalid response type from server".to_string(),
+                )),
+            }
+        }
+
+        async fn symbol_info(&self, symbol_name: SymbolName) -> Result<SymbolInfo, FundForgeError> {
+            let api_client = self.synchronous_client().await;
+            let request = SynchronousRequestType::SymbolInfo(self.clone(), symbol_name);
+            let response = match api_client.send_and_receive(request.to_bytes(), false).await {
+                Ok(response) => response,
+                Err(e) => return Err(e),
+            };
+            let response = SynchronousResponseType::from_bytes(&response)?;
+            match response {
+                SynchronousResponseType::SymbolInfo(info) => Ok(info),
                 SynchronousResponseType::Error(e) => Err(e),
                 _ => Err(FundForgeError::ClientSideErrorDebug(
                     "Invalid response type from server".to_string(),

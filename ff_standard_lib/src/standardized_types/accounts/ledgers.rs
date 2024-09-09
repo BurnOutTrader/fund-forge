@@ -1,3 +1,4 @@
+use async_std::task::block_on;
 use chrono::{DateTime, Utc};
 use crate::apis::brokerage::client_requests::ClientSideBrokerage;
 use crate::apis::brokerage::Brokerage;
@@ -8,8 +9,9 @@ use crate::standardized_types::subscriptions::{SymbolName};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
 use dashmap::DashMap;
+use iso_currency::Currency;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::helpers::decimal_calculators::round_to_decimals;
+use crate::helpers::decimal_calculators::{round_to_decimals, round_to_tick_size};
 use crate::standardized_types::Price;
 
 // B
@@ -33,6 +35,30 @@ pub enum AccountCurrency {
     USDT,
 }
 
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct SymbolInfo {
+    symbol_name: SymbolName,
+    pnl_currency: AccountCurrency,
+    value_per_tick: f64,
+    tick_size: f64
+}
+
+impl SymbolInfo {
+    pub fn new(symbol_name: SymbolName,
+               pnl_currency: AccountCurrency,
+               value_per_tick: f64,
+               tick_size: f64) -> Self {
+        Self {
+            symbol_name,
+            pnl_currency,
+            value_per_tick,
+            tick_size
+        }
+    }
+}
+
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
 #[derive(Debug)]
 pub struct Ledger {
@@ -45,6 +71,7 @@ pub struct Ledger {
     pub positions: DashMap<SymbolName, Position>,
     pub positions_closed: DashMap<SymbolName, Vec<Position>>,
     pub positions_counter: DashMap<SymbolName, u64>,
+    pub symbol_info: DashMap<SymbolName, SymbolInfo>,
 }
 
 
@@ -66,6 +93,7 @@ impl Ledger {
             positions,
             positions_closed: DashMap::new(),
             positions_counter: DashMap::new(),
+            symbol_info: DashMap::new(),
         };
         ledger
     }
@@ -118,6 +146,7 @@ impl Ledger {
             positions: DashMap::new(),
             positions_closed: DashMap::new(),
             positions_counter: DashMap::new(),
+            symbol_info: DashMap::new(),
         };
         account
     }
@@ -235,6 +264,11 @@ impl Ledger {
                 return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
             }
 
+            if !self.symbol_info.contains_key(symbol_name) {
+                let symbol_info = self.brokerage.symbol_info(symbol_name.clone()).await.unwrap(); //todo handle properly later, will require changing how we handle Err(e) in the market handler
+                self.symbol_info.insert(symbol_name.clone(),symbol_info);
+            }
+
             // Determine the side of the position based on the order side
             let side = match side {
                 OrderSide::Buy => PositionSide::Long,
@@ -248,7 +282,8 @@ impl Ledger {
                 side,
                 quantity,
                 price,
-                self.generate_id(&symbol_name, time, side).await
+                self.generate_id(&symbol_name, time, side).await,
+                self.symbol_info.get(symbol_name).unwrap().value().clone()
             );
 
             // Insert the new position into the positions map
@@ -344,7 +379,8 @@ pub struct Position {
     pub highest_recoded_price: Price,
     pub lowest_recoded_price: Price,
     pub is_closed: bool,
-    pub id: PositionId
+    pub id: PositionId,
+    pub symbol_info: SymbolInfo
 }
 
 impl Position {
@@ -354,8 +390,10 @@ impl Position {
         side: PositionSide,
         quantity: u64,
         average_price: f64,
-        id: PositionId
+        id: PositionId,
+        symbol_info: SymbolInfo
     ) -> Self {
+
         Self {
             symbol_name,
             brokerage,
@@ -368,6 +406,7 @@ impl Position {
             lowest_recoded_price: average_price,
             is_closed: false,
             id,
+            symbol_info
         }
     }
 
@@ -386,11 +425,11 @@ impl Position {
                     match self.side {
                         PositionSide::Long => {
                             // For a long position, profit is gained when current price is above the average price
-                            self.open_pnl = round_to_decimals((price.price - self.average_price) * self.quantity as f64, 2);
+                            self.open_pnl = round_to_tick_size((price.price - self.average_price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                         PositionSide::Short => {
                             // For a short position, profit is gained when current price is below the average price
-                            self.open_pnl = round_to_decimals((self.average_price - price.price) * self.quantity as f64, 2);
+                            self.open_pnl = round_to_tick_size((self.average_price - price.price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                     }
                 }
@@ -400,11 +439,11 @@ impl Position {
                     match self.side {
                         PositionSide::Long => {
                             // For a long position, profit is gained when current price is above the average price
-                            self.open_pnl = round_to_decimals((candle.close - self.average_price) * self.quantity as f64,2);
+                            self.open_pnl = round_to_tick_size((candle.close - self.average_price) * self.quantity as f64, self.symbol_info.tick_size) * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                         PositionSide::Short => {
                             // For a short position, profit is gained when current price is below the average price
-                            self.open_pnl = round_to_decimals((self.average_price - candle.close) * self.quantity as f64, 2);
+                            self.open_pnl = round_to_tick_size((self.average_price - candle.close) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                     }
                 }
@@ -413,12 +452,12 @@ impl Position {
                         PositionSide::Long => {
                             self.highest_recoded_price = self.highest_recoded_price.max(bar.ask_high);
                             self.lowest_recoded_price = self.lowest_recoded_price.min(bar.ask_low);
-                            self.open_pnl = round_to_decimals((bar.ask_close - self.average_price) * self.quantity as f64, 2);
+                            self.open_pnl = round_to_tick_size((bar.ask_close - self.average_price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                         PositionSide::Short => {
                             self.highest_recoded_price = self.highest_recoded_price.max(bar.bid_high);
                             self.lowest_recoded_price = self.lowest_recoded_price.min(bar.bid_low);
-                            self.open_pnl = round_to_decimals((self.average_price - bar.bid_close) * self.quantity as f64, 2);
+                            self.open_pnl = round_to_tick_size((self.average_price - bar.bid_close) * self.quantity as f64, self.symbol_info.tick_size) * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                     }
                 }
@@ -429,11 +468,11 @@ impl Position {
                     match self.side {
                         PositionSide::Long => {
                             // For a long position, profit is gained when current price is above the average price
-                            self.open_pnl = round_to_decimals((tick.price - self.average_price) * self.quantity as f64,2);
+                            self.open_pnl = round_to_tick_size((tick.price - self.average_price) * self.quantity as f64,self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                         PositionSide::Short => {
                             // For a short position, profit is gained when current price is below the average price
-                            self.open_pnl = round_to_decimals((self.average_price - tick.price) * self.quantity as f64, 2);
+                            self.open_pnl = round_to_tick_size((self.average_price - tick.price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                     }
                 }
@@ -442,12 +481,12 @@ impl Position {
                         PositionSide::Long => {
                             self.highest_recoded_price = self.highest_recoded_price.max(quote.ask);
                             self.lowest_recoded_price = self.lowest_recoded_price.min(quote.ask);
-                            self.open_pnl = round_to_decimals((quote.ask - self.average_price) * self.quantity as f64, 2);
+                            self.open_pnl = round_to_tick_size((quote.ask - self.average_price) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                         PositionSide::Short => {
                             self.highest_recoded_price = self.highest_recoded_price.max(quote.bid);
                             self.lowest_recoded_price = self.lowest_recoded_price.min(quote.bid);
-                            self.open_pnl = round_to_decimals((self.average_price - quote.bid) * self.quantity as f64, 2);
+                            self.open_pnl = round_to_tick_size((self.average_price - quote.bid) * self.quantity as f64, self.symbol_info.tick_size)  * (self.symbol_info.value_per_tick * self.quantity as f64 );
                         }
                     }
                 }

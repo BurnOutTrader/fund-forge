@@ -1,8 +1,8 @@
 use crate::apis::brokerage::Brokerage;
 use crate::apis::vendor::DataVendor;
-use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo};
+use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo, SymbolInfo};
 use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
-use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -114,9 +114,11 @@ pub enum SynchronousRequestType {
 
     Markets(DataVendor),
 
-    TickSize(DataVendor, Symbol),
+    TickSize(DataVendor, SymbolName),
 
-    DecimalAccuracy(DataVendor, Symbol),
+    DecimalAccuracy(DataVendor, SymbolName),
+
+    SymbolInfo(Brokerage, SymbolName),
 }
 
 impl SynchronousRequestType {
@@ -189,9 +191,13 @@ pub enum SynchronousResponseType {
 
     Markets(Vec<MarketType>),
 
-    TickSize(Symbol, f64),
+    TickSize(f64),
 
-    DecimalAccuracy(Symbol, u8),
+    DecimalAccuracy(u8),
+
+    ValuePerTick(AccountCurrency, f64),
+
+    SymbolInfo(SymbolInfo)
 }
 
 impl SynchronousResponseType {
