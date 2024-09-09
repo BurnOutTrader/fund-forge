@@ -134,9 +134,13 @@ impl Ledger {
             0.0
         };
 
+        //println!("Cash Value: {}", self.cash_value);
+
         let break_even = total_trades - wins - losses;
         format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}",
                 self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, profit_factor, pnl, wins, losses,  break_even, total_trades) //todo, check against self.pnl
+
+
     }
 
     pub fn paper_account_init(
@@ -197,7 +201,10 @@ impl Ledger {
                 }
             };
             if is_reducing {
-                self.booked_pnl += existing_position.reduce_position_size(price, quantity, time);
+                let pnl = existing_position.reduce_position_size(price, quantity, time);
+                self.booked_pnl += pnl;
+                self.cash_available += pnl;
+                self.cash_value = self.cash_available + self.cash_used;
                 // Update PnL: if the entire position is closed, set PnL to 0
                 if !existing_position.is_closed {
                     self.positions.insert(symbol_name.clone(), existing_position);
@@ -219,11 +226,14 @@ impl Ledger {
                     return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
                 }
 
-                existing_position.add_to_position(price, quantity);
-
+                let open_pnl = existing_position.open_pnl;
+                existing_position.add_to_position(price, quantity, time);
                 // Deduct margin from cash available
+                self.open_pnl -= open_pnl;
+                self.open_pnl += existing_position.open_pnl;
                 self.cash_available -= margin_required;
                 self.cash_used += margin_required;
+                self.cash_value = self.cash_available + self.cash_used;
                 self.positions.insert(symbol_name.clone(), existing_position);
                 Ok(())
             }
@@ -400,11 +410,13 @@ impl Position {
         booked_pnl
     }
 
-    pub fn add_to_position(&mut self, market_price: Price, quantity: u64) {
+    pub fn add_to_position(&mut self, market_price: Price, quantity: u64, time: &DateTime<Utc>) {
         // If adding to the short position, calculate the new average price
         self.average_price =
             ((self.quantity as f64 * self.average_price) + (quantity as f64 * market_price))
                 / (self.quantity + quantity) as f64;
+
+        self.open_pnl =  calculate_pnl(&self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
 
         // Update the total quantity
         self.quantity += quantity;
