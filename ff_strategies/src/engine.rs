@@ -1,5 +1,5 @@
 use crate::interaction_handler::InteractionHandler;
-use crate::market_handlers::{HistoricalMarketHandler, MarketHandlerEnum};
+use crate::market_handlers::{HistoricalMarketHandler, MarketHandlerUpdate, MarketHandlerEnum};
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
@@ -22,7 +22,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration as StdDuration;
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
@@ -41,8 +41,9 @@ pub(crate) struct BackTestEngine {
     owner_id: OwnerId,
     start_state: StrategyStartState,
     strategy_event_sender: Sender<EventTimeSlice>,
+    market_handler_update_sender: Sender<MarketHandlerUpdate>,
+    market_event_receiver: Receiver<Option<EventTimeSlice>>,
     subscription_handler: Arc<SubscriptionHandler>,
-    market_event_handler: Arc<MarketHandlerEnum>,
     interaction_handler: Arc<InteractionHandler>,
     indicator_handler: Arc<IndicatorHandler>,
     timed_event_handler: Arc<TimedEventHandler>,
@@ -59,7 +60,8 @@ impl BackTestEngine {
         start_state: StrategyStartState,
         strategy_event_sender: Sender<EventTimeSlice>,
         subscription_handler: Arc<SubscriptionHandler>, //todo, since we are on a seperate thread the engine should take ownership of these and the strategy should just send message requests through a synchronous channel and await responses
-        market_event_handler: Arc<MarketHandlerEnum>,
+        market_handler_time_slice_sender: Sender<MarketHandlerUpdate>,
+        market_event_receiver: Receiver<Option<EventTimeSlice>>,
         interaction_handler: Arc<InteractionHandler>,
         indicator_handler: Arc<IndicatorHandler>,
         timed_event_handler: Arc<TimedEventHandler>,
@@ -71,7 +73,8 @@ impl BackTestEngine {
             start_state,
             strategy_event_sender,
             subscription_handler,
-            market_event_handler,
+            market_handler_update_sender: market_handler_time_slice_sender,
+            market_event_receiver,
             interaction_handler,
             indicator_handler,
             timed_event_handler,
@@ -82,7 +85,7 @@ impl BackTestEngine {
 
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
     /// Calling this method will start the strategy running.
-    pub async fn launch(self: Self) {
+    pub async fn launch(mut self: Self) {
         println!("Engine: Initializing the strategy...");
         thread::spawn(move|| {
             if self.start_state.mode != StrategyMode::Backtest {
@@ -109,7 +112,7 @@ impl BackTestEngine {
         });
     }
 
-    async fn warmup(&self) {
+    async fn warmup(&mut self) {
         let end_time = self.start_state.start_date.to_utc();
 
         // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
@@ -122,7 +125,6 @@ impl BackTestEngine {
             .await;
 
         self.subscription_handler.set_warmup_complete().await;
-        self.market_event_handler.set_warm_up_complete().await;
         self.indicator_handler.set_warmup_complete().await;
         self.timed_event_handler.set_warmup_complete().await;
         let warmup_complete_event = vec![StrategyEvent::WarmUpComplete(self.owner_id.clone())];
@@ -137,11 +139,11 @@ impl BackTestEngine {
                 eprintln!("Engine: Error forwarding event: {:?}", e);
             }
         }
-        println!("Engine: Strategy Warm up complete")
+        println!("Engine: Warm up complete")
     }
 
     /// Runs the strategy backtest
-    async fn run_backtest(&self) {
+    async fn run_backtest(&mut self) {
         println!("Engine: Running the strategy backtest...");
         self.interaction_handler.process_controls().await;
         // we run the historical data feed from the start time until we reach the end date for the strategy
@@ -151,8 +153,6 @@ impl BackTestEngine {
         );
         self.historical_data_feed(month_years, self.start_state.end_date.clone(), true)
             .await;
-
-        self.market_event_handler.process_ledgers().await;
     }
 
     async fn get_base_time_slices(
@@ -168,7 +168,7 @@ impl BackTestEngine {
 
     /// Feeds the historical data to the strategy, along with any events that were created.
     async fn historical_data_feed(
-        &self,
+        &mut self,
         month_years: BTreeMap<i32, DateTime<Utc>>,
         end_time: DateTime<Utc>,
         warm_up_completed: bool,
@@ -176,7 +176,8 @@ impl BackTestEngine {
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
             *self.last_time.write().await = start.clone();
-            self.market_event_handler.update_time(start.clone()).await;
+
+            self.market_handler_update_sender.send(MarketHandlerUpdate::Time(start.clone())).await.unwrap();
             let mut last_time = start.clone();
             'month_loop: loop {
                 let strategy_subscriptions = self.subscription_handler.strategy_subscriptions().await;
@@ -242,10 +243,9 @@ impl BackTestEngine {
                         continue 'time_loop;
                     }
 
-                    let (market_event_handler_events, consolidated_data) = tokio::join!(
-                        self.market_event_handler.update_time_slice(&time_slice),
-                        self.subscription_handler.update_time_slice(&time_slice),
-                    );
+                    self.market_handler_update_sender.send(MarketHandlerUpdate::TimeSlice(time_slice.clone())).await.unwrap();
+                    let consolidated_data = self.subscription_handler.update_time_slice(&time_slice).await;
+
 
                     if let Some(data) = consolidated_data {
                         time_slice.extend(data);
@@ -263,8 +263,10 @@ impl BackTestEngine {
                         }
                     }
 
-                    if let Some(events) = market_event_handler_events {
-                        strategy_event_slice.extend(events);
+                    let market_event_handler_events = self.market_event_receiver.recv().await.unwrap();
+                    match market_event_handler_events {
+                        Some(events) => strategy_event_slice.extend(events),
+                        None => {}
                     }
 
                     if let Some(indicator_slice_event) = self.indicator_handler.update_time_slice(time.clone(), &strategy_time_slice).await {
@@ -334,7 +336,7 @@ impl BackTestEngine {
         strategy_event_slice: EventTimeSlice,
         warm_up_completed: bool,
     ) -> bool {
-        self.market_event_handler.update_time(time.clone()).await;
+        self.market_handler_update_sender.send(MarketHandlerUpdate::Time(time.clone())).await.unwrap();
         match self.strategy_event_sender.send(strategy_event_slice.clone()).await {
             Ok(_) => {}
             Err(e) => {

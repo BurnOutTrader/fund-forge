@@ -39,7 +39,7 @@ async fn main() {
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2023, 04, 30)
+        NaiveDate::from_ymd_opt(2023, 01, 15)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
@@ -48,7 +48,7 @@ async fn main() {
         vec![DataSubscription::new_custom(
                 "AUD-CAD".to_string(),
                 DataVendor::Test,
-                Resolution::Minutes(3),
+                Resolution::Minutes(15),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
                 CandleType::CandleStick,
@@ -139,7 +139,7 @@ pub async fn on_data_received(
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
                 StrategyEvent::DrawingToolEvents(_, drawing_tool_event, _) => {
-                    println!("Drawing Tool Event: {:?}", drawing_tool_event);
+                    println!("Strategy: Drawing Tool Event: {:?}", drawing_tool_event);
                 }
                 StrategyEvent::TimeSlice(_owner , time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
@@ -153,37 +153,41 @@ pub async fn on_data_received(
                                 }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
-                                if !warmup_complete {
-                                    continue;
-                                }
-                                if quotebar.is_closed == true {
-                                    println!("Closed bar time {}", time); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
-                                    history.add(quotebar.clone());
-
+                                history.add(quotebar.clone());
+                                count += 1;
+                                if quotebar.is_closed == true && count > 10 {
+                                    println!("{} Closed bar time {}", time, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    if !warmup_complete {
+                                        continue;
+                                    }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
-                                    let last_bar = match history.get(1) {
-                                        None => continue,
+                              /*      let last_bar = match history.get(1) {
+                                        None => {
+                                            println!("Strategy: No history");
+                                            continue;
+                                        },
                                         Some(bar) => bar
                                     };
 
                                     let two_bars_ago = match history.get(2) {
-                                        None => continue,
+                                        None => {
+                                            println!("Strategy: No history");
+                                            continue;
+                                        },
                                         Some(bar) => bar
-                                    };
+                                    };*/
 
-                                    if quotebar.bid_close > last_bar.bid_high
-                                        && last_bar.bid_close > two_bars_ago.bid_high
-                                        && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
+                                    if quotebar.bid_close > quotebar.bid_open
+                                        //&& last_bar.bid_close > two_bars_ago.bid_high
+                                        && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await //todo I think this is returning wrong value as no trades entered
                                     {
-                                        strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1, String::from("Enter Long")).await;
-                                        println!("Enter Long");
+                                        strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long")).await;
                                     }
-                                    else if quotebar.bid_close < last_bar.bid_low
-                                        && last_bar.bid_close < two_bars_ago.bid_low
-                                        && !strategy.is_short(&brokerage, &account, &quotebar.symbol.name).await
+                                    else if quotebar.bid_close < quotebar.bid_open
+                                        //&& last_bar.bid_close < two_bars_ago.bid_low
+                                        && strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await //todo I think this is returning wrong value as no trades entered
                                     {
-                                        strategy.enter_short(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1, String::from("Enter Short")).await;
-                                        println!("Enter Short");
+                                        strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Exit Long")).await;
                                     }
                                 } else if !quotebar.is_closed {
                                     //println!("Open bar time: {}", time)
@@ -207,29 +211,35 @@ pub async fn on_data_received(
                 }
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(_, event) => {
-                    println!("Order Event: {:?}", event);
+                    println!("Strategy: Order Event: {:?}", event);
                 }
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
                 StrategyEvent::DataSubscriptionEvents(_, events, _) => {
                     for event in events {
-                        println!("Data Subscription Event: {:?}", event);
+                        println!("Strategy: Data Subscription Event: {:?}", event);
                     }
                 }
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
                 StrategyEvent::StrategyControls(_, _, _) => {}
-                StrategyEvent::ShutdownEvent(_, _) => break 'strategy_loop, //we should handle shutdown gracefully by first ending the strategy loop.
+                StrategyEvent::ShutdownEvent(_, _) => {
+                    let ledgers = strategy.print_ledgers().await;
+                    for ledger in ledgers {
+                        println!("{:?}", ledger);
+                    }
+                    break 'strategy_loop
+                }, //we should handle shutdown gracefully by first ending the strategy loop.
                 StrategyEvent::WarmUpComplete(_) => {
-                    println!("Strategy Warmup Complete");
+                    println!("Strategy: Warmup Complete");
                     warmup_complete = true;
                 }
                 StrategyEvent::IndicatorEvent(_, indicator_event) => {
                     //we can handle indicator events here, this is useful for debugging and monitoring the state of the indicators.
                     match indicator_event {
                         IndicatorEvents::IndicatorAdded(added_event) => {
-                            println!("Indicator Added: {:?}", added_event);
+                            println!("Strategy:Indicator Added: {:?}", added_event);
                         }
                         IndicatorEvents::IndicatorRemoved(removed_event) => {
-                            println!("Indicator Removed: {:?}", removed_event);
+                            println!("Strategy:Indicator Removed: {:?}", removed_event);
                         }
                         IndicatorEvents::IndicatorTimeSlice(_time, slice_event) => {
                             // we can see our auto manged indicator values for here.
@@ -240,30 +250,17 @@ pub async fn on_data_received(
                                     indicator_values.values()
                                 );
                             }
-
-                            /*let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
-                            if let Some(history) = history {
-                                println!("History: {:?}", history.history());
-                            }
-
-                            let current: Option<IndicatorValues> = strategy.indicator_current(&IndicatorName::from("heikin_atr_20")).await;
-                            if let Some(current) = current {
-                                println!("Current: {:?}", current.values());
-                            }
-
-                            let index: Option<IndicatorValues> = strategy.indicator_index(&IndicatorName::from("heikin_atr_20"), 3).await;
-                            if let Some(index) = index {
-                                println!("Index: {:?}", index.values());
-                            }*/
                         }
                         IndicatorEvents::Replaced(replace_event) => {
-                            println!("Indicator Replaced: {:?}", replace_event);
+                            println!("Strategy:Indicator Replaced: {:?}", replace_event);
                         }
                     }
 
                     // we could also get the automanaged indicator values from teh strategy at any time.
                 }
-                StrategyEvent::PositionEvents(_) => {}
+                StrategyEvent::PositionEvents(event) => {
+
+                }
             }
             notify.notify_one();
             //simulate work
@@ -271,5 +268,5 @@ pub async fn on_data_received(
         }
     }
     event_receiver.close();
-    println!("Strategy Event Loop Ended");
+    println!("Strategy: Event Loop Ended");
 }

@@ -95,30 +95,51 @@ impl Ledger {
         format!("{}-{}", symbol_name, self.positions_counter.get(symbol_name).unwrap().value().clone())
     }
 
+    pub fn calculate_profit(&self, position: &Position) -> f64 {
+        if let Some(pnl_raw) = position.pnl_raw {
+            // Calculate the total pip value based on position size
+            return position.quantity as f64 * pnl_raw
+        }
+        0.0
+    }
+
     pub async fn exit_position_paper(&mut self, symbol_name: &SymbolName) {
         if !self.positions.contains_key(symbol_name) {
             return;
         }
         let (_, position) = self.positions.remove(symbol_name).unwrap();
-        let margin_freed = self
+        let mut margin_freed = self
             .brokerage
             .margin_required(symbol_name.clone(), position.quantity)
             .await;
 
+        margin_freed += self.calculate_profit(&position);
         self.cash_available += margin_freed;
         self.cash_used -= margin_freed;
+        self.cash_value =  self.cash_available + self.cash_used;
         self.positions_closed.insert(symbol_name.clone(), position);
     }
 
     pub async fn enter_short_paper(
         &mut self,
-        symbol_name: SymbolName,
+        symbol_name: &SymbolName,
         quantity: u64,
-        price: f64,
+        price: Price,
     ) -> Result<(), FundForgeError> {
-        if let Some(position) = self.positions.get(&symbol_name) {
+        if let Some(position) = self.positions.get(symbol_name) {
             if position.side == PositionSide::Short {
                 // we will need to modify our average price and quantity
+            } else if position.side == PositionSide::Long {
+                let (_, position) = self.positions.remove(symbol_name).unwrap();
+                let mut margin_freed = self
+                    .brokerage
+                    .margin_required(symbol_name.clone(), position.quantity)
+                    .await;
+
+                margin_freed += self.calculate_profit(&position);
+                self.cash_available += margin_freed;
+                self.cash_used -= margin_freed;
+                self.positions_closed.insert(symbol_name.clone(), position);
             }
         }
         let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;
@@ -146,11 +167,22 @@ impl Ledger {
         &mut self,
         symbol_name: &SymbolName,
         quantity: u64,
-        price: f64,
+        price: Price,
     ) -> Result<(), FundForgeError> {
         if let Some(position) = self.positions.get(symbol_name) {
             if position.side == PositionSide::Long {
                 // we will need to modify our average price and quantity
+            } else if position.side == PositionSide::Short {
+                let (_, position) = self.positions.remove(symbol_name).unwrap();
+                let mut margin_freed = self
+                    .brokerage
+                    .margin_required(symbol_name.clone(), position.quantity)
+                    .await;
+
+                margin_freed += self.calculate_profit(&position);
+                self.cash_available += margin_freed;
+                self.cash_used -= margin_freed;
+                self.positions_closed.insert(symbol_name.clone(), position);
             }
         }
         let margin_required = self.brokerage.margin_required(symbol_name.clone(), quantity).await;

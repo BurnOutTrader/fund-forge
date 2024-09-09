@@ -46,7 +46,7 @@ pub enum Brokerage {
 impl Brokerage {
     pub async fn margin_required(&self, _symbol_name: SymbolName, quantity: u64) -> f64 { //todo make this [art of the trait
         match self {
-            Brokerage::Test => quantity as f64 * 2500.0,
+            Brokerage::Test => quantity as f64 * 1.1,
         }
     }
 
