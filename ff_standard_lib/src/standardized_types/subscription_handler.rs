@@ -11,12 +11,9 @@ use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptio
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use futures::channel::mpsc::Receiver;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
-use crate::standardized_types::strategy_events::EventTimeSlice;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {

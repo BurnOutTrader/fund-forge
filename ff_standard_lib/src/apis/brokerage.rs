@@ -8,6 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 use strum_macros::Display;
+use crate::helpers::decimal_calculators::round_to_decimals;
 
 async fn broker_api_object(vendor: &Brokerage) -> Arc<impl BrokerApiResponse> {
     match vendor {
@@ -46,7 +47,7 @@ pub enum Brokerage {
 impl Brokerage {
     pub async fn margin_required(&self, _symbol_name: SymbolName, quantity: u64) -> f64 { //todo make this [art of the trait
         match self {
-            Brokerage::Test => quantity as f64 * 1.1,
+            Brokerage::Test => round_to_decimals(quantity as f64 / 200.0, 2),
         }
     }
 

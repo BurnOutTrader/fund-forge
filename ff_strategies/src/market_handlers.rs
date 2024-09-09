@@ -16,6 +16,7 @@ use std::sync::{Arc, RwLockWriteGuard};
 use dashmap::DashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{Mutex, RwLock};
+use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 
 pub(crate) enum MarketHandlerEnum {
     BacktestDefault(HistoricalMarketHandler),
@@ -135,6 +136,7 @@ impl HistoricalMarketHandler {
         let order_cache = self.order_cache.clone();
 
         tokio::task::spawn(async move {
+            let mut event_buffer = EventTimeSlice::new();
             while let Some(update) = primary_data_receiver.recv().await {
                 match update {
                     MarketHandlerUpdate::Time(time) => {
@@ -195,10 +197,24 @@ impl HistoricalMarketHandler {
                                 BaseDataEnum::Fundamental(_) => (),
                             }
                         }
-                        event_sender.send(backtest_matching_engine(&owner_id, order_books.clone(), last_price.clone(), ledgers.clone(), last_time.clone(), order_cache.clone()).await).await.unwrap();
+                        match backtest_matching_engine(&owner_id, order_books.clone(), last_price.clone(), ledgers.clone(), last_time.clone(), order_cache.clone()).await {
+                            None => {},
+                            Some(event) => event_buffer.extend(event)
+                        }
+                        if event_buffer.len() > 0 {
+                            event_sender.send(Some(event_buffer.clone())).await.unwrap();
+                            event_buffer = EventTimeSlice::new();
+                        } else {
+                            event_sender.send(None).await.unwrap();
+                        }
+
                     }
                     MarketHandlerUpdate::Order(order) => {
                         order_cache.write().await.push(order);
+                        match backtest_matching_engine(&owner_id, order_books.clone(), last_price.clone(), ledgers.clone(), last_time.clone(), order_cache.clone()).await {
+                            None => {},
+                            Some(event) => event_buffer.extend(event)
+                        }
                     }
                 }
             }
@@ -211,10 +227,7 @@ impl HistoricalMarketHandler {
         let mut return_strings = vec![];
         for brokerage_map in self.ledgers.iter() {
             for map in brokerage_map.iter() {
-                return_strings.push(format!(
-                    "Brokerage: {:?} Account: {:?} Ledger: {:?}",
-                    brokerage_map.key(), map.key().clone(), map.value().clone()
-                ));
+                return_strings.push(map.value().print());
             }
         }
         return_strings
@@ -266,7 +279,7 @@ async fn backtest_matching_engine(
 
     let mut events = Vec::new();
     let orders = &mut *order_cache;
-    let remaining_orders: Vec<Order> = Vec::new();
+    let mut remaining_orders: Vec<Order> = Vec::new();
     for order in &mut *orders {
         //1. If we don't have a brokerage + account create one
         if !ledgers.contains_key(&order.brokerage) {
@@ -274,8 +287,7 @@ async fn backtest_matching_engine(
                 .insert(order.brokerage.clone(), DashMap::new());
         }
         if !ledgers
-            .get(&order.brokerage)
-            .unwrap()
+            .get(&order.brokerage)?
             .contains_key(&order.account_id)
         {
             let ledger = order
@@ -287,74 +299,119 @@ async fn backtest_matching_engine(
                 )
                 .await;
             ledgers
-                .get_mut(&order.brokerage)
-                .unwrap()
+                .get_mut(&order.brokerage)?
                 .insert(order.account_id.clone(), ledger);
+            println!("Ledger Created")
         }
 
         //2. send the order to the ledger to be handled
         let mut brokerage_ledger = ledgers
-            .get_mut(&order.brokerage)
-            .unwrap();
+            .get_mut(&order.brokerage)?;
         let mut ledger = brokerage_ledger
-            .get_mut(&order.account_id)
-            .unwrap();
+            .get_mut(&order.account_id)?;
 
         let owner_id = owner_id.clone();
+        let market_price = get_market_price(&order.side, &order.symbol_name, order_books.clone(), last_price.clone()).await.unwrap();
+        let last_time_utc = last_time.read().await.clone();
+
+        let fill_order = | mut order: Order, events: &mut Vec<StrategyEvent> | {
+            order.time_filled_utc = Some(last_time_utc.to_string());
+            order.state = OrderState::Filled;
+            order.average_fill_price = Some(market_price);
+            events.push(StrategyEvent::OrderEvents(
+                owner_id.clone(),
+                OrderUpdateEvent::Filled(order.clone()),
+            ));
+        };
+
+        let reject_order = |reason: String, mut order: Order, events: &mut Vec<StrategyEvent>| {
+            order.state = OrderState::Rejected(reason);
+            order.time_created_utc = last_time_utc.to_string();
+            events.push(StrategyEvent::OrderEvents(
+                owner_id.to_string(),
+                OrderUpdateEvent::Rejected(order.clone()),
+            ));
+        };
 
         //3. respond with an order event
+
         match order.order_type {
-            OrderType::Limit => {
-                // todo! for limit orders that are not hit we need to push the order into remaining orders, so that it can be retained
-                panic!("Limit orders not supported in backtest")
+            OrderType::Limit | OrderType::TakeProfit => {
+                let is_filled = match order.side {
+                    OrderSide::Buy => market_price <= order.limit_price?,
+                    OrderSide::Sell => market_price >= order.limit_price?
+                };
+                if is_filled {
+                    order.quantity_filled = order.quantity_ordered;
+                    order.time_filled_utc = Some(last_time_utc.to_string());
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_filled, market_price, order.side, last_time_utc).await {
+                        Ok(_) => fill_order(order.clone(), &mut events),
+                        Err(e) => reject_order("Insufficient Margin".to_string(), order.clone(), &mut events)
+                    }
+                } else {
+                    remaining_orders.push(order.clone());
+                }
             }
-            OrderType::Market => panic!("Market orders not supported in backtest"),
-            OrderType::MarketIfTouched => {
-                panic!("MarketIfTouched orders not supported in backtest")
+            OrderType::Market => {
+                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_filled, market_price, order.side, last_time_utc).await {
+                    Ok(_) => fill_order(order.clone(), &mut events),
+                    Err(e) => reject_order("Insufficient Margin".to_string(), order.clone(), &mut events)
+                }
+            },
+            OrderType::MarketIfTouched | OrderType::StopMarket | OrderType::StopLoss | OrderType::GuaranteedStopLoss | OrderType::TrailingStopLoss | OrderType::TrailingGuaranteedStopLoss => {
+                let is_filled = match order.side {
+                    OrderSide::Buy => market_price <= order.trigger_price?,
+                    OrderSide::Sell => market_price >= order.trigger_price?
+                };
+                if is_filled {
+                    order.quantity_filled = order.quantity_ordered;
+                    order.time_filled_utc = Some(last_time_utc.to_string());
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_filled, market_price, order.side, last_time_utc).await {
+                        Ok(_) => fill_order(order.clone(), &mut events),
+                        Err(e) => reject_order("Insufficient Margin".to_string(), order.clone(), &mut events)
+                    }
+                } else {
+                    remaining_orders.push(order.clone());
+                }
             }
-            OrderType::StopMarket => panic!("StopMarket orders not supported in backtest"),
-            OrderType::StopLimit => panic!("StopLimit orders not supported in backtest"),
-            OrderType::TakeProfit => panic!("TakeProfit orders not supported in backtest"),
-            OrderType::StopLoss => panic!("StopLoss orders not supported in backtest"),
-            OrderType::GuaranteedStopLoss => {
-                panic!("GuaranteedStopLoss orders not supported in backtest")
-            }
-            OrderType::TrailingStopLoss => {
-                panic!("TrailingStopLoss orders not supported in backtest")
-            }
-            OrderType::TrailingGuaranteedStopLoss => {
-                panic!("TrailingGuaranteedStopLoss orders not supported in backtest")
-            }
+            OrderType::StopLimit => {
+                let is_filled = match order.side {
+                    OrderSide::Buy => {
+                        market_price <= order.trigger_price? && market_price > order.limit_price?
+                    },
+                    OrderSide::Sell => market_price >= order.trigger_price? && market_price < order.limit_price?
+                };
+                if is_filled {
+                    order.quantity_filled = order.quantity_ordered;
+                    order.time_filled_utc = Some(last_time_utc.to_string());
+                    match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_filled, market_price, order.side, last_time_utc).await {
+                        Ok(_) => fill_order(order.clone(), &mut events),
+                        Err(e) => reject_order("Insufficient Margin".to_string(), order.clone(), &mut events)
+                    }
+                } else {
+                    remaining_orders.push(order.clone());
+                }
+            },
             OrderType::EnterLong => {
                 if ledger.is_short(&order.symbol_name).await {
                     ledger.exit_position_paper(&order.symbol_name).await;
                 }
-                let market_price = get_market_price(&OrderSide::Buy, &order.symbol_name, order_books.clone(), last_price.clone()).await.unwrap();
+
                 match ledger
                     .enter_long_paper(
                         &order.symbol_name,
                         order.quantity_ordered.clone(),
                         market_price,
+                        last_time.read().await.clone()
                     )
                     .await
                 {
                     Ok(_) => {
-                        order.state = OrderState::Filled;
-                        order.average_fill_price = Some(market_price);
-                        events.push(StrategyEvent::OrderEvents(
-                            owner_id.clone(),
-                            OrderUpdateEvent::Filled(order.clone()),
-                        ));
-                        println!("Entered Long: {}, balance: {}", order.symbol_name, ledger.cash_available)
+                        fill_order(order.clone(), &mut events);
                     }
-                    Err(e) => {
-                        let reason = format!("Failed to enter long position: {:?}", e);
-                        order.state = OrderState::Rejected(reason);
-                        order.time_created_utc = last_time.read().await.to_string();
-                        events.push(StrategyEvent::OrderEvents(
-                            owner_id.clone(),
-                            OrderUpdateEvent::Rejected(order.clone()),
-                        ));
+                    Err(e) =>  {
+                        let reason = "Insufficient Margin".to_string();
+                        reject_order(reason, order.clone(), &mut events)
                     }
                 }
             }
@@ -362,77 +419,37 @@ async fn backtest_matching_engine(
                 if ledger.is_long(&order.symbol_name).await {
                     ledger.exit_position_paper(&order.symbol_name).await;
                 }
-                let market_price = get_market_price(&OrderSide::Sell, &order.symbol_name, order_books.clone(), last_price.clone())
-                    .await
-                    .unwrap();
+
                 match ledger
                     .enter_short_paper(
                         &order.symbol_name,
                         order.quantity_ordered.clone(),
                         market_price,
+                        last_time.read().await.clone()
                     )
                     .await
                 {
-                    Ok(_) => {
-                        order.state = OrderState::Filled;
-                        order.average_fill_price = Some(market_price);
-                        events.push(StrategyEvent::OrderEvents(
-                            owner_id.clone(),
-                            OrderUpdateEvent::Filled(order.clone()),
-                        ));
-                        println!("Entered Short: {}, balance: {}", order.symbol_name, ledger.cash_available)
-                    }
-                    Err(e) => {
-                        let reason = format!("Failed to enter short position: {:?}", e);
-                        order.state = OrderState::Rejected(reason);
-                        order.time_created_utc = last_time.read().await.to_string();
-                        events.push(StrategyEvent::OrderEvents(
-                            owner_id.clone(),
-                            OrderUpdateEvent::Rejected(order.clone()),
-                        ));
+                    Ok(_) => fill_order(order.clone(), &mut events),
+                    Err(e) =>  {
+                        let reason = "Insufficient Margin".to_string();
+                        reject_order(reason, order.clone(), &mut events)
                     }
                 }
             }
             OrderType::ExitLong => {
                 if ledger.is_long(&order.symbol_name).await {
-                    order.state = OrderState::Filled;
-                    let market_price = get_market_price(&OrderSide::Sell, &order.symbol_name, order_books.clone(), last_price.clone())
-                        .await
-                        .unwrap();
-                    order.average_fill_price = Some(market_price);
-                    events.push(StrategyEvent::OrderEvents(
-                        owner_id.clone(),
-                        OrderUpdateEvent::Filled(order.clone()),
-                    ));
+                    fill_order(order.clone(), &mut events);
                 } else {
                     let reason = "No long position to exit".to_string();
-                    order.state = OrderState::Rejected(reason);
-                    order.time_created_utc = last_time.read().await.to_string();
-                    events.push(StrategyEvent::OrderEvents(
-                        owner_id.clone(),
-                        OrderUpdateEvent::Rejected(order.clone()),
-                    ));
+                    reject_order(reason, order.clone(), &mut events);
                 }
             }
             OrderType::ExitShort => {
                 if ledger.is_short(&order.symbol_name).await {
-                    order.state = OrderState::Filled;
-                    let market_price = get_market_price(&OrderSide::Buy, &order.symbol_name, order_books.clone(), last_price.clone())
-                        .await
-                        .unwrap();
-                    order.average_fill_price = Some(market_price);
-                    events.push(StrategyEvent::OrderEvents(
-                        owner_id.clone(),
-                        OrderUpdateEvent::Filled(order.clone()),
-                    ));
+                    fill_order(order.clone(), &mut events);
                 } else {
                     let reason = "No short position to exit".to_string();
-                    order.state = OrderState::Rejected(reason);
-                    order.time_created_utc = last_time.read().await.to_string();
-                    events.push(StrategyEvent::OrderEvents(
-                        owner_id.clone(),
-                        OrderUpdateEvent::Rejected(order.clone()),
-                    ));
+                    reject_order(reason, order.clone(), &mut events);
                 }
             }
         };
