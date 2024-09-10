@@ -347,6 +347,15 @@ impl Ledger {
             if let Some(mut position) = self.positions.get_mut(&base_data_enum.symbol().name){
                 booked_pnl += position.value_mut().update_base_data(&base_data_enum, time);
                 open_pnl += position.open_pnl;
+                if position.is_closed {
+                    let closed_position = position.value().clone();
+                    self.positions.remove(&position.symbol_name);
+                    if let Some(mut closed_positions) = self.positions_closed.get_mut(&position.symbol_name) {
+                        closed_positions.value_mut().push(closed_position);
+                    } else {
+                        self.positions_closed.insert(position.symbol_name.clone(), vec![closed_position]);
+                    }
+                }
             }
         }
         self.open_pnl = open_pnl;
@@ -472,13 +481,9 @@ impl Position {
             BaseDataEnum::Quote(quote) => {
                 match self.side {
                     PositionSide::Long => {
-                        self.highest_recoded_price = self.highest_recoded_price.max(quote.ask);
-                        self.lowest_recoded_price = self.lowest_recoded_price.min(quote.ask);
-                        self.open_pnl = calculate_pnl(&self.side, self.average_price, quote.ask, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
                         quote.ask
                     }
                     PositionSide::Short => {
-
                         quote.bid
                     }
                 }

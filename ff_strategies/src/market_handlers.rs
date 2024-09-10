@@ -11,6 +11,7 @@ use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::standardized_types::{OwnerId, Price};
 use std::collections::{BTreeMap};
 use std::sync::{Arc, RwLockWriteGuard};
+use ahash::AHashMap;
 use dashmap::DashMap;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{Mutex, RwLock};
@@ -92,7 +93,7 @@ pub(crate) struct HistoricalMarketHandler {
     // 3. Option 1 is the best, In live trading we will be selecting the brokerage, the vendor is irrelevant, and we will ofcourse chose the best price, os maybe here we should use best bid and best ask.
     order_books: Arc<DashMap<SymbolName, Arc<OrderBook>>>,
     last_price: Arc<DashMap<SymbolName, Price>>,
-    ledgers: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>>,
+    ledgers: Arc<DashMap<Brokerage, AHashMap<AccountId, Ledger>>>,
     last_time: Arc<RwLock<DateTime<Utc>>>,
     order_cache: Arc<RwLock<Vec<Order>>>,
 }
@@ -144,8 +145,8 @@ impl HistoricalMarketHandler {
                     MarketHandlerUpdate::TimeSlice(time_slice) => {
                         let last_time_utc = last_time.read().await.clone();
                         for mut brokerage_map in ledgers.iter_mut() {
-                            for mut ledger in brokerage_map.value_mut().iter_mut() {
-                                ledger.value_mut().on_data_update(time_slice.clone(), &last_time_utc).await;
+                            for (_, mut ledger) in brokerage_map.value_mut().iter_mut() {
+                                ledger.on_data_update(time_slice.clone(), &last_time_utc).await;
                             }
                         }
                         for base_data in time_slice {
@@ -226,8 +227,8 @@ impl HistoricalMarketHandler {
         // Iterate over the HashMap while holding the read lock
         let mut return_strings = vec![];
         for brokerage_map in self.ledgers.iter() {
-            for map in brokerage_map.iter() {
-                return_strings.push(map.value().print());
+            for (_, ledger) in brokerage_map.iter() {
+                return_strings.push(ledger.print());
             }
         }
         return_strings
@@ -236,7 +237,7 @@ impl HistoricalMarketHandler {
     pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         if let Some(ledger_map) = self.ledgers.get(brokerage) {
             if let Some(broker_ledgers) = ledger_map.get(account_id) {
-                return broker_ledgers.value().is_long(symbol_name).await
+                return broker_ledgers.is_long(symbol_name).await
             }
             return false
         }
@@ -246,7 +247,7 @@ impl HistoricalMarketHandler {
     pub async fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         if let Some(ledger_map) = self.ledgers.get(brokerage) {
             if let Some(broker_ledgers) = ledger_map.get(account_id) {
-                return broker_ledgers.value().is_short(symbol_name).await
+                return broker_ledgers.is_short(symbol_name).await
             }
             return false
         }
@@ -256,7 +257,7 @@ impl HistoricalMarketHandler {
     pub async fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         if let Some(ledger_map) = self.ledgers.get(brokerage) {
             if let Some(broker_ledgers) = ledger_map.get(account_id) {
-                return broker_ledgers.value().is_flat(symbol_name).await
+                return broker_ledgers.is_flat(symbol_name).await
             }
             return true
         }
@@ -268,7 +269,7 @@ async fn backtest_matching_engine(
     owner_id: &OwnerId,
     order_books: Arc<DashMap<SymbolName, Arc<OrderBook>>>,
     last_price: Arc<DashMap<SymbolName, Price>>,
-    ledgers: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>>,
+    ledgers: Arc<DashMap<Brokerage, AHashMap<AccountId, Ledger>>>,
     last_time: Arc<RwLock<DateTime<Utc>>>,
     mut order_cache: Arc<RwLock<Vec<Order>>>,
 ) -> Option<EventTimeSlice> {
@@ -315,7 +316,7 @@ async fn backtest_matching_engine(
         //1. If we don't have a brokerage + account create one
         if !ledgers.contains_key(&order.brokerage) {
             ledgers
-                .insert(order.brokerage.clone(), DashMap::new());
+                .insert(order.brokerage.clone(), AHashMap::new());
         }
         if !ledgers
             .get(&order.brokerage)?
@@ -405,8 +406,8 @@ async fn backtest_matching_engine(
                 is_fill_triggered = false;
                 let mut updated = false;
                 if let Some(ledger) = ledgers.get(broker) {
-                    if let Some(ledger) = ledger.get(account_id) {
-                        ledger.value().update_brackets(symbol_name, brackets.clone());
+                    if let Some(ledger) = ledger.value().get(account_id) {
+                        ledger.update_brackets(symbol_name, brackets.clone());
                         updated = true;
                     }
                 }
