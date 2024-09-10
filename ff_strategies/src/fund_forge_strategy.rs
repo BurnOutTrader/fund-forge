@@ -36,7 +36,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
-use crate::market_handlers::{MarketHandler, MarketHandlerUpdate};
+use crate::market_handler::market_handlers::{MarketHandler, MarketHandlerUpdate};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -563,7 +563,7 @@ impl FundForgeStrategy {
     /// Backtest will return the last data point time, live will return the current time.
     pub async fn time_utc(&self) -> DateTime<Utc> {
         match self.start_state.mode {
-            StrategyMode::Backtest => self.market_event_handler.last_time().await,
+            StrategyMode::Backtest => self.market_event_handler.get_last_time().await,
             _ => Utc::now(),
         }
     }

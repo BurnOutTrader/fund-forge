@@ -1,5 +1,5 @@
 use crate::interaction_handler::InteractionHandler;
-use crate::market_handlers::{MarketHandler, MarketHandlerUpdate};
+use crate::market_handler::market_handlers::{MarketHandler, MarketHandlerUpdate};
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
