@@ -147,18 +147,18 @@ pub async fn get_async_sender(
 ///
 ///     #[tokio::test]
 ///     async fn test_initialize_clients_single_machine() {
-///         let result = initialize_clients(&PlatformMode::SingleMachine).await;
+///         let result = initialize_clients(PlatformMode::SingleMachine, false).await;
 ///         assert!(result.is_ok());
 ///     }
 ///
 ///     #[tokio::test]
 ///     async fn test_initialize_clients_multi_machine() {
 ///         // Assuming you have a way to mock or set up the settings for a multi-machine scenario
-///         let result = initialize_clients(&PlatformMode::MultiMachine).await;
+///         let result = initialize_clients(PlatformMode::MultiMachine, false).await;
 ///        assert!(result.is_ok(), "ensure ff_data_server is launched for multi machine tests");
 ///    }
 /// ```
-pub async fn initialize_clients(platform_mode: &PlatformMode, gui_enabled: bool) -> Result<(), FundForgeError> {
+pub async fn initialize_clients(platform_mode: PlatformMode, gui_enabled: bool) -> Result<(), FundForgeError> {
     //initialize_strategy_registry(platform_mode.clone()).await;
     match platform_mode {
         PlatformMode::SingleMachine => {

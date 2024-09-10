@@ -23,7 +23,8 @@ use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 #[tokio::main]
 async fn main() {
     const GUI_ENABLED: bool = false;
-    initialize_clients(&PlatformMode::SingleMachine, GUI_ENABLED).await.unwrap();
+    const MACHINE_MODE: PlatformMode = PlatformMode::SingleMachine;
+    initialize_clients(MACHINE_MODE, GUI_ENABLED).await.unwrap();
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let notify = Arc::new(Notify::new());
@@ -51,14 +52,14 @@ async fn main() {
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
-             DataSubscription::new_custom(
+    /*         DataSubscription::new_custom(
                  "AUD-USD".to_string(),
                  DataVendor::Test,
                  Resolution::Minutes(3),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::CandleStick,
-             ),
+             ),*/
              /*DataSubscription::new_custom(
                  "AUD-CAD".to_string(),
                  DataVendor::Test,
@@ -136,10 +137,10 @@ pub async fn on_data_received(
     let brokerage = Brokerage::Test;
     let symbol_name_1 = SymbolName::from("AUD-CAD");
     let _symbol_name_2 = SymbolName::from("AUD-USD");
-    let account = AccountId::from("1");
-    let account_2 = AccountId::from("2");
+    let account = AccountId::from("TestAccount1");
+    let account_2 = AccountId::from("TestAccount2");
     let mut warmup_complete = false;
-    let mut count = 0;
+    let mut bars_since_entry_1 = 0;
     let mut history : RollingWindow<QuoteBar> = RollingWindow::new(10);
 
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -161,60 +162,70 @@ pub async fn on_data_received(
                                 }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
-                                history.add(quotebar.clone());
-                                count += 1;
-                                if quotebar.is_closed == true && count > 10 {
-                                    println!("{} Closed bar time {}", time, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                //do something on the bar close
+                                if quotebar.is_closed == true {
+                                    history.add(quotebar.clone());
+                                    //println!("{} Closed bar time {}", time, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     if !warmup_complete {
                                         continue;
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
-                                    let _last_bar = match history.get(1) {
+                                    let last_bar = match history.get(1) {
                                         None => {
                                             println!("Strategy: No history");
                                             continue;
                                         },
                                         Some(bar) => bar
                                     };
+                                    //println!("{}", last_bar);
 
                                     let account = match quotebar.symbol.name == symbol_name_1 {
-                                        true => &account, //todo, make sure this doesnt stop order placement
+                                        true => &account,
                                         false => &account_2
                                     };
 
-                                    if quotebar.bid_close > quotebar.bid_open
+                                    if quotebar.bid_close > last_bar.bid_high
                                         && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
-                                        let _entry_order_id = strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 100000, String::from("Enter Long"), None).await;
+                                        let _entry_order_id = strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 10000, String::from("Enter Long"), None).await;
+                                        bars_since_entry_1 = 0;
                                     }
-                                    else if quotebar.bid_close < quotebar.bid_open
+                                    else if bars_since_entry_1 > 10
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
                                         && strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
-                                        let _exit_order_id = strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 100000, String::from("Exit Long")).await;
+                                        let _exit_order_id = strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 10000, String::from("Exit Long")).await;
+                                        bars_since_entry_1 = 0;
                                     }
-                                } else if !quotebar.is_closed {
+
+                                    if strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await {
+                                        bars_since_entry_1 += 1;
+                                    }
+                                }
+                                //do something with the current open bar
+                                if !quotebar.is_closed {
                                     //println!("Open bar time: {}", time)
                                 }
                             }
-                            BaseDataEnum::Tick(tick) => {
-                                if !warmup_complete {
-                                    // we could manually warm up indicators etc here.
-                                    println!(
-                                        "{}...{} Tick: {}",
-                                        strategy.time_utc().await,
-                                        tick.symbol.name,
-                                        base_data.time_created_utc()
-                                    );
-                                }
+                            BaseDataEnum::Tick(_) => {}
+                            BaseDataEnum::Quote(quote) => {
+                                // primary data feed won't show up in event loop unless specifically subscribed by the strategy
+                                println!(
+                                    "{} Quote: {}",
+                                    quote.symbol.name,
+                                    base_data.time_created_utc()
+                                );
                             }
-                            BaseDataEnum::Quote(_) => {}
                             BaseDataEnum::Fundamental(_) => {}
                         }
                     }
                 }
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(_, event) => {
+                    let ledgers = strategy.print_ledgers().await;
+                    for ledger in ledgers {
+                        println!("{:?}", ledger);
+                    }
                     println!("{}, Strategy: Order Event: {:?}", strategy.time_utc().await, event);
                 }
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode

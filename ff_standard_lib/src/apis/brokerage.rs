@@ -47,7 +47,7 @@ pub enum Brokerage {
 impl Brokerage {
     pub async fn margin_required_historical(&self, _symbol_name: SymbolName, quantity: u64) -> f64 { //todo make this [art of the trait
         match self {
-            Brokerage::Test => round_to_decimals(quantity as f64 / 100.0, 2),
+            Brokerage::Test => quantity as f64
         }
     }
 

@@ -14,19 +14,30 @@ pub fn divide_f64(dividend: f64, divisor: f64) -> f64 {
     result.to_f64().expect("Error converting result to f64")
 }
 
-pub fn round_to_decimals(value: f64, decimals: u64) -> f64 { //todo fix using rust decimal, definitely not working properly
-    let factor = 10f64.powi(decimals as i32);
-    let rounded_value = (value * factor).round() / factor;
-    let rounded_str = format!("{:.10}", rounded_value); // Convert to string with sufficient precision
-    let truncated_str = rounded_str.trim_end_matches('0').trim_end_matches('.'); // Remove trailing zeros and decimal point if necessary
-    truncated_str.parse::<f64>().unwrap_or(rounded_value) // Convert back to f64
+pub fn round_to_decimals(value: f64, decimals: u64) -> f64 {
+    // Convert to Decimal for precision
+    let decimal_value = Decimal::from_f64(value).unwrap();
+
+    // Create a factor of 10^decimals using Decimal
+    let factor = Decimal::from_i64(10_i64.pow(decimals as u32)).unwrap();
+
+    // Perform the rounding operation
+    let rounded_decimal = (decimal_value * factor).round() / factor;
+
+    // Convert back to f64
+    rounded_decimal.to_f64().unwrap()
 }
 
-pub fn round_to_tick_size(value: f64, tick_size: f64) -> f64 { //todo fix using rust decimal, definitely not working properly
-    let rounded_value = (value / tick_size).round() * tick_size;
-    let rounded_str = format!("{:.20}", rounded_value); // Convert to string with sufficient precision
-    let truncated_str = rounded_str.trim_end_matches('0').trim_end_matches('.'); // Remove trailing zeros and decimal point if necessary
-    truncated_str.parse::<f64>().unwrap_or(rounded_value) // Convert back to f64
+pub fn round_to_tick_size(value: f64, tick_size: f64) -> f64 {
+    // Convert to Decimal for precision
+    let decimal_value = Decimal::from_f64(value).unwrap();
+    let tick_size_decimal = Decimal::from_f64(tick_size).unwrap();
+
+    // Perform the rounding to the nearest tick size
+    let rounded_decimal = (decimal_value / tick_size_decimal).round() * tick_size_decimal;
+
+    // Convert back to f64
+    rounded_decimal.to_f64().unwrap()
 }
 
 /// Calculates the average of a vector of floating-point numbers using Decimal for high precision.

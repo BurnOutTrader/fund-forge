@@ -117,14 +117,14 @@ pub async fn backtest_matching_engine(
             },
             OrderType::EnterLong(new_brackets) => {
                 if account_ledger.is_short(&order.symbol_name).await {
-                    account_ledger.exit_position_paper(&order.symbol_name).await;
+                    account_ledger.exit_position_paper(&order.symbol_name, market_price, last_time_utc).await;
                 }
                 is_fill_triggered = true;
                 brackets = new_brackets.clone();
             }
             OrderType::EnterShort(new_brackets) => {
                 if account_ledger.is_long(&order.symbol_name).await {
-                    account_ledger.exit_position_paper(&order.symbol_name).await;
+                    account_ledger.exit_position_paper(&order.symbol_name, market_price, last_time_utc).await;
                 }
                 is_fill_triggered = true;
                 brackets = new_brackets.clone();
