@@ -1,10 +1,10 @@
 use crate::apis::brokerage::Brokerage;
 use crate::helpers::converters::time_local_from_str;
-use crate::standardized_types::accounts::ledgers::AccountId;
+use crate::standardized_types::accounts::ledgers::{AccountId, PositionId};
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::OrderSide;
 use crate::standardized_types::subscriptions::{SymbolName};
-use crate::standardized_types::OwnerId;
+use crate::standardized_types::{OwnerId, Price};
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -40,9 +40,24 @@ pub enum TimeInForce {
     Day,
 }
 
-#[derive(
-    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
-)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+/// Protective Orders always exit the entire position, for custom exits we can just submit regular orders.
+pub enum ProtectiveOrder {
+    TakeProfit{
+        price: Price
+    },
+    StopLoss {
+        price: Price
+    },
+    TrailingStopLoss {
+        price: Price,
+        trail_value: f64
+    },
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum OrderType {
@@ -51,15 +66,17 @@ pub enum OrderType {
     MarketIfTouched,
     StopMarket,
     StopLimit,
-    TakeProfit,
-    StopLoss,
-    GuaranteedStopLoss,
-    TrailingStopLoss,
-    TrailingGuaranteedStopLoss,
-    EnterLong,
-    EnterShort,
+    /// If we are adding to  an existing position and have Some(brackets), the existing brackets will be replaced.
+    /// # Arguments
+    /// brackets: `Option<Vec<ProtectiveOrder>>`,
+    EnterLong(Option<Vec<ProtectiveOrder>>),
+    /// If we are adding to  an existing position and have Some(brackets), the existing brackets will be replaced.
+    /// # Arguments
+    /// brackets: `Option<Vec<ProtectiveOrder>>`,
+    EnterShort(Option<Vec<ProtectiveOrder>>),
     ExitLong,
     ExitShort,
+    UpdateBrackets(Brokerage, AccountId, SymbolName, Vec<ProtectiveOrder>)
 }
 
 #[derive(
@@ -229,6 +246,7 @@ impl Order {
         tag: String,
         account_id: AccountId,
         time: DateTime<Utc>,
+        brackets: Option<Vec<ProtectiveOrder>>
     ) -> Self {
         Order {
             id: format!(
@@ -247,7 +265,7 @@ impl Order {
             limit_price: None,
             trigger_price: None,
             side: OrderSide::Buy,
-            order_type: OrderType::EnterLong,
+            order_type: OrderType::EnterLong(brackets),
             time_in_force: TimeInForce::FOK,
             tag,
             time_created_utc: time.to_string(),
@@ -267,6 +285,7 @@ impl Order {
         tag: String,
         account_id: AccountId,
         time: DateTime<Utc>,
+        brackets: Option<Vec<ProtectiveOrder>>
     ) -> Self {
         Order {
             id: format!(
@@ -285,7 +304,7 @@ impl Order {
             limit_price: None,
             trigger_price: None,
             side: OrderSide::Sell,
-            order_type: OrderType::EnterShort,
+            order_type: OrderType::EnterShort(brackets),
             time_in_force: TimeInForce::FOK,
             tag,
             time_created_utc: time.to_string(),
@@ -302,12 +321,12 @@ impl Order {
             || self.state == OrderState::Accepted
             || self.state == OrderState::PartiallyFilled
         {
-            match self.order_type {
+            return match self.order_type {
                 OrderType::Limit
                 | OrderType::StopLimit
-                | OrderType::TrailingStopLoss
-                | OrderType::MarketIfTouched => return true,
-                _ => return false,
+                | OrderType::StopMarket
+                | OrderType::MarketIfTouched => true,
+                _ => false,
             }
         }
         false

@@ -181,7 +181,7 @@ pub async fn on_data_received(
                                         //&& last_bar.bid_close > two_bars_ago.bid_high //todo if no positions, then the history is not working
                                         && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
-                                        strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long")).await;
+                                        strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long"), None).await;
                                     }
                                     else if quotebar.bid_close < last_bar.bid_low
                                         //&& last_bar.bid_close < two_bars_ago.bid_low

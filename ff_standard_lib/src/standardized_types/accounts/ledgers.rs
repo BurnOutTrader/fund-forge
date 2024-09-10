@@ -12,6 +12,7 @@ use dashmap::DashMap;
 use iso_currency::Currency;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::helpers::decimal_calculators::{round_to_decimals, round_to_tick_size};
+use crate::standardized_types::orders::orders::ProtectiveOrder;
 use crate::standardized_types::Price;
 
 // B
@@ -89,6 +90,12 @@ impl Ledger {
             booked_pnl: 0.0,
         };
         ledger
+    }
+
+    pub fn update_brackets(&self, symbol_name: &SymbolName, brackets: Vec<ProtectiveOrder>) {
+        if let Some(mut position) = self.positions.get_mut(symbol_name) {
+            position.brackets = brackets;
+        }
     }
 
     pub fn print(&self) -> String {
@@ -178,7 +185,8 @@ impl Ledger {
         quantity: u64,
         price: Price,
         side: OrderSide,
-        time: &DateTime<Utc>
+        time: &DateTime<Utc>,
+        brackets: Option<Vec<ProtectiveOrder>>
     ) -> Result<(), FundForgeError>
     {
         // Check if there's an existing position for the given symbol
@@ -187,6 +195,9 @@ impl Ledger {
             let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell) || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
             if is_reducing {
                 let pnl = existing_position.reduce_position_size(price, quantity, time);
+                if let Some(new_brackets) = brackets {
+                    existing_position.brackets = new_brackets;
+                }
                 self.booked_pnl += pnl;
                 self.cash_available += pnl;
                 self.cash_used -= self.brokerage.margin_required_historical(symbol_name.clone(), quantity).await;
@@ -214,6 +225,9 @@ impl Ledger {
 
                 let open_pnl = existing_position.open_pnl;
                 existing_position.add_to_position(price, quantity, time);
+                if let Some(new_brackets) = brackets {
+                    existing_position.brackets = new_brackets;
+                }
                 // Deduct margin from cash available
                 self.open_pnl -= open_pnl;
                 self.open_pnl += existing_position.open_pnl;
@@ -254,7 +268,8 @@ impl Ledger {
                 price,
                 self.generate_id(&symbol_name, time.clone(), side).await,
                 self.symbol_info.get(symbol_name).unwrap().value().clone(),
-                self.currency.clone()
+                self.currency.clone(),
+                brackets
             );
 
             // Insert the new position into the positions map
@@ -352,9 +367,10 @@ pub struct Position {
     pub is_closed: bool,
     pub id: PositionId,
     pub symbol_info: SymbolInfo,
-    account_currency: AccountCurrency
+    account_currency: AccountCurrency,
+    brackets: Vec<ProtectiveOrder>
 }
-
+//todo make it so stop loss and take profit can be attached to positions, then instead of updating in the market handler, those orders update in the position and auto cancel themselves when position closes
 impl Position {
     pub fn enter(
         symbol_name: SymbolName,
@@ -364,9 +380,14 @@ impl Position {
         average_price: f64,
         id: PositionId,
         symbol_info: SymbolInfo,
-        account_currency: AccountCurrency
+        account_currency: AccountCurrency,
+        brackets: Option<Vec<ProtectiveOrder>>
     ) -> Self {
-
+        let brackets = if let Some(brackets) = brackets {
+            brackets
+        } else {
+            vec![]
+        };
         Self {
             symbol_name,
             brokerage,
@@ -380,7 +401,8 @@ impl Position {
             is_closed: false,
             id,
             symbol_info,
-            account_currency
+            account_currency,
+            brackets
         }
     }
 

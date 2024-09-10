@@ -20,7 +20,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::history::range_data;
 use ff_standard_lib::standardized_types::base_data::order_book::OrderBook;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
-use ff_standard_lib::standardized_types::orders::orders::Order;
+use ff_standard_lib::standardized_types::orders::orders::{Order, ProtectiveOrder};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use ff_standard_lib::standardized_types::strategy_events::{
     EventTimeSlice, StrategyEvent, StrategyInteractionMode,
@@ -203,6 +203,7 @@ impl FundForgeStrategy {
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
+        brackets: Option<Vec<ProtectiveOrder>>
     ) {
         let order = Order::enter_long(
             self.owner_id.clone(),
@@ -212,6 +213,7 @@ impl FundForgeStrategy {
             tag,
             account_id,
             self.time_utc().await,
+            brackets
         );
         self.order_sender.send(MarketHandlerUpdate::Order(order)).await.unwrap();
     }
@@ -223,6 +225,7 @@ impl FundForgeStrategy {
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
+        brackets: Option<Vec<ProtectiveOrder>>
     ) {
         let order = Order::enter_short(
             self.owner_id.clone(),
@@ -232,6 +235,7 @@ impl FundForgeStrategy {
             tag,
             account_id,
             self.time_utc().await,
+            brackets
         );
         self.order_sender.send(MarketHandlerUpdate::Order(order)).await.unwrap();
     }
