@@ -185,10 +185,10 @@ pub async fn on_data_received(
                                         Some(bar) => bar
                                     };*/
 
-                                    let account = match quotebar.symbol.name == symbol_name_1 {
+                                 /*   let account = match quotebar.symbol.name == symbol_name_1 {
                                         true => &account,
                                         false => &account_2
-                                    };
+                                    };*/
 
                                     if quotebar.bid_close > last_bar.bid_high
                                         //&& last_bar.bid_close > two_bars_ago.bid_high //todo if no positions, then the history is not working

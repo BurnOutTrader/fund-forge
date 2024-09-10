@@ -334,7 +334,7 @@ async fn backtest_matching_engine(
                 .insert(order.brokerage.clone(), Arc::new(DashMap::new()));
         }
         if !ledgers
-            .get(&order.brokerage)?
+            .get(&order.brokerage)?.value()
             .contains_key(&order.account_id)
         {
             let ledger = order
@@ -346,16 +346,14 @@ async fn backtest_matching_engine(
                 )
                 .await;
             ledgers
-                .get_mut(&order.brokerage)?
+                .get_mut(&order.brokerage)?.value_mut()
                 .insert(order.account_id.clone(), ledger);
-            println!("Ledger Created")
         }
 
         //2. send the order to the ledger to be handled
-        let mut brokerage_ledger = ledgers
-            .get_mut(&order.brokerage)?;
-        let mut ledger = brokerage_ledger
-            .get_mut(&order.account_id)?;
+        let mut brokerage_map = ledgers.get_mut(&order.brokerage)?;
+
+        let mut account_ledger = brokerage_map.value_mut().get_mut(&order.account_id)?;
 
         let market_price = get_market_price(&order.side, &order.symbol_name, order_books.clone(), last_price.clone()).await.unwrap();
         let last_time_utc = last_time.read().await.clone();
@@ -386,21 +384,21 @@ async fn backtest_matching_engine(
                 };
             },
             OrderType::EnterLong(new_brackets) => {
-                if ledger.is_short(&order.symbol_name).await {
-                    ledger.exit_position_paper(&order.symbol_name).await;
+                if account_ledger.is_short(&order.symbol_name).await {
+                    account_ledger.exit_position_paper(&order.symbol_name).await;
                 }
                 is_fill_triggered = true;
                 brackets = new_brackets.clone();
             }
             OrderType::EnterShort(new_brackets) => {
-                if ledger.is_long(&order.symbol_name).await {
-                    ledger.exit_position_paper(&order.symbol_name).await;
+                if account_ledger.is_long(&order.symbol_name).await {
+                    account_ledger.exit_position_paper(&order.symbol_name).await;
                 }
                 is_fill_triggered = true;
                 brackets = new_brackets.clone();
             }
             OrderType::ExitLong => {
-                if ledger.is_long(&order.symbol_name).await {
+                if account_ledger.is_long(&order.symbol_name).await {
                     is_fill_triggered = true;
                 } else {
                     let reason = "No long position to exit".to_string();
@@ -409,7 +407,7 @@ async fn backtest_matching_engine(
                 }
             }
             OrderType::ExitShort => {
-                if ledger.is_short(&order.symbol_name).await {
+                if account_ledger.is_short(&order.symbol_name).await {
                     is_fill_triggered = true;
                 } else {
                     let reason = "No short position to exit".to_string();
@@ -434,7 +432,7 @@ async fn backtest_matching_engine(
             }
         }
         if is_fill_triggered {
-                match ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc, brackets).await {
+                match account_ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc, brackets).await {
                     Ok(_) => fill_order(order.clone(), last_time_utc, market_price, &mut events),
                     Err(e) => reject_order(e.to_string(), order.clone(), last_time_utc, market_price, &mut events)
                 }

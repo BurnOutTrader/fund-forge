@@ -444,49 +444,19 @@ impl Position {
             return 0.0;
         }
         let market_price = match base_data {
-            BaseDataEnum::Price(price) => {
-                self.highest_recoded_price = self.highest_recoded_price.max(price.price);
-                self.lowest_recoded_price = self.lowest_recoded_price.min(price.price);
-                self.open_pnl = calculate_pnl(&self.side, self.average_price, price.price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                price.price
-            }
-            BaseDataEnum::Candle(candle) => {
-                self.highest_recoded_price = self.highest_recoded_price.max(candle.high);
-                self.lowest_recoded_price = self.lowest_recoded_price.min(candle.low);
-                self.open_pnl = calculate_pnl(&self.side, self.average_price, candle.close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                candle.close
-            }
+            BaseDataEnum::Price(price) => price.price,
+            BaseDataEnum::Candle(candle) => candle.close,
+            BaseDataEnum::Tick(tick) => tick.price,
             BaseDataEnum::QuoteBar(bar) => {
                 match self.side {
-                    PositionSide::Long => {
-                        self.highest_recoded_price = self.highest_recoded_price.max(bar.ask_high);
-                        self.lowest_recoded_price = self.lowest_recoded_price.min(bar.ask_low);
-                        self.open_pnl = calculate_pnl(&self.side, self.average_price, bar.ask_close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                        bar.ask_close
-                    }
-                    PositionSide::Short => {
-                        self.highest_recoded_price = self.highest_recoded_price.max(bar.bid_high);
-                        self.lowest_recoded_price = self.lowest_recoded_price.min(bar.bid_low);
-                        self.open_pnl = calculate_pnl(&self.side, self.average_price, bar.bid_close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                        bar.bid_close
-                    }
+                    PositionSide::Long => bar.ask_close,
+                    PositionSide::Short => bar.bid_close,
                 }
-
-            }
-            BaseDataEnum::Tick(tick) => {
-                self.highest_recoded_price = self.highest_recoded_price.max(tick.price);
-                self.lowest_recoded_price = self.lowest_recoded_price.min(tick.price);
-                self.open_pnl = calculate_pnl(&self.side, self.average_price, tick.price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                tick.price
             }
             BaseDataEnum::Quote(quote) => {
                 match self.side {
-                    PositionSide::Long => {
-                        quote.ask
-                    }
-                    PositionSide::Short => {
-                        quote.bid
-                    }
+                    PositionSide::Long => quote.ask,
+                    PositionSide::Short => quote.bid
                 }
             }
             BaseDataEnum::Fundamental(_) => panic!("Fundamentals shouldnt be here")
@@ -535,24 +505,30 @@ impl Position {
                             }
                         }
                     },
-                    ProtectiveOrder::TrailingStopLoss { price, trail_value } => match self.side {
+                    ProtectiveOrder::TrailingStopLoss { mut price, trail_value } => match self.side {
                         PositionSide::Long => {
-                            if market_price <= *price {
+                            if market_price <= price {
                                 bracket_triggered = true;
                                 break 'bracket_loop;
                             } else {
                                 bracket_triggered = false;
+                            }
+                            if market_price > price + trail_value {
+                                price += trail_value;
                             }
                         }
                         PositionSide::Short => {
-                            if market_price >= *price {
+                            if market_price >= price {
                                 bracket_triggered = true;
                                 break 'bracket_loop;
                             } else {
                                 bracket_triggered = false;
                             }
+                            if market_price < price + trail_value {
+                                price -= trail_value;
+                            }
                         }
-                    },
+                    }
                 }
             }
         }
