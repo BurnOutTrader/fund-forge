@@ -94,7 +94,7 @@ impl Ledger {
 
     pub fn update_brackets(&self, symbol_name: &SymbolName, brackets: Vec<ProtectiveOrder>) {
         if let Some(mut position) = self.positions.get_mut(symbol_name) {
-            position.brackets = brackets;
+            position.brackets = Some(brackets);
         }
     }
 
@@ -196,7 +196,7 @@ impl Ledger {
             if is_reducing {
                 let pnl = existing_position.reduce_position_size(price, quantity, time);
                 if let Some(new_brackets) = brackets {
-                    existing_position.brackets = new_brackets;
+                    existing_position.brackets = Some(new_brackets);
                 }
                 self.booked_pnl += pnl;
                 self.cash_available += pnl;
@@ -226,7 +226,7 @@ impl Ledger {
                 let open_pnl = existing_position.open_pnl;
                 existing_position.add_to_position(price, quantity, time);
                 if let Some(new_brackets) = brackets {
-                    existing_position.brackets = new_brackets;
+                    existing_position.brackets = Some(new_brackets);
                 }
                 // Deduct margin from cash available
                 self.open_pnl -= open_pnl;
@@ -342,11 +342,15 @@ impl Ledger {
 
     pub async fn on_data_update(&mut self, time_slice: TimeSlice, time: &DateTime<Utc>) {
         let mut open_pnl = 0.0;
-        for mut position in self.positions.iter_mut() {
-            position.value_mut().update_base_data(&time_slice, time);
-            open_pnl += position.open_pnl;
+        let mut booked_pnl = 0.0;
+        for base_data_enum in time_slice {
+            if let Some(mut position) = self.positions.get_mut(&base_data_enum.symbol().name){
+                booked_pnl += position.value_mut().update_base_data(&base_data_enum, time);
+                open_pnl += position.open_pnl;
+            }
         }
         self.open_pnl = open_pnl;
+        self.booked_pnl += booked_pnl;
     }
 }
 
@@ -368,7 +372,7 @@ pub struct Position {
     pub id: PositionId,
     pub symbol_info: SymbolInfo,
     account_currency: AccountCurrency,
-    brackets: Vec<ProtectiveOrder>
+    brackets: Option<Vec<ProtectiveOrder>>
 }
 //todo make it so stop loss and take profit can be attached to positions, then instead of updating in the market handler, those orders update in the position and auto cancel themselves when position closes
 impl Position {
@@ -383,11 +387,6 @@ impl Position {
         account_currency: AccountCurrency,
         brackets: Option<Vec<ProtectiveOrder>>
     ) -> Self {
-        let brackets = if let Some(brackets) = brackets {
-            brackets
-        } else {
-            vec![]
-        };
         Self {
             symbol_name,
             brokerage,
@@ -430,62 +429,135 @@ impl Position {
         self.quantity += quantity;
     }
 
-    pub fn update_base_data(&mut self, time_slice: &TimeSlice, time: &DateTime<Utc>) {
+    pub fn update_base_data(&mut self, base_data: &BaseDataEnum, time: &DateTime<Utc>) -> f64 {
         if self.is_closed {
-            return;
+            return 0.0;
         }
-        for base_data in time_slice {
-            if self.symbol_name != base_data.symbol().name {
-                continue;
+        let market_price = match base_data {
+            BaseDataEnum::Price(price) => {
+                self.highest_recoded_price = self.highest_recoded_price.max(price.price);
+                self.lowest_recoded_price = self.lowest_recoded_price.min(price.price);
+                self.open_pnl = calculate_pnl(&self.side, self.average_price, price.price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+                price.price
             }
-            match base_data {
-                BaseDataEnum::Price(price) => {
-                    self.highest_recoded_price = self.highest_recoded_price.max(price.price);
-                    self.lowest_recoded_price = self.lowest_recoded_price.min(price.price);
-                    self.open_pnl = calculate_pnl(&self.side, self.average_price, price.price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                }
-                BaseDataEnum::Candle(candle) => {
-                    self.highest_recoded_price = self.highest_recoded_price.max(candle.high);
-                    self.lowest_recoded_price = self.lowest_recoded_price.min(candle.low);
-                    self.open_pnl = calculate_pnl(&self.side, self.average_price, candle.close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                }
-                BaseDataEnum::QuoteBar(bar) => {
-                    match self.side {
-                        PositionSide::Long => {
-                            self.highest_recoded_price = self.highest_recoded_price.max(bar.ask_high);
-                            self.lowest_recoded_price = self.lowest_recoded_price.min(bar.ask_low);
-                            self.open_pnl = calculate_pnl(&self.side, self.average_price, bar.ask_close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                        }
-                        PositionSide::Short => {
-                            self.highest_recoded_price = self.highest_recoded_price.max(bar.bid_high);
-                            self.lowest_recoded_price = self.lowest_recoded_price.min(bar.bid_low);
-                            self.open_pnl = calculate_pnl(&self.side, self.average_price, bar.bid_close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                        }
+            BaseDataEnum::Candle(candle) => {
+                self.highest_recoded_price = self.highest_recoded_price.max(candle.high);
+                self.lowest_recoded_price = self.lowest_recoded_price.min(candle.low);
+                self.open_pnl = calculate_pnl(&self.side, self.average_price, candle.close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+                candle.close
+            }
+            BaseDataEnum::QuoteBar(bar) => {
+                match self.side {
+                    PositionSide::Long => {
+                        self.highest_recoded_price = self.highest_recoded_price.max(bar.ask_high);
+                        self.lowest_recoded_price = self.lowest_recoded_price.min(bar.ask_low);
+                        self.open_pnl = calculate_pnl(&self.side, self.average_price, bar.ask_close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+                        bar.ask_close
                     }
+                    PositionSide::Short => {
+                        self.highest_recoded_price = self.highest_recoded_price.max(bar.bid_high);
+                        self.lowest_recoded_price = self.lowest_recoded_price.min(bar.bid_low);
+                        self.open_pnl = calculate_pnl(&self.side, self.average_price, bar.bid_close, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+                        bar.bid_close
+                    }
+                }
 
-                }
-                BaseDataEnum::Tick(tick) => {
-                    self.highest_recoded_price = self.highest_recoded_price.max(tick.price);
-                    self.lowest_recoded_price = self.lowest_recoded_price.min(tick.price);
-                    self.open_pnl = calculate_pnl(&self.side, self.average_price, tick.price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                }
-                BaseDataEnum::Quote(quote) => {
-                    match self.side {
-                        PositionSide::Long => {
-                            self.highest_recoded_price = self.highest_recoded_price.max(quote.ask);
-                            self.lowest_recoded_price = self.lowest_recoded_price.min(quote.ask);
-                            self.open_pnl = calculate_pnl(&self.side, self.average_price, quote.ask, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                        }
-                        PositionSide::Short => {
-                            self.highest_recoded_price = self.highest_recoded_price.max(quote.bid);
-                            self.lowest_recoded_price = self.lowest_recoded_price.min(quote.bid);
-                            self.open_pnl = calculate_pnl(&self.side, self.average_price, quote.bid, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-                        }
+            }
+            BaseDataEnum::Tick(tick) => {
+                self.highest_recoded_price = self.highest_recoded_price.max(tick.price);
+                self.lowest_recoded_price = self.lowest_recoded_price.min(tick.price);
+                self.open_pnl = calculate_pnl(&self.side, self.average_price, tick.price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+                tick.price
+            }
+            BaseDataEnum::Quote(quote) => {
+                match self.side {
+                    PositionSide::Long => {
+                        self.highest_recoded_price = self.highest_recoded_price.max(quote.ask);
+                        self.lowest_recoded_price = self.lowest_recoded_price.min(quote.ask);
+                        self.open_pnl = calculate_pnl(&self.side, self.average_price, quote.ask, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+                        quote.ask
+                    }
+                    PositionSide::Short => {
+
+                        quote.bid
                     }
                 }
-                BaseDataEnum::Fundamental(_) => (),
+            }
+            BaseDataEnum::Fundamental(_) => panic!("Fundamentals shouldnt be here")
+        };
+        self.highest_recoded_price = self.highest_recoded_price.max(market_price);
+        self.lowest_recoded_price = self.lowest_recoded_price.min(market_price);
+        self.open_pnl = calculate_pnl(&self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+
+        let mut bracket_triggered = false;
+        if let Some(brackets) = &self.brackets {
+            'bracket_loop: for bracket in brackets {
+                match bracket {
+                    ProtectiveOrder::TakeProfit { price } => match self.side {
+                        PositionSide::Long => {
+                            if market_price >= *price {
+                                bracket_triggered = true;
+                                break 'bracket_loop;
+                            } else {
+                                bracket_triggered = false;
+                            }
+                        }
+                        PositionSide::Short => {
+                            if market_price <= *price {
+                                bracket_triggered = true;
+                                break 'bracket_loop;
+                            } else {
+                                bracket_triggered = false;
+                            }
+                        }
+                    },
+                    ProtectiveOrder::StopLoss { price } => match self.side {
+                        PositionSide::Long => {
+                            if market_price <= *price {
+                                bracket_triggered = true;
+                                break 'bracket_loop;
+                            } else {
+                                bracket_triggered = false;
+                            }
+                        }
+                        PositionSide::Short => {
+                            if market_price >= *price {
+                                bracket_triggered = true;
+                                break 'bracket_loop;
+                            } else {
+                                bracket_triggered = false;
+                            }
+                        }
+                    },
+                    ProtectiveOrder::TrailingStopLoss { price, trail_value } => match self.side {
+                        PositionSide::Long => {
+                            if market_price <= *price {
+                                bracket_triggered = true;
+                                break 'bracket_loop;
+                            } else {
+                                bracket_triggered = false;
+                            }
+                        }
+                        PositionSide::Short => {
+                            if market_price >= *price {
+                                bracket_triggered = true;
+                                break 'bracket_loop;
+                            } else {
+                                bracket_triggered = false;
+                            }
+                        }
+                    },
+                }
             }
         }
+        if bracket_triggered {
+            let new_pnl = self.open_pnl;
+            self.booked_pnl += new_pnl;
+            self.open_pnl = 0.0;
+            self.is_closed = true;
+            return new_pnl;
+        }
+        0.0
     }
 }
 
