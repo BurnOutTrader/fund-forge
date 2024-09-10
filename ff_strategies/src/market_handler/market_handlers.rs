@@ -76,6 +76,14 @@ impl MarketHandler {
         self.last_time.read().await.clone()
     }
 
+    pub fn export_trades(&self, path: &str) {
+        for broker_map in self.ledgers.iter() {
+            for ledger in broker_map.iter() {
+                ledger.value().export_positions_to_csv(&path);
+            }
+        }
+    }
+
     /// only primary data gets to here, so we can update our order books etc
     pub(crate) async fn on_data_update(&self, mode: StrategyMode, primary_data_receiver: Receiver<MarketHandlerUpdate>, event_sender: Sender<Option<EventTimeSlice>>) {
         match mode {

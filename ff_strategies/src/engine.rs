@@ -1,5 +1,5 @@
 use crate::interaction_handler::InteractionHandler;
-use crate::market_handler::market_handlers::{MarketHandler, MarketHandlerUpdate};
+use crate::market_handler::market_handlers::{MarketHandlerUpdate};
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
@@ -183,7 +183,7 @@ impl BackTestEngine {
                 //println!("Strategy Subscriptions: {:?}", strategy_subscriptions);
                 let primary_subscriptions = self.subscription_handler.primary_subscriptions().await;
                 //println!("Primary Subscriptions: {:?}", primary_subscriptions);
-                let mut month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
+                let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
                         eprintln!("Engine: Error getting historical data for: {:?}: {:?}", start, e);

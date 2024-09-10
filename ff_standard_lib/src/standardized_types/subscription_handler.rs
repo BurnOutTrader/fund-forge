@@ -244,7 +244,7 @@ impl SubscriptionHandler {
     }
 
     pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> Option<TimeSlice> {
-        let futures: Vec<_> = self.symbol_subscriptions.iter().map(|(symbol_handler)| {
+        let futures: Vec<_> = self.symbol_subscriptions.iter().map(|symbol_handler| {
             let time = time.clone();
             // Creating async blocks that will run concurrently
             async move {
@@ -346,7 +346,6 @@ pub struct SymbolSubscriptionHandler {
     primary_subscription: RwLock<DataSubscription>,
     /// The secondary subscriptions are consolidators that are used to consolidate data from the primary subscription.
     secondary_subscriptions: DashMap<DataSubscription, ConsolidatorEnum>,
-    symbol: Symbol,
     subscription_event_buffer: RwLock<Vec<DataSubscriptionEvent>>,
     is_warmed_up: AtomicBool,
     primary_history: RwLock<RollingWindow<BaseDataEnum>>,
@@ -360,10 +359,9 @@ impl SymbolSubscriptionHandler {
         warm_up_to: DateTime<Utc>,
         strategy_mode: StrategyMode,
     ) -> Self {
-        let mut handler = SymbolSubscriptionHandler {
+        let handler = SymbolSubscriptionHandler {
             primary_subscription: RwLock::new(primary_subscription.clone()),
             secondary_subscriptions: Default::default(),
-            symbol: primary_subscription.symbol.clone(),
             subscription_event_buffer: Default::default(),
             is_warmed_up: AtomicBool::new(is_warmed_up),
             primary_history: RwLock::new(RollingWindow::new(history_to_retain)),

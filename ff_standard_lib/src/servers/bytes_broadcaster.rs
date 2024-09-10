@@ -60,7 +60,7 @@ impl BytesBroadcaster {
         for subscriber in &self.subscribers {
             match subscriber.value().send(source_data).await {
                 Ok(_) => {}
-                Err(e) => {},
+                Err(_e) => {},
             }
         }
 

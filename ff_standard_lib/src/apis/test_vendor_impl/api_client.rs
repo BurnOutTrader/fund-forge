@@ -99,7 +99,7 @@ impl VendorApiResponse for TestVendorApi {
 
     async fn decimal_accuracy_response(
         &self,
-        symbol_name: SymbolName,
+        _symbol_name: SymbolName,
     ) -> Result<SynchronousResponseType, FundForgeError> {
         Ok(SynchronousResponseType::DecimalAccuracy(5))
     }
@@ -150,7 +150,7 @@ impl BrokerApiResponse for TestVendorApi {
 
     async fn symbol_info_response(&self, symbol_name: SymbolName) -> Result<SynchronousResponseType, FundForgeError> {
         match symbol_name {
-            _ => Ok(SynchronousResponseType::SymbolInfo(SymbolInfo::new(symbol_name, AccountCurrency::USD, 0.01, 0.00001)))
+            _ => Ok(SynchronousResponseType::SymbolInfo(SymbolInfo::new(symbol_name, AccountCurrency::USD, 0.00001, 0.00001)))
         }
     }
 }

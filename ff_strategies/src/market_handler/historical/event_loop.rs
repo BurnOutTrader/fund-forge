@@ -38,7 +38,7 @@ pub async fn historical_engine(
                     let mut updates = vec![];
 
                     // update ledgers concurrently per brokerage, this slows us down when only testing 1 ledger, but when using multi broker it will be much faster than running as a single task.
-                    for mut brokerage_map in ledgers.iter() {
+                    for brokerage_map in ledgers.iter() {
                         let brokerage_map_ref = brokerage_map.value().clone();
                         let time_slice_ref = time_slice.clone();
                         let last_time_ref = last_time_utc.clone();

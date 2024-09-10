@@ -23,10 +23,10 @@ use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, ProtectiveOrder};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use ff_standard_lib::standardized_types::strategy_events::{
-    EventTimeSlice, StrategyEvent, StrategyInteractionMode,
+    EventTimeSlice, StrategyInteractionMode,
 };
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::standardized_types::{OwnerId, Price};
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
@@ -570,6 +570,10 @@ impl FundForgeStrategy {
 
     pub async fn print_ledgers(&self) -> Vec<String> {
         self.market_event_handler.process_ledgers().await
+    }
+
+    pub fn export_trades(&self, folder: &str) {
+        self.market_event_handler.export_trades(folder);
     }
 
     /// Generates a unique identifier for the owner of the strategy based on the executable's name.

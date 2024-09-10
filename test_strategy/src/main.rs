@@ -1,4 +1,3 @@
-use std::ops::Add;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use ff_standard_lib::apis::vendor::DataVendor;
@@ -38,12 +37,12 @@ async fn main() {
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2023, 01, 15)
+        NaiveDate::from_ymd_opt(2023, 01, 6)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
-        Duration::days(2), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
+        Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![DataSubscription::new_custom(
                 "AUD-CAD".to_string(),
                 DataVendor::Test,
@@ -136,7 +135,7 @@ pub async fn on_data_received(
 
     let brokerage = Brokerage::Test;
     let symbol_name_1 = SymbolName::from("AUD-CAD");
-    let symbol_name_2 = SymbolName::from("AUD-USD");
+    let _symbol_name_2 = SymbolName::from("AUD-USD");
     let account = AccountId::from("1");
     let account_2 = AccountId::from("2");
     let mut warmup_complete = false;
@@ -152,7 +151,7 @@ pub async fn on_data_received(
                 }
                 StrategyEvent::TimeSlice(_owner , time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
-                    'base_data_loop: for base_data in &time_slice {
+                    for base_data in &time_slice {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::Price(_) => {}
@@ -170,7 +169,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
-                                    let last_bar = match history.get(1) {
+                                    let _last_bar = match history.get(1) {
                                         None => {
                                             println!("Strategy: No history");
                                             continue;
@@ -186,13 +185,13 @@ pub async fn on_data_received(
                                     if quotebar.bid_close > quotebar.bid_open
                                         && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
-                                        let entry_order_id = strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long"), None).await;
+                                        let _entry_order_id = strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 100000, String::from("Enter Long"), None).await;
                                     }
                                     else if quotebar.bid_close < quotebar.bid_open
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
                                         && strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
-                                        let exit_order_id = strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Exit Long")).await;
+                                        let _exit_order_id = strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 100000, String::from("Exit Long")).await;
                                     }
                                 } else if !quotebar.is_closed {
                                     //println!("Open bar time: {}", time)
@@ -227,6 +226,7 @@ pub async fn on_data_received(
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
                 StrategyEvent::StrategyControls(_, _, _) => {}
                 StrategyEvent::ShutdownEvent(_, _) => {
+                    strategy.export_trades(&String::from("/Users/kevmonaghan/RustroverProjects/Test Trade Exports"));
                     let ledgers = strategy.print_ledgers().await;
                     for ledger in ledgers {
                         println!("{:?}", ledger);
@@ -263,7 +263,7 @@ pub async fn on_data_received(
 
                     // we could also get the automanaged indicator values from teh strategy at any time.
                 }
-                StrategyEvent::PositionEvents(event) => {
+                StrategyEvent::PositionEvents(_event) => {
 
                 }
             }

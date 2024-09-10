@@ -1,19 +1,18 @@
-use async_std::task::block_on;
+use std::fs::create_dir_all;
+use std::path::Path;
 use chrono::{DateTime, Utc};
-use crate::apis::brokerage::client_requests::ClientSideBrokerage;
 use crate::apis::brokerage::Brokerage;
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::data_server_messaging::FundForgeError;
-use crate::standardized_types::enums::{OrderSide, PositionSide};
+use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::{SymbolName};
-use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
 use dashmap::DashMap;
-use iso_currency::Currency;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::helpers::decimal_calculators::{round_to_decimals, round_to_tick_size};
+use crate::helpers::decimal_calculators::{round_to_tick_size};
 use crate::standardized_types::orders::orders::ProtectiveOrder;
 use crate::standardized_types::Price;
+use csv::Writer;
+use serde_derive::Serialize;
 
 // B
 pub type AccountId = String;
@@ -91,9 +90,65 @@ impl Ledger {
         };
         ledger
     }
+
+    // Function to export closed positions to CSV
+    pub fn export_positions_to_csv(&self, folder: &str) {
+        // Create the folder if it does not exist
+        if let Err(e) = create_dir_all(folder) {
+            eprintln!("Failed to create directory {}: {}", folder, e);
+            return;
+        }
+
+        // Get current date in desired format
+        let date = Utc::now().format("%Y-%m-%d").to_string();
+
+        // Use brokerage and account ID to format the filename
+        let brokerage = self.brokerage.to_string(); // Assuming brokerage can be formatted as string
+        let file_name = format!("{}/{}_{}_{}.csv", folder, brokerage, self.account_id, date);
+
+        // Create a writer for the CSV file
+        let file_path = Path::new(&file_name);
+        match Writer::from_path(file_path) {
+            Ok(mut wtr) => {
+                // Write headers once
+                if let Err(e) = wtr.write_record(&[
+                    "Symbol Name",
+                    "Side",
+                    "Quantity",
+                    "Average Price",
+                    "Booked PnL",
+                    "Highest Recorded Price",
+                    "Lowest Recorded Price",
+                ]) {
+                    eprintln!("Failed to write headers to {}: {}", file_path.display(), e);
+                    return;
+                }
+
+                // Iterate over all closed positions and write their data
+                for entry in self.positions_closed.iter() {
+                    for position in entry.value() {
+                        let export = position.to_export(); // Assuming `to_export` provides a suitable data representation
+                        if let Err(e) = wtr.serialize(export) {
+                            eprintln!("Failed to write position data to {}: {}", file_path.display(), e);
+                        }
+                    }
+                }
+
+                // Ensure all data is flushed to the file
+                if let Err(e) = wtr.flush() {
+                    eprintln!("Failed to flush CSV writer for {}: {}", file_path.display(), e);
+                } else {
+                    println!("Successfully exported all positions to {}", file_path.display());
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to create CSV writer for {}: {}", file_path.display(), e);
+            }
+        }
+    }
 }
 
-pub(crate) mod HistoricalLedgers {
+pub(crate) mod historical_ledgers {
     use chrono::{DateTime, Utc};
     use dashmap::DashMap;
     use crate::apis::brokerage::Brokerage;
@@ -304,9 +359,10 @@ pub(crate) mod HistoricalLedgers {
             let (_, mut old_position) = self.positions.remove(symbol_name).unwrap();
             let margin_freed = self
                 .brokerage
-                .margin_required_historical(symbol_name.clone(), old_position.quantity)
+                .margin_required_historical(symbol_name.clone(), old_position.quantity_open)
                 .await;
 
+            old_position.quantity_closed += old_position.quantity_open;
             old_position.is_closed = true;
             old_position.booked_pnl += old_position.open_pnl;
             self.booked_pnl += old_position.open_pnl;
@@ -387,7 +443,8 @@ pub struct Position {
     pub symbol_name: SymbolName,
     pub brokerage: Brokerage,
     pub side: PositionSide,
-    pub quantity: u64,
+    pub quantity_open: u64,
+    pub quantity_closed: u64,
     pub average_price: Price,
     pub open_pnl: f64,
     pub booked_pnl: f64,
@@ -416,7 +473,8 @@ impl Position {
             symbol_name,
             brokerage,
             side,
-            quantity,
+            quantity_open: quantity,
+            quantity_closed: 0,
             average_price,
             open_pnl: 0.0,
             booked_pnl: 0.0,
@@ -429,22 +487,53 @@ impl Position {
             brackets
         }
     }
+
+    fn to_export(&self) -> PositionExport {
+        PositionExport {
+            symbol_name: self.symbol_name.to_string(),
+            side: self.side.to_string(),
+            quantity: self.quantity_closed,
+            average_price: self.average_price,
+            booked_pnl: round_to_tick_size(self.booked_pnl, self.symbol_info.tick_size),
+            highest_recoded_price: self.highest_recoded_price,
+            lowest_recoded_price: self.lowest_recoded_price,
+        }
+    }
 }
 
 //todo, later I will move this to be for historical only
-fn calculate_pnl(side: &PositionSide, entry_price: f64, market_price: f64, tick_size: f64, value_per_tick: f64, quantity: u64, base_currency: &AccountCurrency, account_currency: &AccountCurrency, time: &DateTime<Utc>) -> f64 {
-    let pnl = match side {
-        PositionSide::Long => round_to_tick_size(market_price - entry_price, tick_size) * (value_per_tick * quantity as f64),
-        PositionSide::Short => round_to_tick_size(entry_price - market_price, tick_size) * (value_per_tick * quantity as f64),
+fn calculate_pnl(
+    side: &PositionSide,
+    entry_price: f64,
+    market_price: f64,
+    tick_size: f64,
+    value_per_tick: f64,
+    quantity: u64,
+    _base_currency: &AccountCurrency,
+    _account_currency: &AccountCurrency,
+    _time: &DateTime<Utc>
+) -> f64 {
+    // Calculate the price difference based on position side
+    let price_difference = match side {
+        PositionSide::Long => market_price - entry_price,   // Profit if market price > entry price
+        PositionSide::Short => entry_price - market_price, // Profit if entry price > market price
     };
 
-    // Placeholder for currency conversion if needed
+    // Round the price difference to the nearest tick size
+    let rounded_difference = round_to_tick_size(price_difference, tick_size);
+
+    // Calculate PnL by scaling with value per tick and quantity
+    let pnl = rounded_difference * (value_per_tick * quantity as f64);
+
+    // Placeholder for currency conversion if the base currency differs from account currency
     // let pnl = convert_currency(pnl, base_currency, account_currency, time);
+
     pnl
 }
 
-pub(crate) mod HistoricalPosition {
+pub(crate) mod historical_position {
     use chrono::{DateTime, Utc};
+    use crate::helpers::decimal_calculators::round_to_tick_size;
     use crate::standardized_types::accounts::ledgers::{calculate_pnl, Position};
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
@@ -455,10 +544,11 @@ pub(crate) mod HistoricalPosition {
 
         pub(crate) fn reduce_position_size(&mut self, market_price: Price, quantity: u64, time: &DateTime<Utc>) -> f64 {
             let booked_pnl = calculate_pnl(&self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
-            self.booked_pnl = booked_pnl;
+            self.booked_pnl += booked_pnl;
             self.open_pnl -= booked_pnl;
-            self.quantity -= quantity;
-            self.is_closed = self.quantity <= 0;
+            self.quantity_open -= quantity;
+            self.quantity_closed += quantity;
+            self.is_closed = self.quantity_open <= 0;
             if self.is_closed {
                 self.open_pnl = 0.0;
             }
@@ -468,13 +558,13 @@ pub(crate) mod HistoricalPosition {
         pub(crate) fn add_to_position(&mut self, market_price: Price, quantity: u64, time: &DateTime<Utc>) {
             // If adding to the short position, calculate the new average price
             self.average_price =
-                ((self.quantity as f64 * self.average_price) + (quantity as f64 * market_price))
-                    / (self.quantity + quantity) as f64;
-
-            self.open_pnl =  calculate_pnl(&self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+               round_to_tick_size(((self.quantity_open as f64 * self.average_price) + (quantity as f64 * market_price))
+                    / (self.quantity_open + quantity) as f64, self.symbol_info.tick_size);
 
             // Update the total quantity
-            self.quantity += quantity;
+            self.quantity_open += quantity;
+
+            self.open_pnl =  calculate_pnl(&self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity_open, &self.symbol_info.pnl_currency, &self.account_currency, time);
         }
 
         pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: &DateTime<Utc>) -> f64 {
@@ -501,7 +591,7 @@ pub(crate) mod HistoricalPosition {
             };
             self.highest_recoded_price = self.highest_recoded_price.max(market_price);
             self.lowest_recoded_price = self.lowest_recoded_price.min(market_price);
-            self.open_pnl = calculate_pnl(&self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity, &self.symbol_info.pnl_currency, &self.account_currency, time);
+            self.open_pnl = calculate_pnl(&self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity_open, &self.symbol_info.pnl_currency, &self.account_currency, time);
 
             let mut bracket_triggered = false;
             if let Some(brackets) = &self.brackets {
@@ -512,16 +602,12 @@ pub(crate) mod HistoricalPosition {
                                 if market_price >= *price {
                                     bracket_triggered = true;
                                     break 'bracket_loop;
-                                } else {
-                                    bracket_triggered = false;
                                 }
                             }
                             PositionSide::Short => {
                                 if market_price <= *price {
                                     bracket_triggered = true;
                                     break 'bracket_loop;
-                                } else {
-                                    bracket_triggered = false;
                                 }
                             }
                         },
@@ -530,16 +616,12 @@ pub(crate) mod HistoricalPosition {
                                 if market_price <= *price {
                                     bracket_triggered = true;
                                     break 'bracket_loop;
-                                } else {
-                                    bracket_triggered = false;
                                 }
                             }
                             PositionSide::Short => {
                                 if market_price >= *price {
                                     bracket_triggered = true;
                                     break 'bracket_loop;
-                                } else {
-                                    bracket_triggered = false;
                                 }
                             }
                         },
@@ -548,8 +630,6 @@ pub(crate) mod HistoricalPosition {
                                 if market_price <= price {
                                     bracket_triggered = true;
                                     break 'bracket_loop;
-                                } else {
-                                    bracket_triggered = false;
                                 }
                                 if market_price > price + trail_value {
                                     price += trail_value;
@@ -559,8 +639,6 @@ pub(crate) mod HistoricalPosition {
                                 if market_price >= price {
                                     bracket_triggered = true;
                                     break 'bracket_loop;
-                                } else {
-                                    bracket_triggered = false;
                                 }
                                 if market_price < price + trail_value {
                                     price -= trail_value;
@@ -571,10 +649,12 @@ pub(crate) mod HistoricalPosition {
                 }
             }
             if bracket_triggered {
-                let new_pnl = self.open_pnl;
+                let new_pnl =  self.open_pnl;
                 self.booked_pnl += new_pnl;
                 self.open_pnl = 0.0;
                 self.is_closed = true;
+                self.quantity_closed += self.quantity_open;
+                self.quantity_open = 0;
                 return new_pnl;
             }
             0.0
@@ -610,4 +690,15 @@ impl Bytes<Self> for AccountInfo {
         let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
         vec.into()
     }
+}
+
+#[derive(Serialize)]
+struct PositionExport {
+    symbol_name: String,
+    side: String,
+    quantity: u64,
+    average_price: f64,
+    booked_pnl: f64,
+    highest_recoded_price: f64,
+    lowest_recoded_price: f64,
 }

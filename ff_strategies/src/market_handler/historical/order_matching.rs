@@ -18,7 +18,7 @@ pub async fn backtest_matching_engine(
     last_price: Arc<DashMap<SymbolName, Price>>,
     ledgers: Arc<DashMap<Brokerage, Arc<DashMap<AccountId, Ledger>>>>,
     last_time: Arc<RwLock<DateTime<Utc>>>,
-    mut order_cache: Arc<RwLock<Vec<Order>>>,
+    order_cache: Arc<RwLock<Vec<Order>>>,
 ) -> Option<EventTimeSlice> {
     let mut order_cache= order_cache.write().await;
     if order_cache.len() == 0 {
@@ -37,7 +37,7 @@ pub async fn backtest_matching_engine(
         ));
     };
 
-    let reject_order = |reason: String, mut order: Order, last_time_utc: DateTime<Utc>, market_price: Price, events: &mut Vec<StrategyEvent>| {
+    let reject_order = |reason: String, mut order: Order, last_time_utc: DateTime<Utc>, events: &mut Vec<StrategyEvent>| {
         order.state = OrderState::Rejected(reason.clone());
         order.time_created_utc = last_time_utc.to_string();
         events.push(StrategyEvent::OrderEvents(
@@ -47,7 +47,7 @@ pub async fn backtest_matching_engine(
     };
 
     let mut remaining_orders: Vec<Order> = Vec::new();
-    let accept_order = |mut order: Order, last_time_utc: DateTime<Utc>, market_price: Price, events: &mut Vec<StrategyEvent>, remaining_orders: &mut Vec<Order>| {
+    let accept_order = |mut order: Order, last_time_utc: DateTime<Utc>, events: &mut Vec<StrategyEvent>, remaining_orders: &mut Vec<Order>| {
         order.state = OrderState::Accepted;
         order.time_created_utc = last_time_utc.to_string();
         events.push(StrategyEvent::OrderEvents(
@@ -134,7 +134,7 @@ pub async fn backtest_matching_engine(
                     is_fill_triggered = true;
                 } else {
                     let reason = "No long position to exit".to_string();
-                    reject_order(reason, order.clone(), last_time_utc, market_price, &mut events);
+                    reject_order(reason, order.clone(), last_time_utc, &mut events);
                     continue 'order_loop;
                 }
             }
@@ -143,7 +143,7 @@ pub async fn backtest_matching_engine(
                     is_fill_triggered = true;
                 } else {
                     let reason = "No short position to exit".to_string();
-                    reject_order(reason, order.clone(), last_time_utc, market_price, &mut events);
+                    reject_order(reason, order.clone(), last_time_utc, &mut events);
                     continue 'order_loop;
                 }
             }
@@ -158,7 +158,7 @@ pub async fn backtest_matching_engine(
                 }
                 if !updated {
                     let reason = "No position for update brackets".to_string();
-                    reject_order(reason, order.clone(), last_time_utc, market_price, &mut events);
+                    reject_order(reason, order.clone(), last_time_utc, &mut events);
                     continue 'order_loop;
                 }
             }
@@ -166,10 +166,10 @@ pub async fn backtest_matching_engine(
         if is_fill_triggered {
                 match account_ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc, brackets).await {
                     Ok(_) => fill_order(order.clone(), last_time_utc, market_price, &mut events),
-                    Err(e) => reject_order(e.to_string(), order.clone(), last_time_utc, market_price, &mut events)
+                    Err(e) => reject_order(e.to_string(), order.clone(), last_time_utc, &mut events)
                 }
         } else {
-            accept_order(order.clone(), last_time_utc, market_price, &mut events, &mut remaining_orders);
+            accept_order(order.clone(), last_time_utc, &mut events, &mut remaining_orders);
         }
     }
 

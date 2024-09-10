@@ -14,7 +14,7 @@ pub fn divide_f64(dividend: f64, divisor: f64) -> f64 {
     result.to_f64().expect("Error converting result to f64")
 }
 
-pub fn round_to_decimals(value: f64, decimals: u64) -> f64 {
+pub fn round_to_decimals(value: f64, decimals: u64) -> f64 { //todo fix using rust decimal, definitely not working properly
     let factor = 10f64.powi(decimals as i32);
     let rounded_value = (value * factor).round() / factor;
     let rounded_str = format!("{:.10}", rounded_value); // Convert to string with sufficient precision
@@ -22,9 +22,9 @@ pub fn round_to_decimals(value: f64, decimals: u64) -> f64 {
     truncated_str.parse::<f64>().unwrap_or(rounded_value) // Convert back to f64
 }
 
-pub fn round_to_tick_size(value: f64, tick_size: f64) -> f64 {
+pub fn round_to_tick_size(value: f64, tick_size: f64) -> f64 { //todo fix using rust decimal, definitely not working properly
     let rounded_value = (value / tick_size).round() * tick_size;
-    let rounded_str = format!("{:.10}", rounded_value); // Convert to string with sufficient precision
+    let rounded_str = format!("{:.20}", rounded_value); // Convert to string with sufficient precision
     let truncated_str = rounded_str.trim_end_matches('0').trim_end_matches('.'); // Remove trailing zeros and decimal point if necessary
     truncated_str.parse::<f64>().unwrap_or(rounded_value) // Convert back to f64
 }
@@ -60,30 +60,6 @@ pub fn divide_decimal_by_usize(numerator: Decimal, denominator: usize) -> f64 {
     let result = numerator / denominator_decimal;
     result.to_f64().unwrap_or_default() // Using default for f64 which is 0.0
 }
-
-/*
-pub fn calculate_weighted_average_price(orders: &BTreeMap<OrderId, Order>) -> f64 {
-
-    let mut total_quantity = Decimal::new(0, 0);
-    let mut weighted_price_total = Decimal::new(0, 0);
-
-    for order in orders.values() {
-        if let Some(price) = order.average_fill_price {
-            let price_decimal = Decimal::from_f64(price).unwrap_or_default();  // Safely convert f64 to Decimal
-            let quantity_decimal = Decimal::from(order.quantity_filled);      // Convert u64 to Decimal directly
-
-            weighted_price_total = weighted_price_total + price_decimal * quantity_decimal;
-            total_quantity = total_quantity + quantity_decimal;
-        }
-    }
-
-    if total_quantity > Decimal::zero() {
-        let average_price = weighted_price_total / total_quantity;
-        average_price.to_f64().unwrap_or(0.0)  // Safely convert Decimal back to f64
-    } else {
-        0.0  // Return 0.0 if no quantity is filled to avoid division by zero
-    }
-}*/
 
 #[cfg(test)]
 mod tests {

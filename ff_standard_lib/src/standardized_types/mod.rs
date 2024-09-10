@@ -4,7 +4,6 @@ pub mod data_server_messaging;
 pub mod enums;
 pub mod indicators;
 pub mod orders;
-pub mod products;
 pub mod rolling_window;
 pub mod strategy_events;
 pub mod subscription_handler;
