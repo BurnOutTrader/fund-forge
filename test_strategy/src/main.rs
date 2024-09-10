@@ -10,9 +10,7 @@ use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, Strateg
 use ff_standard_lib::standardized_types::strategy_events::{
     EventTimeSlice, StrategyEvent, StrategyInteractionMode,
 };
-use ff_standard_lib::standardized_types::subscriptions::{
-    CandleType, DataSubscription,
-};
+use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
@@ -48,11 +46,19 @@ async fn main() {
         vec![DataSubscription::new_custom(
                 "AUD-CAD".to_string(),
                 DataVendor::Test,
-                Resolution::Minutes(15),
+                Resolution::Minutes(3),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
+             DataSubscription::new_custom(
+                 "AUD-USD".to_string(),
+                 DataVendor::Test,
+                 Resolution::Minutes(3),
+                 BaseDataType::QuoteBars,
+                 MarketType::Forex,
+                 CandleType::CandleStick,
+             ),
              /*DataSubscription::new_custom(
                  "AUD-CAD".to_string(),
                  DataVendor::Test,
@@ -128,8 +134,10 @@ pub async fn on_data_received(
     strategy.indicator_subscribe(heikin_atr_20).await;*/
 
     let brokerage = Brokerage::Test;
+    let symbol_name_1 = SymbolName::from("AUD-CAD");
+    let symbol_name_2 = SymbolName::from("AUD-USD");
     let account = AccountId::from("1");
-
+    let account_2 = AccountId::from("2");
     let mut warmup_complete = false;
     let mut count = 0;
     let mut history : RollingWindow<QuoteBar> = RollingWindow::new(10);
@@ -177,10 +185,16 @@ pub async fn on_data_received(
                                         Some(bar) => bar
                                     };*/
 
+                                    let account = match quotebar.symbol.name == symbol_name_1 {
+                                        true => &account,
+                                        false => &account_2
+                                    };
+
                                     if quotebar.bid_close > last_bar.bid_high
                                         //&& last_bar.bid_close > two_bars_ago.bid_high //todo if no positions, then the history is not working
                                         && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
+
                                         strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long"), None).await;
                                     }
                                     else if quotebar.bid_close < last_bar.bid_low

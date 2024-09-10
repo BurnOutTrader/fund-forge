@@ -344,17 +344,18 @@ impl Ledger {
         let mut open_pnl = 0.0;
         let mut booked_pnl = 0.0;
         for base_data_enum in time_slice {
-            if let Some(mut position) = self.positions.get_mut(&base_data_enum.symbol().name){
-                booked_pnl += position.value_mut().update_base_data(&base_data_enum, time);
+            let data_symbol_name = &base_data_enum.symbol().name;
+            if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
+                booked_pnl += position.update_base_data(&base_data_enum, time);
                 open_pnl += position.open_pnl;
+
                 if position.is_closed {
-                    let closed_position = position.value().clone();
-                    self.positions.remove(&position.symbol_name);
-                    if let Some(mut closed_positions) = self.positions_closed.get_mut(&position.symbol_name) {
-                        closed_positions.value_mut().push(closed_position);
-                    } else {
-                        self.positions_closed.insert(position.symbol_name.clone(), vec![closed_position]);
-                    }
+                    // Move the position to the closed positions map
+                   let (symbol_name, position) = self.positions.remove(data_symbol_name).unwrap();
+                    self.positions_closed
+                        .entry(symbol_name)
+                        .or_insert_with(Vec::new)
+                        .push(position);
                 }
             }
         }
