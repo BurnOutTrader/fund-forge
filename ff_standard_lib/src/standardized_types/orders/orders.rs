@@ -131,16 +131,11 @@ impl Order {
         side: OrderSide,
         tag: String,
         account_id: AccountId,
+        order_id: OrderId,
         time: DateTime<Utc>,
     ) -> Self {
         Order {
-            id: format!(
-                "{}-{}-{}-{}",
-                brokerage,
-                symbol_name,
-                time.timestamp_millis(),
-                side
-            ),
+            id:order_id,
             owner_id,
             symbol_name,
             brokerage,
@@ -153,7 +148,7 @@ impl Order {
             order_type: OrderType::Market,
             time_in_force: TimeInForce::FOK,
             tag,
-            time_created_utc: "".to_string(),
+            time_created_utc: time.to_string(),
             time_filled_utc: None,
             state: OrderState::Created,
             fees: 0.0,
@@ -169,16 +164,11 @@ impl Order {
         quantity: u64,
         tag: String,
         account_id: AccountId,
+        order_id: OrderId,
         time: DateTime<Utc>,
     ) -> Self {
         Order {
-            id: format!(
-                "{}-{}-{}-{}",
-                brokerage,
-                symbol_name,
-                time.timestamp_millis(),
-                OrderSide::Sell
-            ),
+            id: order_id,
             owner_id,
             symbol_name,
             brokerage,
@@ -207,16 +197,11 @@ impl Order {
         quantity: u64,
         tag: String,
         account_id: AccountId,
+        order_id: OrderId,
         time: DateTime<Utc>,
     ) -> Self {
         Order {
-            id: format!(
-                "{}-{}-{}-{}",
-                brokerage,
-                symbol_name,
-                time.timestamp_millis(),
-                OrderSide::Buy
-            ),
+            id: order_id,
             owner_id,
             symbol_name,
             brokerage,
@@ -245,17 +230,12 @@ impl Order {
         quantity: u64,
         tag: String,
         account_id: AccountId,
+        order_id: OrderId,
         time: DateTime<Utc>,
         brackets: Option<Vec<ProtectiveOrder>>
     ) -> Self {
         Order {
-            id: format!(
-                "{}-{}-{}-{}",
-                brokerage,
-                symbol_name,
-                time.timestamp_millis(),
-                OrderSide::Buy
-            ),
+            id: order_id,
             owner_id,
             symbol_name,
             brokerage,
@@ -284,17 +264,12 @@ impl Order {
         quantity: u64,
         tag: String,
         account_id: AccountId,
+        order_id: OrderId,
         time: DateTime<Utc>,
         brackets: Option<Vec<ProtectiveOrder>>
     ) -> Self {
         Order {
-            id: format!(
-                "{}-{}-{}-{}",
-                brokerage,
-                symbol_name,
-                time.timestamp_millis(),
-                OrderSide::Sell
-            ),
+            id: order_id,
             owner_id,
             symbol_name,
             brokerage,
@@ -374,69 +349,19 @@ pub enum OrderChangeType {
 ///
 /// This enum is used to communicate changes in order status between the trading strategy, the user interface, and the brokerage connection. Each variant represents a specific type of update or state change that an order can experience.
 pub enum OrderUpdateEvent {
-    Accepted(Order),
+    Accepted(OrderId),
 
-    Filled(Order),
+    Filled(OrderId),
 
-    PartiallyFilled(Order),
+    PartiallyFilled(OrderId),
 
-    Cancelled(Order),
+    Cancelled(OrderId),
 
-    Rejected(Order),
+    Rejected{id: OrderId, reason: String},
 
-    Updated(Order),
+    Updated(OrderId),
 
-    UpdateRejected(Order),
-}
-
-impl OrderUpdateEvent {
-    pub fn order_id(&self) -> &OrderId {
-        match self {
-            OrderUpdateEvent::Accepted(order) => &order.id,
-            OrderUpdateEvent::Filled(order) => &order.id,
-            OrderUpdateEvent::PartiallyFilled(order) => &order.id,
-            OrderUpdateEvent::Cancelled(order) => &order.id,
-            OrderUpdateEvent::Rejected(order) => &order.id,
-            OrderUpdateEvent::Updated(order) => &order.id,
-            OrderUpdateEvent::UpdateRejected(order) => &order.id,
-        }
-    }
-
-    pub fn symbol_name(&self) -> &SymbolName {
-        match self {
-            OrderUpdateEvent::Accepted(order) => &order.symbol_name,
-            OrderUpdateEvent::Filled(order) => &order.symbol_name,
-            OrderUpdateEvent::PartiallyFilled(order) => &order.symbol_name,
-            OrderUpdateEvent::Cancelled(order) => &order.symbol_name,
-            OrderUpdateEvent::Rejected(order) => &order.symbol_name,
-            OrderUpdateEvent::Updated(order) => &order.symbol_name,
-            OrderUpdateEvent::UpdateRejected(order) => &order.symbol_name,
-        }
-    }
-
-    pub fn brokerage(&self) -> &Brokerage {
-        match self {
-            OrderUpdateEvent::Accepted(order) => &order.brokerage,
-            OrderUpdateEvent::Filled(order) => &order.brokerage,
-            OrderUpdateEvent::PartiallyFilled(order) => &order.brokerage,
-            OrderUpdateEvent::Cancelled(order) => &order.brokerage,
-            OrderUpdateEvent::Rejected(order) => &order.brokerage,
-            OrderUpdateEvent::Updated(order) => &order.brokerage,
-            OrderUpdateEvent::UpdateRejected(order) => &order.brokerage,
-        }
-    }
-
-    pub fn account_id(&self) -> &AccountId {
-        match self {
-            OrderUpdateEvent::Accepted(order) => &order.account_id,
-            OrderUpdateEvent::Filled(order) => &order.account_id,
-            OrderUpdateEvent::PartiallyFilled(order) => &order.account_id,
-            OrderUpdateEvent::Cancelled(order) => &order.account_id,
-            OrderUpdateEvent::Rejected(order) => &order.account_id,
-            OrderUpdateEvent::Updated(order) => &order.account_id,
-            OrderUpdateEvent::UpdateRejected(order) => &order.account_id,
-        }
-    }
+    UpdateRejected{id: OrderId, reason: String},
 }
 
 impl OrderUpdateEvent {

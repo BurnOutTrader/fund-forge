@@ -316,7 +316,7 @@ impl Ledger {
 
     pub async fn is_long(&self, symbol_name: &SymbolName) -> bool {
         if let Some(position) = self.positions.get(symbol_name) {
-            if position.side == PositionSide::Long {
+            if position.value().side == PositionSide::Long {
                 return true;
             }
         }
@@ -325,7 +325,7 @@ impl Ledger {
 
     pub async fn is_short(&self, symbol_name: &SymbolName) -> bool {
         if let Some(position) = self.positions.get(symbol_name) {
-            if position.side == PositionSide::Short {
+            if position.value().side == PositionSide::Short {
                 return true;
             }
         }

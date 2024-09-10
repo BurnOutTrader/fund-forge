@@ -23,7 +23,7 @@ impl<T: std::clone::Clone> RollingWindow<T> {
 
     pub fn add(&mut self, data: T) {
         // Add the latest data at the front
-        self.history.push(data);
+        self.history.insert(0, data);
 
         // Remove the oldest data if we exceed the desired number
         if self.history.len() > self.number {

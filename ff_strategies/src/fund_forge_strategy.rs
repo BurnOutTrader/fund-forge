@@ -20,7 +20,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::history::range_data;
 use ff_standard_lib::standardized_types::base_data::order_book::OrderBook;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
-use ff_standard_lib::standardized_types::orders::orders::{Order, ProtectiveOrder};
+use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, ProtectiveOrder};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use ff_standard_lib::standardized_types::strategy_events::{
     EventTimeSlice, StrategyEvent, StrategyInteractionMode,
@@ -28,7 +28,7 @@ use ff_standard_lib::standardized_types::strategy_events::{
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use ff_standard_lib::standardized_types::OwnerId;
+use ff_standard_lib::standardized_types::{OwnerId, Price};
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
 use std::env;
@@ -36,7 +36,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
-use crate::market_handlers::{MarketHandlerEnum, MarketHandlerUpdate};
+use crate::market_handlers::{MarketHandler, MarketHandlerUpdate};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -59,7 +59,7 @@ pub struct FundForgeStrategy {
 
     interaction_handler: Arc<InteractionHandler>,
 
-    market_event_handler: Arc<MarketHandlerEnum>,
+    market_event_handler: Arc<MarketHandler>,
 
     subscription_handler: Arc<SubscriptionHandler>,
 
@@ -127,7 +127,7 @@ impl FundForgeStrategy {
         let (market_event_sender, market_event_receiver) = mpsc::channel(1);
         let market_event_handler = match strategy_mode {
             StrategyMode::Backtest => {
-                MarketHandlerEnum::new(owner_id.clone(), start_time.to_utc(), strategy_mode.clone(), market_handler_update_receiver, market_event_sender).await
+                MarketHandler::new(owner_id.clone(), start_time.to_utc(), market_handler_update_receiver, market_event_sender, strategy_mode.clone()).await
             }
             StrategyMode::Live => panic!("Live mode not yet implemented"),
             StrategyMode::LivePaperTrading => panic!("Live paper mode not yet implemented"),
@@ -204,7 +204,15 @@ impl FundForgeStrategy {
         quantity: u64,
         tag: String,
         brackets: Option<Vec<ProtectiveOrder>>
-    ) {
+    ) -> OrderId {
+        let order_id = format!(
+            "ENL{}-{}-{}-{}-{}",
+            brokerage,
+            account_id,
+            symbol_name,
+            self.time_utc().await.timestamp_millis(),
+            OrderSide::Buy
+        );
         let order = Order::enter_long(
             self.owner_id.clone(),
             symbol_name,
@@ -212,10 +220,12 @@ impl FundForgeStrategy {
             quantity,
             tag,
             account_id,
+            order_id.clone(),
             self.time_utc().await,
             brackets
         );
         self.order_sender.send(MarketHandlerUpdate::Order(order)).await.unwrap();
+        order_id
     }
 
     pub async fn enter_short(
@@ -226,7 +236,15 @@ impl FundForgeStrategy {
         quantity: u64,
         tag: String,
         brackets: Option<Vec<ProtectiveOrder>>
-    ) {
+    ) -> OrderId {
+        let order_id = format!(
+            "ENS{}-{}-{}-{}-{}",
+            brokerage,
+            account_id,
+            symbol_name,
+            self.time_utc().await.timestamp_millis(),
+            OrderSide::Sell
+        );
         let order = Order::enter_short(
             self.owner_id.clone(),
             symbol_name,
@@ -234,10 +252,12 @@ impl FundForgeStrategy {
             quantity,
             tag,
             account_id,
+            order_id.clone(),
             self.time_utc().await,
             brackets
         );
         self.order_sender.send(MarketHandlerUpdate::Order(order)).await.unwrap();
+        order_id
     }
 
     pub async fn exit_long(
@@ -247,7 +267,15 @@ impl FundForgeStrategy {
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
-    ) {
+    ) -> OrderId {
+        let order_id = format!(
+            "EXL:{}-{}-{}-{}-{}",
+            brokerage,
+            account_id,
+            symbol_name,
+            self.time_utc().await.timestamp_millis(),
+            OrderSide::Sell
+        );
         let order = Order::exit_long(
             self.owner_id.clone(),
             symbol_name,
@@ -255,9 +283,11 @@ impl FundForgeStrategy {
             quantity,
             tag,
             account_id,
+            order_id.clone(),
             self.time_utc().await,
         );
         self.order_sender.send(MarketHandlerUpdate::Order(order)).await.unwrap();
+        order_id
     }
 
     pub async fn exit_short(
@@ -267,7 +297,15 @@ impl FundForgeStrategy {
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
-    ) {
+    ) -> OrderId {
+        let order_id = format!(
+            "EXS:{}-{}-{}-{}-{}",
+            brokerage,
+            account_id,
+            symbol_name,
+            self.time_utc().await.timestamp_millis(),
+            OrderSide::Buy
+        );
         let order = Order::exit_short(
             self.owner_id.clone(),
             symbol_name,
@@ -275,9 +313,11 @@ impl FundForgeStrategy {
             quantity,
             tag,
             account_id,
+            order_id.clone(),
             self.time_utc().await,
         );
         self.order_sender.send(MarketHandlerUpdate::Order(order)).await.unwrap();
+        order_id
     }
 
     pub async fn buy_market(
@@ -287,7 +327,15 @@ impl FundForgeStrategy {
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
-    ) {
+    ) -> OrderId {
+        let order_id = format!(
+            "BM:{}-{}-{}-{}-{}",
+            brokerage,
+            account_id,
+            symbol_name,
+            self.time_utc().await.timestamp_millis(),
+            OrderSide::Buy
+        );
         let order = Order::market_order(
             self.owner_id.clone(),
             symbol_name,
@@ -296,9 +344,11 @@ impl FundForgeStrategy {
             OrderSide::Buy,
             tag,
             account_id,
+            order_id.clone(),
             self.time_utc().await,
         );
         self.order_sender.send(MarketHandlerUpdate::Order(order)).await.unwrap();
+        order_id
     }
 
     pub async fn sell_market(
@@ -308,7 +358,15 @@ impl FundForgeStrategy {
         brokerage: Brokerage,
         quantity: u64,
         tag: String,
-    ) {
+    ) -> OrderId {
+        let order_id = format!(
+            "SM:{}-{}-{}-{}-{}",
+            brokerage,
+            account_id,
+            symbol_name,
+            self.time_utc().await.timestamp_millis(),
+            OrderSide::Sell
+        );
         let order = Order::market_order(
             self.owner_id.clone(),
             symbol_name,
@@ -317,9 +375,29 @@ impl FundForgeStrategy {
             OrderSide::Sell,
             tag,
             account_id,
+            order_id.clone(),
             self.time_utc().await,
         );
         self.order_sender.send(MarketHandlerUpdate::Order(order)).await.unwrap();
+        order_id
+    }
+
+    pub async fn cancel_order(&self, order_id: OrderId) {
+        let cancel_msg =  MarketHandlerUpdate::CancelOrder(order_id);
+        self.order_sender.send(cancel_msg).await.unwrap()
+    }
+
+    pub async fn last_price(&self, symbol_name: &SymbolName) -> Option<Price> {
+        self.market_event_handler.get_last_price(symbol_name).await
+    }
+
+    pub async fn update_order(&self, order_id: OrderId, order: Order) {
+        let cancel_msg =  MarketHandlerUpdate::UpdateOrder(order_id, order);
+        self.order_sender.send(cancel_msg).await.unwrap()
+    }
+
+    pub async fn orders_pending(&self) -> Vec<Order> {
+        self.market_event_handler.get_pending_orders().await
     }
 
     /// see the timed_event_handler.rs for more details

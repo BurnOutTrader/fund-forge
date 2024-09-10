@@ -1,5 +1,5 @@
 use crate::interaction_handler::InteractionHandler;
-use crate::market_handlers::{HistoricalMarketHandler, MarketHandlerUpdate, MarketHandlerEnum};
+use crate::market_handlers::{MarketHandler, MarketHandlerUpdate};
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
@@ -128,7 +128,6 @@ impl BackTestEngine {
         self.indicator_handler.set_warmup_complete().await;
         self.timed_event_handler.set_warmup_complete().await;
         let warmup_complete_event = vec![StrategyEvent::WarmUpComplete(self.owner_id.clone())];
-        //self.notify.notified().await;
         match self
             .strategy_event_sender
             .send(warmup_complete_event.clone())

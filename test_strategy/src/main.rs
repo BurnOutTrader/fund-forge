@@ -1,3 +1,4 @@
+use std::ops::Add;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use ff_standard_lib::apis::vendor::DataVendor;
@@ -169,7 +170,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
-                                    let last_bar = match history.get(2) {
+                                    let last_bar = match history.get(1) {
                                         None => {
                                             println!("Strategy: No history");
                                             continue;
@@ -177,31 +178,21 @@ pub async fn on_data_received(
                                         Some(bar) => bar
                                     };
 
-                          /*          let two_bars_ago = match history.get(2) {
-                                        None => {
-                                            println!("Strategy: No history");
-                                            continue;
-                                        },
-                                        Some(bar) => bar
-                                    };*/
-
-                                 /*   let account = match quotebar.symbol.name == symbol_name_1 {
-                                        true => &account,
+                                    let account = match quotebar.symbol.name == symbol_name_1 {
+                                        true => &account, //todo, make sure this doesnt stop order placement
                                         false => &account_2
-                                    };*/
+                                    };
 
-                                    if quotebar.bid_close > last_bar.bid_high
-                                        //&& last_bar.bid_close > two_bars_ago.bid_high //todo if no positions, then the history is not working
+                                    if quotebar.bid_close > quotebar.bid_open
                                         && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
-
-                                        strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long"), None).await;
+                                        let entry_order_id = strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Enter Long"), None).await;
                                     }
-                                    else if quotebar.bid_close < last_bar.bid_low
+                                    else if quotebar.bid_close < quotebar.bid_open
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
                                         && strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
-                                        strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Exit Long")).await;
+                                        let exit_order_id = strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 1000, String::from("Exit Long")).await;
                                     }
                                 } else if !quotebar.is_closed {
                                     //println!("Open bar time: {}", time)
@@ -225,7 +216,7 @@ pub async fn on_data_received(
                 }
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(_, event) => {
-                    println!("Strategy: Order Event: {:?}", event);
+                    println!("{}, Strategy: Order Event: {:?}", strategy.time_utc().await, event);
                 }
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
                 StrategyEvent::DataSubscriptionEvents(_, events, _) => {

@@ -4,7 +4,7 @@ use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Ledger};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::order_book::{OrderBook, OrderBookUpdate};
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
-use ff_standard_lib::standardized_types::orders::orders::{Order, OrderState, OrderType, OrderUpdateEvent, ProtectiveOrder};
+use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderState, OrderType, OrderUpdateEvent, ProtectiveOrder};
 use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
@@ -17,75 +17,16 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{RwLock};
 use tokio::task;
 
-
-pub(crate) enum MarketHandlerEnum {
-    BacktestDefault(HistoricalMarketHandler),
-    LiveDefault(Arc<HistoricalMarketHandler>), //ToDo Will use this later so that live strategies share an event handler.. the local platform will also use this event handler
-}
-
-impl MarketHandlerEnum {
-    pub async fn new(owner_id: OwnerId, start_time: DateTime<Utc>, mode: StrategyMode, primary_data_receiver: Receiver<MarketHandlerUpdate>, event_sender: Sender<Option<EventTimeSlice>>) -> Self {
-        match mode {
-            StrategyMode::Backtest => MarketHandlerEnum::BacktestDefault(
-                HistoricalMarketHandler::new(owner_id, start_time, primary_data_receiver, event_sender).await,
-            ),
-            _ => panic!("Live mode not supported yet"),
-        }
-    }
-
-    pub(crate) async fn last_time(&self) -> DateTime<Utc> {
-        match self {
-            MarketHandlerEnum::BacktestDefault(handler) => handler.last_time.read().await.clone(),
-            MarketHandlerEnum::LiveDefault(_) => {
-                panic!("Live mode should not use this function for time")
-            }
-        }
-    }
-
-    pub async fn process_ledgers(&self) -> Vec<String> {
-        match self {
-            MarketHandlerEnum::BacktestDefault(handler) => handler.process_ledgers().await,
-            MarketHandlerEnum::LiveDefault(handler) => handler.process_ledgers().await,
-        }
-    }
-
-    pub async fn get_order_book(&self, symbol_name: &SymbolName) -> Option<Arc<OrderBook>> {
-        match self {
-            MarketHandlerEnum::BacktestDefault(handler) => handler.get_order_book(symbol_name).await,
-            MarketHandlerEnum::LiveDefault(handler) => handler.get_order_book(symbol_name).await,
-        }
-    }
-
-    pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        match self {
-            MarketHandlerEnum::BacktestDefault(handler) => handler.is_long(brokerage, account_id, symbol_name).await,
-            MarketHandlerEnum::LiveDefault(handler) => handler.is_long(brokerage, account_id, symbol_name).await
-        }
-    }
-
-    pub async fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        match self {
-            MarketHandlerEnum::BacktestDefault(handler) =>handler.is_short(brokerage, account_id, symbol_name).await,
-            MarketHandlerEnum::LiveDefault(handler) => handler.is_short(brokerage, account_id, symbol_name).await,
-        }
-    }
-
-    pub async fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        match self {
-            MarketHandlerEnum::BacktestDefault(handler) => handler.is_flat(brokerage, account_id, symbol_name).await,
-            MarketHandlerEnum::LiveDefault(handler) => handler.is_flat(brokerage, account_id, symbol_name).await
-        }
-    }
-}
-
-
 pub enum MarketHandlerUpdate {
     Time(DateTime<Utc>),
     TimeSlice(TimeSlice),
-    Order(Order)
+    Order(Order),
+    CancelOrder(OrderId),
+    UpdateOrder(OrderId, Order)
 }
 
-pub(crate) struct HistoricalMarketHandler {
+
+pub(crate) struct MarketHandler {
     owner_id: String,
     /// The strategy receives its timeslices using strategy events, this is for other processes that need time slices and do not need synchronisation with the strategy
     /// These time slices are sent before they are sent to the strategy as events
@@ -96,24 +37,28 @@ pub(crate) struct HistoricalMarketHandler {
     ledgers: Arc<DashMap<Brokerage, Arc<DashMap<AccountId, Ledger>>>>,
     last_time: Arc<RwLock<DateTime<Utc>>>,
     order_cache: Arc<RwLock<Vec<Order>>>,
+    /// Links the local order ID to a broker order ID
+    id_map: Arc<DashMap<OrderId, String>>
 }
 
-impl HistoricalMarketHandler {
+impl MarketHandler {
     pub(crate) async fn new(
         owner_id: OwnerId,
         start_time: DateTime<Utc>,
         primary_data_receiver: Receiver<MarketHandlerUpdate>,
-        event_sender: Sender<Option<EventTimeSlice>>
+        event_sender: Sender<Option<EventTimeSlice>>,
+        mode: StrategyMode
     ) -> Self {
         let handler = Self {
             owner_id,
-            order_books:Arc::new(DashMap::new()),
+            order_books: Arc::new(DashMap::new()),
             last_price: Arc::new(DashMap::new()),
-            ledgers:Arc::new(DashMap::new()),
+            ledgers: Arc::new(DashMap::new()),
             last_time: Arc::new(RwLock::new(start_time)),
             order_cache: Arc::new(RwLock::new(Vec::new())),
+            id_map: Arc::new(DashMap::new())
         };
-        handler.on_data_update(primary_data_receiver, event_sender).await;
+        handler.on_data_update(mode, primary_data_receiver, event_sender).await;
         handler
     }
 
@@ -124,8 +69,23 @@ impl HistoricalMarketHandler {
         None
     }
 
+    pub async fn get_last_price(&self, symbol_name: &SymbolName) -> Option<Price> {
+        if let Some(price) = self.last_price.get(symbol_name) {
+            return Some(price.value().clone());
+        }
+        None
+    }
+
+    pub async fn get_pending_orders(&self) -> Vec<Order> {
+        self.order_cache.read().await.clone()
+    }
+
+    pub async fn last_time(&self) -> DateTime<Utc> {
+        self.last_time.read().await.clone()
+    }
+
     /// only primary data gets to here, so we can update our order books etc
-    pub(crate) async fn on_data_update(&self, primary_data_receiver: Receiver<MarketHandlerUpdate>, event_sender: Sender<Option<EventTimeSlice>>) {
+    pub(crate) async fn on_data_update(&self, mode: StrategyMode, primary_data_receiver: Receiver<MarketHandlerUpdate>, event_sender: Sender<Option<EventTimeSlice>>) {
         let mut primary_data_receiver = primary_data_receiver;
         let mut last_time = self.last_time.clone();
         let ledgers = self.ledgers.clone();
@@ -134,6 +94,13 @@ impl HistoricalMarketHandler {
         let event_sender = event_sender;
         let owner_id: OwnerId = self.owner_id.clone();
         let order_cache = self.order_cache.clone();
+        let engine_id_broker_id = self.id_map.clone();
+
+        let matching_engine = match mode {
+            StrategyMode::Backtest => backtest_matching_engine,
+            StrategyMode::Live => panic!("Not yet implemented"),
+            StrategyMode::LivePaperTrading => panic!("Not yet implemented")
+        };
 
         tokio::task::spawn(async move {
             let mut event_buffer = EventTimeSlice::new();
@@ -213,7 +180,7 @@ impl HistoricalMarketHandler {
                         });
                         updates.push(update_future);
                         join_all(updates).await;
-                        match backtest_matching_engine(&owner_id, order_books.clone(), last_price.clone(), ledgers.clone(), last_time.clone(), order_cache.clone()).await {
+                        match matching_engine(&owner_id, order_books.clone(), last_price.clone(), ledgers.clone(), last_time.clone(), order_cache.clone(), engine_id_broker_id.clone()).await {
                             None => {},
                             Some(event) => event_buffer.extend(event)
                         }
@@ -227,7 +194,48 @@ impl HistoricalMarketHandler {
                     }
                     MarketHandlerUpdate::Order(order) => {
                         order_cache.write().await.push(order);
-                        match backtest_matching_engine(&owner_id, order_books.clone(), last_price.clone(), ledgers.clone(), last_time.clone(), order_cache.clone()).await {
+                        match matching_engine(&owner_id, order_books.clone(), last_price.clone(), ledgers.clone(), last_time.clone(), order_cache.clone(), engine_id_broker_id.clone()).await {
+                            None => {},
+                            Some(event) => event_buffer.extend(event)
+                        }
+                    }
+                    MarketHandlerUpdate::CancelOrder(id) => {
+                        let mut existing_order: Option<Order> = None;
+                        let mut cache = order_cache.write().await;
+                        'order_search: for order in &*cache {
+                            if order.id == id {
+                                existing_order = Some(order.clone());
+                                break 'order_search;
+                            }
+                        }
+                        if let Some(order) = existing_order {
+                            cache.retain(|x | x.id != id );
+                            let cancel_event = StrategyEvent::OrderEvents(order.owner_id.clone(), OrderUpdateEvent::Cancelled(order.id));
+                            event_buffer.push(cancel_event);
+                        } else {
+                           let fail_event = StrategyEvent::OrderEvents(owner_id.clone(), OrderUpdateEvent::UpdateRejected{id, reason: String::from("No pending order found")});
+                            event_buffer.push(fail_event);
+                        }
+                    }
+                    MarketHandlerUpdate::UpdateOrder(id, order) => {
+                        let mut existing_order: Option<Order> = None;
+                        let mut cache = order_cache.write().await;
+                        'order_search: for order in &*cache {
+                            if order.id == id {
+                                existing_order = Some(order.clone());
+                                break 'order_search;
+                            }
+                        }
+                        if let Some(_) = existing_order {
+                            cache.retain(|x | x.id != id );
+                            let update_event = StrategyEvent::OrderEvents(order.owner_id.clone(), OrderUpdateEvent::Updated(order.id.clone()));
+                            cache.push(order);
+                            event_buffer.push(update_event);
+                        } else {
+                            let fail_event = StrategyEvent::OrderEvents(owner_id.clone(), OrderUpdateEvent::UpdateRejected{id, reason: String::from("No pending order found")});
+                            event_buffer.push(fail_event);
+                        }
+                        match matching_engine(&owner_id, order_books.clone(), last_price.clone(), ledgers.clone(), last_time.clone(), order_cache.clone(), engine_id_broker_id.clone()).await {
                             None => {},
                             Some(event) => event_buffer.extend(event)
                         }
@@ -243,7 +251,7 @@ impl HistoricalMarketHandler {
         let mut return_strings = vec![];
         for brokerage_map in self.ledgers.iter() {
             for ledger in brokerage_map.iter() {
-                return_strings.push(format!("{}\n", ledger.value().print()));
+                return_strings.push(format!("{} \n", ledger.value().print()));
             }
         }
         return_strings
@@ -287,6 +295,7 @@ async fn backtest_matching_engine(
     ledgers: Arc<DashMap<Brokerage, Arc<DashMap<AccountId, Ledger>>>>,
     last_time: Arc<RwLock<DateTime<Utc>>>,
     mut order_cache: Arc<RwLock<Vec<Order>>>,
+    engine_id_broker_id: Arc<DashMap<OrderId, String>>
 ) -> Option<EventTimeSlice> {
     let mut order_cache= order_cache.write().await;
     if order_cache.len() == 0 {
@@ -301,16 +310,16 @@ async fn backtest_matching_engine(
         order.time_filled_utc = Some(last_time_utc.to_string());
         events.push(StrategyEvent::OrderEvents(
             owner_id.clone(),
-            OrderUpdateEvent::Filled(order.clone()),
+            OrderUpdateEvent::Filled(order.id),
         ));
     };
 
     let reject_order = |reason: String, mut order: Order, last_time_utc: DateTime<Utc>, market_price: Price, events: &mut Vec<StrategyEvent>| {
-        order.state = OrderState::Rejected(reason);
+        order.state = OrderState::Rejected(reason.clone());
         order.time_created_utc = last_time_utc.to_string();
         events.push(StrategyEvent::OrderEvents(
             owner_id.to_string(),
-            OrderUpdateEvent::Rejected(order.clone()),
+            OrderUpdateEvent::Rejected{id: order.id, reason},
         ));
     };
 
@@ -320,7 +329,7 @@ async fn backtest_matching_engine(
         order.time_created_utc = last_time_utc.to_string();
         events.push(StrategyEvent::OrderEvents(
             owner_id.to_string(),
-            OrderUpdateEvent::Accepted(order.clone()),
+            OrderUpdateEvent::Accepted(order.id.clone()),
         ));
         remaining_orders.push(order);
     };
