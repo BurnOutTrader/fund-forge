@@ -1,8 +1,8 @@
 use crate::apis::brokerage::server_responses::BrokerApiResponse;
-use crate::apis::brokerage::Brokerage;
+use crate::apis::brokerage::{AccountInfo, Brokerage, SymbolInfo};
 use crate::apis::vendor::server_responses::VendorApiResponse;
 use crate::apis::vendor::DataVendor;
-use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo, SymbolInfo};
+use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::data_server_messaging::{FundForgeError, SynchronousResponseType};
 use crate::standardized_types::enums::{MarketType, Resolution, SubscriptionResolutionType};
@@ -111,7 +111,7 @@ impl VendorApiResponse for TestVendorApi {
         &self,
         symbol_name: SymbolName,
     ) -> Result<SynchronousResponseType, FundForgeError> {
-        Ok(SynchronousResponseType::TickSize(Decimal::from_f64(0.00001).unwrap()))
+        Ok(SynchronousResponseType::TickSize(Decimal::from_f64( 0.00001).unwrap()))
     }
 }
 
@@ -128,7 +128,7 @@ impl BrokerApiResponse for TestVendorApi {
         &self,
         account_id: AccountId,
     ) -> Result<SynchronousResponseType, FundForgeError> {
-        let response = SynchronousResponseType::AccountCurrency(account_id, AccountCurrency::USD);
+        let response = SynchronousResponseType::AccountCurrency(account_id, Currency::USD);
         Ok(response)
     }
 
@@ -141,7 +141,7 @@ impl BrokerApiResponse for TestVendorApi {
             brokerage: Brokerage::Test,
             cash_value: dec!(100000.0),
             cash_available: dec!(100000.0),
-            currency: AccountCurrency::USD,
+            currency: Currency::USD,
             cash_used: dec!(0.0),
             positions: Default::default(),
             positions_closed: Default::default(),
@@ -153,7 +153,7 @@ impl BrokerApiResponse for TestVendorApi {
 
     async fn symbol_info_response(&self, symbol_name: SymbolName) -> Result<SynchronousResponseType, FundForgeError> {
         match symbol_name {
-            _ => Ok(SynchronousResponseType::SymbolInfo(SymbolInfo::new(symbol_name, AccountCurrency::USD, Decimal::from_f64(0.00001).unwrap(), Decimal::from_f64(0.00001).unwrap())))
+            _ => Ok(SynchronousResponseType::SymbolInfo(SymbolInfo::new(symbol_name, Currency::USD, Decimal::from_f64(1.0).unwrap(), Decimal::from_f64(0.00001).unwrap())))
         }
     }
 }

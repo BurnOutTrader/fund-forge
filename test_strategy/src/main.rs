@@ -2,7 +2,7 @@ use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
-use ff_standard_lib::server_connections::{initialize_clients, PlatformMode};
+use ff_standard_lib::server_connections::{initialize_clients, GUI_DISABLED, SINGLE_MACHINE_MODE};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
@@ -24,12 +24,11 @@ use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::Color;
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 
+
 // to launch on separate machine
 #[tokio::main]
 async fn main() {
-    const GUI_ENABLED: bool = false;
-    const MACHINE_MODE: PlatformMode = PlatformMode::SingleMachine;
-    initialize_clients(MACHINE_MODE, GUI_ENABLED).await.unwrap();
+    initialize_clients(SINGLE_MACHINE_MODE, GUI_DISABLED).await.unwrap();
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let notify = Arc::new(Notify::new());
@@ -49,8 +48,9 @@ async fn main() {
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
         Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
-        vec![DataSubscription::new_custom(
-                "EUR-USD".to_string(),
+        vec![
+            DataSubscription::new_custom(
+                SymbolName::from("EUR-USD"),
                 DataVendor::Test,
                 Resolution::Minutes(3),
                 BaseDataType::QuoteBars,
@@ -58,7 +58,7 @@ async fn main() {
                 CandleType::CandleStick,
             ),
                DataSubscription::new_custom(
-                 "AUD-CAD".to_string(),
+                 SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
                  Resolution::Minutes(3),
                  BaseDataType::QuoteBars,
@@ -71,7 +71,7 @@ async fn main() {
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
         Some(Duration::seconds(1)),
-        GUI_ENABLED
+        GUI_DISABLED
     ).await;
 
     on_data_received(strategy, notify, strategy_event_receiver).await;
@@ -85,9 +85,9 @@ pub async fn on_data_received(
 ) {
     let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new(
-                "AUD-CAD".to_string(),
+                SymbolName::from("AUD-CAD"),
                 DataVendor::Test,
-                Resolution::Minutes(15),
+                Resolution::Minutes(3),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
@@ -100,13 +100,10 @@ pub async fn on_data_received(
     strategy.indicator_subscribe(heikin_atr_20).await;
 
     let brokerage = Brokerage::Test;
-    let symbol_name_1 = SymbolName::from("AUD-CAD");
-    let _symbol_name_2 = SymbolName::from("AUD-USD");
-    let account = AccountId::from("TestAccount1");
-    let account_2 = AccountId::from("TestAccount2");
     let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
-    let mut history : RollingWindow<QuoteBar> = RollingWindow::new(10);
+    let mut history_1 : RollingWindow<QuoteBar> = RollingWindow::new(10);
+    let mut history_2 : RollingWindow<QuoteBar> = RollingWindow::new(10);
 
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for strategy_event in event_slice {
@@ -129,41 +126,51 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 //do something on the bar close
                                 if quotebar.is_closed == true {
-                                    history.add(quotebar.clone());
-                                    println!("{} Closed bar time {}", time, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    let last_bar = match quotebar.symbol.name == SymbolName::from("AUD-CAD") {
+                                        true => {
+                                            history_1.add(quotebar.clone());
+                                            match history_1.get(1) {
+                                                None => {
+                                                    println!("Strategy: No history");
+                                                    continue;
+                                                },
+                                                Some(bar) => bar
+                                            }
+                                        },
+                                        false => {
+                                            history_2.add(quotebar.clone());
+                                            match history_2.get(1) {
+                                                None => {
+                                                    println!("Strategy: No history");
+                                                    continue;
+                                                },
+                                                Some(bar) => bar
+                                            }
+                                        }
+                                    };
+
+                                    println!("{} Closed {} bar time {}", time, quotebar.symbol.name, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     if !warmup_complete {
                                         continue;
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
-                                    let last_bar = match history.get(1) {
-                                        None => {
-                                            println!("Strategy: No history");
-                                            continue;
-                                        },
-                                        Some(bar) => bar
-                                    };
-                                    //println!("{}", last_bar);
 
-                                    let account = match quotebar.symbol.name == symbol_name_1 {
-                                        true => &account,
-                                        false => &account_2
-                                    };
-
+                                    let account_name = AccountId::from(format!("TestAccount{}", quotebar.symbol.name)); //seperate account by symbol for backtesting purposes
                                     if quotebar.bid_close > last_bar.bid_high
-                                        && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
+                                        && !strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await
                                     {
-                                        let _entry_order_id = strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), dec!(10000), String::from("Enter Long"), None).await;
+                                        let _entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long"), None).await;
                                         bars_since_entry_1 = 0;
                                     }
                                     else if bars_since_entry_1 > 10
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
-                                        && strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
+                                        && strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await
                                     {
-                                        let _exit_order_id = strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), dec!(10000), String::from("Exit Long")).await;
+                                        let _exit_order_id = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
-                                    if strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await {
+                                    if strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await {
                                         bars_since_entry_1 += 1;
                                     }
                                 }

@@ -24,9 +24,12 @@ pub fn round_to_decimals(value: Decimal, decimals: u32) -> Price {
     (value * factor).round() / factor
 }
 
-pub fn round_to_tick_size(value: Price, tick_size: Price) -> Price {
-    // Perform the rounding to the nearest tick size
-    (value / tick_size).round() * tick_size
+pub(crate) fn round_to_tick_size(value: Decimal, tick_size: Decimal) -> Decimal {
+    // Divide the value by the tick size, then round to the nearest integer
+    let ticks = (value / tick_size).round();
+
+    // Multiply the rounded number of ticks by the tick size to get the final rounded value
+    ticks * tick_size
 }
 
 /// Calculates the average of a vector of floating-point numbers using Decimal for high precision.

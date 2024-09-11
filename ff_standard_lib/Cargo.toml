@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Kevin Monaghan"]
 
+[build-dependencies]
+prost-build = "*"
+
 [dependencies]
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
@@ -28,7 +31,6 @@ env_logger = "*"
 futures = "*"
 rustls = "*"
 tokio-rustls = "*"
-iso_currency = "*"
 rust_decimal = { version = "1.36.0", features = ["rkyv", "rkyv-safe"] }
 float-cmp = "*"
 rustls-pemfile = "*"
@@ -39,3 +41,5 @@ ahash = "*"
 dashmap = "*"
 csv ="*"
 rust_decimal_macros ="1.36.0"
+prost ="*"
+prost-build = "0.13.2"

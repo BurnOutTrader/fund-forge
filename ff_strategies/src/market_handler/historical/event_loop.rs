@@ -44,7 +44,7 @@ pub async fn historical_engine(
                         let last_time_ref = last_time_utc.clone();
                         let update_future = tokio::spawn(async move {
                             for mut ledger in brokerage_map_ref.iter_mut() {
-                                ledger.on_data_update(time_slice_ref.clone(), &last_time_ref).await;
+                                ledger.on_historical_data_update(time_slice_ref.clone(), &last_time_ref).await;
                             }
                         });
                         updates.push(update_future);

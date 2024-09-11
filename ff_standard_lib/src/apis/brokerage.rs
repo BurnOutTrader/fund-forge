@@ -1,14 +1,18 @@
 use crate::apis::brokerage::server_responses::BrokerApiResponse;
 use crate::apis::test_vendor_impl::api_client::get_test_api_client;
-use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, Ledger};
+use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
 use crate::standardized_types::data_server_messaging::FundForgeError;
-use crate::standardized_types::subscriptions::{SymbolName};
+use crate::standardized_types::subscriptions::SymbolName;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
+use rust_decimal_macros::dec;
 use strum_macros::Display;
+use crate::helpers::decimal_calculators::round_to_decimals;
 use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::accounts::position::Position;
+use crate::traits::bytes::Bytes;
 
 async fn broker_api_object(vendor: &Brokerage) -> Arc<impl BrokerApiResponse> {
     match vendor {
@@ -47,14 +51,14 @@ pub enum Brokerage {
 impl Brokerage {
     pub async fn margin_required_historical(&self, _symbol_name: SymbolName, quantity: Volume) -> Price { //todo make this [art of the trait
         match self {
-            Brokerage::Test => quantity
+            Brokerage::Test => round_to_decimals(quantity * dec!(1000), 2)
         }
     }
 
     pub async fn paper_ledger(
         &self,
         account_id: AccountId,
-        currency: AccountCurrency,
+        currency: Currency,
         cash_value: Price,
     ) -> Ledger {
         match self {
@@ -144,13 +148,13 @@ pub mod server_responses {
 }
 
 pub mod client_requests {
-    use crate::apis::brokerage::Brokerage;
+    use crate::apis::brokerage::{Brokerage, SymbolInfo};
     use crate::server_connections::{
         get_async_reader, get_async_sender, get_synchronous_communicator, ConnectionType,
     };
     use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
     use crate::servers::communications_sync::SynchronousCommunicator;
-    use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, Ledger, SymbolInfo};
+    use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
     use crate::standardized_types::data_server_messaging::{
         FundForgeError, SynchronousRequestType, SynchronousResponseType,
     };
@@ -170,7 +174,7 @@ pub mod client_requests {
         async fn account_currency(
             &self,
             account_id: AccountId,
-        ) -> Result<AccountCurrency, FundForgeError>;
+        ) -> Result<Currency, FundForgeError>;
 
         async fn init_ledger(&self, account_id: AccountId) -> Result<Ledger, FundForgeError>;
 
@@ -198,7 +202,7 @@ pub mod client_requests {
         async fn account_currency(
             &self,
             account_id: AccountId,
-        ) -> Result<AccountCurrency, FundForgeError> {
+        ) -> Result<Currency, FundForgeError> {
             let client = self.synchronous_client().await;
             let request = SynchronousRequestType::AccountCurrency(self.clone(), account_id);
             let response = match client.send_and_receive(request.to_bytes(), false).await {
@@ -255,9 +259,9 @@ pub mod client_requests {
 
     impl Brokerage {
         //ToDo: Make this function load from a toml file of currencies for the brokerage
-        pub fn user_currency(&self) -> AccountCurrency {
+        pub fn user_currency(&self) -> Currency {
             match self {
-                Brokerage::Test => AccountCurrency::USD,
+                Brokerage::Test => Currency::USD,
             }
         }
 
@@ -287,5 +291,60 @@ pub mod client_requests {
                 Ok(s) => s,
             }
         }
+    }
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct SymbolInfo {
+    symbol_name: SymbolName,
+    pub(crate) pnl_currency: Currency,
+    pub(crate) value_per_tick: Price,
+    pub(crate) tick_size: Price
+}
+
+impl SymbolInfo {
+    pub fn new(symbol_name: SymbolName,
+               pnl_currency: Currency,
+               value_per_tick: Price,
+               tick_size: Price) -> Self {
+        Self {
+            symbol_name,
+            pnl_currency,
+            value_per_tick,
+            tick_size
+        }
+    }
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct AccountInfo {
+    pub account_id: AccountId,
+    pub brokerage: Brokerage,
+    pub cash_value: Price,
+    pub cash_available: Price,
+    pub currency: Currency,
+    pub cash_used: Price,
+    pub positions: Vec<Position>,
+    pub positions_closed: Vec<Position>,
+    pub is_hedging: bool,
+}
+
+impl Bytes<Self> for AccountInfo {
+    fn from_bytes(archived: &[u8]) -> Result<AccountInfo, FundForgeError> {
+        // If the archived bytes do not end with the delimiter, proceed as before
+        match rkyv::from_bytes::<AccountInfo>(archived) {
+            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+            Ok(response) => Ok(response),
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
+        }
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
+        vec.into()
     }
 }

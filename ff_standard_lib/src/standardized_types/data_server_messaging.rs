@@ -1,6 +1,6 @@
-use crate::apis::brokerage::Brokerage;
+use crate::apis::brokerage::{AccountInfo, Brokerage, SymbolInfo};
 use crate::apis::vendor::DataVendor;
-use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, AccountInfo, SymbolInfo};
+use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
 use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::time_slices::TimeSlice;
@@ -186,7 +186,7 @@ pub enum SynchronousResponseType {
     /// [`DataServerError`](ff_data_vendors::networks::DataServerError)
     Error(FundForgeError),
 
-    AccountCurrency(AccountId, AccountCurrency),
+    AccountCurrency(AccountId, Currency),
 
     AccountInfo(AccountInfo),
 
@@ -196,7 +196,7 @@ pub enum SynchronousResponseType {
 
     DecimalAccuracy(u8),
 
-    ValuePerTick(AccountCurrency, Price),
+    ValuePerTick(Currency, Price),
 
     SymbolInfo(SymbolInfo)
 }

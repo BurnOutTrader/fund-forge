@@ -198,9 +198,9 @@ impl FundForgeStrategy {
 
     pub async fn enter_long(
         &self,
-        symbol_name: SymbolName,
-        account_id: AccountId,
-        brokerage: Brokerage,
+        symbol_name: &SymbolName,
+        account_id: &AccountId,
+        brokerage: &Brokerage,
         quantity: Volume,
         tag: String,
         brackets: Option<Vec<ProtectiveOrder>>
@@ -215,11 +215,11 @@ impl FundForgeStrategy {
         );
         let order = Order::enter_long(
             self.owner_id.clone(),
-            symbol_name,
-            brokerage,
+            symbol_name.clone(),
+            brokerage.clone(),
             quantity,
             tag,
-            account_id,
+            account_id.clone(),
             order_id.clone(),
             self.time_utc().await,
             brackets
@@ -230,9 +230,9 @@ impl FundForgeStrategy {
 
     pub async fn enter_short(
         &self,
-        symbol_name: SymbolName,
-        account_id: AccountId,
-        brokerage: Brokerage,
+        symbol_name: &SymbolName,
+        account_id: &AccountId,
+        brokerage: &Brokerage,
         quantity: Volume,
         tag: String,
         brackets: Option<Vec<ProtectiveOrder>>
@@ -247,11 +247,11 @@ impl FundForgeStrategy {
         );
         let order = Order::enter_short(
             self.owner_id.clone(),
-            symbol_name,
-            brokerage,
+            symbol_name.clone(),
+            brokerage.clone(),
             quantity,
             tag,
-            account_id,
+            account_id.clone(),
             order_id.clone(),
             self.time_utc().await,
             brackets
@@ -262,9 +262,9 @@ impl FundForgeStrategy {
 
     pub async fn exit_long(
         &self,
-        symbol_name: SymbolName,
-        account_id: AccountId,
-        brokerage: Brokerage,
+        symbol_name: &SymbolName,
+        account_id: &AccountId,
+        brokerage: &Brokerage,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
@@ -278,11 +278,11 @@ impl FundForgeStrategy {
         );
         let order = Order::exit_long(
             self.owner_id.clone(),
-            symbol_name,
-            brokerage,
+            symbol_name.clone(),
+            brokerage.clone(),
             quantity,
             tag,
-            account_id,
+            account_id.clone(),
             order_id.clone(),
             self.time_utc().await,
         );
@@ -292,9 +292,9 @@ impl FundForgeStrategy {
 
     pub async fn exit_short(
         &self,
-        symbol_name: SymbolName,
-        account_id: AccountId,
-        brokerage: Brokerage,
+        symbol_name: &SymbolName,
+        account_id: &AccountId,
+        brokerage: &Brokerage,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
@@ -308,11 +308,11 @@ impl FundForgeStrategy {
         );
         let order = Order::exit_short(
             self.owner_id.clone(),
-            symbol_name,
-            brokerage,
+            symbol_name.clone(),
+            brokerage.clone(),
             quantity,
             tag,
-            account_id,
+            account_id.clone(),
             order_id.clone(),
             self.time_utc().await,
         );
@@ -322,9 +322,9 @@ impl FundForgeStrategy {
 
     pub async fn buy_market(
         &self,
-        account_id: AccountId,
-        symbol_name: SymbolName,
-        brokerage: Brokerage,
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
@@ -338,12 +338,12 @@ impl FundForgeStrategy {
         );
         let order = Order::market_order(
             self.owner_id.clone(),
-            symbol_name,
-            brokerage,
+            symbol_name.clone(),
+            brokerage.clone(),
             quantity,
             OrderSide::Buy,
             tag,
-            account_id,
+            account_id.clone(),
             order_id.clone(),
             self.time_utc().await,
         );
@@ -353,9 +353,9 @@ impl FundForgeStrategy {
 
     pub async fn sell_market(
         &self,
-        account_id: AccountId,
-        symbol_name: SymbolName,
-        brokerage: Brokerage,
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
@@ -369,12 +369,12 @@ impl FundForgeStrategy {
         );
         let order = Order::market_order(
             self.owner_id.clone(),
-            symbol_name,
-            brokerage,
+            symbol_name.clone(),
+            brokerage.clone(),
             quantity,
             OrderSide::Sell,
             tag,
-            account_id,
+            account_id.clone(),
             order_id.clone(),
             self.time_utc().await,
         );
@@ -412,6 +412,7 @@ impl FundForgeStrategy {
 
     /// see the indicator_enum.rs for more details
     pub async fn indicator_subscribe(&self, indicator: IndicatorEnum) {
+        //todo, add is_subscribed() for subscription manager so we can auto subscribe for indicators.
         self.indicator_handler
             .add_indicator(indicator, self.time_utc().await)
             .await

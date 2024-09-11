@@ -23,6 +23,11 @@ use strum_macros::Display;
 use tokio::io;
 use tokio::sync::{mpsc, Mutex, RwLock};
 
+pub const SINGLE_MACHINE_MODE: PlatformMode = PlatformMode::SingleMachine;
+pub const MULTI_MACHINE_MODE: PlatformMode = PlatformMode::MultiMachine;
+pub const GUI_ENABLED: bool = true;
+pub const GUI_DISABLED: bool = false;
+
 /// A wrapper to allow us to pass in either a `Brokerage` or a `DataVendor`
 /// # Variants
 /// * `Broker(Brokerage)` - Containing a `Brokerage` object
