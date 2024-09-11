@@ -1,0 +1,14 @@
+
+package rti;
+
+message RequestGetInstrumentByUnderlying
+	{                                
+	// PB_OFFSET = 100000, is the offset added for each MNM field id
+     
+	required int32  template_id        = 154467;    // PB_OFFSET + MNM_TEMPLATE_ID
+	repeated string user_msg           = 132760;    // PB_OFFSET + MNM_USER_MSG
+
+	optional string underlying_symbol  = 101026;    // PB_OFFSET + MNM_UNDERLYING_SYMBOL
+	optional string exchange           = 110101;    // PB_OFFSET + MNM_EXCHANGE
+	optional string expiration_date    = 100067;    // PB_OFFSET + MNM_EXPIRATION_DATE
+	}

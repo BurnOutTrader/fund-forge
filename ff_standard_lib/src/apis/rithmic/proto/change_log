@@ -1,0 +1,411 @@
+ 
+#;==============================================================================
+$;
+$;		    template version	5.28
+#;   			release date    August 30th 2024
+$;
+#;==============================================================================
+
+(*) Following new fields are added in request_new_order.proto &
+    request_bracket_order.proto
+ 
+	optional  bool             trailing_stop          = 157063;
+        optional  int32            trail_by_ticks         = 157064;   
+        optional  int32            trail_by_price_id      = 157065;
+
+(*) Following new fields are added in request_oco_order.proto
+
+	repeated  bool             trailing_stop          = 157063;
+        repeated  int32            trail_by_ticks         = 157064;   
+        repeated  int32            trail_by_price_id      = 157065;
+
+(*) Following new fields are added in request_modify_order.proto
+ 
+	optional  bool             trailing_stop          = 157063;
+        optional  int32            trail_by_ticks         = 157064;   
+
+(*) Following new fields are added in rithmic_order_notification.proto and
+    exchange_order_notification.proto
+
+        optional  int32            trail_by_ticks         = 157064;   
+        optional  int32            trail_by_price_id      = 157065;
+ 
+#;==============================================================================
+$;
+$;		    template version	5.27
+#;   			release date    June 15th 2023
+$;
+#;==============================================================================
+
+(*) Following new fields are added in exchange_order_notification.proto
+
+    	      	optional string tp_exchange_order_id = 153647;
+
+(*) enum value 'RELEASE_PENDING = 21' is removed from rithmic_order_notification.proto
+ 
+#;==============================================================================
+$;
+$;		    template version	5.26
+#;   			release date    May 4th 2023
+$;
+#;==============================================================================
+
+(*) Following new fields are added in response_account_list.proto
+
+	      optional string account_auto_liquidate = 131035;
+
+#;==============================================================================
+$;
+$;		    template version	5.25
+#;   			release date    April 10th 2023
+$;
+#;==============================================================================
+
+(*) Following new fields are added in request_new_order.proto and
+    request_bracket_order.proto
+
+    	      optional  int32  release_at_ssboe   = 154487;
+	      optional  int32  release_at_usecs   = 154549;
+
+(*) Following new fields are added in rithmic_order_notification.proto
+
+	      optional string  window_name              = 154629;
+	      optional string  originator_window_name   = 154671;
+	      optional int32   quan_release_pending     = 112027;
+
+    new enum value defined in NotifyType, RELEASE_PENDING  =  21;
+
+(*) Following new fields are added in exchange_order_notification.proto
+
+       	      optional bool    is_rithmic_internal_msg  = 149373;
+              optional string  window_name              = 154629;
+	      optional string  originator_window_name   = 154671;
+
+(*) Following new fields are added in response_show_agreement.proto
+
+    	      optional string agreement_mandatory_flag     = 153410;
+	      optional string agreement_status             = 153415;
+              optional string agreement_acceptance_request = 153430;
+
+(*) Following new fields are added in request_new_order.proto, request_modify_order.proto,
+    request_cancel_order.proto, request_bracket_order.proto, request_oco_order.proto and
+    request_exit_position.proto
+
+	      optional string window_name = 154629;
+
+#;==============================================================================
+$;
+$;		    template version	5.24
+#;   			release date	March 29th 2023
+$;
+#;==============================================================================
+
+(*) Following new fields are added in response_rithmic_system_info.proto
+
+    	      repeated bool has_aggregated_quotes = 153649;
+
+(*) Following fields were removed from response_rithmic_system_gateway_info.proto
+
+	      repeated bool gateway_has_aggregated_quotes = 153642;
+	
+#;==============================================================================
+$;
+$;		    template version	5.23
+#;   			release date	March 21st 2023
+$;
+#;==============================================================================
+
+(*) Following new proto files are included
+
+    request_account_rms_updates.proto,  response_account_rms_updates.proto and
+    account_rms_updates.proto
+	
+#;==============================================================================
+$;
+$;		    template version	5.22
+#;   			release date	March 1st 2023
+$;
+#;==============================================================================
+
+(*) Following new fields are added in request_login.proto
+
+	   optional bool aggregated_quotes = 153644;
+
+(*) Following new fields are added in request_volume_profile_minute_bars.proto
+
+	   optional bool resume_bars = 153642;
+
+(*) Following new fields are added in response_volume_profile_minute_bars.proto
+
+	optional string  request_key = 132758;
+	
+#;==============================================================================
+$;
+$;		    template version	5.21
+#;   			release date	December 13th 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in request_accept_agreement.proto and
+
+    optional string  market_data_usage_capacity = 153431;  // Professional or Non-Professional
+	
+#;==============================================================================
+$;
+$;		    template version	5.20
+#;   			release date	December 12th 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in request_time_bar_replay.proto and
+    request_tick_bar_replay.proto
+	optional bool resume_bars = 153642;
+
+
+(*) Following new fields are added in response_time_bar_replay.proto and
+    response_tick_bar_replay.proto
+	optional string request_key = 132758;
+
+
+(*) Following new proto files are included
+        request_resume_bars.proto
+    	response_resume_bars.proto
+
+#;==============================================================================
+$;
+$;		    template version	5.19
+#;   			release date	October 26th 2022
+$;
+#;==============================================================================
+
+(*) Following new proto files are included
+
+    request_volume_profile_minute_bars.proto
+    response_volume_profile_minute_bars.proto
+
+#;==============================================================================
+$;
+$;		    template version	5.18
+#;   			release date	September 2nd 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in end_of_day_prices.proto
+	optional string is_underlying_for_binary_contrats = 154952;
+
+#;==============================================================================
+$;
+$;		    template version	5.17
+#;   			release date	August 2nd 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in end_of_day_prices.proto
+        optional double adjusted_close_price = 154124;
+
+(*) new enum value (ADJUSTED_CLOSE) defined in 'UpdateBits' enum defintion.
+    This change affects request_market_data_update.proto
+
+(*) new enum value (ADJUSTED_CLOSE) defined in 'PresenceBits' enum defintion.
+    This change affects end_of_day_prices.proto
+
+#;==============================================================================
+$;
+$;		    template version	5.16
+#;   			release date	July 3rd 2022
+$;
+#;==============================================================================
+
+(*) new enum value defined in 'TransactionType' enum defintion. This change affects
+    rithmic_order_notification.proto and exchange_order_notification.proto
+
+#;==============================================================================
+$;
+$;		    template version	5.15
+#;   			release date	June 29th 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in market_mode.proto
+         optional string trade_date   = 100016
+
+(*) Following new fields are added in response_account_list.proto
+         optional string account_currency  = 154383;
+
+#;==============================================================================
+$;
+$;		    template version	5.14
+#;   			release date	May 30th 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in response_list_unaccepted_agreements.proto
+    and response_list_accepted_agreements.proto
+		optional string agreement_acceptance_request  = 153430;		 
+
+(*) Following new proto files are included
+
+    request_replay_executions.proto
+    response_replay_executions.proto
+
+#;==============================================================================
+$;
+$;		    template version	5.13
+#;   			release date	April 28th 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in response_rithmic_system_gateway_info.proto
+        repeated bool gateway_has_aggregated_quotes = 153642
+
+(*) Following new fields are added in request_login.proto
+	optional string  os_version   = 144021;
+	optional string  os_platform  = 144020;
+
+#;==============================================================================
+$;
+$;		    template version	5.12
+#;   			release date	April 18th 2022
+$;
+#;==============================================================================
+
+(*) Following new proto files are included
+
+    request_rithmic_system_gateway_info.proto
+    response_rithmic_system_gateway_info.proto
+
+#;==============================================================================
+$;
+$;		    template version	5.11
+#;   			release date	March 21st 2022
+$;
+#;==============================================================================
+
+(*) Following new proto files are included
+
+    request_list_accepted_agreements.proto
+    response_list_accepted_agreements.proto
+
+    request_accept_agreement.proto
+    response_accept_agreement.proto
+
+    request_set_rithmic_market_data_self_certification_status.proto
+    response_set_rithmic_market_data_self_certification_status.proto
+
+    request_show_agreement.proto
+    response_show_agreement.proto
+
+#;==============================================================================
+$;
+$;		    template version	5.10
+#;   			release date	March 10th 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in instrument_pnl_position_update.proto and
+    account_pnl_position_update.proto
+    	day_open_pnl
+        day_closed_pnl
+	day_pnl
+	day_open_pnl_offset
+	day_closed_pnl_offset
+
+#;==============================================================================
+$;
+$;		    template version	5.09
+#;   			release date	March 2022
+$;
+#;==============================================================================
+
+(*) Following new field is added in request_login.proto
+    	      mac_addr
+
+(*) Following new fields are added in rithmic_order_notification.proto and
+    exchange_order_notification.proto
+    	      linked_basket_ids
+	      bracket_type
+
+#;==============================================================================
+$;
+$;		    template version	5.08
+#;   			release date	February 8th 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in rithmic_order_notification.proto and
+    exchange_order_notification.proto
+    	      avg_fill_price
+
+#;==============================================================================
+$;
+$;		    template version	5.07
+#;   			release date	February 1st 2022
+$;
+#;==============================================================================
+
+(*) Following new fields are added in last_trade.proto
+    	      trade_time
+
+(*) Following new fields are added in best_bid_offer.proto
+    	      bid_time
+	      ask_time
+
+#;==============================================================================
+$;
+$;		    template version	5.06
+#;   			release date	January 14th 2022
+$;
+#;==============================================================================
+
+(*) Following new proto files were added
+    	      request_exit_position.proto
+	      response_exit_position.proto
+
+#;==============================================================================
+$;
+$;		    template version	5.05
+#;   			release date	October 22nd 2021
+$;
+#;==============================================================================
+
+(*) Following new fields are added in request_oco_order.proto
+	   cancel_at_ssboe
+	   cancel_at_usecs
+           cancel_after_secs
+
+#;==============================================================================
+$;
+$;		    template version	5.04
+#;   			release date	October 5th 2021
+$;
+#;==============================================================================
+
+(*) Following new proto files were added
+    	      request_order_session_config.proto
+	      response_order_session_config.proto
+
+(*) Following new fields are added in request_bracket_order.proto
+	   cancel_at_ssboe
+	   cancel_at_usecs
+           cancel_after_secs
+
+#;==============================================================================
+$;
+$;		    template version	5.03
+#;   			release date	September 15 2021
+$;
+#;==============================================================================
+
+(*) rithmic_order_notification.proto
+	      removed 'NEW_ORDER_FAILED' from NotifyType enum definitions
+
+#;==============================================================================
+$;
+$;		    template version	5.02
+#;   			release date	September 1 2021
+$;
+#;==============================================================================
+
+(*) Following new proto files were added
+    	      request_modify_order_reference_data.proto
+	      response_modify_order_reference_data.proto

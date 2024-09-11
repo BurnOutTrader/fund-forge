@@ -1,0 +1,14 @@
+
+package rti;
+
+message SymbolMarginRate
+	{                                     
+	// PB_OFFSET = 100000, is the offset added for each MNM field id
+
+	required  int32   template_id     = 154467;      // PB_OFFSET + MNM_TEMPLATE_ID
+	optional  string  symbol          = 110100;      // PB_OFFSET + MNM_SYMBOL
+	optional  string  exchange        = 110101;      // PB_OFFSET + MNM_EXCHANGE
+
+	optional  bool    is_snapshot     = 110121;      // PB_OFFSET + MNM_UPDATE_TYPE               
+	optional  double  margin_rate     = 154103;      // PB_OFFSET + MNM_MARGIN_RATE
+	}

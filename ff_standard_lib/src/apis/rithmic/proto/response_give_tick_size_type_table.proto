@@ -1,0 +1,31 @@
+
+package rti;
+
+message ResponseGiveTickSizeTypeTable
+	{       
+	// PB_OFFSET = 100000, is the offset added for each MNM field id
+
+	// bit constants are defined using enum
+	enum PresenceBits {
+	                   TICK_SIZE_FIRST_PRICE   =  1;
+			   TICK_SIZE_LAST_PRICE    =  2;
+			   TICK_SIZE_FP_OPERATOR   =  4;
+			   TICK_SIZE_LP_OPERATOR   =  8;
+                          }
+
+
+	required int32  template_id             = 154467;  // PB_OFFSET + MNM_TEMPLATE_ID
+	repeated string user_msg                = 132760;  // PB_OFFSET + MNM_USER_MSG	
+	repeated string rq_handler_rp_code      = 132764;  // PB_OFFSET + MNM_REQUEST_HANDLER_RESPONSE_CODE
+	repeated string rp_code                 = 132766;  // PB_OFFSET + MNM_RESPONSE_CODE
+
+	optional uint32 presence_bits           = 149138;  // PB_OFFSET + MNM_PRICING_INDICATOR
+
+	optional string tick_size_type          = 154167;  // PB_OFFSET + MNM_TICK_SIZE_TYPE
+	optional string tick_size_fp_operator   = 154170;  // PB_OFFSET + MNM_TICK_SIZE_FP_OPERATOR
+	optional string tick_size_lp_operator   = 154171;  // PB_OFFSET + MNM_TICK_SIZE_LP_OPERATOR
+
+	optional double min_fprice_change       = 154387;  // PB_OFFSET + MNM_MIN_FPRICE_CHANGE
+	optional double tick_size_first_price   = 154168;  // PB_OFFSET + MNM_TICK_SIZE_FIRST_PRICE
+	optional double tick_size_last_price    = 154169;  // PB_OFFSET + MNM_TICK_SIZE_LAST_PRICE
+	}

@@ -1,0 +1,19 @@
+
+package rti;
+
+message ResponseShowAgreement
+	{
+	required int32   template_id          = 154467;
+	repeated string  user_msg             = 132760;
+	repeated string  rq_handler_rp_code   = 132764;
+	repeated string  rp_code              = 132766;
+
+	optional string  agreement_title      = 153406;
+	optional string  agreement_id         = 153407;
+	optional bytes   agreement            = 153405;
+	optional bytes   agreement_html       = 153432;
+
+	optional string agreement_mandatory_flag     = 153410;
+	optional string agreement_status             = 153415;
+        optional string agreement_acceptance_request = 153430;	
+	}

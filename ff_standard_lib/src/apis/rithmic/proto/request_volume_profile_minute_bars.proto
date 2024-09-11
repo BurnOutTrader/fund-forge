@@ -1,0 +1,17 @@
+
+package rti;
+
+message RequestVolumeProfileMinuteBars
+	{
+	required int32    template_id      = 154467;
+	repeated string   user_msg         = 132760;
+
+	optional string   symbol           = 110100;
+	optional string   exchange         = 110101;
+
+	optional int32    bar_type_period  = 119215;
+	optional int32    start_index      = 153002;
+	optional int32    finish_index     = 153003;
+	optional int32    user_max_count   = 154020;
+	optional bool     resume_bars      = 153642;
+	}

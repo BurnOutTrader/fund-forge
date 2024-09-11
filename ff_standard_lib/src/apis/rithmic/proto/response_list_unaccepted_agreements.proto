@@ -1,0 +1,17 @@
+
+package rti;
+
+message ResponseListUnacceptedAgreements
+	{       
+	required int32   template_id                  = 154467;
+	repeated string  user_msg                     = 132760;
+	repeated string  rq_handler_rp_code           = 132764;
+	repeated string  rp_code                      = 132766;
+
+	optional string fcm_id                        = 154013;
+	optional string ib_id                         = 154014;
+
+	optional string agreement_title               = 153406;
+	optional string agreement_id                  = 153407;
+	optional string agreement_acceptance_request  = 153430;		 
+	}

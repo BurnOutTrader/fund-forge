@@ -1,0 +1,23 @@
+
+package rti;
+
+message RequestExitPosition
+	{                        
+        enum OrderPlacement {
+	                     MANUAL  = 1;
+			     AUTO    = 2;
+	                    }
+
+	required int32          template_id            = 154467;
+	repeated string         user_msg               = 132760;
+	optional string         window_name            = 154629;
+
+	optional string         fcm_id                 = 154013;
+	optional string         ib_id                  = 154014;
+	optional string         account_id             = 154008;
+
+	optional string         symbol                 = 110100; // optional field, if set, exchange field should also be set.
+	optional string         exchange               = 110101; // optional field, if set, symbol field should also be set.
+	optional string         trading_algorithm      = 154698; // optional field
+	optional OrderPlacement manual_or_auto         = 154710; // required field
+	}

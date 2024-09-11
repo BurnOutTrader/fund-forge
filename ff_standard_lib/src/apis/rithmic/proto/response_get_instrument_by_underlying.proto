@@ -1,0 +1,59 @@
+
+package rti;
+
+message ResponseGetInstrumentByUnderlying
+	{       
+	// presence bits field defined here is an exact copy of response_reference_data.proto
+	// Make sure they are always the same in both proto files.
+
+	// PB_OFFSET = 100000, is the offset added for each MNM field id
+
+	// bit constants are defined using enum
+	enum PresenceBits {
+	                   EXCHANGE_SYMBOL       =       1;
+	                   SYMBOL_NAME           =       2;
+			   PRODUCT_CODE          =       4;
+			   INSTRUMENT_TYPE       =       8;
+			   UNDERLYING_SYMBOL     =      16;
+			   EXPIRATION_DATE       =      32;
+			   CURRENCY              =      64;
+			   PUT_CALL_INDICATOR    =     128;
+			   STRIKE_PRICE          =     256;
+			   FPRICE_TO_QPRICE      =     512;
+			   QPRICE_TO_FPRICE      =    1024;
+			   MIN_QPRICE_CHANGE     =    2048;
+			   MIN_FRPICE_CHANGE     =    4096;
+			   SINGLE_POINT_VALUE    =    8192;
+			   TICK_SIZE_TYPE        =   16384;
+			   PRICE_DISPLAY_FORMAT	 =   32768;  
+                          }
+
+	required int32  template_id             = 154467;  // PB_OFFSET + MNM_TEMPLATE_ID
+	repeated string user_msg                = 132760;  // PB_OFFSET + MNM_USER_MSG	
+	repeated string rq_handler_rp_code      = 132764;  // PB_OFFSET + MNM_REQUEST_HANDLER_RESPONSE_CODE
+	repeated string rp_code                 = 132766;  // PB_OFFSET + MNM_RESPONSE_CODE
+
+	optional uint32 presence_bits           = 149138;  // PB_OFFSET + MNM_PRICING_INDICATOR
+	optional uint32 clear_bits              = 154571;  // PB_OFFSET + MNM_DISPLAY_INDICATOR
+
+	optional string symbol                  = 110100;  // PB_OFFSET + MNM_SYMBOL
+	optional string exchange                = 110101;  // PB_OFFSET + MNM_EXCHANGE
+
+	optional string exchange_symbol         = 110114;  // PB_OFFSET + MNM_EXCHANGE_SYMBOL
+	optional string symbol_name             = 100003;  // PB_OFFSET + MNM_SYMBOL_NAME
+	optional string product_code            = 100749;  // PB_OFFSET + MNM_PRODUCT_CODE
+	optional string instrument_type         = 110116;  // PB_OFFSET + MNM_INSTRUMENT_TYPE
+	optional string underlying_symbol       = 101026;  // PB_OFFSET + MNM_UNDERLYING_SYMBOL
+	optional string expiration_date         = 100067;  // PB_OFFSET + MNM_EXPIRATION_DATE
+	optional string currency                = 154382;  // PB_OFFSET + MNM_SYMBOL_CURRENCY
+	optional string put_call_indicator      = 100109;  // PB_OFFSET + MNM_PUT_CALL_INDICATOR
+	optional string tick_size_type          = 154167;  // PB_OFFSET + MNM_TICK_SIZE_TYPE
+	optional string price_display_format    = 154390;  // PB_OFFSET + MNM_PRICE_DISPLAY_FORMAT
+
+	optional double strike_price            = 100066;  // PB_OFFSET + MNM_STRIKE_PRICE
+	optional double ftoq_price              = 154384;  // PB_OFFSET + MNM_FPRICE_TO_QPRICE
+	optional double qtof_price              = 154385;  // PB_OFFSET + MNM_QPRICE_TO_FPRICE
+	optional double min_qprice_change       = 154386;  // PB_OFFSET + MNM_MIN_QPRICE_CHANGE
+	optional double min_fprice_change       = 154387;  // PB_OFFSET + MNM_MIN_FPRICE_CHANGE
+	optional double single_point_value      = 154389;  // PB_OFFSET + MNM_SINGLE_POINT_VALUE
+	}

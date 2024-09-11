@@ -1,0 +1,27 @@
+
+package rti;
+
+message QuoteStatistics
+	{                                     
+	// PB_OFFSET = 100000, is the offset added for each MNM field id
+
+	// below enum is just for reference only, not used in this message
+	enum PresenceBits {
+			  HIGHEST_BID      =   1;
+			  LOWEST_ASK       =   2;
+                          }
+
+	required int32  template_id        = 154467;      // PB_OFFSET + MNM_TEMPLATE_ID
+	optional string symbol             = 110100;      // PB_OFFSET + MNM_SYMBOL
+	optional string exchange           = 110101;      // PB_OFFSET + MNM_EXCHANGE
+
+	optional uint32 presence_bits      = 149138;      // PB_OFFSET + MNM_PRICING_INDICATOR
+	optional uint32 clear_bits         = 154571;      // PB_OFFSET + MNM_DISPLAY_INDICATOR
+	optional bool   is_snapshot        = 110121;      // PB_OFFSET + MNM_UPDATE_TYPE               
+
+	optional double highest_bid_price  = 154195;      // PB_OFFSET + MNM_HIGHEST_BID_PRICE
+	optional double lowest_ask_price   = 154197;      // PB_OFFSET + MNM_LOWEST_ASK_PRICE
+
+	optional int32  ssboe              = 150100;      // PB_OFFSET + MNM_SECONDS_SINCE_BOE
+	optional int32  usecs              = 150101;      // PB_OFFSET + MNM_USECS
+	}

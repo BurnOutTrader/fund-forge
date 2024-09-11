@@ -1,0 +1,35 @@
+
+package rti;
+
+message RequestTickBarUpdate
+	{          
+	// PB_OFFSET = 100000, is the offset added for each MNM field id
+
+	enum BarType {
+	              TICK_BAR     =  1;
+		      RANGE_BAR    =  2;
+		      VOLUME_BAR   =  3;
+	             }
+
+        enum BarSubType {
+	                 REGULAR  = 1;
+			 CUSTOM   = 2;
+	                }
+ 
+        enum Request {
+	              SUBSCRIBE   = 1;
+		      UNSUBSCRIBE = 2;
+	             } 
+                            
+	required int32       template_id               = 154467;    // PB_OFFSET + MNM_TEMPLATE_ID
+	repeated string      user_msg                  = 132760;    // PB_OFFSET + MNM_USER_MSG
+
+	optional string      symbol                    = 110100;    // PB_OFFSET + MNM_SYMBOL
+	optional string      exchange                  = 110101;    // PB_OFFSET + MNM_EXCHANGE
+        optional Request     request                   = 100000;    // PB_OFFSET + MNM_REQUEST
+	optional BarType     bar_type                  = 119200;    // PB_OFFSET + MNM_DATA_BAR_TYPE
+	optional BarSubType  bar_sub_type              = 119208;    // PB_OFFSET + MNM_DATA_BAR_SUB_TYPE
+	optional string      bar_type_specifier        = 148162;    // PB_OFFSET + MNM_CATEGORY_SPECIFIC_INFO
+	optional int32       custom_session_open_ssm   = 119209;    // PB_OFFSET + MNM_CUSTOM_SESSION_OPEN_SSM
+	optional int32       custom_session_close_ssm  = 119210;    // PB_OFFSET + MNM_CUSTOM_SESSION_CLOSE_SSM
+	}

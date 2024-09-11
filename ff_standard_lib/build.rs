@@ -1,3 +1,7 @@
+fn main() {}
+/*
+// Used to rebuild the rithmic proto buffer files... change the name of this file to build and build.
+
 use std::{env, fs};
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -200,4 +204,4 @@ const RITHMIC_PROTO_FILES: [&str; 151] = [
     "trade_statistics.proto",
     "update_easy_to_borrow_list.proto",
     "user_account_update.proto",
-];
+];*/

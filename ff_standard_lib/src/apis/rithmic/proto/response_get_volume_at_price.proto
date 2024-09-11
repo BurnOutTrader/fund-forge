@@ -1,0 +1,21 @@
+
+package rti;
+
+message ResponseGetVolumeAtPrice
+	{       
+	// PB_OFFSET = 100000, is the offset added for each MNM field id
+
+	required int32   template_id          = 154467;  // PB_OFFSET + MNM_TEMPLATE_ID
+	repeated string  user_msg             = 132760;  // PB_OFFSET + MNM_USER_MSG	
+	repeated string  rq_handler_rp_code   = 132764;  // PB_OFFSET + MNM_REQUEST_HANDLER_RESPONSE_CODE
+	repeated string  rp_code              = 132766;  // PB_OFFSET + MNM_RESPONSE_CODE
+
+	optional string  symbol               = 110100;  // PB_OFFSET + MNM_SYMBOL
+	optional string  exchange             = 110101;  // PB_OFFSET + MNM_EXCHANGE
+
+	repeated double  trade_price          = 100006;  // PB_OFFSET + MNM_TRADE_PRICE
+	repeated int32   volume_at_price      = 156980;  // PB_OFFSET + MNM_VOLUME_AT_PRICE
+
+	optional int32   ssboe                = 150100;  // PB_OFFSET + MNM_SECONDS_SINCE_BOE
+	optional int32   usecs                = 150101;  // PB_OFFSET + MNM_USECS
+	}	

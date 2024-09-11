@@ -1,0 +1,36 @@
+
+package rti;
+
+message ResponseTimeBarReplay
+	{                       
+	enum BarType {
+	              SECOND_BAR    =  1;
+		      MINUTE_BAR    =  2;
+		      DAILY_BAR     =  3;
+		      WEEKLY_BAR    =  4;
+	             }
+              
+	required int32   template_id                 = 154467;
+	optional string  request_key                 = 132758;
+	repeated string  user_msg                    = 132760;
+	repeated string  rq_handler_rp_code          = 132764;
+	repeated string  rp_code                     = 132766;
+
+	optional string  symbol                      = 110100;
+	optional string  exchange                    = 110101;
+
+	optional BarType type                        = 119200;
+	optional string  period                      = 119112;
+	optional int32   marker                      = 119100;
+	optional uint64  num_trades                  = 119109;
+	optional uint64  volume                      = 119110;
+	optional uint64  bid_volume                  = 119117;
+	optional uint64  ask_volume                  = 119118;
+	optional double  open_price                  = 100019;
+	optional double  close_price                 = 100021;
+	optional double  high_price                  = 100012;
+	optional double  low_price                   = 100013;
+	optional double  settlement_price            = 100070;
+	optional bool    has_settlement_price        = 149138;
+	optional bool    must_clear_settlement_price = 154571;
+	}

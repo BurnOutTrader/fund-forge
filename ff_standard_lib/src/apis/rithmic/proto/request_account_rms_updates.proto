@@ -1,0 +1,19 @@
+
+package rti;
+
+message RequestAccountRmsUpdates
+	{
+	enum UpdateBits {
+	                 AUTO_LIQ_THRESHOLD_CURRENT_VALUE  =  1;
+	                }
+	
+	required int32    template_id     = 154467;
+	repeated string   user_msg        = 132760;
+
+	optional string   fcm_id          = 154013;
+	optional string   ib_id           = 154014;
+	optional string   account_id      = 154008;
+	
+	optional string   request         = 100000;  // values can be either 'subscribe' or 'unsubscribe'
+	optional int32    update_bits     = 154211;
+	}

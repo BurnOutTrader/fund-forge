@@ -1,0 +1,67 @@
+
+package rti;
+
+message ResponseReferenceData
+	{
+	// presence bits defined here is also referred in response_get_instrument_by_underlying.proto and response_search_symbols.proto
+	// make sure both these proto files are always same.
+
+	// bit constants are defined using enum
+	enum PresenceBits {
+	                   EXCHANGE_SYMBOL                     =       1;
+	                   SYMBOL_NAME                         =       2;
+			   PRODUCT_CODE                        =       4;
+			   INSTRUMENT_TYPE                     =       8;
+			   UNDERLYING_SYMBOL                   =      16;
+			   EXPIRATION_DATE                     =      32;
+			   CURRENCY                            =      64;
+			   PUT_CALL_INDICATOR                  =     128;
+			   STRIKE_PRICE                        =     256;
+			   FPRICE_TO_QPRICE                    =     512;
+			   QPRICE_TO_FPRICE                    =    1024;
+			   MIN_QPRICE_CHANGE                   =    2048;
+			   MIN_FRPICE_CHANGE                   =    4096;
+			   SINGLE_POINT_VALUE                  =    8192;
+			   TICK_SIZE_TYPE                      =   16384;
+			   PRICE_DISPLAY_FORMAT	               =   32768;  
+			   IS_TRADABLE                         =   65536;
+			   TRADING_SYMBOL                      =  131072;
+			   TRADING_EXCHANGE                    =  262144;
+			   IS_UNDERLYING_FOR_BINARY_CONTRACTS  = 8388608;
+                          }
+
+	required int32  template_id             = 154467;
+	repeated string user_msg                = 132760;
+	repeated string rp_code                 = 132766;
+
+	optional uint32 presence_bits           = 149138;
+	optional uint32 clear_bits              = 154571;
+
+	optional string symbol                  = 110100;
+	optional string exchange                = 110101;
+
+	optional string exchange_symbol         = 110114;
+	optional string symbol_name             = 100003;
+
+	optional string trading_symbol          = 157095;
+	optional string trading_exchange        = 157096;
+
+	optional string product_code            = 100749;
+	optional string instrument_type         = 110116;
+	optional string underlying_symbol       = 101026;
+	optional string expiration_date         = 100067;
+	optional string currency                = 154382;
+	optional string put_call_indicator      = 100109;
+	optional string tick_size_type          = 154167;
+	optional string price_display_format    = 154390;
+	optional string is_tradable             = 154844;
+	
+	optional string is_underlying_for_binary_contrats = 154952;
+
+	optional double strike_price            = 100066;
+	optional double ftoq_price              = 154384;
+	optional double qtof_price              = 154385;
+	optional double min_qprice_change       = 154386;
+	optional double min_fprice_change       = 154387;
+	optional double single_point_value      = 154389;
+	}

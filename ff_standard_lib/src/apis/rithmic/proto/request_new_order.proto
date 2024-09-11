@@ -1,0 +1,88 @@
+
+package rti;
+
+message RequestNewOrder
+	{                                
+        enum TransactionType {
+	                      BUY  = 1;
+		              SELL = 2;
+	                     }
+
+        enum OrderPlacement {
+	                     MANUAL  = 1;
+			     AUTO    = 2;
+	                    }
+
+        enum Duration {
+	               DAY  = 1;
+		       GTC  = 2;
+		       IOC  = 3;
+		       FOK  = 4;
+                      }
+ 
+        enum PriceType {
+	                LIMIT              =  1;
+			MARKET             =  2;
+			STOP_LIMIT         =  3;
+			STOP_MARKET        =  4;
+			MARKET_IF_TOUCHED  =  5;
+			LIMIT_IF_TOUCHED   =  6;
+                       }
+
+	enum PriceField {
+	                 BID_PRICE    =  1;
+			 OFFER_PRICE  =  2;
+			 TRADE_PRICE  =  3;
+			 LEAN_PRICE   =  4;
+	                }
+
+	enum Condition {
+	     	        EQUAL_TO               =  1;
+			NOT_EQUAL_TO           =  2;
+			GREATER_THAN           =  3;
+			GREATER_THAN_EQUAL_TO  =  4;
+			LESSER_THAN            =  5;
+			LESSER_THAN_EQUAL_TO   =  6;
+	               }
+
+
+	required int32             template_id            = 154467;
+	repeated string            user_msg               = 132760;
+	optional string            user_tag               = 154119;
+	optional string            window_name            = 154629;
+
+	optional string            fcm_id                 = 154013;
+	optional string            ib_id                  = 154014;
+	optional string            account_id             = 154008;
+
+	optional string            symbol                 = 110100;
+	optional string            exchange               = 110101;
+
+	optional  int32            quantity               = 112004;
+	optional  double           price                  = 110306;
+	optional  double           trigger_price          = 149247;
+
+	optional  TransactionType  transaction_type       = 112003;
+	optional  Duration         duration               = 112005;
+	optional  PriceType        price_type             = 112008;
+
+	optional  string           trade_route            = 112016;
+	optional  OrderPlacement   manual_or_auto         = 154710;
+
+	optional  bool             trailing_stop          = 157063;
+        optional  int32            trail_by_ticks         = 157064;   
+        optional  int32            trail_by_price_id      = 157065;
+
+	optional  int32            release_at_ssboe       = 154487;
+	optional  int32            release_at_usecs       = 154549;
+
+	optional  int32            cancel_at_ssboe        = 157085;
+	optional  int32            cancel_at_usecs        = 157086;
+        optional  int32            cancel_after_secs      = 154488;
+
+	optional  string           if_touched_symbol      = 154451;
+	optional  string           if_touched_exchange    = 154452;
+	optional  Condition        if_touched_condition   = 154453;
+	optional  PriceField       if_touched_price_field = 154454;
+	optional  double           if_touched_price       = 153632;
+	}

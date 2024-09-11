@@ -1,0 +1,11 @@
+
+package rti;
+
+message RequestOrderSessionConfig
+	{                        
+	required int32   template_id            = 154467;
+	repeated string  user_msg               = 132760;
+
+	optional bool    should_defer_request   = 157750;	// used only when the server has to fetch refdata from the system instead from it's own database.
+	                                       	                // If this field is true, requests are deferred and server loads refdata automatically 
+	}	
