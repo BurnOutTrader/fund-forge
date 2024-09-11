@@ -1,5 +1,7 @@
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive, Zero};
 use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
+use crate::standardized_types::Price;
 
 /// Safely divides two f64 values using Decimal for precision.
 /// Panics if the divisor is zero or if conversion fails.
@@ -14,30 +16,17 @@ pub fn divide_f64(dividend: f64, divisor: f64) -> f64 {
     result.to_f64().expect("Error converting result to f64")
 }
 
-pub fn round_to_decimals(value: f64, decimals: u64) -> f64 {
-    // Convert to Decimal for precision
-    let decimal_value = Decimal::from_f64(value).unwrap();
-
+pub fn round_to_decimals(value: Decimal, decimals: u32) -> Price {
     // Create a factor of 10^decimals using Decimal
-    let factor = Decimal::from_i64(10_i64.pow(decimals as u32)).unwrap();
+    let factor = Decimal::from_i64(10_i64.pow(decimals)).unwrap();
 
     // Perform the rounding operation
-    let rounded_decimal = (decimal_value * factor).round() / factor;
-
-    // Convert back to f64
-    rounded_decimal.to_f64().unwrap()
+    (value * factor).round() / factor
 }
 
-pub fn round_to_tick_size(value: f64, tick_size: f64) -> f64 {
-    // Convert to Decimal for precision
-    let decimal_value = Decimal::from_f64(value).unwrap();
-    let tick_size_decimal = Decimal::from_f64(tick_size).unwrap();
-
+pub fn round_to_tick_size(value: Price, tick_size: Price) -> Price {
     // Perform the rounding to the nearest tick size
-    let rounded_decimal = (decimal_value / tick_size_decimal).round() * tick_size_decimal;
-
-    // Convert back to f64
-    rounded_decimal.to_f64().unwrap()
+    (value / tick_size).round() * tick_size
 }
 
 /// Calculates the average of a vector of floating-point numbers using Decimal for high precision.
@@ -52,7 +41,7 @@ pub fn average_of_f64(values: &Vec<f64>) -> f64 {
             continue; // Skip NaN values
         }
         // Convert float to Decimal, using zero as a fallback for conversion failure
-        let decimal_price = Decimal::from_f64(price).unwrap_or(Decimal::zero());
+        let decimal_price = Decimal::from_f64(price).unwrap();
         total += decimal_price;
         count += 1;
     }

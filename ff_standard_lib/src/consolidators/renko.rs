@@ -1,3 +1,6 @@
+use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal_macros::dec;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -26,8 +29,8 @@ impl RenkoConsolidator {
         let current_data = match &subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(
                 subscription.symbol.clone(),
-                0.0,
-                0.0,
+                dec!(0.0),
+                dec!(0.0),
                 "".to_string(),
                 Resolution::Instant,
                 subscription.candle_type.clone().unwrap(),

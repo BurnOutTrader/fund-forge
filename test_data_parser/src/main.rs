@@ -6,6 +6,8 @@ use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscri
 use std::fs::File;
 use std::io::{self, BufRead};
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::helpers::decimal_calculators::round_to_tick_size;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -21,7 +23,7 @@ use ff_standard_lib::standardized_types::subscriptions::CandleType::CandleStick;
 fn main() -> Result<(), Box<dyn Error>> {
 
     let symbol = Symbol {
-        name: "CAD-JPY".to_string(),
+        name: "AUD-CAD".to_string(),
         market_type: MarketType::Forex,
         data_vendor: DataVendor::Test,
     };
@@ -70,10 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 BaseDataType::Ticks => {},
                 BaseDataType::TradePrices => {},
                 BaseDataType::QuoteBars => {},
-                BaseDataType::Candles => {
-                    let candles = load_csv_candles(&file_path, symbol.clone(), Resolution::Minutes(1))?;
-                    data.extend(candles);
-                },
+                BaseDataType::Candles => {},
                 BaseDataType::Fundamentals => {},
             }
         }
@@ -88,44 +87,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         })?;
 
     Ok(())
-}
-
-
-///to parse 'Candle' data from https://www.histdata.com/.
-/// Note this is only for data with decimal accuracy of 5 or range will be wrong.
-fn load_csv_candles(file_path: &str, symbol: Symbol, resolution: Resolution) -> Result<BTreeMap<DateTime<Utc>, BaseDataEnum>, Box<dyn std::error::Error>> {
-    let file = File::open(file_path)?;
-    let reader = io::BufReader::new(file);
-
-    let mut quotes = BTreeMap::new();
-    for line in reader.lines() {
-        let line = line?;
-        let parts: Vec<&str> = line.split(',').collect();
-
-        let time = parts.get(0).expect("REASON").to_string();
-        let format = "%Y%m%d %H%M%S";
-        let naive_datetime = NaiveDateTime::parse_from_str(&time, format)?;
-
-        // Convert NaiveDateTime to DateTime<Utc>
-        let utc_datetime: DateTime<Utc> = Utc.from_utc_datetime(&naive_datetime);
-        let high =parts.get(2).expect("REASON").parse::<f64>()?;
-        let low = parts.get(3).expect("REASON").parse::<f64>()?;
-        let candle = Candle {
-            symbol: symbol.clone(),
-            open: parts.get(1).expect("REASON").parse::<f64>()?,
-            range: round_to_tick_size(high - low, 0.00001),
-            high,
-            low,
-            close: parts.get(4).expect("REASON").parse::<f64>()?,
-            volume: parts.get(5).expect("REASON").parse::<f64>()?,
-            time: utc_datetime.to_string(),
-            is_closed: true,
-            resolution,
-            candle_type: CandleType::CandleStick,
-        };
-        quotes.insert(utc_datetime, BaseDataEnum::Candle(candle));
-    }
-    Ok(quotes)
 }
 
 
@@ -149,11 +110,11 @@ fn load_csv_quotes(file_path: &str, symbol: Symbol) -> Result<BTreeMap<DateTime<
 
         let quote = Quote {
             symbol: symbol.clone(),
-            bid: parts.get(1).expect("REASON").parse::<f64>()?,
-            ask_volume: 0.0,
-            ask: parts.get(2).expect("REASON").parse::<f64>()?,
+            bid: parts.get(1).expect("REASON").parse::<Decimal>()?,
+            ask_volume: dec!(0.0),
+            ask: parts.get(2).expect("REASON").parse::<Decimal>()?,
             time: utc_datetime.to_string(),
-            bid_volume: 0.0,
+            bid_volume: dec!(0.0),
             book_level: 0,
         };
         quotes.insert(utc_datetime, BaseDataEnum::Quote(quote));

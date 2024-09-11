@@ -5,10 +5,13 @@ use crate::indicators::values::{IndicatorValue, IndicatorValues};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;
-use crate::standardized_types::Color;
+use crate::standardized_types::{Color, Price};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::fmt::{Display, Formatter};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use rust_decimal_macros::dec;
 
 pub struct AverageTrueRange {
     name: IndicatorName,
@@ -16,7 +19,7 @@ pub struct AverageTrueRange {
     history: RollingWindow<IndicatorValues>,
     base_data_history: RollingWindow<BaseDataEnum>,
     is_ready: bool,
-    tick_size: f64,
+    tick_size: Price,
     plot_color: Option<Color>,
 }
 
@@ -56,7 +59,7 @@ impl AverageTrueRange {
         atr
     }
 
-    fn calculate_true_range(&self) -> f64 {
+    fn calculate_true_range(&self) -> Price {
         let base_data = self.base_data_history.history();
         let mut true_ranges = Vec::new();
 
@@ -81,11 +84,11 @@ impl AverageTrueRange {
         // Calculate the average of true ranges (ATR)
         let atr = if !true_ranges.is_empty() {
             round_to_tick_size(
-                true_ranges.iter().sum::<f64>() / true_ranges.len() as f64,
+                true_ranges.iter().sum::<Decimal>() / Decimal::from_usize(true_ranges.len()).unwrap() ,
                 self.tick_size.clone(),
             )
         } else {
-            0.0
+            dec!(0.0)
         };
 
         atr
@@ -111,7 +114,7 @@ impl Indicators for AverageTrueRange {
         }
 
         let atr = self.calculate_true_range();
-        if atr == 0.0 {
+        if atr.to_f64().unwrap() == 0.0 {
             return None;
         }
 

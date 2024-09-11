@@ -1,7 +1,7 @@
 use crate::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
 use crate::indicators::indicators_trait::IndicatorName;
 use crate::standardized_types::subscriptions::DataSubscription;
-use crate::standardized_types::Color;
+use crate::standardized_types::{Color, Price};
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -16,12 +16,12 @@ pub type PlotName = String;
 #[archive_attr(derive(Debug))]
 pub struct IndicatorValue {
     pub plot_name: PlotName,
-    pub value: f64,
+    pub value: Price,
     pub color: Option<Color>,
 }
 
 impl IndicatorValue {
-    pub fn new(plot_name: PlotName, value: f64, color: Option<Color>) -> Self {
+    pub fn new(plot_name: PlotName, value: Price, color: Option<Color>) -> Self {
         Self {
             plot_name,
             value,

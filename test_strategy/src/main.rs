@@ -13,10 +13,15 @@ use ff_standard_lib::standardized_types::strategy_events::{
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use std::sync::Arc;
+use rust_decimal_macros::dec;
 use tokio::sync::{mpsc, Notify};
 use ff_standard_lib::apis::brokerage::Brokerage;
+use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
+use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
+use ff_standard_lib::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
+use ff_standard_lib::standardized_types::Color;
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 
 // to launch on separate machine
@@ -34,72 +39,32 @@ async fn main() {
         notify.clone(),
         StrategyMode::Backtest,                 // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2023, 01, 4)
+        NaiveDate::from_ymd_opt(2024, 08, 23)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2023, 01, 6)
+        NaiveDate::from_ymd_opt(2024, 08, 25)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
         Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![DataSubscription::new_custom(
-                "AUD-CAD".to_string(),
+                "EUR-USD".to_string(),
                 DataVendor::Test,
                 Resolution::Minutes(3),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
-    /*         DataSubscription::new_custom(
-                 "AUD-USD".to_string(),
-                 DataVendor::Test,
-                 Resolution::Minutes(3),
-                 BaseDataType::QuoteBars,
-                 MarketType::Forex,
-                 CandleType::CandleStick,
-             ),*/
-             /*DataSubscription::new_custom(
+               DataSubscription::new_custom(
                  "AUD-CAD".to_string(),
                  DataVendor::Test,
                  Resolution::Minutes(3),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::CandleStick,
-             ),
-             DataSubscription::new_custom(
-                 "AUD-CAD".to_string(),
-                 DataVendor::Test,
-                 Resolution::Seconds(15),
-                 BaseDataType::QuoteBars,
-                 MarketType::Forex,
-                 CandleType::CandleStick,
-             ),
-             DataSubscription::new_custom(
-                 "USD-HUF".to_string(),
-                 DataVendor::Test,
-                 Resolution::Minutes(15),
-                 BaseDataType::QuoteBars,
-                 MarketType::Forex,
-                 CandleType::CandleStick,
-             ),
-             DataSubscription::new_custom(
-                 "USD-HUF".to_string(),
-                 DataVendor::Test,
-                 Resolution::Minutes(3),
-                 BaseDataType::QuoteBars,
-                 MarketType::Forex,
-                 CandleType::CandleStick,
-             ),
-             DataSubscription::new_custom(
-                 "USD-HUF".to_string(),
-                 DataVendor::Test,
-                 Resolution::Seconds(15),
-                 BaseDataType::QuoteBars,
-                 MarketType::Forex,
-                 CandleType::CandleStick,
-             )*/], //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
+             ),],
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
@@ -118,7 +83,7 @@ pub async fn on_data_received(
     notify: Arc<Notify>,
     mut event_receiver: mpsc::Receiver<EventTimeSlice>,
 ) {
- /*   let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
+    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new(
                 "AUD-CAD".to_string(),
                 DataVendor::Test,
@@ -132,7 +97,7 @@ pub async fn on_data_received(
         )
             .await,
     );
-    strategy.indicator_subscribe(heikin_atr_20).await;*/
+    strategy.indicator_subscribe(heikin_atr_20).await;
 
     let brokerage = Brokerage::Test;
     let symbol_name_1 = SymbolName::from("AUD-CAD");
@@ -155,7 +120,7 @@ pub async fn on_data_received(
                     for base_data in &time_slice {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
-                            BaseDataEnum::Price(_) => {}
+                            BaseDataEnum::TradePrice(_) => {}
                             BaseDataEnum::Candle(candle) => {
                                 if candle.is_closed == true {
                                     println!("{}", candle);
@@ -165,7 +130,7 @@ pub async fn on_data_received(
                                 //do something on the bar close
                                 if quotebar.is_closed == true {
                                     history.add(quotebar.clone());
-                                    //println!("{} Closed bar time {}", time, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
+                                    println!("{} Closed bar time {}", time, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     if !warmup_complete {
                                         continue;
                                     }
@@ -187,14 +152,14 @@ pub async fn on_data_received(
                                     if quotebar.bid_close > last_bar.bid_high
                                         && !strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
-                                        let _entry_order_id = strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 10000, String::from("Enter Long"), None).await;
+                                        let _entry_order_id = strategy.enter_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), dec!(10000), String::from("Enter Long"), None).await;
                                         bars_since_entry_1 = 0;
                                     }
                                     else if bars_since_entry_1 > 10
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
                                         && strategy.is_long(&brokerage, &account, &quotebar.symbol.name).await
                                     {
-                                        let _exit_order_id = strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), 10000, String::from("Exit Long")).await;
+                                        let _exit_order_id = strategy.exit_long(quotebar.symbol.name.clone(), account.clone(), brokerage.clone(), dec!(10000), String::from("Exit Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
 

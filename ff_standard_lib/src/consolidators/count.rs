@@ -1,3 +1,4 @@
+use rust_decimal::prelude::FromPrimitive;
 use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::decimal_calculators::round_to_tick_size;
@@ -5,10 +6,12 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;
 
-
+//Todo Replace all quantity and volume with Volume aka Decimal, same for price.
 /// A consolidator that produces a new piece of data after a certain number of data points have been added.
 /// Supports Ticks only.
 pub struct CountConsolidator {
@@ -17,7 +20,7 @@ pub struct CountConsolidator {
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
-    tick_size: f64, //need to add this
+    tick_size: Price, //need to add this
 }
 
 impl CountConsolidator {
@@ -35,8 +38,8 @@ impl CountConsolidator {
         let current_data = match subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(
                 subscription.symbol.clone(),
-                0.0,
-                0.0,
+                Price::from_f64(0.0).unwrap(),
+                Volume::from_f64(0.0).unwrap(),
                 "".to_string(),
                 Resolution::Ticks(number),
                 subscription.candle_type.clone().unwrap(),
@@ -104,9 +107,9 @@ impl CountConsolidator {
                     self.current_data = match self.subscription.base_data_type {
                         BaseDataType::Ticks => Candle::new(
                             self.subscription.symbol.clone(),
-                            0.0,
-                            0.0,
-                            "".to_string(),
+                            Price::from_f64(0.0).unwrap(),
+                            Volume::from_f64(0.0).unwrap(),
+                            base_data.time_utc().to_string(),
                             Resolution::Ticks(self.number),
                             self.subscription.candle_type.clone().unwrap(),
                         ),

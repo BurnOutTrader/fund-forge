@@ -8,7 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 use strum_macros::Display;
-use crate::helpers::decimal_calculators::round_to_decimals;
+use crate::standardized_types::{Price, Volume};
 
 async fn broker_api_object(vendor: &Brokerage) -> Arc<impl BrokerApiResponse> {
     match vendor {
@@ -45,9 +45,9 @@ pub enum Brokerage {
 }
 
 impl Brokerage {
-    pub async fn margin_required_historical(&self, _symbol_name: SymbolName, quantity: u64) -> f64 { //todo make this [art of the trait
+    pub async fn margin_required_historical(&self, _symbol_name: SymbolName, quantity: Volume) -> Price { //todo make this [art of the trait
         match self {
-            Brokerage::Test => quantity as f64
+            Brokerage::Test => quantity
         }
     }
 
@@ -55,7 +55,7 @@ impl Brokerage {
         &self,
         account_id: AccountId,
         currency: AccountCurrency,
-        cash_value: f64,
+        cash_value: Price,
     ) -> Ledger {
         match self {
             Brokerage::Test => {
@@ -158,7 +158,9 @@ pub mod client_requests {
     use crate::standardized_types::subscriptions::{Symbol, SymbolName};
     use async_trait::async_trait;
     use std::sync::Arc;
+    use rust_decimal_macros::dec;
     use tokio::sync::Mutex;
+    use crate::standardized_types::Price;
 
     #[async_trait]
     pub trait ClientSideBrokerage: Sync + Send {
@@ -259,9 +261,9 @@ pub mod client_requests {
             }
         }
 
-        pub fn starting_cash(&self) -> f64 {
+        pub fn starting_cash(&self) -> Price {
             match self {
-                Brokerage::Test => 100000.0,
+                Brokerage::Test => dec!(100000.0),
             }
         }
 

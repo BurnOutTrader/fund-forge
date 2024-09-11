@@ -2,13 +2,14 @@ use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
-use crate::standardized_types::{Price, TimeString};
+use crate::standardized_types::{Price, TimeString, Volume};
 use chrono::{DateTime, FixedOffset};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
+use rust_decimal_macros::dec;
 
 /// Represents a single quote bar in a financial chart, commonly used
 /// in the financial technical analysis of price patterns.
@@ -42,7 +43,7 @@ pub struct QuoteBar {
     pub ask_low: Price,
     pub ask_open: Price,
     pub ask_close: Price,
-    pub volume: f64,
+    pub volume: Volume,
     pub range: Price,
     pub time: TimeString,
     pub spread: Price,
@@ -79,9 +80,9 @@ impl QuoteBar {
     /// - `candle_type`: The type of candlestick.
     pub fn new(
         symbol: Symbol,
-        bid_open: f64,
-        ask_open: f64,
-        volume: f64,
+        bid_open: Price,
+        ask_open: Price,
+        volume: Volume,
         time: String,
         resolution: Resolution,
         candle_type: CandleType,
@@ -97,7 +98,7 @@ impl QuoteBar {
             ask_open,
             ask_close: ask_open,
             volume,
-            range: 0.0,
+            range: dec!(0.0),
             time,
             spread: ask_open - bid_open,
             is_closed: false,
@@ -142,15 +143,15 @@ impl QuoteBar {
     /// - `data_vendor`: The data vendor that provided the quote bar.
     pub fn from_closed(
         symbol: Symbol,
-        bid_high: f64,
-        bid_low: f64,
-        bid_open: f64,
-        bid_close: f64,
-        ask_high: f64,
-        ask_low: f64,
-        ask_open: f64,
-        ask_close: f64,
-        volume: f64,
+        bid_high: Price,
+        bid_low: Price,
+        bid_open: Price,
+        bid_close: Price,
+        ask_high: Price,
+        ask_low: Price,
+        ask_open: Price,
+        ask_close: Price,
+        volume: Volume,
         time: DateTime<chrono::Utc>,
         resolution: Resolution,
         candle_type: CandleType,

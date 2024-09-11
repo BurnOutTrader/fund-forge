@@ -50,7 +50,7 @@ pub enum BaseDataEnum {
     /// * `time` - The time the price was recorded.
     /// * `data_vendor` - The data vendor that provided the price.
     ///
-    Price(TradePrice),
+    TradePrice(TradePrice),
 
     /// The `Candle` struct is used to represent the properties of an asset at a given Resolution. see [`Candle`](ff_data_vendors::base_data_types::candle::Candle)
     ///
@@ -133,7 +133,7 @@ pub enum BaseDataEnum {
 impl Display for BaseDataEnum {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            BaseDataEnum::Price(price) => write!(
+            BaseDataEnum::TradePrice(price) => write!(
                 f,
                 "{}: {}, {}: {}",
                 price.symbol.name, price.symbol.data_vendor, price.price, price.time
@@ -194,7 +194,7 @@ impl Display for BaseDataEnum {
 impl BaseDataEnum {
     pub fn symbol(&self) -> &Symbol {
         match self {
-            BaseDataEnum::Price(price) => &price.symbol,
+            BaseDataEnum::TradePrice(price) => &price.symbol,
             BaseDataEnum::Candle(candle) => &candle.symbol,
             BaseDataEnum::QuoteBar(quote_bar) => &quote_bar.symbol,
             BaseDataEnum::Tick(tick) => &tick.symbol,
@@ -243,7 +243,7 @@ impl BaseDataEnum {
     /// Links `BaseDataEnum` to a `BaseDataType`
     pub fn base_data_type(&self) -> BaseDataType {
         match self {
-            BaseDataEnum::Price(_) => BaseDataType::TradePrices,
+            BaseDataEnum::TradePrice(_) => BaseDataType::TradePrices,
             BaseDataEnum::Candle(_) => BaseDataType::Candles,
             BaseDataEnum::QuoteBar(_) => BaseDataType::QuoteBars,
             BaseDataEnum::Tick(_) => BaseDataType::Ticks,
@@ -647,7 +647,7 @@ impl BaseData for BaseDataEnum {
     /// Returns the symbol of the `BaseDataEnum` variant
     fn symbol_name(&self) -> Symbol {
         match self {
-            BaseDataEnum::Price(price) => price.symbol.clone(),
+            BaseDataEnum::TradePrice(price) => price.symbol.clone(),
             BaseDataEnum::Candle(candle) => candle.symbol.clone(),
             BaseDataEnum::QuoteBar(quote_bar) => quote_bar.symbol.clone(),
             BaseDataEnum::Tick(tick) => tick.symbol.clone(),
@@ -664,7 +664,7 @@ impl BaseData for BaseDataEnum {
     /// This is the closing time of the `BaseDataEnum` variant, so for 1 hour quotebar, if the bar opens at 5pm, the closing time will be 6pm and the time_utc will be 6pm. time_object_unchanged(&self) will return the unaltered value.
     fn time_utc(&self) -> DateTime<Utc> {
         match self {
-            BaseDataEnum::Price(price) => DateTime::from_str(&price.time).unwrap(),
+            BaseDataEnum::TradePrice(price) => DateTime::from_str(&price.time).unwrap(),
             BaseDataEnum::Candle(candle) => DateTime::from_str(&candle.time).unwrap(),
             BaseDataEnum::QuoteBar(quote_bar) => DateTime::from_str(&quote_bar.time).unwrap(),
             BaseDataEnum::Tick(tick) => DateTime::from_str(&tick.time).unwrap(),
@@ -677,7 +677,7 @@ impl BaseData for BaseDataEnum {
 
     fn time_created_utc(&self) -> DateTime<Utc> {
         match self {
-            BaseDataEnum::Price(price) => price.time_utc(),
+            BaseDataEnum::TradePrice(price) => price.time_utc(),
             BaseDataEnum::Candle(candle) => candle.time_utc() + candle.resolution.as_duration(),
             BaseDataEnum::QuoteBar(quote_bar) => {
                 quote_bar.time_utc() + quote_bar.resolution.as_duration()
@@ -695,7 +695,7 @@ impl BaseData for BaseDataEnum {
     /// Returns the `DataVendor` enum variant of the `BaseDataEnum` variant object
     fn data_vendor(&self) -> DataVendor {
         match self {
-            BaseDataEnum::Price(price) => price.symbol.data_vendor.clone(),
+            BaseDataEnum::TradePrice(price) => price.symbol.data_vendor.clone(),
             BaseDataEnum::Candle(candle) => candle.symbol.data_vendor.clone(),
             BaseDataEnum::QuoteBar(quote_bar) => quote_bar.symbol.data_vendor.clone(),
             BaseDataEnum::Tick(tick) => tick.symbol.data_vendor.clone(),
@@ -706,7 +706,7 @@ impl BaseData for BaseDataEnum {
 
     fn market_type(&self) -> MarketType {
         match self {
-            BaseDataEnum::Price(price) => price.symbol.market_type.clone(),
+            BaseDataEnum::TradePrice(price) => price.symbol.market_type.clone(),
             BaseDataEnum::Candle(candle) => candle.symbol.market_type.clone(),
             BaseDataEnum::QuoteBar(quote_bar) => quote_bar.symbol.market_type.clone(),
             BaseDataEnum::Tick(tick) => tick.symbol.market_type.clone(),

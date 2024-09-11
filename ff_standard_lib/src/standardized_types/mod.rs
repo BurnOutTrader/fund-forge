@@ -1,3 +1,4 @@
+
 pub mod accounts;
 pub mod base_data;
 pub mod data_server_messaging;
@@ -10,13 +11,18 @@ pub mod subscription_handler;
 pub mod subscriptions;
 pub mod time_slices;
 
-pub type OwnerId = String;
-pub type TimeString = String;
-
-pub type Price = f64;
 
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use rust_decimal::Decimal;
 use serde_derive::{Deserialize, Serialize};
+
+pub type OwnerId = String;
+pub type TimeString = String;
+pub type Price = Decimal;
+
+pub type Volume = Decimal;
+
+
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Deserialize, Serialize)]
 #[archive(compare(PartialEq), check_bytes)]

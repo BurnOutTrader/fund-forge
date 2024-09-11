@@ -8,28 +8,32 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
+use crate::standardized_types::{Price, Volume};
 
 pub struct HeikinAshiConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
-    previous_ha_close: f64,
-    previous_ha_open: f64,
-    tick_size: f64,
+    previous_ha_close: Price,
+    previous_ha_open: Price,
+    tick_size: Price,
 }
 
 impl HeikinAshiConsolidator {
     fn candle_from_base_data(
         &self,
-        ha_open: f64,
-        ha_high: f64,
-        ha_low: f64,
-        ha_close: f64,
-        volume: f64,
+        ha_open: Price,
+        ha_high: Price,
+        ha_low: Price,
+        ha_close: Price,
+        volume: Volume,
         time: String,
         is_closed: bool,
-        range: f64,
+        range: Price,
     ) -> Candle {
         Candle {
             symbol: self.subscription.symbol.clone(),
@@ -49,16 +53,16 @@ impl HeikinAshiConsolidator {
     fn new_heikin_ashi_candle(&mut self, new_data: &BaseDataEnum) -> Candle {
         match new_data {
             BaseDataEnum::Candle(candle) => {
-                if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
+                if self.previous_ha_close.to_f64().unwrap() == 0.0 && self.previous_ha_open.to_f64().unwrap() == 0.0 {
                     self.previous_ha_close = candle.close;
                     self.previous_ha_open = candle.open;
                 }
                 let ha_close = round_to_tick_size(
-                    (candle.open + candle.high + candle.low + candle.close) / 4.0,
+                    (candle.open + candle.high + candle.low + candle.close) / dec!(4.0),
                     self.tick_size,
                 );
                 let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
                     self.tick_size,
                 );
                 let ha_high = candle.high.max(ha_open).max(ha_close);
@@ -80,14 +84,14 @@ impl HeikinAshiConsolidator {
                     ha_high - ha_low,
                 )
             }
-            BaseDataEnum::Price(price) => {
-                if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
+            BaseDataEnum::TradePrice(price) => {
+                if self.previous_ha_close == dec!(0.0) && self.previous_ha_open == dec!(0.0) {
                     self.previous_ha_close = price.price;
                     self.previous_ha_open = price.price;
                 }
                 let ha_close = price.price;
                 let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
                     self.tick_size,
                 );
                 let ha_high = ha_close.max(ha_open);
@@ -103,20 +107,20 @@ impl HeikinAshiConsolidator {
                     ha_high,
                     ha_low,
                     ha_close,
-                    0.0,
+                    dec!(0.0),
                     time.to_string(),
                     false,
                     ha_high - ha_low,
                 )
             }
             BaseDataEnum::QuoteBar(bar) => {
-                if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
+                if self.previous_ha_close == dec!(0.0) && self.previous_ha_open == dec!(0.0) {
                     self.previous_ha_close = bar.bid_close;
                     self.previous_ha_open = bar.bid_close;
                 }
                 let ha_close = bar.bid_close;
                 let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
                     self.tick_size,
                 );
                 let ha_high = ha_close.max(ha_open);
@@ -139,13 +143,13 @@ impl HeikinAshiConsolidator {
                 )
             }
             BaseDataEnum::Tick(tick) => {
-                if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
+                if self.previous_ha_close == dec!(0.0) && self.previous_ha_open == dec!(0.0) {
                     self.previous_ha_close = tick.price;
                     self.previous_ha_open = tick.price;
                 }
                 let ha_close = tick.price;
                 let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    (self.previous_ha_open + self.previous_ha_close) / Decimal::from_f64(2.0).unwrap(),
                     self.tick_size,
                 );
                 let ha_high = ha_close.max(ha_open);
@@ -168,13 +172,13 @@ impl HeikinAshiConsolidator {
                 )
             }
             BaseDataEnum::Quote(quote) => {
-                if self.previous_ha_close == 0.0 && self.previous_ha_open == 0.0 {
+                if self.previous_ha_close == dec!(0.0) && self.previous_ha_open == dec!(0.0) {
                     self.previous_ha_close = quote.bid;
                     self.previous_ha_open = quote.bid;
                 }
                 let ha_close = quote.bid;
                 let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / 2.0,
+                    (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
                     self.tick_size,
                 );
                 let ha_high = ha_close.max(ha_open);
@@ -190,7 +194,7 @@ impl HeikinAshiConsolidator {
                     ha_high,
                     ha_low,
                     ha_close,
-                    0.0,
+                    dec!(0.0),
                     time.to_string(),
                     false,
                     ha_high - ha_low,
@@ -240,8 +244,8 @@ impl HeikinAshiConsolidator {
             current_data: None,
             subscription,
             history: RollingWindow::new(history_to_retain),
-            previous_ha_close: 0.0,
-            previous_ha_open: 0.0,
+            previous_ha_close: dec!(0.0),
+            previous_ha_open: dec!(0.0),
             tick_size,
         })
     }
@@ -294,7 +298,7 @@ impl HeikinAshiConsolidator {
                             candle.volume += new_candle.volume;
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
-                        BaseDataEnum::Price(price) => {
+                        BaseDataEnum::TradePrice(price) => {
                             candle.high = price.price.max(candle.high);
                             candle.low = price.price.min(candle.low);
                             candle.close = price.price;

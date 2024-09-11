@@ -28,7 +28,7 @@ use ff_standard_lib::standardized_types::strategy_events::{
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use ff_standard_lib::standardized_types::{OwnerId, Price};
+use ff_standard_lib::standardized_types::{OwnerId, Price, Volume};
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
 use std::env;
@@ -201,7 +201,7 @@ impl FundForgeStrategy {
         symbol_name: SymbolName,
         account_id: AccountId,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
         brackets: Option<Vec<ProtectiveOrder>>
     ) -> OrderId {
@@ -233,7 +233,7 @@ impl FundForgeStrategy {
         symbol_name: SymbolName,
         account_id: AccountId,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
         brackets: Option<Vec<ProtectiveOrder>>
     ) -> OrderId {
@@ -265,7 +265,7 @@ impl FundForgeStrategy {
         symbol_name: SymbolName,
         account_id: AccountId,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
     ) -> OrderId {
         let order_id = format!(
@@ -295,7 +295,7 @@ impl FundForgeStrategy {
         symbol_name: SymbolName,
         account_id: AccountId,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
     ) -> OrderId {
         let order_id = format!(
@@ -325,7 +325,7 @@ impl FundForgeStrategy {
         account_id: AccountId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
     ) -> OrderId {
         let order_id = format!(
@@ -356,7 +356,7 @@ impl FundForgeStrategy {
         account_id: AccountId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
     ) -> OrderId {
         let order_id = format!(

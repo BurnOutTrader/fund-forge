@@ -9,6 +9,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use std::fmt::{Debug, Display};
 use std::net::{SocketAddr, ToSocketAddrs};
+use crate::standardized_types::Price;
 
 /// An Api key String
 pub type ApiKey = String;
@@ -191,11 +192,11 @@ pub enum SynchronousResponseType {
 
     Markets(Vec<MarketType>),
 
-    TickSize(f64),
+    TickSize(Price),
 
     DecimalAccuracy(u8),
 
-    ValuePerTick(AccountCurrency, f64),
+    ValuePerTick(AccountCurrency, Price),
 
     SymbolInfo(SymbolInfo)
 }

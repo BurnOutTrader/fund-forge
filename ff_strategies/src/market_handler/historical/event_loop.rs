@@ -55,7 +55,7 @@ pub async fn historical_engine(
                     let update_future = tokio::spawn(async move {
                         for base_data in time_slice {
                             match base_data {
-                                BaseDataEnum::Price(ref price) => {
+                                BaseDataEnum::TradePrice(ref price) => {
                                     last_price_ref.insert(price.symbol.name.clone(), price.price);
                                 }
                                 BaseDataEnum::Candle(ref candle) => {

@@ -4,12 +4,13 @@ use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::OrderSide;
 use crate::standardized_types::subscriptions::{SymbolName};
-use crate::standardized_types::{OwnerId, Price};
+use crate::standardized_types::{OwnerId, Price, Volume};
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
+use rust_decimal_macros::dec;
 use strum_macros::Display;
 
 #[derive(
@@ -53,7 +54,7 @@ pub enum ProtectiveOrder {
     },
     TrailingStopLoss {
         price: Price,
-        trail_value: f64
+        trail_value: Price
     },
 }
 
@@ -100,11 +101,11 @@ pub struct Order {
     pub owner_id: OwnerId,
     pub symbol_name: SymbolName,
     pub brokerage: Brokerage,
-    pub quantity_ordered: u64,
-    pub quantity_filled: u64,
-    pub average_fill_price: Option<f64>,
-    pub limit_price: Option<f64>,
-    pub trigger_price: Option<f64>,
+    pub quantity_ordered: Volume,
+    pub quantity_filled: Volume,
+    pub average_fill_price: Option<Price>,
+    pub limit_price: Option<Price>,
+    pub trigger_price: Option<Price>,
     pub side: OrderSide,
     pub order_type: OrderType,
     pub time_in_force: TimeInForce,
@@ -113,8 +114,8 @@ pub struct Order {
     pub time_created_utc: String,
     pub time_filled_utc: Option<String>,
     pub state: OrderState,
-    pub fees: f64,
-    pub value: f64,
+    pub fees: Price,
+    pub value: Price,
     pub account_id: AccountId,
 }
 
@@ -127,7 +128,7 @@ impl Order {
         owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         side: OrderSide,
         tag: String,
         account_id: AccountId,
@@ -140,7 +141,7 @@ impl Order {
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
-            quantity_filled: 0,
+            quantity_filled: dec!(0.0),
             average_fill_price: None,
             limit_price: None,
             trigger_price: None,
@@ -151,8 +152,8 @@ impl Order {
             time_created_utc: time.to_string(),
             time_filled_utc: None,
             state: OrderState::Created,
-            fees: 0.0,
-            value: 0.0,
+            fees: dec!(0.0),
+            value: dec!(0.0),
             account_id,
         }
     }
@@ -161,7 +162,7 @@ impl Order {
         owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
         account_id: AccountId,
         order_id: OrderId,
@@ -173,7 +174,7 @@ impl Order {
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
-            quantity_filled: 0,
+            quantity_filled: dec!(0.0),
             average_fill_price: None,
             limit_price: None,
             trigger_price: None,
@@ -184,8 +185,8 @@ impl Order {
             time_created_utc: time.to_string(),
             time_filled_utc: None,
             state: OrderState::Created,
-            fees: 0.0,
-            value: 0.0,
+            fees: dec!(0.0),
+            value: dec!(0.0),
             account_id,
         }
     }
@@ -194,7 +195,7 @@ impl Order {
         owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
         account_id: AccountId,
         order_id: OrderId,
@@ -206,7 +207,7 @@ impl Order {
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
-            quantity_filled: 0,
+            quantity_filled: dec!(0.0),
             average_fill_price: None,
             limit_price: None,
             trigger_price: None,
@@ -217,8 +218,8 @@ impl Order {
             time_created_utc: time.to_string(),
             time_filled_utc: None,
             state: OrderState::Created,
-            fees: 0.0,
-            value: 0.0,
+            fees: dec!(0.0),
+            value: dec!(0.0),
             account_id,
         }
     }
@@ -227,7 +228,7 @@ impl Order {
         owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
         account_id: AccountId,
         order_id: OrderId,
@@ -240,7 +241,7 @@ impl Order {
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
-            quantity_filled: 0,
+            quantity_filled: dec!(0.0),
             average_fill_price: None,
             limit_price: None,
             trigger_price: None,
@@ -251,8 +252,8 @@ impl Order {
             time_created_utc: time.to_string(),
             time_filled_utc: None,
             state: OrderState::Created,
-            fees: 0.0,
-            value: 0.0,
+            fees: dec!(0.0),
+            value: dec!(0.0),
             account_id,
         }
     }
@@ -261,7 +262,7 @@ impl Order {
         owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
-        quantity: u64,
+        quantity: Volume,
         tag: String,
         account_id: AccountId,
         order_id: OrderId,
@@ -274,7 +275,7 @@ impl Order {
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
-            quantity_filled: 0,
+            quantity_filled: dec!(0.0),
             average_fill_price: None,
             limit_price: None,
             trigger_price: None,
@@ -285,8 +286,8 @@ impl Order {
             time_created_utc: time.to_string(),
             time_filled_utc: None,
             state: OrderState::Created,
-            fees: 0.0,
-            value: 0.0,
+            fees: dec!(0.0),
+            value: dec!(0.0),
             account_id,
         }
     }

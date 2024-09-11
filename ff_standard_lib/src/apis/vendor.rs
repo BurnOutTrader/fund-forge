@@ -146,6 +146,7 @@ pub mod client_requests {
     use async_trait::async_trait;
     use std::sync::Arc;
     use tokio::sync::Mutex;
+    use crate::standardized_types::Price;
 
     #[async_trait]
     pub trait ClientSideDataVendor: Sync + Send {
@@ -157,7 +158,7 @@ pub mod client_requests {
         ) -> Result<Vec<SubscriptionResolutionType>, FundForgeError>;
         async fn markets(&self) -> Result<Vec<MarketType>, FundForgeError>;
         async fn decimal_accuracy(&self, symbol_name: SymbolName) -> Result<u8, FundForgeError>;
-        async fn tick_size(&self, symbol_name: SymbolName) -> Result<f64, FundForgeError>;
+        async fn tick_size(&self, symbol_name: SymbolName) -> Result<Price, FundForgeError>;
     }
 
     #[async_trait]
@@ -233,7 +234,7 @@ pub mod client_requests {
             }
         }
 
-        async fn tick_size(&self, symbol_name: SymbolName) -> Result<f64, FundForgeError> {
+        async fn tick_size(&self, symbol_name: SymbolName) -> Result<Price, FundForgeError> {
             let api_client = self.synchronous_client().await;
             let request = SynchronousRequestType::TickSize(self.clone(), symbol_name);
             let response = match api_client.send_and_receive(request.to_bytes(), false).await {

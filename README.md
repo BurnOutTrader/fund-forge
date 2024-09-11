@@ -140,7 +140,11 @@ Please see the base_data_enum.rs file for more info when building DataVendor imp
 When handling historical data it is assumed that the `time` property of `Candle` and `QuoteBar` object is the opening time, so in the historical data requests we add the `base_data_enum.resolution.as_seconds()` to get the `base_data_enum.time_created()` which represents the closing time of the bar. To properly align the historical candles and quotebars with other historical data types such as ticks, which represent a single instance in time and therefore do not need to be adjusted. To avoid look ahead bias on our bars during backtesting, a tick that occurred at say 16:00 will be correctly aligned with the bar that closed at 16:00 instead of the bar that opened. This also allows us to reliably combine historical data feeds of different resolutions.
 
 ## Decimal Accuracy
-I have opted to just build decimal calculators to avoid rounding errors, these calculators use the rust_decimal crate and help us to avoid rounding errors without having the additional overhead in our base data when it is not actually needed.
+Using a new type pattern for Price and Volume, both are rust decimals. This adds some additional work when working with price or volume, but has the advantage of accuracy for crypto and fx products.
+```rust 
+pub type Volume = rust_decimal::decimal::Decimal;
+pub type Price = rust_decimal::decimal::Decimal;
+```
 
 ## Strategy Registry
 The strategy registry service is a server where running strategies register and forward events to the Ui, in `SinglMachine` mode this will just be done over mspc channels, in `MultiMachine` mode we will need to manually launch a server instance.

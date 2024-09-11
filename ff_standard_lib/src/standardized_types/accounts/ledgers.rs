@@ -10,12 +10,10 @@ use dashmap::DashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::helpers::decimal_calculators::{round_to_tick_size};
 use crate::standardized_types::orders::orders::ProtectiveOrder;
-use crate::standardized_types::Price;
 use csv::Writer;
-use rust_decimal::Decimal;
-use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use rust_decimal_macros::dec;
 use serde_derive::Serialize;
-
+use crate::standardized_types::{Price, Volume};
 // B
 pub type AccountId = String;
 
@@ -34,15 +32,15 @@ pub enum AccountCurrency {
 pub struct SymbolInfo {
     symbol_name: SymbolName,
     pnl_currency: AccountCurrency,
-    value_per_tick: f64,
-    tick_size: f64
+    value_per_tick: Price,
+    tick_size: Price
 }
 
 impl SymbolInfo {
     pub fn new(symbol_name: SymbolName,
                pnl_currency: AccountCurrency,
-               value_per_tick: f64,
-               tick_size: f64) -> Self {
+               value_per_tick: Price,
+               tick_size: Price) -> Self {
         Self {
             symbol_name,
             pnl_currency,
@@ -57,16 +55,16 @@ impl SymbolInfo {
 pub struct Ledger {
     pub account_id: AccountId,
     pub brokerage: Brokerage,
-    pub cash_value: f64,
-    pub cash_available: f64,
+    pub cash_value: Price,
+    pub cash_available: Price,
     pub currency: AccountCurrency,
-    pub cash_used: f64,
+    pub cash_used: Price,
     pub positions: DashMap<SymbolName, Position>,
     pub positions_closed: DashMap<SymbolName, Vec<Position>>,
     pub positions_counter: DashMap<SymbolName, u64>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
-    pub open_pnl: f64,
-    pub booked_pnl: f64,
+    pub open_pnl: Price,
+    pub booked_pnl: Price,
 }
 impl Ledger {
     pub fn new(account_info: AccountInfo) -> Self {
@@ -87,8 +85,8 @@ impl Ledger {
             positions_closed: DashMap::new(),
             positions_counter: DashMap::new(),
             symbol_info: DashMap::new(),
-            open_pnl: 0.0,
-            booked_pnl: 0.0,
+            open_pnl: dec!(0.0),
+            booked_pnl: dec!(0.0),
         };
         ledger
     }
@@ -155,13 +153,16 @@ impl Ledger {
 pub(crate) mod historical_ledgers {
     use chrono::{DateTime, Utc};
     use dashmap::DashMap;
+    use rust_decimal::Decimal;
+    use rust_decimal::prelude::FromPrimitive;
+    use rust_decimal_macros::dec;
     use crate::apis::brokerage::Brokerage;
     use crate::apis::brokerage::client_requests::ClientSideBrokerage;
-    use crate::standardized_types::accounts::ledgers::{calculate_pnl, AccountCurrency, AccountId, Ledger, Position, PositionId};
+    use crate::standardized_types::accounts::ledgers::{AccountCurrency, AccountId, Ledger, Position, PositionId};
     use crate::standardized_types::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::{OrderSide, PositionSide};
     use crate::standardized_types::orders::orders::ProtectiveOrder;
-    use crate::standardized_types::Price;
+    use crate::standardized_types::{Price, Volume};
     use crate::standardized_types::subscriptions::SymbolName;
     use crate::standardized_types::time_slices::TimeSlice;
 
@@ -172,13 +173,13 @@ pub(crate) mod historical_ledgers {
             }
         }
 
-        pub async fn subtract_margin_used(&mut self, symbol_name: SymbolName, quantity: u64) {
+        pub async fn subtract_margin_used(&mut self, symbol_name: SymbolName, quantity: Volume) {
             let margin = self.brokerage.margin_required_historical(symbol_name, quantity).await;
             self.cash_available += margin;
             self.cash_used -= margin;
         }
 
-        pub async fn add_margin_used(&mut self, symbol_name: SymbolName, quantity: u64) -> Result<(), FundForgeError> {
+        pub async fn add_margin_used(&mut self, symbol_name: SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
             let margin = self.brokerage.margin_required_historical(symbol_name, quantity).await;
             // Check if the available cash is sufficient to cover the margin
             if self.cash_available < margin {
@@ -193,18 +194,18 @@ pub(crate) mod historical_ledgers {
             let mut total_trades: usize = 0;
             let mut losses: usize = 0;
             let mut wins: usize = 0;
-            let mut win_pnl = 0.0;
-            let mut loss_pnl = 0.0;
-            let mut pnl = 0.0;
+            let mut win_pnl = dec!(0.0);
+            let mut loss_pnl = dec!(0.0);
+            let mut pnl = dec!(0.0);
             for trades in self.positions_closed.iter() {
                 total_trades += trades.value().len();
                 for position in trades.value() {
-                    if position.booked_pnl > 0.0 {
+                    if position.booked_pnl > dec!(0.0) {
                         wins += 1;
                         win_pnl += position.booked_pnl;
                     } else {
                         loss_pnl += position.booked_pnl;
-                        if position.booked_pnl < 0.0 {
+                        if position.booked_pnl < dec!(0.0) {
                             losses += 1;
                         }
                     }
@@ -215,21 +216,21 @@ pub(crate) mod historical_ledgers {
             let risk_reward = if losses > 0 {
                 win_pnl / -loss_pnl // negate loss_pnl for correct calculation
             } else {
-                0.0
+                dec!(0.0)
             };
 
             // Calculate profit factor
-            let profit_factor = if loss_pnl != 0.0 {
+            let profit_factor = if loss_pnl != dec!(0.0) {
                 win_pnl / -loss_pnl // negate loss_pnl
             } else {
-                0.0
+                dec!(0.0)
             };
 
             // Calculate win rate
             let win_rate = if total_trades > 0 {
-                wins as f64 / total_trades as f64 * 100.0
+                Decimal::from_usize(wins).unwrap() / Decimal::from_usize(total_trades).unwrap() * Decimal::from_f64(100.0).unwrap()
             } else {
-                0.0
+                dec!(0.0)
             };
 
             let break_even = total_trades - wins - losses;
@@ -241,7 +242,7 @@ pub(crate) mod historical_ledgers {
         pub fn paper_account_init(
             account_id: AccountId,
             brokerage: Brokerage,
-            cash_value: f64,
+            cash_value: Price,
             currency: AccountCurrency,
         ) -> Self {
             let account = Self {
@@ -250,13 +251,13 @@ pub(crate) mod historical_ledgers {
                 cash_value,
                 cash_available: cash_value,
                 currency,
-                cash_used: 0.0,
+                cash_used: dec!(0.0),
                 positions: DashMap::new(),
                 positions_closed: DashMap::new(),
                 positions_counter: DashMap::new(),
                 symbol_info: DashMap::new(),
-                open_pnl: 0.0,
-                booked_pnl: 0.0,
+                open_pnl: dec!(0.0),
+                booked_pnl: dec!(0.0),
             };
             account
         }
@@ -284,7 +285,7 @@ pub(crate) mod historical_ledgers {
         pub async fn update_or_create_paper_position(
             &mut self,
             symbol_name: &SymbolName,
-            quantity: u64,
+            quantity: Volume,
             market_price: Price,
             side: OrderSide,
             time: &DateTime<Utc>,
@@ -370,20 +371,16 @@ pub(crate) mod historical_ledgers {
             }
         }
 
-        pub async fn exit_position_paper(&mut self, symbol_name: &SymbolName, market_price: f64, time: DateTime<Utc>) {
+        pub async fn exit_position_paper(&mut self, symbol_name: &SymbolName, market_price: Price, time: DateTime<Utc>) {
             if !self.positions.contains_key(symbol_name) {
                 return;
             }
             let (_, mut old_position) = self.positions.remove(symbol_name).unwrap();
-            let margin_freed = self
-                .brokerage
-                .margin_required_historical(symbol_name.clone(), old_position.quantity_open)
-                .await;
 
             let booked_pnl =old_position.reduce_position_size(market_price, old_position.quantity_open, &time);
             self.booked_pnl += booked_pnl;
 
-            old_position.open_pnl = 0.0;
+            old_position.open_pnl = dec!(0.0);
             self.process_closed_position(old_position);
             self.print();
         }
@@ -422,8 +419,8 @@ pub(crate) mod historical_ledgers {
         }
 
         pub async fn on_data_update(&mut self, time_slice: TimeSlice, time: &DateTime<Utc>) {
-            let mut open_pnl = 0.0;
-            let mut booked_pnl = 0.0;
+            let mut open_pnl = dec!(0.0);
+            let mut booked_pnl = dec!(0.0);
             for base_data_enum in time_slice {
                 let data_symbol_name = &base_data_enum.symbol().name;
                 if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
@@ -455,11 +452,11 @@ pub struct Position {
     pub symbol_name: SymbolName,
     pub brokerage: Brokerage,
     pub side: PositionSide,
-    pub quantity_open: u64,
-    pub quantity_closed: u64,
+    pub quantity_open: Volume,
+    pub quantity_closed: Volume,
     pub average_price: Price,
-    pub open_pnl: f64,
-    pub booked_pnl: f64,
+    pub open_pnl: Price,
+    pub booked_pnl: Price,
     pub highest_recoded_price: Price,
     pub lowest_recoded_price: Price,
     pub exit_price: Option<Price>,
@@ -475,8 +472,8 @@ impl Position {
         symbol_name: SymbolName,
         brokerage: Brokerage,
         side: PositionSide,
-        quantity: u64,
-        average_price: f64,
+        quantity: Volume,
+        average_price: Price,
         id: PositionId,
         symbol_info: SymbolInfo,
         account_currency: AccountCurrency,
@@ -487,10 +484,10 @@ impl Position {
             brokerage,
             side,
             quantity_open: quantity,
-            quantity_closed: 0,
+            quantity_closed: dec!(0.0),
             average_price,
-            open_pnl: 0.0,
-            booked_pnl: 0.0,
+            open_pnl: dec!(0.0),
+            booked_pnl: dec!(0.0),
             highest_recoded_price: average_price,
             lowest_recoded_price: average_price,
             exit_price: None,
@@ -505,10 +502,10 @@ impl Position {
     fn to_export(&self) -> PositionExport {
         let pnl_by_quantity = match self.side {
             PositionSide::Long => {
-                self.quantity_closed as f64 * (self.exit_price.unwrap() - self.average_price)
+                self.quantity_closed * (self.exit_price.unwrap() - self.average_price)
             }
             PositionSide::Short => {
-                self.quantity_closed as f64 * (self.average_price - self.exit_price.unwrap())
+                self.quantity_closed * (self.average_price - self.exit_price.unwrap())
             }
         };
         PositionExport {
@@ -528,32 +525,27 @@ impl Position {
 //todo, later I will move this to be for historical only
 fn calculate_pnl(
     side: &PositionSide,
-    entry_price: f64,
-    market_price: f64,
-    tick_size: f64,
-    value_per_tick: f64,
-    quantity: u64,
+    entry_price: Price,
+    market_price: Price,
+    tick_size: Price,
+    value_per_tick: Price,
+    quantity: Volume,
     _base_currency: &AccountCurrency,
     _account_currency: &AccountCurrency,
     _time: &DateTime<Utc>,
-) -> f64 {
-    // Convert entry and market prices to Decimal for precision
-    let entry_price_dec = Decimal::from_f64(entry_price).unwrap();
-    let market_price_dec = Decimal::from_f64(market_price).unwrap();
-    let tick_size_dec = Decimal::from_f64(tick_size).unwrap();
+) -> Price {
 
     // Calculate the price difference based on position side
     let price_difference = match side {
-        PositionSide::Long => market_price_dec - entry_price_dec,   // Profit if market price > entry price
-        PositionSide::Short => entry_price_dec - market_price_dec, // Profit if entry price > market price
+        PositionSide::Long => market_price - entry_price,   // Profit if market price > entry price
+        PositionSide::Short => entry_price - market_price, // Profit if entry price > market price
     };
 
     // Round the price difference to the nearest tick size using Decimal
-    let rounded_difference = (price_difference / tick_size_dec).round() * tick_size_dec;
+    let rounded_difference = (price_difference / tick_size).round() * tick_size;
 
     // Convert rounded difference back to f64 and calculate PnL
-    let rounded_difference_f64 = rounded_difference.to_f64().unwrap();
-    let pnl = rounded_difference_f64 * value_per_tick * quantity as f64;
+    let pnl = rounded_difference * value_per_tick * quantity;
 
     // Placeholder for currency conversion if the base currency differs from account currency
     // let pnl = convert_currency(pnl, base_currency, account_currency, time);
@@ -563,17 +555,19 @@ fn calculate_pnl(
 
 pub(crate) mod historical_position {
     use chrono::{DateTime, Utc};
+    use rust_decimal::Decimal;
+    use rust_decimal::prelude::FromPrimitive;
+    use rust_decimal_macros::dec;
     use crate::helpers::decimal_calculators::round_to_tick_size;
     use crate::standardized_types::accounts::ledgers::{calculate_pnl, Position};
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
     use crate::standardized_types::orders::orders::ProtectiveOrder;
-    use crate::standardized_types::Price;
-    use crate::standardized_types::subscriptions::SymbolName;
+    use crate::standardized_types::{Price, Volume};
 
     impl Position {
 
-        pub(crate) fn reduce_position_size(&mut self, market_price: Price, quantity: u64, time: &DateTime<Utc>) -> f64 {
+        pub(crate) fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: &DateTime<Utc>) -> Price {
             let quantity = match quantity > self.quantity_open {
                 true => self.quantity_open,
                 false => quantity
@@ -582,19 +576,19 @@ pub(crate) mod historical_position {
             self.booked_pnl += booked_pnl;
             self.quantity_open -= quantity;
             self.quantity_closed += quantity;
-            self.is_closed = self.quantity_open <= 0;
+            self.is_closed = self.quantity_open <= dec!(0.0);
             self.exit_price = Some(market_price);
             if self.is_closed {
-                self.open_pnl = 0.0;
+                self.open_pnl = dec!(0.0);
             }
             booked_pnl
         }
 
-        pub(crate) fn add_to_position(&mut self, market_price: Price, quantity: u64, time: &DateTime<Utc>) {
+        pub(crate) fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: &DateTime<Utc>) {
             // If adding to the short position, calculate the new average price
             self.average_price =
-               round_to_tick_size(((self.quantity_open as f64 * self.average_price) + (quantity as f64 * market_price))
-                    / (self.quantity_open + quantity) as f64, self.symbol_info.tick_size);
+               round_to_tick_size((self.quantity_open* self.average_price) + (quantity * market_price)
+                    / (self.quantity_open + quantity), self.symbol_info.tick_size);
 
             // Update the total quantity
             self.quantity_open += quantity;
@@ -602,12 +596,12 @@ pub(crate) mod historical_position {
             self.open_pnl =  calculate_pnl(&self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity_open, &self.symbol_info.pnl_currency, &self.account_currency, time);
         }
 
-        pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: &DateTime<Utc>) -> f64 {
+        pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: &DateTime<Utc>) -> Price {
             if self.is_closed {
-                return 0.0;
+                return dec!(0.0);
             }
             let (market_price, highest_price, lowest_price) = match base_data {
-                BaseDataEnum::Price(price) => (price.price,price.price,price.price),
+                BaseDataEnum::TradePrice(price) => (price.price, price.price, price.price),
                 BaseDataEnum::Candle(candle) => (candle.close,candle.high,candle.low),
                 BaseDataEnum::Tick(tick) => (tick.price,tick.price,tick.price),
                 BaseDataEnum::QuoteBar(bar) => {
@@ -686,13 +680,13 @@ pub(crate) mod historical_position {
             if bracket_triggered {
                 let new_pnl =  self.open_pnl;
                 self.booked_pnl += new_pnl;
-                self.open_pnl = 0.0;
+                self.open_pnl = dec!(0.0);
                 self.is_closed = true;
                 self.quantity_closed += self.quantity_open;
-                self.quantity_open = 0;
+                self.quantity_open = dec!(0.0);
                 return new_pnl;
             }
-            0.0
+            dec!(0.0)
         }
     }
 }
@@ -703,10 +697,10 @@ pub(crate) mod historical_position {
 pub struct AccountInfo {
     pub account_id: AccountId,
     pub brokerage: Brokerage,
-    pub cash_value: f64,
-    pub cash_available: f64,
+    pub cash_value: Price,
+    pub cash_available: Price,
     pub currency: AccountCurrency,
-    pub cash_used: f64,
+    pub cash_used: Price,
     pub positions: Vec<Position>,
     pub positions_closed: Vec<Position>,
     pub is_hedging: bool,
@@ -731,11 +725,11 @@ impl Bytes<Self> for AccountInfo {
 struct PositionExport {
     symbol_name: String,
     side: String,
-    quantity: u64,
-    average_price: f64,
-    exit_price: f64,
-    pnl_by_quantity: f64,
-    booked_pnl: f64,
-    highest_recoded_price: f64,
-    lowest_recoded_price: f64,
+    quantity: Volume,
+    average_price: Price,
+    exit_price: Price,
+    pnl_by_quantity: Price,
+    booked_pnl: Price,
+    highest_recoded_price: Price,
+    lowest_recoded_price: Price,
 }

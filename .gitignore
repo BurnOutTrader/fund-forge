@@ -6,31 +6,13 @@
 /.obsidian/core-plugins.json
 /.obsidian/core-plugins-migration.json
 /.obsidian/workspace.json
-ff_data_server/data/test/Forex/quotes/I/AUD-USD/AUD-USD_I_2023-01.rkyv
-ff_data_server/data/test/Forex/quotes/I/AUD-USD/AUD-USD_I_2023-02.rkyv
-ff_data_server/data/test/Forex/quotes/I/AUD-USD/AUD-USD_I_2023-03.rkyv
-ff_data_server/data/test/Forex/quotes/I/AUD-USD/AUD-USD_I_2023-04.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2024-06.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2024-07.rkyv
+ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2024-08.rkyv
 
-ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2023-01.rkyv
-ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2023-02.rkyv
-ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2023-03.rkyv
-ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2023-04.rkyv
-
-ff_data_server/data/test/Forex/quotes/I/USD-HUF/USD-HUF_I_2023-01.rkyv
-ff_data_server/data/test/Forex/quotes/I/USD-HUF/USD-HUF_I_2023-02.rkyv
-ff_data_server/data/test/Forex/quotes/I/USD-HUF/USD-HUF_I_2023-03.rkyv
-ff_data_server/data/test/Forex/quotes/I/USD-HUF/USD-HUF_I_2023-04.rkyv
-
-ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2023-01.rkyv
-ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2023-02.rkyv
-ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2023-03.rkyv
-ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2023-04.rkyv
-
-ff_data_server/data/test/Forex/quotes/I/CAD-JPY/CAD-JPY_I_2023-01.rkyv
-ff_data_server/data/test/Forex/quotes/I/CAD-JPY/CAD-JPY_I_2023-02.rkyv
-ff_data_server/data/test/Forex/quotes/I/CAD-JPY/CAD-JPY_I_2023-03.rkyv
-ff_data_server/data/test/Forex/quotes/I/CAD-JPY/CAD-JPY_I_2023-04.rkyv
-
+ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2024-06.rkyv
+ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2024-07.rkyv
+ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2024-08.rkyv
 # Added by cargo
 #
 # already existing elements were commented out

@@ -12,6 +12,9 @@ use once_cell::sync::OnceCell;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
 use std::sync::Arc;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal_macros::dec;
 
 static TEST_API_CLIENT: OnceCell<Arc<TestVendorApi>> = OnceCell::new();
 
@@ -108,7 +111,7 @@ impl VendorApiResponse for TestVendorApi {
         &self,
         symbol_name: SymbolName,
     ) -> Result<SynchronousResponseType, FundForgeError> {
-        Ok(SynchronousResponseType::TickSize(0.00001))
+        Ok(SynchronousResponseType::TickSize(Decimal::from_f64(0.00001).unwrap()))
     }
 }
 
@@ -136,10 +139,10 @@ impl BrokerApiResponse for TestVendorApi {
         let info = AccountInfo {
             account_id: account_id.clone(),
             brokerage: Brokerage::Test,
-            cash_value: 100000.0,
-            cash_available: 100000.0,
+            cash_value: dec!(100000.0),
+            cash_available: dec!(100000.0),
             currency: AccountCurrency::USD,
-            cash_used: 0.0,
+            cash_used: dec!(0.0),
             positions: Default::default(),
             positions_closed: Default::default(),
             is_hedging: true,
@@ -150,7 +153,7 @@ impl BrokerApiResponse for TestVendorApi {
 
     async fn symbol_info_response(&self, symbol_name: SymbolName) -> Result<SynchronousResponseType, FundForgeError> {
         match symbol_name {
-            _ => Ok(SynchronousResponseType::SymbolInfo(SymbolInfo::new(symbol_name, AccountCurrency::USD, 0.00001, 0.00001)))
+            _ => Ok(SynchronousResponseType::SymbolInfo(SymbolInfo::new(symbol_name, AccountCurrency::USD, Decimal::from_f64(0.00001).unwrap(), Decimal::from_f64(0.00001).unwrap())))
         }
     }
 }

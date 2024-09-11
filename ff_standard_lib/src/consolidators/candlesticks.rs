@@ -10,13 +10,17 @@ use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
+use crate::standardized_types::{Price, Volume};
 
 pub struct CandleStickConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
-    tick_size: f64,
+    tick_size: Price,
 }
 
 impl CandleStickConsolidator {
@@ -66,7 +70,7 @@ impl CandleStickConsolidator {
                         candle.volume += new_candle.volume;
                         return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                     }
-                    BaseDataEnum::Price(price) => {
+                    BaseDataEnum::TradePrice(price) => {
                         candle.high = candle.high.max(price.price);
                         candle.low = candle.low.min(price.price);
                         candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size);
@@ -104,7 +108,7 @@ impl CandleStickConsolidator {
                 self.subscription.symbol.clone(),
                 quote.bid,
                 quote.ask,
-                0.0,
+                dec!(0.0),
                 time.to_string(),
                 self.subscription.resolution.clone(),
                 CandleType::CandleStick,
@@ -201,10 +205,10 @@ impl CandleStickConsolidator {
                 consolidated_candle.time = time.to_string();
                 consolidated_candle
             }
-            BaseDataEnum::Price(price) => Candle::new(
+            BaseDataEnum::TradePrice(price) => Candle::new(
                 self.subscription.symbol.clone(),
                 price.price,
-                0.0,
+                Volume::from_f64(0.0).unwrap(),
                 time.to_string(),
                 self.subscription.resolution.clone(),
                 self.subscription.candle_type.clone().unwrap(),

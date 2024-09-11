@@ -3,13 +3,14 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
-use crate::standardized_types::{Price, TimeString};
+use crate::standardized_types::{Price, TimeString, Volume};
 use chrono::{DateTime, FixedOffset};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use rust_decimal_macros::dec;
 
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Eq, PartialOrd, Ord,
@@ -59,7 +60,7 @@ pub struct Candle {
     pub low: Price,
     pub open: Price,
     pub close: Price,
-    pub volume: f64,
+    pub volume: Volume,
     pub range: Price,
     pub time: TimeString,
     pub is_closed: bool,
@@ -179,8 +180,8 @@ impl Candle {
     ///
     pub fn new(
         symbol: Symbol,
-        open: f64,
-        volume: f64,
+        open: Price,
+        volume: Volume,
         time: TimeString,
         resolution: Resolution,
         candle_type: CandleType,
@@ -192,7 +193,7 @@ impl Candle {
             open,
             close: open,
             volume,
-            range: 0.0,
+            range: dec!(0.0),
             time,
             is_closed: false,
             resolution,
@@ -223,11 +224,11 @@ impl Candle {
     /// - `time`: The opening time as a Unix timestamp.
     pub fn from_closed(
         symbol: Symbol,
-        high: f64,
-        low: f64,
-        open: f64,
-        close: f64,
-        volume: f64,
+        high: Price,
+        low: Price,
+        open: Price,
+        close: Price,
+        volume: Price,
         time: DateTime<chrono::Utc>,
         resolution: Resolution,
         candle_type: CandleType,
@@ -256,7 +257,7 @@ impl Candle {
     /// - `volume`: The additional volume since the last update.
     /// - `is_closed`: Indicates whether this update should close the candles.
     ///
-    pub fn update(&mut self, price: f64, volume: f64, is_closed: bool) {
+    pub fn update(&mut self, price: Price, volume: Volume, is_closed: bool) {
         self.high = self.high.max(price);
         self.low = self.low.min(price);
         self.close = price;

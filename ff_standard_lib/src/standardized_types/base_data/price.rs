@@ -31,7 +31,7 @@ impl TradePrice {
     /// 2. `price` - The price of the asset.
     /// 3. `time` - The time the price was recorded.
     /// 4. `vendor` - The data vendor that provided the price.
-    pub fn new(symbol: Symbol, price: f64, time: String) -> Self {
+    pub fn new(symbol: Symbol, price: Price, time: String) -> Self {
         TradePrice {
             symbol,
             price,

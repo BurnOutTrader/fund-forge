@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 ff_standard_lib = { path = "../ff_standard_lib"}
 chrono = "0.4.38"
+rust_decimal = "*"
+rust_decimal_macros ="1.36.0"

@@ -2,7 +2,7 @@ use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::standardized_types::{Price, TimeString};
+use crate::standardized_types::{Price, TimeString, Volume};
 use chrono::{DateTime, FixedOffset};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -26,8 +26,8 @@ pub struct Quote {
     pub symbol: Symbol,
     pub ask: Price,
     pub bid: Price,
-    pub ask_volume: f64,
-    pub bid_volume: f64,
+    pub ask_volume: Volume,
+    pub bid_volume: Volume,
     pub time: TimeString,
     pub book_level: BookLevel,
 }
