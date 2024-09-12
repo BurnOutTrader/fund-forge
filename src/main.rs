@@ -70,6 +70,7 @@ async fn main() {
 
 
 
+
    /* // Run the async code inside the runtime
     block_on(async {
         let result = initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
