@@ -2,7 +2,11 @@ use iced::{Color, Point, Rectangle, Size};
 use iced::widget::canvas;
 use iced_graphics::geometry::{LineDash, Path, Stroke, Style};
 use std::collections::BTreeMap;
+use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal_macros::dec;
 use ff_standard_lib::app::settings::GraphElementSettings;
+use ff_standard_lib::standardized_types::Price;
 use crate::chart_canvas::graph::models::crosshair::color_from_template;
 use crate::chart_canvas::graph::models::data::SeriesData;
 use crate::chart_canvas::graph::state::ChartState;
@@ -13,8 +17,8 @@ pub struct PriceScale {
     pub last_price_settings: GraphElementSettings,
     pub decimal_precision:  usize,
     pub logarithmic: bool,
-    pub last_price: f64,
-    pub last_open_price: Option<f64>,
+    pub last_price: Price,
+    pub last_open_price: Option<Price>,
 }
 
 impl Default for PriceScale {
@@ -22,7 +26,7 @@ impl Default for PriceScale {
         Self {
             settings: GraphElementSettings::light_mode_settings(),
             last_price_settings: GraphElementSettings::light_mode_settings(),
-            last_price: 0.0,
+            last_price: dec!(0.0),
             last_open_price: None,
             logarithmic: false,
             decimal_precision: 5,
@@ -37,7 +41,7 @@ impl PriceScale {
         Self {
             settings: GraphElementSettings::dark_mode_settings(),
             last_price_settings: GraphElementSettings::dark_mode_settings(),
-            last_price: 0.0,
+            last_price: dec!(0.0),
             last_open_price: None,
             logarithmic: logorithmic,
             decimal_precision,
@@ -47,7 +51,7 @@ impl PriceScale {
         Self {
             settings: GraphElementSettings::light_mode_settings(),
             last_price_settings: GraphElementSettings::light_mode_settings(),
-            last_price: 0.0,
+            last_price: dec!(0.0),
             last_open_price: None,
             logarithmic: logorithmic,
             decimal_precision,
@@ -55,8 +59,8 @@ impl PriceScale {
     }
 
 
-    pub fn last_open_price(data: &BTreeMap<i64, Vec<SeriesData>>) -> Option<f64> {
-        let mut last_open_price: Option<f64> = None;
+    pub fn last_open_price(data: &BTreeMap<i64, Vec<SeriesData>>) -> Option<Price> {
+        let mut last_open_price: Option<Price> = None;
         for (_, data) in data.iter() {
             for data in data.iter() {
                 match data {
@@ -69,8 +73,8 @@ impl PriceScale {
         last_open_price
     }
 
-    pub fn last_price(data: &BTreeMap<i64, Vec<SeriesData>>) -> Option<f64> {
-        let mut last_price: Option<f64> = None;
+    pub fn last_price(data: &BTreeMap<i64, Vec<SeriesData>>) -> Option<Price> {
+        let mut last_price: Option<Price> = None;
         for (_, data) in data.iter() {
             for data in data.iter() {
                 match data {
@@ -162,7 +166,7 @@ impl PriceScale {
         let mut num_intervals = ((view.y_high - view.y_low) / grid_interval).ceil(); // Ensure covering the whole range
 
         let last_line = first_line + (grid_interval * num_intervals);
-        let last_line_y = view.calculate_y(last_line, self.logarithmic);
+        let last_line_y = view.calculate_y(Decimal::from_f64(last_line).unwrap(), self.logarithmic);
         if let Some(last_line_y) = last_line_y {
             if last_line_y < view.y_scale_area.y -(view.y_scale_area.y - view.y_scale_area.height) / num_intervals as f32  {
                 num_intervals += 1.0;
@@ -173,7 +177,7 @@ impl PriceScale {
         //println!("last_line: {}", last_line);
 
         //calulate the space in iced length between the start and the bottom of the price scale
-        let first_line_y = view.calculate_y(first_line, self.logarithmic);
+        let first_line_y = view.calculate_y(Decimal::from_f64(first_line).unwrap(), self.logarithmic);
         if let Some(first_line_y) = first_line_y {
             if first_line_y  >  view.x_scale_area.y - (view.y_scale_area.y - view.y_scale_area.height) / num_intervals as f32 {
                 num_intervals += 1.0;
@@ -194,7 +198,7 @@ impl PriceScale {
                 continue;
             }
 
-            let y = match view.calculate_y(price, self.logarithmic) {
+            let y = match view.calculate_y(Decimal::from_f64(price).unwrap(), self.logarithmic) {
                 Some(y) => y,
                 None => continue,
             };

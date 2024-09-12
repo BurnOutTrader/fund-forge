@@ -70,7 +70,7 @@ async fn main() -> io::Result<()> {
     let cert = Path::join(&options.ssl_auth_folder, "cert.pem");
     let key = Path::join(&options.ssl_auth_folder, "key.pem");
 
-    let certs = load_certs(&cert).unwrap();
+    let certs = load_certs(&cert)?;
     let key = load_keys(&key)
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "No keys found"))?;
 

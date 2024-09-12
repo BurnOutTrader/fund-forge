@@ -7,6 +7,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use ff_standard_lib::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::candle::{Candle};
+use ff_standard_lib::standardized_types::Price;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::chart_canvas::graph::state::ChartState;
 use crate::chart_canvas::graph::traits::TimeSeriesGraphElements;
@@ -91,7 +92,7 @@ impl SeriesData {
         }
     }
 
-    pub fn lowest_value(&self) -> f64 {
+    pub fn lowest_value(&self) -> Price {
         match self {
             SeriesData::CandleStick(candle) => {
                 candle.low
@@ -99,7 +100,7 @@ impl SeriesData {
         }
     }
 
-    pub fn highest_value(&self) -> f64 {
+    pub fn highest_value(&self) -> Price {
         match self {
             SeriesData::CandleStick(candle) => {
                 candle.high
@@ -107,7 +108,7 @@ impl SeriesData {
         }
     }
 
-    pub fn open_value(&self) -> Option<f64> {
+    pub fn open_value(&self) -> Option<Price> {
         match self {
             SeriesData::CandleStick(candle) => {
                 Some(candle.open)
@@ -115,7 +116,7 @@ impl SeriesData {
         }
     }
 
-    pub fn close_value(&self) -> Option<f64> {
+    pub fn close_value(&self) -> Option<Price> {
         match self {
             SeriesData::CandleStick(candle) => {
                 Some(candle.close)

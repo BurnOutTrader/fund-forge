@@ -14,10 +14,13 @@ use iced::advanced::{layout, mouse, renderer, widget, Hasher, Layout, Widget};
 use iced::advanced::subscription::{EventStream, Recipe};
 use iced::Length::Fill;
 use iced_graphics::geometry::{Path, Stroke};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal_macros::dec;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, Mutex, Notify, RwLock};
 use tokio::task;
-use ff_standard_lib::standardized_types::OwnerId;
+use ff_standard_lib::standardized_types::{OwnerId, Price};
 use crate::chart_canvas::graph::enums::areas::ChartAreas;
 use crate::chart_canvas::graph::enums::x_scale::XScale;
 use crate::chart_canvas::graph::enums::y_scale::YScale;
@@ -91,8 +94,8 @@ impl ChartCanvas {
 
         let time = base_data.time_local(&time_zone).timestamp();
         //if the data is bar type this will update the last price, if not then it will have no effect
-        let mut last_open_price: Option<f64> = None;
-        let mut last_price: Option<f64> = None;
+        let mut last_open_price: Option<Price> = None;
+        let mut last_price: Option<Price> = None;
 
         // Insert the new data
         if !self.data.contains_key(&time) {
@@ -155,8 +158,8 @@ impl ChartCanvas {
             return;
         }
 
-        let mut y_high = f64::MIN;
-        let mut y_low = f64::MAX;
+        let mut y_high = Decimal::MIN;
+        let mut y_low = Decimal::MAX;
 
         if data_range.is_empty() {
             return;
@@ -171,11 +174,11 @@ impl ChartCanvas {
             }
         }
 
-        if y_high != f64::MIN {
-            state.y_high = y_high;
+        if y_high != Decimal::MIN {
+            state.y_high = y_high.to_f64().unwrap();
         }
-        if y_low != f64::MAX {
-            state.y_low = y_low;
+        if y_low != Decimal::MAX {
+            state.y_low = y_low.to_f64().unwrap();
         }
     }
 
@@ -235,7 +238,7 @@ impl canvas::Program<RegistryGuiResponse> for ChartCanvas {
             let y_low = get_lowest_low(&self.data);
             let y_high = get_highest_high(&self.data);
             let increment_factor = self.x_scale.increment_factor();
-            state.initialize(self.y_scale.scale_width(), self.x_scale.scale_height(),  x_start, x_end, y_low, y_high, increment_factor);
+            state.initialize(self.y_scale.scale_width(), self.x_scale.scale_height(),  x_start, x_end, y_low.to_f64().unwrap(), y_high.to_f64().unwrap(), increment_factor);
             state.is_initialized = true;
         }
 
@@ -356,8 +359,8 @@ impl canvas::Program<RegistryGuiResponse> for ChartCanvas {
 }
 
 
-pub fn get_highest_high(data: &BTreeMap<i64, Vec<SeriesData>>) -> f64 {
-    let mut high = 0.0;
+pub fn get_highest_high(data: &BTreeMap<i64, Vec<SeriesData>>) -> Price {
+    let mut high = dec!(0.0);
     for (_, data) in data.iter() {
         for data in data.iter() {
             let data_high = data.highest_value();
@@ -369,8 +372,8 @@ pub fn get_highest_high(data: &BTreeMap<i64, Vec<SeriesData>>) -> f64 {
     high
 }
 
-pub fn get_lowest_low(data: &BTreeMap<i64, Vec<SeriesData>>) -> f64 {
-    let mut low = f64::MAX;
+pub fn get_lowest_low(data: &BTreeMap<i64, Vec<SeriesData>>) -> Price {
+    let mut low = Decimal::MAX;
     for (_, data) in data.iter() {
         for data in data.iter() {
             let data_low = data.lowest_value();

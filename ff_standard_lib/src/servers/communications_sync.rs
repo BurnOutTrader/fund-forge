@@ -36,7 +36,7 @@ impl SynchronousCommunicator {
                 communicator.send_and_receive(data, server).await
             }
             SynchronousCommunicator::TlsConnections(communicator) => {
-                return communicator.send_and_receive(data).await
+                communicator.send_and_receive(data).await
             }
         }
     }

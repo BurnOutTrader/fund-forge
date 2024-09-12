@@ -2,6 +2,7 @@ use chrono_tz::Tz;
 use iced::{Color, Point, Rectangle, Size};
 use iced::widget::canvas::Frame;
 use iced_graphics::geometry::{Path, Stroke};
+use rust_decimal::prelude::ToPrimitive;
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use crate::chart_canvas::graph::state::ChartState;
 
@@ -19,7 +20,7 @@ impl TimeSeriesGraphElements for Candle {
     }
 
     fn value(&self) -> f64 {
-        self.close
+        self.close.to_f64().unwrap()
     }
 
     fn draw_object(&self, frame: &mut Frame, view: &ChartState, bounds: &Rectangle, logarithmic: bool, time_zone: &Tz) {

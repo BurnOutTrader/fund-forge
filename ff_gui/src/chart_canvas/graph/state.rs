@@ -1,4 +1,7 @@
 use iced::{Rectangle};
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal_macros::dec;
+use ff_standard_lib::standardized_types::Price;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ChartState {
@@ -178,16 +181,16 @@ impl ChartState {
     }
 
     /// Calculates the y-coordinate of the price
-    pub fn calculate_y(&self, value: f64, logarithmic: bool) -> Option<f32> {
+    pub fn calculate_y(&self, value: Price, logarithmic: bool) -> Option<f32> {
         let adjusted_height = self.data_area.height as f64 * (1.0 - self.percent_clear_boundaries as f64);
 
         if logarithmic {
-            if value <= 0.0 || self.y_low <= 0.0 || self.y_high <= 0.0 {
+            if value <= dec!(0.0) || self.y_low <= 0.0 || self.y_high <= 0.0 {
                 return None; // Guard against invalid input
             }
             let log_low = self.y_low.ln();
             let log_high = self.y_high.ln();
-            let log_value = value.ln();
+            let log_value = value.to_f64().unwrap().ln();
             let proportion = (log_value - log_low) / (log_high - log_low);
             let y = self.data_area.y as f64 + self.data_area.height as f64 * self.percent_clear_boundaries as f64 / 2.0 + adjusted_height - (proportion * adjusted_height);
             Some(y as f32)
@@ -196,7 +199,7 @@ impl ChartState {
             if self.y_high == self.y_low { // Guard against division by zero
                 return None;
             }
-            let proportion = (value - self.y_low) / (self.y_high - self.y_low);
+            let proportion = (value.to_f64().unwrap() - self.y_low) / (self.y_high - self.y_low);
             let y = self.data_area.y as f64 + self.data_area.height as f64 * self.percent_clear_boundaries as f64 / 2.0 + adjusted_height - (proportion * adjusted_height);
             Some(y as f32)
         }

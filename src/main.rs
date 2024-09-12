@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::hash::Hash;
+use std::path::Path;
 use std::sync::Arc;
 use iced::{futures, Application, Command, Element, Settings, Theme};
 use iced::advanced::Hasher;
@@ -8,12 +9,16 @@ use iced::advanced::subscription::{EventStream, Recipe};
 use iced::futures::executor::block_on;
 use iced::futures::stream::BoxStream;
 use iced::widget::{Text};
+use tokio::io::{ReadHalf, WriteHalf};
+use tokio::net::TcpStream;
 use tokio::sync::{Mutex};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use ff_gui::strategy_view::strategy_view::StrategyView;
+use ff_standard_lib::apis::rithmic::api_client::{Credentials, RithmicApiClient};
 use ff_standard_lib::server_connections::{get_async_reader, get_async_sender, initialize_clients, ConnectionType, PlatformMode};
 use ff_standard_lib::servers::communications_async::SecondaryDataSender;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
+use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::OwnerId;
 use ff_standard_lib::standardized_types::strategy_events::StrategyEvent;
@@ -24,6 +29,47 @@ use ff_standard_lib::traits::bytes::Bytes;
 
 #[tokio::main]
 async fn main() {
+
+    let credentials = Credentials {
+        uri: "".to_string(),
+        user: "Kevinjamesmonaghan@outlook.com".to_string(),
+        system_name: "".to_string(),
+        password: "cDbJbQLV".to_string(),
+        app_name: "Fund-Forge".to_string(),
+        app_version: "1.0".to_string(),
+        aggregated_quotes: false,
+        template_version: "5.27".to_string(),
+        pem: String::from("ff_standard_lib/src/apis/rithmic/rithmic_ssl_cert_auth_params.pem"),
+        base_url: "wss://rituz00100.rithmic.com:443".to_string()
+    };
+
+    let rithmic_api = RithmicApiClient::new(credentials);
+
+    // Use the path as needed
+    let message = rithmic_api.connect_and_login().await;
+
+    match message {
+        Ok(_) => {println!("Success")}
+        Err(e) => {
+            println!("Fail: {:?}", e)
+        }
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
    /* // Run the async code inside the runtime
     block_on(async {
         let result = initialize_clients(&PlatformMode::MultiMachine).await.unwrap();
@@ -57,7 +103,7 @@ async fn main() {
         Err(e) => println!("Error running fund forge: {}", e)
     }*/
 }
-
+/*
 pub struct Flags {
     receiver: Receiver<RegistryGuiResponse>,
     registry_sender: Arc<SecondaryDataSender>
@@ -187,3 +233,4 @@ impl Recipe for StrategyWindowRecipe {
 }
 
 
+*/

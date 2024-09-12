@@ -1,5 +1,6 @@
 use iced::Rectangle;
 use iced::widget::canvas::Frame;
+use ff_standard_lib::standardized_types::Price;
 use crate::chart_canvas::graph::models::price_scale::PriceScale;
 use crate::chart_canvas::graph::state::ChartState;
 
@@ -20,7 +21,7 @@ impl YScale {
         }
     }
 
-    pub fn last_value(&mut self, last_price: f64) {
+    pub fn last_value(&mut self, last_price: Price) {
         match self {
             YScale::Price(price_scale) => {
                 price_scale.last_price = last_price;
@@ -28,7 +29,7 @@ impl YScale {
         }
     }
 
-    pub fn last_comparison_value(&mut self, last_open_price: f64) {
+    pub fn last_comparison_value(&mut self, last_open_price: Price) {
         match self {
             YScale::Price(price_scale) => {
                 price_scale.last_open_price = Some(last_open_price);
