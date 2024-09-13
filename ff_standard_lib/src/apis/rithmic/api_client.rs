@@ -17,7 +17,12 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream, tungstenite::Error as TungsteniteError};
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use std::error::Error;
+use std::fmt::format;
+use std::sync::{Arc};
+use dashmap::DashMap;
+use dashmap::mapref::one::Ref;
 use futures_util::stream::{SplitSink, SplitStream};
+use tokio::sync::{Mutex, RwLock};
 use tokio_tungstenite::tungstenite::handshake::client::Response;
 use crate::apis::rithmic::rithmic_proto_objects::rti::request_login::SysInfraType;
 
@@ -42,12 +47,18 @@ lazy_static!(
 ///Server uses Big Endian format for binary data
 pub struct RithmicApiClient {
     credentials: Credentials,
+    connected_plant: Arc<RwLock<Vec<SysInfraType>>>,
+    plant_writer:Arc<DashMap<SysInfraType, Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>>,
+    plant_reader: Arc<DashMap<SysInfraType, Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>>>,
 }
 
 impl RithmicApiClient {
     pub fn new(credentials: Credentials, ) -> Self {
         Self {
             credentials,
+            connected_plant: Default::default(),
+            plant_writer: Arc::new(DashMap::new()),
+            plant_reader: Arc::new(DashMap::new()),
         }
     }
 
@@ -111,7 +122,7 @@ impl RithmicApiClient {
         RepositoryPlant = 5,
     }
     */
-    pub async fn connect_and_login(&self, plant: SysInfraType) -> Result<(SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>, SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>), FundForgeError> {
+    pub async fn connect_and_login(&self, plant: SysInfraType) -> Result<(), FundForgeError> {
         if plant as i32 > 5 {
             return Err(FundForgeError::ServerErrorDebug("Incorrect value for rithmic SysInfraType".to_string()))
         }
@@ -174,14 +185,13 @@ impl RithmicApiClient {
         println!("{:?}", message);
 
         let (ws_writer, ws_reader) = stream.split();
-/*        match RithmicApiClient::shutdown_split_websocket(ws_writer, ws_reader).await {
-            Ok(_) => Ok(()),
-            Err(e) => Err(FundForgeError::ServerErrorDebug(format!("Failed to shut down split stream: {}", e)))
-        }*/
-        Ok((ws_writer, ws_reader))
+        self.connected_plant.write().await.push(plant.clone());
+        self.plant_writer.insert(plant.clone(), Arc::new(Mutex::new(ws_writer)));
+        self.plant_reader.insert(plant.clone(), Arc::new(Mutex::new(ws_reader)));
+        Ok(())
     }
 
-   async fn send_message_split_streams<T: RithmicMessage>(writer: &mut SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>, message: &T) -> Result<(), FundForgeError> {
+   async fn send_message_split_streams<T: RithmicMessage>(writer: Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>, message: &T) -> Result<(), FundForgeError> {
         let mut buf = Vec::new();
 
         match message.encode(&mut buf) {
@@ -193,6 +203,7 @@ impl RithmicApiClient {
         let mut prefixed_msg = length.to_be_bytes().to_vec();
         prefixed_msg.extend(buf);
 
+       let mut writer = writer.lock().await;
         match writer.send(Message::Binary(prefixed_msg)).await {
             Ok(_) => Ok(()),
             Err(e) => Err(FundForgeError::ServerErrorDebug(format!("Failed to send RithmicMessage: {}", e)))
@@ -200,23 +211,33 @@ impl RithmicApiClient {
     }
 
     pub async fn shutdown_split_websocket(
-        mut ws_writer: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-        mut ws_reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
+        &self,
+        plant: SysInfraType
     ) -> Result<(), FundForgeError> {
+        let  (_, mut ws_writer) = match self.plant_writer.remove(&plant) {
+            None => return Err(FundForgeError::ServerErrorDebug(format!("No writer found for rithmic plant: {:?}", plant))),
+            Some(mut writer) => writer
+        };
+
+        let  (_, mut ws_reader) = match self.plant_reader.remove(&plant) {
+            None => return Err(FundForgeError::ServerErrorDebug(format!("No writer found for rithmic plant: {:?}", plant))),
+            Some(reader) => reader
+        };
+
         //Logout Request 12
         let logout_request = RequestLogout {
             template_id: 12,
             user_msg: vec!["Rust Fund Forge Signing Out".to_string()],
         };
 
-        RithmicApiClient::send_message_split_streams(&mut ws_writer, &logout_request).await.unwrap();
-        //Logout Response 13
+        RithmicApiClient::send_message_split_streams(ws_writer.clone(), &logout_request).await?;
 
-        //println!("Rithmic logout response: {:?}", response);
         // Send a close frame using the writer
+        let mut ws_writer= ws_writer.lock().await;
         ws_writer.send(Message::Close(None)).await.unwrap();
 
         // Drain the reader to ensure the connection closes properly
+        let mut ws_reader = ws_reader.lock().await;
         while let Some(msg) = ws_reader.next().await {
             match msg {
                 Ok(Message::Close(_)) => break, // Close confirmed by the server
@@ -224,27 +245,29 @@ impl RithmicApiClient {
                 Err(e) => return  Err(FundForgeError::ServerErrorDebug(format!("Failed safely shutdown stream: {}", e)))
             }
         }
+        self.connected_plant.write().await.retain(|x| *x != plant);
         println!("Safely shutdown rithmic split stream");
         Ok(())
     }
 
-    pub async fn logout(stream: &mut WebSocketStream<MaybeTlsStream<TcpStream>>) -> Result<(), FundForgeError> {
-        //Logout Request 12
-        let logout_request = RequestLogout {
-            template_id: 12,
-            user_msg: vec!["Rust Fund Forge Signing Out".to_string()],
-        };
-        RithmicApiClient::send_single_protobuf_message(stream, &logout_request).await?;
-        //Logout Response 13
-        let response: ResponseLogout = RithmicApiClient::read_single_protobuf_message(stream).await?;
-        println!("Rithmic logout response: {:?}", response);
-        stream.close(None).await.map_err(|e| Box::new(e) as Box<dyn Error>).unwrap();
-       Ok(())
+    pub async fn shutdown_all(&self) -> Result<(), FundForgeError> {
+        let plants= self.connected_plant.read().await.clone();
+        let mut results = vec![];
+        for plant in plants {
+            results.push(self.shutdown_split_websocket(plant).await);
+            println!("Shutdown Success");
+        }
+        for result in results {
+            match result {
+                Ok(_) => {}
+                Err(_) => return Err(FundForgeError::ServerErrorDebug("Failed to properly shutdown a rithmic plant connection".to_string()))
+            }
+        }
+        Ok(())
     }
 
-    async fn manage_requests(
+    async fn manage_responses(
         mut ws_writer: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-        mut ws_reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
     ) -> Result<(), FundForgeError> {
      /*   tokio::task::spawn(async move {
                 while let Some(messages) = ws_reader.

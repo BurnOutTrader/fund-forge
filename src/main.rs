@@ -32,18 +32,12 @@ async fn main() {
    */
 
     // Use the path as needed
-    let (ws_writer_ticker_plant, ws_reader_ticker_plant) = rithmic_api.connect_and_login(SysInfraType::TickerPlant).await.unwrap();
+    rithmic_api.connect_and_login(SysInfraType::TickerPlant).await.unwrap();
+    rithmic_api.connect_and_login(SysInfraType::HistoryPlant).await.unwrap();
+    rithmic_api.connect_and_login(SysInfraType::OrderPlant).await.unwrap();
+    rithmic_api.connect_and_login(SysInfraType::PnlPlant).await.unwrap();
+    rithmic_api.connect_and_login(SysInfraType::RepositoryPlant).await.unwrap();
 
-    let (ws_writer_history_plant, ws_reader_history_plant) = rithmic_api.connect_and_login(SysInfraType::HistoryPlant).await.unwrap();
-
-    sleep(Duration::from_secs(5));
-    match RithmicApiClient::shutdown_split_websocket(ws_writer_ticker_plant, ws_reader_ticker_plant).await {
-        Ok(_) => println!("Success"),
-        Err(e) => println!("{}", e)
-    }
-
-    match RithmicApiClient::shutdown_split_websocket(ws_writer_history_plant, ws_reader_history_plant).await {
-        Ok(_) => println!("Success"),
-        Err(e) => println!("{}", e)
-    }
+    sleep(Duration::from_secs(15));
+    rithmic_api.shutdown_all().await.unwrap();
 }
