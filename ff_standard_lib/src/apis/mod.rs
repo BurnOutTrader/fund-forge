@@ -5,4 +5,4 @@ pub mod settings;
 mod test_vendor_impl;
 pub mod update_tasks;
 pub mod vendor;
-pub mod rithmic;
+pub mod rithmic_api;

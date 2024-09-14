@@ -8,6 +8,7 @@ authors = ["Kevin Monaghan"]
 prost-build = "*"
 
 [dependencies]
+ff_rithmic_api = {path = "/Users/kevmonaghan/RustroverProjects/ff_rithmic_api"}
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
 rkyv = { version =  "*", features = ["std", "alloc", "validation"] }
@@ -41,9 +42,4 @@ ahash = "*"
 dashmap = "*"
 csv ="*"
 rust_decimal_macros ="*"
-prost ="*"
-prost-build = "0.13.2"
-tokio-tungstenite = { version = "*", features = ["rustls-tls", "tokio-native-tls", "connect", "native-tls", "stream"] }
-tungstenite = "0.17"
-futures-util = "0.3"
-url = "2.2"
+prost = "*"
