@@ -17,8 +17,8 @@ use crate::standardized_types::{Volume};
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum Brokerage {
+    Test, //DO NOT CHANGE ORDER
     RithmicTest,
-    Test
 }
 
 impl FromStr for Brokerage {

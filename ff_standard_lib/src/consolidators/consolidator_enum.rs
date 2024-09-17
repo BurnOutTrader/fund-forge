@@ -247,6 +247,7 @@ impl ConsolidatorEnum {
     }
 }
 
+#[derive(Debug)]
 pub struct ConsolidatedData {
     pub open_data: BaseDataEnum,
     pub closed_data: Option<BaseDataEnum>

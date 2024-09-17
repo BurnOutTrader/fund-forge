@@ -1,6 +1,6 @@
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
-use ff_standard_lib::server_connections::{subscribe_primary_subscription_updates, set_warmup_complete, send_strategy_event_slice, update_time_slice, update_time, update_indicator_handler, get_strategy_subscriptions};
+use ff_standard_lib::server_connections::{subscribe_primary_subscription_updates, set_warmup_complete, send_strategy_event_slice, update_time_slice, update_time, update_indicator_handler, get_strategy_subscriptions, get_primary_subscriptions, SUBSCRIPTION_HANDLER};
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
@@ -134,11 +134,10 @@ impl BackTestEngine {
         'main_loop: for (_, start) in &month_years {
             *self.last_time.write().await = start.clone();
             let mut last_time = start.clone();
-            let mut primary_subscriptions = self.primary_subscription_updates.recv().await.unwrap();
+            let mut primary_subscriptions = get_primary_subscriptions().await;
             'month_loop: loop {
                 let strategy_subscriptions = get_strategy_subscriptions().await;
-                //println!("Strategy Subscriptions: {:?}", strategy_subscriptions);
-                println!("Primary Subscriptions: {:?}", primary_subscriptions);
+                println!("Strategy Subscriptions: {:?}", strategy_subscriptions);
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -146,6 +145,7 @@ impl BackTestEngine {
                         continue;
                     }
                 };
+                println!("Month slice length: {}", month_time_slices.len());
 
                 let mut end_month = true;
                 'time_loop: loop {
@@ -153,14 +153,16 @@ impl BackTestEngine {
 
                     if time > end_time {
                         *self.last_time.write().await = last_time.clone();
+                        println!("End Time");
                         break 'main_loop;
                     }
                     if time.month() != start.month() {
+                        //println!("Next Month Time");
                         break 'month_loop;
                     }
 
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
-                    match self.primary_subscription_updates.try_recv() {
+                   match self.primary_subscription_updates.try_recv() {
                         Ok(new_primary_subscriptions) => {
                             if primary_subscriptions != new_primary_subscriptions {
                                 end_month = false;
@@ -177,31 +179,42 @@ impl BackTestEngine {
                         .flat_map(|(_, value)| value.iter().cloned())
                         .collect();
 
+                    //println!("{:?}", time_slice);
+
                     let mut strategy_event_slice: EventTimeSlice = EventTimeSlice::new();
                     let no_primary_data = time_slice.is_empty();
 
-                    if let Some(consolidated_data) = update_time_slice(time_slice.clone(), true).await {
-                        let mut indicator_slice = TimeSlice::new();
-                        indicator_slice.extend(consolidated_data.clone());
-                        indicator_slice.extend(time_slice.clone());
-                        if let Some(events) = update_indicator_handler(indicator_slice).await {
+                    let mut strategy_time_slice: TimeSlice = TimeSlice::new();
+
+                    if no_primary_data == false {
+                        let consolidated_data = update_time_slice(time_slice.clone(), true).await;
+                        if !consolidated_data.is_empty()
+                        {
+                            let mut indicator_slice = TimeSlice::new();
+                            indicator_slice.extend(consolidated_data.clone());
+                            indicator_slice.extend(time_slice.clone());
+                            if let Some(events) = update_indicator_handler(indicator_slice).await {
+                                strategy_event_slice.push(StrategyEvent::TimeSlice(
+                                    time.to_string(),
+                                    consolidated_data.clone(),
+                                ));
+                                strategy_event_slice.extend(events);
+                            }
+                            strategy_time_slice.extend(consolidated_data);
+                        }
+                    }
+
+                    let consolidated_data = update_time(time.clone()).await;
+                    if !consolidated_data.is_empty()
+                    {
+                        if let Some(events) = update_indicator_handler(consolidated_data.clone()).await {
                             strategy_event_slice.push(StrategyEvent::TimeSlice(
                                 time.to_string(),
                                 consolidated_data.clone(),
                             ));
                             strategy_event_slice.extend(events);
                         }
-                        time_slice.extend(consolidated_data);
-                    }
-
-                    if let Some(consolidated_data) = update_time(time.clone()).await {
-                        if let Some(events) = update_indicator_handler(consolidated_data.clone()).await {
-                            strategy_event_slice.push(StrategyEvent::TimeSlice(
-                                time.to_string(),
-                                consolidated_data,
-                            ));
-                            strategy_event_slice.extend(events);
-                        }
+                        strategy_time_slice.extend(consolidated_data);
                     }
 
                     if no_primary_data {
@@ -215,24 +228,25 @@ impl BackTestEngine {
                         continue 'time_loop;
                     }
 
-                    let mut strategy_time_slice: TimeSlice = TimeSlice::new();
+
                     for base_data in time_slice {
                         if strategy_subscriptions.contains(&base_data.subscription()) {
                             strategy_time_slice.push(base_data);
                         }
                     }
 
-                    strategy_event_slice.push(StrategyEvent::TimeSlice(
-                        time.to_string(),
-                        strategy_time_slice,
-                    ));
+                    if !strategy_time_slice.is_empty() {
+                        strategy_event_slice.push(StrategyEvent::TimeSlice(
+                            time.to_string(),
+                            strategy_time_slice,
+                        ));
+                    }
 
-                    if !self
-                        .send_and_continue(strategy_event_slice, warm_up_completed)
-                        .await
-                    {
-                        *self.last_time.write().await = last_time.clone();
-                        break 'main_loop;
+                    if !strategy_event_slice.is_empty() {
+                        if !self.send_and_continue(strategy_event_slice, warm_up_completed).await {
+                            *self.last_time.write().await = last_time.clone();
+                            break 'main_loop;
+                        }
                     }
                     last_time = time.clone();
                 }

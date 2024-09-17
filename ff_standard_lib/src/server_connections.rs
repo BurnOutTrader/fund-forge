@@ -99,32 +99,27 @@ lazy_static! {
     static ref MAX_SERVERS: usize = initialise_settings().unwrap().len();
     static ref ASYNC_OUTGOING:  DashMap<ConnectionType, Arc<ExternalSender>> = DashMap::with_capacity(*MAX_SERVERS);
     static ref ASYNC_INCOMING: DashMap<ConnectionType, Arc<Mutex<ReadHalf<TlsStream<TcpStream>>>>> = DashMap::with_capacity(*MAX_SERVERS);
-
-    // Account Objects
-    static ref CASH_BALANCE: DashMap<Brokerage, DashMap<AccountId, Price>> = DashMap::new();
-    static ref MARGIN_USED: DashMap<Brokerage, DashMap<AccountId, Price>> = DashMap::new();
-    static ref CASH_AVAILABLE: DashMap<Brokerage, DashMap<AccountId, Price>> = DashMap::new();
-    static ref ORDERS_FILLED: DashMap<Brokerage, DashMap<AccountId, Price>> = DashMap::new();
-    static ref ORDERS_OPEN: DashMap<Brokerage, DashMap<AccountId, Price>> = DashMap::new();
-    static ref POSITIONS: DashMap<Brokerage, DashMap<AccountId, DashMap<PositionId, Position>>> = DashMap::new();
-    static ref POSITIONS_CLOSED: DashMap<Brokerage, DashMap<AccountId, DashMap<PositionId, Position>>> = DashMap::new();
     static ref PRIMARY_SUBSCRIPTIONS: Arc<Mutex<Vec<DataSubscription>>> = Arc::new(Mutex::new(Vec::new()));
 }
 
-static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
+pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
 static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
 static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
 
-pub async fn update_time_slice(time_slice: TimeSlice, backtest: bool) -> Option<TimeSlice> {
-    MARKET_HANDLER.get()?.update_time_slice(time_slice.clone(), backtest).await;
-    SUBSCRIPTION_HANDLER.get()?.update_time_slice(time_slice).await
+pub async fn update_time_slice(time_slice: TimeSlice, backtest: bool) -> TimeSlice {
+    //MARKET_HANDLER.get()?.update_time_slice(time_slice.clone(), backtest).await;
+    let data = SUBSCRIPTION_HANDLER.get().unwrap().update_time_slice(time_slice).await;
+    data
 }
 pub async fn update_indicator_handler(time_slice: TimeSlice) -> Option<Vec<StrategyEvent>> {
-    INDICATOR_HANDLER.get()?.update_time_slice(time_slice).await
+    //INDICATOR_HANDLER.get()?.update_time_slice(time_slice).await
+    None
 }
-pub async fn update_time(time: DateTime<Utc>) -> Option<TimeSlice> {
-    MARKET_HANDLER.get()?.update_time(time.clone()).await;
-    SUBSCRIPTION_HANDLER.get()?.update_consolidators_time(time).await
+pub async fn update_time(time: DateTime<Utc>) -> TimeSlice {
+    //MARKET_HANDLER.get()?.update_time(time.clone()).await;
+    let data =SUBSCRIPTION_HANDLER.get().unwrap().update_consolidators_time(time).await;
+    //println!("{:?}", data);
+    data
 }
 
 static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<StrategyRequest>>>> = OnceCell::new();
@@ -164,6 +159,10 @@ pub async fn subscribe_primary_subscription_updates(name: String, sender: mpsc::
 /// only returns subscriptions that the strategy subscribed
 pub async fn get_strategy_subscriptions() -> Vec<DataSubscription> {
     SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await
+}
+
+pub async fn get_primary_subscriptions() -> Vec<DataSubscription> {
+    SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await
 }
 
 pub(crate) enum StrategyRequest {

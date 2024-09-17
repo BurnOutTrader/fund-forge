@@ -35,7 +35,7 @@ async fn main() {
         notify.clone(),
         StrategyMode::Backtest,                 // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2024, 06, 23)
+        NaiveDate::from_ymd_opt(2024, 7, 23)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
@@ -44,7 +44,7 @@ async fn main() {
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
-        Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
+        Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
             DataSubscription::new_custom(
                 SymbolName::from("EUR-USD"),
@@ -54,14 +54,14 @@ async fn main() {
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
-            /*   DataSubscription::new_custom(
+            DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
                  Resolution::Minutes(3),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::CandleStick,
-             ),*/],
+             ),],
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
@@ -124,6 +124,7 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 //do something on the bar close
                                 if quotebar.is_closed == true {
+                                    println!("{} Closed {} bar time {}", time, quotebar.symbol.name, base_data.time_created_utc());
                                     let last_bar = match quotebar.symbol.name == SymbolName::from("AUD-CAD") {
                                         true => {
                                             history_1.add(quotebar.clone());
@@ -147,13 +148,12 @@ pub async fn on_data_received(
                                         }
                                     };
 
-                                    println!("{} Closed {} bar time {}", time, quotebar.symbol.name, base_data.time_created_utc()); //note we automatically adjust for daylight savings based on historical daylight savings adjustments.
                                     if !warmup_complete {
                                         continue;
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
 
-                                    let account_name = AccountId::from(format!("TestAccount{}", quotebar.symbol.name)); //seperate account by symbol for backtesting purposes
+                                /*    let account_name = AccountId::from(format!("TestAccount{}", quotebar.symbol.name)); //seperate account by symbol for backtesting purposes
                                     if quotebar.bid_close > last_bar.bid_high
                                         && !strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await
                                     {
@@ -170,7 +170,7 @@ pub async fn on_data_received(
 
                                     if strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await {
                                         bars_since_entry_1 += 1;
-                                    }
+                                    }*/
                                 }
                                 //do something with the current open bar
                                 if !quotebar.is_closed {

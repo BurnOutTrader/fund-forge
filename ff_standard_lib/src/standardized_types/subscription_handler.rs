@@ -29,7 +29,6 @@ pub struct SubscriptionHandler {
     // subscriptions which the strategy actually subscribed to, not the raw data needed to full-fill the subscription.
     strategy_subscriptions: Arc<RwLock<Vec<DataSubscription>>>,
     primary_subscriptions_broadcaster: Arc<StaticInternalBroadcaster<Vec<DataSubscription>>>,
-    broadcaster: Arc<StaticInternalBroadcaster<Option<TimeSlice>>>,
 }
 
 impl SubscriptionHandler {
@@ -41,18 +40,12 @@ impl SubscriptionHandler {
             strategy_mode,
             strategy_subscriptions: Default::default(),
             primary_subscriptions_broadcaster: Arc::new(StaticInternalBroadcaster::new()),
-            broadcaster: Arc::new(StaticInternalBroadcaster::new())
         };
         handler
     }
 
-    pub(crate) async fn subscribe_consolidated_timeslices(&self,name: String, sender: Sender<Option<TimeSlice>>) {
-        self.broadcaster.subscribe(name, sender).await;
-    }
-
     pub(crate) async fn subscribe_primary_subscription_updates(&self, name: String, sender: Sender<Vec<DataSubscription>>) {
         self.primary_subscriptions_broadcaster.subscribe(name, sender).await;
-        self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
     }
 
     /// Sets the SubscriptionHandler as warmed up, so we can start processing data.
@@ -114,6 +107,7 @@ impl SubscriptionHandler {
             )
             .await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
+            println!("Handler: Subscribed: {}", new_subscription);
         }
 
         self.symbol_subscriptions.get(&new_subscription.symbol).unwrap()
@@ -162,6 +156,7 @@ impl SubscriptionHandler {
                 strategy_subscriptions.retain(|x| x != &subscription);
             }
             self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+            println!("Handler: Unsubscribed: {}", subscription);
             return;
         }
 
@@ -201,14 +196,10 @@ impl SubscriptionHandler {
     }
 
     /// Updates any consolidators with primary data
-    pub async fn update_time_slice(&self, time_slice: TimeSlice) -> Option<TimeSlice> {
+    pub async fn update_time_slice(&self, time_slice: TimeSlice) -> TimeSlice {
         let symbol_subscriptions = self.symbol_subscriptions.clone();
-        let broadcaster = self.broadcaster.clone();
         let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
         let mut closed_bars = Vec::new();
-
-        // Clone the Arc to the symbol subscriptions.
-        //let symbol_subscriptions = self.symbol_subscriptions.clone();
 
         // Create a FuturesUnordered to collect all futures and run them concurrently.
         let mut update_futures = FuturesUnordered::new();
@@ -225,6 +216,7 @@ impl SubscriptionHandler {
                 if let Some(handler) = symbol_subscriptions.get(&symbol) {
                     handler.update(&base_data).await
                 } else {
+                    println!("No handler: {:?}", symbol);
                     Vec::new() // Return empty if handler is not found.
                 }
             });
@@ -245,15 +237,11 @@ impl SubscriptionHandler {
             closed_bars.push(data);
         }
 
-        match closed_bars.is_empty() {
-            true => None,
-            false => Some(closed_bars)
-        }
+        closed_bars
     }
 
-    pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> Option<TimeSlice> {
+    pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> TimeSlice {
         let symbol_subscriptions = self.symbol_subscriptions.clone();
-        let broadcaster = self.broadcaster.clone();
         let futures: Vec<_> = symbol_subscriptions.iter().map(|symbol_handler| {
             let time = time.clone();
             // Creating async blocks that will run concurrently
@@ -273,10 +261,7 @@ impl SubscriptionHandler {
             }
         }
 
-        match time_slice.is_empty() {
-            true => None,
-            false => Some(time_slice)
-        }
+        time_slice
     }
 
     pub async fn history(
@@ -403,7 +388,6 @@ impl SymbolSubscriptionHandler {
         self.primary_history.write().await.add(base_data_enum.clone());
 
         let mut data = vec![];
-        //todo this doesnt work because the data subscription is never the consolidator subscription
         for mut consolidator in self.secondary_subscriptions.iter_mut() {
             data.push(consolidator.value_mut().update(base_data_enum))
         }

@@ -11,8 +11,8 @@ use crate::standardized_types::data_server_messaging::{FundForgeError};
 /// The `DataVendor` is used to specify the data vendor that is being used to feed a `Subscription`.
 /// Each `DataVendor` implements its own logic to fetch the data from the source, this logic can be modified in the `ff_data_server` crate.
 pub enum DataVendor {
+    Test, //DO NOT CHANGE ORDER
     RithmicTest,
-    Test,
 }
 
 impl FromStr for DataVendor {
