@@ -32,8 +32,8 @@ impl InteractionHandler {
         *self.is_warmed_up.write().await = true;
     }
 
-    pub async fn subscribe(&self, sender: Sender<StrategyControls>) {
-        self.broadcaster.subscribe(sender).await;
+    pub async fn subscribe(&self, name: String, sender: Sender<StrategyControls>) {
+        self.broadcaster.subscribe(name, sender).await;
     }
 
     pub async fn set_control_state(&self, control_state: StrategyControls) {

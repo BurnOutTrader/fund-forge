@@ -120,7 +120,6 @@ pub async fn data_server_manage_async_requests(
                     continue;
                 }
             };
-            println!("{:?}", request);
             // Handle the request and generate a response
             let response: Option<DataServerResponse> = match request {
                 DataServerRequest::Register(register_mode) => {
@@ -234,8 +233,8 @@ pub async fn data_server_manage_async_requests(
                 // Write the response to the stream
                 let mut writer = writer.lock().await;
                 match writer.write_all(&prefixed_msg).await {
-                    Err(e) => eprintln!("Error sending response: {:?}", e),
-                    Ok(_) => println!("{:?}", response)
+                    Err(e) => { }
+                    Ok(_) => {}
                 }
             }
         }

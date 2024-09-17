@@ -1,6 +1,6 @@
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
-use ff_standard_lib::server_connections::{broadcast_time, get_strategy_sender, subscribe_all_subscription_updates, subscribe_indicator_events, subscribe_markets, subscribe_primary_subscription_updates, set_warmup_complete, broadcast_primary_data, subscribe_indicator_values, subscribe_consolidated_time_slice};
+use ff_standard_lib::server_connections::{subscribe_primary_subscription_updates, set_warmup_complete, send_strategy_event_slice, update_time_slice, update_time, update_indicator_handler, get_strategy_subscriptions};
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::thread;
 use tokio::sync::mpsc::{Receiver};
 use tokio::sync::{mpsc, Notify, RwLock};
+use tokio::sync::mpsc::error::TryRecvError;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents::IndicatorTimeSlice;
 use ff_standard_lib::indicators::values::IndicatorValues;
@@ -34,12 +35,7 @@ pub(crate) struct BackTestEngine {
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
     last_time: RwLock<DateTime<Utc>>,
     gui_enabled: bool,
-    consolidated_updates: Receiver<TimeSlice>,
     primary_subscription_updates: Receiver<Vec<DataSubscription>>,
-    all_subscription_updates: Receiver<Vec<DataSubscription>>,
-    indicator_value_updates: Receiver<Vec<IndicatorValues>>,
-    indicator_event_updates: Receiver<Vec<IndicatorEvents>>,
-    market_updates: Receiver<EventTimeSlice>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -49,35 +45,15 @@ impl BackTestEngine {
         start_state: StrategyStartState,
         gui_enabled: bool
     ) -> Self {
-        let (sender, consolidated_updates) = mpsc::channel(1);
-        subscribe_consolidated_time_slice(sender).await;
-
         let (sender, primary_subscription_updates) = mpsc::channel(1);
-        subscribe_primary_subscription_updates(sender).await;
-
-        let (sender, all_subscription_updates) = mpsc::channel(1);
-        subscribe_all_subscription_updates(sender).await;
-
-        let (sender, indicator_value_updates) = mpsc::channel(1);
-        subscribe_indicator_values(sender).await;
-
-        let (sender, indicator_event_updates) = mpsc::channel(1);
-        subscribe_indicator_events(sender).await;
-
-        let (sender, market_updates) = mpsc::channel(1);
-        subscribe_markets(sender).await;
+        subscribe_primary_subscription_updates("Back Test Engine".to_string(), sender).await;
 
         let engine = BackTestEngine {
             notify,
             start_state,
             last_time: RwLock::new(Default::default()),
             gui_enabled,
-            consolidated_updates,
             primary_subscription_updates,
-            all_subscription_updates,
-            indicator_value_updates,
-            indicator_event_updates,
-            market_updates
         };
         engine
     }
@@ -101,12 +77,7 @@ impl BackTestEngine {
                 println!("Engine: Backtest complete");
                 let end_event = StrategyEvent::ShutdownEvent(String::from("Success"));
                 let events = vec![end_event.clone()];
-                match get_strategy_sender().lock().await.send(events).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        eprintln!("Engine: Error forwarding event: {:?}", e);
-                    }
-                }
+                send_strategy_event_slice(events).await;
             });
         });
     }
@@ -125,12 +96,7 @@ impl BackTestEngine {
 
         set_warmup_complete().await;
         let warmup_complete_event = vec![StrategyEvent::WarmUpComplete];
-        match get_strategy_sender().lock().await.send(warmup_complete_event).await {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("Engine: Error forwarding event: {:?}", e);
-            }
-        }
+        send_strategy_event_slice(warmup_complete_event).await;
         println!("Engine: Warm up complete")
     }
 
@@ -167,14 +133,12 @@ impl BackTestEngine {
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
             *self.last_time.write().await = start.clone();
-
-            broadcast_time(start.clone()).await;
             let mut last_time = start.clone();
             let mut primary_subscriptions = self.primary_subscription_updates.recv().await.unwrap();
             'month_loop: loop {
-                let strategy_subscriptions = self.all_subscription_updates.recv().await.unwrap();
+                let strategy_subscriptions = get_strategy_subscriptions().await;
                 //println!("Strategy Subscriptions: {:?}", strategy_subscriptions);
-                //println!("Primary Subscriptions: {:?}", primary_subscriptions);
+                println!("Primary Subscriptions: {:?}", primary_subscriptions);
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -196,14 +160,16 @@ impl BackTestEngine {
                     }
 
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
-                    if let Some(new_primary_subscriptions) = self.primary_subscription_updates.recv().await {
-                        if primary_subscriptions != new_primary_subscriptions {
-                            end_month = false;
-                            primary_subscriptions = new_primary_subscriptions;
-                            break 'time_loop;
+                    match self.primary_subscription_updates.try_recv() {
+                        Ok(new_primary_subscriptions) => {
+                            if primary_subscriptions != new_primary_subscriptions {
+                                end_month = false;
+                                primary_subscriptions = new_primary_subscriptions;
+                                break 'time_loop;
+                            }
                         }
+                        Err(_) => {}
                     }
-
 
                     // Collect data from the range
                     let mut time_slice: TimeSlice = month_time_slices
@@ -212,20 +178,33 @@ impl BackTestEngine {
                         .collect();
 
                     let mut strategy_event_slice: EventTimeSlice = EventTimeSlice::new();
-                    // if we don't have base data we update any objects which need to be updated with the time
-                    if time_slice.is_empty() {
-                        broadcast_time(time.clone()).await;
-                        let consolidated_data = self.consolidated_updates.recv().await.unwrap();
-                        let indicator_slice_event = self.indicator_value_updates.recv().await.unwrap();
-                        strategy_event_slice.push(StrategyEvent::IndicatorEvent(IndicatorTimeSlice(indicator_slice_event)));
-                        strategy_event_slice.push(StrategyEvent::TimeSlice(
-                            time.to_string(),
-                            consolidated_data,
-                        ));
-                        let indicator_buffer =  self.indicator_event_updates.recv().await.unwrap();
-                        for event in indicator_buffer {
-                            strategy_event_slice.push(StrategyEvent::IndicatorEvent(event));
+                    let no_primary_data = time_slice.is_empty();
+
+                    if let Some(consolidated_data) = update_time_slice(time_slice.clone(), true).await {
+                        let mut indicator_slice = TimeSlice::new();
+                        indicator_slice.extend(consolidated_data.clone());
+                        indicator_slice.extend(time_slice.clone());
+                        if let Some(events) = update_indicator_handler(indicator_slice).await {
+                            strategy_event_slice.push(StrategyEvent::TimeSlice(
+                                time.to_string(),
+                                consolidated_data.clone(),
+                            ));
+                            strategy_event_slice.extend(events);
                         }
+                        time_slice.extend(consolidated_data);
+                    }
+
+                    if let Some(consolidated_data) = update_time(time.clone()).await {
+                        if let Some(events) = update_indicator_handler(consolidated_data.clone()).await {
+                            strategy_event_slice.push(StrategyEvent::TimeSlice(
+                                time.to_string(),
+                                consolidated_data,
+                            ));
+                            strategy_event_slice.extend(events);
+                        }
+                    }
+
+                    if no_primary_data {
                         if !strategy_event_slice.is_empty() {
                             if !self.send_and_continue(strategy_event_slice, warm_up_completed).await {
                                 *self.last_time.write().await = last_time.clone();
@@ -235,14 +214,6 @@ impl BackTestEngine {
                         last_time = time.clone();
                         continue 'time_loop;
                     }
-                    broadcast_primary_data(time_slice.clone()).await;
-                    broadcast_time(time).await;
-
-                    // need multiple event loops for market handler, 1 for data 1 for orders
-                    //self.market_handler_update_sender.send(MarketHandlerUpdate::TimeSlice(time_slice.clone())).await.unwrap();
-
-                    let consolidated_data = self.consolidated_updates.recv().await.unwrap();
-                    time_slice.extend(consolidated_data);
 
                     let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                     for base_data in time_slice {
@@ -250,18 +221,6 @@ impl BackTestEngine {
                             strategy_time_slice.push(base_data);
                         }
                     }
-
-                    let market_event_handler_events = self.market_updates.recv().await.unwrap();
-                    strategy_event_slice.extend(market_event_handler_events);
-
-                    let indicator_buffer= self.indicator_event_updates.recv().await.unwrap();
-                    for event in indicator_buffer {
-                        strategy_event_slice.push(StrategyEvent::IndicatorEvent(event));
-                    }
-
-                   let indicator_slice_event = self.indicator_value_updates.recv().await.unwrap();
-                    strategy_event_slice.push(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(indicator_slice_event)));
-
 
                     strategy_event_slice.push(StrategyEvent::TimeSlice(
                         time.to_string(),
@@ -275,7 +234,6 @@ impl BackTestEngine {
                         *self.last_time.write().await = last_time.clone();
                         break 'main_loop;
                     }
-
                     last_time = time.clone();
                 }
                 if end_month {
@@ -291,12 +249,7 @@ impl BackTestEngine {
         strategy_event_slice: EventTimeSlice,
         warm_up_completed: bool,
     ) -> bool {
-        match get_strategy_sender().lock().await.send(strategy_event_slice).await {
-            Ok(_) => {}
-            Err(e) => {
-                eprintln!("Engine: Error forwarding event: {:?}", e);
-            }
-        }
+        send_strategy_event_slice(strategy_event_slice).await;
         // We check if the user has requested a delay between time slices for market replay style backtesting.
         // need to subscribe to updates for these handlers
   /*      if warm_up_completed {

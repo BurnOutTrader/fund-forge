@@ -35,7 +35,7 @@ async fn main() {
         notify.clone(),
         StrategyMode::Backtest,                 // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2024, 08, 23)
+        NaiveDate::from_ymd_opt(2024, 06, 23)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
@@ -54,14 +54,14 @@ async fn main() {
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
-               DataSubscription::new_custom(
+            /*   DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
                  Resolution::Minutes(3),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::CandleStick,
-             ),],
+             ),*/],
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
@@ -80,6 +80,7 @@ pub async fn on_data_received(
     notify: Arc<Notify>,
     mut event_receiver: mpsc::Receiver<EventTimeSlice>,
 ) {
+    println!("Start strategy loop");
     let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new(
                 SymbolName::from("AUD-CAD"),

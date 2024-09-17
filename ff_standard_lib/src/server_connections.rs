@@ -33,7 +33,7 @@ use crate::standardized_types::Price;
 use crate::standardized_types::accounts::position::{Position, PositionId};
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::orders::orders::{OrderRequest};
-use crate::standardized_types::strategy_events::{EventTimeSlice};
+use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::standardized_types::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription};
 use crate::standardized_types::time_slices::TimeSlice;
@@ -99,8 +99,6 @@ lazy_static! {
     static ref MAX_SERVERS: usize = initialise_settings().unwrap().len();
     static ref ASYNC_OUTGOING:  DashMap<ConnectionType, Arc<ExternalSender>> = DashMap::with_capacity(*MAX_SERVERS);
     static ref ASYNC_INCOMING: DashMap<ConnectionType, Arc<Mutex<ReadHalf<TlsStream<TcpStream>>>>> = DashMap::with_capacity(*MAX_SERVERS);
-    static ref PRIMARY_DATA_BROADCASTER: Arc<StaticInternalBroadcaster<TimeSlice>> = Arc::new(StaticInternalBroadcaster::new());
-    static ref TIME_BROADCASTER_BROADCASTER: Arc<StaticInternalBroadcaster<DateTime<Utc>>> = Arc::new(StaticInternalBroadcaster::new());
 
     // Account Objects
     static ref CASH_BALANCE: DashMap<Brokerage, DashMap<AccountId, Price>> = DashMap::new();
@@ -112,11 +110,28 @@ lazy_static! {
     static ref POSITIONS_CLOSED: DashMap<Brokerage, DashMap<AccountId, DashMap<PositionId, Position>>> = DashMap::new();
     static ref PRIMARY_SUBSCRIPTIONS: Arc<Mutex<Vec<DataSubscription>>> = Arc::new(Mutex::new(Vec::new()));
 }
-static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<StrategyRequest>>>> = OnceCell::new();
-static STRATEGY_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<EventTimeSlice>>>> = OnceCell::new();
+
 static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
-static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
 static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
+static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
+
+pub async fn update_time_slice(time_slice: TimeSlice, backtest: bool) -> Option<TimeSlice> {
+    MARKET_HANDLER.get()?.update_time_slice(time_slice.clone(), backtest).await;
+    SUBSCRIPTION_HANDLER.get()?.update_time_slice(time_slice).await
+}
+pub async fn update_indicator_handler(time_slice: TimeSlice) -> Option<Vec<StrategyEvent>> {
+    INDICATOR_HANDLER.get()?.update_time_slice(time_slice).await
+}
+pub async fn update_time(time: DateTime<Utc>) -> Option<TimeSlice> {
+    MARKET_HANDLER.get()?.update_time(time.clone()).await;
+    SUBSCRIPTION_HANDLER.get()?.update_consolidators_time(time).await
+}
+
+static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<StrategyRequest>>>> = OnceCell::new();
+static STRATEGY_SENDER: OnceCell<Sender<EventTimeSlice>> = OnceCell::new();
+
+
+
 static INTERACTION_HANDLER: OnceCell<Arc<InteractionHandler>> = OnceCell::new();
 static TIMED_EVENT_HANDLER: OnceCell<Arc<TimedEventHandler>> = OnceCell::new();
 static DRAWING_OBJECTS_HANDLER: OnceCell<Arc<DrawingObjectHandler>> = OnceCell::new();
@@ -139,48 +154,16 @@ pub async fn set_warmup_complete() {
 pub(crate) fn get_sender() -> Arc<Mutex<mpsc::Sender<StrategyRequest>>> {
     DATA_SERVER_SENDER.get().unwrap().clone() // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
-
-pub fn get_strategy_sender() -> Arc<Mutex<mpsc::Sender<EventTimeSlice>>> {
-    STRATEGY_SENDER.get().unwrap().clone()
+pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
+    STRATEGY_SENDER.get().unwrap().send(slice).await.unwrap();
+}
+pub async fn subscribe_primary_subscription_updates(name: String, sender: mpsc::Sender<Vec<DataSubscription>>) {
+    SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
-pub async fn subscribe_consolidated_time_slice(sender: mpsc::Sender<TimeSlice>) {
-    SUBSCRIPTION_HANDLER.get().unwrap().clone().subscribe_consolidated_timeslices(sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
-}
-
-pub async fn subscribe_primary_subscription_updates(sender: mpsc::Sender<Vec<DataSubscription>>) {
-    SUBSCRIPTION_HANDLER.get().unwrap().clone().subscribe_primary_subscription_updates(sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
-}
-
-pub async fn subscribe_all_subscription_updates(sender: mpsc::Sender<Vec<DataSubscription>>) {
-    SUBSCRIPTION_HANDLER.get().unwrap().clone().subscribe_secondary_subscription_updates(sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
-}
-
-pub async fn subscribe_indicator_values(sender: mpsc::Sender<Vec<IndicatorValues>>) {
-    INDICATOR_HANDLER.get().unwrap().clone().subscribe_values(sender).await
-}
-
-pub async fn subscribe_indicator_events(sender: mpsc::Sender<Vec<IndicatorEvents>>) {
-    INDICATOR_HANDLER.get().unwrap().clone().subscribe_events(sender).await
-}
-
-pub async fn subscribe_markets(sender: Sender<EventTimeSlice>) {
-    MARKET_HANDLER.get().unwrap().clone().subscribe_events(sender).await
-}
-
-pub(crate) async fn subscribe_primary_feed(sender: mpsc::Sender<TimeSlice>) {
-    PRIMARY_DATA_BROADCASTER.subscribe(sender).await;
-}
-pub(crate) async fn subscribe_strategy_time(sender: mpsc::Sender<DateTime<Utc>>) {
-    TIME_BROADCASTER_BROADCASTER.subscribe(sender).await;
-}
-
-pub async fn broadcast_primary_data(data: TimeSlice) {
-    PRIMARY_DATA_BROADCASTER.broadcast(data).await;
-}
-
-pub async fn broadcast_time(time: DateTime<Utc>) {
-    TIME_BROADCASTER_BROADCASTER.broadcast(time).await;
+/// only returns subscriptions that the strategy subscribed
+pub async fn get_strategy_subscriptions() -> Vec<DataSubscription> {
+    SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await
 }
 
 pub(crate) enum StrategyRequest {
@@ -364,7 +347,7 @@ pub async fn initialize_static(
 ) {
 
     STRATEGY_SENDER.get_or_init(|| {
-        Arc::new(Mutex::new(event_sender))
+        event_sender
     }).clone();
     INDICATOR_HANDLER.get_or_init(|| {
         indicator_handler
@@ -386,7 +369,7 @@ pub async fn initialize_static(
         StrategyMode::Backtest => {}
         StrategyMode::Live | StrategyMode::LivePaperTrading => {
             let (tx, rx) = mpsc::channel(100);
-            subscribe_primary_subscription_updates(tx).await;
+            subscribe_primary_subscription_updates("Live Subscription Update Loop".to_string(), tx).await;
             live_subscription_handler(mode, rx).await
         },
     }

@@ -125,10 +125,10 @@ impl FundForgeStrategy {
         let subscription_handler = Arc::new(subscription_handler);
         init_sub_handler(subscription_handler.clone()).await;
 
-        let (order_sender, order_receiver) = mpsc::channel(1);
+        let (order_sender, order_receiver) = mpsc::channel(100);
         let market_event_handler = match strategy_mode {
-            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(start_time.to_utc(), Some(order_receiver), strategy_mode.clone()).await,
-            StrategyMode::Live => MarketHandler::new(start_time.to_utc(), None, StrategyMode::Live).await,
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(start_time.to_utc(), Some(order_receiver)).await,
+            StrategyMode::Live => MarketHandler::new(start_time.to_utc(), None).await,
         };
         let market_event_handler = Arc::new(market_event_handler);
 
@@ -148,7 +148,6 @@ impl FundForgeStrategy {
             order_sender,
         };
 
-        println!("Init static");
         initialize_static(
             strategy_mode.clone(),
             strategy_event_sender,

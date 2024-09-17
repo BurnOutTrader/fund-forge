@@ -14,9 +14,8 @@ use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Duration, Utc};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use dashmap::DashMap;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{mpsc, RwLock};
-use crate::server_connections::{subscribe_consolidated_time_slice, subscribe_primary_feed};
+use tokio::sync::mpsc::{Sender};
+use tokio::sync::{RwLock};
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
@@ -37,8 +36,6 @@ pub struct IndicatorHandler {
     strategy_mode: StrategyMode,
     event_buffer: RwLock<Vec<StrategyEvent>>,
     subscription_map: DashMap<IndicatorName, DataSubscription>, //used to quickly find the subscription of an indicator by name.
-    broadcaster: Arc<StaticInternalBroadcaster<Vec<IndicatorValues>>>,
-    events_broadcaster: Arc<StaticInternalBroadcaster<Vec<IndicatorEvents>>>
 }
 
 impl IndicatorHandler {
@@ -49,23 +46,8 @@ impl IndicatorHandler {
             strategy_mode,
             event_buffer: Default::default(),
             subscription_map: Default::default(),
-            broadcaster: Arc::new(StaticInternalBroadcaster::new()),
-            events_broadcaster: Arc::new(StaticInternalBroadcaster::new()),
         };
-        let (sender, receiver) =  mpsc::channel(1);
-        subscribe_primary_feed(sender.clone()).await;
-        subscribe_consolidated_time_slice(sender).await;
-        handler.update_time_slice(receiver).await;
-
         handler
-    }
-
-    pub async fn subscribe_events(&self, sender: Sender<Vec<IndicatorEvents>>) {
-        self.events_broadcaster.subscribe(sender).await;
-    }
-
-    pub async fn subscribe_values(&self, sender: Sender<Vec<IndicatorValues>>) {
-        self.broadcaster.subscribe(sender).await;
     }
 
     pub async fn get_event_buffer(&self) -> Option<Vec<StrategyEvent>> {
@@ -141,34 +123,36 @@ impl IndicatorHandler {
         }
     }
 
-    async fn update_time_slice(&self, time_slice_receiver: Receiver<TimeSlice>)  {
-        let mut time_slice_receiver = time_slice_receiver;
+    pub async fn update_time_slice(&self, time_slice: TimeSlice) -> Option<Vec<StrategyEvent>>   {
         let mut results: BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
-        let broadcaster = self.broadcaster.clone();
         let indicators = self.indicators.clone();
-        tokio::task::spawn(async move {
-            while let Some(time_slice) = time_slice_receiver.recv().await {
-                if time_slice.is_empty() {
-                    continue;
-                }
-                for data in time_slice {
-                    let subscription = data.subscription(); // Assume subscription() is a method on BaseDataEnum
 
-                    if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
-                        // Use the `iter_mut()` method to iterate over mutable references to key-value pairs in the DashMap
-                        for mut indicators_dash_map in indicators_by_sub.iter_mut() {
-                            let data = indicators_dash_map.value_mut().update_base_data(&data); // Assume update_base_data() is defined
-                            if let Some(indicator_data) = data {
-                                results.insert(indicators_dash_map.key().clone(), indicator_data);
-                            }
-                        }
+        for data in time_slice {
+            let subscription = data.subscription(); // Assume subscription() is a method on BaseDataEnum
+
+            if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
+                // Use the `iter_mut()` method to iterate over mutable references to key-value pairs in the DashMap
+                for mut indicators_dash_map in indicators_by_sub.iter_mut() {
+                    let data = indicators_dash_map.value_mut().update_base_data(&data); // Assume update_base_data() is defined
+                    if let Some(indicator_data) = data {
+                        results.insert(indicators_dash_map.key().clone(), indicator_data);
                     }
                 }
-
-                let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
-                broadcaster.broadcast(results_vec).await;
             }
-        });
+        }
+
+        let mut results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
+        let mut events = self.event_buffer.write().await;
+        let mut event_buffer: Vec<StrategyEvent>= vec![];
+        if !events.is_empty() {
+            event_buffer.extend(events.clone())
+        }
+        if results_vec.is_empty() && events.is_empty() {
+            return None
+        }
+        event_buffer.push(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec)));
+        events.clear();
+        Some(event_buffer)
     }
 
     pub async fn history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {
