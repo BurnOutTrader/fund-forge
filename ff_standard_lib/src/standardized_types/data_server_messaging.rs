@@ -144,11 +144,6 @@ pub enum DataServerRequest {
         subscription: DataSubscription,
         time: String,
     },
-    HistoricalBaseDataMany {
-        callback_id: u64,
-        subscriptions: Vec<DataSubscription>,
-        time: String,
-    },
     /// Requests a list of instruments all instruments available with the `DataVendor` from the server, an instrument object is the vendors specific data type.
     /// # Fields
     /// * `DataVendor`
@@ -223,7 +218,6 @@ impl DataServerRequest {
     pub fn set_callback_id(&mut self, id: u64) {
         match self {
             DataServerRequest::HistoricalBaseData { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::HistoricalBaseDataMany {callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolsVendor { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolsBroker { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Resolutions {callback_id, .. } => {*callback_id = id}
@@ -263,11 +257,6 @@ DataServerResponse {
     HistoricalBaseData {
         callback_id: u64,
         payload: BaseDataPayload
-    },
-
-    HistoricalBaseDataMany {
-        callback_id: u64,
-        payloads: Vec<BaseDataPayload>
     },
 
     /// Responds with `instruments` as `Vec<InstrumentEnum>` which contains:
@@ -361,7 +350,6 @@ impl DataServerResponse {
     pub fn get_callback_id(&self) -> Option<u64> {
         match self {
             DataServerResponse::HistoricalBaseData { callback_id,.. } => Some(callback_id.clone()),
-            DataServerResponse::HistoricalBaseDataMany  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::Symbols  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::Resolutions  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::Error  { callback_id,.. } => Some(callback_id.clone()),

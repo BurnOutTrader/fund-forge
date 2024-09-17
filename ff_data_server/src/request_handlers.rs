@@ -48,47 +48,6 @@ pub async fn base_data_response(
     }
 }
 
-pub async fn base_data_many_response(
-    subscriptions: Vec<DataSubscription>,
-    time: String,
-    callback_id: u64,
-) -> DataServerResponse {
-    let data_folder = PathBuf::from(get_data_folder());
-    let time: DateTime<Utc> = time.parse().unwrap();
-
-    let futures: Vec<_> = subscriptions.iter().map(|sub| {
-        let time = time.clone();
-        let folder = data_folder.clone();
-        let sub = sub.clone();
-        let time = time.clone();
-        // Creating async blocks that will run concurrently
-        async move {
-            let file = BaseDataEnum::file_path(&folder, &sub, &time).unwrap();
-            //println!("file path: {:?}", file);
-            if file.exists() {
-                let data = load_as_bytes(file).unwrap();
-                Some(BaseDataPayload {
-                    bytes: data,
-                    subscription: sub.clone(),
-                });
-            }
-            None
-        }
-    }).collect();
-
-    let mut results:Vec<Option<BaseDataPayload>> = futures::future::join_all(futures).await;
-
-    let mut payloads: Vec<BaseDataPayload> = vec![];
-
-    for result in results.iter_mut() {
-        if let Some(data) = result {
-            payloads.push(data.to_owned());
-        }
-    }
-    // return the ResponseType::HistoricalBaseData to the server fn that called this fn
-    DataServerResponse::HistoricalBaseDataMany{ callback_id, payloads}
-}
-
 
 pub async fn data_server_manage_async_requests(
     stream: TlsStream<TcpStream>
