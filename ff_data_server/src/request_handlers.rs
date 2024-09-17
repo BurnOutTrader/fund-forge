@@ -122,115 +122,141 @@ pub async fn data_server_manage_async_requests(
                     continue;
                 }
             };
-            // Handle the request and generate a response
-            match request {
-                DataServerRequest::Register(register_mode) => {
-                    strategy_mode = register_mode;
-                },
-                DataServerRequest::HistoricalBaseData {
-                    callback_id,
-                    subscription,
-                    time,
-                } => handle_callback(
-                    || base_data_response(subscription, time, callback_id),
-                    writer.clone()
-                ).await,
+            let writer = writer.clone();
+            tokio::spawn(async move {
+                // Handle the request and generate a response
+                match request {
+                    DataServerRequest::Register(register_mode) => {
+                        strategy_mode = register_mode;
+                    },
 
-                DataServerRequest::SymbolsVendor {
-                    data_vendor,
-                    market_type,
-                    callback_id,
-                } => handle_callback(
-                    || data_vendor.symbols_response(market_type, callback_id),
-                    writer.clone()
-                ).await,
+                    DataServerRequest::DecimalAccuracy {
+                        data_vendor,
+                        callback_id,
+                        symbol_name
+                    } => handle_callback(
+                        || data_vendor.decimal_accuracy_response(symbol_name, callback_id),
+                        writer.clone()
+                    ).await,
 
-                DataServerRequest::SymbolsBroker {
-                    brokerage,
-                    callback_id,
-                    market_type,
-                } => handle_callback(
-                    || brokerage.symbols_response(market_type, callback_id),
-                    writer.clone()
-                ).await,
+                    DataServerRequest::SymbolInfo {
+                        symbol_name,
+                        brokerage,
+                        callback_id
+                    } => handle_callback(
+                        || brokerage.symbol_info_response(symbol_name, callback_id),
+                        writer.clone()
+                    ).await,
 
-                DataServerRequest::HistoricalBaseDataMany {
-                    callback_id,
-                    subscriptions,
-                    time,
-                } => handle_callback(
-                    || base_data_many_response(subscriptions, time, callback_id),
-                    writer.clone()
-                ).await,
+                    DataServerRequest::HistoricalBaseData {
+                        callback_id,
+                        subscription,
+                        time,
+                    } => handle_callback(
+                        || base_data_response(subscription, time, callback_id),
+                        writer.clone()
+                    ).await,
 
-                DataServerRequest::Resolutions {
-                    callback_id,
-                    data_vendor,
-                    market_type,
-                } => handle_callback(
-                    || data_vendor.resolutions_response(market_type, callback_id),
-                    writer.clone()
-                ).await,
+                    DataServerRequest::SymbolsVendor {
+                        data_vendor,
+                        market_type,
+                        callback_id,
+                    } => handle_callback(
+                        || data_vendor.symbols_response(market_type, callback_id),
+                        writer.clone()
+                    ).await,
 
-                DataServerRequest::AccountInfo {
-                    callback_id,
-                    brokerage,
-                    account_id,
-                } => handle_callback(
-                    || brokerage.account_info_response(account_id, callback_id),
-                    writer.clone()
-                ).await,
+                    DataServerRequest::SymbolsBroker {
+                        brokerage,
+                        callback_id,
+                        market_type,
+                    } => handle_callback(
+                        || brokerage.symbols_response(market_type, callback_id),
+                        writer.clone()
+                    ).await,
 
-                DataServerRequest::Markets {
-                    callback_id,
-                    data_vendor,
-                } => handle_callback(
-                    || data_vendor.markets_response(callback_id),
-                    writer.clone()
-                ).await,
+                    DataServerRequest::HistoricalBaseDataMany {
+                        callback_id,
+                        subscriptions,
+                        time,
+                    } => handle_callback(
+                        || base_data_many_response(subscriptions, time, callback_id),
+                        writer.clone()
+                    ).await,
 
-                DataServerRequest::TickSize {
-                    callback_id,
-                    data_vendor,
-                    symbol_name,
-                } => handle_callback(
-                    || data_vendor.tick_size_response(symbol_name, callback_id),
-                    writer.clone()).await,
+                    DataServerRequest::Resolutions {
+                        callback_id,
+                        data_vendor,
+                        market_type,
+                    } => handle_callback(
+                        || data_vendor.resolutions_response(market_type, callback_id),
+                        writer.clone()
+                    ).await,
 
-                _ => panic!()
-/*
+                    DataServerRequest::AccountInfo {
+                        callback_id,
+                        brokerage,
+                        account_id,
+                    } => handle_callback(
+                        || brokerage.account_info_response(account_id, callback_id),
+                        writer.clone()
+                    ).await,
+
+                    DataServerRequest::Markets {
+                        callback_id,
+                        data_vendor,
+                    } => handle_callback(
+                        || data_vendor.markets_response(callback_id),
+                        writer.clone()
+                    ).await,
+
+                    DataServerRequest::TickSize {
+                        callback_id,
+                        data_vendor,
+                        symbol_name,
+                    } => handle_callback(
+                        || data_vendor.tick_size_response(symbol_name, callback_id),
+                        writer.clone()).await,
+
+                    DataServerRequest::MarginRequired {
+                        brokerage,
+                        callback_id,
+                        symbol_name,
+                        quantity
+                    } => {
+                        match strategy_mode {
+                            StrategyMode::Backtest => {
+                                handle_callback(
+                                    || brokerage.margin_required_historical_response(symbol_name, quantity, callback_id),
+                                    writer.clone()).await
+                            },
+                            StrategyMode::LivePaperTrading | StrategyMode::Live => {
+                                handle_callback(
+                                    || brokerage.margin_required_live_response(symbol_name, quantity, callback_id),
+                                    writer.clone()).await
+                            },
+                        }
+                    },
+
                     DataServerRequest::StreamRequest {
-                    request
-                } => {
-                    if strategy_mode == StrategyMode::Backtest {
-                        continue
-                    }
-                    stream_response(request).await;
-                    None
-                },
+                        request
+                    } => {
+                        if strategy_mode == StrategyMode::Backtest {
+                            return
+                        }
+                        stream_response(request).await;
+                    },
 
-                DataServerRequest::OrderRequest {
-                    request
-                } => {
-                    if strategy_mode == StrategyMode::Backtest {
-                        continue
-                    }
-                    order_response(request).await;
-                    None
-                },
-
-                DataServerRequest::MarginRequired {
-                    brokerage,
-                    callback_id,
-                    symbol_name,
-                    quantity
-                } => {
-                    match strategy_mode {
-                        StrategyMode::Backtest => Some(brokerage.margin_required_historical_response(symbol_name, quantity, callback_id).await),
-                        StrategyMode::LivePaperTrading | StrategyMode::Live => Some(brokerage.margin_required_live_response(symbol_name, quantity, callback_id).await),
-                    }
-                }*/
-            };
+                    DataServerRequest::OrderRequest {
+                        request
+                    } => {
+                        if strategy_mode == StrategyMode::Backtest {
+                            return;
+                        }
+                        order_response(request).await;
+                    },
+                };
+            });
         }
     });
 }
@@ -262,6 +288,7 @@ where
     let mut writer = writer.lock().await;
     match writer.write_all(&prefixed_msg).await {
         Err(e) => {
+            // Handle the error (log it or take some other action)
         }
         Ok(_) => {
             // Successfully wrote the message
