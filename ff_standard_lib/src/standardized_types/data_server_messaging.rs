@@ -255,7 +255,8 @@ pub struct BaseDataPayload {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Represents a request type for the network message. This enum is used to specify the type of request and the returning response
-pub enum DataServerResponse {
+pub enum
+DataServerResponse {
     /// This is for generic history requests, Responds with `payload` as `Payload` which contains:
     /// ## HistoricalBaseData Fields
     /// * `payloads` as `Vec<Payload>`
@@ -339,12 +340,8 @@ pub enum DataServerResponse {
     },
 }
 
-impl DataServerResponse {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
-        vec.into()
-    }
-    pub fn from_bytes(archived: &[u8]) -> Result<DataServerResponse, FundForgeError> {
+impl Bytes<DataServerResponse> for DataServerResponse {
+    fn from_bytes(archived: &[u8]) -> Result<DataServerResponse, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
         match rkyv::from_bytes::<DataServerResponse>(archived) {
             //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
@@ -352,6 +349,14 @@ impl DataServerResponse {
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
+    fn to_bytes(&self) -> Vec<u8> {
+        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
+        vec.into()
+    }
+}
+
+impl DataServerResponse {
+
 
     pub fn get_callback_id(&self) -> Option<u64> {
         match self {

@@ -107,7 +107,7 @@ impl SubscriptionHandler {
             )
             .await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
-            println!("Handler: Subscribed: {}", new_subscription);
+            //println!("Handler: Subscribed: {}", new_subscription);
         }
 
         self.symbol_subscriptions.get(&new_subscription.symbol).unwrap()
@@ -156,7 +156,7 @@ impl SubscriptionHandler {
                 strategy_subscriptions.retain(|x| x != &subscription);
             }
             self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
-            println!("Handler: Unsubscribed: {}", subscription);
+            //println!("Handler: Unsubscribed: {}", subscription);
             return;
         }
 

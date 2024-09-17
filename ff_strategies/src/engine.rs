@@ -137,7 +137,7 @@ impl BackTestEngine {
             let mut primary_subscriptions = get_primary_subscriptions().await;
             'month_loop: loop {
                 let strategy_subscriptions = get_strategy_subscriptions().await;
-                println!("Strategy Subscriptions: {:?}", strategy_subscriptions);
+                //println!("Strategy Subscriptions: {:?}", strategy_subscriptions);
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -145,10 +145,10 @@ impl BackTestEngine {
                         continue;
                     }
                 };
-                println!("Month slice length: {}", month_time_slices.len());
+                //println!("Month slice length: {}", month_time_slices.len());
 
                 let mut end_month = true;
-                'time_loop: loop {
+                'time_instant_loop: loop {
                     let time = last_time + self.start_state.buffer_resolution;
 
                     if time > end_time {
@@ -167,7 +167,7 @@ impl BackTestEngine {
                             if primary_subscriptions != new_primary_subscriptions {
                                 end_month = false;
                                 primary_subscriptions = new_primary_subscriptions;
-                                break 'time_loop;
+                                break 'time_instant_loop;
                             }
                         }
                         Err(_) => {}
@@ -225,7 +225,7 @@ impl BackTestEngine {
                             }
                         }
                         last_time = time.clone();
-                        continue 'time_loop;
+                        continue 'time_instant_loop;
                     }
 
 

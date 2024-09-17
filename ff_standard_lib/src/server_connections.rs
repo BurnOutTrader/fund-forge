@@ -38,6 +38,7 @@ use crate::standardized_types::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::timed_events_handler::TimedEventHandler;
+use crate::traits::bytes::Bytes;
 
 pub const GUI_ENABLED: bool = true;
 pub const GUI_DISABLED: bool = false;
@@ -107,16 +108,15 @@ static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
 static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
 
 pub async fn update_time_slice(time_slice: TimeSlice, backtest: bool) -> TimeSlice {
-    //MARKET_HANDLER.get()?.update_time_slice(time_slice.clone(), backtest).await;
+    //MARKET_HANDLER.get().unwrap().update_time_slice(time_slice.clone(), backtest).await;
     let data = SUBSCRIPTION_HANDLER.get().unwrap().update_time_slice(time_slice).await;
     data
 }
 pub async fn update_indicator_handler(time_slice: TimeSlice) -> Option<Vec<StrategyEvent>> {
-    //INDICATOR_HANDLER.get()?.update_time_slice(time_slice).await
-    None
+    INDICATOR_HANDLER.get().unwrap().update_time_slice(time_slice).await
 }
 pub async fn update_time(time: DateTime<Utc>) -> TimeSlice {
-    //MARKET_HANDLER.get()?.update_time(time.clone()).await;
+   // MARKET_HANDLER.get().unwrap().update_time(time.clone()).await; //todo, need to put market handler back how it was or make it static..can be static since it uses receiver for roder
     let data =SUBSCRIPTION_HANDLER.get().unwrap().update_consolidators_time(time).await;
     //println!("{:?}", data);
     data

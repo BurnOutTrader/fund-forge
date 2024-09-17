@@ -1,3 +1,4 @@
+use std::future::Future;
 use ff_standard_lib::helpers::converters::load_as_bytes;
 use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -7,10 +8,11 @@ use ff_standard_lib::traits::bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use std::sync::Arc;
+use ahash::AHashMap;
 use tokio::io;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::sync::{oneshot, Mutex, RwLock};
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::apis::brokerage::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::apis::data_vendor::server_side_datavendor::VendorApiResponse;
@@ -87,12 +89,12 @@ pub async fn base_data_many_response(
     DataServerResponse::HistoricalBaseDataMany{ callback_id, payloads}
 }
 
+
 pub async fn data_server_manage_async_requests(
     stream: TlsStream<TcpStream>
 ) {
     let (read_half, write_half) = io::split(stream);
     let writer = Arc::new(Mutex::new(write_half));
-
     tokio::spawn(async move {
         const LENGTH: usize = 8;
         let mut receiver = read_half;
@@ -121,72 +123,85 @@ pub async fn data_server_manage_async_requests(
                 }
             };
             // Handle the request and generate a response
-            let response: Option<DataServerResponse> = match request {
+            match request {
                 DataServerRequest::Register(register_mode) => {
                     strategy_mode = register_mode;
-                    None
                 },
                 DataServerRequest::HistoricalBaseData {
                     callback_id,
                     subscription,
                     time,
-                } => Some(base_data_response(subscription, time, callback_id).await),
+                } => handle_callback(
+                    || base_data_response(subscription, time, callback_id),
+                    writer.clone()
+                ).await,
 
                 DataServerRequest::SymbolsVendor {
                     data_vendor,
                     market_type,
                     callback_id,
-                } => Some(data_vendor.symbols_response(market_type, callback_id).await),
+                } => handle_callback(
+                    || data_vendor.symbols_response(market_type, callback_id),
+                    writer.clone()
+                ).await,
 
                 DataServerRequest::SymbolsBroker {
                     brokerage,
                     callback_id,
-                    market_type
-                } => Some(brokerage.symbols_response(market_type, callback_id).await),
+                    market_type,
+                } => handle_callback(
+                    || brokerage.symbols_response(market_type, callback_id),
+                    writer.clone()
+                ).await,
+
                 DataServerRequest::HistoricalBaseDataMany {
                     callback_id,
                     subscriptions,
-                    time
-                } => Some(base_data_many_response(subscriptions, time, callback_id).await),
+                    time,
+                } => handle_callback(
+                    || base_data_many_response(subscriptions, time, callback_id),
+                    writer.clone()
+                ).await,
 
                 DataServerRequest::Resolutions {
                     callback_id,
                     data_vendor,
-                    market_type
-                } => Some(data_vendor.resolutions_response(market_type, callback_id).await),
+                    market_type,
+                } => handle_callback(
+                    || data_vendor.resolutions_response(market_type, callback_id),
+                    writer.clone()
+                ).await,
 
                 DataServerRequest::AccountInfo {
                     callback_id,
                     brokerage,
-                    account_id
-                } => Some(brokerage.account_info_response(account_id, callback_id).await),
+                    account_id,
+                } => handle_callback(
+                    || brokerage.account_info_response(account_id, callback_id),
+                    writer.clone()
+                ).await,
 
                 DataServerRequest::Markets {
                     callback_id,
-                    data_vendor
-                } => Some(data_vendor.markets_response(callback_id).await),
+                    data_vendor,
+                } => handle_callback(
+                    || data_vendor.markets_response(callback_id),
+                    writer.clone()
+                ).await,
 
                 DataServerRequest::TickSize {
                     callback_id,
                     data_vendor,
-                    symbol_name
-                } => Some(data_vendor.tick_size_response(symbol_name, callback_id).await),
+                    symbol_name,
+                } => handle_callback(
+                    || data_vendor.tick_size_response(symbol_name, callback_id),
+                    writer.clone()).await,
 
-                DataServerRequest::DecimalAccuracy {
-                    callback_id,
-                    data_vendor,
-                    symbol_name
-                } => Some(data_vendor.decimal_accuracy_response(symbol_name, callback_id).await),
-
-                DataServerRequest::SymbolInfo {
-                    callback_id,
-                    brokerage,
-                    symbol_name
-                } => Some(brokerage.symbol_info_response(symbol_name, callback_id).await),
-
-                DataServerRequest::StreamRequest {
+                _ => panic!()
+/*
+                    DataServerRequest::StreamRequest {
                     request
-                }  => {
+                } => {
                     if strategy_mode == StrategyMode::Backtest {
                         continue
                     }
@@ -214,32 +229,44 @@ pub async fn data_server_manage_async_requests(
                         StrategyMode::Backtest => Some(brokerage.margin_required_historical_response(symbol_name, quantity, callback_id).await),
                         StrategyMode::LivePaperTrading | StrategyMode::Live => Some(brokerage.margin_required_live_response(symbol_name, quantity, callback_id).await),
                     }
-                }
+                }*/
             };
-
-            // Send the response back to the client if available
-            if let Some(response) = response {
-
-                let bytes = DataServerResponse::to_bytes(&response);
-
-                // Prepare the message with a 4-byte length header in big-endian format
-                let length = (bytes.len() as u64).to_be_bytes();
-
-                // Create a buffer containing the length header followed by the response bytes
-                let mut prefixed_msg = Vec::new();
-                prefixed_msg.extend_from_slice(&length);
-                prefixed_msg.extend_from_slice(&bytes);
-
-                // Write the response to the stream
-                let mut writer = writer.lock().await;
-                match writer.write_all(&prefixed_msg).await {
-                    Err(e) => { }
-                    Ok(_) => {}
-                }
-            }
         }
-        println!("Disconnected")
     });
+}
+
+async fn handle_callback<F, Fut, T>(
+    callback: F,
+    writer: Arc<Mutex<WriteHalf<TlsStream<TcpStream>>>>
+)
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = T>,
+    T: Bytes<DataServerResponse>,  // Ensures `T` can be converted to bytes for sending
+{
+    // Call the closure to get the future, then await the future to get the response
+    let response = callback().await;
+
+    // Convert the response to bytes
+    let bytes = T::to_bytes(&response);
+
+    // Prepare the message with a 4-byte length header in big-endian format
+    let length = (bytes.len() as u64).to_be_bytes();
+
+    // Create a buffer containing the length header followed by the response bytes
+    let mut prefixed_msg = Vec::new();
+    prefixed_msg.extend_from_slice(&length);
+    prefixed_msg.extend_from_slice(&bytes);
+
+    // Write the response to the stream
+    let mut writer = writer.lock().await;
+    match writer.write_all(&prefixed_msg).await {
+        Err(e) => {
+        }
+        Ok(_) => {
+            // Successfully wrote the message
+        }
+    }
 }
 
 async fn stream_response(request: StreamRequest) {
