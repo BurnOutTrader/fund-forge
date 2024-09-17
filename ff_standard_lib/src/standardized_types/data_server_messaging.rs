@@ -253,7 +253,7 @@ pub enum
 DataServerResponse {
     /// This is for generic history requests, Responds with `payload` as `Payload` which contains:
     /// ## HistoricalBaseData Fields
-    /// * `payloads` as `Vec<Payload>`
+    /// * `payloads` as `BaseDataPayload`
     HistoricalBaseData {
         callback_id: u64,
         payload: BaseDataPayload

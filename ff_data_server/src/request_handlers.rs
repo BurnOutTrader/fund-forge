@@ -134,15 +134,6 @@ pub async fn data_server_manage_async_requests(
                         writer.clone()
                     ).await,
 
-                    DataServerRequest::HistoricalBaseDataMany {
-                        callback_id,
-                        subscriptions,
-                        time,
-                    } => handle_callback(
-                        || base_data_many_response(subscriptions, time, callback_id),
-                        writer.clone()
-                    ).await,
-
                     DataServerRequest::Resolutions {
                         callback_id,
                         data_vendor,
