@@ -1,7 +1,4 @@
-use rust_decimal::Decimal;
-use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
-use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -46,8 +43,7 @@ impl RenkoConsolidator {
 
         let tick_size = subscription
             .symbol
-            .data_vendor
-            .tick_size(subscription.symbol.name.clone())
+            .tick_size()
             .await
             .unwrap();
 

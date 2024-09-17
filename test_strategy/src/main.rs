@@ -1,8 +1,6 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
-use ff_standard_lib::apis::vendor::DataVendor;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
-use ff_standard_lib::server_connections::{initialize_clients, GUI_DISABLED, SINGLE_MACHINE_MODE};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
@@ -15,10 +13,12 @@ use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use std::sync::Arc;
 use rust_decimal_macros::dec;
 use tokio::sync::{mpsc, Notify};
-use ff_standard_lib::apis::brokerage::Brokerage;
+use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
+use ff_standard_lib::apis::data_vendor::datavendor_enum::DataVendor;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicators_trait::IndicatorName;
+use ff_standard_lib::server_connections::{init_connections, GUI_DISABLED};
 use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::Color;
@@ -28,13 +28,10 @@ use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 // to launch on separate machine
 #[tokio::main]
 async fn main() {
-    initialize_clients(SINGLE_MACHINE_MODE, GUI_DISABLED).await.unwrap();
-
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
-        Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, todo! this needs to be upgraded in the future to be more reliable in Single and Multi machine modes.
         notify.clone(),
         StrategyMode::Backtest,                 // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
@@ -109,10 +106,10 @@ pub async fn on_data_received(
         for strategy_event in event_slice {
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
-                StrategyEvent::DrawingToolEvents(_, drawing_tool_event, _) => {
-                    println!("Strategy: Drawing Tool Event: {:?}", drawing_tool_event);
+                StrategyEvent::DrawingToolEvents(event, _) => {
+                    println!("Strategy: Drawing Tool Event: {:?}", event);
                 }
-                StrategyEvent::TimeSlice(_owner , time, time_slice) => {
+                StrategyEvent::TimeSlice(time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
                     for base_data in &time_slice {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
@@ -193,7 +190,7 @@ pub async fn on_data_received(
                     }
                 }
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
-                StrategyEvent::OrderEvents(_, event) => {
+                StrategyEvent::OrderEvents(event) => {
                     let ledgers = strategy.print_ledgers().await;
                     for ledger in ledgers {
                         println!("{:?}", ledger);
@@ -201,14 +198,14 @@ pub async fn on_data_received(
                     println!("{}, Strategy: Order Event: {:?}", strategy.time_utc().await, event);
                 }
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
-                StrategyEvent::DataSubscriptionEvents(_, events, _) => {
+                StrategyEvent::DataSubscriptionEvents(events,_) => {
                     for event in events {
                         println!("Strategy: Data Subscription Event: {:?}", event);
                     }
                 }
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
-                StrategyEvent::StrategyControls(_, _, _) => {}
-                StrategyEvent::ShutdownEvent(_, _) => {
+                StrategyEvent::StrategyControls(control, _) => {}
+                StrategyEvent::ShutdownEvent(event) => {
                     strategy.export_trades(&String::from("/Users/kevmonaghan/RustroverProjects/Test Trade Exports"));
                     let ledgers = strategy.print_ledgers().await;
                     for ledger in ledgers {
@@ -216,11 +213,11 @@ pub async fn on_data_received(
                     }
                     break 'strategy_loop
                 }, //we should handle shutdown gracefully by first ending the strategy loop.
-                StrategyEvent::WarmUpComplete(_) => {
+                StrategyEvent::WarmUpComplete{} => {
                     println!("Strategy: Warmup Complete");
                     warmup_complete = true;
                 }
-                StrategyEvent::IndicatorEvent(_, indicator_event) => {
+                StrategyEvent::IndicatorEvent(indicator_event) => {
                     //we can handle indicator events here, this is useful for debugging and monitoring the state of the indicators.
                     match indicator_event {
                         IndicatorEvents::IndicatorAdded(added_event) => {
@@ -229,7 +226,7 @@ pub async fn on_data_received(
                         IndicatorEvents::IndicatorRemoved(removed_event) => {
                             println!("Strategy:Indicator Removed: {:?}", removed_event);
                         }
-                        IndicatorEvents::IndicatorTimeSlice(_time, slice_event) => {
+                        IndicatorEvents::IndicatorTimeSlice(slice_event) => {
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice_event {
                                 println!(
@@ -246,7 +243,7 @@ pub async fn on_data_received(
 
                     // we could also get the automanaged indicator values from teh strategy at any time.
                 }
-                StrategyEvent::PositionEvents(_event) => {
+                StrategyEvent::PositionEvents => {
 
                 }
             }

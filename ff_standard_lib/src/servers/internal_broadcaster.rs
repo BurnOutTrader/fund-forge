@@ -1,3 +1,4 @@
+use futures::future::join_all;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 
@@ -26,10 +27,37 @@ impl<T: Clone + Send> StaticInternalBroadcaster<T> {
     /// Sequential broadcast: broadcasts the data to all subscribers sequentially without concurrency or creating new tasks.
     pub async fn broadcast(&self, source_data: T) {
         let subscribers = self.subscribers.read().await;
-        for subscriber in &*subscribers {
-            match subscriber.send(source_data.clone()).await {
-                Ok(_) => {}
-                Err(_) => {}
+
+        // Create a vector of futures for each subscriber
+        let mut tasks = Vec::with_capacity(subscribers.len());
+
+        for (i, subscriber) in subscribers.iter().enumerate() {
+            let data_clone = source_data.clone();
+            let task = async move {
+                // Try sending data to the subscriber
+                let result = subscriber.send(data_clone).await;
+                // Return the index of the failed subscriber (if any)
+                result.map_err(|_| i)
+            };
+            tasks.push(task);
+        }
+
+        // Await all tasks concurrently
+        let results = join_all(tasks).await;
+
+        // Collect failed subscriber indices
+        let mut failed_indices = Vec::new();
+        for result in results {
+            if let Err(index) = result {
+                failed_indices.push(index);
+            }
+        }
+
+        // Remove failed subscribers
+        if !failed_indices.is_empty() {
+            let mut subscribers = self.subscribers.write().await; // Acquire a write lock to modify the list
+            for &i in failed_indices.iter().rev() {
+                subscribers.remove(i);
             }
         }
     }

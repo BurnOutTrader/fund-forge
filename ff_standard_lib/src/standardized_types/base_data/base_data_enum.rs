@@ -1,4 +1,3 @@
-use crate::apis::vendor::DataVendor;
 use crate::helpers::converters::{
     fund_forge_formatted_symbol_name, load_as_bytes, time_convert_utc_datetime_to_fixed_offset,
 };
@@ -26,6 +25,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
+use crate::apis::data_vendor::datavendor_enum::DataVendor;
 
 /// Enum for the different types of base data
 /// This is the main_window enum for all the different types of base data

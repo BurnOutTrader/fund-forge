@@ -1,13 +1,7 @@
 use chrono::Utc;
 use ff_standard_lib::server_connections::ConnectionType;
 use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
-use ff_standard_lib::servers::communications_sync::{
-    SecureExternalCommunicator, SynchronousCommunicator,
-};
-use ff_standard_lib::servers::request_handlers::{
-    data_server_manage_async_requests, data_server_manage_sequential_requests,
-};
-use ff_standard_lib::servers::settings::client_settings::get_settings;
+use ff_standard_lib::servers::communications_sync::SecureExternalCommunicator;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
@@ -23,6 +17,10 @@ use tokio::sync::Mutex;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor, TlsStream};
+use ff_standard_lib::servers::settings::client_settings::initialise_settings;
+use crate::request_handlers::data_server_manage_async_requests;
+
+pub mod request_handlers;
 
 #[derive(Debug)]
 pub enum StartUpMode {
@@ -64,8 +62,9 @@ struct ServerLaunchOptions {
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
+    let settings_map = initialise_settings().unwrap();
     let options = ServerLaunchOptions::from_args();
-    let settings = get_settings(&ConnectionType::Default).await.unwrap();
+    let settings = settings_map.get(&ConnectionType::Default).unwrap();
 
     let cert = Path::join(&options.ssl_auth_folder, "cert.pem");
     let key = Path::join(&options.ssl_auth_folder, "key.pem");
@@ -79,92 +78,15 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-    let sync_server_handle =
-        synchronous_server(config.clone().into(), settings.address_synchronous).await;
     let async_server_handle = async_server(config.into(), settings.address).await;
 
-    let sync_result = sync_server_handle.await;
     let async_result = async_server_handle.await;
-
-    if let Err(e) = sync_result {
-        eprintln!("Synchronous server failed: {:?}", e);
-    }
 
     if let Err(e) = async_result {
         eprintln!("Asynchronous server failed: {:?}", e);
     }
 
     Ok(())
-}
-/*
-pub async fn toml_launch(connection_type: ConnectionType) -> JoinHandle<()> {
-    task::spawn(async move {
-        let settings = get_settings(&connection_type).await.unwrap();
-
-        let cert = Path::join(&settings.ssl_auth_folder, "cert.pem");
-        let key = Path::join(&settings.ssl_auth_folder, "key.pem");
-
-        let certs = load_certs(&cert).unwrap();
-        let key = load_keys(&key).ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "No keys found")).unwrap();
-
-        let config = rustls::ServerConfig::builder()
-            .with_no_client_auth()
-            .with_single_cert(certs, key)
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err)).unwrap();
-
-        let sync_server_handle = synchronous_server(config.clone().into(), settings.address_synchronous).await;
-        let async_server_handle = async_server(config.into(), settings.address).await;
-
-        let sync_result = sync_server_handle.await;
-        let async_result = async_server_handle.await;
-
-        if let Err(e) = sync_result {
-            eprintln!("Synchronous server failed: {:?}", e);
-        }
-
-        if let Err(e) = async_result {
-            eprintln!("Asynchronous server failed: {:?}", e);
-        }
-    })
-}*/
-
-pub(crate) async fn synchronous_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()> {
-    task::spawn(async move {
-        let acceptor = TlsAcceptor::from(Arc::new(config));
-        let listener = match TcpListener::bind(&addr).await {
-            Ok(listener) => listener,
-            Err(e) => {
-                eprintln!("Failed to listen on {}: {}", addr, e);
-                return;
-            }
-        };
-        println!("{} Listening on: {}", Utc::now(), addr);
-
-        loop {
-            let (stream, peer_addr) = match listener.accept().await {
-                Ok((stream, peer_addr)) => (stream, peer_addr),
-                Err(e) => {
-                    eprintln!("Failed to accept TLS connection: {:?}", e);
-                    continue;
-                }
-            };
-            println!("{}, peer_addr: {:?}", Utc::now(), peer_addr);
-            let acceptor = acceptor.clone();
-
-            let tls_stream = match acceptor.accept(stream).await {
-                Ok(stream) => stream,
-                Err(e) => {
-                    eprintln!("Failed to accept TLS connection: {:?}", e);
-                    continue;
-                }
-            };
-            let communicator =
-                SynchronousCommunicator::new(SynchronousCommunicator::TlsConnections(
-                    SecureExternalCommunicator::new(Mutex::new(TlsStream::from(tls_stream))),
-                ));
-            data_server_manage_sequential_requests(Arc::new(communicator)).await;
-        }
-    })
 }
 
 pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()> {
@@ -198,14 +120,10 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
                 }
             };
 
-            let (read_half, write_half) = tokio::io::split(tls_stream);
-            let secondary_sender = SecondaryDataSender::Server(Mutex::new(write_half));
-            let secondary_receiver = SecondaryDataReceiver::Server(read_half);
             println!("TLS connection established with {:?}", peer_addr);
 
             data_server_manage_async_requests(
-                Arc::new(secondary_sender),
-                Arc::new(Mutex::new(secondary_receiver)),
+                tls_stream
             )
             .await;
         }

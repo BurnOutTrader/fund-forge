@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -13,32 +13,63 @@ use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use tokio::sync::RwLock;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{mpsc, RwLock};
+use crate::server_connections::{subscribe_primary_feed, subscribe_strategy_time};
+use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
     /// Manages the consolidators of specific symbols
-    symbol_subscriptions: DashMap<Symbol, SymbolSubscriptionHandler>,
+    symbol_subscriptions: Arc<DashMap<Symbol, SymbolSubscriptionHandler>>,
     /// fundamental data is not consolidated and so it does not need special handlers
-    fundamental_subscriptions: RwLock<Vec<DataSubscription>>,
+    fundamental_subscriptions: Arc<RwLock<Vec<DataSubscription>>>,
     /// Keeps a record when the strategy has updated its subscriptions, so we can pause the backtest to fetch new data.
-    subscriptions_updated: AtomicBool,
     is_warmed_up: AtomicBool,
     strategy_mode: StrategyMode,
     // subscriptions which the strategy actually subscribed to, not the raw data needed to full-fill the subscription.
-    strategy_subscriptions: RwLock<Vec<DataSubscription>>,
+    strategy_subscriptions: Arc<RwLock<Vec<DataSubscription>>>,
+    primary_subscriptions_broadcaster: Arc<StaticInternalBroadcaster<Vec<DataSubscription>>>,
+    all_subscriptions_broadcaster: Arc<StaticInternalBroadcaster<Vec<DataSubscription>>>,
+    broadcaster: Arc<StaticInternalBroadcaster<TimeSlice>>,
 }
 
 impl SubscriptionHandler {
     pub async fn new(strategy_mode: StrategyMode) -> Self {
-        SubscriptionHandler {
+        let handler = SubscriptionHandler {
             fundamental_subscriptions: Default::default(),
             symbol_subscriptions: Default::default(),
-            subscriptions_updated: AtomicBool::new(true),
             is_warmed_up: AtomicBool::new(false),
             strategy_mode,
             strategy_subscriptions: Default::default(),
-        }
+            primary_subscriptions_broadcaster: Arc::new(StaticInternalBroadcaster::new()),
+            all_subscriptions_broadcaster: Arc::new(StaticInternalBroadcaster::new()),
+            broadcaster: Arc::new(StaticInternalBroadcaster::new())
+        };
+
+        // sends back consolidated data
+        let (sender, receiver) =  mpsc::channel(1);
+        subscribe_primary_feed(sender).await;
+        handler.update_time_slice(receiver).await;
+
+        let (time_sender, time_receiver) =  mpsc::channel(1);
+        subscribe_strategy_time(time_sender).await;
+        handler.update_consolidators_time(time_receiver).await;
+        handler
+    }
+
+    pub(crate) async fn subscribe_consolidated_timeslices(&self, sender: Sender<TimeSlice>) {
+        self.broadcaster.subscribe(sender).await;
+    }
+
+    pub(crate) async fn subscribe_primary_subscription_updates(&self, sender: Sender<Vec<DataSubscription>>) {
+        self.primary_subscriptions_broadcaster.subscribe(sender).await;
+        self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+    }
+
+    pub(crate) async fn subscribe_secondary_subscription_updates(&self, sender: Sender<Vec<DataSubscription>>) {
+        self.all_subscriptions_broadcaster.subscribe(sender).await;
+        self.all_subscriptions_broadcaster.broadcast(self.strategy_subscriptions().await).await;
     }
 
     /// Sets the SubscriptionHandler as warmed up, so we can start processing data.
@@ -75,7 +106,6 @@ impl SubscriptionHandler {
         history_to_retain: u64,
         current_time: DateTime<Utc>,
     ) {
-
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         if !strategy_subscriptions.contains(&new_subscription) {
             strategy_subscriptions.push(new_subscription.clone());
@@ -87,7 +117,8 @@ impl SubscriptionHandler {
             if !fundamental_subscriptions.contains(&new_subscription) {
                 fundamental_subscriptions.push(new_subscription.clone());
             }
-            self.subscriptions_updated.store(true, Ordering::SeqCst);
+            self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+            self.all_subscriptions_broadcaster.broadcast(self.subscriptions().await).await;
             return;
         }
 
@@ -112,7 +143,8 @@ impl SubscriptionHandler {
             )
             .await;
 
-        self.subscriptions_updated.store(true, Ordering::SeqCst);
+        self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+        self.all_subscriptions_broadcaster.broadcast(self.subscriptions().await).await;
     }
 
     pub async fn set_subscriptions(
@@ -130,7 +162,8 @@ impl SubscriptionHandler {
         for sub in new_subscription {
            self.subscribe(sub.clone(),history_to_retain.clone(), current_time.clone()).await;
         }
-        self.subscriptions_updated.store(true, Ordering::SeqCst);
+        self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+        self.all_subscriptions_broadcaster.broadcast(self.subscriptions().await).await;
     }
 
     /// Unsubscribes from a data subscription
@@ -148,7 +181,8 @@ impl SubscriptionHandler {
             if strategy_subscriptions.contains(&subscription) {
                 strategy_subscriptions.retain(|x| x != &subscription);
             }
-            self.subscriptions_updated.store(true, Ordering::SeqCst);
+            self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+            self.all_subscriptions_broadcaster.broadcast(self.subscriptions().await).await;
             return;
         }
 
@@ -160,16 +194,10 @@ impl SubscriptionHandler {
         if strategy_subscriptions.contains(&subscription) {
             strategy_subscriptions.retain(|x| x != &subscription);
         }
-        self.subscriptions_updated.store(true, Ordering::SeqCst);
+        self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+        self.all_subscriptions_broadcaster.broadcast(self.subscriptions().await).await;
     }
 
-    pub async fn get_subscriptions_updated(&self) -> bool {
-        self.subscriptions_updated.load(Ordering::SeqCst)
-    }
-
-    pub async fn set_subscriptions_updated(&self, updated: bool) {
-        self.subscriptions_updated.store(updated, Ordering::SeqCst);
-    }
 
     /// Returns all the primary subscriptions
     /// These are subscriptions that come directly from the vendors own data source.
@@ -195,79 +223,86 @@ impl SubscriptionHandler {
     }
 
     /// Updates any consolidators with primary data
-    pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<TimeSlice> {
-        let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
-        let mut closed_bars = Vec::new();
+    async fn update_time_slice(&self, receiver: Receiver<TimeSlice>) {
+        let mut receiver = receiver;
+        let symbol_subscriptions = self.symbol_subscriptions.clone();
+        let broadcaster = self.broadcaster.clone();
+        tokio::task::spawn(async move {
+            while let Some(time_slice) = receiver.recv().await {
+                let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
+                let mut closed_bars = Vec::new();
 
-        // Clone the Arc to the symbol subscriptions.
-        //let symbol_subscriptions = self.symbol_subscriptions.clone();
+                // Clone the Arc to the symbol subscriptions.
+                //let symbol_subscriptions = self.symbol_subscriptions.clone();
 
-        // Create a FuturesUnordered to collect all futures and run them concurrently.
-        let mut update_futures = FuturesUnordered::new();
+                // Create a FuturesUnordered to collect all futures and run them concurrently.
+                let mut update_futures = FuturesUnordered::new();
 
-        for base_data in time_slice.iter() {
-            let symbol = base_data.symbol();
-           // let symbol_subscriptions = symbol_subscriptions.clone(); // Clone the Arc for each task.
-            let base_data = base_data.clone(); // Clone base_data to avoid borrowing issues.
+                for base_data in time_slice.iter() {
+                    let symbol = base_data.symbol();
+                    // let symbol_subscriptions = symbol_subscriptions.clone(); // Clone the Arc for each task.
+                    let base_data = base_data.clone(); // Clone base_data to avoid borrowing issues.
 
-            // Add the future to the FuturesUnordered.
-            update_futures.push(async move {
-                // Get a read guard inside the async block to avoid lifetime issues.
-                if let Some(handler) = self.symbol_subscriptions.get(&symbol) {
-                    handler.update(&base_data).await
-                } else {
-                    Vec::new() // Return empty if handler is not found.
+                    let symbol_subscriptions = symbol_subscriptions.clone();
+                    // Add the future to the FuturesUnordered.
+                    update_futures.push(async move {
+                        // Get a read guard inside the async block to avoid lifetime issues.
+                        if let Some(handler) = symbol_subscriptions.get(&symbol) {
+                            handler.update(&base_data).await
+                        } else {
+                            Vec::new() // Return empty if handler is not found.
+                        }
+                    });
                 }
-            });
-        }
 
-        // Process all the updates concurrently.
-        while let Some(data) = update_futures.next().await {
-            for consolidated_bars in data {
-                if let Some(consolidated_bar) = consolidated_bars.closed_data {
-                    closed_bars.push(consolidated_bar);
+                // Process all the updates concurrently.
+                while let Some(data) = update_futures.next().await {
+                    for consolidated_bars in data {
+                        if let Some(consolidated_bar) = consolidated_bars.closed_data {
+                            closed_bars.push(consolidated_bar);
+                        }
+                        open_bars.insert(consolidated_bars.open_data.subscription(), consolidated_bars.open_data);
+                    }
                 }
-                open_bars.insert(consolidated_bars.open_data.subscription(), consolidated_bars.open_data);
+
+                // Combine open and closed bars.
+                for (_, data) in open_bars {
+                    closed_bars.push(data);
+                }
+
+                broadcaster.broadcast(closed_bars).await;
             }
-        }
-
-        // Combine open and closed bars.
-        for (_, data) in open_bars {
-            closed_bars.push(data);
-        }
-
-        if closed_bars.is_empty() {
-            None
-        } else {
-            Some(closed_bars)
-        }
+        });
     }
 
-    pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> Option<TimeSlice> {
-        let futures: Vec<_> = self.symbol_subscriptions.iter().map(|symbol_handler| {
-            let time = time.clone();
-            // Creating async blocks that will run concurrently
-            async move {
-                symbol_handler.value().update_time(time).await
+    async fn update_consolidators_time(&self, receiver: Receiver<DateTime<Utc>>) {
+        let mut receiver = receiver;
+        let symbol_subscriptions = self.symbol_subscriptions.clone();
+        let broadcaster = self.broadcaster.clone();
+        tokio::task::spawn(async move {
+            while let Some(time) = receiver.recv().await {
+                let futures: Vec<_> = symbol_subscriptions.iter().map(|symbol_handler| {
+                    let time = time.clone();
+                    // Creating async blocks that will run concurrently
+                    async move {
+                        symbol_handler.value().update_time(time).await
+                    }
+                }).collect();
+
+                // Execute all futures concurrently
+                let results = futures::future::join_all(futures).await;
+
+                // Collect the results into a TimeSlice
+                let mut time_slice = TimeSlice::new();
+                for result in results {
+                    if let Some(data) = result {
+                        time_slice.extend(data);
+                    }
+                }
+
+                broadcaster.broadcast(time_slice).await;
             }
-        }).collect();
-
-        // Execute all futures concurrently
-        let results = futures::future::join_all(futures).await;
-
-        // Collect the results into a TimeSlice
-        let mut time_slice = TimeSlice::new();
-        for result in results {
-            if let Some(data) = result {
-                time_slice.extend(data);
-            }
-        }
-
-        if time_slice.is_empty() {
-            None
-        } else {
-            Some(time_slice)
-        }
+        });
     }
 
     pub async fn history(

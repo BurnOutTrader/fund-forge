@@ -1,8 +1,8 @@
-use crate::apis::vendor::DataVendor;
 use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::subscriptions::Symbol;
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
+use crate::apis::data_vendor::datavendor_enum::DataVendor;
 
 /// Properties are used to update the data que during strategy execution.
 pub trait BaseData {

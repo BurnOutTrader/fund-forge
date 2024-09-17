@@ -1,5 +1,4 @@
 use rust_decimal::prelude::FromPrimitive;
-use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -56,8 +55,7 @@ impl CountConsolidator {
 
         let tick_size = match subscription
             .symbol
-            .data_vendor
-            .tick_size(subscription.symbol.name.clone())
+            .tick_size()
             .await
         {
             Ok(size) => size,

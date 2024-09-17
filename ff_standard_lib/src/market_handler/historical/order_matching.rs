@@ -1,23 +1,23 @@
-use ff_standard_lib::standardized_types::{OwnerId, Price};
+use crate::standardized_types::{Price};
 use std::sync::Arc;
 use dashmap::DashMap;
-use ff_standard_lib::apis::brokerage::Brokerage;
-use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Ledger};
-use ff_standard_lib::standardized_types::base_data::order_book::OrderBook;
-use ff_standard_lib::standardized_types::subscriptions::SymbolName;
+use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
+use crate::standardized_types::base_data::order_book::OrderBook;
+use crate::standardized_types::subscriptions::SymbolName;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};
-use ff_standard_lib::standardized_types::enums::OrderSide;
-use ff_standard_lib::standardized_types::orders::orders::{Order, OrderState, OrderType, OrderUpdateEvent, ProtectiveOrder};
-use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
+use rust_decimal::prelude::FromPrimitive;
+use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::market_handler::market_handlers::get_market_price;
+use crate::standardized_types::enums::OrderSide;
+use crate::standardized_types::orders::orders::{Order, OrderState, OrderType, OrderUpdateEvent, ProtectiveOrder};
+use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 
 pub async fn backtest_matching_engine(
-    owner_id: &OwnerId,
     order_books: Arc<DashMap<SymbolName, Arc<OrderBook>>>,
     last_price: Arc<DashMap<SymbolName, Price>>,
     ledgers: Arc<DashMap<Brokerage, Arc<DashMap<AccountId, Ledger>>>>,
-    last_time: Arc<RwLock<DateTime<Utc>>>,
+    last_time: DateTime<Utc>,
     order_cache: Arc<RwLock<Vec<Order>>>,
 ) -> Option<EventTimeSlice> {
     let mut order_cache= order_cache.write().await;
@@ -32,7 +32,6 @@ pub async fn backtest_matching_engine(
         order.quantity_filled = order.quantity_ordered;
         order.time_filled_utc = Some(last_time_utc.to_string());
         events.push(StrategyEvent::OrderEvents(
-            owner_id.clone(),
             OrderUpdateEvent::Filled(order.id),
         ));
     };
@@ -41,7 +40,6 @@ pub async fn backtest_matching_engine(
         order.state = OrderState::Rejected(reason.clone());
         order.time_created_utc = last_time_utc.to_string();
         events.push(StrategyEvent::OrderEvents(
-            owner_id.to_string(),
             OrderUpdateEvent::Rejected{id: order.id, reason},
         ));
     };
@@ -51,7 +49,6 @@ pub async fn backtest_matching_engine(
         order.state = OrderState::Accepted;
         order.time_created_utc = last_time_utc.to_string();
         events.push(StrategyEvent::OrderEvents(
-            owner_id.to_string(),
             OrderUpdateEvent::Accepted(order.id.clone()),
         ));
         remaining_orders.push(order);
@@ -69,14 +66,20 @@ pub async fn backtest_matching_engine(
             .get(&order.brokerage)?.value()
             .contains_key(&order.account_id)
         {
-            let ledger = order
-                .brokerage
-                .paper_ledger(
-                    order.account_id.clone(),
-                    order.brokerage.user_currency(),
-                    order.brokerage.starting_cash(),
-                )
-                .await;
+            let ledger = Ledger {
+                account_id: order.account_id.clone(),
+                brokerage: order.brokerage.clone(),
+                cash_value: Price::from_f64(100000.0).unwrap(),
+                cash_available:Price::from_f64(100000.0).unwrap(),
+                currency: Currency::USD,
+                cash_used: Price::from_f64(0.0).unwrap(),
+                positions: Default::default(),
+                positions_closed: Default::default(),
+                positions_counter: Default::default(),
+                symbol_info: Default::default(),
+                open_pnl: Price::from_f64(0.0).unwrap(),
+                booked_pnl: Price::from_f64(0.0).unwrap(),
+            };
             ledgers
                 .get_mut(&order.brokerage)?.value_mut()
                 .insert(order.account_id.clone(), ledger);
@@ -88,7 +91,6 @@ pub async fn backtest_matching_engine(
         let mut account_ledger = brokerage_map.value_mut().get_mut(&order.account_id)?;
 
         let market_price = get_market_price(&order.side, &order.symbol_name, order_books.clone(), last_price.clone()).await.unwrap();
-        let last_time_utc = last_time.read().await.clone();
 
         //3. respond with an order event
         let mut is_fill_triggered = false;
@@ -117,14 +119,14 @@ pub async fn backtest_matching_engine(
             },
             OrderType::EnterLong(new_brackets) => {
                 if account_ledger.is_short(&order.symbol_name).await {
-                    account_ledger.exit_position_paper(&order.symbol_name, market_price, last_time_utc).await;
+                    account_ledger.exit_position_paper(&order.symbol_name, market_price, last_time).await;
                 }
                 is_fill_triggered = true;
                 brackets = new_brackets.clone();
             }
             OrderType::EnterShort(new_brackets) => {
                 if account_ledger.is_long(&order.symbol_name).await {
-                    account_ledger.exit_position_paper(&order.symbol_name, market_price, last_time_utc).await;
+                    account_ledger.exit_position_paper(&order.symbol_name, market_price, last_time).await;
                 }
                 is_fill_triggered = true;
                 brackets = new_brackets.clone();
@@ -134,7 +136,7 @@ pub async fn backtest_matching_engine(
                     is_fill_triggered = true;
                 } else {
                     let reason = "No long position to exit".to_string();
-                    reject_order(reason, order.clone(), last_time_utc, &mut events);
+                    reject_order(reason, order.clone(), last_time, &mut events);
                     continue 'order_loop;
                 }
             }
@@ -143,7 +145,7 @@ pub async fn backtest_matching_engine(
                     is_fill_triggered = true;
                 } else {
                     let reason = "No short position to exit".to_string();
-                    reject_order(reason, order.clone(), last_time_utc, &mut events);
+                    reject_order(reason, order.clone(), last_time, &mut events);
                     continue 'order_loop;
                 }
             }
@@ -158,18 +160,18 @@ pub async fn backtest_matching_engine(
                 }
                 if !updated {
                     let reason = "No position for update brackets".to_string();
-                    reject_order(reason, order.clone(), last_time_utc, &mut events);
+                    reject_order(reason, order.clone(), last_time, &mut events);
                     continue 'order_loop;
                 }
             }
         }
         if is_fill_triggered {
-                match account_ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time_utc, brackets).await {
-                    Ok(_) => fill_order(order.clone(), last_time_utc, market_price, &mut events),
-                    Err(e) => reject_order(e.to_string(), order.clone(), last_time_utc, &mut events)
+                match account_ledger.update_or_create_paper_position(&order.symbol_name.clone(), order.quantity_ordered, market_price, order.side, &last_time, brackets).await {
+                    Ok(_) => fill_order(order.clone(), last_time, market_price, &mut events),
+                    Err(e) => reject_order(e.to_string(), order.clone(), last_time, &mut events)
                 }
         } else {
-            accept_order(order.clone(), last_time_utc, &mut events, &mut remaining_orders);
+            accept_order(order.clone(), last_time, &mut events, &mut remaining_orders);
         }
     }
 

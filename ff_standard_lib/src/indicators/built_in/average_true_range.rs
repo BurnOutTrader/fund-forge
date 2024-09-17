@@ -1,4 +1,3 @@
-use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::indicators::values::{IndicatorValue, IndicatorValues};
@@ -43,10 +42,8 @@ impl AverageTrueRange {
     ) -> Self {
         let tick_size = subscription
             .symbol
-            .data_vendor
-            .tick_size(subscription.symbol.name.clone())
-            .await
-            .unwrap();
+            .tick_size()
+            .await.unwrap();
         let atr = AverageTrueRange {
             name,
             subscription,

@@ -2,18 +2,11 @@ pub mod client_settings {
     use crate::helpers::{get_resources, get_toml_file_path};
     use crate::server_connections::ConnectionType;
     use crate::standardized_types::data_server_messaging::FundForgeError;
-    use once_cell::sync::Lazy;
     use serde_derive::{Deserialize, Serialize};
     use std::collections::HashMap;
     use std::net::SocketAddr;
     use std::path::PathBuf;
     use std::str::FromStr;
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
-
-    static CONNECTION_SETTINGS: Lazy<
-        Result<Arc<Mutex<HashMap<ConnectionType, ConnectionSettings>>>, FundForgeError>,
-    > = Lazy::new(|| initialise_settings());
 
     #[derive(Debug, Serialize, Deserialize)]
     struct SettingsMap {
@@ -41,7 +34,7 @@ pub mod client_settings {
     /// - If there is an error reading from or writing to the TOML file.
     /// - If parsing the TOML content into the expected structure fails.
     pub fn initialise_settings(
-    ) -> Result<Arc<Mutex<HashMap<ConnectionType, ConnectionSettings>>>, FundForgeError> {
+    ) -> Result<HashMap<ConnectionType, ConnectionSettings>, FundForgeError> {
         let toml_file_path = get_toml_file_path();
 
         if !toml_file_path.exists() {
@@ -86,31 +79,7 @@ pub mod client_settings {
             );
         }
 
-        let map = Arc::new(Mutex::new(map));
         Ok(map)
-    }
-
-    /// Retrieves a shared reference to the global client connection settings map.
-    ///
-    /// This function accesses a lazily-initialized, global instance of the client connection settings,
-    /// which is stored in a `HashMap` keyed by `ConnectionType`. The settings map is wrapped in an `Arc<Mutex<>>`
-    /// to allow safe, concurrent access across multiple threads and async tasks. If the settings have not been
-    /// successfully initialized prior to this call (e.g., due to an error loading from a configuration file),
-    /// this function will panic, indicating the nature of the initialization error.
-    ///
-    /// # Returns
-    /// An `Arc<Mutex<HashMap<ConnectionType, ClientConnectionSettings>>>`: A thread-safe, reference-counted
-    /// wrapper around the global settings map. This allows the caller to access and potentially modify the
-    /// settings in a controlled manner.
-    ///
-    /// # Panics
-    /// This function will panic if the global settings have not been successfully initialized, with the panic
-    /// message providing details about the initialization error.
-    pub fn get_settings_map() -> Arc<Mutex<HashMap<ConnectionType, ConnectionSettings>>> {
-        match &*CONNECTION_SETTINGS {
-            Ok(settings_arc) => settings_arc.clone(),
-            Err(e) => panic!("{:?}", e),
-        }
     }
 
     #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -133,65 +102,6 @@ pub mod client_settings {
                 address: SocketAddr::from_str("127.0.0.1:8080").unwrap(),
                 address_synchronous: SocketAddr::from_str("127.0.0.1:8081").unwrap(),
             }
-        }
-    }
-
-    /// Retrieves the client connection settings for a specified connection type.
-    ///
-    /// This function looks up the `CONNECTION_SETTINGS` map for the given `connection_type`.
-    /// If the settings for the specified type are found, they are returned directly. Otherwise,
-    /// the function attempts to initialize the settings by reading from the default TOML configuration file,
-    /// updates the map with these settings, and then returns them.
-    ///
-    /// # Parameters
-    /// - `connection_type`: A reference to the `ConnectionType` for which the settings are being requested.
-    ///
-    /// # Returns
-    /// - `Ok(ClientConnectionSettings)`: The connection settings for the specified type if found or successfully loaded.
-    /// - `Err(FundForgeError)`: An error of type `FundForgeError` if the settings cannot be loaded.
-    ///
-    /// # Errors
-    /// This function can return an error if:
-    /// - The default TOML configuration file cannot be read or parsed.
-    /// - The specified `connection_type` does not exist in the loaded settings.
-    ///
-    /// # Examples
-    /// ```rust
-    ///     use std::fs;
-    ///     use std::net::SocketAddr;
-    ///     use std::path::{Path};
-    ///     use ff_standard_lib::server_connections::ConnectionType;
-    ///     use ff_standard_lib::servers::settings::client_settings::get_settings;
-    ///
-    ///     /// Tests loading of settings from a TOML file and validates the certificate file path.
-    ///     #[tokio::test]
-    ///     async fn test_load_and_validate_settings() {
-    ///        match get_settings(&ConnectionType::Default).await {
-    ///             Ok(settings) => {
-    ///                 // Validate the ca_file exists
-    ///                 let ca_file = Path::join(&settings.ssl_auth_folder, "rootCA.crt");
-    ///                 println!("{:?}", ca_file);
-    ///                 assert!(fs::metadata(&ca_file).is_ok(), "CA file does not exist");
-    ///
-    ///                 // Optionally, add more checks here for server_name, address, etc.
-    ///                 assert_eq!(settings.server_name, "fundforge");
-    ///                 assert_eq!(settings.address, "127.0.0.1:8080".parse::<SocketAddr>().unwrap());
-    ///             }
-    ///             Err(e) => panic!("Failed to get settings: {:?}", e),
-    ///         }
-    ///     }
-    /// ```
-    pub async fn get_settings(
-        connection_type: &ConnectionType,
-    ) -> Result<ConnectionSettings, FundForgeError> {
-        let map = get_settings_map().clone();
-        let map = map.lock().await;
-        if map.contains_key(&connection_type) {
-            Ok(map.get(&connection_type).unwrap().clone())
-        } else {
-            Err(FundForgeError::ClientSideErrorDebug(String::from(
-                "Connection type not found in settings.",
-            )))
         }
     }
 }

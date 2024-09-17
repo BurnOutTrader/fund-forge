@@ -1,4 +1,3 @@
-use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::helpers::converters;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -10,11 +9,11 @@ use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::data_server_messaging::FundForgeError;
 
 pub struct CandleStickConsolidator {
     current_data: Option<BaseDataEnum>,
@@ -220,34 +219,26 @@ impl CandleStickConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         history_to_retain: u64,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, FundForgeError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
-            return Err(format!(
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
                     "{} is an Invalid base data type for TimeConsolidator",
                     subscription.base_data_type
-                ),
+                )),
             );
         }
 
         if let Resolution::Ticks(_) = subscription.resolution {
-            return Err(format!(
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
                     "{:?} is an Invalid resolution for TimeConsolidator",
                     subscription.resolution
-                ),
+                )),
             );
         }
 
-        let tick_size = match subscription
-            .symbol
-            .data_vendor
-            .tick_size(subscription.symbol.name.clone())
-            .await
-        {
+        let tick_size = match subscription.symbol.tick_size().await {
             Ok(size) => size,
-            Err(e) => {
-                return Err(format!("Error getting tick size: {}", e),
-                )
-            }
+            Err(e) => return Err(e)
         };
 
         Ok(CandleStickConsolidator {

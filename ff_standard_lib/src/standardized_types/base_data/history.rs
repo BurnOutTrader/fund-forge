@@ -2,7 +2,7 @@ use crate::helpers::converters::next_month;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{
-    BaseDataPayload, FundForgeError, SynchronousRequestType, SynchronousResponseType,
+    BaseDataPayload, FundForgeError, DataServerRequest, DataServerResponse,
 };
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
@@ -10,7 +10,8 @@ use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::time_slices::UnstructuredSlice;
 use chrono::{DateTime, Utc};
 use std::collections::{btree_map, BTreeMap, Bound, HashMap};
-use futures::executor::block_on;
+use tokio::sync::oneshot;
+use crate::server_connections::{get_sender, ConnectionType, StrategyRequest};
 
 /// Method responsible for structuring raw historical data into combined time slices, where all data points a combined into BTreeMap<DateTime<Utc>, TimeSlice> where data.time_created() is key and value is TimeSlice.
 ///
@@ -118,27 +119,27 @@ pub async fn get_historical_data(
     let futures: Vec<_> = subscriptions.iter().map(|sub| {
         let sub = sub.clone();
         async move {
-            let request: SynchronousRequestType = SynchronousRequestType::HistoricalBaseData {
-                subscription: sub.clone(),
-                time: time.to_string(),
-            };
-            let synchronous_communicator = block_on(sub.symbol.data_vendor.synchronous_client());
+            let (sender, receiver) = oneshot::channel();
+            let request: StrategyRequest = StrategyRequest::CallBack(
+                    ConnectionType::Vendor(sub.symbol.data_vendor.clone()),
+                    DataServerRequest::HistoricalBaseData {
+                    callback_id: 0,
+                    subscription: sub.clone(),
+                    time: time.to_string(),
+                },
+                sender
+            );
+            let sender = get_sender();
+            let sender = sender.lock().await;
+            sender.send(request).await.unwrap();
 
-            let response = block_on(synchronous_communicator
-                .send_and_receive(request.to_bytes(), false));
-
+           let response = receiver.await.unwrap();
             match response {
-                Ok(response) => {
-                    let response = SynchronousResponseType::from_bytes(&response).unwrap();
-                    match response {
-                        SynchronousResponseType::HistoricalBaseData(payload) => {
-                            Ok(payload)
-                        }
-                        SynchronousResponseType::Error(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Error: {}", e))),
-                        _ => Err(FundForgeError::ClientSideErrorDebug("Error getting historical data".to_string())),
-                    }
+                DataServerResponse::HistoricalBaseData{payload, ..} => {
+                    Ok(payload)
                 }
-                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Error: {}", e))),
+                DataServerResponse::Error{error, ..} => Err(FundForgeError::ClientSideErrorDebug(format!("Error: {}", error))),
+                _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect Response on callback".to_string())),
             }
         }
     }).collect();

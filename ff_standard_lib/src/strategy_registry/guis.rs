@@ -1,6 +1,5 @@
-use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::standardized_types::data_server_messaging::{AddressString, FundForgeError};
 use crate::standardized_types::strategy_events::EventTimeSlice;
-use crate::standardized_types::OwnerId;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::collections::BTreeMap;
@@ -35,11 +34,11 @@ impl Bytes<Self> for GuiRequest {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum RegistryGuiResponse {
-    StrategyEventUpdates(OwnerId, i64, EventTimeSlice),
-    ListStrategiesResponse{backtest: Vec<OwnerId>, live: Vec<OwnerId>, live_paper: Vec<OwnerId>},
-    StrategyAdded(OwnerId, StrategyMode, Vec<DataSubscription>),
-    StrategyDisconnect(OwnerId),
-    Buffer {buffer: BTreeMap<OwnerId, BTreeMap<i64, EventTimeSlice>> },
+    StrategyEventUpdates(AddressString,i64, EventTimeSlice),
+    ListStrategiesResponse{backtest: Vec<AddressString>, live: Vec<AddressString>, live_paper: Vec<AddressString>},
+    StrategyAdded(AddressString, StrategyMode, Vec<DataSubscription>),
+    StrategyDisconnect(AddressString),
+    //Buffer {buffer: BTreeMap<AddressString, BTreeMap<i64, EventTimeSlice>> },
 }
 
 impl Bytes<Self> for RegistryGuiResponse {

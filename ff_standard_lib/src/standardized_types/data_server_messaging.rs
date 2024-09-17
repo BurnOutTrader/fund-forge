@@ -1,18 +1,80 @@
-use crate::apis::brokerage::{AccountInfo, Brokerage, SymbolInfo};
-use crate::apis::vendor::DataVendor;
-use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
-use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
+use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo, Currency};
+use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
-use crate::standardized_types::time_slices::TimeSlice;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use std::fmt::{Debug, Display};
 use std::net::{SocketAddr, ToSocketAddrs};
-use crate::standardized_types::Price;
+use rust_decimal::Decimal;
+use crate::apis::brokerage::broker_enum::Brokerage;
+use crate::apis::data_vendor::datavendor_enum::DataVendor;
+use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::accounts::position::PositionUpdateEvent;
+use crate::standardized_types::orders::orders::{OrderRequest, OrderUpdateEvent};
+use crate::standardized_types::symbol_info::SymbolInfo;
+use crate::standardized_types::time_slices::TimeSlice;
 
 /// An Api key String
 pub type ApiKey = String;
+
+#[derive(
+    Clone,
+    Serialize,
+    Deserialize,
+    Archive,
+    Debug,
+    PartialEq,
+)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub enum StreamResponse {
+    BaseData(TimeSlice),
+    AccountState(Brokerage, AccountId, AccountState),
+    OrderUpdates(OrderUpdateEvent),
+    PositionUpdates(PositionUpdateEvent)
+}
+
+#[derive(
+    Clone,
+    Serialize,
+    Deserialize,
+    Archive,
+    Debug,
+    SerdeSerialize,
+    SerdeDeserialize,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct AccountState {
+    balance: Decimal,
+    equity_used: Decimal,
+    equity_available: Decimal
+}
+
+#[derive(
+    Clone,
+    Serialize,
+    Deserialize,
+    Archive,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub enum StreamRequest {
+    BaseData(DataSubscription),
+    AccountUpdates(Brokerage, AccountId),
+    Subscribe(DataSubscription),
+    Unsubscribe(DataSubscription)
+}
 
 /// A socket Address in String format
 #[derive(
@@ -27,15 +89,9 @@ pub type ApiKey = String;
     Eq,
     PartialOrd,
     Ord,
+    Hash
 )]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct AddressString(String);
 impl AddressString {
@@ -71,81 +127,121 @@ impl Display for AddressString {
 pub enum HistoricalDataReason {}
 
 #[derive(Clone, Serialize, Deserialize, Archive, Debug)]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes, )]
 #[archive_attr(derive(Debug))]
 /// Represents a request type for the network message. This enum is used to specify the type of request and the returning response
 ///
 /// # Variants
 /// * [`SynchronousRequestType::HistoricalBaseData`](ff_data_vendors::networks::RequestType) : Requests the Base data for the specified subscriptions. Server returns a ResponseType::HistoricalBaseData with the data payload.
-pub enum SynchronousRequestType {
+pub enum DataServerRequest {
+    Register(StrategyMode),
     /// Requests historical `Vec<BaseDataEnum>` for a specified list of subscriptions at the specified time, this request is specifically used by the strategy backend to delegate data into the engine
     /// # Fields
     /// * `subscriptions: Vec<Subscription>`
     /// * `time: String,`
     HistoricalBaseData {
+        callback_id: u64,
         subscription: DataSubscription,
         time: String,
     },
-
     HistoricalBaseDataMany {
+        callback_id: u64,
         subscriptions: Vec<DataSubscription>,
         time: String,
     },
-
     /// Requests a list of instruments all instruments available with the `DataVendor` from the server, an instrument object is the vendors specific data type.
     /// # Fields
     /// * `DataVendor`
     /// * `MarketType`
-    SymbolsVendor(DataVendor, MarketType),
-    SymbolsBroker(Brokerage, MarketType),
-
+    SymbolsVendor {
+        callback_id: u64,
+        data_vendor: DataVendor,
+        market_type: MarketType
+    },
+    SymbolsBroker {
+        callback_id: u64,
+        brokerage: Brokerage,
+        market_type: MarketType
+    },
     /// Requests a list of resolutions available with the `DataVendor` from the server
-    Resolutions(DataVendor, MarketType),
-
-    AccountCurrency(Brokerage, AccountId),
-
-    AccountInfo(Brokerage, AccountId),
-
-    Markets(DataVendor),
-
-    TickSize(DataVendor, SymbolName),
-
-    DecimalAccuracy(DataVendor, SymbolName),
-
-    SymbolInfo(Brokerage, SymbolName),
+    Resolutions {
+        callback_id: u64,
+        data_vendor: DataVendor,
+        market_type: MarketType
+    },
+    AccountInfo {
+        callback_id: u64,
+        brokerage: Brokerage,
+        account_id: AccountId
+    },
+    Markets {
+        callback_id: u64,
+        data_vendor: DataVendor
+    },
+    TickSize {
+        callback_id: u64,
+        data_vendor: DataVendor,
+        symbol_name: SymbolName
+    },
+    DecimalAccuracy {
+        callback_id: u64,
+        data_vendor: DataVendor,
+        symbol_name: SymbolName
+    },
+    SymbolInfo{
+        callback_id: u64,
+        brokerage: Brokerage,
+        symbol_name: SymbolName
+    },
+    StreamRequest {
+        request: StreamRequest
+    },
+    OrderRequest {
+        request: OrderRequest
+    },
+    MarginRequired {
+        callback_id: u64,
+        quantity: Volume,
+        brokerage: Brokerage,
+        symbol_name: SymbolName
+    }
 }
 
-impl SynchronousRequestType {
+impl DataServerRequest {
     pub fn to_bytes(&self) -> Vec<u8> {
         let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
         vec.into()
     }
-    pub fn from_bytes(archived: &[u8]) -> Result<SynchronousRequestType, FundForgeError> {
+    pub fn from_bytes(archived: &[u8]) -> Result<DataServerRequest, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<SynchronousRequestType>(archived) {
+        match rkyv::from_bytes::<DataServerRequest>(archived) {
             //Ignore this warning: Trait `Deserialize<RequestType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
             Ok(response) => Ok(response),
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
+    pub fn set_callback_id(&mut self, id: u64) {
+        match self {
+            DataServerRequest::HistoricalBaseData { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::HistoricalBaseDataMany {callback_id, .. } => {*callback_id = id}
+            DataServerRequest::SymbolsVendor { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::SymbolsBroker { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::Resolutions {callback_id, .. } => {*callback_id = id}
+            DataServerRequest::AccountInfo { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::Markets { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::TickSize { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::DecimalAccuracy { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::SymbolInfo { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::StreamRequest   { .. } => {}
+            DataServerRequest::Register {  .. } => {}
+            DataServerRequest::OrderRequest { .. } => {}
+            DataServerRequest::MarginRequired { callback_id, .. } => {*callback_id = id}
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Archive, Debug)]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes, )]
 #[archive_attr(derive(Debug))]
 pub struct BaseDataPayload {
     /// a Vec<BaseDataEnum> in bytes form
@@ -156,75 +252,135 @@ pub struct BaseDataPayload {
 }
 
 #[derive(Clone, Serialize, Deserialize, Archive, Debug)]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Represents a request type for the network message. This enum is used to specify the type of request and the returning response
-pub enum SynchronousResponseType {
+pub enum DataServerResponse {
     /// This is for generic history requests, Responds with `payload` as `Payload` which contains:
     /// ## HistoricalBaseData Fields
     /// * `payloads` as `Vec<Payload>`
-    HistoricalBaseData(BaseDataPayload),
+    HistoricalBaseData {
+        callback_id: u64,
+        payload: BaseDataPayload
+    },
 
-    HistoricalBaseDataMany(Vec<BaseDataPayload>),
+    HistoricalBaseDataMany {
+        callback_id: u64,
+        payloads: Vec<BaseDataPayload>
+    },
 
     /// Responds with `instruments` as `Vec<InstrumentEnum>` which contains:
     /// *  `Vec<Symbol>` for all symbols available on the server, to fullfill this the vendor will need a fn that converts from its instrument format into a `Symbol` object.
-    Symbols(Vec<Symbol>, MarketType),
+    Symbols {
+        callback_id: u64,
+        symbols: Vec<Symbol>,
+        market_type: MarketType
+    },
 
     /// Responds with a vec<(Resolution, BaseDataType)> which represents all the native resolutions available for the data types from the vendor api (note we only support intraday resolutions, higher resolutions are consolidated by the engine)
-    Resolutions(Vec<SubscriptionResolutionType>, MarketType),
+    Resolutions {
+        callback_id: u64,
+        subscription_resolutions_types: Vec<SubscriptionResolutionType>,
+        market_type: MarketType
+    },
 
     /// Provides the client with an error message
     /// Contains a `FundForgeError` which is used to help debug and identify the type of error that occurred.
     /// [`DataServerError`](ff_data_vendors::networks::DataServerError)
-    Error(FundForgeError),
+    Error {
+        callback_id: u64,
+        error: FundForgeError
+    },
 
-    AccountCurrency(AccountId, Currency),
+    AccountInfo {
+        callback_id: u64,
+        account_info: AccountInfo
+    },
 
-    AccountInfo(AccountInfo),
+    Markets {
+        callback_id: u64,
+        markets: Vec<MarketType>
+    },
 
-    Markets(Vec<MarketType>),
+    TickSize {
+        callback_id: u64,
+        tick_size: Price
+    },
 
-    TickSize(Price),
+    DecimalAccuracy{
+        callback_id: u64,
+        accuracy: u8
+    },
 
-    DecimalAccuracy(u8),
+    ValuePerTick{
+        callback_id: u64,
+        currency: Currency,
+        price: Price
+    },
 
-    ValuePerTick(Currency, Price),
+    SymbolInfo {
+        callback_id: u64,
+        symbol_info: SymbolInfo
+    },
 
-    SymbolInfo(SymbolInfo)
+    SymbolInfoMany {
+        callback_id: u64,
+        info_vec: Vec<SymbolInfo>
+    },
+
+    StreamResponse {
+        response: StreamResponse
+    },
+
+    MarginRequired {
+        callback_id: u64,
+        symbol_name: SymbolName,
+        price: Price
+    },
 }
 
-impl SynchronousResponseType {
+impl DataServerResponse {
     pub fn to_bytes(&self) -> Vec<u8> {
         let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
         vec.into()
     }
-    pub fn from_bytes(archived: &[u8]) -> Result<SynchronousResponseType, FundForgeError> {
+    pub fn from_bytes(archived: &[u8]) -> Result<DataServerResponse, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<SynchronousResponseType>(archived) {
+        match rkyv::from_bytes::<DataServerResponse>(archived) {
             //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
             Ok(response) => Ok(response),
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
     }
+
+    pub fn get_callback_id(&self) -> Option<u64> {
+        match self {
+            DataServerResponse::HistoricalBaseData { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::HistoricalBaseDataMany  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::Symbols  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::Resolutions  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::Error  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::AccountInfo  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::Markets  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::TickSize  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::DecimalAccuracy  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::ValuePerTick  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::SymbolInfo  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::SymbolInfoMany  { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::StreamResponse { .. } => None,
+            DataServerResponse::MarginRequired { callback_id,.. } => Some(callback_id.clone()),
+        }
+    }
+    pub fn stream_response(&self) -> Option<StreamResponse> {
+        match self {
+            DataServerResponse::StreamResponse { response, .. } => Some(response.clone()),
+            _ => None
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Archive, PartialEq)]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Represents a response type for the network message. This is used to help debug and identify the type of error that occurred
 /// # Variants
@@ -280,71 +436,5 @@ impl Display for FundForgeError {
                 write!(f, "ConnectionNotFound: {}:", debug)
             }
         }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Archive, Debug)]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
-#[archive_attr(derive(Debug))]
-/// Represents a request type for the network message. This enum is used to specify the type of request and the returning response
-///
-/// # Variants
-/// * [`SynchronousRequestType::HistoricalBaseData`](ff_data_vendors::networks::RequestType) : Requests the Base data for the specified subscriptions. Server returns a ResponseType::HistoricalBaseData with the data payload.
-pub enum AsyncRequestType {
-    SubscribeLive(DataSubscription),
-}
-
-impl Bytes<Self> for AsyncRequestType {
-    fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
-        vec.into()
-    }
-
-    fn from_bytes(archived: &[u8]) -> Result<AsyncRequestType, FundForgeError> {
-        // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<AsyncRequestType>(archived) {
-            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
-            Ok(response) => Ok(response),
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
-        }
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize, Archive, Debug)]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
-#[archive_attr(derive(Debug))]
-pub enum AsyncResponseType {
-    SubscriptionSuccess(DataSubscription),
-    Error(FundForgeError),
-    TimeSlice(TimeSlice),
-}
-
-impl Bytes<Self> for AsyncResponseType {
-    fn from_bytes(archived: &[u8]) -> Result<AsyncResponseType, FundForgeError> {
-        // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<AsyncResponseType>(archived) {
-            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
-            Ok(response) => Ok(response),
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
-        }
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 2048>(self).unwrap();
-        vec.into()
     }
 }

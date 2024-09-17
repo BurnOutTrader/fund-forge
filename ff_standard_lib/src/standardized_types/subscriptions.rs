@@ -1,4 +1,3 @@
-use crate::apis::vendor::DataVendor;
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution, SubscriptionResolutionType};
@@ -7,6 +6,11 @@ use rkyv::ser::Serializer;
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt;
 use std::fmt::{Debug, Display, Error, Formatter};
+use tokio::sync::oneshot;
+use crate::apis::data_vendor::datavendor_enum::DataVendor;
+use crate::server_connections::{get_sender, ConnectionType, StrategyRequest};
+use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
+use crate::standardized_types::Price;
 
 pub type ExchangeCode = String;
 pub type SymbolName = String;
@@ -38,7 +42,7 @@ impl Symbol {
         }
     }
 
-    pub fn from_array_bytes(data: &Vec<u8>) -> Result<Vec<Symbol>, Error> {
+    pub(crate) fn from_array_bytes(data: &Vec<u8>) -> Result<Vec<Symbol>, Error> {
         let archived_quotebars = match rkyv::check_archived_root::<Vec<Symbol>>(&data[..]) {
             Ok(data) => data,
             Err(_) => {
@@ -53,7 +57,7 @@ impl Symbol {
     }
 
     /// Serializes a `Vec<Symbol>` into `AlignedVec`
-    pub fn vec_to_aligned(symbols: Vec<Symbol>) -> AlignedVec {
+    pub(crate) fn vec_to_aligned(symbols: Vec<Symbol>) -> AlignedVec {
         // Create a new serializer
         let mut serializer = AllocSerializer::<1024>::default();
 
@@ -67,10 +71,33 @@ impl Symbol {
 
     /// Serializes a `Vec<Symbol>` into `Vec<u8>`
     /// This is the method used for quote bar request_response
-    pub fn vec_to_bytes(symbols: Vec<Symbol>) -> Vec<u8> {
+    pub(crate) fn vec_to_bytes(symbols: Vec<Symbol>) -> Vec<u8> {
         // Get the serialized bytes
         let vec = Symbol::vec_to_aligned(symbols);
         vec.to_vec()
+    }
+
+    pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
+        let request = DataServerRequest::TickSize {
+            callback_id: 0,
+            data_vendor: self.data_vendor.clone(),
+            symbol_name: self.name.clone(),
+        };
+        let (sender, receiver) = oneshot::channel();
+        let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request,sender);
+        let sender = get_sender();
+        let sender = sender.lock().await;
+        sender.send(msg).await.unwrap();
+        match receiver.await {
+            Ok(response) => {
+                match response {
+                    DataServerResponse::TickSize { tick_size, .. } => Ok(tick_size),
+                    DataServerResponse::Error {error,..} => Err(error),
+                    _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
+                }
+            },
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+        }
     }
 }
 

@@ -10,13 +10,13 @@ pub mod strategy_events;
 pub mod subscription_handler;
 pub mod subscriptions;
 pub mod time_slices;
+pub mod symbol_info;
 
 
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal::Decimal;
 use serde_derive::{Deserialize, Serialize};
 
-pub type OwnerId = String;
 pub type TimeString = String;
 pub type Price = Decimal;
 

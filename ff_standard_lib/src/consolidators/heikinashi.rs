@@ -1,4 +1,3 @@
-use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::helpers::converters::open_time;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -229,8 +228,7 @@ impl HeikinAshiConsolidator {
         }
         let tick_size = match subscription
             .symbol
-            .data_vendor
-            .tick_size(subscription.symbol.name.clone())
+            .tick_size()
             .await
         {
             Ok(size) => size,

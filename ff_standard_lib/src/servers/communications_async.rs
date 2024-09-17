@@ -5,6 +5,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, Mutex};
 use tokio_rustls::server::TlsStream as ServerTlsStream;
 use tokio_rustls::TlsStream;
+use crate::standardized_types::data_server_messaging::FundForgeError;
 
 /// With an 8-byte (64-bit) length field, you can represent data sizes up to approximately 17179869184 GB, which is equivalent to 16777216 TB, or 16 exabytes (EB).
 const LENGTH: usize = 8;
@@ -55,26 +56,63 @@ impl InternalReceiver {
 
 /// External Receiver implements a receive fn to receive data as bytes from an external source over Tcp.
 pub struct ExternalReceiver {
-    reader: ReadHalf<TlsStream<TcpStream>>,
+    reader: Mutex<ReadHalf<TlsStream<TcpStream>>>,
 }
 
 impl ExternalReceiver {
     pub fn new(reader: ReadHalf<TlsStream<TcpStream>>) -> Self {
-        Self { reader }
+        Self {
+            reader: Mutex::new(reader) }
     }
 
-    pub async fn receive(&mut self) -> Option<Vec<u8>> {
+    pub async fn receive(&self) -> Option<Vec<u8>> {
         let mut length_bytes = vec![0u8; LENGTH];
-        if self.reader.read_exact(&mut length_bytes).await.is_ok() {
+        let mut reader = self.reader.lock().await;
+        if reader.read_exact(&mut length_bytes).await.is_ok() {
             let msg_length = u64::from_be_bytes(length_bytes.try_into().ok()?) as usize;
             let mut message_body = vec![0u8; msg_length];
-            if self.reader.read_exact(&mut message_body).await.is_ok() {
+            if reader.read_exact(&mut message_body).await.is_ok() {
                 return Some(message_body);
             }
         }
         None
     }
 }
+
+pub struct ExternalSender {
+    sender: Mutex<WriteHalf<TlsStream<TcpStream>>>
+}
+
+impl ExternalSender {
+    pub fn new(sender: WriteHalf<TlsStream<TcpStream>>) -> Self {
+        Self {
+            sender: Mutex::new(sender)
+        }
+    }
+    pub async fn send(&self, data: &Vec<u8>) -> Result<(), FundForgeError> {
+        // Lock the mutex to get mutable access
+        let mut sender = self.sender.lock().await;
+
+        // Convert the length of the data to a u64, then to bytes
+        let len = data.len() as u64;
+        let len_bytes = len.to_be_bytes();
+
+        // Write the length header
+        match sender
+            .write_all(&len_bytes)
+            .await {
+            Ok(_) => {}
+            Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to send lenght: {}", e)))
+        }
+
+        // Write the actual data
+        sender
+            .write_all(&data)
+            .await
+            .map_err(|e| FundForgeError::ClientSideErrorDebug(e.to_string()))
+    }
+}
+
 
 #[derive(Debug, Clone)]
 pub struct SendError {

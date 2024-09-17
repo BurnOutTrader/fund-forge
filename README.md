@@ -129,6 +129,8 @@ struct ServerLaunchOptions {
 }
 ```
 
+### Rithmic Credentials and Setup
+
 
 ## Parsing Data and Time handling
 All data should be saved as 1 file per month and all times for data should be Utc time, use the time parsing functions in `ff_standard_lib::helpers::converters` to parse time from your time zone, these functions use `chrono-tz` and will automatically handle historical time zone conversions such as day light savings times. All Base data time properties are serialized as Strings, these strings are auto parsed into `DateTime<Utc>` using `base_data.time_utc()` or. `DateTime<FixedOffset>` using `base_data.time_local(Tz)` when running strategies, the reason for parsing to string is simply for easier `ser/de` using `rkyv`.

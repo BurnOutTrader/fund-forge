@@ -1,7 +1,6 @@
 use std::fs::create_dir_all;
 use std::path::Path;
 use chrono::{DateTime, Utc};
-use crate::apis::brokerage::{AccountInfo, Brokerage, SymbolInfo};
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::traits::bytes::Bytes;
@@ -9,12 +8,15 @@ use dashmap::DashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use csv::Writer;
 use rust_decimal_macros::dec;
+use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::accounts::position::Position;
-
+use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::standardized_types::symbol_info::SymbolInfo;
+use serde_derive::{Deserialize, Serialize};
 pub type AccountId = String;
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize, PartialOrd,)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum Currency {
@@ -165,8 +167,7 @@ pub(crate) mod historical_ledgers {
     use rust_decimal::Decimal;
     use rust_decimal::prelude::FromPrimitive;
     use rust_decimal_macros::dec;
-    use crate::apis::brokerage::Brokerage;
-    use crate::apis::brokerage::client_requests::ClientSideBrokerage;
+    use crate::apis::brokerage::broker_enum::Brokerage;
     use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
     use crate::standardized_types::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::{OrderSide, PositionSide};
@@ -184,13 +185,13 @@ pub(crate) mod historical_ledgers {
         }
 
         pub async fn subtract_margin_used(&mut self, symbol_name: SymbolName, quantity: Volume) {
-            let margin = self.brokerage.margin_required_historical(symbol_name, quantity).await;
+            let margin = self.brokerage.margin_required_historical(symbol_name, quantity).await.unwrap();
             self.cash_available += margin;
             self.cash_used -= margin;
         }
 
         pub async fn add_margin_used(&mut self, symbol_name: SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
-            let margin = self.brokerage.margin_required_historical(symbol_name, quantity).await;
+            let margin = self.brokerage.margin_required_historical(symbol_name, quantity).await?;
             // Check if the available cash is sufficient to cover the margin
             if self.cash_available < margin {
                 return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
@@ -391,13 +392,6 @@ pub(crate) mod historical_ledgers {
             self.process_closed_position(old_position);
         }
 
-        pub async fn account_init(account_id: AccountId, brokerage: Brokerage) -> Self {
-            match brokerage.init_ledger(account_id).await {
-                Ok(ledger) => ledger,
-                Err(e) => panic!("Failed to initialize account: {:?}", e),
-            }
-        }
-
         pub async fn is_long(&self, symbol_name: &SymbolName) -> bool {
             if let Some(position) = self.positions.get(symbol_name) {
                 if position.value().side == PositionSide::Long {
@@ -455,4 +449,32 @@ pub(crate) mod historical_ledgers {
     }
 }
 
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct AccountInfo {
+    pub account_id: AccountId,
+    pub brokerage: Brokerage,
+    pub cash_value: Price,
+    pub cash_available: Price,
+    pub currency: Currency,
+    pub cash_used: Price,
+    pub positions: Vec<Position>,
+    pub is_hedging: bool,
+}
 
+impl Bytes<Self> for AccountInfo {
+    fn from_bytes(archived: &[u8]) -> Result<AccountInfo, FundForgeError> {
+        // If the archived bytes do not end with the delimiter, proceed as before
+        match rkyv::from_bytes::<AccountInfo>(archived) {
+            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+            Ok(response) => Ok(response),
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
+        }
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
+        vec.into()
+    }
+}

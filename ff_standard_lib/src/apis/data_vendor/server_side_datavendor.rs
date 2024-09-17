@@ -1,0 +1,116 @@
+use async_trait::async_trait;
+use crate::apis::data_vendor::datavendor_enum::DataVendor;
+use crate::apis::rithmic_api::api_client::{get_rithmic_client};
+use crate::apis::test_api::TEST_CLIENT;
+use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError};
+use crate::standardized_types::enums::MarketType;
+use crate::standardized_types::subscriptions::SymbolName;
+
+/// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
+#[async_trait]
+pub trait VendorApiResponse: Sync + Send {
+    async fn symbols_response(
+        &self,
+        market_type: MarketType,
+        callback_id: u64
+    ) -> DataServerResponse;
+    async fn resolutions_response(
+        &self,
+        market_type: MarketType,
+        callback_id: u64
+    ) -> DataServerResponse;
+    async fn markets_response(
+        &self,
+        callback_id: u64
+    ) -> DataServerResponse;
+    async fn decimal_accuracy_response(
+        &self,
+        symbol_name: SymbolName,
+        callback_id: u64
+    ) -> DataServerResponse;
+    async fn tick_size_response(
+        &self,
+        symbol_name: SymbolName,
+        callback_id: u64
+    ) -> DataServerResponse;
+}
+
+/// Responses
+#[async_trait]
+impl VendorApiResponse for DataVendor {
+    async fn symbols_response(
+        &self,
+        market_type: MarketType,
+        callback_id: u64
+    ) -> DataServerResponse {
+        match self {
+            DataVendor::RithmicTest => {
+                if let Some(client) = get_rithmic_client(self) {
+                    return client.symbols_response(market_type, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.symbols_response(market_type, callback_id).await
+        }
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
+    }
+
+    async fn resolutions_response(
+        &self,
+        market_type: MarketType,
+        callback_id: u64
+    ) -> DataServerResponse {
+        match self {
+            DataVendor::RithmicTest => {
+                if let Some(client) = get_rithmic_client(self) {
+                    return client.resolutions_response(market_type, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.resolutions_response(market_type, callback_id).await
+        }
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
+    }
+
+    async fn markets_response(&self, callback_id: u64) -> DataServerResponse {
+        match self {
+            DataVendor::RithmicTest => {
+                if let Some(client) = get_rithmic_client(self) {
+                    return client.markets_response(callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.markets_response(callback_id).await
+        }
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
+    }
+
+    async fn decimal_accuracy_response(
+        &self,
+        symbol_name: SymbolName,
+        callback_id: u64
+    ) -> DataServerResponse {
+        match self {
+            DataVendor::RithmicTest => {
+                if let Some(client) = get_rithmic_client(self) {
+                    return client.decimal_accuracy_response(symbol_name, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.decimal_accuracy_response(symbol_name, callback_id).await
+        }
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
+    }
+
+    async fn tick_size_response(
+        &self,
+        symbol_name: SymbolName,
+        callback_id: u64
+    ) -> DataServerResponse {
+        match self {
+            DataVendor::RithmicTest => {
+                if let Some(client) = get_rithmic_client(self) {
+                    return client.tick_size_response(symbol_name, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.tick_size_response(symbol_name, callback_id).await
+        }
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
+    }
+}

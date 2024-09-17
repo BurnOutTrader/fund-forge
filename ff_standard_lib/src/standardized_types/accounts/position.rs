@@ -1,12 +1,13 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal_macros::dec;
-use serde_derive::Serialize;
-use crate::apis::brokerage::{Brokerage, SymbolInfo};
+use serde_derive::{Deserialize, Serialize};
+use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::accounts::ledgers::Currency;
-use crate::standardized_types::orders::orders::ProtectiveOrder;
+use crate::standardized_types::orders::orders::{OrderId, ProtectiveOrder};
+use crate::standardized_types::symbol_info::SymbolInfo;
 
 pub type PositionId = String;
 #[derive(Serialize)]
@@ -21,7 +22,7 @@ pub(crate) struct PositionExport {
     lowest_recoded_price: Price,
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize,     PartialOrd,)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct Position {
@@ -39,8 +40,47 @@ pub struct Position {
     pub is_closed: bool,
     pub id: PositionId,
     pub symbol_info: SymbolInfo,
-    account_currency: Currency,
+    pub account_currency: Currency,
     pub(crate) brackets: Option<Vec<ProtectiveOrder>>
+}
+
+#[derive(
+    Clone,
+    rkyv::Serialize,
+    rkyv::Deserialize,
+    Archive,
+    Debug,
+    PartialEq,
+)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub enum PositionUpdateEvent {
+    Opened(PositionId, Position),
+    Reduced{
+        quantity_open: Volume,
+        quantity_closed: Volume,
+        average_price: Price,
+        open_pnl: Price,
+        booked_pnl: Price,
+        average_exit_price: Option<Price>,
+    },
+    Closed {
+        quantity_open: Volume,
+        quantity_closed: Volume,
+        average_price: Price,
+        open_pnl: Price,
+        booked_pnl: Price,
+        average_exit_price: Option<Price>,
+    },
+    UpdateSnapShot {
+        quantity_open: Volume,
+        quantity_closed: Volume,
+        average_price: Price,
+        open_pnl: Price,
+        booked_pnl: Price,
+    },
+    BracketCreated(ProtectiveOrder),
+    BracketRemoved(OrderId)
 }
 
 //todo make it so stop loss and take profit can be attached to positions, then instead of updating in the market handler, those orders update in the position and auto cancel themselves when position closes
@@ -206,7 +246,7 @@ pub(crate) mod historical_position {
             if let Some(brackets) = &mut self.brackets {
                 'bracket_loop: for bracket in brackets.iter_mut() {
                     match bracket {
-                        ProtectiveOrder::TakeProfit { price } => match self.side {
+                        ProtectiveOrder::TakeProfit { id, price } => match self.side {
                             PositionSide::Long if highest_price >= *price => {
                                 bracket_triggered = true;
                                 break 'bracket_loop;
@@ -217,7 +257,7 @@ pub(crate) mod historical_position {
                             }
                             _ => {}
                         },
-                        ProtectiveOrder::StopLoss { price } => match self.side {
+                        ProtectiveOrder::StopLoss { id, price } => match self.side {
                             PositionSide::Long if lowest_price <= *price => {
                                 bracket_triggered = true;
                                 break 'bracket_loop;
@@ -228,23 +268,23 @@ pub(crate) mod historical_position {
                             }
                             _ => {}
                         },
-                        ProtectiveOrder::TrailingStopLoss { price, trail_value } => match self.side {
+                        ProtectiveOrder::TrailingStopLoss { id, mut price, trail_value } => match self.side {
                             PositionSide::Long => {
-                                if lowest_price <= *price {
+                                if lowest_price <= price {
                                     bracket_triggered = true;
                                     break 'bracket_loop;
                                 }
-                                if highest_price > *price + *trail_value {
-                                    *price += *trail_value;
+                                if highest_price > price + *trail_value {
+                                    price += *trail_value;
                                 }
                             }
                             PositionSide::Short => {
-                                if highest_price >= *price {
+                                if highest_price >= price {
                                     bracket_triggered = true;
                                     break 'bracket_loop;
                                 }
-                                if lowest_price < *price - *trail_value {
-                                    *price -= *trail_value;
+                                if lowest_price < price - *trail_value {
+                                    price -= *trail_value;
                                 }
                             }
                         },

@@ -1,126 +1,148 @@
 use std::sync::Arc;
-use ahash::AHashMap;
+use async_std::task::block_on;
+use async_trait::async_trait;
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
-use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::RequestGiveTickSizeTypeTable;
-use futures::channel::oneshot;
-use futures::stream::SplitStream;
+use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
-use tokio::net::TcpStream;
-use crate::apis::brokerage::client_requests::ClientSideBrokerage;
-use crate::apis::brokerage::server_responses::BrokerApiResponse;
-use crate::apis::brokerage::SymbolInfo;
-use crate::apis::vendor::client_requests::ClientSideDataVendor;
-use crate::apis::vendor::server_responses::VendorApiResponse;
-use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
-use crate::standardized_types::data_server_messaging::{FundForgeError, SynchronousResponseType};
-use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
-use crate::standardized_types::Price;
-use crate::standardized_types::subscriptions::{Symbol, SymbolName};
+use crate::apis::brokerage::broker_enum::Brokerage;
+use crate::apis::brokerage::server_side_brokerage::BrokerApiResponse;
+use crate::apis::data_vendor::datavendor_enum::DataVendor;
+use crate::apis::data_vendor::server_side_datavendor::VendorApiResponse;
+use crate::standardized_types::accounts::ledgers::{AccountId};
+use crate::standardized_types::data_server_messaging::{FundForgeError, DataServerResponse};
+use crate::standardized_types::enums::{MarketType};
+use crate::standardized_types::subscriptions::{SymbolName};
+use crate::standardized_types::symbol_info::SymbolInfo;
+use crate::standardized_types::Volume;
+
+lazy_static! {
+    pub static ref RITHMIC_CLIENTS: DashMap<Brokerage , Arc<RithmicClient>> = DashMap::new();
+}
+
+pub fn get_rithmic_client(data_vendor: &DataVendor) -> Option<Arc<RithmicClient>> {
+    match data_vendor {
+        DataVendor::RithmicTest => {
+            if let Some(client) = RITHMIC_CLIENTS.get(&Brokerage::RithmicTest) {
+                return Some(client.value().clone())
+            }
+            None
+        }
+        DataVendor::Test => panic!("Incorrect vendor for this fn")
+    }
+}
 
 type ResponseRequestId = u64;
 pub struct RithmicClient {
+    /// The primary client is the only client used for data feeds, it will also have all brokerage features.
     pub client: Arc<RithmicApiClient>,
-    pub tick_size: AHashMap<SymbolName, f64>,
-
-    /// ResponseRequestId will be attached to the request and so should return with the rithmic response
-    synchronous_request_map: Arc<DashMap<ResponseRequestId, oneshot::Sender<SynchronousResponseType>>>,
-    synchronous_request_counter: Arc<std::sync::Mutex<ResponseRequestId>>,
+    pub symbol_info: DashMap<SymbolName, SymbolInfo>,
 }
 
 impl RithmicClient {
-    pub async fn new() -> Self {
-        let credentials: RithmicCredentials = RithmicCredentials::load_credentials_from_file(&"rithmic_credentials.toml".to_string()).unwrap();
+    fn rithmic_credentials(broker: &Brokerage) -> RithmicCredentials {
+        let file = format!("rithmic_credentials_{}.toml", broker.to_string().to_lowercase());
+        let file_path = format!("rithmic_credentials/{}", file);
+        RithmicCredentials::load_credentials_from_file(&file_path).unwrap()
+    }
+    pub fn new(broker: &Brokerage) -> Self {
+        let credentials = RithmicClient::rithmic_credentials(&broker);
+        let client = RithmicApiClient::new(credentials);
         let client = Self {
-            client: Arc::new(RithmicApiClient::new(credentials)),
-            tick_size: Default::default(),
-            synchronous_request_map: Arc::new(DashMap::new()),
-            synchronous_request_counter: Arc::new(std::sync::Mutex::new(0)),
+            client: Arc::new(client),
+            symbol_info: Default::default(),
         };
-        const MAIN_RITHMIC_PLANTS: Vec<SysInfraType> = vec![SysInfraType::HistoryPlant, SysInfraType::OrderPlant, SysInfraType::PnlPlant, SysInfraType::TickerPlant];
-        for plant in MAIN_RITHMIC_PLANTS {
-            match client.client.connect_and_login(plant).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("{}", e)
+        let shutdown_client = || async {
+            if let Err(_) = block_on(client.client.shutdown_all()) {}
+        };
+        let ticker_receiver = match block_on(client.client.connect_and_login(SysInfraType::TickerPlant)) {
+            Ok(r) => r,
+            Err(e) => {
+                shutdown_client;
+                return client
             }
-        }
+        };
+        let history_receiver = match block_on(client.client.connect_and_login(SysInfraType::HistoryPlant)) {
+            Ok(r) => r,
+            Err(e) => {
+                shutdown_client;
+                return client
+            }
+        };
+        let order_receiver = match block_on(client.client.connect_and_login(SysInfraType::OrderPlant)) {
+            Ok(r) => r,
+            Err(e) => {
+                shutdown_client;
+                return client
+            }
+        };
+        let pnl_receiver = match block_on(client.client.connect_and_login(SysInfraType::PnlPlant)) {
+            Ok(r) => r,
+            Err(e) => {
+                shutdown_client;
+                return client
+            }
+        };
         client
     }
 
-    // Generate a unique request ID
-    fn register_synchronous_request(&self) -> ResponseRequestId {
-        let mut counter = self.synchronous_request_counter.lock().unwrap();
-        *counter += 1;
-        *counter
+    pub async fn shutdown(&self) {
+        match self.client.shutdown_all().await {
+            Ok(_) => {}
+            Err(e) => eprintln!("Rithmic Client shutdown error: {}", e)
+        }
     }
 
     // Send a request and wait for a response
-    pub async fn send_synchronous_request<T: ProstMessage + Default>(&self, plant: &SysInfraType, request: T) -> Result<SynchronousResponseType, String> {
-        let request_id = self.get_next_request_id();
-
-        // Create a oneshot channel to receive the response
-        let (tx, rx) = oneshot::channel();
-
-        // Store the sender in the map so the stream can send the response back
-        self.synchronous_request_map.insert(request_id, tx);
-
-        //send request to api client
-        match self.client.send_message(plant, request).await {
-            Ok(_) => {}
-            Err(_) => {}
-        }
-
-        // Wait for the response
-        match rx.await {
-            Ok(response) => Ok(response),
-            Err(_) => Err("Failed to receive response".to_string()),
-        }
+    pub async fn send_synchronous_request<T: ProstMessage + Default>(&self, plant: &SysInfraType, request: T, id: u64) -> Result<DataServerResponse, FundForgeError> {
+        todo!()
     }
 }
 
+#[async_trait]
 impl BrokerApiResponse for RithmicClient {
-    async fn symbols_response(&self, market_type: MarketType) -> Result<SynchronousResponseType, FundForgeError> {
+    async fn symbols_response(&self, market_type: MarketType, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn account_currency_response(&self, account_id: AccountId) -> Result<SynchronousResponseType, FundForgeError> {
+    async fn account_info_response(&self, account_id: AccountId, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn account_info_response(&self, account_id: AccountId) -> Result<SynchronousResponseType, FundForgeError> {
+    async fn symbol_info_response(&self, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn symbol_info_response(&self, symbol_name: SymbolName) -> Result<SynchronousResponseType, FundForgeError> {
+    async fn margin_required_historical_response(&self, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+        todo!()
+    }
+
+    async fn margin_required_live_response(&self, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 }
 
+#[async_trait]
 impl VendorApiResponse for RithmicClient {
-    async fn basedata_symbols_response(&self, market_type: MarketType) -> Result<SynchronousResponseType, FundForgeError> {
+    async fn symbols_response(&self, market_type: MarketType, callback_id: u64) -> DataServerResponse{
         todo!()
     }
 
-    async fn resolutions_response(&self, market_type: MarketType) -> Result<SynchronousResponseType, FundForgeError> {
+    async fn resolutions_response(&self, market_type: MarketType, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn markets_response(&self) -> Result<SynchronousResponseType, FundForgeError> {
+    async fn markets_response(&self, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn decimal_accuracy_response(&self, symbol_name: SymbolName) -> Result<SynchronousResponseType, FundForgeError> {
+    async fn decimal_accuracy_response(&self, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn tick_size_response(&self, symbol_name: SymbolName) -> Result<SynchronousResponseType, FundForgeError> {
-        let request = RequestGiveTickSizeTypeTable {
-            template_id: 107,
-            user_msg: vec![],
-            tick_size_type: None,
-        }
+    async fn tick_size_response(&self, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        todo!()
     }
 }

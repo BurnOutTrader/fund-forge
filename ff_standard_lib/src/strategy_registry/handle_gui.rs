@@ -31,7 +31,7 @@ pub async fn handle_gui(
                     }
                     GuiRequest::RequestBuffers => {
                         let buffers = get_events_buffer().await;
-                        send_subscriber(id, RegistryGuiResponse::Buffer {buffer: buffers}.to_bytes()).await;
+                        //send_subscriber(id, RegistryGuiResponse::Buffer {buffer: buffers}.to_bytes()).await;
                     }
                 };
             });

@@ -1,10 +1,9 @@
-use crate::apis::brokerage::Brokerage;
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::OrderSide;
 use crate::standardized_types::subscriptions::{SymbolName};
-use crate::standardized_types::{OwnerId, Price, Volume};
+use crate::standardized_types::{Price, Volume};
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -12,6 +11,28 @@ use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use rust_decimal_macros::dec;
 use strum_macros::Display;
+use crate::apis::brokerage::broker_enum::Brokerage;
+
+#[derive(
+    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
+)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub enum OrderRequest {
+    Create{brokerage: Brokerage, order: Order},
+    Cancel{brokerage: Brokerage, order_id: OrderId},
+    Update{brokerage: Brokerage, order_id: OrderId, order: Order}
+}
+
+impl OrderRequest {
+    pub fn brokerage(&self) -> Brokerage {
+        match self {
+            OrderRequest::Create { brokerage, .. } => brokerage.clone(),
+            OrderRequest::Cancel { brokerage, .. } => brokerage.clone(),
+            OrderRequest::Update { brokerage,.. } => brokerage.clone(),
+        }
+    }
+}
 
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
@@ -41,18 +62,21 @@ pub enum TimeInForce {
     Day,
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Archive, Clone, rkyv::Serialize, rkyv::Deserialize, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Protective Orders always exit the entire position, for custom exits we can just submit regular orders.
 pub enum ProtectiveOrder {
-    TakeProfit{
+    TakeProfit {
+        id: OrderId,
         price: Price
     },
     StopLoss {
+        id: OrderId,
         price: Price
     },
     TrailingStopLoss {
+        id: OrderId,
         price: Price,
         trail_value: Price
     },
@@ -94,11 +118,12 @@ pub enum OrderState {
     Rejected(String),
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
+#[derive(
+    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
+)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct Order {
-    pub owner_id: OwnerId,
     pub symbol_name: SymbolName,
     pub brokerage: Brokerage,
     pub quantity_ordered: Volume,
@@ -125,7 +150,6 @@ impl Order {
     }
 
     pub fn market_order(
-        owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: Volume,
@@ -137,7 +161,6 @@ impl Order {
     ) -> Self {
         Order {
             id:order_id,
-            owner_id,
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
@@ -159,7 +182,6 @@ impl Order {
     }
 
     pub fn exit_long(
-        owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: Volume,
@@ -170,7 +192,6 @@ impl Order {
     ) -> Self {
         Order {
             id: order_id,
-            owner_id,
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
@@ -192,7 +213,6 @@ impl Order {
     }
 
     pub fn exit_short(
-        owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: Volume,
@@ -203,7 +223,6 @@ impl Order {
     ) -> Self {
         Order {
             id: order_id,
-            owner_id,
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
@@ -225,7 +244,6 @@ impl Order {
     }
 
     pub fn enter_long(
-        owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: Volume,
@@ -237,7 +255,6 @@ impl Order {
     ) -> Self {
         Order {
             id: order_id,
-            owner_id,
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
@@ -259,7 +276,6 @@ impl Order {
     }
 
     pub fn enter_short(
-        owner_id: OwnerId,
         symbol_name: SymbolName,
         brokerage: Brokerage,
         quantity: Volume,
@@ -271,7 +287,6 @@ impl Order {
     ) -> Self {
         Order {
             id: order_id,
-            owner_id,
             symbol_name,
             brokerage,
             quantity_ordered: quantity,
@@ -343,7 +358,7 @@ pub enum OrderChangeType {
     Tag(String),
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Display)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Display, Eq, PartialOrd, Ord,)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Represents the various states and updates an order can undergo in the trading system.

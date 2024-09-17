@@ -10,3 +10,5 @@ pub mod standardized_types;
 pub mod strategy_registry;
 pub mod timed_events_handler;
 pub mod traits;
+pub mod market_handler;
+pub mod interaction_handler;

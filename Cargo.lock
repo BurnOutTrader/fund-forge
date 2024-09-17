@@ -1036,6 +1036,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "toml",
+ "tungstenite",
  "urlencoding",
  "zip",
 ]

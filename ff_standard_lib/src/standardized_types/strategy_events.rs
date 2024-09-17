@@ -4,7 +4,7 @@ use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::orders::orders::OrderUpdateEvent;
 use crate::standardized_types::subscriptions::DataSubscriptionEvent;
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::standardized_types::{OwnerId, TimeString};
+use crate::standardized_types::{TimeString};
 use rkyv::ser::serializers::AllocSerializer;
 use rkyv::ser::Serializer;
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -60,36 +60,32 @@ pub enum StrategyEvent {
     /// Communicates order-related strategies between the UI, strategy, and brokerage connections.
     ///
     /// # Parameters
-    /// - `OwnerId`: The unique identifier of the owner (strategy or UI).
     /// - `OrderEvent`: Details of the order event.
     /// - `EventForwarderType`: Specifies the type of event forwarder (Strategy or UI).
-    OrderEvents(OwnerId, OrderUpdateEvent),
+    OrderEvents(OrderUpdateEvent),
 
     /// Allows for the subscription and un-subscription of data feeds remotely.
     ///
     /// # Parameters
-    /// - `OwnerId`: The unique identifier of the owner (strategy or UI).
     /// - `DataSubscriptionEvent`: The subscription event details.
     /// - `EventForwarderType`: Specifies the type of event forwarder (Strategy or UI).
     /// - `i64`: A timestamp indicating when the event was created.
-    DataSubscriptionEvents(OwnerId, Vec<DataSubscriptionEvent>, i64),
+    DataSubscriptionEvents(Vec<DataSubscriptionEvent>, i64),
 
     /// Enables remote control of strategy operations.
     ///
     /// # Parameters
-    /// - `OwnerId`: The unique identifier of the owner (strategy or UI).
     /// - `StrategyControls`: The control command to be executed.
     /// - `EventForwarderType`: Specifies the type of event forwarder (Strategy or UI).
     /// - `i64`: A timestamp indicating when the event was created.
-    StrategyControls(OwnerId, StrategyControls, i64),
+    StrategyControls(StrategyControls, i64),
 
     /// Facilitates interaction with drawing tools between the UI and strategies.
     ///
     /// # Parameters
-    /// - `OwnerId`: The unique identifier of the owner (strategy or UI).
     /// - `DrawingToolEvent`: The drawing tool event details.
     /// - `i64`: A timestamp indicating when the event was created.
-    DrawingToolEvents(OwnerId, DrawingToolEvent, i64),
+    DrawingToolEvents(DrawingToolEvent, i64),
 
     /// Contains strategy BaseDataEnum's as TimeSlice.
     ///
@@ -97,34 +93,20 @@ pub enum StrategyEvent {
     /// - `OwnerId`: The unique identifier of the owner (strategy).
     /// - "TimeString": The time of the slice event
     /// - `TimeSlice`: The time slice data.
-    TimeSlice(OwnerId, TimeString, TimeSlice),
+    TimeSlice(TimeString, TimeSlice),
 
     //IndicatorSlice(OwnerId, IndicatorResults),
-    ShutdownEvent(OwnerId, String),
+    ShutdownEvent(String),
 
-    WarmUpComplete(OwnerId),
+    WarmUpComplete,
 
-    IndicatorEvent(OwnerId, IndicatorEvents),
+    IndicatorEvent(IndicatorEvents),
 
 
-    PositionEvents(OwnerId, )
+    PositionEvents
 }
 
 impl StrategyEvent {
-    pub fn get_owner_id(&self) -> OwnerId {
-        match self {
-            StrategyEvent::OrderEvents(owner_id, _) => owner_id.clone(),
-            StrategyEvent::DataSubscriptionEvents(owner_id, _, _) => owner_id.clone(),
-            StrategyEvent::StrategyControls(owner_id, _, _) => owner_id.clone(),
-            StrategyEvent::DrawingToolEvents(owner_id, _, _) => owner_id.clone(),
-            StrategyEvent::TimeSlice(owner_id,_, _) => owner_id.clone(),
-            StrategyEvent::ShutdownEvent(owner_id, _) => owner_id.clone(),
-            StrategyEvent::WarmUpComplete(owner_id) => owner_id.clone(),
-            StrategyEvent::IndicatorEvent(owner_id, _) => owner_id.clone(),
-            StrategyEvent::PositionEvents(owner_id) => owner_id.clone()
-        }
-    }
-
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut vec = rkyv::to_bytes::<_, 256>(self).unwrap();
         vec.extend_from_slice(b"\n\n");

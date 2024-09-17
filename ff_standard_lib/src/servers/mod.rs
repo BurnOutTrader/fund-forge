@@ -4,5 +4,4 @@ pub mod communications_sync;
 pub mod init_clients;
 pub mod internal_broadcaster;
 pub mod registry_request_handlers;
-pub mod request_handlers;
 pub mod settings;

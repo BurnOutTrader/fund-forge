@@ -38,7 +38,7 @@ impl StrategyStartState {
     ) -> StrategyStartState {
         let buffer_resolution = match buffer_resolution {
             Some(backtest_resolution) => backtest_resolution,
-            None => Duration::seconds(1),
+            None => Duration::milliseconds(250),
         };
         let start_date = convert_to_utc(start_date, time_zone);
         println!("start_date: {:?}", start_date);

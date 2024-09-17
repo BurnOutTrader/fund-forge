@@ -1,6 +1,5 @@
-use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::standardized_types::data_server_messaging::{AddressString, FundForgeError};
 use crate::standardized_types::strategy_events::EventTimeSlice;
-use crate::standardized_types::OwnerId;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 
@@ -8,7 +7,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum StrategyResponse {
-    ShutDownAcknowledged(OwnerId),
+    ShutDownAcknowledged(AddressString),
 }
 
 impl Bytes<Self> for StrategyResponse {

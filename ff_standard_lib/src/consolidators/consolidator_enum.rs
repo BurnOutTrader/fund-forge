@@ -1,4 +1,3 @@
-use crate::apis::vendor::client_requests::ClientSideDataVendor;
 use crate::consolidators::candlesticks::CandleStickConsolidator;
 use crate::consolidators::count::CountConsolidator;
 use crate::consolidators::heikinashi::HeikinAshiConsolidator;

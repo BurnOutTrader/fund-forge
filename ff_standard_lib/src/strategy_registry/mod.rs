@@ -1,5 +1,4 @@
-use crate::standardized_types::data_server_messaging::FundForgeError;
-use crate::standardized_types::OwnerId;
+use crate::standardized_types::data_server_messaging::{AddressString, FundForgeError};
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::standardized_types::enums::StrategyMode;
@@ -15,7 +14,7 @@ pub mod strategy_commands;
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum RegistrationRequest {
-    Strategy(OwnerId, StrategyMode, Vec<DataSubscription>),
+    Strategy(AddressString, StrategyMode, Vec<DataSubscription>),
     Gui,
 }
 
