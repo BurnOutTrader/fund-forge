@@ -40,6 +40,7 @@ use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::market_handler::market_handlers::{MarketHandler};
 use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static};
+use ff_standard_lib::standardized_types::data_server_messaging::DataServerRequest;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -108,7 +109,7 @@ impl FundForgeStrategy {
         buffering_resolution: Option<Duration>,
         gui_enabled: bool
     ) -> FundForgeStrategy {
-        init_connections(gui_enabled, buffering_resolution).await;
+        init_connections(gui_enabled, buffering_resolution, strategy_mode.clone()).await;
 
         let start_state = StrategyStartState::new(
             strategy_mode.clone(),

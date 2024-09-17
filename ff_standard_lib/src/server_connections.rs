@@ -322,7 +322,7 @@ async fn request_handler(receiver: mpsc::Receiver<StrategyRequest>, buffer_durat
     }
 }
 
-async fn send(connection_type: ConnectionType, msg: Vec<u8>) {
+pub async fn send(connection_type: ConnectionType, msg: Vec<u8>) {
     let sender = ASYNC_OUTGOING.get(&connection_type).unwrap_or_else(|| ASYNC_OUTGOING.get(&ConnectionType::Default).unwrap()).value().clone();
     match sender.send(&msg).await {
         Ok(_) => {}
@@ -374,7 +374,7 @@ pub async fn initialize_static(
     }
 }
 
-pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duration>,) {
+pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duration>, mode: StrategyMode) {
     //initialize_strategy_registry(platform_mode.clone()).await;
     let settings_map = initialise_settings().unwrap();
     println!("Connections: {:?}", settings_map);
@@ -394,6 +394,8 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duratio
         let async_sender = ExternalSender::new(write_half);
         ASYNC_OUTGOING.insert(connection_type.clone(), Arc::new(async_sender));
         ASYNC_INCOMING.insert(connection_type.clone(), Arc::new(Mutex::new(read_half)));
+        let register_message = DataServerRequest::Register(mode.clone());
+        send(connection_type.clone(), register_message.to_bytes()).await;
     }
     let (tx, rx) = mpsc::channel(1000);
     request_handler(rx, buffer_duration, settings_map).await;
