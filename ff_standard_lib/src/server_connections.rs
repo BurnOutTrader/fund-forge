@@ -107,19 +107,16 @@ pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::
 static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
 static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
 
-pub async fn update_time_slice(time_slice: TimeSlice, backtest: bool) -> TimeSlice {
-    //MARKET_HANDLER.get().unwrap().update_time_slice(time_slice.clone(), backtest).await;
-    let data = SUBSCRIPTION_HANDLER.get().unwrap().update_time_slice(time_slice).await;
-    data
+pub async fn update_time_slice(time_slice: TimeSlice, time: DateTime<Utc>) -> TimeSlice {
+    //MARKET_HANDLER.get().unwrap().update_time_slice(time, time_slice.clone()).await; todo //Market handler is shit, doest work. freezes platform.
+                                                                                        //todo I am going to get rithmic working then make new one based on rithmic accounts
+    SUBSCRIPTION_HANDLER.get().unwrap().update_time_slice(time_slice).await
 }
 pub async fn update_indicator_handler(time_slice: TimeSlice) -> Option<Vec<StrategyEvent>> {
     INDICATOR_HANDLER.get().unwrap().update_time_slice(time_slice).await
 }
 pub async fn update_time(time: DateTime<Utc>) -> TimeSlice {
-   // MARKET_HANDLER.get().unwrap().update_time(time.clone()).await; //todo, need to put market handler back how it was or make it static..can be static since it uses receiver for roder
-    let data =SUBSCRIPTION_HANDLER.get().unwrap().update_consolidators_time(time).await;
-    //println!("{:?}", data);
-    data
+    SUBSCRIPTION_HANDLER.get().unwrap().update_consolidators_time(time).await
 }
 
 static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<StrategyRequest>>>> = OnceCell::new();

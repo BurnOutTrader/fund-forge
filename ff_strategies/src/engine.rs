@@ -187,7 +187,7 @@ impl BackTestEngine {
                     let mut strategy_time_slice: TimeSlice = TimeSlice::new();
 
                     if no_primary_data == false {
-                        let consolidated_data = update_time_slice(time_slice.clone(), true).await;
+                        let consolidated_data = update_time_slice(time_slice.clone(), time.clone()).await;
                         if !consolidated_data.is_empty()
                         {
                             let mut indicator_slice = TimeSlice::new();

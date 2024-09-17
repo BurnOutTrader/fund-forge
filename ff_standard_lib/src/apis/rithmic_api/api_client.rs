@@ -19,7 +19,7 @@ use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::Volume;
 
 lazy_static! {
-    pub static ref RITHMIC_CLIENTS: DashMap<Brokerage , Arc<RithmicClient>> = DashMap::new();
+    pub static ref RITHMIC_CLIENTS: DashMap<Brokerage , Arc<RithmicClient>> = DashMap::with_capacity(3);
 }
 
 pub fn get_rithmic_client(data_vendor: &DataVendor) -> Option<Arc<RithmicClient>> {

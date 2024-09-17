@@ -2,20 +2,19 @@ use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
 use crate::standardized_types::accounts::ledgers::{AccountId, Ledger};
 use crate::standardized_types::base_data::order_book::{OrderBook, OrderBookUpdate};
-use crate::standardized_types::enums::{OrderSide, StrategyMode};
-use crate::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderUpdateEvent};
+use crate::standardized_types::enums::{OrderSide};
+use crate::standardized_types::orders::orders::{Order, OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::{Price};
 use std::sync::Arc;
 use dashmap::DashMap;
 use futures::future::join_all;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::mpsc::{Receiver};
+use tokio::sync::{RwLock};
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::market_handler::historical::order_matching;
 use crate::server_connections::send_strategy_event_slice;
-use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::time_slices::TimeSlice;
 
@@ -25,8 +24,6 @@ pub struct MarketHandler {
     ledgers: Arc<DashMap<Brokerage, Arc<DashMap<AccountId, Ledger>>>>,
     last_time: Arc<RwLock<DateTime<Utc>>>,
     order_cache: Arc<RwLock<Vec<Order>>>,
-    /// Links the local order ID to a broker order ID
-    id_map: Arc<DashMap<OrderId, String>>,
 }
 
 impl MarketHandler {
@@ -40,7 +37,6 @@ impl MarketHandler {
             ledgers: Arc::new(DashMap::new()),
             last_time: Arc::new(RwLock::new(start_time)),
             order_cache: Arc::new(RwLock::new(Vec::new())),
-            id_map: Arc::new(DashMap::new()),
         };
 
         if let Some(order_receiver) = order_receiver {
@@ -79,7 +75,10 @@ impl MarketHandler {
         }
     }
 
-    pub async fn update_time_slice(&self, time_slice: TimeSlice, backtest: bool) {
+    pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: TimeSlice) {
+        {
+            *self.last_time.write().await = time;
+        }
         let last_price = self.last_price.clone();
         let order_books = self.order_books.clone();
         let mut updates = vec![];
@@ -139,16 +138,12 @@ impl MarketHandler {
         join_all(updates).await;
     }
 
-    pub async fn update_time(&self, time: DateTime<Utc>) {
-        *self.last_time.write().await = time;
-    }
-
     pub async fn simulated_order_matching(
         &self,
         mut order_receiver: Receiver<OrderRequest>,
     ) {
         let mut event_buffer = Arc::new(RwLock::new(EventTimeSlice::new()));
-        let last_time = self.last_time.read().await.clone();
+        let last_time = self.last_time.clone();
         let ledgers = self.ledgers.clone();
         let last_price = self.last_price.clone();
         let order_cache = self.order_cache.clone();
@@ -156,6 +151,7 @@ impl MarketHandler {
         let mut order_receiver = order_receiver;
         tokio::task::spawn(async move {
             while let Some(order_request) = order_receiver.recv().await {
+                let last_time = last_time.read().await;
                 match order_request {
                     OrderRequest::Create { brokerage, order } => {
                         order_cache.write().await.push(order);

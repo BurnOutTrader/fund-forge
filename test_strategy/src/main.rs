@@ -39,7 +39,7 @@ async fn main() {
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 08, 25)
+        NaiveDate::from_ymd_opt(2024, 07, 30)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
