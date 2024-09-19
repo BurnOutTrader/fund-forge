@@ -74,7 +74,7 @@ impl IndicatorHandler {
 
         let name = indicator.name().clone();
 
-        match self.is_warm_up_complete.load(Ordering::SeqCst) {
+        let indicator = match self.is_warm_up_complete.load(Ordering::SeqCst) {
             true => warmup(time, self.strategy_mode.clone(), indicator).await,
             false => indicator,
         };
@@ -85,7 +85,7 @@ impl IndicatorHandler {
                 .write()
                 .await
                 .push(StrategyEvent::IndicatorEvent(
-                IndicatorEvents::IndicatorAdded(name.clone())))
+                IndicatorEvents::IndicatorAdded(name.clone())));
         } else {
             self
                 .event_buffer
@@ -93,6 +93,9 @@ impl IndicatorHandler {
                 .await
                 .push(StrategyEvent::IndicatorEvent(
                 IndicatorEvents::Replaced(name.clone())));
+        }
+        if let Some(map) = self.indicators.get(&subscription) {
+            map.insert(indicator.name(), indicator);
         }
         self.subscription_map.insert(name.clone(), subscription.clone());
     }
@@ -128,12 +131,10 @@ impl IndicatorHandler {
         let indicators = self.indicators.clone();
 
         for data in time_slice {
-            let subscription = data.subscription(); // Assume subscription() is a method on BaseDataEnum
-
+            let subscription = data.subscription();
             if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
-                // Use the `iter_mut()` method to iterate over mutable references to key-value pairs in the DashMap
                 for mut indicators_dash_map in indicators_by_sub.iter_mut() {
-                    let data = indicators_dash_map.value_mut().update_base_data(data); // Assume update_base_data() is defined
+                    let data = indicators_dash_map.value_mut().update_base_data(data);
                     if let Some(indicator_data) = data {
                         results.insert(indicators_dash_map.key().clone(), indicator_data);
                     }
@@ -141,14 +142,19 @@ impl IndicatorHandler {
             }
         }
 
-        let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
-        let mut events = self.event_buffer.write().await;
         let mut event_buffer: Vec<StrategyEvent>= vec![];
-        if !events.is_empty() {
-            event_buffer.extend(events.clone());
-            events.clear();
+
+        let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
+        if !results_vec.is_empty() {
+            event_buffer.push(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec)));
         }
-        event_buffer.push(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec)));
+
+        let buffered = self.event_buffer.read().await.clone();
+        if !buffered.is_empty() {
+            event_buffer.extend(buffered);
+            self.event_buffer.write().await.clear();
+        }
+
         match event_buffer.is_empty() {
             true => None,
             false => Some(event_buffer)
