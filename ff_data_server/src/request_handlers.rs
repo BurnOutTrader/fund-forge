@@ -70,6 +70,7 @@ pub async fn data_server_manage_async_requests(
     stream: TlsStream<TcpStream>
 ) {
     let stream_name = get_ip_addresses(&stream).await.to_string();
+    println!("stream name: {}", stream_name);
     let (read_half, write_half) = io::split(stream);
     let writer = Arc::new(Mutex::new(write_half));
     tokio::spawn(async move {
