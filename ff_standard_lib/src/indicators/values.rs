@@ -15,7 +15,7 @@ pub type PlotName = String;
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct IndicatorPlot {
-    pub plot_name: PlotName,
+    pub name: PlotName,
     pub value: Price,
     pub color: Option<Color>,
 }
@@ -23,7 +23,7 @@ pub struct IndicatorPlot {
 impl IndicatorPlot {
     pub fn new(plot_name: PlotName, value: Price, color: Option<Color>) -> Self {
         Self {
-            plot_name,
+            name: plot_name,
             value,
             color,
         }
