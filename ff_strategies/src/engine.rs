@@ -1,6 +1,6 @@
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
-use ff_standard_lib::server_connections::{subscribe_primary_subscription_updates, set_warmup_complete, send_strategy_event_slice, update_time_slice, update_time, update_indicator_handler, get_strategy_subscriptions, get_primary_subscriptions, SUBSCRIPTION_HANDLER};
+use ff_standard_lib::server_connections::{subscribe_primary_subscription_updates, set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER};
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
@@ -130,13 +130,17 @@ impl BackTestEngine {
         end_time: DateTime<Utc>,
         warm_up_completed: bool,
     ) {
+        let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
+        let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
-            *self.last_time.write().await = start.clone();
+            {
+                *self.last_time.write().await = start.clone();
+            }
             let mut last_time = start.clone();
-            let mut primary_subscriptions = get_primary_subscriptions().await;
+            let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
             'month_loop: loop {
-                let strategy_subscriptions = get_strategy_subscriptions().await;
+                let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
                 //println!("Strategy Subscriptions: {:?}", strategy_subscriptions);
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
@@ -145,10 +149,10 @@ impl BackTestEngine {
                         continue;
                     }
                 };
-                //println!("Month slice length: {}", month_time_slices.len());
+                println!("Month slice length: {}", month_time_slices.len());
 
                 let mut end_month = true;
-                'time_instant_loop: loop {
+                'time_instance_loop: loop {
                     let time = last_time + self.start_state.buffer_resolution;
 
                     if time > end_time {
@@ -167,86 +171,56 @@ impl BackTestEngine {
                             if primary_subscriptions != new_primary_subscriptions {
                                 end_month = false;
                                 primary_subscriptions = new_primary_subscriptions;
-                                break 'time_instant_loop;
+                                break 'time_instance_loop;
                             }
                         }
                         Err(_) => {}
                     }
 
-                    // Collect data from the range
+                    // Collect data from the primary feeds simulating a buffering range
                     let mut time_slice: TimeSlice = month_time_slices
                         .range(last_time..=time)
                         .flat_map(|(_, value)| value.iter().cloned())
                         .collect();
 
-                    //println!("{:?}", time_slice);
-
                     let mut strategy_event_slice: EventTimeSlice = EventTimeSlice::new();
-                    let no_primary_data = time_slice.is_empty();
-
                     let mut strategy_time_slice: TimeSlice = TimeSlice::new();
-
-                    if no_primary_data == false {
-                        let consolidated_data = update_time_slice(time_slice.clone(), time.clone()).await;
-                        if !consolidated_data.is_empty()
-                        {
-                            let mut indicator_slice = TimeSlice::new();
-                            indicator_slice.extend(consolidated_data.clone());
-                            indicator_slice.extend(time_slice.clone());
-                            if let Some(events) = update_indicator_handler(indicator_slice).await {
-                                strategy_event_slice.push(StrategyEvent::TimeSlice(
-                                    time.to_string(),
-                                    consolidated_data.clone(),
-                                ));
-                                strategy_event_slice.extend(events);
-                            }
+                        // update our consolidators and create the strategies time slice with any new data or just create empty slice.
+                    if !time_slice.is_empty() {
+                        // Add only primary data which the strategy has subscribed to into the strategies time slice
+                        if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
                             strategy_time_slice.extend(consolidated_data);
+                        }
+
+                        for base_data in time_slice {
+                            if strategy_subscriptions.contains(&base_data.subscription()) {
+                                strategy_time_slice.push(base_data);
+                            }
                         }
                     }
 
-                    let consolidated_data = update_time(time.clone()).await;
-                    if !consolidated_data.is_empty()
-                    {
-                        if let Some(events) = update_indicator_handler(consolidated_data.clone()).await {
-                            strategy_event_slice.push(StrategyEvent::TimeSlice(
-                                time.to_string(),
-                                consolidated_data.clone(),
-                            ));
-                            strategy_event_slice.extend(events);
-                        }
+                    // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
+                    if let Some(consolidated_data) = subscription_handler.update_consolidators_time(time.clone()).await {
                         strategy_time_slice.extend(consolidated_data);
                     }
 
-                    if no_primary_data {
-                        if !strategy_event_slice.is_empty() {
-                            if !self.send_and_continue(strategy_event_slice, warm_up_completed).await {
-                                *self.last_time.write().await = last_time.clone();
-                                break 'main_loop;
-                            }
-                        }
-                        last_time = time.clone();
-                        continue 'time_instant_loop;
-                    }
-
-
-                    for base_data in time_slice {
-                        if strategy_subscriptions.contains(&base_data.subscription()) {
-                            strategy_time_slice.push(base_data);
-                        }
-                    }
-
                     if !strategy_time_slice.is_empty() {
+                        // Update indicators and get any generated events.
+                        if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
+                            strategy_event_slice.extend(events);
+                        }
+
+                        // add the strategy time slice to the new events.
                         strategy_event_slice.push(StrategyEvent::TimeSlice(
                             time.to_string(),
                             strategy_time_slice,
                         ));
                     }
 
+                    // send the buffered strategy events to the strategy
                     if !strategy_event_slice.is_empty() {
-                        if !self.send_and_continue(strategy_event_slice, warm_up_completed).await {
-                            *self.last_time.write().await = last_time.clone();
-                            break 'main_loop;
-                        }
+                        send_strategy_event_slice(strategy_event_slice).await;
+                        self.notify.notified().await;
                     }
                     last_time = time.clone();
                 }
@@ -256,28 +230,6 @@ impl BackTestEngine {
             }
             *self.last_time.write().await = last_time.clone();
         }
-    }
-
-    async fn send_and_continue(
-        &self,
-        strategy_event_slice: EventTimeSlice,
-        warm_up_completed: bool,
-    ) -> bool {
-        send_strategy_event_slice(strategy_event_slice).await;
-        // We check if the user has requested a delay between time slices for market replay style backtesting.
-        // need to subscribe to updates for these handlers
-  /*      if warm_up_completed {
-            if self.interaction_handler.process_controls().await == true {
-                return false;
-            }
-
-            match self.interaction_handler.replay_delay_ms().await {
-                Some(delay) => tokio::time::sleep(StdDuration::from_millis(delay)).await,
-                None => {}
-            }
-        }*/
-        self.notify.notified().await;
-        true
     }
 }
 

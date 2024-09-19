@@ -141,18 +141,18 @@ impl IndicatorHandler {
             }
         }
 
-        let mut results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
+        let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
         let mut events = self.event_buffer.write().await;
         let mut event_buffer: Vec<StrategyEvent>= vec![];
         if !events.is_empty() {
             event_buffer.extend(events.clone());
             events.clear();
         }
-        if results_vec.is_empty() && events.is_empty() {
-            return None
-        }
         event_buffer.push(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec)));
-        Some(event_buffer)
+        match event_buffer.is_empty() {
+            true => None,
+            false => Some(event_buffer)
+        }
     }
 
     pub async fn history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {

@@ -196,7 +196,7 @@ impl SubscriptionHandler {
     }
 
     /// Updates any consolidators with primary data
-    pub async fn update_time_slice(&self, time_slice: TimeSlice) -> TimeSlice {
+    pub async fn update_time_slice(&self, time_slice: TimeSlice) -> Option<TimeSlice> {
         let symbol_subscriptions = self.symbol_subscriptions.clone();
         let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
         let mut closed_bars = Vec::new();
@@ -237,10 +237,13 @@ impl SubscriptionHandler {
             closed_bars.push(data);
         }
 
-        closed_bars
+        match closed_bars.is_empty() {
+            true => None,
+            false => Some(closed_bars)
+        }
     }
 
-    pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> TimeSlice {
+    pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> Option<TimeSlice> {
         let symbol_subscriptions = self.symbol_subscriptions.clone();
         let futures: Vec<_> = symbol_subscriptions.iter().map(|symbol_handler| {
             let time = time.clone();
@@ -261,7 +264,10 @@ impl SubscriptionHandler {
             }
         }
 
-        time_slice
+        match time_slice.is_empty() {
+            true => None,
+            false => Some(time_slice)
+        }
     }
 
     pub async fn history(

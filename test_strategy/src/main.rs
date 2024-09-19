@@ -248,10 +248,8 @@ pub async fn on_data_received(
 
                 }
             }
-            notify.notify_one();
-            //simulate work
-            //tokio::time::sleep(tokio::time::Duration::from_nanos(50)).await;
         }
+        notify.notify_one();
     }
     event_receiver.close();
     println!("Strategy: Event Loop Ended");
