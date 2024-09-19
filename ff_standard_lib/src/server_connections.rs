@@ -210,16 +210,18 @@ async fn request_handler(receiver: mpsc::Receiver<StrategyRequest>, buffer_durat
             match outgoing_message {
                 StrategyRequest::CallBack(connection_type, mut request, oneshot) => {
                     callback_id_counter += 1;
-                    let id = callback_id_counter.clone();
                     let callbacks = callbacks.clone();
-                    request.set_callback_id(id.clone());
+                    let id = callback_id_counter.clone();
                     callbacks.write().await.insert(id, oneshot);
-                    let connection_type = match connection_map.contains_key(&connection_type) {
-                        true => connection_type,
-                        false => ConnectionType::Default
-                    };
-                    //println!("{}: request_received: {:?}", connection_type, request);
-                    send(connection_type, request.to_bytes()).await;
+                    request.set_callback_id(id.clone());
+                    tokio::task::spawn(async move {
+                        let connection_type = match connection_map.contains_key(&connection_type) {
+                            true => connection_type,
+                            false => ConnectionType::Default
+                        };
+                        //println!("{}: request_received: {:?}", connection_type, request);
+                        send(connection_type, request.to_bytes()).await;
+                    });
                 }
                 StrategyRequest::OneWay(connection_type, mut request) => {
                     tokio::task::spawn(async move {
@@ -276,24 +278,26 @@ async fn request_handler(receiver: mpsc::Receiver<StrategyRequest>, buffer_durat
                     }
                 }
                 let callbacks = callbacks.clone();
-                let response = DataServerResponse::from_bytes(&message_body).unwrap();
-                //println!("{:?}", response);
-                match response.get_callback_id() {
-                    None => {
-                        let stream_response = response.stream_response().unwrap();
-                        match stream_response {
-                            StreamResponse::BaseData(base_data) => {},
-                            StreamResponse::AccountState(_, _, _) => {},
-                            StreamResponse::OrderUpdates(update) => {},
-                            StreamResponse::PositionUpdates(_) => {},
+                tokio::task::spawn(async move {
+                    let response = DataServerResponse::from_bytes(&message_body).unwrap();
+                    //println!("{:?}", response);
+                    match response.get_callback_id() {
+                        None => {
+                            let stream_response = response.stream_response().unwrap();
+                            match stream_response {
+                                StreamResponse::BaseData(base_data) => {},
+                                StreamResponse::AccountState(_, _, _) => {},
+                                StreamResponse::OrderUpdates(update) => {},
+                                StreamResponse::PositionUpdates(_) => {},
+                            }
+                        }
+                        Some(id) => {
+                            if let Some(callback) = callbacks.write().await.remove(&id) {
+                                let _ = callback.send(response);
+                            }
                         }
                     }
-                    Some(id) => {
-                        if let Some(callback) = callbacks.write().await.remove(&id) {
-                            let _ = callback.send(response);
-                        }
-                    }
-                }
+                });
             }
             //println!("response handler end");
         });
