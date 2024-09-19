@@ -11,6 +11,7 @@ use std::fmt::{Display, Formatter};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal_macros::dec;
+use crate::standardized_types::base_data::traits::BaseData;
 
 pub struct AverageTrueRange {
     name: IndicatorName,
@@ -125,11 +126,10 @@ impl Indicators for AverageTrueRange {
             self.name.clone(),
             self.subscription.clone(),
             plots,
-            Default::default(),
+            base_data.time_created_utc()
         );
 
         self.history.add(values.clone());
-
         Some(values)
     }
 
