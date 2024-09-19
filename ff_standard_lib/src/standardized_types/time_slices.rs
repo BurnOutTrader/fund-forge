@@ -4,6 +4,7 @@ use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::Symbol;
 
 /// A `UnstructuredSlice` is an unordered slice of data that is not yet consolidated into a `TimeSlice`.
+#[derive(Clone)]
 pub struct UnstructuredSlice {
     pub data: Vec<u8>,
     pub price_data_type: BaseDataType,
