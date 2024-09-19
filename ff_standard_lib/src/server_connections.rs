@@ -104,23 +104,32 @@ lazy_static! {
 }
 
 pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
-static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
-static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
-
-pub async fn update_time_slice(time_slice: TimeSlice, time: DateTime<Utc>) -> TimeSlice {
-    //MARKET_HANDLER.get().unwrap().update_time_slice(time, time_slice.clone()).await; todo //Market handler is shit, doest work. freezes platform.
-                                                                                        //todo I am going to get rithmic working then make new one based on rithmic accounts
+pub async fn subscribe_primary_subscription_updates(name: String, sender: mpsc::Sender<Vec<DataSubscription>>) {
+    SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
+}
+/// only returns subscriptions that the strategy subscribed
+pub async fn get_strategy_subscriptions() -> Vec<DataSubscription> {
+    SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await
+}
+pub async fn get_primary_subscriptions() -> Vec<DataSubscription> {
+    SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await
+}
+pub async fn update_time_slice(time_slice: TimeSlice) -> TimeSlice {
     SUBSCRIPTION_HANDLER.get().unwrap().update_time_slice(time_slice).await
 }
-pub async fn update_indicator_handler(time_slice: TimeSlice) -> Option<Vec<StrategyEvent>> {
+
+
+
+static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
+
+pub async fn update_indicator_handler(time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
     INDICATOR_HANDLER.get().unwrap().update_time_slice(time_slice).await
 }
 pub async fn update_time(time: DateTime<Utc>) -> TimeSlice {
     SUBSCRIPTION_HANDLER.get().unwrap().update_consolidators_time(time).await
 }
 
-static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<StrategyRequest>>>> = OnceCell::new();
-static STRATEGY_SENDER: OnceCell<Sender<EventTimeSlice>> = OnceCell::new();
+static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
 
 
 
@@ -135,37 +144,29 @@ pub async fn set_warmup_complete() {
     INDICATOR_HANDLER.get_or_init(|| {
         panic!("INDICATOR_HANDLER Not found")
     }).set_warmup_complete().await;
-    INTERACTION_HANDLER.get_or_init(|| {
+/*    INTERACTION_HANDLER.get_or_init(|| {
         panic!("INTERACTION_HANDLER Not found")
     }).set_warmup_complete().await;
     TIMED_EVENT_HANDLER.get_or_init(|| {
         panic!("TIMED_EVENT_HANDLER Not found")
-    }).set_warmup_complete().await;
+    }).set_warmup_complete().await;*/
 }
 
-pub(crate) fn get_sender() -> Arc<Mutex<mpsc::Sender<StrategyRequest>>> {
-    DATA_SERVER_SENDER.get().unwrap().clone() // Return a clone of the Arc to avoid moving the value out of the OnceCell
-}
-pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
-    STRATEGY_SENDER.get().unwrap().send(slice).await.unwrap();
-}
-pub async fn subscribe_primary_subscription_updates(name: String, sender: mpsc::Sender<Vec<DataSubscription>>) {
-    SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
-}
 
-/// only returns subscriptions that the strategy subscribed
-pub async fn get_strategy_subscriptions() -> Vec<DataSubscription> {
-    SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await
-}
-
-pub async fn get_primary_subscriptions() -> Vec<DataSubscription> {
-    SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await
-}
 
 pub(crate) enum StrategyRequest {
     CallBack(ConnectionType, DataServerRequest, oneshot::Sender<DataServerResponse>),
     OneWay(ConnectionType, DataServerRequest),
     Orders(ConnectionType, OrderRequest)
+}
+static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<StrategyRequest>>>> = OnceCell::new();
+pub(crate) fn get_sender() -> Arc<Mutex<mpsc::Sender<StrategyRequest>>> {
+    DATA_SERVER_SENDER.get().unwrap().clone() // Return a clone of the Arc to avoid moving the value out of the OnceCell
+}
+
+static STRATEGY_SENDER: OnceCell<Sender<EventTimeSlice>> = OnceCell::new();
+pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
+    STRATEGY_SENDER.get().unwrap().send(slice).await.unwrap();
 }
 
 //Notes
