@@ -1,4 +1,5 @@
 use std::future::Future;
+use std::net::SocketAddr;
 use ff_standard_lib::helpers::converters::load_as_bytes;
 use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -8,6 +9,9 @@ use ff_standard_lib::traits::bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use std::sync::Arc;
+use ahash::AHashMap;
+use dashmap::DashMap;
+use structopt::lazy_static::lazy_static;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
@@ -46,11 +50,26 @@ pub async fn base_data_response(
         Some(payload) => DataServerResponse::HistoricalBaseData{callback_id, payload}
     }
 }
+/*todo
+    1. The request comes in from strategy
+    2. we send request to callback fn
+    3. callback calls broker/vendor fn
+    4. broker/vendor api sends a outgoing request message and books a oneshot with connection_name and callback_id into its callbacks map, while callback fn awaits
+    5. incoming broker/vendor message is parsed and converted to fund forge response
+    6. using the connection_name and callback_id the broker/vendor read half finds the oneshot for the callback fn
+    6. broker vendor fn receivers back a message on its oneshot
+ */
 
+
+async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
+    let tcp_stream = stream.get_ref();
+    tcp_stream.0.peer_addr().unwrap()
+}
 
 pub async fn data_server_manage_async_requests(
     stream: TlsStream<TcpStream>
 ) {
+    let stream_name = get_ip_addresses(&stream).await.to_string();
     let (read_half, write_half) = io::split(stream);
     let writer = Arc::new(Mutex::new(write_half));
     tokio::spawn(async move {
@@ -58,6 +77,7 @@ pub async fn data_server_manage_async_requests(
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
         let mut strategy_mode = StrategyMode::Backtest;
+
         while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
             // Parse the length from the header
             let msg_length = u64::from_be_bytes(length_bytes) as usize;
@@ -81,6 +101,7 @@ pub async fn data_server_manage_async_requests(
                 }
             };
             let writer = writer.clone();
+            let stream_name = stream_name.clone();
             tokio::spawn(async move {
                 // Handle the request and generate a response
                 match request {
@@ -93,7 +114,7 @@ pub async fn data_server_manage_async_requests(
                         callback_id,
                         symbol_name
                     } => handle_callback(
-                        || data_vendor.decimal_accuracy_response(symbol_name, callback_id),
+                        || data_vendor.decimal_accuracy_response(stream_name.to_string(), symbol_name, callback_id),
                         writer.clone()
                     ).await,
 
@@ -102,7 +123,7 @@ pub async fn data_server_manage_async_requests(
                         brokerage,
                         callback_id
                     } => handle_callback(
-                        || brokerage.symbol_info_response(symbol_name, callback_id),
+                        || brokerage.symbol_info_response(stream_name.to_string(), symbol_name, callback_id),
                         writer.clone()
                     ).await,
 
@@ -120,7 +141,7 @@ pub async fn data_server_manage_async_requests(
                         market_type,
                         callback_id,
                     } => handle_callback(
-                        || data_vendor.symbols_response(market_type, callback_id),
+                        || data_vendor.symbols_response(stream_name.to_string(), market_type, callback_id),
                         writer.clone()
                     ).await,
 
@@ -129,7 +150,7 @@ pub async fn data_server_manage_async_requests(
                         callback_id,
                         market_type,
                     } => handle_callback(
-                        || brokerage.symbols_response(market_type, callback_id),
+                        || brokerage.symbols_response(stream_name.to_string(), market_type, callback_id),
                         writer.clone()
                     ).await,
 
@@ -138,7 +159,7 @@ pub async fn data_server_manage_async_requests(
                         data_vendor,
                         market_type,
                     } => handle_callback(
-                        || data_vendor.resolutions_response(market_type, callback_id),
+                        || data_vendor.resolutions_response(stream_name.to_string(), market_type, callback_id),
                         writer.clone()
                     ).await,
 
@@ -147,7 +168,7 @@ pub async fn data_server_manage_async_requests(
                         brokerage,
                         account_id,
                     } => handle_callback(
-                        || brokerage.account_info_response(account_id, callback_id),
+                        || brokerage.account_info_response(stream_name.to_string(), account_id, callback_id),
                         writer.clone()
                     ).await,
 
@@ -155,7 +176,7 @@ pub async fn data_server_manage_async_requests(
                         callback_id,
                         data_vendor,
                     } => handle_callback(
-                        || data_vendor.markets_response(callback_id),
+                        || data_vendor.markets_response(stream_name.to_string(), callback_id),
                         writer.clone()
                     ).await,
 
@@ -164,7 +185,7 @@ pub async fn data_server_manage_async_requests(
                         data_vendor,
                         symbol_name,
                     } => handle_callback(
-                        || data_vendor.tick_size_response(symbol_name, callback_id),
+                        || data_vendor.tick_size_response(stream_name.to_string(), symbol_name, callback_id),
                         writer.clone()).await,
 
                     DataServerRequest::MarginRequired {
@@ -176,12 +197,12 @@ pub async fn data_server_manage_async_requests(
                         match strategy_mode {
                             StrategyMode::Backtest => {
                                 handle_callback(
-                                    || brokerage.margin_required_historical_response(symbol_name, quantity, callback_id),
+                                    || brokerage.margin_required_historical_response(stream_name.to_string(), symbol_name, quantity, callback_id),
                                     writer.clone()).await
                             },
                             StrategyMode::LivePaperTrading | StrategyMode::Live => {
                                 handle_callback(
-                                    || brokerage.margin_required_live_response(symbol_name, quantity, callback_id),
+                                    || brokerage.margin_required_live_response(stream_name.to_string(), symbol_name, quantity, callback_id),
                                     writer.clone()).await
                             },
                         }
@@ -246,9 +267,18 @@ where
 }
 
 async fn stream_response(request: StreamRequest) {
-
+    match request {
+        StreamRequest::BaseData(_) => {}
+        StreamRequest::AccountUpdates(_, _) => {}
+        StreamRequest::Subscribe(_) => {}
+        StreamRequest::Unsubscribe(_) => {}
+    }
 }
 
 async fn order_response(request: OrderRequest) {
-
+    match request {
+        OrderRequest::Create { .. } => {}
+        OrderRequest::Cancel { .. } => {}
+        OrderRequest::Update { .. } => {}
+    }
 }
