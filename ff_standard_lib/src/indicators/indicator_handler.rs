@@ -123,7 +123,7 @@ impl IndicatorHandler {
         }
     }
 
-    pub async fn update_time_slice(&self, time_slice: TimeSlice) -> Option<Vec<StrategyEvent>>   {
+    pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>>   {
         let mut results: BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
         let indicators = self.indicators.clone();
 
@@ -133,7 +133,7 @@ impl IndicatorHandler {
             if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
                 // Use the `iter_mut()` method to iterate over mutable references to key-value pairs in the DashMap
                 for mut indicators_dash_map in indicators_by_sub.iter_mut() {
-                    let data = indicators_dash_map.value_mut().update_base_data(&data); // Assume update_base_data() is defined
+                    let data = indicators_dash_map.value_mut().update_base_data(data); // Assume update_base_data() is defined
                     if let Some(indicator_data) = data {
                         results.insert(indicators_dash_map.key().clone(), indicator_data);
                     }
@@ -145,13 +145,13 @@ impl IndicatorHandler {
         let mut events = self.event_buffer.write().await;
         let mut event_buffer: Vec<StrategyEvent>= vec![];
         if !events.is_empty() {
-            event_buffer.extend(events.clone())
+            event_buffer.extend(events.clone());
+            events.clear();
         }
         if results_vec.is_empty() && events.is_empty() {
             return None
         }
         event_buffer.push(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec)));
-        events.clear();
         Some(event_buffer)
     }
 
