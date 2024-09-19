@@ -218,10 +218,8 @@ impl BackTestEngine {
                     }
 
                     // send the buffered strategy events to the strategy
-                    if !strategy_event_slice.is_empty() {
-                        send_strategy_event_slice(strategy_event_slice).await;
-                        self.notify.notified().await;
-                    }
+                    send_strategy_event_slice(strategy_event_slice).await;
+                    self.notify.notified().await;
                     last_time = time.clone();
                 }
                 if end_month {
