@@ -128,7 +128,6 @@ impl Ledger {
                     "Quantity",
                     "Average Price",
                     "Exit Price",
-                    "Pnl Ticks by Quantity",
                     "Booked PnL",
                     "Highest Recorded Price",
                     "Lowest Recorded Price",
