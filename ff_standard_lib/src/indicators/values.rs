@@ -14,13 +14,13 @@ pub type PlotName = String;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
-pub struct IndicatorValue {
+pub struct IndicatorPlot {
     pub plot_name: PlotName,
     pub value: Price,
     pub color: Option<Color>,
 }
 
-impl IndicatorValue {
+impl IndicatorPlot {
     pub fn new(plot_name: PlotName, value: Price, color: Option<Color>) -> Self {
         Self {
             plot_name,
@@ -38,7 +38,7 @@ pub struct IndicatorValues {
     name: IndicatorName,
     time: String,
     subscription: DataSubscription,
-    values: BTreeMap<PlotName, IndicatorValue>,
+    values: BTreeMap<PlotName, IndicatorPlot>,
 }
 
 impl Display for IndicatorValues {
@@ -55,7 +55,7 @@ impl IndicatorValues {
     pub fn new(
         name: IndicatorName,
         subscription: DataSubscription,
-        values: BTreeMap<PlotName, IndicatorValue>,
+        values: BTreeMap<PlotName, IndicatorPlot>,
         time: DateTime<Utc>,
     ) -> Self {
         Self {
@@ -81,17 +81,17 @@ impl IndicatorValues {
     }
 
     /// get the value of a plot by name
-    pub fn get_plot(&self, plot_name: &PlotName) -> Option<IndicatorValue> {
+    pub fn get_plot(&self, plot_name: &PlotName) -> Option<IndicatorPlot> {
         self.values.get(plot_name).cloned()
     }
 
     /// get all the values `values: &AHashMap<PlotName, f64>`
-    pub fn values(&self) -> BTreeMap<PlotName, IndicatorValue> {
+    pub fn values(&self) -> BTreeMap<PlotName, IndicatorPlot> {
         self.values.clone()
     }
 
     /// insert a value into the values
-    pub(crate) fn insert(&mut self, plot_name: PlotName, value: IndicatorValue) {
+    pub(crate) fn insert(&mut self, plot_name: PlotName, value: IndicatorPlot) {
         self.values.insert(plot_name, value);
     }
 }

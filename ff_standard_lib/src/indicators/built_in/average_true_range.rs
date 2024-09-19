@@ -1,6 +1,6 @@
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::indicators::indicators_trait::{IndicatorName, Indicators};
-use crate::indicators::values::{IndicatorValue, IndicatorValues};
+use crate::indicators::values::{IndicatorPlot, IndicatorValues};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;
@@ -120,7 +120,7 @@ impl Indicators for AverageTrueRange {
         let name = "atr".to_string();
         plots.insert(
             name,
-            IndicatorValue::new("atr".to_string(), atr, self.plot_color.clone()),
+            IndicatorPlot::new("atr".to_string(), atr, self.plot_color.clone()),
         );
         let values = IndicatorValues::new(
             self.name.clone(),

@@ -82,18 +82,19 @@ pub async fn on_data_received(
 ) {
     println!("Start strategy loop");
     let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
-        AverageTrueRange::new(IndicatorName::from("heikin_atr_20"), DataSubscription::new(
-                SymbolName::from("AUD-CAD"),
-                DataVendor::Test,
-                Resolution::Minutes(3),
-                BaseDataType::QuoteBars,
-                MarketType::Forex,
-            ),
+        AverageTrueRange::new(IndicatorName::from("heikin_atr_20"),
+          DataSubscription::new_custom(
+            SymbolName::from("EUR-USD"),
+            DataVendor::Test,
+            Resolution::Minutes(3),
+            BaseDataType::QuoteBars,
+            MarketType::Forex,
+            CandleType::CandleStick,
+          ),
             100,
             20,
             Some(Color::new(50,50,50))
-        )
-            .await,
+        ).await,
     );
     strategy.indicator_subscribe(heikin_atr_20).await;
 
@@ -125,13 +126,12 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 //do something on the bar close
                                 if quotebar.is_closed == true {
-                                    println!("Strategy Time{} Closed {} Closed Bar Time {}", time, quotebar.symbol.name, base_data.time_created_utc());
+                                    println!("Strategy Time: {}, {} Closed Bar Time: {}", time, quotebar.symbol.name, base_data.time_created_utc());
                                     let last_bar = match quotebar.symbol.name == SymbolName::from("AUD-CAD") {
                                         true => {
                                             history_1.add(quotebar.clone());
                                             match history_1.get(1) {
                                                 None => {
-                                                    println!("Strategy: No history");
                                                     continue;
                                                 },
                                                 Some(bar) => bar
@@ -141,7 +141,6 @@ pub async fn on_data_received(
                                             history_2.add(quotebar.clone());
                                             match history_2.get(1) {
                                                 None => {
-                                                    println!("Strategy: No history");
                                                     continue;
                                                 },
                                                 Some(bar) => bar
@@ -154,7 +153,7 @@ pub async fn on_data_received(
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
 
-                                /*    let account_name = AccountId::from(format!("TestAccount{}", quotebar.symbol.name)); //seperate account by symbol for backtesting purposes
+                                /*    let account_name = AccountId::from(format!("TestAccount{}", quotebar.symbol.name)); //seperate account by symbol for back-testing purposes
                                     if quotebar.bid_close > last_bar.bid_high
                                         && !strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await
                                     {
@@ -231,11 +230,9 @@ pub async fn on_data_received(
                         IndicatorEvents::IndicatorTimeSlice(slice_event) => {
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice_event {
-                                println!(
-                                    "{}: \n {:?}",
-                                    indicator_values.name(),
-                                    indicator_values.values()
-                                );
+                                for (name, value) in indicator_values.values(){
+                                    println!("{}: {:?}", name, value.value);
+                                }
                             }
                         }
                         IndicatorEvents::Replaced(replace_event) => {
