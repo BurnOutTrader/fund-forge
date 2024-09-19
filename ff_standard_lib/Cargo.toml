@@ -45,3 +45,4 @@ rust_decimal_macros ="*"
 prost = "*"
 tungstenite = "0.23.0"
 tokio-tungstenite = { version = "0.23.1", features = ["stream", "native-tls"] }
+rayon = "1.10.0"
