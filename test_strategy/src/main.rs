@@ -105,14 +105,6 @@ pub async fn on_data_received(
 
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        if event_slice.is_empty() {
-            // the event slice can sometimes be empty if no events occurred in the buffer period, we can do some work at evevry buffer interval like this even if no events occurred.
-            // This can be an alternative to using the TimedEvents handler.
-            let time = strategy.time_utc().await;
-            println!("Strategy Time: {} - Empty Buffer, Day: {}", time, time.day() );
-            notify.notify_one();
-            continue;
-        }
         for strategy_event in event_slice {
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
