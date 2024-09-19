@@ -22,7 +22,7 @@ lazy_static! {
 pub struct TestApiClient {}
 #[async_trait]
 impl BrokerApiResponse for TestApiClient {
-    async fn symbols_response(&self, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn symbols_response(&self, stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
         DataServerResponse::Symbols {
             callback_id,
             symbols: vec![
@@ -34,7 +34,7 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
-    async fn account_info_response(&self, account_id: AccountId, callback_id: u64) -> DataServerResponse {
+    async fn account_info_response(&self, stream_name: String, account_id: AccountId, callback_id: u64) -> DataServerResponse {
         let account_info = AccountInfo {
             brokerage: Brokerage::Test,
             cash_value: dec!(100000),
@@ -51,7 +51,7 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
-    async fn symbol_info_response(&self, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn symbol_info_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         let symbol_info = SymbolInfo {
             symbol_name,
             pnl_currency: Currency::USD,
@@ -64,7 +64,7 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
-    async fn margin_required_historical_response(&self, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn margin_required_historical_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         let value = round_to_decimals(quantity  * dec!(100.0), 2);
         DataServerResponse::MarginRequired {
             callback_id,
@@ -73,14 +73,14 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
-    async fn margin_required_live_response(&self, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn margin_required_live_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 }
 
 #[async_trait]
 impl VendorApiResponse for TestApiClient {
-    async fn symbols_response(&self, market_type: MarketType, callback_id: u64) -> DataServerResponse{
+    async fn symbols_response(&self, stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse{
         DataServerResponse::Symbols {
             callback_id,
             symbols: vec![
@@ -92,7 +92,7 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn resolutions_response(&self, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn resolutions_response(&self, stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
         let res = SubscriptionResolutionType {
             base_data_type: BaseDataType::Quotes,
             resolution: Resolution::Instant,
@@ -104,21 +104,21 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn markets_response(&self, callback_id: u64) -> DataServerResponse {
+    async fn markets_response(&self, stream_name: String, callback_id: u64) -> DataServerResponse {
         DataServerResponse::Markets {
             callback_id,
             markets: vec![MarketType::Forex],
         }
     }
 
-    async fn decimal_accuracy_response(&self, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn decimal_accuracy_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         DataServerResponse::DecimalAccuracy {
             callback_id,
             accuracy: 5,
         }
     }
 
-    async fn tick_size_response(&self, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn tick_size_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         DataServerResponse::TickSize {
             callback_id,
             tick_size: dec!(0.00001),
