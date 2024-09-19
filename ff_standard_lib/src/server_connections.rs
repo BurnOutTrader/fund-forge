@@ -107,27 +107,8 @@ pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::
 pub async fn subscribe_primary_subscription_updates(name: String, sender: mpsc::Sender<Vec<DataSubscription>>) {
     SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
-/// only returns subscriptions that the strategy subscribed
-pub async fn get_strategy_subscriptions() -> Vec<DataSubscription> {
-    SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await
-}
-pub async fn get_primary_subscriptions() -> Vec<DataSubscription> {
-    SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await
-}
-pub async fn update_time_slice(time_slice: TimeSlice) -> TimeSlice {
-    SUBSCRIPTION_HANDLER.get().unwrap().update_time_slice(time_slice).await
-}
 
-
-
-static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
-
-pub async fn update_indicator_handler(time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>> {
-    INDICATOR_HANDLER.get().unwrap().update_time_slice(time_slice).await
-}
-pub async fn update_time(time: DateTime<Utc>) -> TimeSlice {
-    SUBSCRIPTION_HANDLER.get().unwrap().update_consolidators_time(time).await
-}
+pub static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
 
 static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
 
@@ -144,14 +125,13 @@ pub async fn set_warmup_complete() {
     INDICATOR_HANDLER.get_or_init(|| {
         panic!("INDICATOR_HANDLER Not found")
     }).set_warmup_complete().await;
-/*    INTERACTION_HANDLER.get_or_init(|| {
+    INTERACTION_HANDLER.get_or_init(|| {
         panic!("INTERACTION_HANDLER Not found")
     }).set_warmup_complete().await;
     TIMED_EVENT_HANDLER.get_or_init(|| {
         panic!("TIMED_EVENT_HANDLER Not found")
-    }).set_warmup_complete().await;*/
+    }).set_warmup_complete().await;
 }
-
 
 
 pub(crate) enum StrategyRequest {
