@@ -36,8 +36,6 @@ impl Currency {
     }
 }
 
-
-//todo, later I will move this to be for historical only
 pub(crate) fn calculate_pnl(
     side: &PositionSide,
     entry_price: Price,
