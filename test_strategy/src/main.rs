@@ -110,6 +110,7 @@ pub async fn on_data_received(
             // This can be an alternative to using the TimedEvents handler.
             let time = strategy.time_utc().await;
             println!("Strategy Time: {} - Empty Buffer, Day: {}", time, time.day() );
+            notify.notify_one();
             continue;
         }
         for strategy_event in event_slice {
