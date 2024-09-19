@@ -110,7 +110,7 @@ pub async fn subscribe_primary_subscription_updates(name: String, sender: mpsc::
 
 pub static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
 
-static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
+pub static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
 
 
 

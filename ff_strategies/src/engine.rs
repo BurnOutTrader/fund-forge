@@ -1,6 +1,6 @@
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
-use ff_standard_lib::server_connections::{subscribe_primary_subscription_updates, set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER};
+use ff_standard_lib::server_connections::{subscribe_primary_subscription_updates, set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, MARKET_HANDLER};
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
@@ -132,6 +132,7 @@ impl BackTestEngine {
     ) {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
+        let market_handler = MARKET_HANDLER.get().unwrap().clone();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
             {
@@ -182,10 +183,11 @@ impl BackTestEngine {
                         .range(last_time..=time)
                         .flat_map(|(_, value)| value.iter().cloned())
                         .collect();
+                    market_handler.update_time_slice(time.clone(), &time_slice).await;
 
                     let mut strategy_event_slice: EventTimeSlice = EventTimeSlice::new();
                     let mut strategy_time_slice: TimeSlice = TimeSlice::new();
-                        // update our consolidators and create the strategies time slice with any new data or just create empty slice.
+                    // update our consolidators and create the strategies time slice with any new data or just create empty slice.
                     if !time_slice.is_empty() {
                         // Add only primary data which the strategy has subscribed to into the strategies time slice
                         if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {

@@ -169,7 +169,7 @@ impl FundForgeStrategy {
 
     pub async fn is_shutdown(&self) -> bool {
         let end_time = self.start_state.end_date.to_utc();
-        if self.time_utc().await >= end_time {
+        if self.time_utc() >= end_time {
             return true;
         }
         false
@@ -201,7 +201,7 @@ impl FundForgeStrategy {
             brokerage,
             account_id,
             symbol_name,
-            self.time_utc().await.timestamp_millis(),
+            self.time_utc().timestamp_millis(),
             OrderSide::Buy
         );
         let order = Order::enter_long(
@@ -211,7 +211,7 @@ impl FundForgeStrategy {
             tag,
             account_id.clone(),
             order_id.clone(),
-            self.time_utc().await,
+            self.time_utc(),
             brackets
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
@@ -232,7 +232,7 @@ impl FundForgeStrategy {
             brokerage,
             account_id,
             symbol_name,
-            self.time_utc().await.timestamp_millis(),
+            self.time_utc().timestamp_millis(),
             OrderSide::Sell
         );
         let order = Order::enter_short(
@@ -242,7 +242,7 @@ impl FundForgeStrategy {
             tag,
             account_id.clone(),
             order_id.clone(),
-            self.time_utc().await,
+            self.time_utc(),
             brackets
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
@@ -271,7 +271,7 @@ impl FundForgeStrategy {
             brokerage,
             account_id,
             symbol_name,
-            self.time_utc().await.timestamp_millis(),
+            self.time_utc().timestamp_millis(),
             side,
             num
         )
@@ -293,7 +293,7 @@ impl FundForgeStrategy {
             tag,
             account_id.clone(),
             order_id.clone(),
-            self.time_utc().await,
+            self.time_utc(),
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
         order_id
@@ -315,7 +315,7 @@ impl FundForgeStrategy {
             tag,
             account_id.clone(),
             order_id.clone(),
-            self.time_utc().await,
+            self.time_utc(),
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
         order_id
@@ -338,7 +338,7 @@ impl FundForgeStrategy {
             tag,
             account_id.clone(),
             order_id.clone(),
-            self.time_utc().await,
+            self.time_utc(),
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
         order_id
@@ -361,7 +361,7 @@ impl FundForgeStrategy {
             tag,
             account_id.clone(),
             order_id.clone(),
-            self.time_utc().await,
+            self.time_utc(),
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
         order_id
@@ -403,7 +403,7 @@ impl FundForgeStrategy {
     pub async fn indicator_subscribe(&self, indicator: IndicatorEnum) {
         //todo, add is_subscribed() for subscription manager so we can auto subscribe for indicators.
         self.indicator_handler
-            .add_indicator(indicator, self.time_utc().await)
+            .add_indicator(indicator, self.time_utc())
             .await
     }
 
@@ -492,7 +492,7 @@ impl FundForgeStrategy {
     pub async fn subscribe(&self, subscription: DataSubscription, retain_history: u64) {
         self
             .subscription_handler
-            .subscribe(subscription.clone(), retain_history, self.time_utc().await)
+            .subscribe(subscription.clone(), retain_history, self.time_utc())
             .await
     }
 
@@ -515,7 +515,7 @@ impl FundForgeStrategy {
         subscriptions: Vec<DataSubscription>,
         retain_history: u64,
     ) {
-        self.subscription_handler.set_subscriptions(subscriptions, retain_history, self.time_utc().await).await;
+        self.subscription_handler.set_subscriptions(subscriptions, retain_history, self.time_utc()).await;
     }
 
     /// returns the nth last bar at the specified index. 1 = 1 bar ago, 0 = current bar.
@@ -539,7 +539,7 @@ impl FundForgeStrategy {
         match self.start_state.mode {
             StrategyMode::Backtest => time_convert_utc_datetime_to_fixed_offset(
                 &self.start_state.time_zone,
-                self.time_utc().await,
+                self.time_utc(),
             ),
             _ => time_convert_utc_datetime_to_fixed_offset(&self.start_state.time_zone, Utc::now()),
         }
@@ -547,9 +547,9 @@ impl FundForgeStrategy {
 
     /// Current Utc time, depends on the `StrategyMode`. \
     /// Backtest will return the last data point time, live will return the current time.
-    pub async fn time_utc(&self) -> DateTime<Utc> {
+    pub fn time_utc(&self) -> DateTime<Utc> {
         match self.start_state.mode {
-            StrategyMode::Backtest => self.market_handler.get_last_time().await,
+            StrategyMode::Backtest => self.market_handler.get_last_time(),
             _ => Utc::now(),
         }
     }
@@ -569,7 +569,7 @@ impl FundForgeStrategy {
         subscription: &DataSubscription,
     ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
         let start_date = convert_to_utc(from_time, time_zone);
-        range_data(start_date, self.time_utc().await, subscription.clone()).await
+        range_data(start_date, self.time_utc(), subscription.clone()).await
     }
 
     pub async fn history_from_utc_time(
@@ -578,7 +578,7 @@ impl FundForgeStrategy {
         subscription: &DataSubscription,
     ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
         let start_date = DateTime::<Utc>::from_naive_utc_and_offset(from_time, Utc);
-        range_data(start_date, self.time_utc().await, subscription.clone()).await
+        range_data(start_date, self.time_utc(), subscription.clone()).await
     }
 
     pub async fn historical_range_from_local_time(
@@ -591,8 +591,8 @@ impl FundForgeStrategy {
         let start_date = convert_to_utc(from_time, time_zone.clone());
         let end_date = convert_to_utc(to_time, time_zone);
 
-        let end_date = match end_date > self.time_utc().await {
-            true => self.time_utc().await,
+        let end_date = match end_date > self.time_utc() {
+            true => self.time_utc(),
             false => end_date,
         };
 
@@ -608,8 +608,8 @@ impl FundForgeStrategy {
         let start_date = DateTime::<Utc>::from_naive_utc_and_offset(from_time, Utc);
         let end_date = DateTime::<Utc>::from_naive_utc_and_offset(to_time, Utc);
 
-        let end_date = match end_date > self.time_utc().await {
-            true => self.time_utc().await,
+        let end_date = match end_date > self.time_utc() {
+            true => self.time_utc(),
             false => end_date,
         };
 

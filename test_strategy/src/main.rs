@@ -153,7 +153,7 @@ pub async fn on_data_received(
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
 
-                                /*    let account_name = AccountId::from(format!("TestAccount{}", quotebar.symbol.name)); //seperate account by symbol for back-testing purposes
+                                    let account_name = AccountId::from(format!("TestAccount{}", quotebar.symbol.name)); //seperate account by symbol for back-testing purposes
                                     if quotebar.bid_close > last_bar.bid_high
                                         && !strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await
                                     {
@@ -170,7 +170,7 @@ pub async fn on_data_received(
 
                                     if strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await {
                                         bars_since_entry_1 += 1;
-                                    }*/
+                                    }
                                 }
                                 //do something with the current open bar
                                 if !quotebar.is_closed {
@@ -196,7 +196,7 @@ pub async fn on_data_received(
                     for ledger in ledgers {
                         println!("{:?}", ledger);
                     }
-                    println!("{}, Strategy: Order Event: {:?}", strategy.time_utc().await, event);
+                    println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), event);
                 }
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
                 StrategyEvent::DataSubscriptionEvents(events,_) => {
