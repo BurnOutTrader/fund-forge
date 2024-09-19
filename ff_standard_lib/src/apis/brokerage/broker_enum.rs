@@ -104,16 +104,17 @@ pub mod client_side_brokerage {
 impl BrokerApiResponse for Brokerage {
     async fn symbols_response(
         &self,
+        stream_name: String,
         market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse {
         match self {
             Brokerage::RithmicTest => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
-                    return client.symbols_response(market_type, callback_id).await
+                    return client.symbols_response(stream_name, market_type, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.symbols_response(market_type, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.symbols_response(stream_name, market_type, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -121,52 +122,53 @@ impl BrokerApiResponse for Brokerage {
 
     async fn account_info_response(
         &self,
+        stream_name: String,
         account_id: AccountId,
         callback_id: u64
     ) -> DataServerResponse {
         match self {
             Brokerage::RithmicTest => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
-                    return client.account_info_response(account_id, callback_id).await
+                    return client.account_info_response(stream_name, account_id, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.account_info_response(account_id, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.account_info_response(stream_name, account_id, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
 
-    async fn symbol_info_response(&self, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn symbol_info_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         match self {
             Brokerage::RithmicTest => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
-                    return client.symbol_info_response(symbol_name, callback_id).await
+                    return client.symbol_info_response(stream_name, symbol_name, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.symbol_info_response(symbol_name, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.symbol_info_response(stream_name, symbol_name, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
 
-    async fn margin_required_historical_response(&self, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn margin_required_historical_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         match self {
             Brokerage::RithmicTest => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
-                    return client.margin_required_historical_response(symbol_name, quantity, callback_id).await
+                    return client.margin_required_historical_response(stream_name, symbol_name, quantity, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.margin_required_historical_response(symbol_name, quantity, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.margin_required_historical_response(stream_name, symbol_name, quantity, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
 
-    async fn margin_required_live_response(&self, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn margin_required_live_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         match self {
             Brokerage::RithmicTest => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
-                    return client.margin_required_live_response(symbol_name, quantity, callback_id).await
+                    return client.margin_required_live_response(symbol_name, stream_name, quantity, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.margin_required_live_response(symbol_name, quantity, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.margin_required_live_response(stream_name, symbol_name, quantity, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
