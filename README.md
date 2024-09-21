@@ -244,8 +244,8 @@ fn example() {
 }
 ```
 What the above function actually does is:
-1. call a function to get the connection to the data server instance associated with that enum variant.
-2. Then the engine sends a request for the symbols which also contains the enum variant to the data server.
+1. Call a function to get the TLS/TCP connection to the data server instance associated with that enum variant.
+2. The engine sends a request for the symbols which also contains the enum variant to the data server.
 3. The server requests the correct api using a matching statement for each variant and retrieves the symbols from the correct api implementation returning them in fund forge format as `Vec<Symbol>`.
 
 ## Parsing Data and Time handling
