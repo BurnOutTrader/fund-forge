@@ -1,19 +1,27 @@
 ## Launching a strategy
-Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function.
-This will automatically create the engine and start the strategy in the background.
-Then we can receive events in our `fn on_data_received()` function.
-The strategy object returned from `initialize()` is a fully owned object, and we can pass it to other function, wrap it in an arc etc.
-It is best practice to use the strategies methods to interact with the strategy rather than calling on any private fields directly.
-strategy methods only need a reference to the strategy object, and will handle all the necessary locking and thread safety for you.
-It is possible to wrap the strategy in Arc if you need to pass it to multiple threads, all functionality will remain.
+To run a strategy.
+1. complete the setup from the main readme
+2. In the ff_data_server folder open a terminal and `cargo run`
+3. In the test_strategy folder open a terminal and `cargo run`, or run directly in IDE
+4. The initial strategy start up will take time, as we recover historical data from our local server instance and (more demandingly) sort the individual symbol data into timeslices for perfect accuracy. 
+The downloading and sorting of data into time slices is concurrent, but since the test data consists of 3318839 data points per month (2 symbols) it can take some time initially.
+I am aiming to improve this function in the future.
+
+Everything found here could be changed during development, you will have to consult your IDE for minor errors like changes to function inputs. \
+See the [TEST STRATEGY](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs) for the most up to date working main function.
+
+Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function. \
+This will automatically create the engine and start the strategy in the background. \
+Then we can receive events in our `fn on_data_received()` function. \
+The strategy object returned from `initialize()` is a fully owned object, and we can pass it to other function, wrap it in an arc etc. \
+It is best practice to use the strategies methods to interact with the strategy rather than calling on any private fields directly. \
+strategy methods only need a reference to the strategy object, and will handle all the necessary locking and thread safety for you. \
+It is possible to wrap the strategy in Arc if you need to pass it to multiple threads, all functionality will remain. \
 The strategy object is an owned object, however it does not need to be owned or mutable to access strategy methods, all methods can be called with only a reference to the strategy object, this
 allows us to pass our strategy in an Arc to any other threads or functions and still utilise its full functionality, the strategy is protected from misuse by using interior mutability.
 ```rust
 #[tokio::main]
 async fn main() {
-    // we need to initialize the api clients and ff_data_server. (this will be handled by the gui application in the future)
-    initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
-    
     // we create a channel for the receiving strategy events
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     
@@ -137,28 +145,47 @@ fn set_subscriptions_initial() -> Vec<DataSubscription> {
 
 #[tokio::main]
 async fn main() {
-    initialize_clients(&PlatformMode::SingleMachine).await.unwrap();
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
-        Some(String::from("test")), //if none is passed in an id will be generated based on the executing program name, todo! this needs to be upgraded in the future to be more reliable in Single and Multi machine modes.
         notify.clone(),
-        StrategyMode::Backtest, // Backtest, Live, LivePaper
-        StrategyInteractionMode::SemiAutomated,  // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2023, 03, 30).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
-        Australia::Sydney, // the strategy time zone
+        StrategyMode::Backtest,                 // Backtest, Live, LivePaper
+        StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
+        NaiveDate::from_ymd_opt(2024, 7, 23)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2024, 07, 30)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        Australia::Sydney,                      // the strategy time zone
         Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
-        set_subscriptions_initial(), //the closure or function used to set the subscriptions for the strategy. this allows us to have multiple subscription methods for more complex strategies
-        100,
+        vec![
+            DataSubscription::new_custom(
+                SymbolName::from("EUR-USD"),
+                DataVendor::Test,
+                Resolution::Minutes(3),
+                BaseDataType::QuoteBars,
+                MarketType::Forex,
+                CandleType::CandleStick,
+            ),
+            DataSubscription::new_custom(
+                SymbolName::from("AUD-CAD"),
+                DataVendor::Test,
+                Resolution::Minutes(3),
+                BaseDataType::QuoteBars,
+                MarketType::Forex,
+                CandleType::CandleStick,
+            ),],
+        5,
         strategy_event_sender, // the sender for the strategy events
         None,
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
-        //this allows us full control over how the strategy buffers data and how it processes data, in live trading. 
-        //Setting this value higher than your base working resolution, has the potential to create race conditions in `handler.update_time_slice()` I have not had it occur in testing but I believe the potential is there if overshooting too far.
-        // You would prbably have to do it delibertely
-        Some(Duration::seconds(1))
+        //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
+        Some(Duration::seconds(1)),
+        GUI_DISABLED
     ).await;
 
     on_data_received(strategy, notify, strategy_event_receiver).await;
@@ -211,9 +238,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 StrategyEvent::PositionEvents(_) => {}
                 //todo add more event types 
             }
-            // we can notify the engine that we have processed the message and it can send the next one.
-            notify.notify_one();
+            
         }
+        // we can notify the engine that we have processed the message and it can send the next one.
+        notify.notify_one();
     }
     event_receiver.close();
     println!("Strategy Event Loop Ended");
