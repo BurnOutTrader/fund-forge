@@ -247,7 +247,6 @@ What the above function actually does is:
 1. call a function to get the connection to the data server instance associated with that enum variant.
 2. Then the engine sends a request for the symbols which also contains the enum variant to the data server.
 3. The server requests the correct api using a matching statement for each variant and retrieves the symbols from the correct api implementation returning them in fund forge format as `Vec<Symbol>`.
-`DataVendor::Test` and `Brokerage::Test` do not actually use any live Api endpoints and are instead designed to simulate end points so that we can get a reliable response from the server using pre serialized or hardcoded data to test platform functionality during development and remain broker and data vendor agnostic.
 
 ## Parsing Data and Time handling
 This is likely to change in the future by making the code more sophisticated but currently all data
