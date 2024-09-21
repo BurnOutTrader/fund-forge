@@ -1,5 +1,5 @@
 # Fund Forge
-Take a quick look at [strategy features here]( [Strategies Guide](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md))
+Take a quick look at [strategy features here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
 You will need to complete the setup outlined below to run the test strategy.
 
 fund-forge is an algorithmic trading engine written in rust. \
