@@ -166,7 +166,7 @@ To use rithmic API's you will need to request a dev kit for RProtocol (Proto Buf
 You will need to have a unique app name in your rithmic_credentials.toml files.
 
 ## Strategies
-Once you have followed the setup instructions below, you can play with a test strategy by reviewing [Strategies Guide](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
+Once you have followed the setup instructions above, you can play with a test strategy by reviewing [Strategies Guide](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
 
 ## Gui
 Decoupled.
