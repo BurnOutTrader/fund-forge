@@ -13,6 +13,7 @@ I would like the platform to be 100% open source but realistically to get the be
 This would allow me to pay front end developers to help with the GUI development and also pay any licensing fees associated with TradingView.
 I won't know how realistic this option is until I know how many people are using the engine.
 Since the engine is open source you will need to undergo the rithmic verification independently, you can see Rithmic section below.
+[Current Licence](https://github.com/BurnOutTrader/fund-forge/blob/main/LICENCE.md)
 
 ## Strategies
 Once you have followed the setup instructions below, you can play with a test strategy by reviewing https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md
