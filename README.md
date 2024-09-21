@@ -1,10 +1,11 @@
 # Fund Forge
 fund-forge is an algorithmic trading engine written in rust. \
 It is designed to allow maximum utility of retail trading api's by limiting the need to have duplicate api instances. \
-All strategies share can share a single api instance for each brokerage or data vendor vby connecting via Tls to your fund forge data server instance/s. \
-All streaming data feeds etc can be shared and only 1 stream per symbol is maintained, any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategies `SubscriptionHandler`. \
+All strategies share a single api instance for each brokerage or data vendor by connecting via Tls to your `ff_data_server` instance/s. \
+All streaming data feeds etc can be shared and only 1 stream per symbol is maintained regardless of the number of running strategies, any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategies `SubscriptionHandler`. \
 This means if we have a DataVendor with a tick stream, we can subscribe to 15 minute Candles and the  engine will create those candles in real time. \
 The Current state of the engine is implementing a  `Brokerage::Test` and `DataVendor::Test` variant as a means to develop standardised api requirements.
+Strategies are to be run as individual rust programs, directly on your machine, in docker, or on cloud services like [linode](https://www.linode.com/lp/refer/?r=861446255d0586038773b79b486fea8fef9e9c70).
 
 You can contact me by creating a git-hub issue or at my project email: BurnOutTrader@outlook.com this is not my main email, but I will try to keep an eye on it, please just create an issue if you have any questions.
 The current repo is likely to receive a lot of changes and updates, some things will break or be completely overhauled, I recently conducted a major refactor to go from synchronous communication with the data server to using a callback system so much of the functionality, like charting etc is temporarily broken.
@@ -27,16 +28,21 @@ If you manage to get this live trading before me, then you will need to test pro
 
 ## Current Objectives
 - Complete all simulated functionality for the TEST api variants.
-- Complete full Rithmic functionality
+- Complete full Rithmic functionality after conformance is approved. 
+- I will provide affiliate links to allow people to support the development as an alternative to direct donations. Each firm has its own advantages and disadvantages, I have never promoted either firm in any other place.
+I personally don't normally do this sort of thing but since I am going to build both api variants for the following 2 trading firms for my own purposes I might as well offer the option.
+  - Complete Rithmic Api for [Apex Trader Funding](https://apextraderfunding.com/member/aff/go/burnouttrader) Affiliate coupon LISUNZQY (I am awaiting approval and information on connection to their server)
+  - Complete Rithmic Api for [TopStep](https://www.topstep.com/) currently no affiliate. (I am awaiting approval and information on connection to their server)
 - Complete at least 1 crypto, 1 forex/cfd and 1 equities api.
 - Improve event driven functions for live data/trading scenarios by testing completed apis.
-- Complete the ledger and market handlers.
-- Complete backtesting functionality by running test strategies on local paper ledger in parallel with live paper trading, to compare results.
+- Complete overhaul for the ledger and market handlers.
+- Complete the back testing functionality by running test strategies on local paper ledger in parallel with live paper trading, to compare results and create a new ledger model.
 - Conduct live testing
 - Lock down handler and strategy Architecture to avoid breaking changes in future versions.
 - Slowly improve performance by updating individual components as I learn and experiment more.
 - Add more indicators including support for multi symbol indicators
 - finish charting and gui api development.
+- Add support for building strategies in other languages while using the rust engine and backend. This will be done via a mix of json and a c-types interface to convert from rust data types to a general purpose interface for other languages.
 
 ## Licence and Disclaimer
 The project was a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. \
