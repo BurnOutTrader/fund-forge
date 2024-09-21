@@ -84,14 +84,21 @@ I think these will be a good way to test the engine once I have Rithmic approval
 - Add support for building strategies in other languages while using the rust engine and backend. This will be done via a mix of json and a c-types interface to convert from rust data types to a general purpose interface for other languages.
 
 ## Licence and Disclaimer
-The project was a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. \
-I haven't had any formal coding experience and I have learned by building this project after learning basic coding making strategies with pro real time, ninjatrader and quantconnect. \
-After reading the above statement it should go without saying that you should not expect to use this project for live trading for the forseable future without conducting thorough paper testing. \
-I have started building a GUI in iced for a full rust implementation, I have also experimented with a Tauri gui, which would use a rust backend and javascript front end so that we could use the lightweight charts api made by Trading View, \
-the current problem with the TradingView option is that lightweight charts free api does not support Renko or Heikin Ashi charts, so I temporarily halted development on this option in favour of completing a [rust charting](https://youtu.be/BU9TU3e1-UY) api using iced.rs, \
-I am considering making a cheap paid cross-platform GUI in the future so that I can use the Trading View's `Platform edition api` which requires to have an established company, for this reason I will likely include only a single prohibition in the licence, to restrict commercial use in regard to re-selling any part of the fund-forge repository. \
+The project was a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. 
+
+I haven't had any formal coding experience and I have learned by building this project after learning basic coding making strategies with pro real time, ninjatrader and quantconnect. 
+
+After reading the above statement it should go without saying that you should not expect to use this project for live trading for the forseable future without conducting thorough paper testing. 
+
+I have started building a GUI in iced for a full rust implementation, I have also experimented with a Tauri gui, which would use a rust backend and javascript front end so that we could use the lightweight charts api made by Trading View.
+
+The current problem with the TradingView option is that lightweight charts free api does not support Renko or Heikin Ashi charts, so I temporarily halted development on this option in favour of completing a [rust charting](https://youtu.be/BU9TU3e1-UY) api using iced.rs. 
+
+I am considering making a cheap paid cross-platform GUI in the future so that I can use the Trading View's `Platform edition api` which requires to have an established company, for this reason I will likely include only a single prohibition in the licence, to restrict commercial use in regard to re-selling any part of the fund-forge repository. 
+
 I would like the platform to be 100% open source but realistically to get the best maintainable development of a GUI I might need to look into this option should the repo gain popularity. \
-This would allow me to pay front end developers to help with the GUI development and also pay any licensing fees associated with TradingView. \
+This would allow me to pay front end developers to help with the GUI development and also pay any licensing fees associated with TradingView. 
+
 I won't know how realistic this option is until I know how many people are using the engine, I will continue development of the rust charting api until I have a better sense of the overall direction and popularity (since this is a fairly niche repo). \
 Since the engine is open source you will need to undergo the rithmic verification independently, you can see Rithmic section below.
 [Current Licence](https://github.com/BurnOutTrader/fund-forge/blob/main/LICENCE.md)
@@ -108,11 +115,16 @@ From this data your strategy will consolidate and Candles or Quotebars of any de
 
 ### For more testing and development data
 You can download some free testing data [here](https://www.histdata.com/download-free-forex-data/?/ascii/tick-data-quotes)
+
 Tick data from histdata.com will actually be parsed into the engine as `BaseDataEnum::Quotes(Quote)`
+
 Since the tick data is actually best bid and ask data.
+
 There is a crude test data parser [here](https://github.com/BurnOutTrader/fund-forge/tree/main/test_data_parser) 
+
 You will need to manually download the files, then put all the .csv files into 1 folder and change the variables such as input/output folders and Symbol of the data.
-change the following to suit the symbol and your directory.
+
+Change the following to suit the symbol and your directory.
 ```rust
 const YOUR_FOLDER_PATH: String = "".to_string();
 const SYMBOL_NAME: String = "".to_string();
@@ -160,14 +172,19 @@ Once you have followed the setup instructions below, you can play with a test st
 Decoupled.
 Basic charting functionality was tested months ago. The code base has since been refactored and charting now supports live streams. A local gui is in production using rust iced.
 Old video of testing charting algorithm [Initial Charting Api](https://youtu.be/BU9TU3e1-UY)
+
 I will complete a charting API in the future but since I am not experienced with GUI development functionality will be limited to charting only in the short term.
+
 Unfortunatley the learning curve for GUI development in iced is rather steep and it is the only appropriate rust option for the type of GUI I am trying to build.
+
 All Gui development is total decoupled from the engine by using the ff_strategy_registry as an intermediate server for forwarding messages between strategies and gui's
 after the last refactor the strategy registry is not in a working state, but is easily fixed in the future.
 
 ## Architecture
 I have tried to maintain a reasonable separation of concerns throughout the code base to allow any backend implementations to be upgraded without effecting existing strategies.
+
 Some of the current implementations are a little but crude, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
+
 The final architecture of the engine and associated handlers has not been locked down, I am experimenting with different object-oriented and event driven designs.
 
 All strategy functionality is accessed by calling the `FundForgeStrategy` object's associated functions, there is essentially a complete decoupling of strategy instance from the backend so that
