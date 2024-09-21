@@ -8,7 +8,7 @@ authors = ["Kevin Monaghan"]
 prost-build = "*"
 
 [dependencies]
-ff_rithmic_api = {path = "/Users/kevmonaghan/RustroverProjects/ff_rithmic_api"}
+ff_rithmic_api = { git = "https://github.com/BurnOutTrader/ff_rithmic_api.git", branch = "master" }
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
 rkyv = { version =  "*", features = ["std", "alloc", "validation"] }

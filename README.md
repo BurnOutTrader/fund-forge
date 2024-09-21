@@ -11,6 +11,10 @@ You can contact me by creating a git-hub issue or at my project email: BurnOutTr
 The current repo is likely to receive a lot of changes and updates, some things will break or be completely overhauled, I recently conducted a major refactor to go from synchronous communication with the data server to using a callback system so much of the functionality, like charting etc is temporarily broken.
 I am prone to doing a major overhaul to add a new feature or improve the design, since we are not ready for live trading this shouldn't be an issue.
 
+If you want to work on Rithmic Api, you will need to apply for your own dev kit and credentials from rithmic, you will also need to complete the rithmic conformance procedure, 
+since fund forge is not a company each user must do this and create their own unique app name to pass conformance. please contact [rithmic](https://yyy3.rithmic.com/?page_id=17).
+The skeleton of my initial rithmic api is [here](https://github.com/BurnOutTrader/ff_rithmic_api) inside the ff_standard_lib there is another rithmic api object which uses the aforementioned project as a dependency (already included in cargo.toml as a git link)
+
 ## Warning 
 Please do not launch your data server on a public address, despite using Tls it is currently suitable for private local host only.
 I am not a professional software developer.
@@ -30,7 +34,9 @@ If you manage to get this live trading before me, then you will need to test pro
 - Complete all simulated functionality for the TEST api variants.
 - Complete full Rithmic functionality after conformance is approved. 
 - I will provide affiliate links to allow people to support the development as an alternative to direct donations. Each firm has its own advantages and disadvantages, I have never promoted either firm in any other place.
+I will be doing this for all brokerages and prop firms which i use personally, I don't care if you use my affiliate links or not, my only concern is making money trading.
 I personally don't normally do this sort of thing but since I am going to build both api variants for the following 2 trading firms for my own purposes I might as well offer the option.
+I think these will be a good way to test the engine once I have Rithmic approval, I will build some live brokerages into the engine after I am happy with live trading development.
   - Complete Rithmic Api for [Apex Trader Funding](https://apextraderfunding.com/member/aff/go/burnouttrader) Affiliate coupon LISUNZQY (I am awaiting approval and information on connection to their server)
   - Complete Rithmic Api for [TopStep](https://www.topstep.com/) currently no affiliate. (I am awaiting approval and information on connection to their server)
 - Complete at least 1 crypto, 1 forex/cfd and 1 equities api.
