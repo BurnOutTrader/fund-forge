@@ -20,11 +20,13 @@ This design allows us to:
 
 ## Data Server
 The data server is responsible for hosting API instances, persisting historical data and managing broker or vendor specific information required by strategy instances.
-Data feeds are shared, with only one stream per symbol maintained regardless of the number of running strategies. Any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategy’s `SubscriptionHandler`.
-For example, if we have a DataVendor providing a tick stream, we can subscribe to 15-minute candles, and the engine will create those candles in real-time.
-I have tested running the data server remotely for large low resolution backtests and it adds a few seconds to backtest durations even at low data resolutions. 
+Data feeds are shared, with only one stream per symbol maintained regardless of the number of running strategies.
 This enables our data server to stay running on a remote server while keeping a permanent copy of historical data in the cloud, all while continuing to backtest locally or warm up strategies with minimum overhead.
 
+Any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategy’s `SubscriptionHandler`.
+For example, if we have a DataVendor providing a tick stream, we can subscribe to 15-minute candles, and the engine will create those candles in real-time.
+
+I have tested running the data server remotely during low resolution back tests, compared to local host it adds only a few seconds to backtest duration even at lower data resolutions.
 ## Engine Development
 
 The current state of the engine implements a `Brokerage::Test` and `DataVendor::Test` variant, serving as a means to develop standardized API requirements.
