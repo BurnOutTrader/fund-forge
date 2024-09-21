@@ -4,6 +4,7 @@ It is currently not able to trade live and is using only a faux `Test` api imple
 It is designed to allow maximum utility of retail trading api's by limiting the need to have duplicate api instances. \
 All strategies share a single api instance for each brokerage or data vendor by connecting via Tls to your `ff_data_server` instance/s. \
 This will allow us to use collocation services for running strategies on cloud hardware.
+I have tested running the data server remotely, it only adds a few seconds to backtests even at low data resolutions, this means we will be able to have our data server running on a server and keep a permanent copy of historical data in the cloud, while still back testing locally. \
 All streaming data feeds etc can be shared and only 1 stream per symbol is maintained regardless of the number of running strategies, any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategies `SubscriptionHandler`. \
 This means if we have a DataVendor with a tick stream, we can subscribe to 15 minute Candles and the  engine will create those candles in real time. \
 The Current state of the engine is implementing a  `Brokerage::Test` and `DataVendor::Test` variant as a means to develop standardised api requirements.

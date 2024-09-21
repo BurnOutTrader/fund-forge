@@ -39,7 +39,7 @@ async fn main() {
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 08, 30)
+        NaiveDate::from_ymd_opt(2024, 06, 15)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
@@ -54,14 +54,14 @@ async fn main() {
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
-            /*DataSubscription::new_custom(
+            DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
                  Resolution::Minutes(3),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::CandleStick,
-             ),*/],
+             ),],
         5,
         strategy_event_sender, // the sender for the strategy events
         None,

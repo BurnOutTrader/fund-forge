@@ -13,10 +13,6 @@ use std::sync::Arc;
 use std::thread;
 use tokio::sync::mpsc::{Receiver};
 use tokio::sync::{mpsc, Notify, RwLock};
-use tokio::sync::mpsc::error::TryRecvError;
-use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
-use ff_standard_lib::indicators::indicator_handler::IndicatorEvents::IndicatorTimeSlice;
-use ff_standard_lib::indicators::values::IndicatorValues;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 
 //Possibly more accurate engine
@@ -45,7 +41,7 @@ impl BackTestEngine {
         start_state: StrategyStartState,
         gui_enabled: bool
     ) -> Self {
-        let (sender, primary_subscription_updates) = mpsc::channel(1);
+        let (sender, primary_subscription_updates) = mpsc::channel(5);
         subscribe_primary_subscription_updates("Back Test Engine".to_string(), sender).await;
 
         let engine = BackTestEngine {
@@ -133,13 +129,23 @@ impl BackTestEngine {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         let market_handler = MARKET_HANDLER.get().unwrap().clone();
+
+        let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
+        match self.primary_subscription_updates.try_recv() {
+            Ok(new_primary_subscriptions) => {
+                if primary_subscriptions != new_primary_subscriptions {
+                    primary_subscriptions = new_primary_subscriptions;
+                }
+            }
+            Err(_) => {}
+        }
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
             {
                 *self.last_time.write().await = start.clone();
             }
             let mut last_time = start.clone();
-            let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
+
             println!("Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
             'month_loop: loop {
                 let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;

@@ -1,3 +1,4 @@
+use std::any::type_name;
 use std::future::Future;
 use std::net::SocketAddr;
 use ff_standard_lib::helpers::converters::load_as_bytes;
@@ -102,6 +103,7 @@ pub async fn data_server_manage_async_requests(
             let stream_name = stream_name.clone();
             tokio::spawn(async move {
                 // Handle the request and generate a response
+                println!("{:?}", request);
                 match request {
                     DataServerRequest::Register(register_mode) => {
                         strategy_mode = register_mode;
@@ -252,6 +254,7 @@ where
     prefixed_msg.extend_from_slice(&length);
     prefixed_msg.extend_from_slice(&bytes);
 
+    println!("Response type: {}", type_name::<T>());
     // Write the response to the stream
     let mut writer = writer.lock().await;
     match writer.write_all(&prefixed_msg).await {
