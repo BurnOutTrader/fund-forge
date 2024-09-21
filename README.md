@@ -4,6 +4,8 @@ fund-forge is an algorithmic trading engine written in rust. \
 Take a quick look at [strategy features here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
 You will need to complete the setup outlined below to run the test strategy.
 
+I will make a youtube video of setting up the platform for development purposes in the near future.
+
 It is currently not able to trade live and is using only a faux `Test` api implementation to help build the standardised models which will aid future api intergrations.
 It is designed to allow maximum utility of retail trading api's by limiting the need to have duplicate api instances. \
 
