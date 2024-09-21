@@ -54,14 +54,14 @@ async fn main() {
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),
-            DataSubscription::new_custom(
+            /*DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
                  Resolution::Minutes(3),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::CandleStick,
-             ),],
+             ),*/],
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
