@@ -195,8 +195,8 @@ Some of the current implementations are a crude implementations that act as plac
 
 The final architecture of the engine and associated handlers has not been locked down, I am experimenting with different object-oriented and event driven designs.
 
-All strategy functionality is accessed by calling the `FundForgeStrategy` object's associated functions, there is essentially a complete decoupling of strategy instance from the backend so that
-upgrades can be implemented from the backend engine and handlers without causing breaking changes to strategies.
+All strategy functionality is accessed by calling the `FundForgeStrategy` object's associated functions, there is a complete decoupling of strategy instance from the backend so that
+upgrades can be implemented in the engine and handlers without causing breaking changes to strategies.
 
 I am willing to accept improvements and pull requests that do not include any kind of binary file (all vendor data is serialized as binaries).
 All pull requests should include only human-readable code and files.
