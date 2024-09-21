@@ -83,7 +83,7 @@ I will be doing this for all brokerages and prop firms which i use personally, I
 13. Add support for building strategies in other languages while using the rust engine and backend. This will be done via a mix of json and a c-types interface to convert from rust data types to a general purpose interface for other languages.
 
 ## Licence and Disclaimer
-The project was a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. 
+The project has been a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. 
 
 I haven't had any formal coding experience and I have learned by building this project after learning basic coding making strategies with pro real time, ninjatrader and quantconnect. 
 
