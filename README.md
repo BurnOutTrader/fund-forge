@@ -231,7 +231,9 @@ On the client side the function calls are automatically forwarded to the correct
 Currently the market handler is very crude, backtesting results are innacurate, it is for development purposes only.
 
 All requests made by the engine will use the DataVendor or Brokerage variant in some way.
-We are simply sending a request to the server using the DataVendor or Brokerage enum variant, and the server is returning a response with the data we require based on that variant.
+We are simply: 
+1. Sending a request to the server using the DataVendor or Brokerage enum variant
+2. The server is returning a response with the data we require based on that variant.
 ```rust
 fn example() {
     /// in a strategy we could request the symbols for a market like this
@@ -241,9 +243,11 @@ fn example() {
     let symbols = vendor.symbols(MarketType::Forex).await.unwrap();
 }
 ```
-What the above function actually does is call a function to get the connection to the data server instance associated with that enum variant, then it sends a request for the symbols which also contains the enum variant to the data server, the server requests the correct api using a matching statement for each variant and retrieves the symbols from the correct api implementation, returning them in fund forge format as `Vec<Symbol>`.
+What the above function actually does is:
+1. call a function to get the connection to the data server instance associated with that enum variant.
+2. Then the engine sends a request for the symbols which also contains the enum variant to the data server.
+3. The server requests the correct api using a matching statement for each variant and retrieves the symbols from the correct api implementation returning them in fund forge format as `Vec<Symbol>`.
 `DataVendor::Test` and `Brokerage::Test` do not actually use any live Api endpoints and are instead designed to simulate end points so that we can get a reliable response from the server using pre serialized or hardcoded data to test platform functionality during development and remain broker and data vendor agnostic.
-
 
 ## Parsing Data and Time handling
 This is likely to change in the future by making the code more sophisticated but currently all data
