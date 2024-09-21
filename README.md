@@ -38,7 +38,7 @@ You can contact me by creating a GitHub issue or reaching out via my project ema
 
 This repository is likely to undergo many changes and updates at short notice, some features may break or be completely overhauled. Recently, I conducted a major refactor to move from synchronous communication with the data server to a callback system, so much of the functionality (like charting) is temporarily broken.
 
-Since we are not ready for live trading, these changes shouldn't pose significant issues and I will try to maintain future commits to be function specific.
+Since we are not ready for live trading, these changes shouldn't pose significant issues and I will try to keep future commits to be specific to limited sections of the code base.
 
 ## Rithmic API
 
