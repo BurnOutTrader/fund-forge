@@ -19,6 +19,7 @@ This design allows us to:
 - Persist historical data between strategies without duplication
 
 ## Data Server
+The data server is responsible for hosting API instances, persisting historical data and managing broker or vendor specific information required by strategy instances.
 Data feeds are shared, with only one stream per symbol maintained regardless of the number of running strategies. Any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategy’s `SubscriptionHandler`.
 For example, if we have a DataVendor providing a tick stream, we can subscribe to 15-minute candles, and the engine will create those candles in real-time.
 I have tested running the data server remotely for large low resolution backtests and it adds a few seconds to backtest durations even at low data resolutions. 
