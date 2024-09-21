@@ -85,7 +85,7 @@ I will be doing this for all brokerages and prop firms which i use personally, I
 ## Licence and Disclaimer
 The project has been a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. 
 
-I haven't had any formal coding experience and I have learned by building this project after learning basic coding making strategies with pro real time, ninjatrader and quantconnect. 
+I haven't had any formal coding experience in software and I have learned by building this project after learning basic coding by developing strategies with `Pro Real Time`, `NinjaTrader` and `QuantConnect`. 
 
 After reading the above statement it should go without saying that you should not expect to use this project for live trading for the forseable future without conducting thorough paper testing. 
 
