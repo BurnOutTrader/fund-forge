@@ -1,30 +1,52 @@
 # Fund Forge
-fund-forge is an algorithmic trading engine written in rust. \
 
-Take a quick look at [strategy features here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
-You will need to complete the setup outlined below to run the test strategy.
+**Fund Forge** is an algorithmic trading engine written in Rust.
 
-I will make a youtube video of setting up the platform for development purposes in the near future.
+Take a quick look at [strategy features here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md). You will need to complete the setup outlined below to run the test strategy.
 
-It is currently not able to trade live and is using only a faux `Test` api implementation to help build the standardised models which will aid future api intergrations.
-It is designed to allow maximum utility of retail trading api's by limiting the need to have duplicate api instances. \
+I will create a YouTube video on setting up the platform for development purposes in the near future.
 
-All strategies share a single api instance for each brokerage or data vendor by connecting via Tls/TCP to your `ff_data_server` instance/s. \
-This will allow us to use collocation services for running strategies on cloud hardware and will also allows a microservices structure for managing api instances.
+## Current Status
 
-I have tested running the data server remotely, it only adds a few seconds to backtests even at low data resolutions, this means we will be able to have our data server running on a server and keep a permanent copy of historical data in the cloud, while still back testing locally. \
-All streaming data feeds etc can be shared and only 1 stream per symbol is maintained regardless of the number of running strategies, any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategies `SubscriptionHandler`. \
-This means if we have a DataVendor with a tick stream, we can subscribe to 15 minute Candles and the  engine will create those candles in real time. \
-The Current state of the engine is implementing a  `Brokerage::Test` and `DataVendor::Test` variant as a means to develop standardised api requirements.
-Strategies are to be run as individual rust programs, directly on your machine, in docker, or on cloud services like [linode](https://www.linode.com/lp/refer/?r=861446255d0586038773b79b486fea8fef9e9c70).
+Fund Forge is not yet ready for live trading. It currently uses a faux `Test` API implementation to help build standardized models, which will aid future API integrations.
 
-You can contact me by creating a git-hub issue or at my project email: BurnOutTrader@outlook.com this is not my main email, but I will try to keep an eye on it, please just create an issue if you have any questions.
-The current repo is likely to receive a lot of changes and updates, some things will break or be completely overhauled, I recently conducted a major refactor to go from synchronous communication with the data server to using a callback system so much of the functionality, like charting etc is temporarily broken.
-I am prone to doing a major overhaul to add a new feature or improve the design, since we are not ready for live trading this shouldn't be an issue.
+The platform is designed to allow maximum utility of retail trading APIs by limiting the need for duplicate API instances. All strategies share a single API instance for each brokerage or data vendor by connecting via TLS/TCP to your `ff_data_server` instance(s).
 
-If you want to work on Rithmic Api, you will need to apply for your own dev kit and credentials from rithmic, you will also need to complete the rithmic conformance procedure, 
-since fund forge is not a company each user must do this and create their own unique app name to pass conformance. please contact [rithmic](https://yyy3.rithmic.com/?page_id=17).
-The skeleton of my initial rithmic api is [here](https://github.com/BurnOutTrader/ff_rithmic_api) inside the ff_standard_lib there is another rithmic api object which uses the aforementioned project as a dependency (already included in cargo.toml as a git link)
+This design allows us to:
+- Use colocation services for running strategies on cloud hardware.
+- Enable a microservices structure for managing API instances.
+
+## Data Server
+
+I have tested running the data server remotely, and it only adds a few seconds to backtests, even at low data resolutions. This means we will be able to have our data server running on a remote server while keeping a permanent copy of historical data in the cloud, all while continuing to backtest locally.
+
+All streaming data feeds can be shared, with only one stream per symbol maintained regardless of the number of running strategies. Any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategy’s `SubscriptionHandler`.
+
+For example, if we have a DataVendor providing a tick stream, we can subscribe to 15-minute candles, and the engine will create those candles in real-time.
+
+## Engine Development
+
+The current state of the engine implements a `Brokerage::Test` and `DataVendor::Test` variant, serving as a means to develop standardized API requirements.
+
+Strategies are intended to be run as individual Rust programs, either on your machine, in Docker, or on cloud services like [Linode](https://www.linode.com/lp/refer/?r=861446255d0586038773b79b486fea8fef9e9c70).
+
+## Contact
+
+You can contact me by creating a GitHub issue or reaching out via my project email: **BurnOutTrader@outlook.com**. Please note, this is not my main email, but I will try to keep an eye on it. If you have questions, creating an issue is preferable.
+
+## Important Notes
+
+This repository is likely to undergo many changes and updates. Some features may break or be completely overhauled. Recently, I conducted a major refactor to move from synchronous communication with the data server to a callback system, so much of the functionality (like charting) is temporarily broken.
+
+I tend to make major overhauls to add new features or improve the design. Since we are not ready for live trading, these changes shouldn't pose significant issues.
+
+## Rithmic API
+
+If you want to work on the Rithmic API, you will need to apply for your own dev kit and credentials from Rithmic. Additionally, you will need to complete the Rithmic conformance procedure.
+
+Since Fund Forge is not a company, each user must do this and create their own unique app name to pass conformance. You can find more information at [Rithmic](https://yyy3.rithmic.com/?page_id=17).
+
+The skeleton of my initial Rithmic API is available [here](https://github.com/BurnOutTrader/ff_rithmic_api). Inside the `ff_standard_lib`, there is another Rithmic API object that uses the aforementioned project as a dependency (already included in `Cargo.toml` as a git link).
 
 ## Warning 
 Please do not launch your data server on a public address, despite using Tls it is currently suitable for private local host only.
