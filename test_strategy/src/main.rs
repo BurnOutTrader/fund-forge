@@ -125,7 +125,7 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 //do something on the bar close
                                 if quotebar.is_closed == true {
-                                    println!("Strategy Time: {}, {} Closed Bar Time: {}", time, quotebar.symbol.name, base_data.time_created_utc());
+                                    println!("{}", quotebar);
                                     let last_bar = match quotebar.symbol.name == SymbolName::from("AUD-CAD") {
                                         true => {
                                             history_1.add(quotebar.clone());
