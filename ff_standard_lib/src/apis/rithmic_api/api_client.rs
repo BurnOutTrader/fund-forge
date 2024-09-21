@@ -9,6 +9,7 @@ use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
 use tokio::io::WriteHalf;
 use tokio::net::TcpStream;
+use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
 use tokio_rustls::server::TlsStream;
 use crate::apis::brokerage::broker_enum::Brokerage;
@@ -18,8 +19,9 @@ use crate::apis::data_vendor::server_side_datavendor::VendorApiResponse;
 use crate::standardized_types::accounts::ledgers::{AccountId};
 use crate::standardized_types::data_server_messaging::{FundForgeError, DataServerResponse};
 use crate::standardized_types::enums::{MarketType};
-use crate::standardized_types::subscriptions::{SymbolName};
+use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
+use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::Volume;
 
 lazy_static! {
@@ -172,6 +174,14 @@ impl VendorApiResponse for RithmicClient {
     }
 
     async fn tick_size_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        todo!()
+    }
+
+    async fn data_feed_subscribe(&self,stream_name: String, subscription: DataSubscription, sender: Sender<TimeSlice>) -> DataServerResponse {
+        todo!()
+    }
+
+    async fn data_feed_unsubscribe(&self, stream_name: String, subscription: DataSubscription) -> DataServerResponse {
         todo!()
     }
 }

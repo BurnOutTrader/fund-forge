@@ -1,25 +1,46 @@
 use std::sync::Arc;
 use async_trait::async_trait;
+use chrono::{NaiveDate, TimeZone, Utc};
+use dashmap::DashMap;
+use futures::SinkExt;
 use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::task::JoinHandle;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::brokerage::server_side_brokerage::BrokerApiResponse;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::apis::data_vendor::server_side_datavendor::VendorApiResponse;
 use crate::helpers::decimal_calculators::round_to_decimals;
+use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo, Currency};
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::data_server_messaging::DataServerResponse;
+use crate::standardized_types::base_data::history::get_historical_data;
+use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError, StreamResponse};
 use crate::standardized_types::enums::{MarketType, Resolution, SubscriptionResolutionType};
-use crate::standardized_types::subscriptions::{Symbol, SymbolName};
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
+use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::Volume;
 
 lazy_static! {
-    pub static ref TEST_CLIENT: Arc<TestApiClient> = Arc::new(TestApiClient{});
+    pub static ref TEST_CLIENT: Arc<TestApiClient> = Arc::new(TestApiClient::new());
 }
 
-pub struct TestApiClient {}
+pub struct TestApiClient {
+    data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<TimeSlice>>>>
+}
+
+impl TestApiClient {
+    fn new() -> Self {
+        Self {
+            data_feed_broadcasters: Default::default(),
+        }
+    }
+}
+
 #[async_trait]
 impl BrokerApiResponse for TestApiClient {
     async fn symbols_response(&self, stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
@@ -74,7 +95,12 @@ impl BrokerApiResponse for TestApiClient {
     }
 
     async fn margin_required_live_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-        todo!()
+        let value = round_to_decimals(quantity  * dec!(100.0), 2);
+        DataServerResponse::MarginRequired {
+            callback_id,
+            symbol_name,
+            price: value,
+        }
     }
 }
 
@@ -123,5 +149,55 @@ impl VendorApiResponse for TestApiClient {
             callback_id,
             tick_size: dec!(0.00001),
         }
+    }
+
+    async fn data_feed_subscribe(&self, stream_name: String, subscription: DataSubscription, sender: Sender<TimeSlice>) -> DataServerResponse {
+        let available_subscription_1 = DataSubscription::new(SymbolName::from("AUD-CAD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
+        let available_subscription_2 = DataSubscription::new(SymbolName::from("EUR-USD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
+        if subscription != available_subscription_1 && subscription != available_subscription_2 {
+            return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
+        }
+        if !self.data_feed_broadcasters.contains_key(&subscription) {
+            self.data_feed_broadcasters.insert(subscription.clone(), Arc::new(StaticInternalBroadcaster::new()));
+        } else {
+            // If we already have a running task, we dont need a new one, we just subscribe to the broadcaster
+            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name, sender).await;
+            return DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
+        }
+
+        let subscription_clone = subscription.clone();
+        let broadcasters = self.data_feed_broadcasters.clone();
+        let broadcaster = self.data_feed_broadcasters.get(&subscription).unwrap().value().clone();
+        tokio::task::spawn(async move {
+            let mut sender = sender;
+            let naive_dt_1 = NaiveDate::from_ymd_opt(2024, 6, 01).unwrap().and_hms_opt(0, 0, 0).unwrap();
+            let utc_dt_1 = Utc.from_utc_datetime(&naive_dt_1);
+
+            let naive_dt_2 = NaiveDate::from_ymd_opt(2024, 8, 31).unwrap().and_hms_opt(0, 0, 0).unwrap();
+            let utc_dt_2 = Utc.from_utc_datetime(&naive_dt_2);
+
+            let mut last_time = utc_dt_1;
+            'main_loop: while last_time < utc_dt_2 {
+                let month_time_slices = get_historical_data(vec![subscription_clone.clone()], last_time.clone()).await.unwrap();
+                for (time, time_slice) in month_time_slices {
+                    if broadcaster.has_subscribers() {
+                        broadcaster.broadcast(time_slice).await;
+                        last_time = time;
+                    } else {
+                        break 'main_loop;
+                    }
+                }
+            }
+            broadcasters.remove(&subscription_clone);
+        });
+        DataServerResponse::SubscribeResponse{ success: true, subscription, reason: None}
+    }
+
+    async fn data_feed_unsubscribe(&self, stream_name: String, subscription: DataSubscription) -> DataServerResponse {
+        if let Some(broadcaster) = self.data_feed_broadcasters.get(&subscription) {
+            broadcaster.unsubscribe(stream_name).await;
+            return DataServerResponse::UnSubscribeResponse{ success: true, subscription: subscription, reason: None}
+        }
+        DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("There is no active subscription for: {}", subscription))}
     }
 }

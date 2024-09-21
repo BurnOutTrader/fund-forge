@@ -29,10 +29,8 @@ pub type ApiKey = String;
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum StreamResponse {
-    BaseData(TimeSlice),
-    AccountState(Brokerage, AccountId, AccountState),
-    OrderUpdates(OrderUpdateEvent),
-    PositionUpdates(PositionUpdateEvent)
+    SubscribeBaseData(DataSubscription),
+    UnSubscribeBaseData(DataSubscription),
 }
 
 #[derive(
@@ -318,15 +316,27 @@ DataServerResponse {
         info_vec: Vec<SymbolInfo>
     },
 
-    StreamResponse {
-        response: StreamResponse
-    },
-
     MarginRequired {
         callback_id: u64,
         symbol_name: SymbolName,
         price: Price
     },
+
+    SubscribeResponse {
+        success: bool,
+        subscription: DataSubscription,
+        reason: Option<String>
+    },
+
+    UnSubscribeResponse {
+        success: bool,
+        subscription: DataSubscription,
+        reason: Option<String>
+    },
+/*    AccountState(Brokerage, AccountId, AccountState),
+    OrderUpdates(OrderUpdateEvent),
+    PositionUpdates(PositionUpdateEvent),*/
+    DataUpdates(TimeSlice)
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -360,14 +370,10 @@ impl DataServerResponse {
             DataServerResponse::ValuePerTick  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SymbolInfo  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SymbolInfoMany  { callback_id,.. } => Some(callback_id.clone()),
-            DataServerResponse::StreamResponse { .. } => None,
             DataServerResponse::MarginRequired { callback_id,.. } => Some(callback_id.clone()),
-        }
-    }
-    pub fn stream_response(&self) -> Option<StreamResponse> {
-        match self {
-            DataServerResponse::StreamResponse { response, .. } => Some(response.clone()),
-            _ => None
+            DataServerResponse::SubscribeResponse { .. } => None,
+            DataServerResponse::UnSubscribeResponse { .. } => None,
+            DataServerResponse::DataUpdates(_) => None
         }
     }
 }

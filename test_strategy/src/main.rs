@@ -80,7 +80,6 @@ pub async fn on_data_received(
     notify: Arc<Notify>,
     mut event_receiver: mpsc::Receiver<EventTimeSlice>,
 ) {
-    println!("Start strategy loop");
     let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("heikin_atr_20"),
           DataSubscription::new_custom(

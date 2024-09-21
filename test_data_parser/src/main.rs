@@ -8,25 +8,31 @@ use std::io::{self, BufRead};
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use ff_standard_lib::apis::vendor::DataVendor;
-use ff_standard_lib::helpers::decimal_calculators::round_to_tick_size;
+use ff_standard_lib::apis::data_vendor::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
-use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution};
-use ff_standard_lib::standardized_types::subscriptions::CandleType::CandleStick;
 
 /// to parse free testing data from https://www.histdata.com/
 /// 1. Put all the csv data into one folder
 /// 2. Configure the subscription properties and directory path
 fn main() -> Result<(), Box<dyn Error>> {
+    const YOUR_FOLDER_PATH: String = "".to_string();
+    const SYMBOL_NAME: String = "AUD-CAD".to_string();
 
     let symbol = Symbol {
-        name: "AUD-CAD".to_string(),
+        name: SYMBOL_NAME, //CHANGE THIS
         market_type: MarketType::Forex,
         data_vendor: DataVendor::Test,
     };
+
+    let dir_path = format!("{}/Downloads/{}", YOUR_FOLDER_PATH, symbol.name); //CHANGE THIS
+    let base_data_path = PathBuf::from(format!("{}/data/parsed", YOUR_FOLDER_PATH)); //CHANGE THIS
+
+    if !base_data_path.exists() {
+        fs::create_dir_all(&base_data_path)?;
+    }
 
     // Define subscription
     let subscription = DataSubscription {
@@ -36,24 +42,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         market_type: MarketType::Forex,
         candle_type: None,
     };
-
-
-    let dir_path = format!("/Users/kevmonaghan/Downloads/{}", symbol.name);
-    let base_data_path = PathBuf::from("/Users/kevmonaghan/Downloads/data/parsed");
-
-    if !base_data_path.exists() {
-        fs::create_dir_all(&base_data_path)?;
-    }
-
-
-/*    let subscription_quotes = DataSubscription {
-        symbol: symbol.clone(),
-        resolution: Resolution::Instant,
-        base_data_type: BaseDataType::Quotes,
-        market_type: MarketType::Forex,
-        candle_type: None,
-    };*/
-
 
     let mut data : BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
     for entry in fs::read_dir(dir_path)? {

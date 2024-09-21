@@ -1,8 +1,5 @@
 use dashmap::DashMap;
-use futures::future::join_all;
-use tokio::sync::mpsc::error::SendError;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::RwLock;
 
 /// Manages subscriptions to incoming data, any concurrent process that needs a copy of this objects  primary data source can become a `SecondaryDataSubscriber` and thus will receive a copy of the data stream.
 pub struct StaticInternalBroadcaster<T: Clone + Send> {
@@ -29,6 +26,11 @@ impl<T: Clone + Send> StaticInternalBroadcaster<T> {
     pub async fn unsubscribe(&self, name: String) {
         self.subscribers.remove(&name);
     }
+
+    pub fn has_subscribers(&self) -> bool {
+        !self.subscribers.is_empty()
+    }
+
 
     /// Sequential broadcast: broadcasts the data to all subscribers sequentially without concurrency or creating new tasks.
     pub async fn broadcast(&self, source_data: T) {

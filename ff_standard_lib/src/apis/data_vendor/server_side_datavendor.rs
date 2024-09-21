@@ -1,10 +1,13 @@
 use async_trait::async_trait;
+use tokio::sync::mpsc::{Receiver, Sender};
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::apis::rithmic_api::api_client::{get_rithmic_client};
 use crate::apis::test_api::TEST_CLIENT;
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError};
-use crate::standardized_types::enums::MarketType;
-use crate::standardized_types::subscriptions::SymbolName;
+use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
+use crate::standardized_types::time_slices::TimeSlice;
 
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
 #[async_trait]
@@ -37,6 +40,17 @@ pub trait VendorApiResponse: Sync + Send {
         stream_name: String,
         symbol_name: SymbolName,
         callback_id: u64
+    ) -> DataServerResponse;
+    async fn data_feed_subscribe(
+        &self,
+        stream_name: String,
+        subscription: DataSubscription,
+        sender: Sender<TimeSlice>
+    ) -> DataServerResponse;
+    async fn data_feed_unsubscribe(
+        &self,
+        stream_name: String,
+        subscription: DataSubscription,
     ) -> DataServerResponse;
 }
 
@@ -125,5 +139,29 @@ impl VendorApiResponse for DataVendor {
             DataVendor::Test => return TEST_CLIENT.tick_size_response(stream_name, symbol_name, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
+    }
+
+    async fn data_feed_subscribe(&self,stream_name: String, subscription: DataSubscription, sender: Sender<TimeSlice>) -> DataServerResponse {
+        match self {
+            DataVendor::RithmicTest => {
+                if let Some(client) = get_rithmic_client(self) {
+                    return client.data_feed_subscribe(stream_name, subscription, sender).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription, sender).await
+        }
+        DataServerResponse::SubscribeResponse{ success: false, subscription, reason: Some(format!("Unable to find api client instance for: {}", self))}
+    }
+
+    async fn data_feed_unsubscribe(&self, stream_name: String,  subscription: DataSubscription) -> DataServerResponse {
+        match self {
+            DataVendor::RithmicTest => {
+                if let Some(client) = get_rithmic_client(self) {
+                    return client.data_feed_unsubscribe(stream_name, subscription).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(stream_name, subscription).await
+        }
+        DataServerResponse::UnSubscribeResponse{ success: false, subscription, reason: Some(format!("Unable to find api client instance for: {}", self))}
     }
 }

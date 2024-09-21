@@ -150,7 +150,7 @@ impl BackTestEngine {
                         continue;
                     }
                 };
-                println!("Month slice length: {}", month_time_slices.len());
+                println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
 
                 let mut end_month = true;
                 'time_instance_loop: loop {

@@ -1,15 +1,15 @@
-use std::collections::HashMap;
-use crate::servers::communications_async::{ExternalReceiver, ExternalSender};
+use std::collections::{HashMap};
+use crate::servers::communications_async::{ExternalSender};
 use crate::servers::init_clients::{create_async_api_client};
 use crate::servers::settings::client_settings::{initialise_settings, ConnectionSettings};
-use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError, StreamRequest, StreamResponse};
+use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError, StreamRequest};
 use heck::ToPascalCase;
 use lazy_static::lazy_static;
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 use ahash::AHashMap;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{Duration, Utc};
 use dashmap::DashMap;
 use futures::SinkExt;
 use strum_macros::Display;
@@ -23,20 +23,14 @@ use tokio_rustls::TlsStream;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::drawing_objects::drawing_object_handler::DrawingObjectHandler;
-use crate::indicators::indicator_handler::{IndicatorEvents, IndicatorHandler};
-use crate::indicators::values::IndicatorValues;
+use crate::indicators::indicator_handler::{IndicatorHandler};
 use crate::interaction_handler::InteractionHandler;
 use crate::market_handler::market_handlers::MarketHandler;
-use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
-use crate::standardized_types::accounts::ledgers::{AccountId};
-use crate::standardized_types::Price;
-use crate::standardized_types::accounts::position::{Position, PositionId};
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::orders::orders::{OrderRequest};
 use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::standardized_types::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription};
-use crate::standardized_types::time_slices::TimeSlice;
 use crate::timed_events_handler::TimedEventHandler;
 use crate::traits::bytes::Bytes;
 
@@ -94,6 +88,7 @@ impl FromStr for ConnectionType {
         since we always expect Some to return. this allows async timings with concurrent data updates.
 
 */
+
 
 // Connections
 lazy_static! {
@@ -280,15 +275,42 @@ async fn request_handler(receiver: mpsc::Receiver<StrategyRequest>, buffer_durat
                 let callbacks = callbacks.clone();
                 tokio::task::spawn(async move {
                     let response = DataServerResponse::from_bytes(&message_body).unwrap();
-                    //println!("{:?}", response);
                     match response.get_callback_id() {
                         None => {
-                            let stream_response = response.stream_response().unwrap();
-                            match stream_response {
-                                StreamResponse::BaseData(base_data) => {},
-                                StreamResponse::AccountState(_, _, _) => {},
-                                StreamResponse::OrderUpdates(update) => {},
-                                StreamResponse::PositionUpdates(_) => {},
+                            match response {
+                                /*
+                                pub enum DataSubscriptionEvent {
+                                        Subscribed(DataSubscription),
+                                        Unsubscribed(DataSubscription),
+                                        Failed(DataSubscription),
+                                    }
+                                */
+                                DataServerResponse::SubscribeResponse { success, subscription, reason } => {
+                                    //determine success or fail and add to the strategy event buffer
+                                    match success {
+                                        true => {
+                                            //send subscribe message to buffer
+                                        }
+                                        false => {
+                                            //send failed event
+                                        }
+                                    }
+                                }
+                                DataServerResponse::UnSubscribeResponse { success, subscription, reason } => {
+                                    match success {
+                                        true => {
+                                            //send unsubscribe message to buffer
+                                        }
+                                        false => {
+                                            //send failed  event
+                                        }
+                                    }
+                                }
+                                DataServerResponse::DataUpdates(data) => {
+                                    let event_slice = StrategyEvent::TimeSlice(Utc::now().to_string() ,data);
+                                    send_strategy_event_slice(vec![event_slice]).await;
+                                }
+                                _ => panic!("Incorrect response here: {:?}", response)
                             }
                         }
                         Some(id) => {
@@ -299,7 +321,6 @@ async fn request_handler(receiver: mpsc::Receiver<StrategyRequest>, buffer_durat
                     }
                 });
             }
-            //println!("response handler end");
         });
     }
 }

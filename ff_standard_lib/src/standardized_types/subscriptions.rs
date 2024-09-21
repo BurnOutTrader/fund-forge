@@ -348,7 +348,8 @@ impl DataSubscription {
 pub enum DataSubscriptionEvent {
     Subscribed(DataSubscription),
     Unsubscribed(DataSubscription),
-    Failed(DataSubscription),
+    FailedSubscribed(DataSubscription, String),
+    FailedUnSubscribed(DataSubscription, String),
 }
 
 pub fn filter_resolutions(
