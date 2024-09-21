@@ -87,10 +87,11 @@ I will be doing this for all brokerages and prop firms which i use personally, I
 - Complete Rithmic Api for [TopStep](https://www.topstep.com/) currently no affiliate. (I am awaiting approval and information on connection to their server)
 
 ## Licence and Disclaimer
-The project has been a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. 
+The project has been a way for me to learn rust and build a portfolio of useful projects, my objective is to keep the engine open source, where I might get help with development from more seasoned developers. 
 
 I haven't had any formal coding experience in software and I have learned by building this project after learning basic coding by developing strategies with `Pro Real Time`, `NinjaTrader` and `QuantConnect`. 
 It was the superior documentation and support of those companies that gave me a foothold into programming and I will try to maintain the same standard of documentation which those companies have set as the benchmark for trading software.
+This is a preliminary readme and I aim to provide a full index of documentation towards completion.
 
 After reading the above statement it should go without saying that you should not expect to use this project for live trading for the foreseeable future without conducting thorough paper testing. 
 
