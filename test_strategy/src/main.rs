@@ -20,6 +20,7 @@ use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::server_connections::{GUI_DISABLED};
 use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
+use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::Color;
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
@@ -100,8 +101,9 @@ pub async fn on_data_received(
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
+    let mut bars_since_entry_2 = 0;
     let mut history_1 : RollingWindow<QuoteBar> = RollingWindow::new(10);
-    let mut history_2 : RollingWindow<QuoteBar> = RollingWindow::new(10);
+    let mut history_2 : RollingWindow<Candle> = RollingWindow::new(10);
 
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -118,33 +120,53 @@ pub async fn on_data_received(
                         match base_data {
                             BaseDataEnum::TradePrice(_) => {}
                             BaseDataEnum::Candle(candle) => {
+                                // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
                                     println!("{}", candle);
+                                    history_2.add(candle.clone());
+                                    let last_bar =
+                                        match history_2.get(1) {
+                                            None => {
+                                                continue;
+                                            },
+                                            Some(bar) => bar
+                                        };
+
+                                    if !warmup_complete {
+                                        continue;
+                                    }
+
+                                    let account_name = AccountId::from(format!("TestAccount{}", candle.symbol.name)); //seperate account by symbol for back-testing purposes
+                                    if candle.close > last_bar.high
+                                        && !strategy.is_long(&brokerage, &account_name, &candle.symbol.name).await
+                                    {
+                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long"), None).await;
+                                        bars_since_entry_2 = 0;
+                                    }
+                                    else if bars_since_entry_2 > 10
+                                        //&& last_bar.bid_close < two_bars_ago.bid_low
+                                        && strategy.is_long(&brokerage, &account_name, &candle.symbol.name).await
+                                    {
+                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
+                                        bars_since_entry_2 = 0;
+                                    }
+
+                                    if strategy.is_long(&brokerage, &account_name, &candle.symbol.name).await {
+                                        bars_since_entry_2 += 1;
+                                    }
                                 }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
-                                //do something on the bar close
+                                // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
                                     println!("{}", quotebar);
-                                    let last_bar = match quotebar.symbol.name == SymbolName::from("AUD-CAD") {
-                                        true => {
-                                            history_1.add(quotebar.clone());
-                                            match history_1.get(1) {
-                                                None => {
-                                                    continue;
-                                                },
-                                                Some(bar) => bar
-                                            }
+                                    history_1.add(quotebar.clone());
+                                    let last_bar =
+                                    match history_1.get(1) {
+                                        None => {
+                                            continue;
                                         },
-                                        false => {
-                                            history_2.add(quotebar.clone());
-                                            match history_2.get(1) {
-                                                None => {
-                                                    continue;
-                                                },
-                                                Some(bar) => bar
-                                            }
-                                        }
+                                        Some(bar) => bar
                                     };
 
                                     if !warmup_complete {
