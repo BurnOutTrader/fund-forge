@@ -85,7 +85,7 @@ I will provide affiliate links to allow people to support the development as an 
 I will be doing this for all brokerages and prop firms which i use personally, I don't care if you use my affiliate links or not, my only concern is making consistent money trading, which to me is the only thing that matters.
 - Complete Rithmic Api for [Apex Trader Funding](https://apextraderfunding.com/member/aff/go/burnouttrader) Affiliate coupon LISUNZQY (I am awaiting approval and information on connection to their server)
 - Complete Rithmic Api for [TopStep](https://www.topstep.com/) currently no affiliate. (I am awaiting approval and information on connection to their server)
-- 
+
 ## Licence and Disclaimer
 The project has been a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. 
 
