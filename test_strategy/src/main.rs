@@ -35,16 +35,16 @@ async fn main() {
         notify.clone(),
         StrategyMode::Backtest,                 // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2024, 7, 23)
+        NaiveDate::from_ymd_opt(2024, 6, 10)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 07, 30)
+        NaiveDate::from_ymd_opt(2024, 08, 30)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
-        Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
+        Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
             DataSubscription::new_custom(
                 SymbolName::from("EUR-USD"),
