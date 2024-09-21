@@ -166,7 +166,7 @@ impl BackTestEngine {
 
                     if time > end_time {
                         *self.last_time.write().await = last_time.clone();
-                        println!("End Time");
+                        println!("Engine: End Time: {}", end_time);
                         break 'main_loop;
                     }
                     if time.month() != start.month() {
