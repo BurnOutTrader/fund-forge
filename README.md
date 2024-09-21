@@ -88,7 +88,7 @@ The project has been a way for me to learn rust and build a portfolio of useful 
 I haven't had any formal coding experience in software and I have learned by building this project after learning basic coding by developing strategies with `Pro Real Time`, `NinjaTrader` and `QuantConnect`. 
 It was the superior documentation and support of those companies that gave me a foothold into programming and I will try to maintain the same standard of documentation which those companies have set as the benchmark for trading software.
 
-After reading the above statement it should go without saying that you should not expect to use this project for live trading for the forseable future without conducting thorough paper testing. 
+After reading the above statement it should go without saying that you should not expect to use this project for live trading for the foreseeable future without conducting thorough paper testing. 
 
 I have started building a GUI in iced for a full rust implementation, I have also experimented with a Tauri gui, which would use a rust backend and javascript front end so that we could use the lightweight charts api made by Trading View.
 
