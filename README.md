@@ -191,7 +191,7 @@ after the last refactor the strategy registry is not in a working state, but is 
 ## Architecture
 I have tried to maintain a reasonable separation of concerns throughout the code base to allow any backend implementations to be upgraded without effecting existing strategies.
 
-Some of the current implementations are a little but crude, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
+Some of the current implementations are a crude implementations that act as placeholders for more performant designs in the future, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
 
 The final architecture of the engine and associated handlers has not been locked down, I am experimenting with different object-oriented and event driven designs.
 
