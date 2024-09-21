@@ -33,7 +33,7 @@ If you manage to get this live trading before me, then you will need to test pro
 ## Incomplete: current state
 - Daily, Weekly or Monthly resolution subscriptions will have custom consolidators based on market hours, this is because data vendors have an inconsistent definition of daily bars.
   I will build custom consolidators for these types of resolutions in the future.
-- Currently building a Rithmic API as the first live trading and back testing api. I did build an Oanda implementation, but they closed my live account without any reason (Not salty but I am sure what the misunderstanding was) so I have scraped that for now as I needed to proceed with development, I will come back to oanda api later.
+- Currently building a Rithmic API as the first live trading and back testing api. I did build an Oanda implementation, but they closed my live account without any reason (Not salty but I am not sure what the misunderstanding was) so I have scraped that for now as I needed to proceed with development, I will come back to oanda api later.
 - Backtest ledgers and statistics very crude and incomplete/inaccurate.
 - Only TEST variants API is working, which is just a hard coded .
 - Currently working on simulating data streams and order updates for 'TEST' variants, while securing a rithmic account to continue rithmic API development
