@@ -119,10 +119,7 @@ This also helps us get consistent results between backtesting and live trading a
 
 
 ### Running the strategy and receiving events
-We first need to run `initialize_clients(&PlatformMode::SingleMachine).await.unwrap();` in main to initialize the clients.
-If we are using a multi-machine setup, we will need to use `initialize_clients(&PlatformMode::MultiMachine).await.unwrap();` instead.
-
-Then we simply Initialize the strategy using the parameters above and pass it to our `fn on_data_received()` function.
+Simply Initialize the strategy using the parameters above and pass it to our `fn on_data_received()` function.
 The engine will automatically be created and started in the background, and we will receive events in our `fn on_data_received()` function.
 
 We can divert strategy events to different functions if we want to separate the logic, some tasks are less critical than others. 
