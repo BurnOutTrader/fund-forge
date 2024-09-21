@@ -5,7 +5,7 @@ Get the test data from the instructions provided in the main readme and complete
 To run a strategy.
 1. cargo build in the fund-forge directory
 2. complete the setup from the main readme by hard coding the directories and downloading the test data.
-3. In the ff_data_server folder open a terminal and `cargo run`
+3. In the ff_data_server folder open a terminal and `cargo run` (since the last refactor the server sometimes needs to be restarted between running strategies, I will fix shortly)
 4. In the test_strategy folder open a terminal and `cargo run`, or run directly in IDE
 5. The initial strategy start up will take time, as we recover historical data from our local server instance and (more demandingly) sort the individual quote resolution symbol data into timeslices for perfect accuracy. 
 The downloading and sorting of data into time slices is concurrent, but since the test data consists of 3318839 data points per month (2 symbols) it can take some time initially.
