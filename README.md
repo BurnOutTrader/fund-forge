@@ -36,13 +36,13 @@ You can contact me by creating a GitHub issue or reaching out via my project ema
 
 ## Important Notes
 
-This repository is likely to undergo many changes and updates. Some features may break or be completely overhauled. Recently, I conducted a major refactor to move from synchronous communication with the data server to a callback system, so much of the functionality (like charting) is temporarily broken.
+This repository is likely to undergo many changes and updates at short notice, some features may break or be completely overhauled. Recently, I conducted a major refactor to move from synchronous communication with the data server to a callback system, so much of the functionality (like charting) is temporarily broken.
 
-I tend to make major overhauls to add new features or improve the design. Since we are not ready for live trading, these changes shouldn't pose significant issues.
+Since we are not ready for live trading, these changes shouldn't pose significant issues and I will try to maintain future commits to be function specific.
 
 ## Rithmic API
 
-If you want to work on the Rithmic API, you will need to apply for your own dev kit and credentials from Rithmic. Additionally, you will need to complete the Rithmic conformance procedure.
+If you would like to work on the Rithmic API, you will need to apply for your own dev kit and credentials from Rithmic. Additionally, you will need to complete the Rithmic conformance procedure.
 
 Since Fund Forge is not a company, each user must do this and create their own unique app name to pass conformance. You can find more information at [Rithmic](https://yyy3.rithmic.com/?page_id=17).
 
