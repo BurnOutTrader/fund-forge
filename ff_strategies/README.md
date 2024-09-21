@@ -25,6 +25,8 @@ It is possible to wrap the strategy in Arc if you need to pass it to multiple th
 The strategy object is an owned object, however it does not need to be owned or mutable to access strategy methods, all methods can be called with only a reference to the strategy object, this
 allows us to pass our strategy in an Arc to any other threads or functions and still utilise its full functionality, the strategy is protected from misuse by using interior mutability.
 
+### Use the test strategy for actual testing, these examples will be partially outdated!
+
 Note: Since the backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtests where the println stops outputting over weekends or market close, it will shortly resume.
 ```rust
 #[tokio::main]
