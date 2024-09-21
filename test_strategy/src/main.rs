@@ -60,7 +60,7 @@ async fn main() {
                  Resolution::Minutes(3),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
-                 CandleType::CandleStick,
+                 CandleType::HeikinAshi,
              ),],
         5,
         strategy_event_sender, // the sender for the strategy events
