@@ -111,7 +111,7 @@ Since the engine is open source you will need to undergo the rithmic verificatio
 
 Everything mentioned above is flexible by discussion.
 
-## Fund Forge /src 
+## fund-forge/src 
 Fund forge /src is just for testing random functionality during development, it will not be used in the future, please use the test_strategy folder for testing and developing.
 
 ## Demonstration Testing Data
