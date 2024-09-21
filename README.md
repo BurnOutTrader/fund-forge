@@ -8,21 +8,22 @@ I will create a YouTube video on setting up the platform for development purpose
 
 ## Current Status
 
-Fund Forge is not yet ready for live trading. It currently uses a faux `Test` API implementation to help build standardized models, which will aid future API integrations.
+Fund Forge is not ready for live trading. It currently uses a faux `DataevVndor::Test` and `Brokerage::Test` API implementation's to help build standardized models, which will aid future API integrations.
 
-The platform is designed to allow maximum utility of retail trading APIs by limiting the need for duplicate API instances. All strategies share a single API instance for each brokerage or data vendor by connecting via TLS/TCP to your `ff_data_server` instance(s).
+The platform is designed to allow maximum utility of retail trading APIs by limiting the need for duplicate API instances.
+All strategies share a single API instance for each brokerage or data vendor by connecting via TLS/TCP to your `ff_data_server` instance(s).
 
 This design allows us to:
 - Use colocation services for running strategies on cloud hardware.
 - Enable a microservices structure for managing API instances.
+- Persist historical data between strategies without duplication
 
 ## Data Server
-
-I have tested running the data server remotely, and it only adds a few seconds to backtests, even at low data resolutions. This means we will be able to have our data server running on a remote server while keeping a permanent copy of historical data in the cloud, all while continuing to backtest locally.
-
-All streaming data feeds can be shared, with only one stream per symbol maintained regardless of the number of running strategies. Any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategy’s `SubscriptionHandler`.
+Data feeds are shared, with only one stream per symbol maintained regardless of the number of running strategies. Any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategy’s `SubscriptionHandler`.
 
 For example, if we have a DataVendor providing a tick stream, we can subscribe to 15-minute candles, and the engine will create those candles in real-time.
+
+I have tested running the data server remotely, and it only adds a few seconds to backtests, even at low data resolutions. This means we will be able to have our data server running on a remote server while keeping a permanent copy of historical data in the cloud, all while continuing to backtest locally.
 
 ## Engine Development
 
