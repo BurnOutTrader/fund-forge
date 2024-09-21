@@ -183,9 +183,9 @@ Old video of testing charting algorithm [Initial Charting Api](https://youtu.be/
 
 I will complete a charting API in the future but since I am not experienced with GUI development functionality will be limited to charting only in the short term.
 
-Unfortunatley the learning curve for GUI development in iced is rather steep and it is the only appropriate rust option for the type of GUI I am trying to build.
+Unfortunately the learning curve for GUI development in iced is rather steep and it is the only appropriate rust option for the type of GUI I am trying to build.
 
-All Gui development is total decoupled from the engine by using the ff_strategy_registry as an intermediate server for forwarding messages between strategies and gui's
+All Gui development is totally decoupled from the engine by using the ff_strategy_registry as an intermediate server for forwarding messages between strategies and gui's
 after the last refactor the strategy registry is not in a working state, but is easily fixed in the future.
 
 ## Architecture
