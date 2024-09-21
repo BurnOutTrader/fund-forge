@@ -140,9 +140,11 @@ impl BackTestEngine {
             }
             let mut last_time = start.clone();
             let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
+            println!("Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
             'month_loop: loop {
                 let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                //println!("Strategy Subscriptions: {:?}", strategy_subscriptions);
+                println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
+                println!("Engine: Organising historical data feed");
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
