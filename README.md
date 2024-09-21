@@ -8,7 +8,7 @@ I will create a YouTube video on setting up the platform for development purpose
 
 ## Current Status
 
-Fund Forge is not ready for live trading. It currently uses a faux `DataevVndor::Test` and `Brokerage::Test` API implementation's to help build standardized models, which will aid future API integrations.
+Fund Forge is not ready for live trading. It currently uses a faux `DataevVndor::Test` and `Brokerage::Test` API implementation to help build standardized models, which will aid future API integrations.
 
 The platform is designed to allow maximum utility of retail trading APIs by limiting the need for duplicate API instances.
 All strategies share a single API instance for each brokerage or data vendor by connecting via TLS/TCP to your `ff_data_server` instance(s).
