@@ -217,7 +217,7 @@ When running a Strategy or Ui each vendor or brokerage instance will automatical
 We can have a unique `ff_data_server` instance for each brokerage and data vendor, or we can holst all api instances on a single instance of the data server.
 
 All data transferred between strategies and the data server or strategy registry is transferred over raw TLS/TCP (not websocket) using 0 cost deserialization with the `rkyv crate`
-The Tls handshake requires both server and client authentication certificates.
+The TLS handshake requires both server and client authentication certificates.
 
 An api instance for a `DataVendor` is just an object that implements `VendorApiResponse` trait
 All 'DataVendor' and `Brokerage` Responses are `DataServerResponse` enum variants. 
