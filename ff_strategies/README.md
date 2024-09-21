@@ -1,9 +1,11 @@
 ## Launching a strategy
+Get the test data from the instructions provided in the main readme and complete the setup. 
 To run a strategy.
-1. complete the setup from the main readme
-2. In the ff_data_server folder open a terminal and `cargo run`
-3. In the test_strategy folder open a terminal and `cargo run`, or run directly in IDE
-4. The initial strategy start up will take time, as we recover historical data from our local server instance and (more demandingly) sort the individual symbol data into timeslices for perfect accuracy. 
+1. cargo build in the fund-forge directory
+2. complete the setup from the main readme by harcoding the directories and downloading the test data.
+3. In the ff_data_server folder open a terminal and `cargo run`
+4. In the test_strategy folder open a terminal and `cargo run`, or run directly in IDE
+5. The initial strategy start up will take time, as we recover historical data from our local server instance and (more demandingly) sort the individual symbol data into timeslices for perfect accuracy. 
 The downloading and sorting of data into time slices is concurrent, but since the test data consists of 3318839 data points per month (2 symbols) it can take some time initially.
 I am aiming to improve this function in the future.
 
@@ -134,15 +136,6 @@ We can divert strategy events to different functions if we want to separate the 
 We can use  `notify.notify_one();` to slow the message sender channel until we have processed the last message.
 
 ```rust
-fn set_subscriptions_initial() -> Vec<DataSubscription> {
-    let subscriptions: Vec<DataSubscription> = vec![
-        DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-        DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-        DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)
-    ];
-    subscriptions
-}
-
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
@@ -771,7 +764,7 @@ async fn example() {
 ```
 
 ## Placing Orders
-The matching engines are interchangable, currently there is a Live engine and a Backtesting engine. These are defined by a `MarketHandlerEnum` variant.
+The matching engines are inter-changeable, currently there is a Live engine and a back testing engine. These are defined by a `MarketHandlerEnum` variant.
 We can customise matching engines for backtesting specific strategies.
 A Triangular arbitrage strategy may need a more complex Market handler than a standard price action strategy.
 In backtesting a new ledger will be instantiated for each AccountID.

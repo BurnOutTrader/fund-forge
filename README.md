@@ -6,26 +6,35 @@ All streaming data feeds etc can be shared and only 1 stream per symbol is maint
 This means if we have a DataVendor with a tick stream, we can subscribe to 15 minute Candles and the  engine will create those candles in real time. \
 The Current state of the engine is implementing a  `Brokerage::Test` and `DataVendor::Test` variant as a means to develop standardised api requirements.
 
+You can contact me by creating a git-hub issue or at my project email: BurnOutTrader@outlook.com this is not my main email, but I will try to keep an eye on it, please just create an issue if you have any questions.
+The current repo is likely to receive a lot of changes and updates, some things will break or be completely overhauled, I recently conducted a major refactor to go from synchronous communication with the data server to using a callback system so much of the functionality, like charting etc is temporarily broken.
+I am prone to doing a major overhaul to add a new feature or improve the design, since we are not ready for live trading this shouldn't be an issue.
+
 ## Warning 
 Please do not launch your data server on a public address, despite using Tls it is currently suitable for private local host only.
 I am not a professional in sec ops or software development.
 
-## Incomplete
+## Incomplete: current state
 - Daily, Weekly or Monthly resolution subscriptions will have custom consolidators based on market hours, this is because data vendors have an inconsistent definition of daily bars.
   I will build custom consolidators for these types of resolutions in the future.
 - Currently building a Rithmic API as the first live trading and back testing api. I did build an Oanda implementation, but they closed my live account without any reason (Not salty but I am sure what the misunderstanding was) so I have scraped that for now as I needed to proceed with development, I will come back to oanda api later.
 - Backtest ledgers and statistics very crude and incomplete/inaccurate.
 - Only TEST variants API is working, which is just a hard coded .
 - Currently working on simulating data streams and order updates for 'TEST' variants, while securing a rithmic account to continue rithmic API development
+- Docker builds have not been tested recently and probably will not work.
 
 ## Current Objectives
 - Complete all simulated functionality for the TEST api variants.
 - Complete full Rithmic functionality
 - Complete at least 1 crypto, 1 forex/cfd and 1 equities api.
-- Improve event driven functions for live data/trading scenarios.
+- Improve event driven functions for live data/trading scenarios by testing completed apis.
+- Complete the ledger and market handlers.
+- Complete backtesting functionality by running test strategies on local paper ledger in parallel with live paper trading, to compare results.
 - Conduct live testing
 - Lock down handler and strategy Architecture to avoid breaking changes in future versions.
 - Slowly improve performance by updating individual components as I learn and experiment more.
+- Add more indicators including support for multi symbol indicators
+- finish charting and gui api development.
 
 ## Licence and Disclaimer
 The project was a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. \
@@ -86,30 +95,11 @@ impl Default for ConnectionSettings {
             ConnectionSettings {
                 ssl_auth_folder: get_toml_file_path(),
                 server_name: String::from("fundforge"), //if using my default (insecure) certificates you will need to keep the currecnt server name.
-                address:  SocketAddr::from_str("127.0.0.1:8080").unwrap(), //Note that the default toml launch option will only allow local host, if using a remote instance please make your own certificates
-                address_synchronous: SocketAddr::from_str("127.0.0.1:8081").unwrap() //Note that the default toml launch option will only allow local host
+                address:  SocketAddr::from_str("127.0.0.1:8080").unwrap(), 
+                address_synchronous: SocketAddr::from_str("127.0.0.1:8081").unwrap() //all communication is now async only using a callback system
             }
         }
     }
-```
-
-There is also the option to override the `toml` launch, by passing in the following commands (not yet implemented)
-```rust
-#[derive(Debug, StructOpt)]
-struct ServerLaunchOptions {
-    /// Sets the data folder
-    #[structopt(short = "f", long = "data_folder", parse(from_os_str), default_value = "./data")]
-    pub data_folder: PathBuf,
-
-    #[structopt(short = "f", long = "ssl_folder", parse(from_os_str), default_value = "{PATH_TO_YOUR_`fund-forge`_FOLDER}/resources/keys")]
-    pub ssl_auth_folder: PathBuf,
-
-    #[structopt(short = "s", long = "synchronous_address", default_value = "0.0.0.0:8080")]
-    pub listener_address: String,
-
-    #[structopt(short = "p", long = "async_address", default_value = "0.0.0.0:8081")]
-    pub async_listener_address: String,
-}
 ```
 
 ### Rithmic Credentials and Setup
