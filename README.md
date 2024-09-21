@@ -50,9 +50,9 @@ The skeleton of my initial Rithmic API is available [here](https://github.com/Bu
 
 ## Warning 
 Please do not launch your data server on a public address, despite using Tls it is currently suitable for private local host only.
-I am not a professional software developer.
+I am not a professional software developer and many security concerns have not yet been finalised, the tls keys are a part of the public repo, so they are not a reliable security measure.
 
-If you manage to get this live trading before me, then you will need to test properly, there will be bugs.
+If you manage to begin live trading before me, then you will need to test properly, there will be bugs.
 
 ## Incomplete: current state
 - Daily, Weekly or Monthly resolution subscriptions will have custom consolidators based on market hours, this is because data vendors have an inconsistent definition of daily bars.
