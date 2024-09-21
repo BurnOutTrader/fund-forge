@@ -1,6 +1,6 @@
 # Fund Forge
 fund-forge is an algorithmic trading engine written in rust. \
-It is currently not able to trade live and is using only a Test api implementations to help build the standardised models which will aid future api intergrations.
+It is currently not able to trade live and is using only a faux `Test` api implementation to help build the standardised models which will aid future api intergrations.
 It is designed to allow maximum utility of retail trading api's by limiting the need to have duplicate api instances. \
 All strategies share a single api instance for each brokerage or data vendor by connecting via Tls to your `ff_data_server` instance/s. \
 This will allow us to use collocation services for running strategies on cloud hardware.
