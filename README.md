@@ -65,24 +65,22 @@ If you manage to begin live trading before me, then you will need to test proper
 - Docker builds have not been tested recently and probably will not work without some minor code adjustments to the docker files.
 
 ## Current Objectives
-- Complete all simulated functionality for the TEST api variants.
-- Complete full Rithmic functionality after conformance is approved. 
-- I will provide affiliate links to allow people to support the development as an alternative to direct donations. Each firm has its own advantages and disadvantages, I have never promoted either firm in any other place.
-I will be doing this for all brokerages and prop firms which i use personally, I don't care if you use my affiliate links or not, my only concern is making money trading.
-I personally don't normally do this sort of thing but since I am going to build both api variants for the following 2 trading firms for my own purposes I might as well offer the option.
-I think these will be a good way to test the engine once I have Rithmic approval, I will build some live brokerages into the engine after I am happy with live trading development.
+1. Complete all simulated functionality for the TEST api variants.
+2. Complete full Rithmic functionality after conformance is approved. 
+3. I will provide affiliate links to allow people to support the development as an alternative to direct donations. Each firm has its own advantages and disadvantages, I have never promoted either firm in any other place.
+I will be doing this for all brokerages and prop firms which i use personally, I don't care if you use my affiliate links or not, my only concern is making consistent money trading, which to me is the only thing that matters.
   - Complete Rithmic Api for [Apex Trader Funding](https://apextraderfunding.com/member/aff/go/burnouttrader) Affiliate coupon LISUNZQY (I am awaiting approval and information on connection to their server)
   - Complete Rithmic Api for [TopStep](https://www.topstep.com/) currently no affiliate. (I am awaiting approval and information on connection to their server)
-- Complete at least 1 crypto, 1 forex/cfd and 1 equities api.
-- Improve event driven functions for live data/trading scenarios by testing completed apis.
-- Complete overhaul for the ledger and market handlers.
-- Complete the back testing functionality by running test strategies on local paper ledger in parallel with live paper trading, to compare results and create a new ledger model.
-- Conduct live testing
-- Lock down handler and strategy Architecture to avoid breaking changes in future versions.
-- Slowly improve performance by updating individual components as I learn and experiment more.
-- Add more indicators including support for multi symbol indicators
-- finish charting and gui api development.
-- Add support for building strategies in other languages while using the rust engine and backend. This will be done via a mix of json and a c-types interface to convert from rust data types to a general purpose interface for other languages.
+4. Complete at least 1 crypto, 1 forex/cfd and 1 equities api.
+5. Improve event driven functions for live data/trading scenarios by testing completed apis.
+6. Complete overhaul for the ledger and market handlers.
+7. Complete the back testing functionality by running test strategies on local paper ledger in parallel with live paper trading, to compare results and create a new ledger model.
+8. Conduct live testing
+9. Lock down handler and strategy Architecture to avoid breaking changes in future versions.
+10. Slowly improve performance by updating individual components as I learn and experiment more.
+11. Add more indicators including support for multi symbol indicators
+12. finish charting and gui api development.
+13. Add support for building strategies in other languages while using the rust engine and backend. This will be done via a mix of json and a c-types interface to convert from rust data types to a general purpose interface for other languages.
 
 ## Licence and Disclaimer
 The project was a way for me to learn rust and build a portfolio of useful projects, my desire is to try and keep the engine itself open source, where I might get help with development from more seasoned developers. 
