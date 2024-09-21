@@ -62,7 +62,7 @@ If you manage to begin live trading before me, then you will need to test proper
 - Backtest ledgers and statistics very crude and incomplete/inaccurate.
 - Only TEST variant API is working, which is just a hard coded simulated api.
 - Currently working on simulating data streams and order updates for 'Test' variants, while securing a rithmic account to continue rithmic API development
-- Docker builds have not been tested recently and probably will not work.
+- Docker builds have not been tested recently and probably will not work without some minor code adjustments to the docker files.
 
 ## Current Objectives
 - Complete all simulated functionality for the TEST api variants.
