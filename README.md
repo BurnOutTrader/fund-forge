@@ -216,7 +216,7 @@ If no settings are provided in the `resources/server_settings.toml` then that br
 When running a Strategy or Ui each vendor or brokerage instance will automatically generate an Asynchronous connection per individual `Brokerage` or `DataVendor` specification, if no unique specs are input in the `server_settings.toml` then the default connection will be assumed to host the api instance.
 We can have a unique `ff_data_server` instance for each brokerage and data vendor, or we can holst all api instances on a single instance of the data server.
 
-All data transferred between strategies and the data server or strategy registry is transferred over raw Tls (not websocket) using 0 cost deserialization with the `rkyv crate`
+All data transferred between strategies and the data server or strategy registry is transferred over raw TLS/TCP (not websocket) using 0 cost deserialization with the `rkyv crate`
 The Tls handshake requires both server and client authentication certificates.
 
 An api instance for a `DataVendor` is just an object that implements `VendorApiResponse` trait
