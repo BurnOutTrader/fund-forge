@@ -155,6 +155,7 @@ All pull requests should include only human-readable code and files.
 The platform is designed to be as fast as possible, using `rkyv` for serialization and deserialization and network messaging, and `tokio` for async communication.
 The full potential of using rkyv will be unlocked in future versions, currently it is only the most basic implementation of serializing and deserializing to and from archived bytes.
 see: [rkyv](https://github.com/rkyv/rkyv)
+see tests [here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_standard_lib/README.md)
 
 I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance at the cost of slightly more hardcoding for new implementations.
 
