@@ -33,9 +33,6 @@ async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     
     let strategy = FundForgeStrategy::initialize(
-        //if none is passed in an id will be generated based on the executing program name this fn will change later as it becomes a full application, 
-        Some(String::from("test")), 
-
         // we create a notify object to control the message sender channel until we have processed the last message or to speed up the que. 
         // this gives us full async control over the engine and handlers
         Arc::new(Notify::new()),
@@ -86,10 +83,7 @@ async fn main() {
     ).await;
 }
 ```
-#### Parameters for FundForgeStrategy::initialize() 
-##### `owner_id: Option<OwnerId>:` 
-The unique identifier for the owner of the strategy. If None, a unique identifier will be generated based on the executable's name.
-
+#### Parameters for FundForgeStrategy::initialize()
 ##### `notify: Arc<Notify>:` 
 The notification mechanism for the strategy, this is useful to slow the message sender channel until we have processed the last message.
 
@@ -471,7 +465,7 @@ impl IndicatorValues {
     }
 
     /// get the value of a plot by name
-    pub fn get_plot(&self, plot_name: &PlotName) -> Option<f64> {
+    pub fn get_plot(&self, plot_name: &PlotName) -> Option<Decimal> {
         for plot in &self.values {
             if plot.name == *plot_name {
                 return Some(plot.value);
