@@ -1,12 +1,15 @@
 # Fund Forge
+fund-forge is an algorithmic trading engine written in rust. \
+
 Take a quick look at [strategy features here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
 You will need to complete the setup outlined below to run the test strategy.
 
-fund-forge is an algorithmic trading engine written in rust. \
 It is currently not able to trade live and is using only a faux `Test` api implementation to help build the standardised models which will aid future api intergrations.
 It is designed to allow maximum utility of retail trading api's by limiting the need to have duplicate api instances. \
-All strategies share a single api instance for each brokerage or data vendor by connecting via Tls to your `ff_data_server` instance/s. \
-This will allow us to use collocation services for running strategies on cloud hardware.
+
+All strategies share a single api instance for each brokerage or data vendor by connecting via Tls/TCP to your `ff_data_server` instance/s. \
+This will allow us to use collocation services for running strategies on cloud hardware and will also allows a microservices structure for managing api instances.
+
 I have tested running the data server remotely, it only adds a few seconds to backtests even at low data resolutions, this means we will be able to have our data server running on a server and keep a permanent copy of historical data in the cloud, while still back testing locally. \
 All streaming data feeds etc can be shared and only 1 stream per symbol is maintained regardless of the number of running strategies, any data of higher resolution than the primary data stream will be automatically consolidated on the strategy side by the strategies `SubscriptionHandler`. \
 This means if we have a DataVendor with a tick stream, we can subscribe to 15 minute Candles and the  engine will create those candles in real time. \
