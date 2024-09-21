@@ -782,7 +782,7 @@ async fn example() {
     let account_id: AccountId = AccountId::from("account123");
     let symbol_name: SymbolName = SymbolName::from("AAPL");
     let brokerage: Brokerage = Brokerage.Test;
-    let quantity: u64 = 100.0; //u64 to allow crypto
+    let quantity: Volume = dec!(100.0); //Decimal to allow crypto
     let tag = String::from("Example Trade");
 
     // Enter a long position and close any existing short position on the same account / symbol
