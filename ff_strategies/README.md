@@ -1,16 +1,18 @@
 ## Launching a strategy
+The test strategy might appear to be frozen during warm up, this is because we are sorting a large amount quote of data into accurate time slices for 2 symbols. 
+
 Get the test data from the instructions provided in the main readme and complete the setup. 
 To run a strategy.
 1. cargo build in the fund-forge directory
-2. complete the setup from the main readme by harcoding the directories and downloading the test data.
+2. complete the setup from the main readme by hard coding the directories and downloading the test data.
 3. In the ff_data_server folder open a terminal and `cargo run`
 4. In the test_strategy folder open a terminal and `cargo run`, or run directly in IDE
-5. The initial strategy start up will take time, as we recover historical data from our local server instance and (more demandingly) sort the individual symbol data into timeslices for perfect accuracy. 
+5. The initial strategy start up will take time, as we recover historical data from our local server instance and (more demandingly) sort the individual quote resolution symbol data into timeslices for perfect accuracy. 
 The downloading and sorting of data into time slices is concurrent, but since the test data consists of 3318839 data points per month (2 symbols) it can take some time initially.
 I am aiming to improve this function in the future.
 
 Everything found here could be changed during development, you will have to consult your IDE for minor errors like changes to function inputs. \
-See the [TEST STRATEGY](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs) for the most up-to-date working strategy example.
+See the [Test strategy](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs) for the most up-to-date working strategy example.
 
 Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function. \
 This will automatically create the engine and start the strategy in the background. \
@@ -21,6 +23,8 @@ strategy methods only need a reference to the strategy object, and will handle a
 It is possible to wrap the strategy in Arc if you need to pass it to multiple threads, all functionality will remain. \
 The strategy object is an owned object, however it does not need to be owned or mutable to access strategy methods, all methods can be called with only a reference to the strategy object, this
 allows us to pass our strategy in an Arc to any other threads or functions and still utilise its full functionality, the strategy is protected from misuse by using interior mutability.
+
+Note: Since the backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtests where the println stops outputting over weekends or market close, it will shortly resume.
 ```rust
 #[tokio::main]
 async fn main() {

@@ -18,7 +18,7 @@ use ff_standard_lib::apis::data_vendor::datavendor_enum::DataVendor;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicators_trait::IndicatorName;
-use ff_standard_lib::server_connections::{init_connections, GUI_DISABLED};
+use ff_standard_lib::server_connections::{GUI_DISABLED};
 use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::Color;
@@ -67,7 +67,7 @@ async fn main() {
         None,
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
-        Some(Duration::seconds(1)),
+        Some(Duration::milliseconds(100)),
         GUI_DISABLED
     ).await;
 
@@ -206,7 +206,8 @@ pub async fn on_data_received(
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
                 StrategyEvent::StrategyControls(control, _) => {}
                 StrategyEvent::ShutdownEvent(event) => {
-                    strategy.export_trades(&String::from("/Users/kevmonaghan/RustroverProjects/Test Trade Exports"));
+                    println!("{}",event);
+                    //strategy.export_trades(&String::from("/Users/kevmonaghan/RustroverProjects/Test Trade Exports"));
                     let ledgers = strategy.print_ledgers().await;
                     for ledger in ledgers {
                         println!("{:?}", ledger);
