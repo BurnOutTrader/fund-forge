@@ -10,7 +10,7 @@ The downloading and sorting of data into time slices is concurrent, but since th
 I am aiming to improve this function in the future.
 
 Everything found here could be changed during development, you will have to consult your IDE for minor errors like changes to function inputs. \
-See the [TEST STRATEGY](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs) for the most up to date working main function.
+See the [TEST STRATEGY](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs) for the most up-to-date working strategy example.
 
 Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function. \
 This will automatically create the engine and start the strategy in the background. \

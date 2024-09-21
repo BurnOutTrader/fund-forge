@@ -12,7 +12,9 @@ I am prone to doing a major overhaul to add a new feature or improve the design,
 
 ## Warning 
 Please do not launch your data server on a public address, despite using Tls it is currently suitable for private local host only.
-I am not a professional in sec ops or software development.
+I am not a professional software developer.
+
+If you manage to get this live trading before me, then you will need to test properly, there will be bugs.
 
 ## Incomplete: current state
 - Daily, Weekly or Monthly resolution subscriptions will have custom consolidators based on market hours, this is because data vendors have an inconsistent definition of daily bars.
