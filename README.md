@@ -55,8 +55,9 @@ I am not a professional software developer and many security concerns have not y
 If you manage to begin live trading before me, then you will need to test properly, there will be bugs.
 
 ## Incomplete: current state
-- Daily, Weekly or Monthly resolution subscriptions will have custom consolidators based on market hours, this is because data vendors have an inconsistent definition of daily bars.
+- Daily, Weekly or Monthly resolution subscriptions will have custom consolidators based upon symbol market hours, this is because data vendors have an inconsistent definition of daily bars.
   I will build custom consolidators for these types of resolutions in the future.
+- Renko consolidator is available but not implemented and will panic.
 - Currently building a Rithmic API as the first live trading and back testing api. I did build an Oanda implementation, but they closed my live account without any reason (Not salty but I am not sure what the misunderstanding was) so I have scraped that for now as I needed to proceed with development, I will come back to oanda api later.
 - Backtest ledgers and statistics very crude and incomplete/inaccurate.
 - Only TEST variants API is working, which is just a hard coded .
