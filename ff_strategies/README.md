@@ -11,10 +11,11 @@ To run a strategy.
 The downloading and sorting of data into time slices is concurrent, but since the test data consists of 3318839 data points per month (2 symbols) it can take some time initially.
 I have tested running the data server remotely, it only adds a few seconds to backtests even at low data resolutions, this means we will be able to have our data server running on a server and keep a permanent copy of historical data in the cloud, while still back testing locally.
 
-Everything found here could be changed during development, you will have to consult your IDE for minor errors like changes to function inputs. \
+Everything found here could be changed during development, you will have to consult your IDE for minor errors like changes to function inputs. 
+
 See the [Test strategy](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs) for the most up-to-date working strategy example.
 
-Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function. \
+Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function. 
 This will automatically create the engine and start the strategy in the background. \
 Then we can receive events in our `fn on_data_received()` function. \
 The strategy object returned from `initialize()` is a fully owned object, and we can pass it to other function, wrap it in an arc etc. \
