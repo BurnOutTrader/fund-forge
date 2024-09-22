@@ -320,13 +320,13 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
             }
 
             let slice = StrategyEvent::TimeSlice(Utc::now().to_string(), time_slice.clone());
+            *time_slice = TimeSlice::new();
+
             buffer.push(slice);
             if !buffer.is_empty() {
-                let buffer = buffer.clone();
-                send_strategy_event_slice(buffer).await;
+                send_strategy_event_slice(buffer.clone()).await;
+                *buffer = EventTimeSlice::new();
             }
-            *time_slice = TimeSlice::new();
-            *buffer = EventTimeSlice::new();
             instant = Instant::now() + buffer_duration;
         }
     });
