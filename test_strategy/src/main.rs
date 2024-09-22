@@ -272,7 +272,7 @@ pub async fn on_data_received(
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice_event {
                                 for (_name, plot) in indicator_values.values(){
-                                    println!("{}: {:?}", plot.name, plot.value);
+                                    println!("{}: {}: {:?}", indicator_values.name, plot.name, plot.value);
                                 }
                             }
                         }

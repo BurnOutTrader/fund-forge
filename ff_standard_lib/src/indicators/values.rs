@@ -35,10 +35,10 @@ impl IndicatorPlot {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct IndicatorValues {
-    name: IndicatorName,
-    time: String,
-    subscription: DataSubscription,
-    values: BTreeMap<PlotName, IndicatorPlot>,
+    pub name: IndicatorName,
+    pub time: String,
+    pub subscription: DataSubscription,
+    pub values: BTreeMap<PlotName, IndicatorPlot>,
 }
 
 impl Display for IndicatorValues {
