@@ -334,11 +334,11 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
 
             buffer.push(slice);
             if !buffer.is_empty() {
-                notify.notified().await;
                 send_strategy_event_slice(buffer.clone()).await;
                 *buffer = EventTimeSlice::new();
             }
             instant = Instant::now() + buffer_duration;
+            notify.notified().await;
         }
     });
 
