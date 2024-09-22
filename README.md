@@ -23,7 +23,7 @@ I will create a YouTube video on setting up the platform for development purpose
 The strategy engine will be started in the background depending on the StrategyMode. The strategy can be shared between threads and maintain full functionality, allowing the strategy logic to be delegated between custom user functions and use async architectures.
 
 Then we will receive data and events as an `EventTimeSlice` in our event_receiver.
-Events will be a collection of all strategy related events that occurred within a buffer period.
+Events are a vec collection of all `StrategyEvents` that occurred within a buffer period.
 
 We have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
 ```rust
