@@ -153,7 +153,7 @@ Much of the functionality of fund forge occurs through associated helper functio
 ```rust
 fn example() {
   let vendor = DataVendor::RithmicTest;
-  let symbols: Vec<Symbol> = brokerage.symbols(MarketType::Futures).await;
+  let symbols: Vec<Symbol> = vendor.symbols(MarketType::Futures).await;
   
   let brokerage = Brokerage::RithmicTest;
   let symbols: SymbolInfo = brokerage.symbol_info(SymbolName::from("NQ")).await;
@@ -163,6 +163,9 @@ fn example() {
   let is_long: bool = strategy.is_long().await; //parameters excluded for brevity
 }
 ```
+DataVendor allows us to connect to data providers that are not necessarily brokers, but brokers can also be DataVendor's
+
+Brokerage allows us to connect to brokerages and exchanges that facilitate placing orders, they can also be DataVendors, but we can place orders based on any data feed, or multiple feeds for the same symbol name.
 
 All strategies can trade multiple symbols and brokers at the same time, as well as subscribe and unsubscribe from data feeds and indicators at run time.
 
