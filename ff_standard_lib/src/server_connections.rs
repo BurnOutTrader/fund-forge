@@ -1,4 +1,4 @@
-use std::collections::{HashMap};
+use std::collections::{BTreeMap, HashMap};
 use crate::servers::communications_async::{ExternalSender};
 use crate::servers::init_clients::{create_async_api_client};
 use crate::servers::settings::client_settings::{initialise_settings, ConnectionSettings};
@@ -8,9 +8,9 @@ use lazy_static::lazy_static;
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use ahash::AHashMap;
-use async_std::task::sleep;
-use chrono::{Duration, Utc};
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use futures::SinkExt;
 use strum_macros::Display;
@@ -20,6 +20,7 @@ use tokio::io::{AsyncReadExt, ReadHalf};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::sync::mpsc::Sender;
+use tokio::time::{sleep_until, Instant};
 use tokio_rustls::TlsStream;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
@@ -27,10 +28,11 @@ use crate::drawing_objects::drawing_object_handler::DrawingObjectHandler;
 use crate::indicators::indicator_handler::{IndicatorHandler};
 use crate::interaction_handler::InteractionHandler;
 use crate::market_handler::market_handlers::MarketHandler;
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::orders::orders::{OrderRequest};
 use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
-use crate::standardized_types::strategy_events::StrategyEvent::DataSubscriptionEvents;
 use crate::standardized_types::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
 use crate::standardized_types::time_slices::TimeSlice;
@@ -232,7 +234,7 @@ pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_c
     });
 }
 /// This response handler is also acting as a live engine.
-async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Option<Duration>, settings_map: HashMap<ConnectionType, ConnectionSettings>)  {
+async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Duration, settings_map: HashMap<ConnectionType, ConnectionSettings>)  {
     let mut receiver = receiver;
     let callbacks: Arc<RwLock<AHashMap<u64, oneshot::Sender<DataServerResponse>>>> = Default::default();
     let connection_map = Arc::new(settings_map);
@@ -291,12 +293,54 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
 
     let strategy_subscriptions = STRATGEY_SUBSCRIPTIONS.clone();
     let callbacks = callbacks.clone();
+    let event_buffer = Arc::new(RwLock::new(EventTimeSlice::new()));
+    let open_bars: Arc<RwLock<BTreeMap<DataSubscription, BTreeMap<DateTime<Utc>, BaseDataEnum>>>> = Arc::new(RwLock::new(BTreeMap::new()));
+    let time_slice = Arc::new(RwLock::new(TimeSlice::new()));
+    // start a buffer loop to send events every buffer interval
+
+    let event_buffer_ref = event_buffer.clone();
+    let time_slice_ref = time_slice.clone();
+    let open_bars_Ref = open_bars.clone();
+    let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
+    tokio::task::spawn(async move {
+        let mut instant = Instant::now() + buffer_duration;
+        loop {
+            sleep_until(instant.into()).await;
+            let mut buffer = event_buffer_ref.write().await;
+            let mut time_slice = time_slice_ref.write().await;
+            let mut open_bars = open_bars_Ref.write().await;
+            for (_, map) in &mut *open_bars {
+                for (_, data) in &mut *map {
+                    time_slice.push(data.clone());
+                }
+                map.clear();
+            }
+            if let Some(remaining_time_slice) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                time_slice.extend(remaining_time_slice);
+            }
+
+            let slice = StrategyEvent::TimeSlice(Utc::now().to_string(), time_slice.clone());
+            buffer.push(slice);
+            if !buffer.is_empty() {
+                let buffer = buffer.clone();
+                send_strategy_event_slice(buffer).await;
+            }
+            *time_slice = TimeSlice::new();
+            *buffer = EventTimeSlice::new();
+            instant = Instant::now() + buffer_duration;
+        }
+    });
+
+
     for incoming in ASYNC_INCOMING.iter() {
         let register_message = StrategyRequest::OneWay(incoming.key().clone(), DataServerRequest::Register(mode.clone()));
         send_request(register_message).await;
         let receiver = incoming.clone();
         let callbacks = callbacks.clone();
         let strategy_subscriptions_ref = strategy_subscriptions.clone();
+        let event_buffer = event_buffer.clone();
+        let time_slice = time_slice.clone();
+        let open_bars = open_bars.clone();
         tokio::task::spawn(async move {
             let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
             //let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
@@ -324,6 +368,9 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                 let callbacks = callbacks.clone();
                 let strategy_subscriptions = strategy_subscriptions_ref.clone();
                 let subscription_handler = subscription_handler.clone();
+                let event_buffer = event_buffer.clone();
+                let time_slice = time_slice.clone();
+                let open_bars = open_bars.clone();
                 tokio::task::spawn(async move {
                     let response = DataServerResponse::from_bytes(&message_body).unwrap();
                     match response.get_callback_id() {
@@ -342,7 +389,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                         false => {
                                             let event = DataSubscriptionEvent::FailedSubscribed(subscription.clone(), reason.unwrap());
                                             let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                            send_strategy_event_slice(vec![event_slice]).await;
+                                            event_buffer.write().await.push(event_slice);
                                             println!("Handler: Subscribe Failed: {}", subscription);
                                         }
                                     }
@@ -352,12 +399,12 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                         true => {
                                             let event = DataSubscriptionEvent::Unsubscribed(subscription);
                                             let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                            send_strategy_event_slice(vec![event_slice]).await;
+                                            event_buffer.write().await.push(event_slice);
                                         }
                                         false => {
                                             let event = DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap());
                                             let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                            send_strategy_event_slice(vec![event_slice]).await;
+                                            event_buffer.write().await.push(event_slice);
                                         }
                                     }
                                 }
@@ -375,8 +422,19 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                     if strategy_time_slice.is_empty() {
                                         return;;
                                     }
-                                    let event_slice = StrategyEvent::TimeSlice(Utc::now().to_string() ,strategy_time_slice);
-                                    send_strategy_event_slice(vec![event_slice]).await;
+
+                                    for data in strategy_time_slice {
+                                        let subscription = data.subscription();
+                                        if data.is_closed() {
+                                            time_slice.write().await.push(data);
+                                        } else {
+                                            let mut open_bars = open_bars.write().await;
+                                            if !open_bars.contains_key(&subscription) {
+                                                open_bars.insert(subscription.clone(), BTreeMap::new());
+                                            }
+                                            open_bars.get_mut(&subscription).unwrap().insert(data.time_utc(), data);
+                                        }
+                                    }
                                 }
                                 _ => panic!("Incorrect response here: {:?}", response)
                             }
@@ -402,14 +460,15 @@ pub async fn send(connection_type: ConnectionType, msg: Vec<u8>) {
     }
 }
 
-pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>) {
+pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>,  event_sender: mpsc::Sender<EventTimeSlice>,) {
+    STRATEGY_SENDER.get_or_init(|| {
+        event_sender
+    }).clone();
     SUBSCRIPTION_HANDLER.get_or_init(|| {
         subscription_handler
     }).clone();
 }
 pub async fn initialize_static(
-    mode: StrategyMode,
-    event_sender: mpsc::Sender<EventTimeSlice>,
     indicator_handler: Arc<IndicatorHandler>,
     market_handler: Arc<MarketHandler>,
     timed_event_handler: Arc<TimedEventHandler>,
@@ -417,9 +476,6 @@ pub async fn initialize_static(
     drawing_objects_handler: Arc<DrawingObjectHandler>,
 ) {
 
-    STRATEGY_SENDER.get_or_init(|| {
-        event_sender
-    }).clone();
     INDICATOR_HANDLER.get_or_init(|| {
         indicator_handler
     }).clone();
@@ -437,7 +493,7 @@ pub async fn initialize_static(
     }).clone();
 }
 
-pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duration>, mode: StrategyMode) {
+pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode) {
     //initialize_strategy_registry(platform_mode.clone()).await;
     let settings_map = initialise_settings().unwrap();
     println!("Connections: {:?}", settings_map);

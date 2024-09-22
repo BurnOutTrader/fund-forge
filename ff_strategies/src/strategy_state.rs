@@ -1,8 +1,9 @@
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, Utc};
 use chrono_tz::Tz;
 use ff_standard_lib::helpers::converters::convert_to_utc;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use std::fmt::Debug;
+use std::time::Duration;
 
 #[derive(Clone)]
 pub struct StrategyStartState {
@@ -34,12 +35,8 @@ impl StrategyStartState {
         end_date: NaiveDateTime,
         time_zone: Tz,
         warmup_duration: Duration,
-        buffer_resolution: Option<Duration>,
+        buffer_resolution: Duration,
     ) -> StrategyStartState {
-        let buffer_resolution = match buffer_resolution {
-            Some(backtest_resolution) => backtest_resolution,
-            None => Duration::milliseconds(250),
-        };
         let start_date = convert_to_utc(start_date, time_zone);
         println!("start_date: {:?}", start_date);
         let end_date = convert_to_utc(end_date, time_zone);

@@ -2,7 +2,7 @@ use crate::engine::BackTestEngine;
 use ff_standard_lib::interaction_handler::InteractionHandler;
 use crate::strategy_state::StrategyStartState;
 use ahash::AHashMap;
-use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc, Duration as ChronoDuration};
 use chrono_tz::Tz;
 use ff_standard_lib::drawing_objects::drawing_object_handler::DrawingObjectHandler;
 use ff_standard_lib::drawing_objects::drawing_tool_enum::DrawingTool;
@@ -33,6 +33,7 @@ use std::collections::BTreeMap;
 use std::env;
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Duration;
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;
 use tokio::sync::{mpsc, Notify};
@@ -102,17 +103,20 @@ impl FundForgeStrategy {
         start_date: NaiveDateTime,
         end_date: NaiveDateTime,
         time_zone: Tz,
-        warmup_duration: Duration,
+        warmup_duration: ChronoDuration,
         subscriptions: Vec<DataSubscription>,
         retain_history: u64,
         strategy_event_sender: mpsc::Sender<EventTimeSlice>,
         replay_delay_ms: Option<u64>,
-        buffering_resolution: Option<Duration>,
+        buffering_resolution: ChronoDuration,
         gui_enabled: bool
     ) -> FundForgeStrategy {
+        let buffering_resolution = Duration::from_secs(buffering_resolution.num_minutes() as u64 * 60);
+        let warmup_duration = Duration::from_secs(warmup_duration.num_minutes() as u64 * 60);
+
         let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
         let subscription_handler = Arc::new(subscription_handler);
-        init_sub_handler(subscription_handler.clone()).await;
+        init_sub_handler(subscription_handler.clone(), strategy_event_sender).await;
         init_connections(gui_enabled, buffering_resolution, strategy_mode.clone()).await;
 
         let start_state = StrategyStartState::new(
@@ -153,8 +157,6 @@ impl FundForgeStrategy {
         };
 
         initialize_static(
-            strategy_mode.clone(),
-            strategy_event_sender,
             indicator_handler,
             market_event_handler,
             timed_event_handler,
