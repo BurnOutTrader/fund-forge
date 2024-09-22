@@ -176,7 +176,7 @@ pub struct Symbol {
 
 Brokerage allows us to connect to brokerages and exchanges that facilitate placing orders, they can also be DataVendors, but we can place orders based on any data feed, or multiple feeds for the same symbol name.
 All strategies can trade multiple symbols and brokers at the same time, as well as subscribe and unsubscribe from data feeds and indicators at run time.
-A broker only needs a symbol name to place an order.
+A `Brokerage` variant only needs a symbol name to place an order.
 ```rust
 fn example() {
   let symbol_name: SymbolName = SymbolName::from("AUD-USD");
