@@ -204,12 +204,12 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             continue 'strategy_loop;
                         }
                         match base_data {
-                            BaseDataEnum::Price(_) => {}
+                            BaseDataEnum::TradePrice(ref trade_price) => {}
                             BaseDataEnum::Candle(ref candle) => {}
-                            BaseDataEnum::QuoteBar(_) => {}
-                            BaseDataEnum::Tick(tick) => {}
-                            BaseDataEnum::Quote(_) => {}
-                            BaseDataEnum::Fundamental(_) => {}
+                            BaseDataEnum::QuoteBar(ref quote_bar) => {}
+                            BaseDataEnum::Tick(ref tick) => {}
+                            BaseDataEnum::Quote(ref tick) => {}
+                            BaseDataEnum::Fundamental(ref fundamental) => {}
                         }
                     }
                 }

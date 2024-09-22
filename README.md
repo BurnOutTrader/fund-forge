@@ -1,6 +1,13 @@
 # Fund Forge
 
 **Fund Forge** is an algorithmic trading engine written in Rust.
+The engine is designed to allow simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators and
+managing orders, connections and data streams.
+The engine can consolidate data into any bar type and resolution automatically using simple methods like `strategy.subscribe()` and `strategy.subscribe_indicator()`.
+There are event driven handlers and a buffering system for maintaining consistency from back testing to live trading, to allow for simple strategy design and management similar to 
+common retail trading platforms.
+
+It is easy to build and run strategies across multiple machines, build indicators and add brokers or data feeds, including fundamental data.
 
 Take a quick look at [strategy features here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md). You will need to complete the setup outlined below to run the test strategy.
 
