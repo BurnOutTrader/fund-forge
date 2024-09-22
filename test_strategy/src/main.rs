@@ -23,6 +23,7 @@ use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::Color;
+use ff_standard_lib::standardized_types::orders::orders::OrderUpdateEvent;
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 
 
@@ -34,7 +35,7 @@ async fn main() {
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         notify.clone(),
-        StrategyMode::Backtest,                 // Backtest, Live, LivePaper
+        StrategyMode::LivePaperTrading,                 // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 6, 10)
             .unwrap()
@@ -50,7 +51,7 @@ async fn main() {
             DataSubscription::new_custom(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Minutes(3),
+                Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
                 CandleType::CandleStick,
@@ -58,7 +59,7 @@ async fn main() {
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Minutes(3),
+                 Resolution::Seconds(5),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::HeikinAshi,
@@ -68,7 +69,7 @@ async fn main() {
         None,
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
-        Some(Duration::milliseconds(100)),
+        Duration::milliseconds(100),
         GUI_DISABLED
     ).await;
 
@@ -81,25 +82,25 @@ pub async fn on_data_received(
     notify: Arc<Notify>,
     mut event_receiver: mpsc::Receiver<EventTimeSlice>,
 ) {
-    let heikin_atr_20 = IndicatorEnum::AverageTrueRange(
-        AverageTrueRange::new(IndicatorName::from("heikin_atr_20"),
-          DataSubscription::new_custom(
-            SymbolName::from("EUR-USD"),
-            DataVendor::Test,
-            Resolution::Minutes(3),
-            BaseDataType::QuoteBars,
-            MarketType::Forex,
-            CandleType::CandleStick,
-          ),
+    let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
+        AverageTrueRange::new(IndicatorName::from("heikin_atr_5"),
+              DataSubscription::new_custom(
+                  SymbolName::from("EUR-USD"),
+                  DataVendor::Test,
+                  Resolution::Seconds(5),
+                  BaseDataType::QuoteBars,
+                  MarketType::Forex,
+                  CandleType::CandleStick,
+              ),
             100,
-            20,
+            5,
             Some(Color::new(50,50,50))
         ).await,
     );
-    strategy.indicator_subscribe(heikin_atr_20).await;
+    strategy.indicator_subscribe(heikin_atr_5).await;
 
     let brokerage = Brokerage::Test;
-    let mut warmup_complete = false;
+    let mut warmup_complete = true;
     let mut bars_since_entry_1 = 0;
     let mut bars_since_entry_2 = 0;
     let mut history_1 : RollingWindow<QuoteBar> = RollingWindow::new(10);
@@ -118,11 +119,11 @@ pub async fn on_data_received(
                     for base_data in &time_slice {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
-                            BaseDataEnum::TradePrice(_) => {}
+                            BaseDataEnum::TradePrice(_trade_price) => {}
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    println!("{}", candle);
+                                    println!("Candle {}: {}", candle.symbol.name, candle.time);
                                     history_2.add(candle.clone());
                                     let last_bar =
                                         match history_2.get(1) {
@@ -159,7 +160,7 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
-                                    println!("{}", quotebar);
+                                    println!("QuoteBar {}: {}", quotebar.symbol.name, quotebar.time);
                                     history_1.add(quotebar.clone());
                                     let last_bar =
                                     match history_1.get(1) {
@@ -198,7 +199,7 @@ pub async fn on_data_received(
                                     //println!("Open bar time: {}", time)
                                 }
                             }
-                            BaseDataEnum::Tick(_) => {}
+                            BaseDataEnum::Tick(_tick) => {}
                             BaseDataEnum::Quote(quote) => {
                                 // primary data feed won't show up in event loop unless specifically subscribed by the strategy
                                 println!(
@@ -207,16 +208,35 @@ pub async fn on_data_received(
                                     base_data.time_created_utc()
                                 );
                             }
-                            BaseDataEnum::Fundamental(_) => {}
+                            BaseDataEnum::Fundamental(_fundamental) => {}
                         }
                     }
                 }
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(event) => {
-                    let ledgers = strategy.print_ledgers().await;
-                    for ledger in ledgers {
-                        println!("{:?}", ledger);
-                    }
+                    match &event {
+                        OrderUpdateEvent::Accepted { brokerage, account_id, order_id } => {
+                            println!("{:?}", strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                        }
+                        OrderUpdateEvent::Filled { brokerage, account_id, order_id } => {
+                            println!("{:?}", strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                        },
+                        OrderUpdateEvent::PartiallyFilled { brokerage, account_id, order_id } => {
+                            println!("{:?}", strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                        }
+                        OrderUpdateEvent::Cancelled { brokerage, account_id, order_id } => {
+                            println!("{:?}", strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                        }
+                        OrderUpdateEvent::Rejected { brokerage, account_id, order_id, reason } => {
+                            println!("{:?}", strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                        }
+                        OrderUpdateEvent::Updated { brokerage, account_id, order_id } => {
+                            println!("{:?}", strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                        }
+                        OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason } => {
+                            println!("{:?}", strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                        }
+                    };
                     println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), event);
                 }
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode

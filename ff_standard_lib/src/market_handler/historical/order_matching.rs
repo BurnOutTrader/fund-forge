@@ -32,7 +32,7 @@ pub async fn backtest_matching_engine(
         order.quantity_filled = order.quantity_ordered;
         order.time_filled_utc = Some(last_time_utc.to_string());
         events.push(StrategyEvent::OrderEvents(
-            OrderUpdateEvent::Filled(order.id),
+            OrderUpdateEvent::Filled{order_id: order.id, brokerage: order.brokerage, account_id: order.account_id},
         ));
     };
 
@@ -40,7 +40,7 @@ pub async fn backtest_matching_engine(
         order.state = OrderState::Rejected(reason.clone());
         order.time_created_utc = last_time_utc.to_string();
         events.push(StrategyEvent::OrderEvents(
-            OrderUpdateEvent::Rejected{id: order.id, reason},
+            OrderUpdateEvent::Rejected{order_id: order.id, brokerage: order.brokerage, account_id: order.account_id, reason},
         ));
     };
 
@@ -49,7 +49,7 @@ pub async fn backtest_matching_engine(
         order.state = OrderState::Accepted;
         order.time_created_utc = last_time_utc.to_string();
         events.push(StrategyEvent::OrderEvents(
-            OrderUpdateEvent::Accepted(order.id.clone()),
+            OrderUpdateEvent::Accepted{order_id: order.id.clone(), brokerage: order.brokerage.clone(), account_id: order.account_id.clone()},
         ));
         remaining_orders.push(order);
     };

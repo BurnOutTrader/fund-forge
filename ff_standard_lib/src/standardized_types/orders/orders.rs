@@ -20,7 +20,7 @@ use crate::apis::brokerage::broker_enum::Brokerage;
 #[archive_attr(derive(Debug))]
 pub enum OrderRequest {
     Create{brokerage: Brokerage, order: Order},
-    Cancel{brokerage: Brokerage, order_id: OrderId},
+    Cancel{brokerage: Brokerage, order_id: OrderId, account_id: AccountId},
     Update{brokerage: Brokerage, order_id: OrderId, order: Order}
 }
 
@@ -365,19 +365,19 @@ pub enum OrderChangeType {
 ///
 /// This enum is used to communicate changes in order status between the trading strategy, the user interface, and the brokerage connection. Each variant represents a specific type of update or state change that an order can experience.
 pub enum OrderUpdateEvent {
-    Accepted(OrderId),
+    Accepted{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    Filled(OrderId),
+    Filled{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    PartiallyFilled(OrderId),
+    PartiallyFilled{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    Cancelled(OrderId),
+    Cancelled{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    Rejected{id: OrderId, reason: String},
+    Rejected{brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
 
-    Updated(OrderId),
+    Updated{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    UpdateRejected{id: OrderId, reason: String},
+    UpdateRejected{brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
 }
 
 impl OrderUpdateEvent {

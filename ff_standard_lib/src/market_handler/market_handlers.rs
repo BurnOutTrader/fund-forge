@@ -161,7 +161,7 @@ impl MarketHandler {
                             Some(event) => event_buffer.write().await.extend(event)
                         }
                     }
-                    OrderRequest::Cancel{brokerage, order_id } => {
+                    OrderRequest::Cancel{brokerage, order_id, account_id } => {
                         let mut existing_order: Option<Order> = None;
                         let mut cache = order_cache.write().await;
                         'order_search: for order in &*cache {
@@ -172,10 +172,10 @@ impl MarketHandler {
                         }
                         if let Some(order) = existing_order {
                             cache.retain(|x| x.id != order_id);
-                            let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Cancelled(order.id));
+                            let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Cancelled{ brokerage, account_id: order.account_id.clone(), order_id: order.id});
                             event_buffer.write().await.push(cancel_event);
                         } else {
-                            let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::UpdateRejected { id: order_id, reason: String::from("No pending order found") });
+                            let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found") });
                             event_buffer.write().await.push(fail_event);
                         }
                     }
@@ -191,11 +191,11 @@ impl MarketHandler {
                         }
                         if let Some(_) = existing_order {
                             cache.retain(|x| x.id != order_id);
-                            let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Updated(order.id.clone()));
+                            let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Updated{ brokerage, account_id: order.account_id.clone(), order_id: order.id.clone()});
                             cache.push(order);
                             event_buffer.write().await.push(update_event);
                         } else {
-                            let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::UpdateRejected { id: order_id, reason: String::from("No pending order found") });
+                            let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::UpdateRejected { brokerage, account_id: order.account_id.clone(), order_id: order.id, reason: String::from("No pending order found") });
                             event_buffer.write().await.push(fail_event);
                         }
                         match order_matching::backtest_matching_engine(order_books.clone(), last_price.clone(), ledgers.clone(), time, order_cache.clone()).await {
@@ -223,6 +223,15 @@ impl MarketHandler {
             }
         }
         return_strings
+    }
+
+    pub async fn print_ledger(&self, brokerage: Brokerage, account_id: AccountId) -> Option<String> {
+        if let Some(brokerage_map) = self.ledgers.get(&brokerage) {
+            if let Some(ledger) = brokerage_map.get(&account_id) {
+                return Some(ledger.print())
+            }
+        }
+        None
     }
 
     pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {

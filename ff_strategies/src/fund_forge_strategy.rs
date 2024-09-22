@@ -380,8 +380,8 @@ impl FundForgeStrategy {
         order_id
     }
 
-    pub async fn cancel_order(&self, brokerage: Brokerage, order_id: OrderId) {
-        let cancel_msg =  OrderRequest::Cancel{ brokerage, order_id };
+    pub async fn cancel_order(&self, brokerage: Brokerage, order_id: OrderId, account_id: AccountId) {
+        let cancel_msg =  OrderRequest::Cancel{order_id, brokerage, account_id};
         self.order_sender.send(cancel_msg).await.unwrap()
     }
 
@@ -569,6 +569,10 @@ impl FundForgeStrategy {
 
     pub async fn print_ledgers(&self) -> Vec<String> {
         self.market_handler.process_ledgers().await
+    }
+
+    pub async fn print_ledger(&self, brokerage: Brokerage, account_id: AccountId) -> Option<String> {
+        self.market_handler.print_ledger(brokerage, account_id).await
     }
 
     pub fn export_trades(&self, folder: &str) {
