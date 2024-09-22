@@ -33,23 +33,17 @@ pub async fn on_data_received(
     mut event_receiver: mpsc::Receiver<EventTimeSlice>,
 ) {
     let mut warmup_complete = false;
-    // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for strategy_event in event_slice {
             match strategy_event {
-                // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
                 StrategyEvent::DrawingToolEvents(event, _) => {
                     println!("Strategy: Drawing Tool Event: {:?}", event);
                 }
-
                 StrategyEvent::TimeSlice(time, time_slice) => {
-                    // here we would process the time slice events and update the strategy state accordingly.
                     for base_data in &time_slice {
-                        // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::TradePrice(trade_price) => {}
                             BaseDataEnum::Candle(candle) => {
-                                // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
                                     println!("Candle {}: {}", candle.symbol.name, candle.time);
                                 } else if candle.is_closed == false {
@@ -57,7 +51,6 @@ pub async fn on_data_received(
                                 }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
-                                // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
                                     println!("QuoteBar {}: {}", quotebar.symbol.name, quotebar.time);
                                 } else if quotebar.is_closed == false {
@@ -66,31 +59,18 @@ pub async fn on_data_received(
                             }
                             BaseDataEnum::Tick(tick) => {}
                             BaseDataEnum::Quote(quote) => {
-                                // primary data feed won't show up in event loop unless specifically subscribed by the strategy
-                                println!(
-                                    "{} Quote: {}",
-                                    quote.symbol.name,
-                                    base_data.time_created_utc()
-                                );
+                                println!("{} Quote: {}", quote.symbol.name, base_data.time_created_utc());
                             }
                             BaseDataEnum::Fundamental(_fundamental) => {}
                         }
                     }
                 }
-
-                // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(events) => {
                     println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), events);
                 }
-
-                // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
                 StrategyEvent::DataSubscriptionEvents(events,_) => {
-                    for event in events {
-                        println!("Strategy: Data Subscription Event: {:?}", event);
-                    }
+                    println!("Strategy: Data Subscription Events: {:?}", events);
                 }
-
-                // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
                 StrategyEvent::StrategyControls(control, _) => {
                   match control {
                     StrategyControls::Continue => {}
@@ -100,38 +80,19 @@ pub async fn on_data_received(
                     StrategyControls::Delay(_) => {}
                   }
                 }
-
                 StrategyEvent::ShutdownEvent(event) => {
-                    println!("{}",event);
-                    //we should handle shutdown gracefully by first ending the strategy loop.
                     break 'strategy_loop
                 },
-
                 StrategyEvent::WarmUpComplete{} => {
-                    println!("Strategy: Warmup Complete");
                     warmup_complete = true;
                 }
-
                 StrategyEvent::IndicatorEvent(indicator_event) => {
                     //we can handle indicator events here, this is useful for debugging and monitoring the state of the indicators.
                     match indicator_event {
-                        IndicatorEvents::IndicatorAdded(added_event) => {
-                            println!("Strategy:Indicator Added: {:?}", added_event);
-                        }
-                        IndicatorEvents::IndicatorRemoved(removed_event) => {
-                            println!("Strategy:Indicator Removed: {:?}", removed_event);
-                        }
-                        IndicatorEvents::IndicatorTimeSlice(slice_event) => {
-                            // we can see our auto manged indicator values for here.
-                            for indicator_values in slice_event {
-                                for (_name, plot) in indicator_values.values(){
-                                    println!("{}: {}: {:?}", indicator_values.name, plot.name, plot.value);
-                                }
-                            }
-                        }
-                        IndicatorEvents::Replaced(replace_event) => {
-                            println!("Strategy:Indicator Replaced: {:?}", replace_event);
-                        }
+                        IndicatorEvents::IndicatorAdded(added_event) => {}
+                        IndicatorEvents::IndicatorRemoved(removed_event) => {}
+                        IndicatorEvents::IndicatorTimeSlice(slice_event) => {}
+                        IndicatorEvents::Replaced(replace_event) => {}
                     }
                 }
                 StrategyEvent::PositionEvents => {}
@@ -139,8 +100,6 @@ pub async fn on_data_received(
         }
         notify.notify_one();
     }
-    event_receiver.close();
-    println!("Strategy: Event Loop Ended");
 }
 ```
 
