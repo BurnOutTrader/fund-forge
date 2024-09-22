@@ -283,7 +283,6 @@ async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: Arc<Mute
     let mut receiver = receiver;
     tokio::spawn(async move {
         while let Some(response) = receiver.recv().await {
-            println!("{:?}", response);
             // Convert the response to bytes
             let bytes = response.to_bytes();
 
