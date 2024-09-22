@@ -20,6 +20,130 @@ Take a quick look at [strategy features here](https://github.com/BurnOutTrader/f
 
 I will create a YouTube video on setting up the platform for development purposes in the near future.
 
+The strategy engine will be started in the background depending on the StrategyMode.
+
+Then we will receive data and events as an EventTimeSlice in our event_receiver.
+Events will be a collection of all strategy related events that occurred within the buffer period.
+
+We have options for interacting with strategies using drawing tools and commands from a user interface, and a complete desktop charting package is in development.
+```rust
+pub async fn on_data_received(
+    strategy: FundForgeStrategy,
+    notify: Arc<Notify>,
+    mut event_receiver: mpsc::Receiver<EventTimeSlice>,
+) {
+    let mut warmup_complete = false;
+    // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
+    'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
+        for strategy_event in event_slice {
+            match strategy_event {
+                // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
+                StrategyEvent::DrawingToolEvents(event, _) => {
+                    println!("Strategy: Drawing Tool Event: {:?}", event);
+                }
+
+                StrategyEvent::TimeSlice(time, time_slice) => {
+                    // here we would process the time slice events and update the strategy state accordingly.
+                    for base_data in &time_slice {
+                        // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
+                        match base_data {
+                            BaseDataEnum::TradePrice(_trade_price) => {}
+                            BaseDataEnum::Candle(candle) => {
+                                // Place trades based on the AUD-CAD Heikin Ashi Candles
+                                if candle.is_closed == true {
+                                    println!("Candle {}: {}", candle.symbol.name, candle.time);
+                                } else if candle.is_closed == false {
+                                  println!("Candle {}: {}", candle.symbol.name, candle.time);
+                                }
+                            }
+                            BaseDataEnum::QuoteBar(quotebar) => {
+                                // Place trades based on the EUR-USD QuoteBars
+                                if quotebar.is_closed == true {
+                                    println!("QuoteBar {}: {}", quotebar.symbol.name, quotebar.time);
+                                } else if quotebar.is_closed == false {
+                                  println!("QuoteBar {}: {}", quotebar.symbol.name, quotebar.time);
+                                }
+                            }
+                            BaseDataEnum::Tick(_tick) => {}
+                            BaseDataEnum::Quote(quote) => {
+                                // primary data feed won't show up in event loop unless specifically subscribed by the strategy
+                                println!(
+                                    "{} Quote: {}",
+                                    quote.symbol.name,
+                                    base_data.time_created_utc()
+                                );
+                            }
+                            BaseDataEnum::Fundamental(_fundamental) => {}
+                        }
+                    }
+                }
+
+                // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
+                StrategyEvent::OrderEvents(events) => {
+                    println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), events);
+                }
+
+                // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
+                StrategyEvent::DataSubscriptionEvents(events,_) => {
+                    for event in events {
+                        println!("Strategy: Data Subscription Event: {:?}", event);
+                    }
+                }
+
+                // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
+                StrategyEvent::StrategyControls(control, _) => {
+                  match control {
+                    StrategyControls::Continue => {}
+                    StrategyControls::Pause => {}
+                    StrategyControls::Stop => {}
+                    StrategyControls::Start => {}
+                    StrategyControls::Delay(_) => {}
+                  }
+                }
+
+                StrategyEvent::ShutdownEvent(event) => {
+                    println!("{}",event);
+                    //we should handle shutdown gracefully by first ending the strategy loop.
+                    break 'strategy_loop
+                },
+
+                StrategyEvent::WarmUpComplete{} => {
+                    println!("Strategy: Warmup Complete");
+                    warmup_complete = true;
+                }
+
+                StrategyEvent::IndicatorEvent(indicator_event) => {
+                    //we can handle indicator events here, this is useful for debugging and monitoring the state of the indicators.
+                    match indicator_event {
+                        IndicatorEvents::IndicatorAdded(added_event) => {
+                            println!("Strategy:Indicator Added: {:?}", added_event);
+                        }
+                        IndicatorEvents::IndicatorRemoved(removed_event) => {
+                            println!("Strategy:Indicator Removed: {:?}", removed_event);
+                        }
+                        IndicatorEvents::IndicatorTimeSlice(slice_event) => {
+                            // we can see our auto manged indicator values for here.
+                            for indicator_values in slice_event {
+                                for (_name, plot) in indicator_values.values(){
+                                    println!("{}: {}: {:?}", indicator_values.name, plot.name, plot.value);
+                                }
+                            }
+                        }
+                        IndicatorEvents::Replaced(replace_event) => {
+                            println!("Strategy:Indicator Replaced: {:?}", replace_event);
+                        }
+                    }
+                }
+                StrategyEvent::PositionEvents => {}
+            }
+        }
+        notify.notify_one();
+    }
+    event_receiver.close();
+    println!("Strategy: Event Loop Ended");
+}
+```
+
 ## Current Status
 
 Fund Forge is not ready for live trading. It currently uses a faux `DataevVndor::Test` and `Brokerage::Test` API implementation to help build standardized models, which will aid future API integrations.

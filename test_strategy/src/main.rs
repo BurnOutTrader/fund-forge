@@ -5,9 +5,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
-use ff_standard_lib::standardized_types::strategy_events::{
-    EventTimeSlice, StrategyEvent, StrategyInteractionMode,
-};
+use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyControls, StrategyEvent, StrategyInteractionMode};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use std::sync::Arc;
@@ -249,7 +247,15 @@ pub async fn on_data_received(
                 }
 
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
-                StrategyEvent::StrategyControls(control, _) => {}
+                StrategyEvent::StrategyControls(control, _) => {
+                    match control {
+                        StrategyControls::Continue => {}
+                        StrategyControls::Pause => {}
+                        StrategyControls::Stop => {}
+                        StrategyControls::Start => {}
+                        StrategyControls::Delay(_) => {}
+                    }
+                }
 
                 StrategyEvent::ShutdownEvent(event) => {
                     println!("{}",event);
