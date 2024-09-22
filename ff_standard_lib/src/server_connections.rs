@@ -19,7 +19,7 @@ use tokio::io;
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, ReadHalf};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{mpsc, oneshot, Mutex, Notify, RwLock};
 use tokio::sync::mpsc::Sender;
 use tokio::time::{sleep_until, Instant};
 use tokio_rustls::TlsStream;
@@ -260,7 +260,7 @@ pub async fn live_order_handler(
 }
 
 /// This response handler is also acting as a live engine.
-async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Duration, settings_map: HashMap<ConnectionType, ConnectionSettings>)  {
+async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Duration, settings_map: HashMap<ConnectionType, ConnectionSettings>, notify: Arc<Notify>)  {
     let mut receiver = receiver;
     let callbacks: Arc<RwLock<AHashMap<u64, oneshot::Sender<DataServerResponse>>>> = Default::default();
     let connection_map = Arc::new(settings_map);
@@ -339,6 +339,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
 
             buffer.push(slice);
             if !buffer.is_empty() {
+                notify.notified().await;
                 send_strategy_event_slice(buffer.clone()).await;
                 *buffer = EventTimeSlice::new();
             }
@@ -511,7 +512,7 @@ pub async fn initialize_static(
     }).clone();
 }
 
-pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode) {
+pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode, notify: Arc<Notify>) {
     //initialize_strategy_registry(platform_mode.clone()).await;
     let settings_map = initialise_settings().unwrap();
     println!("Connections: {:?}", settings_map);
@@ -537,5 +538,5 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode
         Arc::new(Mutex::new(tx))
     }).clone();
 
-    request_handler(mode.clone(), rx, buffer_duration, settings_map.clone()).await;
+    request_handler(mode.clone(), rx, buffer_duration, settings_map.clone(), notify).await;
 }
