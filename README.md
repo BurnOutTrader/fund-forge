@@ -15,7 +15,7 @@ All strategies share a single API instance for each brokerage or data vendor by 
 
 This design allows us to:
 - Use colocation services for running strategies on cloud hardware.
-- Enable a microservices structure for managing API instances.
+- Enable a microservices architecture for managing API instances.
 - Persist historical data between strategies without duplication
 
 ## Data Server
