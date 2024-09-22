@@ -190,16 +190,21 @@ impl VendorApiResponse for TestApiClient {
                 let data = load_as_bytes(file.clone()).unwrap();
                 let month_time_slices = BaseDataEnum::from_array_bytes(&data).unwrap();
 
-                for base_data in month_time_slices {
-                    if broadcaster.has_subscribers() {
-                        last_time = base_data.time_created_utc();
-                        let response = DataServerResponse::DataUpdates(vec![base_data]);
-                        println!("{:?}", response);
-                        broadcaster.broadcast(response).await;
-                        sleep(Duration::from_millis(100)).await;
-                    } else {
-                        println!("No subscribers");
-                        break 'main_loop;
+                for mut base_data in month_time_slices {
+                    last_time = base_data.time_created_utc();
+                    match base_data {
+                        BaseDataEnum::Quote(ref mut quote) => {
+                            if broadcaster.has_subscribers() {
+                                quote.time = Utc::now().to_string();
+                                let response = DataServerResponse::DataUpdates(vec![base_data.clone()]);
+                                broadcaster.broadcast(response).await;
+                                sleep(Duration::from_millis(100)).await;
+                            } else {
+                                println!("No subscribers");
+                                break 'main_loop;
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
