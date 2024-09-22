@@ -48,7 +48,7 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {}
                             BaseDataEnum::Tick(tick) => {}
                             BaseDataEnum::Quote(quote) => {}
-                            BaseDataEnum::Fundamental(_fundamental) => {}
+                            BaseDataEnum::Fundamental(fundamental) => {}
                         }
                     }
                 }
