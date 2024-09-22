@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 use ff_standard_lib::helpers::converters::load_as_bytes;
 use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use ff_standard_lib::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, DataServerRequest, DataServerResponse, StreamRequest};
+use ff_standard_lib::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, DataServerRequest, DataServerResponse, StreamRequest, StreamResponse};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::traits::bytes::Bytes;
 use chrono::{DateTime, Utc};
@@ -13,9 +13,12 @@ use std::sync::Arc;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::task::JoinHandle;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::apis::brokerage::server_side_brokerage::BrokerApiResponse;
+use ff_standard_lib::apis::data_vendor::datavendor_enum::DataVendor;
 use ff_standard_lib::apis::data_vendor::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::orders::OrderRequest;
@@ -76,7 +79,8 @@ pub async fn data_server_manage_async_requests(
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
         let mut strategy_mode = StrategyMode::Backtest;
-
+        let (stream_sender, stream_receiver) = mpsc::channel(100);
+        let stream_handle = stream_handler(stream_receiver, writer.clone()).await;
         while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
             // Parse the length from the header
             let msg_length = u64::from_be_bytes(length_bytes) as usize;
@@ -101,6 +105,7 @@ pub async fn data_server_manage_async_requests(
             };
             let writer = writer.clone();
             let stream_name = stream_name.clone();
+            let sender = stream_sender.clone();
             tokio::spawn(async move {
                 // Handle the request and generate a response
                 println!("{:?}", request);
@@ -214,7 +219,9 @@ pub async fn data_server_manage_async_requests(
                         if strategy_mode == StrategyMode::Backtest {
                             return
                         }
-                        stream_response(request).await;
+                        handle_callback(
+                            || stream_response(stream_name.clone(), request, sender),
+                            writer.clone()).await
                     },
 
                     DataServerRequest::OrderRequest {
@@ -254,7 +261,7 @@ where
     prefixed_msg.extend_from_slice(&length);
     prefixed_msg.extend_from_slice(&bytes);
 
-    println!("Response type: {}", type_name::<T>());
+    //println!("Response type: {}", type_name::<T>());
     // Write the response to the stream
     let mut writer = writer.lock().await;
     match writer.write_all(&prefixed_msg).await {
@@ -267,12 +274,52 @@ where
     }
 }
 
-async fn stream_response(request: StreamRequest) {
+async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: Arc<Mutex<WriteHalf<TlsStream<TcpStream>>>>) -> JoinHandle<()> {
+    let mut receiver = receiver;
+    tokio::spawn(async move {
+        while let Some(response) = receiver.recv().await {
+            println!("{:?}", response);
+            // Convert the response to bytes
+            let bytes = response.to_bytes();
+
+            // Prepare the message with a 4-byte length header in big-endian format
+            let length = (bytes.len() as u64).to_be_bytes();
+            let mut prefixed_msg = Vec::new();
+            prefixed_msg.extend_from_slice(&length);
+            prefixed_msg.extend_from_slice(&bytes);
+
+            // Write the response to the stream
+            let mut writer = writer.lock().await;
+            match writer.write_all(&prefixed_msg).await {
+                Err(e) => {
+                    // Handle the error (log it or take some other action)
+                }
+                Ok(_) => {
+                    // Successfully wrote the message
+                }
+            }
+        }
+    })
+}
+
+async fn stream_response(stream_name: String, request: StreamRequest, sender: Sender<DataServerResponse>) -> DataServerResponse {
     match request {
-        StreamRequest::BaseData(_) => {}
-        StreamRequest::AccountUpdates(_, _) => {}
-        StreamRequest::Subscribe(_) => {}
-        StreamRequest::Unsubscribe(_) => {}
+        StreamRequest::AccountUpdates(_, _) => {
+            panic!()
+        }
+        StreamRequest::Subscribe(subscription) => {
+            match &subscription.symbol.data_vendor {
+                DataVendor::Test => {
+                    subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
+                }
+                DataVendor::RithmicTest => {
+                    panic!()
+                }
+            }
+        }
+        StreamRequest::Unsubscribe(_) => {
+            panic!()
+        }
     }
 }
 

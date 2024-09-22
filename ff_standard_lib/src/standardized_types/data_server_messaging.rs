@@ -68,7 +68,6 @@ pub struct AccountState {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum StreamRequest {
-    BaseData(DataSubscription),
     AccountUpdates(Brokerage, AccountId),
     Subscribe(DataSubscription),
     Unsubscribe(DataSubscription)

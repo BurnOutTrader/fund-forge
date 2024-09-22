@@ -61,14 +61,12 @@ pub enum StrategyEvent {
     ///
     /// # Parameters
     /// - `OrderEvent`: Details of the order event.
-    /// - `EventForwarderType`: Specifies the type of event forwarder (Strategy or UI).
     OrderEvents(OrderUpdateEvent),
 
     /// Allows for the subscription and un-subscription of data feeds remotely.
     ///
     /// # Parameters
     /// - `DataSubscriptionEvent`: The subscription event details.
-    /// - `EventForwarderType`: Specifies the type of event forwarder (Strategy or UI).
     /// - `i64`: A timestamp indicating when the event was created.
     DataSubscriptionEvents(Vec<DataSubscriptionEvent>, i64),
 
@@ -76,7 +74,6 @@ pub enum StrategyEvent {
     ///
     /// # Parameters
     /// - `StrategyControls`: The control command to be executed.
-    /// - `EventForwarderType`: Specifies the type of event forwarder (Strategy or UI).
     /// - `i64`: A timestamp indicating when the event was created.
     StrategyControls(StrategyControls, i64),
 
@@ -90,7 +87,6 @@ pub enum StrategyEvent {
     /// Contains strategy BaseDataEnum's as TimeSlice.
     ///
     /// # Parameters
-    /// - `OwnerId`: The unique identifier of the owner (strategy).
     /// - "TimeString": The time of the slice event
     /// - `TimeSlice`: The time slice data.
     TimeSlice(TimeString, TimeSlice),

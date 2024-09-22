@@ -40,7 +40,6 @@ pub fn get_rithmic_client(data_vendor: &DataVendor) -> Option<Arc<RithmicClient>
     }
 }
 
-type ResponseRequestId = u64;
 pub struct RithmicClient {
     /// The primary client is the only client used for data feeds, it will also have all brokerage features.
     pub client: Arc<RithmicApiClient>,
@@ -177,7 +176,7 @@ impl VendorApiResponse for RithmicClient {
         todo!()
     }
 
-    async fn data_feed_subscribe(&self,stream_name: String, subscription: DataSubscription, sender: Sender<TimeSlice>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self,stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
         todo!()
     }
 

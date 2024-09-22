@@ -45,7 +45,7 @@ pub trait VendorApiResponse: Sync + Send {
         &self,
         stream_name: String,
         subscription: DataSubscription,
-        sender: Sender<TimeSlice>
+        sender: Sender<DataServerResponse>
     ) -> DataServerResponse;
     async fn data_feed_unsubscribe(
         &self,
@@ -141,7 +141,7 @@ impl VendorApiResponse for DataVendor {
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
 
-    async fn data_feed_subscribe(&self,stream_name: String, subscription: DataSubscription, sender: Sender<TimeSlice>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
         match self {
             DataVendor::RithmicTest => {
                 if let Some(client) = get_rithmic_client(self) {

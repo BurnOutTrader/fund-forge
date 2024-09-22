@@ -29,8 +29,9 @@ use crate::market_handler::market_handlers::MarketHandler;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::orders::orders::{OrderRequest};
 use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
+use crate::standardized_types::strategy_events::StrategyEvent::DataSubscriptionEvents;
 use crate::standardized_types::subscription_handler::SubscriptionHandler;
-use crate::standardized_types::subscriptions::{DataSubscription};
+use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
 use crate::timed_events_handler::TimedEventHandler;
 use crate::traits::bytes::Bytes;
 
@@ -100,6 +101,7 @@ lazy_static! {
 
 pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
 pub async fn subscribe_primary_subscription_updates(name: String, sender: mpsc::Sender<Vec<DataSubscription>>) {
+    *PRIMARY_SUBSCRIPTIONS.lock().await = SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await;
     SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
@@ -148,11 +150,27 @@ pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
 //todo, make all handlers event driven.. we will need to use senders and receivers.
 // 1. Subscriptions will be handled by the subscription handler, it will only send subscription request if it needs a new primary, it will alo cancel existing if need be.
 
-async fn live_subscription_handler(mode: StrategyMode, subscription_update_channel: mpsc::Receiver<Vec<DataSubscription>>) {
+async fn live_subscription_handler(mode: StrategyMode, subscription_update_channel: mpsc::Receiver<Vec<DataSubscription>>, settings_map: HashMap<ConnectionType, ConnectionSettings>) {
     if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
         let mut subscription_update_channel = subscription_update_channel;
         let current_subscriptions = PRIMARY_SUBSCRIPTIONS.clone();
+        println!("Handler: Start Live handler");
         tokio::task::spawn(async move {
+            {
+                let current_subscriptions = current_subscriptions.lock().await;
+                println!("Handler: {:?}", current_subscriptions);
+                for subscription in &*current_subscriptions {
+                    let request = DataServerRequest::StreamRequest {
+                        request: StreamRequest::Subscribe(subscription.clone())
+                    };
+                    let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
+                    let connection_type = match settings_map.contains_key(&connection) {
+                        true => connection,
+                        false => ConnectionType::Default
+                    };
+                    send(connection_type, request.to_bytes()).await;
+                }
+            }
             while let Some(updated_subscriptions) = subscription_update_channel.recv().await {
                 let mut current_subscriptions = current_subscriptions.lock().await;
                 let mut requests_map = AHashMap::new();
@@ -160,22 +178,31 @@ async fn live_subscription_handler(mode: StrategyMode, subscription_update_chann
                     for subscription in &updated_subscriptions {
                         if !current_subscriptions.contains(&subscription) {
                             let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
+                            let connection_type = match settings_map.contains_key(&connection) {
+                                true => connection,
+                                false => ConnectionType::Default
+                            };
                             let request = DataServerRequest::StreamRequest { request: StreamRequest::Subscribe(subscription.clone())};
-                            if !requests_map.contains_key(&connection) {
-                                requests_map.insert(connection, vec![request]);
+                            if !requests_map.contains_key(&connection_type) {
+                                requests_map.insert(connection_type, vec![request]);
                             } else {
-                                requests_map.get_mut(&connection).unwrap().push(request);
+                                requests_map.get_mut(&connection_type).unwrap().push(request);
                             }
                         }
                     }
                     for subscription in &*current_subscriptions {
                         if !updated_subscriptions.contains(&subscription) {
                             let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
+                            let connection_type = match settings_map.contains_key(&connection) {
+                                true => connection,
+                                false => ConnectionType::Default
+                            };
                             let request = DataServerRequest::StreamRequest { request: StreamRequest::Unsubscribe(subscription.clone())};
-                            if !requests_map.contains_key(&connection) {
-                                requests_map.insert(connection, vec![request]);
+
+                            if !requests_map.contains_key(&connection_type) {
+                                requests_map.insert(connection_type, vec![request]);
                             } else {
-                                requests_map.get_mut(&connection).unwrap().push(request);
+                                requests_map.get_mut(&connection_type).unwrap().push(request);
                             }
                         }
                     }
@@ -191,7 +218,7 @@ async fn live_subscription_handler(mode: StrategyMode, subscription_update_chann
     }
 }
 /// This response handler is also acting as a live engine.
-async fn request_handler(receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Option<Duration>, settings_map: HashMap<ConnectionType, ConnectionSettings>)  {
+async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Option<Duration>, settings_map: HashMap<ConnectionType, ConnectionSettings>)  {
     let mut receiver = receiver;
     let callbacks: Arc<RwLock<AHashMap<u64, oneshot::Sender<DataServerResponse>>>> = Default::default();
     let connection_map = Arc::new(settings_map);
@@ -250,6 +277,8 @@ async fn request_handler(receiver: mpsc::Receiver<StrategyRequest>, buffer_durat
 
     let callbacks = callbacks.clone();
     for incoming in ASYNC_INCOMING.iter() {
+        let register_message = DataServerRequest::Register(mode.clone());
+        send(incoming.key().clone(), register_message.to_bytes()).await;
         let receiver = incoming.clone();
         let callbacks = callbacks.clone();
         tokio::task::spawn(async move {
@@ -272,6 +301,7 @@ async fn request_handler(receiver: mpsc::Receiver<StrategyRequest>, buffer_durat
                         continue;
                     }
                 }
+                // these will be buffered eventually into an EventTimeSlice
                 let callbacks = callbacks.clone();
                 tokio::task::spawn(async move {
                     let response = DataServerResponse::from_bytes(&message_body).unwrap();
@@ -289,20 +319,30 @@ async fn request_handler(receiver: mpsc::Receiver<StrategyRequest>, buffer_durat
                                     //determine success or fail and add to the strategy event buffer
                                     match success {
                                         true => {
-                                            //send subscribe message to buffer
+                                            let event = DataSubscriptionEvent::Subscribed(subscription.clone());
+                                            let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
+                                            send_strategy_event_slice(vec![event_slice]).await;
+                                            println!("Handler: Subscribed: {}", subscription);
                                         }
                                         false => {
-                                            //send failed event
+                                            let event = DataSubscriptionEvent::FailedSubscribed(subscription.clone(), reason.unwrap());
+                                            let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
+                                            send_strategy_event_slice(vec![event_slice]).await;
+                                            println!("Handler: Subscribe Failed: {}", subscription);
                                         }
                                     }
                                 }
                                 DataServerResponse::UnSubscribeResponse { success, subscription, reason } => {
                                     match success {
                                         true => {
-                                            //send unsubscribe message to buffer
+                                            let event = DataSubscriptionEvent::Unsubscribed(subscription);
+                                            let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
+                                            send_strategy_event_slice(vec![event_slice]).await;
                                         }
                                         false => {
-                                            //send failed  event
+                                            let event = DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap());
+                                            let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
+                                            send_strategy_event_slice(vec![event_slice]).await;
                                         }
                                     }
                                 }
@@ -370,9 +410,10 @@ pub async fn initialize_static(
     match mode {
         StrategyMode::Backtest => {}
         StrategyMode::Live | StrategyMode::LivePaperTrading => {
+            let settings_map = initialise_settings().unwrap();
             let (tx, rx) = mpsc::channel(100);
             subscribe_primary_subscription_updates("Live Subscription Update Loop".to_string(), tx).await;
-            live_subscription_handler(mode, rx).await
+            live_subscription_handler(mode, rx, settings_map).await
         },
     }
 }
@@ -397,11 +438,9 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duratio
         let async_sender = ExternalSender::new(write_half);
         ASYNC_OUTGOING.insert(connection_type.clone(), Arc::new(async_sender));
         ASYNC_INCOMING.insert(connection_type.clone(), Arc::new(Mutex::new(read_half)));
-        let register_message = DataServerRequest::Register(mode.clone());
-        send(connection_type.clone(), register_message.to_bytes()).await;
     }
     let (tx, rx) = mpsc::channel(1000);
-    request_handler(rx, buffer_duration, settings_map).await;
+    request_handler(mode.clone(), rx, buffer_duration, settings_map).await;
 
     DATA_SERVER_SENDER.get_or_init(|| {
         Arc::new(Mutex::new(tx))

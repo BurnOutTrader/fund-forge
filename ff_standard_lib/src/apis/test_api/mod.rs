@@ -1,4 +1,6 @@
+use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{NaiveDate, TimeZone, Utc};
 use dashmap::DashMap;
@@ -7,11 +9,14 @@ use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
+use tokio::time::sleep;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::brokerage::server_side_brokerage::BrokerApiResponse;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::apis::data_vendor::server_side_datavendor::VendorApiResponse;
+use crate::helpers::converters::load_as_bytes;
 use crate::helpers::decimal_calculators::round_to_decimals;
+use crate::helpers::get_data_folder;
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -30,7 +35,7 @@ lazy_static! {
 }
 
 pub struct TestApiClient {
-    data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<TimeSlice>>>>
+    data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<DataServerResponse>>>>
 }
 
 impl TestApiClient {
@@ -151,7 +156,7 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn data_feed_subscribe(&self, stream_name: String, subscription: DataSubscription, sender: Sender<TimeSlice>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
         let available_subscription_1 = DataSubscription::new(SymbolName::from("AUD-CAD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
         let available_subscription_2 = DataSubscription::new(SymbolName::from("EUR-USD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
         if subscription != available_subscription_1 && subscription != available_subscription_2 {
@@ -159,17 +164,19 @@ impl VendorApiResponse for TestApiClient {
         }
         if !self.data_feed_broadcasters.contains_key(&subscription) {
             self.data_feed_broadcasters.insert(subscription.clone(), Arc::new(StaticInternalBroadcaster::new()));
+            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name, sender).await;
+            println!("Subscribing: {}", subscription);
         } else {
             // If we already have a running task, we dont need a new one, we just subscribe to the broadcaster
             self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name, sender).await;
             return DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
         }
-
+        println!("data_feed_subscribe Starting loop");
         let subscription_clone = subscription.clone();
+        let subscription_clone_2 = subscription.clone();
         let broadcasters = self.data_feed_broadcasters.clone();
         let broadcaster = self.data_feed_broadcasters.get(&subscription).unwrap().value().clone();
         tokio::task::spawn(async move {
-            let mut sender = sender;
             let naive_dt_1 = NaiveDate::from_ymd_opt(2024, 6, 01).unwrap().and_hms_opt(0, 0, 0).unwrap();
             let utc_dt_1 = Utc.from_utc_datetime(&naive_dt_1);
 
@@ -178,25 +185,33 @@ impl VendorApiResponse for TestApiClient {
 
             let mut last_time = utc_dt_1;
             'main_loop: while last_time < utc_dt_2 {
-                let month_time_slices = get_historical_data(vec![subscription_clone.clone()], last_time.clone()).await.unwrap();
-                for (time, time_slice) in month_time_slices {
+                let data_folder = PathBuf::from(get_data_folder());
+                let file = BaseDataEnum::file_path(&data_folder, &subscription, &last_time).unwrap();
+                let data = load_as_bytes(file.clone()).unwrap();
+                let month_time_slices = BaseDataEnum::from_array_bytes(&data).unwrap();
+
+                for base_data in month_time_slices {
                     if broadcaster.has_subscribers() {
-                        broadcaster.broadcast(time_slice).await;
-                        last_time = time;
+                        last_time = base_data.time_created_utc();
+                        let response = DataServerResponse::DataUpdates(vec![base_data]);
+                        println!("{:?}", response);
+                        broadcaster.broadcast(response).await;
+                        sleep(Duration::from_millis(100)).await;
                     } else {
+                        println!("No subscribers");
                         break 'main_loop;
                     }
                 }
             }
             broadcasters.remove(&subscription_clone);
         });
-        DataServerResponse::SubscribeResponse{ success: true, subscription, reason: None}
+        DataServerResponse::SubscribeResponse{ success: true, subscription: subscription_clone_2.clone(), reason: None}
     }
 
     async fn data_feed_unsubscribe(&self, stream_name: String, subscription: DataSubscription) -> DataServerResponse {
         if let Some(broadcaster) = self.data_feed_broadcasters.get(&subscription) {
             broadcaster.unsubscribe(stream_name).await;
-            return DataServerResponse::UnSubscribeResponse{ success: true, subscription: subscription, reason: None}
+            return DataServerResponse::UnSubscribeResponse{ success: true, subscription, reason: None}
         }
         DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("There is no active subscription for: {}", subscription))}
     }
