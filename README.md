@@ -239,7 +239,7 @@ pub fn get_resources() -> PathBuf {
 }
 ```
 On first run a `server_settings.toml` file will be created in `fund-forge/resources` it will contain the default settings based on your `get_toml_file_path()`
-If you try to launch before changing the path, just delete the `server_settings.toml` and it will be recreated.
+If you try to launch before changing the path mentioned above, just delete the `server_settings.toml` and it will be recreated.
 ```rust
 impl Default for ConnectionSettings {
         fn default() -> Self {
