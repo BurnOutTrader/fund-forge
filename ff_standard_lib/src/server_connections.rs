@@ -8,7 +8,6 @@ use lazy_static::lazy_static;
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::sync::mpsc::Receiver;
 use std::time::Duration;
 use ahash::AHashMap;
 use chrono::{DateTime, Utc};
@@ -80,21 +79,6 @@ impl FromStr for ConnectionType {
     }
 }
 
-/*
-    1. primary data comes from either backtest engine or server stream
-    2. primary data is broadcast to PRIMARY_DATA_BROADCASTER subscribers
-        a. subscription handler
-        b. indicator handler
-    3. consolidated data is broadcast to subscribers
-        a indicator handler
-
-    4. each buffer iteration before sending the buffer to the engine or strategy, we update consolidator time.
-        consolidator and indicator handler can return empty vec so we only add to slice if !is_empty(),
-        The reason for returning empty buffer is so that we can block until the handlers have cycled the last data input,
-        since we always expect Some to return. this allows async timings with concurrent data updates.
-
-*/
-
 
 // Connections
 lazy_static! {
@@ -106,7 +90,7 @@ lazy_static! {
 }
 
 pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
-pub async fn subscribe_primary_subscription_updates(name: String, sender: mpsc::Sender<Vec<DataSubscription>>) {
+pub async fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
     *PRIMARY_SUBSCRIPTIONS.write().await = SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await;
     *STRATGEY_SUBSCRIPTIONS.write().await = SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await;
     SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
@@ -142,8 +126,8 @@ pub(crate) enum StrategyRequest {
     CallBack(ConnectionType, DataServerRequest, oneshot::Sender<DataServerResponse>),
     OneWay(ConnectionType, DataServerRequest),
 }
-static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<StrategyRequest>>>> = OnceCell::new();
-pub(crate) fn get_sender() -> Arc<Mutex<mpsc::Sender<StrategyRequest>>> {
+static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<Sender<StrategyRequest>>>> = OnceCell::new();
+pub(crate) fn get_sender() -> Arc<Mutex<Sender<StrategyRequest>>> {
     DATA_SERVER_SENDER.get().unwrap().clone() // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 pub(crate) async fn send_request(req: StrategyRequest) {
@@ -237,7 +221,7 @@ pub async fn live_subscription_handler(
 
 pub async fn live_order_handler(
     mode: StrategyMode,
-    order_receiver: tokio::sync::mpsc::Receiver<OrderRequest>
+    order_receiver: mpsc::Receiver<OrderRequest>
 ) {
     let settings_map = Arc::new(initialise_settings().unwrap());
     if mode == StrategyMode::Live {
@@ -309,9 +293,20 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
     let time_slice = Arc::new(RwLock::new(TimeSlice::new()));
     // start a buffer loop to send events every buffer interval
 
+    /*
+    1. primary data comes from either backtest engine or server stream
+    2. primary data is fed to
+        a. subscription handler
+        b. market handler
+    3. consolidated data + primary data is fed to
+        a. indicator handler
+
+    4. each buffer iteration before sending the buffer to the engine or strategy, we update consolidator time.
+        to see if we have any closed bars.
+*/
     let event_buffer_ref = event_buffer.clone();
     let time_slice_ref = time_slice.clone();
-    let open_bars_Ref = open_bars.clone();
+    let open_bars_ref = open_bars.clone();
     let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
     let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
     tokio::task::spawn(async move {
@@ -320,7 +315,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
             sleep_until(instant.into()).await;
             let mut buffer = event_buffer_ref.write().await;
             let mut time_slice = time_slice_ref.write().await;
-            let mut open_bars = open_bars_Ref.write().await;
+            let mut open_bars = open_bars_ref.write().await;
             for (_, map) in &mut *open_bars {
                 for (_, data) in &mut *map {
                     time_slice.push(data.clone());
@@ -437,7 +432,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                         }
                                     }
                                     if strategy_time_slice.is_empty() {
-                                        return;;
+                                        return;
                                     }
 
                                     if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&strategy_time_slice).await {
@@ -481,7 +476,7 @@ pub async fn send(connection_type: ConnectionType, msg: Vec<u8>) {
     }
 }
 
-pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>,  event_sender: mpsc::Sender<EventTimeSlice>, indicator_handler: Arc<IndicatorHandler>,) {
+pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>,  event_sender: Sender<EventTimeSlice>, indicator_handler: Arc<IndicatorHandler>,) {
     STRATEGY_SENDER.get_or_init(|| {
         event_sender
     }).clone();
