@@ -316,15 +316,9 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                 tokio::task::spawn(async move {
                     let response = DataServerResponse::from_bytes(&message_body).unwrap();
                     match response.get_callback_id() {
+                        // if there is no callback id then we add it to the strategy event buffer
                         None => {
                             match response {
-                                /*
-                                pub enum DataSubscriptionEvent {
-                                        Subscribed(DataSubscription),
-                                        Unsubscribed(DataSubscription),
-                                        Failed(DataSubscription),
-                                    }
-                                */
                                 DataServerResponse::SubscribeResponse { success, subscription, reason } => {
                                     //determine success or fail and add to the strategy event buffer
                                     match success {
@@ -363,6 +357,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                 _ => panic!("Incorrect response here: {:?}", response)
                             }
                         }
+                        // if there is a callback id we just send it to the awaiting oneshot receiver
                         Some(id) => {
                             if let Some(callback) = callbacks.write().await.remove(&id) {
                                 let _ = callback.send(response);
