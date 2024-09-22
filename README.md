@@ -85,6 +85,55 @@ pub async fn on_data_received(
 }
 ```
 
+It is easy to subscribe to data, including custom candles like Heikin Ashi and Renko Blocks.
+```rust
+fn example() {
+  DataSubscription::new_custom(
+    SymbolName::from("EUR-USD"),
+    DataVendor::Test,
+    Resolution::Seconds(1),
+    BaseDataType::QuoteBars,
+    MarketType::Forex,
+    CandleType::CandleStick,
+  );
+}
+```
+
+It is easy to create and add indicators.
+```rust
+fn example() {
+  let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
+    AverageTrueRange::new(
+      IndicatorName::from("heikin_atr_5"),
+      DataSubscription::new_custom(
+        SymbolName::from("EUR-USD"),
+        DataVendor::Test,
+        Resolution::Seconds(5),
+        BaseDataType::QuoteBars,
+        MarketType::Forex,
+        CandleType::HeikinAshi,
+      ),
+      100,
+      5,
+      Some(Color::new(50,50,50))
+    ).await,
+  );
+  strategy.indicator_subscribe(heikin_atr_5).await;
+}
+```
+It is easy to place orders, including attaching bracket orders
+```rust
+fn example() {
+    let entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long"), None).await;
+    let exit_order_id = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
+}
+```
+
+For a full look at strategies see
+[test_strategy](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs)
+and
+[strategies readme](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
+
 ## Current Status
 
 Fund Forge is not ready for live trading. It currently uses a faux `DataevVndor::Test` and `Brokerage::Test` API implementation to help build standardized models, which will aid future API integrations.
