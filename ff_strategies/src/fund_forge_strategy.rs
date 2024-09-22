@@ -200,6 +200,33 @@ impl FundForgeStrategy {
         self.market_handler.is_short(brokerage, account_id, symbol_name).await
     }
 
+    pub async fn order_id(
+        &self,
+        symbol_name: &SymbolName,
+        account_id: &AccountId,
+        brokerage: &Brokerage,
+        order_string: String
+    ) -> OrderId {
+        let num = match self.orders_count.get_mut(brokerage) {
+            None => {
+                self.orders_count.insert(brokerage.clone(), 1);
+                1
+            }
+            Some(mut broker_order_number) => {
+                *broker_order_number.value_mut() += 1;
+                broker_order_number.value().clone()
+            }
+        };
+        format!(
+            "{}: {}:{}, {}, {}",
+            order_string,
+            brokerage,
+            account_id,
+            symbol_name,
+            num
+        )
+    }
+
     pub async fn enter_long(
         &self,
         symbol_name: &SymbolName,
@@ -209,14 +236,7 @@ impl FundForgeStrategy {
         tag: String,
         brackets: Option<Vec<ProtectiveOrder>>
     ) -> OrderId {
-        let order_id = format!(
-            "ENL{}-{}-{}-{}-{}",
-            brokerage,
-            account_id,
-            symbol_name,
-            self.time_utc().timestamp_millis(),
-            OrderSide::Buy
-        );
+        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Enter Long")).await;
         let order = Order::enter_long(
             symbol_name.clone(),
             brokerage.clone(),
@@ -240,14 +260,7 @@ impl FundForgeStrategy {
         tag: String,
         brackets: Option<Vec<ProtectiveOrder>>
     ) -> OrderId {
-        let order_id = format!(
-            "ENS{}-{}-{}-{}-{}",
-            brokerage,
-            account_id,
-            symbol_name,
-            self.time_utc().timestamp_millis(),
-            OrderSide::Sell
-        );
+        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Enter Short")).await;
         let order = Order::enter_short(
             symbol_name.clone(),
             brokerage.clone(),
@@ -262,34 +275,6 @@ impl FundForgeStrategy {
         order_id
     }
 
-    pub async fn order_id(
-        &self,
-        symbol_name: &SymbolName,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
-        side: OrderSide,
-    ) -> OrderId {
-        let num = match self.orders_count.get_mut(brokerage) {
-            None => {
-                self.orders_count.insert(brokerage.clone(), 1);
-                1
-            }
-            Some(mut broker_order_number) => {
-                *broker_order_number.value_mut() += 1;
-                broker_order_number.value().clone()
-            }
-        };
-        format!(
-            "{}-{}-{}-{}-{}-{}",
-            brokerage,
-            account_id,
-            symbol_name,
-            self.time_utc().timestamp_millis(),
-            side,
-            num
-        )
-    }
-
     pub async fn exit_long(
         &self,
         symbol_name: &SymbolName,
@@ -298,7 +283,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, OrderSide::Sell).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Exit Long")).await;
         let order = Order::exit_long(
             symbol_name.clone(),
             brokerage.clone(),
@@ -320,7 +305,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, OrderSide::Buy).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Exit Short")).await;
         let order = Order::exit_short(
             symbol_name.clone(),
             brokerage.clone(),
@@ -342,7 +327,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, OrderSide::Buy).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Buy Market")).await;
         let order = Order::market_order(
             symbol_name.clone(),
             brokerage.clone(),
@@ -365,7 +350,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, OrderSide::Sell).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Sell Market")).await;
         let order = Order::market_order(
             symbol_name.clone(),
             brokerage.clone(),
