@@ -11,6 +11,7 @@ There are event driven handlers and a buffering system for maintaining speed and
 common retail trading platforms.
 
 This allows people familiar with concepts from common retail trading platforms to start building strategies without having to understand the entire code base.
+Simply build using high level abstractions like you would in any familiar commercial trading platform, but enjoy the benefits of the rust programing language.
 
 The only major difference in fund forge is the idea of the ff_data_server, a server which hosts your api instances locally or on a remote machine and allows multiple strategies to connect ot disconnect while persisting historical data from a centralized location
 
@@ -51,7 +52,17 @@ pub async fn on_data_received(
                         }
                     }
                 }
-                StrategyEvent::OrderEvents(events) => {}
+                StrategyEvent::OrderEvents(event) => {
+                  match &event {
+                    OrderUpdateEvent::Accepted { brokerage, account_id, order_id } => {}
+                    OrderUpdateEvent::Filled { brokerage, account_id, order_id } => {},
+                    OrderUpdateEvent::PartiallyFilled { brokerage, account_id, order_id } => {}
+                    OrderUpdateEvent::Cancelled { brokerage, account_id, order_id } => {}
+                    OrderUpdateEvent::Rejected { brokerage, account_id, order_id, reason } => {}
+                    OrderUpdateEvent::Updated { brokerage, account_id, order_id } => {}
+                    OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason } => {}
+                  };
+                }
                 StrategyEvent::DataSubscriptionEvents(events,_) => {}
                 StrategyEvent::StrategyControls(control, _) => {
                   match control {
