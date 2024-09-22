@@ -114,7 +114,7 @@ impl BaseData for Candle {
     }
 
     fn data_vendor(&self) -> DataVendor {
-        self.data_vendor()
+        self.symbol.data_vendor.clone()
     }
 
     fn market_type(&self) -> MarketType {

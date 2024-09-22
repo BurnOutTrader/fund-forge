@@ -9,7 +9,6 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
-use crate::standardized_types::base_data::tick::Tick;
 use crate::standardized_types::base_data::traits::BaseData;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
@@ -67,7 +66,7 @@ impl BaseData for Fundamental {
     }
 
     fn data_vendor(&self) -> DataVendor {
-        self.data_vendor()
+        self.symbol.data_vendor.clone()
     }
 
     fn market_type(&self) -> MarketType {

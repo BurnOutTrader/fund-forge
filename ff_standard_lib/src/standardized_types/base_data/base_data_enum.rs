@@ -228,7 +228,7 @@ impl BaseDataEnum {
         let archived_quotebars = match rkyv::check_archived_root::<Vec<BaseDataEnum>>(&data[..]) {
             Ok(data) => data,
             Err(e) => {
-                format!("Failed to deserialize data: {}", e);
+                eprintln!("Failed to deserialize data: {}", e);
                 return Err(Error);
             }
         };

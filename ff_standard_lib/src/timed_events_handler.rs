@@ -3,7 +3,6 @@ use chrono::{DateTime, Datelike, Duration, Timelike, Utc, Weekday};
 use std::sync::mpsc::Sender;
 use tokio::sync::mpsc::Receiver;
 use tokio::sync::RwLock;
-use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 
 #[derive(Clone, Debug)]
 pub enum EventTimeEnum {
@@ -126,7 +125,6 @@ impl TimedEvent {
 pub struct TimedEventHandler {
     pub(crate) schedule: Arc<RwLock<Vec<TimedEvent>>>,
     is_warmed_up: RwLock<bool>,
-    broadcaster: StaticInternalBroadcaster<TimedEvent>,
 }
 
 impl TimedEventHandler {
@@ -134,7 +132,6 @@ impl TimedEventHandler {
         TimedEventHandler {
             schedule: Default::default(),
             is_warmed_up: RwLock::new(false),
-            broadcaster: StaticInternalBroadcaster::new()
         }
     }
 
@@ -153,6 +150,7 @@ impl TimedEventHandler {
             .retain(|event| event.name != name);
     }
 
+    #[allow(unused_variables)] #[allow(unused_assignments)]
     pub async fn update_time(&self, receiver: Receiver<DateTime<Utc>>) {
         let mut receiver = receiver;
         while let Some(current_time) = receiver.recv().await {
@@ -170,8 +168,7 @@ impl TimedEventHandler {
                     if let EventTimeEnum::DateTime { .. } = event.time {
                         events_to_remove.push(event.name.clone());
                     }
-                    if let EventTimeEnum::Every { duration, mut next_time, .. } = event.time
-                    {
+                    if let EventTimeEnum::Every { duration, mut next_time, .. } = event.time {
                         next_time = current_time + duration;
                     }
                 }

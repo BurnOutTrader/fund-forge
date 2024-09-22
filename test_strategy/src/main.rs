@@ -1,4 +1,4 @@
-use chrono::{Datelike, Duration, NaiveDate};
+use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -113,7 +113,7 @@ pub async fn on_data_received(
                     println!("Strategy: Drawing Tool Event: {:?}", event);
                 }
 
-                StrategyEvent::TimeSlice(time, time_slice) => {
+                StrategyEvent::TimeSlice(_time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
                     for base_data in &time_slice {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
@@ -227,13 +227,13 @@ pub async fn on_data_received(
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
                         }
                         OrderUpdateEvent::Rejected { brokerage, account_id, order_id, reason } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                            println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap(), reason);
                         }
                         OrderUpdateEvent::Updated { brokerage, account_id, order_id } => {
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
                         }
                         OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                            println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap(), reason);
                         }
                     };
                     println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), event);

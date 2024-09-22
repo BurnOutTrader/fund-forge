@@ -246,7 +246,7 @@ pub(crate) mod historical_position {
             if let Some(brackets) = &mut self.brackets {
                 'bracket_loop: for bracket in brackets.iter_mut() {
                     match bracket {
-                        ProtectiveOrder::TakeProfit { id, price } => match self.side {
+                        ProtectiveOrder::TakeProfit { id: _, price } => match self.side {
                             PositionSide::Long if highest_price >= *price => {
                                 bracket_triggered = true;
                                 break 'bracket_loop;
@@ -257,7 +257,7 @@ pub(crate) mod historical_position {
                             }
                             _ => {}
                         },
-                        ProtectiveOrder::StopLoss { id, price } => match self.side {
+                        ProtectiveOrder::StopLoss { id: _, price } => match self.side {
                             PositionSide::Long if lowest_price <= *price => {
                                 bracket_triggered = true;
                                 break 'bracket_loop;
@@ -268,7 +268,7 @@ pub(crate) mod historical_position {
                             }
                             _ => {}
                         },
-                        ProtectiveOrder::TrailingStopLoss { id, mut price, trail_value } => match self.side {
+                        ProtectiveOrder::TrailingStopLoss { id: _, mut price, trail_value } => match self.side {
                             PositionSide::Long => {
                                 if lowest_price <= price {
                                     bracket_triggered = true;

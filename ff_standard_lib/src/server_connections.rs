@@ -12,7 +12,6 @@ use std::time::Duration;
 use ahash::AHashMap;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use futures::SinkExt;
 use strum_macros::Display;
 use tokio::io;
 use once_cell::sync::OnceCell;
@@ -251,7 +250,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
     let callbacks_ref = callbacks.clone();
     tokio::task::spawn(async move {
         let mut callback_id_counter: u64 = 0;
-        let mut callbacks = callbacks_ref.clone();
+        let callbacks = callbacks_ref.clone();
         //println!("Request handler start");
         while let Some(outgoing_message) = receiver.recv().await {
             let connection_map = connection_map.clone();
@@ -271,7 +270,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                         send(connection_type, request.to_bytes()).await;
                     });
                 }
-                StrategyRequest::OneWay(connection_type, mut request) => {
+                StrategyRequest::OneWay(connection_type, request) => {
                     tokio::task::spawn(async move {
                         let connection_type = match connection_map.contains_key(&connection_type) {
                             true => connection_type,
@@ -447,9 +446,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                             time_slice.write().await.push(data);
                                         } else {
                                             let mut open_bars = open_bars.write().await;
-                                            if !open_bars.contains_key(&subscription) {
-                                                open_bars.insert(subscription.clone(), BTreeMap::new());
-                                            }
+                                            open_bars.insert(subscription.clone(), BTreeMap::new());
                                             open_bars.get_mut(&subscription).unwrap().insert(data.time_utc(), data);
                                         }
                                     }
@@ -470,9 +467,9 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
     }
 }
 
-pub async fn response_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Duration, settings_map: HashMap<ConnectionType, ConnectionSettings>, notify: Arc<Notify>) {
+/*pub async fn response_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Duration, settings_map: HashMap<ConnectionType, ConnectionSettings>, notify: Arc<Notify>) {
 
-}
+}*/
 
 pub async fn send(connection_type: ConnectionType, msg: Vec<u8>) {
     let sender = ASYNC_OUTGOING.get(&connection_type).unwrap_or_else(|| ASYNC_OUTGOING.get(&ConnectionType::Default).unwrap()).value().clone();
@@ -483,13 +480,13 @@ pub async fn send(connection_type: ConnectionType, msg: Vec<u8>) {
 }
 
 pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>,  event_sender: Sender<EventTimeSlice>, indicator_handler: Arc<IndicatorHandler>,) {
-    STRATEGY_SENDER.get_or_init(|| {
+    let _ = STRATEGY_SENDER.get_or_init(|| {
         event_sender
     }).clone();
-    SUBSCRIPTION_HANDLER.get_or_init(|| {
+    let _ = SUBSCRIPTION_HANDLER.get_or_init(|| {
         subscription_handler
     }).clone();
-    INDICATOR_HANDLER.get_or_init(|| {
+    let _ = INDICATOR_HANDLER.get_or_init(|| {
         indicator_handler
     }).clone();
 }
@@ -499,16 +496,16 @@ pub async fn initialize_static(
     interaction_handler: Arc<InteractionHandler>,
     drawing_objects_handler: Arc<DrawingObjectHandler>,
 ) {
-    TIMED_EVENT_HANDLER.get_or_init(|| {
+    let _ = TIMED_EVENT_HANDLER.get_or_init(|| {
         timed_event_handler
     }).clone();
-    MARKET_HANDLER.get_or_init(|| {
+    let _ = MARKET_HANDLER.get_or_init(|| {
         market_handler
     }).clone();
-    INTERACTION_HANDLER.get_or_init(|| {
+    let _ = INTERACTION_HANDLER.get_or_init(|| {
         interaction_handler
     }).clone();
-    DRAWING_OBJECTS_HANDLER.get_or_init(|| {
+    let _ = DRAWING_OBJECTS_HANDLER.get_or_init(|| {
         drawing_objects_handler
     }).clone();
 }
@@ -535,7 +532,7 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode
         ASYNC_INCOMING.insert(connection_type.clone(), Arc::new(Mutex::new(read_half)));
     }
     let (tx, rx) = mpsc::channel(1000);
-    DATA_SERVER_SENDER.get_or_init(|| {
+    let _ = DATA_SERVER_SENDER.get_or_init(|| {
         Arc::new(Mutex::new(tx))
     }).clone();
 

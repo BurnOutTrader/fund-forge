@@ -42,41 +42,6 @@ impl Symbol {
         }
     }
 
-    pub(crate) fn from_array_bytes(data: &Vec<u8>) -> Result<Vec<Symbol>, Error> {
-        let archived_quotebars = match rkyv::check_archived_root::<Vec<Symbol>>(&data[..]) {
-            Ok(data) => data,
-            Err(_) => {
-                return Err(Error);
-            }
-        };
-
-        // Assuming you want to work with the archived data directly, or you can deserialize it further
-        Ok(archived_quotebars
-            .deserialize(&mut rkyv::Infallible)
-            .unwrap())
-    }
-
-    /// Serializes a `Vec<Symbol>` into `AlignedVec`
-    pub(crate) fn vec_to_aligned(symbols: Vec<Symbol>) -> AlignedVec {
-        // Create a new serializer
-        let mut serializer = AllocSerializer::<1024>::default();
-
-        // Serialize the Vec<QuoteBar>
-        serializer.serialize_value(&symbols).unwrap();
-
-        // Get the serialized bytes
-        let vec = serializer.into_serializer().into_inner();
-        vec
-    }
-
-    /// Serializes a `Vec<Symbol>` into `Vec<u8>`
-    /// This is the method used for quote bar request_response
-    pub(crate) fn vec_to_bytes(symbols: Vec<Symbol>) -> Vec<u8> {
-        // Get the serialized bytes
-        let vec = Symbol::vec_to_aligned(symbols);
-        vec.to_vec()
-    }
-
     pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
         let request = DataServerRequest::TickSize {
             callback_id: 0,

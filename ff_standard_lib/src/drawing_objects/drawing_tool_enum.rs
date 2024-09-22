@@ -26,7 +26,7 @@ impl DrawingTool {
         let drawing_tools = match rkyv::check_archived_root::<Vec<DrawingTool>>(&data[..]) {
             Ok(data) => data,
             Err(e) => {
-                format!("Failed to deserialize tools: {}", e);
+                eprintln!("Failed to deserialize tools: {}", e);
                 return Err(Error);
             }
         };

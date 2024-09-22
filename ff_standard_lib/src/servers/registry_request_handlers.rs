@@ -3,16 +3,15 @@ use crate::strategy_registry::RegistrationRequest;
 use crate::traits::bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use crate::strategy_registry::guis::RegistryGuiResponse;
 
 /// this is used when launching in single machine
 pub async fn registry_manage_async_requests(
-    sender: Arc<SecondaryDataSender>,
+    _sender: Arc<SecondaryDataSender>,
     receiver: Arc<Mutex<SecondaryDataReceiver>>,
 ) {
     tokio::spawn(async move {
         let receiver = receiver.clone();
-        let sender = sender;
+        //let sender = sender;
         let binding = receiver.clone();
         let mut listener = binding.lock().await;
         'register_loop: while let Some(data) = listener.receive().await {
@@ -24,9 +23,9 @@ pub async fn registry_manage_async_requests(
                 }
             };
             match request {
-                RegistrationRequest::Strategy(owner, mode, subscriptions) => {
+                RegistrationRequest::Strategy(_owner, _mode, _subscriptions) => {
                     //handle_strategies(owner.clone(), sender, receiver, mode.clone()).await;
-                    let gui_response = RegistryGuiResponse::StrategyAdded(owner, mode, subscriptions);
+                    //let gui_response = RegistryGuiResponse::StrategyAdded(owner, mode, subscriptions);
                     //broadcast(gui_response.to_bytes()).await;
                     break 'register_loop;
                 }

@@ -1,6 +1,6 @@
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
-use ff_standard_lib::server_connections::{subscribe_primary_subscription_updates, set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, MARKET_HANDLER};
+use ff_standard_lib::server_connections::{set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, MARKET_HANDLER};
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
@@ -11,8 +11,8 @@ use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::thread;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{mpsc, Notify, RwLock};
+use tokio::sync::mpsc::{Receiver};
+use tokio::sync::{Notify, RwLock};
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 
@@ -27,6 +27,7 @@ use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
   The date 2023-08-19 is in ISO week 33 of the year 2023
 */
 
+#[allow(dead_code)]
 pub(crate) struct BackTestEngine {
     start_state: StrategyStartState,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
@@ -86,7 +87,7 @@ impl BackTestEngine {
             end_time.clone(),
         );
 
-        self.historical_data_feed(month_years, end_time.clone(), false)
+        self.historical_data_feed(month_years, end_time.clone())
             .await;
 
         set_warmup_complete().await;
@@ -103,7 +104,7 @@ impl BackTestEngine {
             self.start_state.start_date,
             self.start_state.end_date.clone(),
         );
-        self.historical_data_feed(month_years, self.start_state.end_date.clone(), true)
+        self.historical_data_feed(month_years, self.start_state.end_date.clone())
             .await;
     }
 
@@ -123,7 +124,6 @@ impl BackTestEngine {
         &mut self,
         month_years: BTreeMap<i32, DateTime<Utc>>,
         end_time: DateTime<Utc>,
-        warm_up_completed: bool,
     ) {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
@@ -186,7 +186,7 @@ impl BackTestEngine {
                     }
 
                     // Collect data from the primary feeds simulating a buffering range
-                    let mut time_slice: TimeSlice = month_time_slices
+                    let time_slice: TimeSlice = month_time_slices
                         .range(last_time..=time)
                         .flat_map(|(_, value)| value.iter().cloned())
                         .collect();

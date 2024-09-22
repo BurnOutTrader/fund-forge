@@ -11,7 +11,6 @@ use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use rust_decimal_macros::dec;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
-use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::traits::BaseData;
 
 /// Represents a single quote bar in a financial chart, commonly used
@@ -80,7 +79,7 @@ impl BaseData for QuoteBar {
     }
 
     fn data_vendor(&self) -> DataVendor {
-        self.data_vendor()
+        self.symbol.data_vendor.clone()
     }
 
     fn market_type(&self) -> MarketType {

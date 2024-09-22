@@ -10,7 +10,6 @@ use std::fmt;
 use std::fmt::Debug;
 use std::str::FromStr;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
-use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::traits::BaseData;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
@@ -54,7 +53,7 @@ impl BaseData for Tick {
     }
 
     fn data_vendor(&self) -> DataVendor {
-        self.data_vendor()
+        self.symbol.data_vendor.clone()
     }
 
     fn market_type(&self) -> MarketType {

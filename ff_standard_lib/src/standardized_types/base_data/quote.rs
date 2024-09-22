@@ -10,7 +10,6 @@ use std::fmt;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
-use crate::standardized_types::base_data::tick::Tick;
 use crate::standardized_types::base_data::traits::BaseData;
 
 pub type BookLevel = u8;
@@ -61,7 +60,7 @@ impl BaseData for Quote {
     }
 
     fn data_vendor(&self) -> DataVendor {
-        self.data_vendor()
+        self.symbol.data_vendor.clone()
     }
 
     fn market_type(&self) -> MarketType {

@@ -51,7 +51,7 @@ impl RithmicClient {
         if let Some(map) = self.callbacks.get(&stream_name) {
             map.insert(id, client_ref);
         } else {
-            let mut map = DashMap::new();
+            let map = DashMap::new();
             map.insert(id, client_ref);
             self.callbacks.insert(stream_name.clone(), map);
         }
@@ -78,30 +78,30 @@ impl RithmicClient {
             symbol_info: Default::default(),
             callbacks: Default::default(),
         };
-        let ticker_receiver = match block_on(client.client.connect_and_login(SysInfraType::TickerPlant)) {
+        let _ticker_receiver = match block_on(client.client.connect_and_login(SysInfraType::TickerPlant)) {
             Ok(r) => r,
-            Err(e) => {
+            Err(_e) => {
                 let _ = block_on(client.client.shutdown_all());
                 return client
             }
         };
-        let history_receiver = match block_on(client.client.connect_and_login(SysInfraType::HistoryPlant)) {
+        let _history_receiver = match block_on(client.client.connect_and_login(SysInfraType::HistoryPlant)) {
             Ok(r) => r,
-            Err(e) => {
+            Err(_e) => {
                 let _ = block_on(client.client.shutdown_all());
                 return client
             }
         };
-        let order_receiver = match block_on(client.client.connect_and_login(SysInfraType::OrderPlant)) {
+        let _order_receiver = match block_on(client.client.connect_and_login(SysInfraType::OrderPlant)) {
             Ok(r) => r,
-            Err(e) => {
+            Err(_e) => {
                 let _ = block_on(client.client.shutdown_all());
                 return client
             }
         };
-        let pnl_receiver = match block_on(client.client.connect_and_login(SysInfraType::PnlPlant)) {
+        let _pnl_receiver = match block_on(client.client.connect_and_login(SysInfraType::PnlPlant)) {
             Ok(r) => r,
-            Err(e) => {
+            Err(_e) => {
                 let _ = block_on(client.client.shutdown_all());
                 return client
             }
@@ -117,37 +117,37 @@ impl RithmicClient {
     }
 
     // Send a request and wait for a response
-    pub async fn send_synchronous_request<T: ProstMessage + Default>(&self, stream_name: String, plant: &SysInfraType, request: T, id: u64 ) -> Result<DataServerResponse, FundForgeError> {
+    pub async fn send_synchronous_request<T: ProstMessage + Default>(&self, _stream_name: String, _plant: &SysInfraType, _request: T, _id: u64 ) -> Result<DataServerResponse, FundForgeError> {
        todo!()
     }
 }
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
-    async fn symbols_response(&self, stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn symbols_response(&self, _stream_name: String, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn account_info_response(&self, stream_name: String, account_id: AccountId, callback_id: u64) -> DataServerResponse {
+    async fn account_info_response(&self, _stream_name: String, _account_id: AccountId, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn symbol_info_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn symbol_info_response(&self, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn margin_required_historical_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn margin_required_historical_response(&self, _stream_name: String, _symbol_name: SymbolName, _quantity: Volume, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn margin_required_live_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn margin_required_live_response(&self, _stream_name: String, _symbol_name: SymbolName, _quantity: Volume, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 }
 
 #[async_trait]
 impl VendorApiResponse for RithmicClient {
-    async fn symbols_response(&self, stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse{
+    async fn symbols_response(&self, _stream_name: String, _market_type: MarketType, _callback_id: u64) -> DataServerResponse{
         //1. create a oneshot
         //2. create the rithmic message
         //3. send to rithmic
@@ -156,27 +156,27 @@ impl VendorApiResponse for RithmicClient {
         todo!()
     }
 
-    async fn resolutions_response(&self, stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn resolutions_response(&self, _stream_name: String, _market_type: MarketType, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn markets_response(&self, stream_name: String, callback_id: u64) -> DataServerResponse {
+    async fn markets_response(&self, _stream_name: String, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn decimal_accuracy_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn decimal_accuracy_response(&self, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn tick_size_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn tick_size_response(&self, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn data_feed_subscribe(&self,stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self,_stream_name: String, _subscription: DataSubscription, _sender: Sender<DataServerResponse>) -> DataServerResponse {
         todo!()
     }
 
-    async fn data_feed_unsubscribe(&self, stream_name: String, subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self, _stream_name: String, _subscription: DataSubscription) -> DataServerResponse {
         todo!()
     }
 }

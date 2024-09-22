@@ -147,9 +147,9 @@ impl MarketHandler {
 
     pub async fn simulated_order_matching(
         &self,
-        mut order_receiver: Receiver<OrderRequest>,
+        order_receiver: Receiver<OrderRequest>,
     ) {
-        let mut event_buffer = Arc::new(RwLock::new(EventTimeSlice::new()));
+        let event_buffer = Arc::new(RwLock::new(EventTimeSlice::new()));
         let ledgers = self.ledgers.clone();
         let last_price = self.last_price.clone();
         let order_cache = self.order_cache.clone();
@@ -158,7 +158,7 @@ impl MarketHandler {
         tokio::task::spawn(async move {
             while let Some(order_request) = order_receiver.recv().await {
                 match order_request {
-                    OrderRequest::Create { brokerage, order } => {
+                    OrderRequest::Create { order, .. } => {
                         let time = DateTime::from_str(&order.time_created_utc).unwrap();
                         order_cache.write().await.push(order);
                         match order_matching::backtest_matching_engine(order_books.clone(), last_price.clone(), ledgers.clone(), time , order_cache.clone()).await {
@@ -186,7 +186,7 @@ impl MarketHandler {
                     }
                     OrderRequest::Update{ brokerage, order_id, account_id, update } => {
                         let mut existing_order: Option<Order> = None;
-                        let mut cache = order_cache.write().await;
+                        let cache = order_cache.write().await;
                         'order_search: for order in &*cache {
                             if order.id == order_id {
                                 existing_order = Some(order.clone());
@@ -196,13 +196,13 @@ impl MarketHandler {
                         if let Some(mut order) = existing_order {
                             match update {
                                 OrderUpdateType::LimitPrice(price) => {
-                                    if let Some(mut limit_price) = order.limit_price {
-                                        limit_price = price;
+                                    if let Some(ref mut limit_price) = order.limit_price {
+                                        *limit_price = price;
                                     }
                                 }
                                 OrderUpdateType::TriggerPrice(price) => {
-                                    if let Some(mut trigger_price) = order.trigger_price {
-                                        trigger_price = price;
+                                    if let Some(ref mut trigger_price) = order.trigger_price {
+                                        *trigger_price = price;
                                     }
                                 }
                                 OrderUpdateType::TimeInForce(tif) => {
