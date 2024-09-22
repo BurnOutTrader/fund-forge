@@ -8,6 +8,7 @@ use lazy_static::lazy_static;
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 use std::time::Duration;
 use ahash::AHashMap;
 use chrono::{DateTime, Utc};
@@ -140,7 +141,6 @@ pub async fn set_warmup_complete() {
 pub(crate) enum StrategyRequest {
     CallBack(ConnectionType, DataServerRequest, oneshot::Sender<DataServerResponse>),
     OneWay(ConnectionType, DataServerRequest),
-    Orders(ConnectionType, OrderRequest)
 }
 static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<StrategyRequest>>>> = OnceCell::new();
 pub(crate) fn get_sender() -> Arc<Mutex<mpsc::Sender<StrategyRequest>>> {
@@ -155,13 +155,17 @@ pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
     STRATEGY_SENDER.get().unwrap().send(slice).await.unwrap();
 }
 
-pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_channel: mpsc::Receiver<Vec<DataSubscription>>, settings_map: HashMap<ConnectionType, ConnectionSettings>) {
+pub async fn live_subscription_handler(
+    mode: StrategyMode,
+    subscription_update_channel: mpsc::Receiver<Vec<DataSubscription>>,
+) {
     if mode == StrategyMode::Backtest {
         return;
     }
-
+    let settings_map = Arc::new(initialise_settings().unwrap());
     let mut subscription_update_channel = subscription_update_channel;
     let current_subscriptions = PRIMARY_SUBSCRIPTIONS.clone();
+    let settings_map_ref = settings_map.clone();
     println!("Handler: Start Live handler");
     tokio::task::spawn(async move {
         {
@@ -172,7 +176,7 @@ pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_c
                     request: StreamRequest::Subscribe(subscription.clone())
                 };
                 let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
-                let connection_type = match settings_map.contains_key(&connection) {
+                let connection_type = match settings_map_ref.contains_key(&connection) {
                     true => connection,
                     false => ConnectionType::Default
                 };
@@ -189,7 +193,7 @@ pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_c
                 for subscription in &updated_subscriptions {
                     if !current_subscriptions.contains(&subscription) {
                         let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
-                        let connection_type = match settings_map.contains_key(&connection) {
+                        let connection_type = match settings_map_ref.contains_key(&connection) {
                             true => connection,
                             false => ConnectionType::Default
                         };
@@ -204,7 +208,7 @@ pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_c
                 for subscription in &*current_subscriptions {
                     if !updated_subscriptions.contains(&subscription) {
                         let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
-                        let connection_type = match settings_map.contains_key(&connection) {
+                        let connection_type = match settings_map_ref.contains_key(&connection) {
                             true => connection,
                             false => ConnectionType::Default
                         };
@@ -229,6 +233,32 @@ pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_c
         }
     });
 }
+
+
+pub async fn live_order_handler(
+    mode: StrategyMode,
+    order_receiver: tokio::sync::mpsc::Receiver<OrderRequest>
+) {
+    let settings_map = Arc::new(initialise_settings().unwrap());
+    if mode == StrategyMode::Live {
+        let connection_map = settings_map;
+        tokio::task::spawn(async move {
+            let mut order_receiver = order_receiver;
+            while let Some(order_request) = order_receiver.recv().await {
+                let connection_type = ConnectionType::Broker(order_request.brokerage());
+                let connection_type = match connection_map.contains_key(&connection_type) {
+                    true => connection_type,
+                    false => ConnectionType::Default
+                };
+                let request = DataServerRequest::OrderRequest {
+                    request: order_request
+                };
+                send(connection_type, request.to_bytes()).await;
+            }
+        });
+    }
+}
+
 /// This response handler is also acting as a live engine.
 async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Duration, settings_map: HashMap<ConnectionType, ConnectionSettings>)  {
     let mut receiver = receiver;
@@ -266,21 +296,6 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                         //println!("{}: request_received: {:?}", connection_type, request);
                         send(connection_type, request.to_bytes()).await;
                     });
-                }
-                StrategyRequest::Orders(connection_type, request) => {
-                    if mode  == StrategyMode::Live {
-                       tokio::task::spawn(async move {
-                           let request = DataServerRequest::OrderRequest {
-                               request
-                           };
-                           let connection_type = match connection_map.contains_key(&connection_type) {
-                               true => connection_type,
-                               false => ConnectionType::Default
-                           };
-                           //println!("{}: request_received: {:?}", connection_type, request);
-                           send(connection_type, request.to_bytes()).await;
-                       });
-                    }
                 }
             }
         }

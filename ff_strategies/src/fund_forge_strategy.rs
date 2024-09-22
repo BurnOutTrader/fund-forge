@@ -40,7 +40,7 @@ use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::market_handler::market_handlers::{MarketHandler};
-use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, set_warmup_complete, subscribe_primary_subscription_updates};
+use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static, live_order_handler, live_subscription_handler, set_warmup_complete, subscribe_primary_subscription_updates};
 use ff_standard_lib::servers::settings::client_settings::initialise_settings;
 use ff_standard_lib::standardized_types::data_server_messaging::DataServerRequest;
 
@@ -137,7 +137,10 @@ impl FundForgeStrategy {
         let (order_sender, order_receiver) = mpsc::channel(100);
         let market_event_handler = match strategy_mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(start_time.to_utc(), Some(order_receiver)).await,
-            StrategyMode::Live => MarketHandler::new(start_time.to_utc(), None).await,
+            StrategyMode::Live => {
+                live_order_handler(strategy_mode, order_receiver).await;
+                MarketHandler::new(start_time.to_utc(), None).await
+            },
         };
         let market_event_handler = Arc::new(market_event_handler);
 
@@ -169,11 +172,10 @@ impl FundForgeStrategy {
         match strategy_mode {
             StrategyMode::Backtest => {
                 let engine = BackTestEngine::new(notify, start_state, gui_enabled.clone(), rx).await;
-                BackTestEngine::launch(engine).await
+                BackTestEngine::launch(engine).await;
             }
-            StrategyMode::Live | StrategyMode::LivePaperTrading => {
-                let settings_map = initialise_settings().unwrap();
-                live_subscription_handler(strategy_mode, rx, settings_map).await
+            StrategyMode::LivePaperTrading | StrategyMode::Live  => {
+                live_subscription_handler(strategy_mode, rx).await;
             },
         }
         strategy
