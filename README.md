@@ -163,7 +163,8 @@ fn example() {
   let is_long: bool = strategy.is_long().await; //parameters excluded for brevity
 }
 ```
-DataVendor allows us to connect to data providers that are not necessarily brokers, but brokers can also be DataVendor's
+DataVendor allows us to connect to data providers that are not necessarily brokers, but brokers can also be DataVendor's.
+DataVendors can provide any kind of data, from price data to fundamentals.
 
 Brokerage allows us to connect to brokerages and exchanges that facilitate placing orders, they can also be DataVendors, but we can place orders based on any data feed, or multiple feeds for the same symbol name.
 
