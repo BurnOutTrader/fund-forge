@@ -171,6 +171,7 @@ pub(crate) mod historical_ledgers {
     use crate::standardized_types::orders::orders::ProtectiveOrder;
     use crate::standardized_types::{Price, Volume};
     use crate::standardized_types::accounts::position::{Position, PositionId};
+    use crate::standardized_types::base_data::traits::BaseData;
     use crate::standardized_types::subscriptions::SymbolName;
     use crate::standardized_types::time_slices::TimeSlice;
 
