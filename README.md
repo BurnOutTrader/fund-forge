@@ -100,6 +100,7 @@ pub async fn on_data_received(
 
 It is easy to subscribe to data, including custom candles like Heikin Ashi and Renko Blocks.
 Data subscriptions can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history.
+Data subscriptions will warm themselves up on creation if the strategy is already warmed up, so we can subscribe and unsubscribe at any time.
 ```rust
 fn example() {
   let subscription = DataSubscription::new_custom(
@@ -116,8 +117,10 @@ fn example() {
 
 It is easy to create and add indicators or custom candlestick types. Below we subscribe to an ATR indicator using Heikin Ashi candles.
 Indicators can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history.
+Indicators will warm themselves up on creation if the strategy is already warmed up, so we can subscribe and unsubscribe at any time.
 ```rust
 fn example() {
+  // Here we create a 5 period ATR using a Heikin Ashi data subscription, and we specify to retain the last 100 bars in memory.
   let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
     AverageTrueRange::new(
       IndicatorName::from("heikin_atr_5"),
