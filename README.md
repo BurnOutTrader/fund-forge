@@ -164,6 +164,8 @@ fn example() {
 }
 ```
 
+All strategies can trade multiple symbols and brokers at the same time, as well as subscribe and unsubscribe from data feeds and indicators at run time.
+
 For a full look at strategies see
 [test_strategy](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs)
 and
