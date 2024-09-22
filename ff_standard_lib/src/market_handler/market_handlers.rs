@@ -18,8 +18,6 @@ use crate::market_handler::historical::order_matching;
 use crate::server_connections::send_strategy_event_slice;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::time_slices::TimeSlice;
-use futures::stream::FuturesUnordered;
-use futures::StreamExt;
 
 pub struct MarketHandler {
     order_books: Arc<DashMap<SymbolName, Arc<OrderBook>>>,
@@ -138,6 +136,12 @@ impl MarketHandler {
                 BaseDataEnum::Fundamental(_) => (),
             }
         }
+    }
+
+    pub async fn live_ledger_updates(
+        &self
+    ) {
+
     }
 
     pub async fn simulated_order_matching(

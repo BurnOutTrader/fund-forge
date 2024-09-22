@@ -5,8 +5,6 @@ use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::subscriptions::DataSubscription;
 
 pub mod guis;
-pub mod handle_gui;
-pub mod handle_strategies;
 pub mod strategies;
 pub mod strategy_commands;
 

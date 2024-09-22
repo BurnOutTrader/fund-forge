@@ -1,6 +1,6 @@
 use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use crate::strategy_registry::guis::{GuiRequest, RegistryGuiResponse};
-use crate::strategy_registry::handle_strategies::{get_backtest_connected_strategies, get_events_buffer, get_live_connected_strategies, get_live_paper_connected_strategies, send_subscriber, subscribe, unsubscribe};
+use ff_strategy_registry::handle_strategies::{get_backtest_connected_strategies, get_events_buffer, get_live_connected_strategies, get_live_paper_connected_strategies, send_subscriber, subscribe, unsubscribe};
 use crate::traits::bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::Mutex;

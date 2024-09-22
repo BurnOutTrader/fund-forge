@@ -1,6 +1,4 @@
 use crate::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
-use crate::strategy_registry::handle_gui::handle_gui;
-use crate::strategy_registry::handle_strategies::{broadcast, handle_strategies};
 use crate::strategy_registry::RegistrationRequest;
 use crate::traits::bytes::Bytes;
 use std::sync::Arc;
@@ -27,13 +25,13 @@ pub async fn registry_manage_async_requests(
             };
             match request {
                 RegistrationRequest::Strategy(owner, mode, subscriptions) => {
-                    handle_strategies(owner.clone(), sender, receiver, mode.clone()).await;
+                    //handle_strategies(owner.clone(), sender, receiver, mode.clone()).await;
                     let gui_response = RegistryGuiResponse::StrategyAdded(owner, mode, subscriptions);
-                    broadcast(gui_response.to_bytes()).await;
+                    //broadcast(gui_response.to_bytes()).await;
                     break 'register_loop;
                 }
                 RegistrationRequest::Gui => {
-                    handle_gui(sender, receiver).await;
+                    //handle_gui(sender, receiver).await;
                     break 'register_loop;
                 }
             };

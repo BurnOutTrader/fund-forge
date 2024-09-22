@@ -10,8 +10,7 @@ use rust_decimal::Decimal;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::standardized_types::{Price, Volume};
-use crate::standardized_types::accounts::position::PositionUpdateEvent;
-use crate::standardized_types::orders::orders::{OrderRequest, OrderUpdateEvent};
+use crate::standardized_types::orders::orders::{OrderRequest};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
 

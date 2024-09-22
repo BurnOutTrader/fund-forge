@@ -1,13 +1,11 @@
 use async_trait::async_trait;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::{Sender};
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::apis::rithmic_api::api_client::{get_rithmic_client};
 use crate::apis::test_api::TEST_CLIENT;
-use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError};
-use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::standardized_types::enums::{MarketType};
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
-use crate::standardized_types::time_slices::TimeSlice;
 
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
 #[async_trait]

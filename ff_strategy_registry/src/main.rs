@@ -1,11 +1,7 @@
 use chrono::Utc;
 use ff_standard_lib::server_connections::ConnectionType;
 use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
-use ff_standard_lib::servers::communications_sync::{
-    SecureExternalCommunicator, SynchronousCommunicator,
-};
 use ff_standard_lib::servers::registry_request_handlers::registry_manage_async_requests;
-use ff_standard_lib::servers::settings::client_settings::get_settings;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
@@ -20,7 +16,11 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio::task;
 use tokio::task::JoinHandle;
-use tokio_rustls::{TlsAcceptor, TlsStream};
+use tokio_rustls::TlsAcceptor;
+use ff_standard_lib::servers::settings::client_settings::initialise_settings;
+
+pub mod handle_gui;
+pub mod handle_strategies;
 
 pub(crate) fn load_certs(path: &Path) -> io::Result<Vec<CertificateDer<'static>>> {
     let certificates = certs(&mut BufReader::new(File::open(path)?)).collect();
@@ -71,9 +71,8 @@ struct ServerLaunchOptions {
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let options = ServerLaunchOptions::from_args();
-    let settings = get_settings(&ConnectionType::StrategyRegistry)
-        .await
-        .unwrap();
+    let settings_map = initialise_settings().unwrap();
+    let settings = settings_map.get(&ConnectionType::StrategyRegistry).unwrap();
 
     let cert = Path::join(&options.ssl_auth_folder, "cert.pem");
     let key = Path::join(&options.ssl_auth_folder, "key.pem");

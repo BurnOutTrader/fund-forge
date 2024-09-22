@@ -470,6 +470,10 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
     }
 }
 
+pub async fn response_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Duration, settings_map: HashMap<ConnectionType, ConnectionSettings>, notify: Arc<Notify>) {
+
+}
+
 pub async fn send(connection_type: ConnectionType, msg: Vec<u8>) {
     let sender = ASYNC_OUTGOING.get(&connection_type).unwrap_or_else(|| ASYNC_OUTGOING.get(&ConnectionType::Default).unwrap()).value().clone();
     match sender.send(&msg).await {

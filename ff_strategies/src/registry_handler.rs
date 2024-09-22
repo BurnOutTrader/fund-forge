@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::strategy_events::StrategyEvent;
+use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 
 pub struct RegistryHandler {}
@@ -19,7 +19,7 @@ impl RegistryHandler {
         todo!()
     }
 
-    pub async fn forward_events(&self, time: DateTime<Utc>, strategy_event_slice: Vec<StrategyEvent>) {
+    pub async fn forward_events(&self, time: DateTime<Utc>, strategy_event_slice: EventTimeSlice) {
         todo!()
     }
 }
