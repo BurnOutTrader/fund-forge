@@ -43,34 +43,16 @@ pub async fn on_data_received(
                     for base_data in &time_slice {
                         match base_data {
                             BaseDataEnum::TradePrice(trade_price) => {}
-                            BaseDataEnum::Candle(candle) => {
-                                if candle.is_closed == true {
-                                    println!("Candle {}: {}", candle.symbol.name, candle.time);
-                                } else if candle.is_closed == false {
-                                  println!("Candle {}: {}", candle.symbol.name, candle.time);
-                                }
-                            }
-                            BaseDataEnum::QuoteBar(quotebar) => {
-                                if quotebar.is_closed == true {
-                                    println!("QuoteBar {}: {}", quotebar.symbol.name, quotebar.time);
-                                } else if quotebar.is_closed == false {
-                                  println!("QuoteBar {}: {}", quotebar.symbol.name, quotebar.time);
-                                }
-                            }
+                            BaseDataEnum::Candle(candle) => {}
+                            BaseDataEnum::QuoteBar(quotebar) => {}
                             BaseDataEnum::Tick(tick) => {}
-                            BaseDataEnum::Quote(quote) => {
-                                println!("{} Quote: {}", quote.symbol.name, base_data.time_created_utc());
-                            }
+                            BaseDataEnum::Quote(quote) => {}
                             BaseDataEnum::Fundamental(_fundamental) => {}
                         }
                     }
                 }
-                StrategyEvent::OrderEvents(events) => {
-                    println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), events);
-                }
-                StrategyEvent::DataSubscriptionEvents(events,_) => {
-                    println!("Strategy: Data Subscription Events: {:?}", events);
-                }
+                StrategyEvent::OrderEvents(events) => {}
+                StrategyEvent::DataSubscriptionEvents(events,_) => {}
                 StrategyEvent::StrategyControls(control, _) => {
                   match control {
                     StrategyControls::Continue => {}
