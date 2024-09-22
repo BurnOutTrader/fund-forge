@@ -15,8 +15,8 @@ All strategies share a single API instance for each brokerage or data vendor by 
 
 This design allows us to:
 - Use colocation services for running strategies on cloud hardware.
-- Enable a microservices architecture for managing API instances.
-- Persist historical data between strategies without duplication
+- Enable a microservices architecture for managing API instances including co-location of Api's/ff_data_server instances.
+- Persist historical data between strategies without duplication.
 
 ## Data Server
 The data server is responsible for hosting API instances, persisting historical data and managing broker or vendor specific information required by strategy instances.
@@ -115,11 +115,13 @@ Everything mentioned above is flexible by discussion.
 Fund forge /src is just for testing random functionality during development, it will not be used in the future, please use the test_strategy folder for testing and developing.
 
 ## Demonstration Testing Data
-you can download data I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKEZD9BHCDbvCbHRmg?e=fiBcr3)
+You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKEZD9BHCDbvCbHRmg?e=fiBcr3)
 Password "fundforge"
+The Forex folder should be put into the following director "ff_data_server/data/Test".
 
 The parsed data includes Quote data for AUD-CAD and EUR-CAD from start of 06/2024 to end of 08/2024.
-From this data your strategy will consolidate and Candles or Quotebars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
+From this data your strategy will consolidate and Candles or QuoteBars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
+
 
 ### For more testing and development data
 You can download some free testing data [here](https://www.histdata.com/download-free-forex-data/?/ascii/tick-data-quotes)
