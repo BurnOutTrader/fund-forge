@@ -165,10 +165,23 @@ fn example() {
 ```
 DataVendor allows us to connect to data providers that are not necessarily brokers, but brokers can also be DataVendor's.
 DataVendors can provide any kind of data, from price data to fundamentals.
+A `DataVendor` variant uses a Symbol object to define a symbol
+```rust
+pub struct Symbol {
+    pub name: SymbolName,
+    pub market_type: MarketType,
+    pub data_vendor: DataVendor,
+}
+```
 
 Brokerage allows us to connect to brokerages and exchanges that facilitate placing orders, they can also be DataVendors, but we can place orders based on any data feed, or multiple feeds for the same symbol name.
-
 All strategies can trade multiple symbols and brokers at the same time, as well as subscribe and unsubscribe from data feeds and indicators at run time.
+A broker only needs a symbol name to place an order.
+```rust
+fn example() {
+  let symbol_name: SymbolName = SymbolName::from("AUD-USD");
+}
+```
 
 For a full look at strategies see
 [test_strategy](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs)
