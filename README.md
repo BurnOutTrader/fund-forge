@@ -136,6 +136,8 @@ For a full look at strategies see
 and
 [strategies readme](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
 
+I intend to build a full glossary and video tutorial series when live trading features are completed.
+
 ## Current Status
 
 Fund Forge is not ready for live trading. It currently uses a faux `DataevVndor::Test` and `Brokerage::Test` API implementation to help build standardized models, which will aid future API integrations.
