@@ -309,40 +309,42 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
     let open_bars_ref = open_bars.clone();
     let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
     let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
-    tokio::task::spawn(async move {
-        let mut instant = Instant::now() + buffer_duration;
-        loop {
-            sleep_until(instant.into()).await;
-            { //we use a block here so if we await notified the buffer can keep filling up as we will drop locks
-                let mut buffer = event_buffer_ref.write().await;
-                let mut time_slice = time_slice_ref.write().await;
-                let mut open_bars = open_bars_ref.write().await;
-                for (_, map) in &mut *open_bars {
-                    for (_, data) in &mut *map {
-                        time_slice.push(data.clone());
+    if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
+        tokio::task::spawn(async move {
+            let mut instant = Instant::now() + buffer_duration;
+            loop {
+                sleep_until(instant.into()).await;
+                { //we use a block here so if we await notified the buffer can keep filling up as we will drop locks
+                    let mut buffer = event_buffer_ref.write().await;
+                    let mut time_slice = time_slice_ref.write().await;
+                    let mut open_bars = open_bars_ref.write().await;
+                    for (_, map) in &mut *open_bars {
+                        for (_, data) in &mut *map {
+                            time_slice.push(data.clone());
+                        }
+                        map.clear();
                     }
-                    map.clear();
-                }
-                if let Some(remaining_time_slice) = subscription_handler.update_consolidators_time(Utc::now()).await {
-                    if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&remaining_time_slice).await {
-                        buffer.extend(indicator_events);
+                    if let Some(remaining_time_slice) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                        if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&remaining_time_slice).await {
+                            buffer.extend(indicator_events);
+                        }
+                        time_slice.extend(remaining_time_slice);
                     }
-                    time_slice.extend(remaining_time_slice);
-                }
 
-                let slice = StrategyEvent::TimeSlice(Utc::now().to_string(), time_slice.clone());
-                *time_slice = TimeSlice::new();
+                    let slice = StrategyEvent::TimeSlice(Utc::now().to_string(), time_slice.clone());
+                    *time_slice = TimeSlice::new();
 
-                buffer.push(slice);
-                if !buffer.is_empty() {
-                    send_strategy_event_slice(buffer.clone()).await;
-                    *buffer = EventTimeSlice::new();
+                    buffer.push(slice);
+                    if !buffer.is_empty() {
+                        send_strategy_event_slice(buffer.clone()).await;
+                        *buffer = EventTimeSlice::new();
+                    }
+                    instant = Instant::now() + buffer_duration;
                 }
-                instant = Instant::now() + buffer_duration;
+                notify.notified().await;
             }
-            notify.notified().await;
-        }
-    });
+        });
+    }
 
 
     for incoming in ASYNC_INCOMING.iter() {
