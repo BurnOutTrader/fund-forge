@@ -424,6 +424,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                     }
                                 }
                                 DataServerResponse::DataUpdates(primary_data) => {
+                                    MARKET_HANDLER.get().unwrap().update_time_slice(Utc::now(), &primary_data).await;
                                     let mut strategy_time_slice = TimeSlice::new();
                                     if let Some(consolidated) = subscription_handler.update_time_slice(primary_data.clone()).await {
                                         strategy_time_slice.extend(consolidated);
@@ -491,7 +492,6 @@ pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>,  e
     }).clone();
 }
 pub async fn initialize_static(
-
     market_handler: Arc<MarketHandler>,
     timed_event_handler: Arc<TimedEventHandler>,
     interaction_handler: Arc<InteractionHandler>,
