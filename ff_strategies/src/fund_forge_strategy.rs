@@ -116,7 +116,8 @@ impl FundForgeStrategy {
 
         let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
         let subscription_handler = Arc::new(subscription_handler);
-        init_sub_handler(subscription_handler.clone(), strategy_event_sender).await;
+        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
+        init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
         init_connections(gui_enabled, buffering_resolution, strategy_mode.clone()).await;
 
         let start_state = StrategyStartState::new(
@@ -140,7 +141,7 @@ impl FundForgeStrategy {
         };
         let market_event_handler = Arc::new(market_event_handler);
 
-        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
+
         let timed_event_handler = Arc::new(TimedEventHandler::new());
         let interaction_handler = Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode));
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
@@ -157,7 +158,6 @@ impl FundForgeStrategy {
         };
 
         initialize_static(
-            indicator_handler,
             market_event_handler,
             timed_event_handler,
             interaction_handler,

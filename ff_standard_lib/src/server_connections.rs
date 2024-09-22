@@ -341,6 +341,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
         let event_buffer = event_buffer.clone();
         let time_slice = time_slice.clone();
         let open_bars = open_bars.clone();
+        let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         tokio::task::spawn(async move {
             let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
             //let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
@@ -371,6 +372,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                 let event_buffer = event_buffer.clone();
                 let time_slice = time_slice.clone();
                 let open_bars = open_bars.clone();
+                let indicator_handler = indicator_handler.clone();
                 tokio::task::spawn(async move {
                     let response = DataServerResponse::from_bytes(&message_body).unwrap();
                     match response.get_callback_id() {
@@ -384,13 +386,11 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                             let event = DataSubscriptionEvent::Subscribed(subscription.clone());
                                             let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
                                             send_strategy_event_slice(vec![event_slice]).await;
-                                            println!("Handler: Subscribed: {}", subscription);
                                         }
                                         false => {
                                             let event = DataSubscriptionEvent::FailedSubscribed(subscription.clone(), reason.unwrap());
                                             let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
                                             event_buffer.write().await.push(event_slice);
-                                            println!("Handler: Subscribe Failed: {}", subscription);
                                         }
                                     }
                                 }
@@ -421,6 +421,10 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                     }
                                     if strategy_time_slice.is_empty() {
                                         return;;
+                                    }
+
+                                    if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&strategy_time_slice).await {
+                                        event_buffer.write().await.extend(indicator_events);
                                     }
 
                                     for data in strategy_time_slice {
@@ -460,25 +464,24 @@ pub async fn send(connection_type: ConnectionType, msg: Vec<u8>) {
     }
 }
 
-pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>,  event_sender: mpsc::Sender<EventTimeSlice>,) {
+pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>,  event_sender: mpsc::Sender<EventTimeSlice>, indicator_handler: Arc<IndicatorHandler>,) {
     STRATEGY_SENDER.get_or_init(|| {
         event_sender
     }).clone();
     SUBSCRIPTION_HANDLER.get_or_init(|| {
         subscription_handler
     }).clone();
+    INDICATOR_HANDLER.get_or_init(|| {
+        indicator_handler
+    }).clone();
 }
 pub async fn initialize_static(
-    indicator_handler: Arc<IndicatorHandler>,
+
     market_handler: Arc<MarketHandler>,
     timed_event_handler: Arc<TimedEventHandler>,
     interaction_handler: Arc<InteractionHandler>,
     drawing_objects_handler: Arc<DrawingObjectHandler>,
 ) {
-
-    INDICATOR_HANDLER.get_or_init(|| {
-        indicator_handler
-    }).clone();
     TIMED_EVENT_HANDLER.get_or_init(|| {
         timed_event_handler
     }).clone();
