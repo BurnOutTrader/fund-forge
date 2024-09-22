@@ -88,7 +88,7 @@ pub async fn on_data_received(
 It is easy to subscribe to data, including custom candles like Heikin Ashi and Renko Blocks.
 ```rust
 fn example() {
-  DataSubscription::new_custom(
+  let subscription = DataSubscription::new_custom(
     SymbolName::from("EUR-USD"),
     DataVendor::Test,
     Resolution::Seconds(1),
@@ -96,10 +96,11 @@ fn example() {
     MarketType::Forex,
     CandleType::CandleStick,
   );
+  strategy.subscribe(subscription).await;
 }
 ```
 
-It is easy to create and add indicators.
+It is easy to create and add indicators or custom candlestick types. Below we subscribe to an ATR indicator using Heikin Ashi candles
 ```rust
 fn example() {
   let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
@@ -121,7 +122,8 @@ fn example() {
   strategy.indicator_subscribe(heikin_atr_5).await;
 }
 ```
-It is easy to place orders, including attaching bracket orders
+
+It is easy to place orders, including attaching bracket orders to the new position.
 ```rust
 fn example() {
     let entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long"), None).await;
