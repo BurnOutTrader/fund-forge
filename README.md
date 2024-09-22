@@ -183,7 +183,7 @@ Password "fundforge"
 The Forex folder should be put into the following director "ff_data_server/data/Test".
 
 The parsed data includes Quote data for AUD-CAD and EUR-CAD from start of 06/2024 to end of 08/2024.
-From this data your strategy will consolidate and Candles or QuoteBars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
+From this data your strategy will consolidate Candles or QuoteBars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
 
 
 ### For more testing and development data
