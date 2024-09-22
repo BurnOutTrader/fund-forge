@@ -114,6 +114,7 @@ pub async fn on_data_received(
                 StrategyEvent::DrawingToolEvents(event, _) => {
                     println!("Strategy: Drawing Tool Event: {:?}", event);
                 }
+
                 StrategyEvent::TimeSlice(time, time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
                     for base_data in &time_slice {
@@ -211,6 +212,7 @@ pub async fn on_data_received(
                         }
                     }
                 }
+
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(event) => {
                     match &event {
@@ -238,14 +240,17 @@ pub async fn on_data_received(
                     };
                     println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), event);
                 }
+
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
                 StrategyEvent::DataSubscriptionEvents(events,_) => {
                     for event in events {
                         println!("Strategy: Data Subscription Event: {:?}", event);
                     }
                 }
+
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
                 StrategyEvent::StrategyControls(control, _) => {}
+
                 StrategyEvent::ShutdownEvent(event) => {
                     println!("{}",event);
                     strategy.export_trades(&String::from("/Test Trade Exports"));
@@ -253,12 +258,15 @@ pub async fn on_data_received(
                     for ledger in ledgers {
                         println!("{:?}", ledger);
                     }
+                    //we should handle shutdown gracefully by first ending the strategy loop.
                     break 'strategy_loop
-                }, //we should handle shutdown gracefully by first ending the strategy loop.
+                },
+
                 StrategyEvent::WarmUpComplete{} => {
                     println!("Strategy: Warmup Complete");
                     warmup_complete = true;
                 }
+
                 StrategyEvent::IndicatorEvent(indicator_event) => {
                     //we can handle indicator events here, this is useful for debugging and monitoring the state of the indicators.
                     match indicator_event {
@@ -283,6 +291,7 @@ pub async fn on_data_received(
 
                     // we could also get the automanaged indicator values from teh strategy at any time.
                 }
+
                 StrategyEvent::PositionEvents => {
 
                 }
