@@ -239,6 +239,7 @@ pub async fn data_server_manage_async_requests(
                 };
             });
         }
+        stream_handle.abort();
     });
 }
 

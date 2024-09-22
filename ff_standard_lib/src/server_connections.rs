@@ -268,19 +268,19 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                     });
                 }
                 StrategyRequest::Orders(connection_type, request) => {
-                    tokio::task::spawn(async move {
-                        let brokerage = request.brokerage();
-                        let request = DataServerRequest::OrderRequest {
-                            request
-                        };
-                        let connection_type= ConnectionType::Broker(brokerage);
-                        let connection_type = match connection_map.contains_key(&connection_type) {
-                            true => connection_type,
-                            false => ConnectionType::Default
-                        };
-                        //println!("{}: request_received: {:?}", connection_type, request);
-                        send(connection_type, request.to_bytes()).await;
-                    });
+                    if mode  == StrategyMode::Live {
+                       tokio::task::spawn(async move {
+                           let request = DataServerRequest::OrderRequest {
+                               request
+                           };
+                           let connection_type = match connection_map.contains_key(&connection_type) {
+                               true => connection_type,
+                               false => ConnectionType::Default
+                           };
+                           //println!("{}: request_received: {:?}", connection_type, request);
+                           send(connection_type, request.to_bytes()).await;
+                       });
+                    }
                 }
             }
         }
