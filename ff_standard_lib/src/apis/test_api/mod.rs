@@ -198,7 +198,7 @@ impl VendorApiResponse for TestApiClient {
                                 quote.time = Utc::now().to_string();
                                 let response = DataServerResponse::DataUpdates(vec![base_data.clone()]);
                                 broadcaster.broadcast(response).await;
-                                sleep(Duration::from_millis(100)).await;
+                                sleep(Duration::from_millis(20)).await;
                             } else {
                                 println!("No subscribers");
                                 break 'main_loop;

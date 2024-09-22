@@ -51,7 +51,7 @@ async fn main() {
             DataSubscription::new_custom(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Seconds(5),
+                Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
                 CandleType::CandleStick,
@@ -59,7 +59,7 @@ async fn main() {
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Seconds(5),
+                 Resolution::Seconds(1),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::HeikinAshi,
