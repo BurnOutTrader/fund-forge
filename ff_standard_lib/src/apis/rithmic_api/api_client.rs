@@ -78,34 +78,31 @@ impl RithmicClient {
             symbol_info: Default::default(),
             callbacks: Default::default(),
         };
-        let shutdown_client = || async {
-            if let Err(_) = block_on(client.client.shutdown_all()) {}
-        };
         let ticker_receiver = match block_on(client.client.connect_and_login(SysInfraType::TickerPlant)) {
             Ok(r) => r,
             Err(e) => {
-                shutdown_client;
+                let _ = block_on(client.client.shutdown_all());
                 return client
             }
         };
         let history_receiver = match block_on(client.client.connect_and_login(SysInfraType::HistoryPlant)) {
             Ok(r) => r,
             Err(e) => {
-                shutdown_client;
+                let _ = block_on(client.client.shutdown_all());
                 return client
             }
         };
         let order_receiver = match block_on(client.client.connect_and_login(SysInfraType::OrderPlant)) {
             Ok(r) => r,
             Err(e) => {
-                shutdown_client;
+                let _ = block_on(client.client.shutdown_all());
                 return client
             }
         };
         let pnl_receiver = match block_on(client.client.connect_and_login(SysInfraType::PnlPlant)) {
             Ok(r) => r,
             Err(e) => {
-                shutdown_client;
+                let _ = block_on(client.client.shutdown_all());
                 return client
             }
         };
