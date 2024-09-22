@@ -29,7 +29,7 @@ Events are a vec collection of all `StrategyEvent`s that occurred within a buffe
 We have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
 ```rust
 
-//let strategy = FundForgeStrategy::initialize(//strategy inputs);
+//let strategy = FundForgeStrategy::initialize(); //parameters excluded for brevity
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     notify: Arc<Notify>,
@@ -146,6 +146,21 @@ It is easy to place orders, including attaching bracket orders to the new positi
 fn example() {
     let entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long"), None).await;
     let exit_order_id = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
+}
+```
+
+Much of the functionality of fund forge occurs through helper functions with either a strategy, brokerage or data vendor object.
+```rust
+fn example() {
+  let vendor = DataVendor::RithmicTest;
+  let symbols: Vec<Symbol> = brokerage.symbols(MarketType::Futures).await;
+  
+  let brokerage = Brokerage::RithmicTest;
+  let symbols: SymbolInfo = brokerage.symbol_info(SymbolName::from("NQ")).await;
+
+  let strategy = FundForgeStrategy::initialize();  //parameters excluded for brevity
+  let order_id: OrderId = strategy.enter_long().await; //parameters excluded for brevity
+  let is_long: bool = strategy.is_long().await; //parameters excluded for brevity
 }
 ```
 
