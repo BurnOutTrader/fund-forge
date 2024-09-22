@@ -154,6 +154,65 @@ and
 I intend to build a full glossary and video tutorial series when live trading features are completed.
 I will walk through the entire code base during the video tutorial to assist people creating new Brokerage or DataVendor implementations.
 
+
+## Demonstration Testing Data
+You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKEZD9BHCDbvCbHRmg?e=fiBcr3)
+Password "fundforge"
+The Forex folder should be put into the following director "ff_data_server/data/Test".
+
+The parsed data includes Quote data for AUD-CAD and EUR-CAD from start of 06/2024 to end of 08/2024.
+From this data your strategy will consolidate and Candles or QuoteBars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
+
+
+### For more testing and development data
+You can download some free testing data [here](https://www.histdata.com/download-free-forex-data/?/ascii/tick-data-quotes)
+
+Tick data from histdata.com will actually be parsed into the engine as `BaseDataEnum::Quotes(Quote)`
+
+Since the tick data is actually best bid and ask data.
+
+There is a crude test data parser [here](https://github.com/BurnOutTrader/fund-forge/tree/main/test_data_parser)
+
+You will need to manually download the files, then put all the .csv files into 1 folder and change the variables such as input/output folders and Symbol of the data.
+
+Change the following to suit the symbol and your directory.
+```rust
+const YOUR_FOLDER_PATH: String = "".to_string();
+const SYMBOL_NAME: String = "".to_string();
+```
+
+After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
+
+## Setup
+I will simplify this setup in the future.
+You will need to change these hard coded directories in `ff_standard_lib::helpers` `mod.rs`
+```rust
+/// This is the path to the folder we use to store all base data from vendors
+pub fn get_data_folder() -> PathBuf {
+    PathBuf::from("{PATH_TO_FOLDER}/fund-forge/ff_data_server/data")
+}
+
+// The path to the resources folder
+pub fn get_resources() -> PathBuf {  
+    PathBuf::from("{PATH_TO_FOLDER}/fund-forge/resources")  
+}
+```
+On first run a `server_settings.toml` file will be created in `fund-forge/resources` it will contain the default settings based on your `get_toml_file_path()`
+If you try to launch before changing the path, just delete the `server_settings.toml` and it will be recreated.
+```rust
+impl Default for ConnectionSettings {
+        fn default() -> Self {
+            ConnectionSettings {
+                ssl_auth_folder: get_toml_file_path(),
+                server_name: String::from("fundforge"), //if using my default (insecure) certificates you will need to keep the currecnt server name.
+                address:  SocketAddr::from_str("127.0.0.1:8080").unwrap(), 
+                address_synchronous: SocketAddr::from_str("127.0.0.1:8081").unwrap() //all communication is now async only using a callback system
+            }
+        }
+    }
+```
+
+
 ## Current Status
 
 Fund Forge is not ready for live trading. It currently uses a faux `DataevVndor::Test` and `Brokerage::Test` API implementation to help build standardized models, which will aid future API integrations.
@@ -261,63 +320,6 @@ Everything mentioned above is flexible by discussion.
 
 ## fund-forge/src 
 Fund forge /src is just for testing random functionality during development, it will not be used in the future, please use the test_strategy folder for testing and developing.
-
-## Demonstration Testing Data
-You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKEZD9BHCDbvCbHRmg?e=fiBcr3)
-Password "fundforge"
-The Forex folder should be put into the following director "ff_data_server/data/Test".
-
-The parsed data includes Quote data for AUD-CAD and EUR-CAD from start of 06/2024 to end of 08/2024.
-From this data your strategy will consolidate and Candles or QuoteBars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
-
-
-### For more testing and development data
-You can download some free testing data [here](https://www.histdata.com/download-free-forex-data/?/ascii/tick-data-quotes)
-
-Tick data from histdata.com will actually be parsed into the engine as `BaseDataEnum::Quotes(Quote)`
-
-Since the tick data is actually best bid and ask data.
-
-There is a crude test data parser [here](https://github.com/BurnOutTrader/fund-forge/tree/main/test_data_parser) 
-
-You will need to manually download the files, then put all the .csv files into 1 folder and change the variables such as input/output folders and Symbol of the data.
-
-Change the following to suit the symbol and your directory.
-```rust
-const YOUR_FOLDER_PATH: String = "".to_string();
-const SYMBOL_NAME: String = "".to_string();
-```
-
-After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
-
-## Setup
-I will simplify this setup in the future.
-You will need to change these hard coded directories in `ff_standard_lib::helpers` `mod.rs`
-```rust
-/// This is the path to the folder we use to store all base data from vendors
-pub fn get_data_folder() -> PathBuf {
-    PathBuf::from("{PATH_TO_FOLDER}/fund-forge/ff_data_server/data")
-}
-
-// The path to the resources folder
-pub fn get_resources() -> PathBuf {  
-    PathBuf::from("{PATH_TO_FOLDER}/fund-forge/resources")  
-}
-```
-On first run a `server_settings.toml` file will be created in `fund-forge/resources` it will contain the default settings based on your `get_toml_file_path()`
-If you try to launch before changing the path, just delete the `server_settings.toml` and it will be recreated.
-```rust
-impl Default for ConnectionSettings {
-        fn default() -> Self {
-            ConnectionSettings {
-                ssl_auth_folder: get_toml_file_path(),
-                server_name: String::from("fundforge"), //if using my default (insecure) certificates you will need to keep the currecnt server name.
-                address:  SocketAddr::from_str("127.0.0.1:8080").unwrap(), 
-                address_synchronous: SocketAddr::from_str("127.0.0.1:8081").unwrap() //all communication is now async only using a callback system
-            }
-        }
-    }
-```
 
 ### Rithmic Credentials and Setup
 To use rithmic API's you will need to request a dev kit for RProtocol (Proto Buffer) from rithmic, you will then need to complete the app conformance procedure.
