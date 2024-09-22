@@ -35,7 +35,7 @@ async fn main() {
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         notify.clone(),
-        StrategyMode::LivePaperTrading,                 // Backtest, Live, LivePaper
+        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 6, 10)
             .unwrap()
@@ -105,7 +105,7 @@ pub async fn on_data_received(
     let mut bars_since_entry_2 = 0;
     let mut history_1 : RollingWindow<QuoteBar> = RollingWindow::new(10);
     let mut history_2 : RollingWindow<Candle> = RollingWindow::new(10);
-
+    let account_name = AccountId::from("TestAccount");
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for strategy_event in event_slice {
@@ -137,7 +137,6 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    let account_name = AccountId::from(format!("TestAccount{}", candle.symbol.name)); //seperate account by symbol for back-testing purposes
                                     if candle.close > last_bar.high
                                         && !strategy.is_long(&brokerage, &account_name, &candle.symbol.name).await
                                     {
@@ -175,7 +174,7 @@ pub async fn on_data_received(
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
 
-                                    let account_name = AccountId::from(format!("TestAccount{}", quotebar.symbol.name)); //seperate account by symbol for back-testing purposes
+
                                     if quotebar.bid_close > last_bar.bid_high
                                         && !strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await
                                     {
