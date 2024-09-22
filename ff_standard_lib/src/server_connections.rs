@@ -33,6 +33,7 @@ use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::standardized_types::strategy_events::StrategyEvent::DataSubscriptionEvents;
 use crate::standardized_types::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
+use crate::standardized_types::time_slices::TimeSlice;
 use crate::timed_events_handler::TimedEventHandler;
 use crate::traits::bytes::Bytes;
 
@@ -97,12 +98,14 @@ lazy_static! {
     static ref MAX_SERVERS: usize = initialise_settings().unwrap().len();
     static ref ASYNC_OUTGOING:  DashMap<ConnectionType, Arc<ExternalSender>> = DashMap::with_capacity(*MAX_SERVERS);
     static ref ASYNC_INCOMING: DashMap<ConnectionType, Arc<Mutex<ReadHalf<TlsStream<TcpStream>>>>> = DashMap::with_capacity(*MAX_SERVERS);
-    static ref PRIMARY_SUBSCRIPTIONS: Arc<Mutex<Vec<DataSubscription>>> = Arc::new(Mutex::new(Vec::new()));
+    static ref PRIMARY_SUBSCRIPTIONS: Arc<RwLock<Vec<DataSubscription>>> = Arc::new(RwLock::new(Vec::new()));
+    static ref STRATGEY_SUBSCRIPTIONS: Arc<RwLock<Vec<DataSubscription>>> = Arc::new(RwLock::new(Vec::new()));
 }
 
 pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
 pub async fn subscribe_primary_subscription_updates(name: String, sender: mpsc::Sender<Vec<DataSubscription>>) {
-    *PRIMARY_SUBSCRIPTIONS.lock().await = SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await;
+    *PRIMARY_SUBSCRIPTIONS.write().await = SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await;
+    *STRATGEY_SUBSCRIPTIONS.write().await = SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await;
     SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
@@ -164,7 +167,7 @@ pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_c
     println!("Handler: Start Live handler");
     tokio::task::spawn(async move {
         {
-            let current_subscriptions = current_subscriptions.lock().await;
+            let current_subscriptions = current_subscriptions.read().await;
             println!("Handler: {:?}", current_subscriptions);
             for subscription in &*current_subscriptions {
                 let request = DataServerRequest::StreamRequest {
@@ -182,7 +185,7 @@ pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_c
             }
         }
         while let Some(updated_subscriptions) = subscription_update_channel.recv().await {
-            let mut current_subscriptions = current_subscriptions.lock().await;
+            let mut current_subscriptions = current_subscriptions.write().await;
             let mut requests_map = AHashMap::new();
             if *current_subscriptions != updated_subscriptions {
                 for subscription in &updated_subscriptions {
@@ -222,6 +225,7 @@ pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_c
                         send_request(request).await;
                     }
                 }
+                *STRATGEY_SUBSCRIPTIONS.write().await = SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await;
                 *current_subscriptions = updated_subscriptions.clone();
             }
         }
@@ -285,13 +289,18 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
         //println!("request handler end");
     });
 
+    let strategy_subscriptions = STRATGEY_SUBSCRIPTIONS.clone();
     let callbacks = callbacks.clone();
     for incoming in ASYNC_INCOMING.iter() {
         let register_message = StrategyRequest::OneWay(incoming.key().clone(), DataServerRequest::Register(mode.clone()));
         send_request(register_message).await;
         let receiver = incoming.clone();
         let callbacks = callbacks.clone();
+        let strategy_subscriptions_ref = strategy_subscriptions.clone();
         tokio::task::spawn(async move {
+            let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
+            //let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
+            //let market_handler = MARKET_HANDLER.get().unwrap().clone();
             let mut receiver = receiver.lock().await;
             const LENGTH: usize = 8;
             //println!("{:?}: response handler start", incoming.key());
@@ -313,6 +322,8 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                 }
                 // these will be buffered eventually into an EventTimeSlice
                 let callbacks = callbacks.clone();
+                let strategy_subscriptions = strategy_subscriptions_ref.clone();
+                let subscription_handler = subscription_handler.clone();
                 tokio::task::spawn(async move {
                     let response = DataServerResponse::from_bytes(&message_body).unwrap();
                     match response.get_callback_id() {
@@ -350,8 +361,21 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                                         }
                                     }
                                 }
-                                DataServerResponse::DataUpdates(data) => {
-                                    let event_slice = StrategyEvent::TimeSlice(Utc::now().to_string() ,data);
+                                DataServerResponse::DataUpdates(primary_data) => {
+                                    let mut strategy_time_slice = TimeSlice::new();
+                                    if let Some(consolidated) = subscription_handler.update_time_slice(primary_data.clone()).await {
+                                        strategy_time_slice.extend(consolidated);
+                                    }
+                                    let strategy_subscriptions = strategy_subscriptions.read().await;
+                                    for base_data in primary_data {
+                                        if strategy_subscriptions.contains(&base_data.subscription()) {
+                                            strategy_time_slice.push(base_data);
+                                        }
+                                    }
+                                    if strategy_time_slice.is_empty() {
+                                        return;;
+                                    }
+                                    let event_slice = StrategyEvent::TimeSlice(Utc::now().to_string() ,strategy_time_slice);
                                     send_strategy_event_slice(vec![event_slice]).await;
                                 }
                                 _ => panic!("Incorrect response here: {:?}", response)

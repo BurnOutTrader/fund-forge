@@ -110,6 +110,9 @@ impl FundForgeStrategy {
         buffering_resolution: Option<Duration>,
         gui_enabled: bool
     ) -> FundForgeStrategy {
+        let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
+        let subscription_handler = Arc::new(subscription_handler);
+        init_sub_handler(subscription_handler.clone()).await;
         init_connections(gui_enabled, buffering_resolution, strategy_mode.clone()).await;
 
         let start_state = StrategyStartState::new(
@@ -122,10 +125,9 @@ impl FundForgeStrategy {
         );
         let start_time = time_convert_utc_naive_to_fixed_offset(&time_zone, start_date);
 
-        let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
         subscription_handler.set_subscriptions(subscriptions, retain_history, start_time.to_utc() - warmup_duration).await;
-        let subscription_handler = Arc::new(subscription_handler);
-        init_sub_handler(subscription_handler.clone()).await;
+
+
 
         let (order_sender, order_receiver) = mpsc::channel(100);
         let market_event_handler = match strategy_mode {
