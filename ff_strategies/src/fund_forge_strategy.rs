@@ -40,7 +40,7 @@ use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::market_handler::market_handlers::{MarketHandler};
-use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, subscribe_primary_subscription_updates};
+use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, set_warmup_complete, subscribe_primary_subscription_updates};
 use ff_standard_lib::servers::settings::client_settings::initialise_settings;
 use ff_standard_lib::standardized_types::data_server_messaging::DataServerRequest;
 
@@ -176,7 +176,6 @@ impl FundForgeStrategy {
                 live_subscription_handler(strategy_mode, rx, settings_map).await
             },
         }
-
         strategy
     }
 

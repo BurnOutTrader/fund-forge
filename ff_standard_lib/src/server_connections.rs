@@ -155,10 +155,6 @@ pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
     STRATEGY_SENDER.get().unwrap().send(slice).await.unwrap();
 }
 
-//Notes
-//todo, make all handlers event driven.. we will need to use senders and receivers.
-// 1. Subscriptions will be handled by the subscription handler, it will only send subscription request if it needs a new primary, it will alo cancel existing if need be.
-
 pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_channel: mpsc::Receiver<Vec<DataSubscription>>, settings_map: HashMap<ConnectionType, ConnectionSettings>) {
     if mode == StrategyMode::Backtest {
         return;
@@ -302,6 +298,7 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
     let time_slice_ref = time_slice.clone();
     let open_bars_Ref = open_bars.clone();
     let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
+    let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
     tokio::task::spawn(async move {
         let mut instant = Instant::now() + buffer_duration;
         loop {
@@ -316,6 +313,9 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
                 map.clear();
             }
             if let Some(remaining_time_slice) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&remaining_time_slice).await {
+                    buffer.extend(indicator_events);
+                }
                 time_slice.extend(remaining_time_slice);
             }
 
