@@ -21,7 +21,7 @@ use crate::apis::brokerage::broker_enum::Brokerage;
 pub enum OrderRequest {
     Create{brokerage: Brokerage, order: Order},
     Cancel{brokerage: Brokerage, order_id: OrderId, account_id: AccountId},
-    Update{brokerage: Brokerage, order_id: OrderId, order: Order}
+    Update{brokerage: Brokerage, order_id: OrderId, account_id: AccountId, update: OrderUpdateType }
 }
 
 impl OrderRequest {
@@ -347,14 +347,16 @@ impl Order {
 
 pub type OrderId = String;
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Display)]
+#[derive(
+    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
+)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
-pub enum OrderChangeType {
-    LimitPrice(f64),
-    TriggerPrice(f64),
+pub enum OrderUpdateType {
+    LimitPrice(Price),
+    TriggerPrice(Price),
     TimeInForce(TimeInForce),
-    Quantity(u64),
+    Quantity(Volume),
     Tag(String),
 }
 

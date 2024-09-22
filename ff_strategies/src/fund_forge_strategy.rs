@@ -19,7 +19,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::history::range_data;
 use ff_standard_lib::standardized_types::base_data::order_book::OrderBook;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
-use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, ProtectiveOrder};
+use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderUpdateType, ProtectiveOrder};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use ff_standard_lib::standardized_types::strategy_events::{
     EventTimeSlice, StrategyInteractionMode,
@@ -389,11 +389,12 @@ impl FundForgeStrategy {
         self.market_handler.get_last_price(symbol_name).await
     }
 
-    pub async fn update_order(&self, order_id: OrderId, order: Order) {
+    pub async fn update_order(&self, brokerage: Brokerage, order_id: OrderId, account_id: AccountId, update: OrderUpdateType) {
         let cancel_msg =  OrderRequest::Update {
-            brokerage: order.brokerage.clone(),
+            brokerage,
             order_id,
-            order,
+            account_id,
+            update,
         };
         self.order_sender.send(cancel_msg).await.unwrap()
     }

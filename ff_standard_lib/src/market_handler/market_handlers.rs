@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use crate::standardized_types::accounts::ledgers::{AccountId, Ledger};
 use crate::standardized_types::base_data::order_book::{OrderBook, OrderBookUpdate};
 use crate::standardized_types::enums::{OrderSide};
-use crate::standardized_types::orders::orders::{Order, OrderRequest, OrderUpdateEvent};
+use crate::standardized_types::orders::orders::{Order, OrderUpdateType, OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::{Price};
@@ -179,9 +179,8 @@ impl MarketHandler {
                             event_buffer.write().await.push(fail_event);
                         }
                     }
-                    OrderRequest::Update{ brokerage, order_id, order } => {
+                    OrderRequest::Update{ brokerage, order_id, account_id, update } => {
                         let mut existing_order: Option<Order> = None;
-                        let time = DateTime::from_str(&order.time_created_utc).unwrap();
                         let mut cache = order_cache.write().await;
                         'order_search: for order in &*cache {
                             if order.id == order_id {
@@ -189,18 +188,33 @@ impl MarketHandler {
                                 break 'order_search;
                             }
                         }
-                        if let Some(_) = existing_order {
-                            cache.retain(|x| x.id != order_id);
+                        if let Some(mut order) = existing_order {
+                            match update {
+                                OrderUpdateType::LimitPrice(price) => {
+                                    if let Some(mut limit_price) = order.limit_price {
+                                        limit_price = price;
+                                    }
+                                }
+                                OrderUpdateType::TriggerPrice(price) => {
+                                    if let Some(mut trigger_price) = order.trigger_price {
+                                        trigger_price = price;
+                                    }
+                                }
+                                OrderUpdateType::TimeInForce(tif) => {
+                                    order.time_in_force = tif;
+                                }
+                                OrderUpdateType::Quantity(quantity) => {
+                                    order.quantity_ordered = quantity;
+                                }
+                                OrderUpdateType::Tag(tag) => {
+                                    order.tag = tag;
+                                }
+                            }
                             let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Updated{ brokerage, account_id: order.account_id.clone(), order_id: order.id.clone()});
-                            cache.push(order);
                             event_buffer.write().await.push(update_event);
                         } else {
-                            let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::UpdateRejected { brokerage, account_id: order.account_id.clone(), order_id: order.id, reason: String::from("No pending order found") });
+                            let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found") });
                             event_buffer.write().await.push(fail_event);
-                        }
-                        match order_matching::backtest_matching_engine(order_books.clone(), last_price.clone(), ledgers.clone(), time, order_cache.clone()).await {
-                            None => {},
-                            Some(event) => event_buffer.write().await.extend(event)
                         }
                     }
                 }
