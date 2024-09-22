@@ -304,12 +304,12 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
     4. each buffer iteration before sending the buffer to the engine or strategy, we update consolidator time.
         to see if we have any closed bars.
 */
-    let event_buffer_ref = event_buffer.clone();
-    let time_slice_ref = time_slice.clone();
-    let open_bars_ref = open_bars.clone();
-    let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
-    let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
     if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
+        let event_buffer_ref = event_buffer.clone();
+        let time_slice_ref = time_slice.clone();
+        let open_bars_ref = open_bars.clone();
+        let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
+        let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         tokio::task::spawn(async move {
             let mut instant = Instant::now() + buffer_duration;
             loop {
@@ -359,8 +359,6 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         tokio::task::spawn(async move {
             let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
-            //let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
-            //let market_handler = MARKET_HANDLER.get().unwrap().clone();
             let mut receiver = receiver.lock().await;
             const LENGTH: usize = 8;
             //println!("{:?}: response handler start", incoming.key());
