@@ -1,16 +1,18 @@
 use crate::helpers::converters::time_local_from_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
-use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
 use crate::standardized_types::{Price, TimeString, Volume};
-use chrono::{DateTime, FixedOffset};
+use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use rust_decimal_macros::dec;
+use crate::apis::data_vendor::datavendor_enum::DataVendor;
+use crate::standardized_types::base_data::traits::BaseData;
 
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Eq, PartialOrd, Ord,
@@ -88,12 +90,46 @@ impl Display for Candle {
     }
 }
 
-impl Candle {
-    pub fn resolution(&self) -> Resolution {
+impl BaseData for Candle {
+    fn symbol_name(&self) -> Symbol {
+        self.symbol.clone()
+    }
+
+    /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
+    fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
+        time_local_from_str(time_zone, &self.time)
+    }
+
+    /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
+    fn time_utc(&self) -> DateTime<chrono::Utc> {
+        DateTime::from_str(&self.time).unwrap()
+    }
+
+    fn time_created_utc(&self) -> DateTime<Utc> {
+        self.time_utc() + self.resolution.as_duration()
+    }
+
+    fn time_created_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
+        self.time_local(time_zone) + self.resolution.as_duration()
+    }
+
+    fn data_vendor(&self) -> DataVendor {
+        self.data_vendor()
+    }
+
+    fn market_type(&self) -> MarketType {
+        self.symbol.market_type.clone()
+    }
+
+    fn resolution(&self) -> Resolution {
         self.resolution.clone()
     }
 
-    pub fn subscription(&self) -> DataSubscription {
+    fn symbol(&self) -> &Symbol {
+        &self.symbol
+    }
+
+    fn subscription(&self) -> DataSubscription {
         let symbol = self.symbol.clone();
         let resolution = self.resolution();
         let candle_type = Some(self.candle_type.clone());
@@ -106,6 +142,9 @@ impl Candle {
             candle_type,
         )
     }
+}
+
+impl Candle {
 
     pub fn from_quotebar(quotebar: QuoteBar, bid: bool) -> Self {
         let high = match bid {
@@ -201,15 +240,7 @@ impl Candle {
         }
     }
 
-    /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
-    pub fn time_utc(&self) -> DateTime<chrono::Utc> {
-        DateTime::from_str(&self.time).unwrap()
-    }
 
-    /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
-    pub fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        time_local_from_str(time_zone, &self.time)
-    }
 
     /// Creates a new `candles` instance representing a completed (closed) trading period.
     ///

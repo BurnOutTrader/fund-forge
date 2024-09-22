@@ -192,44 +192,7 @@ impl Display for BaseDataEnum {
 }
 
 impl BaseDataEnum {
-    pub fn symbol(&self) -> &Symbol {
-        match self {
-            BaseDataEnum::TradePrice(price) => &price.symbol,
-            BaseDataEnum::Candle(candle) => &candle.symbol,
-            BaseDataEnum::QuoteBar(quote_bar) => &quote_bar.symbol,
-            BaseDataEnum::Tick(tick) => &tick.symbol,
-            BaseDataEnum::Quote(quote) => &quote.symbol,
-            BaseDataEnum::Fundamental(fundamental) => &fundamental.symbol,
-        }
-    }
 
-    pub fn resolution(&self) -> Resolution {
-        match self {
-            BaseDataEnum::Candle(candle) => candle.resolution,
-            BaseDataEnum::QuoteBar(bar) => bar.resolution,
-            // this works because tick candles will be candles not ticks so number is always 1
-            BaseDataEnum::Tick(_) => Resolution::Ticks(1),
-            _ => Resolution::Instant,
-        }
-    }
-
-    pub fn subscription(&self) -> DataSubscription {
-        let symbol = self.symbol();
-        let resolution = self.resolution();
-        let candle_type = match self {
-            BaseDataEnum::Candle(candle) => Some(candle.candle_type.clone()),
-            BaseDataEnum::QuoteBar(bar) => Some(bar.candle_type.clone()),
-            _ => None,
-        };
-        DataSubscription::from_base_data(
-            symbol.name.clone(),
-            symbol.data_vendor.clone(),
-            resolution,
-            self.base_data_type(),
-            symbol.market_type.clone(),
-            candle_type,
-        )
-    }
 
     /// Returns the `is_closed` property of the `BaseDataEnum` variant for variants that implement it, else just returns true.
     pub fn is_closed(&self) -> bool {
@@ -628,11 +591,6 @@ impl BaseDataEnum {
 }
 
 impl Bytes<Self> for BaseDataEnum {
-    fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
-        vec.into()
-    }
-
     fn from_bytes(archived: &[u8]) -> Result<BaseDataEnum, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
         match rkyv::from_bytes::<BaseDataEnum>(archived) {
@@ -640,6 +598,11 @@ impl Bytes<Self> for BaseDataEnum {
             Ok(response) => Ok(response),
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
+        vec.into()
     }
 }
 
@@ -713,5 +676,44 @@ impl BaseData for BaseDataEnum {
             BaseDataEnum::Quote(quote) => quote.symbol.market_type.clone(),
             BaseDataEnum::Fundamental(fundamental) => fundamental.symbol.market_type.clone(),
         }
+    }
+
+    fn resolution(&self) -> Resolution {
+        match self {
+            BaseDataEnum::Candle(candle) => candle.resolution,
+            BaseDataEnum::QuoteBar(bar) => bar.resolution,
+            // this works because tick candles will be candles not ticks so number is always 1
+            BaseDataEnum::Tick(_) => Resolution::Ticks(1),
+            _ => Resolution::Instant,
+        }
+    }
+
+    fn symbol(&self) -> &Symbol {
+        match self {
+            BaseDataEnum::TradePrice(price) => &price.symbol,
+            BaseDataEnum::Candle(candle) => &candle.symbol,
+            BaseDataEnum::QuoteBar(quote_bar) => &quote_bar.symbol,
+            BaseDataEnum::Tick(tick) => &tick.symbol,
+            BaseDataEnum::Quote(quote) => &quote.symbol,
+            BaseDataEnum::Fundamental(fundamental) => &fundamental.symbol,
+        }
+    }
+
+    fn subscription(&self) -> DataSubscription {
+        let symbol = self.symbol();
+        let resolution = self.resolution();
+        let candle_type = match self {
+            BaseDataEnum::Candle(candle) => Some(candle.candle_type.clone()),
+            BaseDataEnum::QuoteBar(bar) => Some(bar.candle_type.clone()),
+            _ => None,
+        };
+        DataSubscription::from_base_data(
+            symbol.name.clone(),
+            symbol.data_vendor.clone(),
+            resolution,
+            self.base_data_type(),
+            symbol.market_type.clone(),
+            candle_type,
+        )
     }
 }

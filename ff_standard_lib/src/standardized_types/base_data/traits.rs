@@ -1,8 +1,9 @@
-use crate::standardized_types::enums::MarketType;
-use crate::standardized_types::subscriptions::Symbol;
+use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use chrono::{DateTime, FixedOffset, Utc};
 use chrono_tz::Tz;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 
 /// Properties are used to update the data que during strategy execution.
 pub trait BaseData {
@@ -19,4 +20,10 @@ pub trait BaseData {
     fn data_vendor(&self) -> DataVendor;
 
     fn market_type(&self) -> MarketType;
+
+    fn resolution(&self) -> Resolution;
+
+    fn symbol(&self) -> &Symbol;
+
+    fn subscription(&self) -> DataSubscription;
 }
