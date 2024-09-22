@@ -248,7 +248,7 @@ pub async fn on_data_received(
                 StrategyEvent::StrategyControls(control, _) => {}
                 StrategyEvent::ShutdownEvent(event) => {
                     println!("{}",event);
-                    //strategy.export_trades(&String::from("/Users/kevmonaghan/RustroverProjects/Test Trade Exports"));
+                    strategy.export_trades(&String::from("/Test Trade Exports"));
                     let ledgers = strategy.print_ledgers().await;
                     for ledger in ledgers {
                         println!("{:?}", ledger);
