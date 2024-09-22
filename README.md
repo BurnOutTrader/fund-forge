@@ -149,7 +149,7 @@ fn example() {
 }
 ```
 
-Much of the functionality of fund forge occurs through helper functions with either a strategy, brokerage or data vendor object.
+Much of the functionality of fund forge occurs through associated helper functions with either a strategy, brokerage or data vendor object.
 ```rust
 fn example() {
   let vendor = DataVendor::RithmicTest;
