@@ -11,7 +11,7 @@ use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::thread;
-use tokio::sync::mpsc::{Receiver};
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{mpsc, Notify, RwLock};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 
@@ -39,11 +39,9 @@ impl BackTestEngine {
     pub async fn new(
         notify: Arc<Notify>,
         start_state: StrategyStartState,
-        gui_enabled: bool
+        gui_enabled: bool,
+        primary_subscription_updates: Receiver<Vec<DataSubscription>>,
     ) -> Self {
-        let (sender, primary_subscription_updates) = mpsc::channel(5);
-        subscribe_primary_subscription_updates("Back Test Engine".to_string(), sender).await;
-
         let engine = BackTestEngine {
             notify,
             start_state,

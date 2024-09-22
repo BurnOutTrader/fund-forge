@@ -9,6 +9,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
 use ahash::AHashMap;
+use async_std::task::sleep;
 use chrono::{Duration, Utc};
 use dashmap::DashMap;
 use futures::SinkExt;
@@ -140,6 +141,9 @@ static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<mpsc::Sender<StrategyRequest>>>> =
 pub(crate) fn get_sender() -> Arc<Mutex<mpsc::Sender<StrategyRequest>>> {
     DATA_SERVER_SENDER.get().unwrap().clone() // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
+pub(crate) async fn send_request(req: StrategyRequest) {
+    get_sender().lock().await.send(req).await.unwrap(); // Return a clone of the Arc to avoid moving the value out of the OnceCell
+}
 
 static STRATEGY_SENDER: OnceCell<Sender<EventTimeSlice>> = OnceCell::new();
 pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
@@ -150,72 +154,78 @@ pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
 //todo, make all handlers event driven.. we will need to use senders and receivers.
 // 1. Subscriptions will be handled by the subscription handler, it will only send subscription request if it needs a new primary, it will alo cancel existing if need be.
 
-async fn live_subscription_handler(mode: StrategyMode, subscription_update_channel: mpsc::Receiver<Vec<DataSubscription>>, settings_map: HashMap<ConnectionType, ConnectionSettings>) {
-    if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
-        let mut subscription_update_channel = subscription_update_channel;
-        let current_subscriptions = PRIMARY_SUBSCRIPTIONS.clone();
-        println!("Handler: Start Live handler");
-        tokio::task::spawn(async move {
-            {
-                let current_subscriptions = current_subscriptions.lock().await;
-                println!("Handler: {:?}", current_subscriptions);
-                for subscription in &*current_subscriptions {
-                    let request = DataServerRequest::StreamRequest {
-                        request: StreamRequest::Subscribe(subscription.clone())
-                    };
-                    let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
-                    let connection_type = match settings_map.contains_key(&connection) {
-                        true => connection,
-                        false => ConnectionType::Default
-                    };
-                    send(connection_type, request.to_bytes()).await;
-                }
-            }
-            while let Some(updated_subscriptions) = subscription_update_channel.recv().await {
-                let mut current_subscriptions = current_subscriptions.lock().await;
-                let mut requests_map = AHashMap::new();
-                if *current_subscriptions != updated_subscriptions {
-                    for subscription in &updated_subscriptions {
-                        if !current_subscriptions.contains(&subscription) {
-                            let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
-                            let connection_type = match settings_map.contains_key(&connection) {
-                                true => connection,
-                                false => ConnectionType::Default
-                            };
-                            let request = DataServerRequest::StreamRequest { request: StreamRequest::Subscribe(subscription.clone())};
-                            if !requests_map.contains_key(&connection_type) {
-                                requests_map.insert(connection_type, vec![request]);
-                            } else {
-                                requests_map.get_mut(&connection_type).unwrap().push(request);
-                            }
-                        }
-                    }
-                    for subscription in &*current_subscriptions {
-                        if !updated_subscriptions.contains(&subscription) {
-                            let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
-                            let connection_type = match settings_map.contains_key(&connection) {
-                                true => connection,
-                                false => ConnectionType::Default
-                            };
-                            let request = DataServerRequest::StreamRequest { request: StreamRequest::Unsubscribe(subscription.clone())};
-
-                            if !requests_map.contains_key(&connection_type) {
-                                requests_map.insert(connection_type, vec![request]);
-                            } else {
-                                requests_map.get_mut(&connection_type).unwrap().push(request);
-                            }
-                        }
-                    }
-                    for (connection, requests) in requests_map {
-                        for request in requests {
-                            send(connection.clone(), request.to_bytes()).await;
-                        }
-                    }
-                    *current_subscriptions = updated_subscriptions.clone();
-                }
-            }
-        });
+pub async fn live_subscription_handler(mode: StrategyMode, subscription_update_channel: mpsc::Receiver<Vec<DataSubscription>>, settings_map: HashMap<ConnectionType, ConnectionSettings>) {
+    if mode == StrategyMode::Backtest {
+        return;
     }
+
+    let mut subscription_update_channel = subscription_update_channel;
+    let current_subscriptions = PRIMARY_SUBSCRIPTIONS.clone();
+    println!("Handler: Start Live handler");
+    tokio::task::spawn(async move {
+        {
+            let current_subscriptions = current_subscriptions.lock().await;
+            println!("Handler: {:?}", current_subscriptions);
+            for subscription in &*current_subscriptions {
+                let request = DataServerRequest::StreamRequest {
+                    request: StreamRequest::Subscribe(subscription.clone())
+                };
+                let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
+                let connection_type = match settings_map.contains_key(&connection) {
+                    true => connection,
+                    false => ConnectionType::Default
+                };
+                let register = StrategyRequest::OneWay(connection_type.clone(), DataServerRequest::Register(mode.clone()));
+                send_request(register).await;
+                let request = StrategyRequest::OneWay(connection_type, request);
+                send_request(request).await;
+            }
+        }
+        while let Some(updated_subscriptions) = subscription_update_channel.recv().await {
+            let mut current_subscriptions = current_subscriptions.lock().await;
+            let mut requests_map = AHashMap::new();
+            if *current_subscriptions != updated_subscriptions {
+                for subscription in &updated_subscriptions {
+                    if !current_subscriptions.contains(&subscription) {
+                        let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
+                        let connection_type = match settings_map.contains_key(&connection) {
+                            true => connection,
+                            false => ConnectionType::Default
+                        };
+                        let request = DataServerRequest::StreamRequest { request: StreamRequest::Subscribe(subscription.clone())};
+                        if !requests_map.contains_key(&connection_type) {
+                            requests_map.insert(connection_type, vec![request]);
+                        } else {
+                            requests_map.get_mut(&connection_type).unwrap().push(request);
+                        }
+                    }
+                }
+                for subscription in &*current_subscriptions {
+                    if !updated_subscriptions.contains(&subscription) {
+                        let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
+                        let connection_type = match settings_map.contains_key(&connection) {
+                            true => connection,
+                            false => ConnectionType::Default
+                        };
+                        let request = DataServerRequest::StreamRequest { request: StreamRequest::Unsubscribe(subscription.clone())};
+
+                        if !requests_map.contains_key(&connection_type) {
+                            requests_map.insert(connection_type, vec![request]);
+                        } else {
+                            requests_map.get_mut(&connection_type).unwrap().push(request);
+                        }
+                    }
+                }
+                for (connection, requests) in requests_map {
+                    for request in requests {
+                        let request = StrategyRequest::OneWay(connection.clone(), request);
+                        send_request(request).await;
+                    }
+                }
+                *current_subscriptions = updated_subscriptions.clone();
+            }
+        }
+    });
 }
 /// This response handler is also acting as a live engine.
 async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Option<Duration>, settings_map: HashMap<ConnectionType, ConnectionSettings>)  {
@@ -277,8 +287,8 @@ async fn request_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRe
 
     let callbacks = callbacks.clone();
     for incoming in ASYNC_INCOMING.iter() {
-        let register_message = DataServerRequest::Register(mode.clone());
-        send(incoming.key().clone(), register_message.to_bytes()).await;
+        let register_message = StrategyRequest::OneWay(incoming.key().clone(), DataServerRequest::Register(mode.clone()));
+        send_request(register_message).await;
         let receiver = incoming.clone();
         let callbacks = callbacks.clone();
         tokio::task::spawn(async move {
@@ -406,16 +416,6 @@ pub async fn initialize_static(
     DRAWING_OBJECTS_HANDLER.get_or_init(|| {
         drawing_objects_handler
     }).clone();
-
-    match mode {
-        StrategyMode::Backtest => {}
-        StrategyMode::Live | StrategyMode::LivePaperTrading => {
-            let settings_map = initialise_settings().unwrap();
-            let (tx, rx) = mpsc::channel(100);
-            subscribe_primary_subscription_updates("Live Subscription Update Loop".to_string(), tx).await;
-            live_subscription_handler(mode, rx, settings_map).await
-        },
-    }
 }
 
 pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duration>, mode: StrategyMode) {
@@ -440,9 +440,9 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duratio
         ASYNC_INCOMING.insert(connection_type.clone(), Arc::new(Mutex::new(read_half)));
     }
     let (tx, rx) = mpsc::channel(1000);
-    request_handler(mode.clone(), rx, buffer_duration, settings_map).await;
-
     DATA_SERVER_SENDER.get_or_init(|| {
         Arc::new(Mutex::new(tx))
     }).clone();
+
+    request_handler(mode.clone(), rx, buffer_duration, settings_map.clone()).await;
 }

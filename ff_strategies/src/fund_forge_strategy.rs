@@ -39,7 +39,8 @@ use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::market_handler::market_handlers::{MarketHandler};
-use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static};
+use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, subscribe_primary_subscription_updates};
+use ff_standard_lib::servers::settings::client_settings::initialise_settings;
 use ff_standard_lib::standardized_types::data_server_messaging::DataServerRequest;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
@@ -159,9 +160,17 @@ impl FundForgeStrategy {
             drawing_objects_handler
         ).await;
 
-        if strategy_mode == StrategyMode::Backtest {
-            let engine = BackTestEngine::new(notify, start_state, gui_enabled.clone()).await;
-            BackTestEngine::launch(engine).await
+        let (tx, rx) = mpsc::channel(100);
+        subscribe_primary_subscription_updates("Live Subscription Update Loop".to_string(), tx).await;
+        match strategy_mode {
+            StrategyMode::Backtest => {
+                let engine = BackTestEngine::new(notify, start_state, gui_enabled.clone(), rx).await;
+                BackTestEngine::launch(engine).await
+            }
+            StrategyMode::Live | StrategyMode::LivePaperTrading => {
+                let settings_map = initialise_settings().unwrap();
+                live_subscription_handler(strategy_mode, rx, settings_map).await
+            },
         }
 
         strategy

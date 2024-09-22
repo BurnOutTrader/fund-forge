@@ -13,7 +13,7 @@ use std::sync::Arc;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{mpsc, Mutex, RwLock};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio_rustls::server::TlsStream;
@@ -78,7 +78,7 @@ pub async fn data_server_manage_async_requests(
         const LENGTH: usize = 8;
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
-        let mut strategy_mode = StrategyMode::Backtest;
+        let mut strategy_mode = Arc::new(RwLock::new(StrategyMode::Backtest));
         let (stream_sender, stream_receiver) = mpsc::channel(100);
         let stream_handle = stream_handler(stream_receiver, writer.clone()).await;
         while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
@@ -106,12 +106,12 @@ pub async fn data_server_manage_async_requests(
             let writer = writer.clone();
             let stream_name = stream_name.clone();
             let sender = stream_sender.clone();
+            let strategy_mode = strategy_mode.clone();
             tokio::spawn(async move {
                 // Handle the request and generate a response
-                println!("{:?}", request);
                 match request {
                     DataServerRequest::Register(register_mode) => {
-                        strategy_mode = register_mode;
+                        *strategy_mode.write().await = register_mode;
                     },
 
                     DataServerRequest::DecimalAccuracy {
@@ -199,7 +199,7 @@ pub async fn data_server_manage_async_requests(
                         symbol_name,
                         quantity
                     } => {
-                        match strategy_mode {
+                        match *strategy_mode.read().await {
                             StrategyMode::Backtest => {
                                 handle_callback(
                                     || brokerage.margin_required_historical_response(stream_name.to_string(), symbol_name, quantity, callback_id),
@@ -216,9 +216,11 @@ pub async fn data_server_manage_async_requests(
                     DataServerRequest::StreamRequest {
                         request
                     } => {
-                        if strategy_mode == StrategyMode::Backtest {
+                        if *strategy_mode.read().await == StrategyMode::Backtest {
+                            eprintln!("Incorrect strategy mode for stream: {:?}", strategy_mode);
                             return
                         }
+                        println!("{:?}", request);
                         handle_callback(
                             || stream_response(stream_name.clone(), request, sender),
                             writer.clone()).await
@@ -227,9 +229,11 @@ pub async fn data_server_manage_async_requests(
                     DataServerRequest::OrderRequest {
                         request
                     } => {
-                        if strategy_mode == StrategyMode::Backtest {
+                        if *strategy_mode.read().await == StrategyMode::Backtest {
+                            eprintln!("Incorrect strategy mode for orders: {:?}", strategy_mode);
                             return;
                         }
+                        println!("{:?}", request);
                         order_response(request).await;
                     },
                 };
