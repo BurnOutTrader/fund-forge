@@ -132,9 +132,9 @@ fn example() {
         MarketType::Forex,
         CandleType::HeikinAshi,
       ),
-      100,
-      5,
-      Some(Color::new(50,50,50))
+      100, //retain 100 last values
+      5, // atr period
+      Some(Color::new(50,50,50)) //plot color rgb for charting 
     ).await,
   );
   strategy.indicator_subscribe(heikin_atr_5).await;
