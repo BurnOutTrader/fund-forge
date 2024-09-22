@@ -47,7 +47,7 @@ pub async fn on_data_received(
                     for base_data in &time_slice {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
-                            BaseDataEnum::TradePrice(_trade_price) => {}
+                            BaseDataEnum::TradePrice(trade_price) => {}
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
@@ -64,7 +64,7 @@ pub async fn on_data_received(
                                   println!("QuoteBar {}: {}", quotebar.symbol.name, quotebar.time);
                                 }
                             }
-                            BaseDataEnum::Tick(_tick) => {}
+                            BaseDataEnum::Tick(tick) => {}
                             BaseDataEnum::Quote(quote) => {
                                 // primary data feed won't show up in event loop unless specifically subscribed by the strategy
                                 println!(
