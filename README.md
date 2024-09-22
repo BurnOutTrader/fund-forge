@@ -211,7 +211,7 @@ impl Default for ConnectionSettings {
         }
     }
 ```
-
+To run the test strategy you will first need to launch the ff_data_server on local host, by using cargo run in the data server folder.
 
 ## Current Status
 
