@@ -137,6 +137,7 @@ and
 [strategies readme](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
 
 I intend to build a full glossary and video tutorial series when live trading features are completed.
+I will walk through the entire code base during the video tutorial to assist people creating new Brokerage or DataVendor implementations.
 
 ## Current Status
 
