@@ -9,6 +9,7 @@ use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::{Price};
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 use async_std::task::block_on;
 use dashmap::DashMap;
 use tokio::sync::mpsc::{Receiver};
@@ -25,7 +26,8 @@ pub struct MarketHandler {
     last_price: Arc<DashMap<SymbolName, Price>>,
     ledgers: Arc<DashMap<Brokerage, Arc<DashMap<AccountId, Ledger>>>>,
     order_cache: Arc<RwLock<Vec<Order>>>,
-    last_time: RwLock<DateTime<Utc>>
+    last_time: RwLock<DateTime<Utc>>,
+    warm_up_complete: Arc<RwLock<bool>>,
 }
 
 impl MarketHandler {
@@ -39,12 +41,17 @@ impl MarketHandler {
             ledgers: Arc::new(DashMap::new()),
             order_cache: Arc::new(RwLock::new(Vec::new())),
             last_time: RwLock::new(start_time),
+            warm_up_complete: Arc::new(RwLock::new(false))
         };
 
         if let Some(order_receiver) = order_receiver {
             handler.simulated_order_matching(order_receiver).await;
         }
         handler
+    }
+
+    pub async fn set_warmup_complete(&self) {
+        *self.warm_up_complete.write().await = true
     }
 
     pub async fn get_order_book(&self, symbol_name: &SymbolName) -> Option<Arc<OrderBook>> {
@@ -155,8 +162,12 @@ impl MarketHandler {
         let order_cache = self.order_cache.clone();
         let order_books = self.order_books.clone();
         let mut order_receiver = order_receiver;
+        let warm_up_complete = self.warm_up_complete.clone();
         tokio::task::spawn(async move {
             while let Some(order_request) = order_receiver.recv().await {
+                if !*warm_up_complete.read().await {
+                    order_cache.write().await.clear();
+                }
                 match order_request {
                     OrderRequest::Create { order, .. } => {
                         let time = DateTime::from_str(&order.time_created_utc).unwrap();

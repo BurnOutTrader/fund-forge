@@ -105,6 +105,9 @@ pub async fn set_warmup_complete() {
     TIMED_EVENT_HANDLER.get_or_init(|| {
         panic!("TIMED_EVENT_HANDLER Not found")
     }).set_warmup_complete().await;
+    MARKET_HANDLER.get_or_init(|| {
+        panic!("MARKET_HANDLER Not found")
+    }).set_warmup_complete().await;
 }
 
 
