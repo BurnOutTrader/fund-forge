@@ -103,6 +103,7 @@ pub async fn data_server_manage_async_requests(
                     continue;
                 }
             };
+            println!("{:?}", request);
             let writer = writer.clone();
             let stream_name = stream_name.clone();
             let sender = stream_sender.clone();
