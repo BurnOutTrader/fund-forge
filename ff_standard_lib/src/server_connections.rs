@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{HashMap};
 use crate::servers::communications_async::{ExternalSender};
 use crate::servers::init_clients::{create_async_api_client};
 use crate::servers::settings::client_settings::{initialise_settings, ConnectionSettings};
@@ -78,17 +78,13 @@ impl FromStr for ConnectionType {
     }
 }
 
-// Connections
-lazy_static! {
-    static ref PRIMARY_SUBSCRIPTIONS: Arc<RwLock<Vec<DataSubscription>>> = Arc::new(RwLock::new(Vec::new()));
-    static ref STRATGEY_SUBSCRIPTIONS: Arc<RwLock<Vec<DataSubscription>>> = Arc::new(RwLock::new(Vec::new()));
-}
 
 pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
 pub async fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
-    *PRIMARY_SUBSCRIPTIONS.write().await = SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await;
-    *STRATGEY_SUBSCRIPTIONS.write().await = SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await;
     SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
+}
+pub async fn unsubscribe_primary_subscription_updates(name: String) {
+    SUBSCRIPTION_HANDLER.get().unwrap().unsubscribe_primary_subscription_updates(name).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
 pub static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
@@ -132,19 +128,21 @@ pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
 
 pub async fn live_subscription_handler(
     mode: StrategyMode,
-    subscription_update_channel: mpsc::Receiver<Vec<DataSubscription>>,
 ) {
     if mode == StrategyMode::Backtest {
         return;
     }
+    let (tx, rx) = mpsc::channel(100);
+    subscribe_primary_subscription_updates("Live Subscription Updates".to_string(), tx).await;
+
     let settings_map = Arc::new(initialise_settings().unwrap());
-    let mut subscription_update_channel = subscription_update_channel;
-    let current_subscriptions = PRIMARY_SUBSCRIPTIONS.clone();
+    let mut subscription_update_channel = rx;
+
     let settings_map_ref = settings_map.clone();
     println!("Handler: Start Live handler");
     tokio::task::spawn(async move {
+        let mut current_subscriptions = SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await.clone();
         {
-            let current_subscriptions = current_subscriptions.read().await;
             println!("Handler: {:?}", current_subscriptions);
             for subscription in &*current_subscriptions {
                 let request = DataServerRequest::StreamRequest {
@@ -162,9 +160,8 @@ pub async fn live_subscription_handler(
             }
         }
         while let Some(updated_subscriptions) = subscription_update_channel.recv().await {
-            let mut current_subscriptions = current_subscriptions.write().await;
             let mut requests_map = AHashMap::new();
-            if *current_subscriptions != updated_subscriptions {
+            if current_subscriptions != updated_subscriptions {
                 for subscription in &updated_subscriptions {
                     if !current_subscriptions.contains(&subscription) {
                         let connection = ConnectionType::Vendor(subscription.symbol.data_vendor.clone());
@@ -202,8 +199,7 @@ pub async fn live_subscription_handler(
                         send_request(request).await;
                     }
                 }
-                *STRATGEY_SUBSCRIPTIONS.write().await = SUBSCRIPTION_HANDLER.get().unwrap().strategy_subscriptions().await;
-                *current_subscriptions = updated_subscriptions.clone();
+                current_subscriptions = updated_subscriptions.clone();
             }
         }
     });
@@ -234,17 +230,13 @@ pub async fn live_order_handler(
 }
 
 /// This response handler is also acting as a live engine.
-async fn request_handler(
-    mode: StrategyMode,
+pub async fn request_handler(
     receiver: mpsc::Receiver<StrategyRequest>,
-    buffer_duration: Duration,
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
-    notify: Arc<Notify>,
-    server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
-    server_senders: DashMap<ConnectionType, ExternalSender>
-)  {
+    server_senders: DashMap<ConnectionType, ExternalSender>,
+    callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
+) {
     let mut receiver = receiver;
-    let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     let connection_map = settings_map.clone();
     let callbacks_ref = callbacks.clone();
     let server_senders = server_senders;
@@ -282,11 +274,11 @@ async fn request_handler(
                 }
             }
         }
-        //println!("request handler end");
     });
+}
 
 
-    /*
+/*
     1. primary data comes from server stream
     2. primary data is fed to
         a. subscription handler
@@ -300,8 +292,17 @@ async fn request_handler(
         to see if we have any closed bars, if we do we run the indicator update again.
 
     6. All base data is added to a TimeSlice and the timeslice is added to the event slice
+
+    7. the buffer loop sleeps until the next scheduled instant while it is refilled by the streams and the process repeats.
 */
-    let strategy_subscriptions = STRATGEY_SUBSCRIPTIONS.clone();
+pub async fn response_handler(
+    mode: StrategyMode,
+    buffer_duration: Duration,
+    settings_map: HashMap<ConnectionType, ConnectionSettings>,
+    notify: Arc<Notify>,
+    server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
+    callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
+) {
     let callbacks = callbacks.clone();
     let event_buffer = Arc::new(RwLock::new(EventTimeSlice::new()));
     let open_bars: Arc<DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>>> = Arc::new(DashMap::new());
@@ -313,17 +314,20 @@ async fn request_handler(
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         tokio::task::spawn(async move {
+            subscription_handler.strategy_subscriptions().await;
             let mut instant = Instant::now() + buffer_duration;
             loop {
                 sleep_until(instant.into()).await;
                 { //we use a block here so if we await notified the buffer can keep filling up as we will drop locks
                     let mut buffer = event_buffer_ref.write().await;
                     let mut time_slice = time_slice_ref.write().await;
-                    for mut map in open_bars_ref.iter_mut() {
-                        for (_, data) in &*map {
-                            time_slice.push(data.clone());
+                    {
+                        for mut map in open_bars_ref.iter_mut() {
+                            for (_, data) in &*map {
+                                time_slice.push(data.clone());
+                            }
+                            map.clear();
                         }
-                        map.clear();
                     }
                     if let Some(remaining_time_slice) = subscription_handler.update_consolidators_time(Utc::now()).await {
                         if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&remaining_time_slice).await {
@@ -350,11 +354,12 @@ async fn request_handler(
 
     for (connection, settings) in &settings_map {
         if let Some((connection, stream)) = server_receivers.remove(connection) {
-            const register_message: StrategyRequest = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));
+            let register_message = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));
             send_request(register_message).await;
             let mut receiver = stream;
             let callbacks = callbacks.clone();
-            let strategy_subscriptions_ref = strategy_subscriptions.clone();
+            let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
+            let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
             let event_buffer = event_buffer.clone();
             let time_slice = time_slice.clone();
             let open_bars = open_bars.clone();
@@ -381,7 +386,7 @@ async fn request_handler(
                     }
                     // these will be buffered eventually into an EventTimeSlice
                     let callbacks = callbacks.clone();
-                    let strategy_subscriptions = strategy_subscriptions_ref.clone();
+                    let strategy_subscriptions = strategy_subscriptions.clone();
                     let subscription_handler = subscription_handler.clone();
                     let event_buffer = event_buffer.clone();
                     let time_slice = time_slice.clone();
@@ -428,7 +433,6 @@ async fn request_handler(
                                         if let Some(consolidated) = subscription_handler.update_time_slice(primary_data.clone()).await {
                                             strategy_time_slice.extend(consolidated);
                                         }
-                                        let strategy_subscriptions = strategy_subscriptions.read().await;
                                         for base_data in primary_data {
                                             if strategy_subscriptions.contains(&base_data.subscription()) {
                                                 strategy_time_slice.push(base_data);
@@ -533,5 +537,7 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode
         Arc::new(Mutex::new(tx))
     }).clone();
 
-    request_handler(mode.clone(), rx, buffer_duration, settings_map.clone(), notify, server_receivers, server_senders).await;
+    let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
+    request_handler(rx, settings_map.clone(), server_senders, callbacks.clone()).await;
+    response_handler(mode, buffer_duration, settings_map, notify, server_receivers, callbacks).await;
 }

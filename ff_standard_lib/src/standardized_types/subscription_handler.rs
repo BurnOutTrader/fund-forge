@@ -49,6 +49,10 @@ impl SubscriptionHandler {
         self.primary_subscriptions_broadcaster.subscribe(name, sender).await;
     }
 
+    pub(crate) async fn unsubscribe_primary_subscription_updates(&self, name: String) {
+        self.primary_subscriptions_broadcaster.unsubscribe(name).await;
+    }
+
     /// Sets the SubscriptionHandler as warmed up, so we can start processing data.
     /// This lets the handler know that it needs to manually warm up any future subscriptions.
     pub async fn set_warmup_complete(&self) {

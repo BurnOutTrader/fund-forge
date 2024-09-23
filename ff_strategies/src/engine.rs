@@ -1,6 +1,6 @@
 use crate::strategy_state::StrategyStartState;
 use chrono::{DateTime, Datelike, Utc};
-use ff_standard_lib::server_connections::{set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, MARKET_HANDLER};
+use ff_standard_lib::server_connections::{set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, MARKET_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, unsubscribe_primary_subscription_updates};
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::thread;
 use tokio::sync::mpsc::{Receiver};
-use tokio::sync::{Notify, RwLock};
+use tokio::sync::{mpsc, Notify, RwLock};
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 
@@ -28,28 +28,30 @@ use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 */
 
 #[allow(dead_code)]
-pub(crate) struct BackTestEngine {
+pub(crate) struct HistoricalEngine {
     start_state: StrategyStartState,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
-    last_time: RwLock<DateTime<Utc>>,
     gui_enabled: bool,
     primary_subscription_updates: Receiver<Vec<DataSubscription>>,
+    warm_up_only: bool
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
-impl BackTestEngine {
+impl HistoricalEngine {
     pub async fn new(
         notify: Arc<Notify>,
         start_state: StrategyStartState,
         gui_enabled: bool,
-        primary_subscription_updates: Receiver<Vec<DataSubscription>>,
+        warm_up_only: bool,
     ) -> Self {
-        let engine = BackTestEngine {
+        let (tx, rx) = mpsc::channel(10);
+        subscribe_primary_subscription_updates("Historical Engine".to_string(), tx).await;
+        let engine = HistoricalEngine {
             notify,
             start_state,
-            last_time: RwLock::new(Default::default()),
             gui_enabled,
-            primary_subscription_updates,
+            primary_subscription_updates: rx,
+            warm_up_only
         };
         engine
     }
@@ -66,6 +68,11 @@ impl BackTestEngine {
             tokio::runtime::Runtime::new().unwrap().block_on(async {
                 println!("Engine: Warming up the strategy...");
                 self.warmup().await;
+
+                if self.warm_up_only {
+                    unsubscribe_primary_subscription_updates("Historical Engine".to_string()).await;
+                    return;
+                }
 
                 println!("Engine: Start {:?} ", self.start_state.mode);
                 self.run_backtest().await;
@@ -140,16 +147,13 @@ impl BackTestEngine {
         }
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
-            {
-                *self.last_time.write().await = start.clone();
-            }
             let mut last_time = start.clone();
 
             println!("Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
             'month_loop: loop {
                 let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
-                println!("Engine: Organising historical data feed");
+                //println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
+                //println!("Engine: Organising historical data feed");
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -157,14 +161,13 @@ impl BackTestEngine {
                         continue;
                     }
                 };
-                println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
+                //println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
 
                 let mut end_month = true;
                 'time_instance_loop: loop {
                     let time = last_time + self.start_state.buffer_resolution;
 
                     if time > end_time {
-                        *self.last_time.write().await = last_time.clone();
                         println!("Engine: End Time: {}", end_time);
                         break 'main_loop;
                     }
@@ -237,7 +240,6 @@ impl BackTestEngine {
                     break 'month_loop;
                 }
             }
-            *self.last_time.write().await = last_time.clone();
         }
     }
 }

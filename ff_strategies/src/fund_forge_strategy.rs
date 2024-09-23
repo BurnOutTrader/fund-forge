@@ -1,4 +1,4 @@
-use crate::engine::BackTestEngine;
+use crate::engine::HistoricalEngine;
 use ff_standard_lib::interaction_handler::InteractionHandler;
 use crate::strategy_state::StrategyStartState;
 use ahash::AHashMap;
@@ -162,15 +162,14 @@ impl FundForgeStrategy {
             drawing_objects_handler
         ).await;
 
-        let (tx, rx) = mpsc::channel(100);
-        subscribe_primary_subscription_updates("Live Subscription Update Loop".to_string(), tx).await;
+
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = BackTestEngine::new(notify, start_state, gui_enabled.clone(), rx).await;
-                BackTestEngine::launch(engine).await;
+                let engine = HistoricalEngine::new(notify, start_state, gui_enabled.clone(), false).await;
+                HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
-                live_subscription_handler(strategy_mode, rx).await;
+                live_subscription_handler(strategy_mode).await;
             },
         }
         strategy
