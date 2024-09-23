@@ -178,45 +178,7 @@ impl Candle {
             candle_type: CandleType::CandleStick,
         }
     }
-    /// Mutates the raw candle data into the required CandleStickType
-    /*    pub fn mutate_candle(&mut self, candle_calculation_type: &CandleCalculationType, prior_candle: &Option<Candle>) {
-        match candle_calculation_type {
-            CandleCalculationType::Candle => {
-                return
-            }
-            CandleCalculationType::HeikenAshi => {
-                if let Some(prior) = prior_candle {
-                    let open = (prior.open + prior.close) / 2.0;
-                    let close = (self.open + self.high + self.low + self.close) / 4.0;
-                    let high = self.high.max(open).max(close);
-                    let low = self.low.min(open).min(close);
-                    self.open = open;
-                    self.close = close;
-                    self.high = high;
-                    self.low = low;
-                } else {
-                    let open = (self.open + self.close) / 2.0;
-                    let close = (self.open + self.high + self.low + self.close) / 4.0;
-                    let high = self.high;
-                    let low = self.low;
-                    self.open = open;
-                    self.close = close;
-                    self.high = high;
-                    self.low = low;
-                }
-            }
 
-        }
-    }*/
-    /// Creates a new `candles` instance that is open and has not yet closed.
-    ///
-    /// # Arguments
-    ///
-    /// - `symbol`: The trading symbol of the asset.
-    /// - `open`: The opening price.
-    /// - `volume`: The trading volume.
-    /// - `time`: The opening time as a Unix timestamp.
-    ///
     pub fn new(
         symbol: Symbol,
         open: Price,
@@ -243,16 +205,6 @@ impl Candle {
 
 
     /// Creates a new `candles` instance representing a completed (closed) trading period.
-    ///
-    /// # Arguments
-    ///
-    /// - `symbol`: The trading symbol of the asset.
-    /// - `high`: The highest price during the candles's time.
-    /// - `low`: The lowest price during the candles's time.
-    /// - `open`: The opening price.
-    /// - `close`: The closing price.
-    /// - `volume`: The trading volume.
-    /// - `time`: The opening time as a Unix timestamp.
     pub fn from_closed(
         symbol: Symbol,
         high: Price,
@@ -281,13 +233,6 @@ impl Candle {
 
     /// Updates the candles with new price and volume information. Typically used
     /// during the trading period before the candles closes.
-    ///
-    /// # Arguments
-    ///
-    /// - `price`: The latest price.
-    /// - `volume`: The additional volume since the last update.
-    /// - `is_closed`: Indicates whether this update should close the candles.
-    ///
     pub fn update(&mut self, price: Price, volume: Volume, is_closed: bool) {
         self.high = self.high.max(price);
         self.low = self.low.min(price);
