@@ -285,11 +285,6 @@ async fn request_handler(
         //println!("request handler end");
     });
 
-    let strategy_subscriptions = STRATGEY_SUBSCRIPTIONS.clone();
-    let callbacks = callbacks.clone();
-    let event_buffer = Arc::new(RwLock::new(EventTimeSlice::new()));
-    let open_bars: Arc<RwLock<BTreeMap<DataSubscription, BTreeMap<DateTime<Utc>, BaseDataEnum>>>> = Arc::new(RwLock::new(BTreeMap::new()));
-    let time_slice = Arc::new(RwLock::new(TimeSlice::new()));
     // start a buffer loop to send events every buffer interval
 
     /*
@@ -303,6 +298,11 @@ async fn request_handler(
     4. each buffer iteration before sending the buffer to the engine or strategy, we update consolidator time.
         to see if we have any closed bars.
 */
+    let strategy_subscriptions = STRATGEY_SUBSCRIPTIONS.clone();
+    let callbacks = callbacks.clone();
+    let event_buffer = Arc::new(RwLock::new(EventTimeSlice::new()));
+    let open_bars: Arc<DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>>> = Arc::new(DashMap::new());
+    let time_slice = Arc::new(RwLock::new(TimeSlice::new()));
     if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
         let event_buffer_ref = event_buffer.clone();
         let time_slice_ref = time_slice.clone();
@@ -316,9 +316,8 @@ async fn request_handler(
                 { //we use a block here so if we await notified the buffer can keep filling up as we will drop locks
                     let mut buffer = event_buffer_ref.write().await;
                     let mut time_slice = time_slice_ref.write().await;
-                    let mut open_bars = open_bars_ref.write().await;
-                    for (_, map) in &mut *open_bars {
-                        for (_, data) in &mut *map {
+                    for mut map in open_bars_ref.iter_mut() {
+                        for (_, data) in &*map {
                             time_slice.push(data.clone());
                         }
                         map.clear();
@@ -445,9 +444,9 @@ async fn request_handler(
                                             if data.is_closed() {
                                                 time_slice.write().await.push(data);
                                             } else {
-                                                let mut open_bars = open_bars.write().await;
-                                                open_bars.insert(subscription.clone(), BTreeMap::new());
-                                                open_bars.get_mut(&subscription).unwrap().insert(data.time_utc(), data);
+                                                let mut bar_map = AHashMap::new();
+                                                bar_map.insert(data.time_utc(), data);
+                                                open_bars.insert(subscription.clone(), bar_map);
                                             }
                                         }
                                     }
