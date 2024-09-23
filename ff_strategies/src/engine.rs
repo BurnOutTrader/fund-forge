@@ -143,13 +143,18 @@ impl HistoricalEngine {
         let market_handler = MARKET_HANDLER.get().unwrap().clone();
 
         let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
-        match self.primary_subscription_updates.try_recv() {
-            Ok(new_primary_subscriptions) => {
-                if primary_subscriptions != new_primary_subscriptions {
-                    primary_subscriptions = new_primary_subscriptions;
+        let mut subscription_changes = true;
+        while subscription_changes {
+            match self.primary_subscription_updates.try_recv() {
+                Ok(new_primary_subscriptions) => {
+                    if primary_subscriptions != new_primary_subscriptions {
+                        primary_subscriptions = new_primary_subscriptions;
+                    }
+                }
+                Err(_) => {
+                    subscription_changes = false
                 }
             }
-            Err(_) => {}
         }
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
