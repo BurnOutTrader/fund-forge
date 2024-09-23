@@ -49,7 +49,7 @@ async fn main() {
             DataSubscription::new_custom(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Seconds(15),
+                Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
                 CandleType::CandleStick,
@@ -57,7 +57,7 @@ async fn main() {
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Seconds(15),
+                 Resolution::Seconds(1),
                  BaseDataType::QuoteBars,
                  MarketType::Forex,
                  CandleType::HeikinAshi,
@@ -98,7 +98,7 @@ pub async fn on_data_received(
     strategy.indicator_subscribe(heikin_atr_5).await;
 
     let brokerage = Brokerage::Test;
-    let mut warmup_complete = true;
+    let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
     let mut bars_since_entry_2 = 0;
     let mut history_1 : RollingWindow<QuoteBar> = RollingWindow::new(10);
