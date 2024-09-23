@@ -1,6 +1,5 @@
 use crate::engine::HistoricalEngine;
 use ff_standard_lib::interaction_handler::InteractionHandler;
-use crate::strategy_state::StrategyStartState;
 use ahash::AHashMap;
 use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc, Duration as ChronoDuration};
 use chrono_tz::Tz;
@@ -51,7 +50,18 @@ use ff_standard_lib::server_connections::{init_connections, init_sub_handler, in
 /// # Properties
 #[allow(dead_code)]
 pub struct FundForgeStrategy {
-    start_state: StrategyStartState,
+    mode: StrategyMode,
+
+    start_time: DateTime<Utc>,
+
+    end_time: DateTime<Utc>,
+
+    warmup_duration: Duration,
+
+    buffer_resolution: Duration,
+
+    time_zone: Tz,
+
     subscription_handler: Arc<SubscriptionHandler>,
 
     indicator_handler: Arc<IndicatorHandler>,
@@ -116,15 +126,8 @@ impl FundForgeStrategy {
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
         init_connections(gui_enabled, buffering_resolution, strategy_mode.clone(), notify.clone()).await;
 
-        let start_state = StrategyStartState::new(
-            strategy_mode.clone(),
-            start_date,
-            end_date,
-            time_zone.clone(),
-            warmup_duration,
-            buffering_resolution,
-        );
         let start_time = time_convert_utc_naive_to_fixed_offset(&time_zone, start_date);
+        let end_time = time_convert_utc_naive_to_fixed_offset(&time_zone, end_date);
 
         subscription_handler.set_subscriptions(subscriptions, retain_history, start_time.to_utc() - warmup_duration).await;
 
@@ -144,7 +147,12 @@ impl FundForgeStrategy {
         let interaction_handler = Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode));
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
         let strategy = FundForgeStrategy {
-            start_state: start_state.clone(),
+            mode: strategy_mode.clone(),
+            start_time: start_time.to_utc(),
+            end_time: end_time.to_utc(),
+            warmup_duration: warmup_duration.clone(),
+            buffer_resolution: buffering_resolution.clone(),
+            time_zone,
             market_handler: market_event_handler.clone(),
             subscription_handler,
             indicator_handler: indicator_handler.clone(),
@@ -165,22 +173,14 @@ impl FundForgeStrategy {
 
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = HistoricalEngine::new(notify, start_state, gui_enabled.clone(), false).await;
+                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone(), false).await;
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
-                live_subscription_handler(strategy_mode).await;
+                live_subscription_handler(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone()).await;
             },
         }
         strategy
-    }
-
-    pub async fn is_shutdown(&self) -> bool {
-        let end_time = self.start_state.end_date.to_utc();
-        if self.time_utc() >= end_time {
-            return true;
-        }
-        false
     }
 
     pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
@@ -437,7 +437,7 @@ impl FundForgeStrategy {
 
     /// returns the strategy time zone.
     pub fn time_zone(&self) -> &Tz {
-        &self.start_state.time_zone
+        &self.time_zone
     }
 
     pub async fn drawing_tools(&self) -> AHashMap<DataSubscription, Vec<DrawingTool>> {
@@ -530,19 +530,19 @@ impl FundForgeStrategy {
     /// Current Tz time, depends on the `StrategyMode`. \
     /// Backtest will return the last data point time, live will return the current time.
     pub async fn time_local(&self) -> DateTime<FixedOffset> {
-        match self.start_state.mode {
+        match self.mode {
             StrategyMode::Backtest => time_convert_utc_datetime_to_fixed_offset(
-                &self.start_state.time_zone,
+                &self.time_zone,
                 self.time_utc(),
             ),
-            _ => time_convert_utc_datetime_to_fixed_offset(&self.start_state.time_zone, Utc::now()),
+            _ => time_convert_utc_datetime_to_fixed_offset(&self.time_zone, Utc::now()),
         }
     }
 
     /// Current Utc time, depends on the `StrategyMode`. \
     /// Backtest will return the last data point time, live will return the current time.
     pub fn time_utc(&self) -> DateTime<Utc> {
-        match self.start_state.mode {
+        match self.mode {
             StrategyMode::Backtest => self.market_handler.get_last_time(),
             _ => Utc::now(),
         }

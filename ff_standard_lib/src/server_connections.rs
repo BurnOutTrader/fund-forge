@@ -4,7 +4,6 @@ use crate::servers::init_clients::{create_async_api_client};
 use crate::servers::settings::client_settings::{initialise_settings, ConnectionSettings};
 use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError, StreamRequest};
 use heck::ToPascalCase;
-use lazy_static::lazy_static;
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
@@ -128,6 +127,10 @@ pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
 
 pub async fn live_subscription_handler(
     mode: StrategyMode,
+    start_time: DateTime<Utc>,
+    end_date: DateTime<Utc>,
+    warmup_duration: Duration,
+    buffer_resolution: Duration,
 ) {
     if mode == StrategyMode::Backtest {
         return;
