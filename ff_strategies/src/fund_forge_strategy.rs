@@ -483,6 +483,9 @@ impl FundForgeStrategy {
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
     pub async fn subscribe(&self, subscription: DataSubscription, retain_history: u64) {
+        if subscription.resolution.as_duration() < self.buffer_resolution {
+            panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {}", subscription.resolution, self.buffer_resolution)
+        }
         self
             .subscription_handler
             .subscribe(subscription.clone(), retain_history, self.time_utc())
@@ -508,6 +511,11 @@ impl FundForgeStrategy {
         subscriptions: Vec<DataSubscription>,
         retain_history: u64,
     ) {
+        for subscription in &subscriptions {
+            if subscription.resolution.as_duration() < self.buffer_resolution {
+                panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {}", subscription.resolution, self.buffer_resolution)
+            }
+        }
         self.subscription_handler.set_subscriptions(subscriptions, retain_history, self.time_utc()).await;
     }
 
