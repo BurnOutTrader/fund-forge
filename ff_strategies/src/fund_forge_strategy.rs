@@ -176,8 +176,6 @@ impl FundForgeStrategy {
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
-                //let mut engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
-                //engine.warmup().await;
                 live_subscription_handler(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration, buffering_resolution).await;
             },
         }
