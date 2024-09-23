@@ -285,7 +285,6 @@ async fn request_handler(
         //println!("request handler end");
     });
 
-    // start a buffer loop to send events every buffer interval
 
     /*
     1. primary data comes from server stream
@@ -297,7 +296,7 @@ async fn request_handler(
 
     4. data is added to the buffer
 
-    5. each buffer iteration before sending the buffer to the engine or strategy, we update consolidator time again.
+    5. each buffer iteration (duration) before sending the buffer to the engine or strategy, we update consolidator time again.
         to see if we have any closed bars, if we do we run the indicator update again.
 
     6. All base data is added to a TimeSlice and the timeslice is added to the event slice
