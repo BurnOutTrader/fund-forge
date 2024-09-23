@@ -58,7 +58,7 @@ async fn main() {
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
                  Resolution::Seconds(1),
-                 BaseDataType::Candles,
+                 BaseDataType::Candles, // Must be candles for Heikin ahsi
                  MarketType::Forex,
                  CandleType::HeikinAshi,
              ),],
