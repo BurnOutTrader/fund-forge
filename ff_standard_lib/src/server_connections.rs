@@ -444,6 +444,9 @@ pub async fn response_handler(
                                         if let Some(consolidated) = subscription_handler.update_time_slice(primary_data.clone()).await {
                                             strategy_time_slice.extend(consolidated);
                                         }
+                                        if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                                            strategy_time_slice.extend(consolidated);
+                                        }
                                         for base_data in primary_data {
                                             if strategy_subscriptions.contains(&base_data.subscription()) {
                                                 strategy_time_slice.push(base_data);

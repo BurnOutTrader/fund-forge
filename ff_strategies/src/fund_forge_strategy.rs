@@ -128,7 +128,7 @@ impl FundForgeStrategy {
         let end_time = time_convert_utc_naive_to_fixed_offset(&time_zone, end_date);
 
         subscription_handler.set_subscriptions(subscriptions, retain_history, start_time.to_utc() - warmup_duration).await;
-
+        //todo There is a problem with quote bars not being produced consistently since refactoring
 
         let (order_sender, order_receiver) = mpsc::channel(100);
         let market_event_handler = match strategy_mode {
