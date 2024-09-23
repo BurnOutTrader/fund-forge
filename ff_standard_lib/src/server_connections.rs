@@ -12,6 +12,7 @@ use std::time::Duration;
 use ahash::AHashMap;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use futures::SinkExt;
 use strum_macros::Display;
 use tokio::io;
 use once_cell::sync::OnceCell;
@@ -40,7 +41,6 @@ use crate::traits::bytes::Bytes;
 
 pub const GUI_ENABLED: bool = true;
 pub const GUI_DISABLED: bool = false;
-const DEFAULT: ConnectionType = ConnectionType::Default;
 
 /// A wrapper to allow us to pass in either a `Brokerage` or a `DataVendor`
 /// # Variants
@@ -78,10 +78,8 @@ impl FromStr for ConnectionType {
     }
 }
 
-
 // Connections
 lazy_static! {
-    static ref MAX_SERVERS: usize = initialise_settings().unwrap().len();
     static ref PRIMARY_SUBSCRIPTIONS: Arc<RwLock<Vec<DataSubscription>>> = Arc::new(RwLock::new(Vec::new()));
     static ref STRATGEY_SUBSCRIPTIONS: Arc<RwLock<Vec<DataSubscription>>> = Arc::new(RwLock::new(Vec::new()));
 }
@@ -246,21 +244,20 @@ async fn request_handler(
     server_senders: DashMap<ConnectionType, ExternalSender>
 )  {
     let mut receiver = receiver;
-    let callbacks: Arc<RwLock<AHashMap<u64, oneshot::Sender<DataServerResponse>>>> = Default::default();
+    let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     let connection_map = settings_map.clone();
     let callbacks_ref = callbacks.clone();
     let server_senders = server_senders;
     tokio::task::spawn(async move {
         let mut callback_id_counter: u64 = 0;
         let callbacks = callbacks_ref.clone();
-        //println!("Request handler start");
         while let Some(outgoing_message) = receiver.recv().await {
             match outgoing_message {
                 StrategyRequest::CallBack(connection_type, mut request, oneshot) => {
                     callback_id_counter += 1;
                     let callbacks = callbacks.clone();
                     let id = callback_id_counter.clone();
-                    callbacks.write().await.insert(id, oneshot);
+                    callbacks.insert(id, oneshot);
                     request.set_callback_id(id.clone());
                     let connection_type = match connection_map.contains_key(&connection_type) {
                         true => connection_type,
@@ -459,7 +456,7 @@ async fn request_handler(
                             }
                             // if there is a callback id we just send it to the awaiting oneshot receiver
                             Some(id) => {
-                                if let Some(callback) = callbacks.write().await.remove(&id) {
+                                if let Some((_, callback)) = callbacks.remove(&id) {
                                     let _ = callback.send(response);
                                 }
                             }
@@ -509,8 +506,8 @@ pub async fn initialize_static(
 pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode, notify: Arc<Notify>) {
     let settings_map = initialise_settings().unwrap();
     let mut server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
-    let mut server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(*MAX_SERVERS);
-    //initialize_strategy_registry(platform_mode.clone()).await;
+    let mut server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());
+
     println!("Connections: {:?}", settings_map);
     // for each connection type specified in our server_settings.toml we will establish a connection
     for (connection_type, settings) in settings_map.iter() {
