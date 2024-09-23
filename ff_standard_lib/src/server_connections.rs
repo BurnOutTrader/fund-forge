@@ -9,7 +9,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc,  Duration as ChronoDuration};
 use dashmap::DashMap;
 use futures::SinkExt;
 use strum_macros::Display;
@@ -129,8 +129,8 @@ pub async fn live_subscription_handler(
     mode: StrategyMode,
     start_time: DateTime<Utc>,
     end_date: DateTime<Utc>,
-    warmup_duration: Duration,
-    buffer_resolution: Duration,
+    warmup_duration: ChronoDuration,
+    buffer_resolution: ChronoDuration,
 ) {
     if mode == StrategyMode::Backtest {
         return;
@@ -300,7 +300,7 @@ pub async fn request_handler(
 */
 pub async fn response_handler(
     mode: StrategyMode,
-    buffer_duration: Duration,
+    buffer_duration: ChronoDuration,
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
     notify: Arc<Notify>,
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
@@ -311,6 +311,7 @@ pub async fn response_handler(
     let open_bars: Arc<DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>>> = Arc::new(DashMap::new());
     let time_slice = Arc::new(RwLock::new(TimeSlice::new()));
     if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
+        let buffering_resolution = Duration::from_secs(buffer_duration.num_minutes() as u64 * 60);
         let event_buffer_ref = event_buffer.clone();
         let time_slice_ref = time_slice.clone();
         let open_bars_ref = open_bars.clone();
@@ -318,7 +319,7 @@ pub async fn response_handler(
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         tokio::task::spawn(async move {
             subscription_handler.strategy_subscriptions().await;
-            let mut instant = Instant::now() + buffer_duration;
+            let mut instant = Instant::now() + buffering_resolution;
             loop {
                 sleep_until(instant.into()).await;
                 { //we use a block here so if we await notified the buffer can keep filling up as we will drop locks
@@ -347,7 +348,7 @@ pub async fn response_handler(
                         send_strategy_event_slice(buffer.clone()).await;
                         *buffer = EventTimeSlice::new();
                     }
-                    instant = Instant::now() + buffer_duration;
+                    instant = Instant::now() + buffering_resolution;
                 }
                 notify.notified().await;
             }
@@ -512,7 +513,7 @@ pub async fn initialize_static(
     }).clone();
 }
 
-pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode, notify: Arc<Notify>) {
+pub async fn init_connections(gui_enabled: bool, buffer_duration: ChronoDuration, mode: StrategyMode, notify: Arc<Notify>) {
     let settings_map = initialise_settings().unwrap();
     let mut server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
     let mut server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Datelike, Utc};
+use chrono::{DateTime, Datelike, Utc,  Duration as ChronoDuration};
 use ff_standard_lib::server_connections::{set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, MARKET_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, unsubscribe_primary_subscription_updates};
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
@@ -11,9 +11,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use chrono_tz::Tz;
 use tokio::sync::mpsc::{Receiver};
-use tokio::sync::{mpsc, Notify, RwLock};
+use tokio::sync::{mpsc, Notify};
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 
@@ -33,12 +32,11 @@ pub(crate) struct HistoricalEngine {
     mode: StrategyMode,
     start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
-    warmup_duration: Duration,
-    buffer_resolution: Duration,
+    warmup_duration: ChronoDuration,
+    buffer_resolution: ChronoDuration,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
     gui_enabled: bool,
     primary_subscription_updates: Receiver<Vec<DataSubscription>>,
-    warm_up_only: bool
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -47,11 +45,10 @@ impl HistoricalEngine {
         mode: StrategyMode,
         start_date: DateTime<Utc>,
         end_date: DateTime<Utc>,
-        warmup_duration: Duration,
-        buffer_resolution: Duration,
+        warmup_duration: ChronoDuration,
+        buffer_resolution: ChronoDuration,
         notify: Arc<Notify>,
         gui_enabled: bool,
-        warm_up_only: bool,
     ) -> Self {
         let (tx, rx) = mpsc::channel(10);
         subscribe_primary_subscription_updates("Historical Engine".to_string(), tx).await;
@@ -64,7 +61,6 @@ impl HistoricalEngine {
             buffer_resolution,
             gui_enabled,
             primary_subscription_updates: rx,
-            warm_up_only
         };
         engine
     }
@@ -72,22 +68,15 @@ impl HistoricalEngine {
     /// Initializes the strategy, runs the warmup and then runs the strategy based on the mode.
     /// Calling this method will start the strategy running.
     pub async fn launch(mut self: Self) {
+        if self.mode != StrategyMode::Backtest {
+            panic!("Engine: Trying to launch backtest engine in live mode");
+        }
         println!("Engine: Initializing the strategy...");
         thread::spawn(move|| {
-            if self.mode != StrategyMode::Backtest {
-                panic!("Incorrect Engine instance for {:?}", self.mode)
-            }
             // Run the engine logic on a dedicated OS thread
             tokio::runtime::Runtime::new().unwrap().block_on(async {
-                println!("Engine: Warming up the strategy...");
                 self.warmup().await;
 
-                if self.warm_up_only {
-                    unsubscribe_primary_subscription_updates("Historical Engine".to_string()).await;
-                    return;
-                }
-
-                println!("Engine: Start {:?} ", self.mode);
                 self.run_backtest().await;
 
                 println!("Engine: Backtest complete");
@@ -98,7 +87,8 @@ impl HistoricalEngine {
         });
     }
 
-    async fn warmup(&mut self) {
+    pub async fn warmup(&mut self) {
+        println!("Engine: Warming up the strategy...");
         let end_time = self.start_time;
 
         // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
@@ -113,12 +103,15 @@ impl HistoricalEngine {
         set_warmup_complete().await;
         let warmup_complete_event = vec![StrategyEvent::WarmUpComplete];
         send_strategy_event_slice(warmup_complete_event).await;
+        if self.mode != StrategyMode::Backtest {
+            unsubscribe_primary_subscription_updates("Historical Engine".to_string()).await;
+        }
         println!("Engine: Warm up complete")
     }
 
     /// Runs the strategy backtest
     async fn run_backtest(&mut self) {
-        println!("Engine: Running the strategy backtest...");
+        println!("Engine: Start {:?} ", self.mode);
         // we run the historical data feed from the start time until we reach the end date for the strategy
         let month_years = generate_file_dates(
             self.start_time,
@@ -165,8 +158,8 @@ impl HistoricalEngine {
             println!("Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
             'month_loop: loop {
                 let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                //println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
-                //println!("Engine: Organising historical data feed");
+                println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
+                println!("Engine: Organising historical data feed");
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -174,12 +167,11 @@ impl HistoricalEngine {
                         continue;
                     }
                 };
-                //println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
+                println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
 
                 let mut end_month = true;
                 'time_instance_loop: loop {
                     let time = last_time + self.buffer_resolution;
-
                     if time > end_time {
                         println!("Engine: End Time: {}", end_time);
                         break 'main_loop;

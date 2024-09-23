@@ -56,9 +56,9 @@ pub struct FundForgeStrategy {
 
     end_time: DateTime<Utc>,
 
-    warmup_duration: Duration,
+    warmup_duration: ChronoDuration,
 
-    buffer_resolution: Duration,
+    buffer_resolution: ChronoDuration,
 
     time_zone: Tz,
 
@@ -117,14 +117,12 @@ impl FundForgeStrategy {
         buffering_resolution: ChronoDuration,
         gui_enabled: bool
     ) -> FundForgeStrategy {
-        let buffering_resolution = Duration::from_secs(buffering_resolution.num_minutes() as u64 * 60);
-        let warmup_duration = Duration::from_secs(warmup_duration.num_minutes() as u64 * 60);
 
         let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
         let subscription_handler = Arc::new(subscription_handler);
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
-        init_connections(gui_enabled, buffering_resolution, strategy_mode.clone(), notify.clone()).await;
+        init_connections(gui_enabled, buffering_resolution.clone(), strategy_mode.clone(), notify.clone()).await;
 
         let start_time = time_convert_utc_naive_to_fixed_offset(&time_zone, start_date);
         let end_time = time_convert_utc_naive_to_fixed_offset(&time_zone, end_date);
@@ -134,7 +132,7 @@ impl FundForgeStrategy {
 
         let (order_sender, order_receiver) = mpsc::channel(100);
         let market_event_handler = match strategy_mode {
-            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(start_time.to_utc(), Some(order_receiver)).await,
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(start_time.to_utc() - warmup_duration, Some(order_receiver)).await,
             StrategyMode::Live => {
                 live_order_handler(strategy_mode, order_receiver).await;
                 MarketHandler::new(start_time.to_utc(), None).await
@@ -146,6 +144,7 @@ impl FundForgeStrategy {
         let timed_event_handler = Arc::new(TimedEventHandler::new());
         let interaction_handler = Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode));
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
+
         let strategy = FundForgeStrategy {
             mode: strategy_mode.clone(),
             start_time: start_time.to_utc(),
@@ -173,11 +172,13 @@ impl FundForgeStrategy {
 
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone(), false).await;
+                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
-                live_subscription_handler(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone()).await;
+                //let mut engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
+                //engine.warmup().await;
+                live_subscription_handler(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration, buffering_resolution).await;
             },
         }
         strategy
