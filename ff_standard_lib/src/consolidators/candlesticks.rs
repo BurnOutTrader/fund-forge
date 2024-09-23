@@ -1,5 +1,5 @@
 use crate::helpers::converters;
-use crate::helpers::decimal_calculators::round_to_tick_size;
+use crate::helpers::decimal_calculators::{round_to_decimals, round_to_tick_size};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
@@ -12,6 +12,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
+use crate::helpers::converters::open_time;
 use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::data_server_messaging::FundForgeError;
 
@@ -20,10 +21,62 @@ pub struct CandleStickConsolidator {
     pub(crate) subscription: DataSubscription,
     pub(crate) history: RollingWindow<BaseDataEnum>,
     tick_size: Price,
+    last_close: Option<Price>,
+    last_ask_close: Option<Price>,
+    last_bid_close: Option<Price>
 }
 
 impl CandleStickConsolidator {
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
+        //todo add fill forward option for this
+        if self.current_data == None {
+            match self.subscription.base_data_type {
+                BaseDataType::QuoteBars => {
+                    if let (Some(last_bid_close), Some(last_ask_close)) = (self.last_bid_close, self.last_ask_close) {
+                        let time = open_time(&self.subscription, time);
+                        let spread = round_to_tick_size(last_ask_close - last_bid_close, self.tick_size);
+
+                        self.current_data = Some(BaseDataEnum::QuoteBar(QuoteBar {
+                            symbol: self.subscription.symbol.clone(),
+                            ask_open: last_ask_close,
+                            ask_high: last_ask_close,
+                            ask_low: last_ask_close,
+                            ask_close: last_ask_close,
+                            bid_open: last_bid_close,
+                            bid_high: last_bid_close,
+                            bid_low: last_bid_close,
+                            bid_close: last_bid_close,
+                            volume: dec!(0.0),
+                            time: time.to_string(),
+                            resolution: self.subscription.resolution.clone(),
+                            is_closed: false,
+                            range: dec!(0.0),
+                            candle_type: CandleType::CandleStick,
+                            spread,
+                        }));
+                    }
+                }
+                BaseDataType::Candles => {
+                    if let Some(last_close) = self.last_close {
+                        let time = open_time(&self.subscription, time);
+                        self.current_data = Some(BaseDataEnum::Candle(Candle {
+                            symbol: self.subscription.symbol.clone(),
+                            open: last_close,
+                            high: last_close,
+                            low: last_close,
+                            close: last_close,
+                            volume: dec!(0.0),
+                            time: time.to_string(),
+                            resolution: self.subscription.resolution.clone(),
+                            is_closed: false,
+                            range: dec!(0.0),
+                            candle_type: CandleType::CandleStick,
+                        }));
+                    }
+                }
+                _ => return None
+            }
+        }
         if let Some(current_data) = self.current_data.as_mut() {
             if time >= current_data.time_created_utc() {
                 let mut return_data = current_data.clone();
@@ -45,6 +98,12 @@ impl CandleStickConsolidator {
             if base_data.time_created_utc() >= current_bar.time_created_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
+                match &consolidated_bar {
+                    BaseDataEnum::Candle(candle) => {
+                        self.last_close = Some(candle.close.clone());
+                    }
+                    _ => {}
+                }
                 self.history.add(consolidated_bar.clone());
                 let new_bar = self.new_candle(base_data);
                 self.current_data = Some(BaseDataEnum::Candle(new_bar.clone()));
@@ -128,6 +187,13 @@ impl CandleStickConsolidator {
                 consolidated_bar.set_is_closed(true);
                 self.history.add(consolidated_bar.clone());
                 let new_bar = self.new_quote_bar(base_data);
+                match &consolidated_bar {
+                    BaseDataEnum::QuoteBar(quote_bar) => {
+                        self.last_ask_close = Some(quote_bar.ask_close.clone());
+                        self.last_bid_close = Some(quote_bar.bid_close.clone());
+                    }
+                    _ => {}
+                }
                 self.current_data = Some(BaseDataEnum::QuoteBar(new_bar.clone()));
                 return ConsolidatedData::with_closed(BaseDataEnum::QuoteBar(new_bar), consolidated_bar);
             }
@@ -246,6 +312,9 @@ impl CandleStickConsolidator {
             subscription,
             history: RollingWindow::new(history_to_retain),
             tick_size,
+            last_close: None,
+            last_ask_close: None,
+            last_bid_close: None,
         })
     }
 

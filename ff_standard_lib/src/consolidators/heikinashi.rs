@@ -52,7 +52,7 @@ impl HeikinAshiConsolidator {
     fn new_heikin_ashi_candle(&mut self, new_data: &BaseDataEnum) -> Candle {
         match new_data {
             BaseDataEnum::Candle(candle) => {
-                if self.previous_ha_close.to_f64().unwrap() == 0.0 && self.previous_ha_open.to_f64().unwrap() == 0.0 {
+                if self.previous_ha_close == dec!(0.0) && self.previous_ha_open == dec!(0.0) {
                     self.previous_ha_close = candle.close;
                     self.previous_ha_open = candle.open;
                 }
@@ -249,6 +249,27 @@ impl HeikinAshiConsolidator {
     }
 
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
+        //todo add fill forward option for this
+        if self.current_data == None  {
+            let ha_open = round_to_tick_size(
+                (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
+                self.tick_size,
+            );
+            let time = open_time(&self.subscription, time);
+            self.current_data = Some(BaseDataEnum::Candle(Candle {
+                symbol: self.subscription.symbol.clone(),
+                open: ha_open,
+                high: ha_open,
+                low: ha_open,
+                close: ha_open,
+                volume: dec!(0.0),
+                time: time.to_string(),
+                resolution: self.subscription.resolution.clone(),
+                is_closed: false,
+                range: dec!(0.0),
+                candle_type: CandleType::HeikinAshi,
+            }));
+        }
         if let Some(current_data) = self.current_data.as_mut() {
             if time >= current_data.time_created_utc() {
                 let mut return_data = current_data.clone();
