@@ -220,20 +220,16 @@ impl DataSubscription {
         symbol_name: String,
         data_vendor: DataVendor,
         resolution: Resolution,
-        base_data_type: BaseDataType,
         market_type: MarketType,
         candle_type: CandleType,
     ) -> Self {
-        if (candle_type == CandleType::HeikinAshi && base_data_type != BaseDataType::Candles)  || (candle_type ==  CandleType::Renko && base_data_type != BaseDataType::Candles) {
-            panic!("{} is not compatable with {}, please use BaseDataType::Candles", candle_type, base_data_type)
-        }
         let cleaned_symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         let symbol = Symbol::new(cleaned_symbol_name, data_vendor, market_type.clone());
 
         DataSubscription {
             symbol,
             resolution,
-            base_data_type,
+            base_data_type: BaseDataType::Candles,
             market_type,
             candle_type: Some(candle_type),
         }
