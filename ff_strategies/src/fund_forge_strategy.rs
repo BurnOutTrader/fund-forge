@@ -118,8 +118,7 @@ impl FundForgeStrategy {
         gui_enabled: bool
     ) -> FundForgeStrategy {
 
-        let subscription_handler = SubscriptionHandler::new(strategy_mode).await;
-        let subscription_handler = Arc::new(subscription_handler);
+        let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode).await);
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
         init_connections(gui_enabled, buffering_resolution.clone(), strategy_mode.clone(), notify.clone()).await;
