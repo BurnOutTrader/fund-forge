@@ -33,13 +33,13 @@ async fn main() {
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         notify.clone(),
-        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
+        StrategyMode::Backtest, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2024, 6, 10)
+        NaiveDate::from_ymd_opt(2024, 6, 15)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 06, 15)
+        NaiveDate::from_ymd_opt(2024, 06, 25)
             .unwrap()
             .and_hms_opt(0, 0, 0)
             .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
