@@ -288,15 +288,19 @@ async fn request_handler(
     // start a buffer loop to send events every buffer interval
 
     /*
-    1. primary data comes from either backtest engine or server stream
+    1. primary data comes from server stream
     2. primary data is fed to
         a. subscription handler
         b. market handler
     3. consolidated data + primary data is fed to
         a. indicator handler
 
-    4. each buffer iteration before sending the buffer to the engine or strategy, we update consolidator time.
-        to see if we have any closed bars.
+    4. data is added to the buffer
+
+    5. each buffer iteration before sending the buffer to the engine or strategy, we update consolidator time again.
+        to see if we have any closed bars, if we do we run the indicator update again.
+
+    6. All base data is added to a TimeSlice and the timeslice is added to the event slice
 */
     let strategy_subscriptions = STRATGEY_SUBSCRIPTIONS.clone();
     let callbacks = callbacks.clone();
@@ -347,7 +351,7 @@ async fn request_handler(
 
     for (connection, settings) in &settings_map {
         if let Some((connection, stream)) = server_receivers.remove(connection) {
-            let register_message = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));
+            const register_message: StrategyRequest = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));
             send_request(register_message).await;
             let mut receiver = stream;
             let callbacks = callbacks.clone();
