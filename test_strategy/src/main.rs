@@ -46,13 +46,12 @@ async fn main() {
         Australia::Sydney,                      // the strategy time zone
         Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
-            DataSubscription::new_custom(
+            DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
                 Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
-                CandleType::CandleStick,
             ),
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
@@ -82,13 +81,12 @@ pub async fn on_data_received(
 ) {
     let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("heikin_atr_5"),
-              DataSubscription::new_custom(
+              DataSubscription::new(
                   SymbolName::from("EUR-USD"),
                   DataVendor::Test,
                   Resolution::Seconds(1),
                   BaseDataType::QuoteBars,
                   MarketType::Forex,
-                  CandleType::CandleStick,
               ),
             100,
             5,
