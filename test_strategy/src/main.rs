@@ -66,7 +66,7 @@ async fn main() {
         None,
         //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
-        50,
+        100,
         GUI_DISABLED
     ).await;
 
