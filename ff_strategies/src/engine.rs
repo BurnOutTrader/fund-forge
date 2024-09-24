@@ -76,6 +76,8 @@ impl HistoricalEngine {
             // Run the engine logic on a dedicated OS thread
             tokio::runtime::Runtime::new().unwrap().block_on(async {
                 self.warmup().await;
+
+                //be sure not to allow launching historical engine when not in backtest mode
                 if self.mode == StrategyMode::Backtest {
                     self.run_backtest().await;
                     println!("Engine: Backtest complete");
@@ -94,7 +96,7 @@ impl HistoricalEngine {
         // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
         let month_years = generate_file_dates(
             self.start_time - self.warmup_duration,
-            end_time.clone(),
+            self.start_time.clone(),
         );
 
         self.historical_data_feed(month_years, self.start_time.clone())
@@ -111,6 +113,9 @@ impl HistoricalEngine {
 
     /// Runs the strategy backtest
     async fn run_backtest(&mut self) {
+        if self.mode != StrategyMode::Backtest {
+            panic!("Do not run backtest engine with mode set to: {:?}", self.mode)
+        }
         println!("Engine: Start {:?} ", self.mode);
         // we run the historical data feed from the start time until we reach the end date for the strategy
         let month_years = generate_file_dates(
