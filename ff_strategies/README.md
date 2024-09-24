@@ -272,12 +272,12 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         // The data time property is a string which has to do with 0 copy serde.
         // to access data time we use a fn.
         let time_zone = Australia::Sydney;
-        let candle_time_string = data.time.clone();
-        let candle_time_utc = candle.time_utc();
-        let candle_time_local = candle.time_local(strategy.time_zone());
-        let candle_time_sydney = candle.time_local(time_zone);
-        let strategy_time_local = strategy.time_local();
-        let strategy_time_utc = strategy.time_utc();
+        let candle_time_string: String = data.time.clone();
+        let candle_time_utc: DateTime<Utc> = candle.time_utc();
+        let candle_time_local: DateTime<Tz> = candle.time_local(strategy.time_zone());
+        let candle_time_sydney: DateTime<Tz> = candle.time_local(time_zone);
+        let strategy_time_local: DateTime<Tz> = strategy.time_local();
+        let strategy_time_utc: DateTime<Utc> = strategy.time_utc();
 
         notify.notify_one();
     }

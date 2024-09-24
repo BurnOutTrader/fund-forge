@@ -450,6 +450,7 @@ To properly align the historical candles and quotebars with other historical dat
 
 I will be keeping `DateTime<Utc>` as the standard for the application, this will never change, all future timezone confusion can be avoided by parsing data to UTC as soon as it is received from the DataVendor.
 
+When using local times, the time_local(Tz) functions will return a DateTime<Tz>
 ## Decimal Accuracy
 Using a new type pattern for Price and Volume, both are rust decimals. This adds some additional work when working with price or volume, but has the advantage of accuracy for crypto and fx products.
 ```rust 

@@ -120,7 +120,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    println!("Candle {}: {}", candle.symbol.name, candle.time);
+                                    println!("Candle {}: {}, Local Time: {}", candle.symbol.name, candle.time_created_utc(), candle.time_created_local(strategy.time_zone()));
                                     history_2.add(candle.clone());
                                     let last_bar =
                                         match history_2.get(1) {
@@ -156,7 +156,7 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
-                                    println!("QuoteBar {}: {}", quotebar.symbol.name, quotebar.time);
+                                    println!("QuoteBar {}: {}, Local Time {}", quotebar.symbol.name, quotebar.time_created_utc(), quotebar.time_created_local(strategy.time_zone()));
                                     history_1.add(quotebar.clone());
                                     let last_bar =
                                     match history_1.get(1) {
