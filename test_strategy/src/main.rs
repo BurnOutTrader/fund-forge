@@ -60,7 +60,7 @@ async fn main() {
                  MarketType::Forex,
                  CandleType::HeikinAshi,
              ),],
-        true,
+        false,
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
