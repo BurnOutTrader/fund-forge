@@ -799,6 +799,7 @@ async fn example() {
 ## Placing Orders
 In backtesting a new ledger will be instantiated for each AccountID and Brokerage combination to simulate any number of accounts.
 This is in its infancy, market handlers are very raw and untested and the way they are instantiated and interact with the engine will change in future updates.
+The backtesting engine pnl is not accurate at this moment.
 
 ```rust
 async fn example() {
