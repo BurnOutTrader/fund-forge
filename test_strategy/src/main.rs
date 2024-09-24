@@ -61,7 +61,7 @@ async fn main() {
                  CandleType::HeikinAshi,
              ),],
         false,
-        5,
+        100,
         strategy_event_sender, // the sender for the strategy events
         None,
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity

@@ -99,8 +99,7 @@ impl HistoricalEngine {
             self.start_time.clone(), //end time for warm up is strategy official start time
         );
 
-        self.historical_data_feed(month_years, self.start_time.clone())
-            .await;
+        self.historical_data_feed(month_years, self.start_time.clone()).await;
 
         set_warmup_complete().await;
         let warmup_complete_event = vec![StrategyEvent::WarmUpComplete];
