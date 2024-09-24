@@ -281,7 +281,7 @@ use chrono_tz::Australia;
 use chrono_tz::America;
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        // time_local() will return the current time in the strategy's time zone as DateTime<FixedOffset>
+        // time_local() will return the current time in the strategy's time zone as DateTime<Tz>
         println!("{}... time local {}", count, strategy.time_local().await);
         
         // time_utc() will return the current time in UTC as DateTime<Utc>
