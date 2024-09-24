@@ -9,9 +9,17 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-
+/// Convert utc time string to local time, adjusting the actual hour
 pub fn time_local_from_utc_str(time_zone: &Tz, time: &str) -> DateTime<Tz> {
     let utc_time: DateTime<Utc> = DateTime::from_str(&time).unwrap();
+    time_zone.from_utc_datetime(&utc_time.naive_utc())
+}
+
+/// Convert utc time to local time, adjusting the actual hour
+pub fn time_convert_utc_to_local(
+    time_zone: &Tz,
+    utc_time: DateTime<Utc>,
+) -> DateTime<Tz> {
     time_zone.from_utc_datetime(&utc_time.naive_utc())
 }
 

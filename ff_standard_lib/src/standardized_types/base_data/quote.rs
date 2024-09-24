@@ -1,4 +1,3 @@
-use crate::helpers::converters::time_local_from_utc_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
@@ -43,7 +42,8 @@ impl BaseData for Quote {
 
     /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
     fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
-        time_local_from_utc_str(time_zone, &self.time)
+        let utc_time: DateTime<Utc> = DateTime::from_str(&self.time).unwrap();
+        time_zone.from_utc_datetime(&utc_time.naive_utc())
     }
 
     /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.

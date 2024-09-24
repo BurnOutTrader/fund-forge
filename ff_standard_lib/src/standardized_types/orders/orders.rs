@@ -1,10 +1,9 @@
-use crate::helpers::converters::time_local_from_utc_str;
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::OrderSide;
 use crate::standardized_types::subscriptions::{SymbolName};
 use crate::standardized_types::{Price, Volume};
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
@@ -327,7 +326,8 @@ impl Order {
         DateTime::from_str(&self.time_created_utc).unwrap()
     }
     pub fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz> {
-        time_local_from_utc_str(time_zone, &self.time_created_utc)
+        let utc_time: DateTime<Utc> = DateTime::from_str(&self.time_created_utc).unwrap();
+        time_zone.from_utc_datetime(&utc_time.naive_utc())
     }
 
     pub fn time_filled_utc(&self) -> Option<DateTime<Utc>> {
@@ -339,7 +339,10 @@ impl Order {
 
     pub fn time_filled_local(&self, time_zone: &Tz) -> Option<DateTime<Tz>> {
         match &self.time_filled_utc {
-            Some(time) => Some(time_local_from_utc_str(time_zone, time)),
+            Some(time) => {
+                let utc_time: DateTime<Utc> = DateTime::from_str(&time).unwrap();
+                Some(time_zone.from_utc_datetime(&utc_time.naive_utc()))
+            },
             None => None,
         }
     }
