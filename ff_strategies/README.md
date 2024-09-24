@@ -29,39 +29,40 @@ allows us to pass our strategy in an Arc to any other threads or functions and s
 
 ### Initializing and Creating a Strategy Instance
 #### Parameters for FundForgeStrategy::initialize()
-##### `notify: Arc<Notify>:`
+#### `notify: Arc<Notify>:`
 The notification mechanism for the strategy, this is useful to slow the message sender channel until we have processed the last message.
 
-##### `strategy_mode: StrategyMode:`
+#### `strategy_mode: StrategyMode:`
 The mode of the strategy (Backtest, Live, LivePaperTrading).
 
-##### `interaction_mode: StrategyInteractionMode:`
+#### `interaction_mode: StrategyInteractionMode:`
 The interaction mode for the strategy.
 
-##### `start_date: NaiveDateTime:`
+#### `start_date: NaiveDateTime:`
 The start date of the strategy.
 
-##### `end_date: NaiveDateTime:`
+#### `end_date: NaiveDateTime:`
 The end date of the strategy.
 
-##### `time_zone: Tz:`
+#### `time_zone: Tz:`
 The time zone of the strategy, you can use Utc for default.
 
-##### `warmup_duration: Duration:`
+#### `warmup_duration: Duration:`
 The warmup duration for the strategy. used if we need to warmup consolidators, indicators etc.
 We might also need a certain amount of history to be available before starting, this will ensure that it is.
 
-##### `subscriptions: Vec<DataSubscription>:`
+#### `subscriptions: Vec<DataSubscription>:`
 The initial data subscriptions for the strategy.
 strategy_event_sender: mpsc::Sender<EventTimeSlice>: The sender for strategy events.
 If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
 
-##### `fill_forward`: bool
-This is only regarding initial subscriptions.
+#### `fill_forward`: bool
+This is only regarding initial subscriptions, additional subscriptions will have to specify the option.
 If true we will create new bars based on the time when there is no new primary data available, this can result in bars where ohlc price are all == to the last bars close price.
 Bars filling forward without data normally look like this: "_" where there was not price action. They could also open and then receive a price update sometime during the resolution period.
 With fill forward enabled, during market close you will receive a series of bars resembling `_ _ _ _ _` instead of no bars at all.
 You should consider that some indicators like ATR might see these bars and drop the ATR to 0 during these periods.
+If this is false, you will see periods of no data in backtests when the market is closed, as the engine ticks at buffering_millis through the close hours, until new  data is received.
 
 #### `replay_delay_ms: Option<u64>:`
 The delay in milliseconds between time slices for market replay style backtesting. this will be ignored in live trading.
@@ -90,7 +91,7 @@ In live: If we don't need to make strategy decisions on every tick, we can just 
 This also helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
 
 ***Note: Since the backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtests where the println stops outputting over weekends or market close, it will shortly resume.
-This can be overridden using fill_forward***
+This can be overridden using fill_forward, but be aware you will then capture flat bars in your history***
 ```rust
 #[tokio::main]
 async fn main() {
