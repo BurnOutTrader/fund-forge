@@ -130,7 +130,7 @@ async fn main() {
             //if using new() default candle type is CandleStick
             DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex)
             // we can also specify candle types like HeikinAshi, Renko, CandleStick (more to come). 
-            DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, Some(CandleType::HeikinAshi))
+            DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), MarketType::Forex, CandleType::HeikinAshi)
         ],
         // Fill forward, when the market is closed or no primary data is available, consolidators will create bars based on the last close price. See parameters above
         true,
@@ -179,21 +179,19 @@ async fn main() {
         Australia::Sydney,                      // the strategy time zone
         Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
-            DataSubscription::new_custom(
+            DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Minutes(3),
+                Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
-                CandleType::CandleStick,
             ),
             DataSubscription::new_custom(
                 SymbolName::from("AUD-CAD"),
                 DataVendor::Test,
-                Resolution::Minutes(3),
-                BaseDataType::QuoteBars,
+                Resolution::Minutes(5),
                 MarketType::Forex,
-                CandleType::CandleStick,
+                CandleType::HeikinAshi,
             ),],
         true,
         5,
