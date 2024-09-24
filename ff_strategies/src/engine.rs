@@ -96,7 +96,7 @@ impl HistoricalEngine {
         // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
         let month_years = generate_file_dates(
             self.start_time - self.warmup_duration,
-            self.start_time.clone(),
+            self.start_time.clone(), //end time for warm up is strategy official start time
         );
 
         self.historical_data_feed(month_years, self.start_time.clone())
