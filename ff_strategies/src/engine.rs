@@ -76,13 +76,13 @@ impl HistoricalEngine {
             // Run the engine logic on a dedicated OS thread
             tokio::runtime::Runtime::new().unwrap().block_on(async {
                 self.warmup().await;
-
-                self.run_backtest().await;
-
-                println!("Engine: Backtest complete");
-                let end_event = StrategyEvent::ShutdownEvent(String::from("Success"));
-                let events = vec![end_event.clone()];
-                send_strategy_event_slice(events).await;
+                if self.mode == StrategyMode::Backtest {
+                    self.run_backtest().await;
+                    println!("Engine: Backtest complete");
+                    let end_event = StrategyEvent::ShutdownEvent(String::from("Success"));
+                    let events = vec![end_event.clone()];
+                    send_strategy_event_slice(events).await;
+                }
             });
         });
     }
@@ -141,14 +141,11 @@ impl HistoricalEngine {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         let market_handler = MARKET_HANDLER.get().unwrap().clone();
+        let notify = self.notify.clone();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
-
-
             'month_loop: loop {
-                let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
                 let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
                 let mut subscription_changes = true;
                 while subscription_changes {
@@ -163,6 +160,9 @@ impl HistoricalEngine {
                         }
                     }
                 }
+                let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
+                println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
+
                 println!("Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
@@ -235,7 +235,7 @@ impl HistoricalEngine {
                     // send the buffered strategy events to the strategy
                     if !strategy_event_slice.is_empty() {
                         send_strategy_event_slice(strategy_event_slice).await;
-                        self.notify.notified().await;
+                        notify.notified().await;
                     }
                     last_time = time.clone();
                 }

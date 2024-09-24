@@ -1,7 +1,7 @@
 use crate::engine::HistoricalEngine;
 use ff_standard_lib::interaction_handler::InteractionHandler;
 use ahash::AHashMap;
-use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc, Duration as ChronoDuration};
+use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc, Duration as ChronoDuration, TimeZone};
 use chrono_tz::Tz;
 use ff_standard_lib::drawing_objects::drawing_object_handler::DrawingObjectHandler;
 use ff_standard_lib::drawing_objects::drawing_tool_enum::DrawingTool;
@@ -124,18 +124,22 @@ impl FundForgeStrategy {
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
         init_connections(gui_enabled, buffering_resolution.clone(), strategy_mode.clone(), notify.clone()).await;
 
-        let start_time = time_convert_utc_naive_to_fixed_offset(&time_zone, start_date);
-        let end_time = time_convert_utc_naive_to_fixed_offset(&time_zone, end_date);
+        let start_time =   time_zone.from_local_datetime(&start_date).single().unwrap();
+        let utc_start_time = start_time.with_timezone(&Utc);
+        let end_time = time_convert_utc_naive_to_fixed_offset(&time_zone, end_date).with_timezone(&Utc);
+        let utc_end_time = end_time.with_timezone(&Utc);
 
-        subscription_handler.set_subscriptions(subscriptions, retain_history, start_time.to_utc() - warmup_duration, fill_forward).await;
+        let warm_up_start_time = utc_start_time - warmup_duration;
+
+        subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward).await;
         //todo There is a problem with quote bars not being produced consistently since refactoring
 
         let (order_sender, order_receiver) = mpsc::channel(100);
         let market_event_handler = match strategy_mode {
-            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(start_time.to_utc() - warmup_duration, Some(order_receiver)).await,
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(warm_up_start_time.clone(), Some(order_receiver)).await,
             StrategyMode::Live => {
                 live_order_handler(strategy_mode, order_receiver).await;
-                MarketHandler::new(start_time.to_utc(), None).await
+                MarketHandler::new(warm_up_start_time.clone(), None).await
             },
         };
         let market_event_handler = Arc::new(market_event_handler);
@@ -147,8 +151,8 @@ impl FundForgeStrategy {
 
         let strategy = FundForgeStrategy {
             mode: strategy_mode.clone(),
-            start_time: start_time.to_utc(),
-            end_time: end_time.to_utc(),
+            start_time: warm_up_start_time.clone(),
+            end_time: utc_end_time.clone(),
             warmup_duration: warmup_duration.clone(),
             buffer_resolution: buffering_resolution.clone(),
             time_zone,
@@ -172,11 +176,11 @@ impl FundForgeStrategy {
 
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
+                let engine = HistoricalEngine::new(strategy_mode.clone(), utc_start_time.clone(),  utc_end_time.clone(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
-                live_subscription_handler(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration, buffering_resolution).await;
+                live_subscription_handler(strategy_mode.clone(), warm_up_start_time.clone(), utc_end_time.clone(), warmup_duration, buffering_resolution).await;
             },
         }
         strategy
