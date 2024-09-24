@@ -9,6 +9,17 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+
+/// Convert a NaiveDateTime to the exact same Date and time Utc DateTime object
+pub fn naive_date_time_to_utc(naive_date_time: NaiveDateTime) -> DateTime<Utc> {
+    Utc.from_local_datetime(&naive_date_time).unwrap().to_utc()
+}
+
+/// Convert a NaiveDateTime to the exact same Date and time Tz DateTime object
+pub fn naive_date_time_to_tz(naive_date_time: NaiveDateTime, time_zone: Tz) -> DateTime<Tz> {
+    time_zone.from_local_datetime(&naive_date_time).unwrap()
+}
+
 /// Convert utc time string to local time, adjusting the actual hour
 pub fn time_local_from_utc_str(time_zone: &Tz, time: &str) -> DateTime<Tz> {
     let utc_time: DateTime<Utc> = DateTime::from_str(&time).unwrap();
