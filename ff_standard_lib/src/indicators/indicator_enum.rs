@@ -56,6 +56,13 @@ impl Indicators for IndicatorEnum {
         }
     }
 
+    fn history_to_retain(&self) -> usize {
+        match self {
+            IndicatorEnum::Custom(indicator) => indicator.history_to_retain(),
+            IndicatorEnum::AverageTrueRange(indicator) => indicator.history_to_retain(),
+        }
+    }
+
     /// returns a rolling window of the indicator, a value is:
     ///  ```rust
     /// use ahash::AHashMap;

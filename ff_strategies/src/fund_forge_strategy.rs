@@ -11,7 +11,7 @@ use ff_standard_lib::helpers::converters::{
 };
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
-use ff_standard_lib::indicators::indicators_trait::IndicatorName;
+use ff_standard_lib::indicators::indicators_trait::{IndicatorName, Indicators};
 use ff_standard_lib::indicators::values::IndicatorValues;
 use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -392,8 +392,14 @@ impl FundForgeStrategy {
     }
 
     /// see the indicator_enum.rs for more details
+    /// If we subscribe to an indicator and we do not have the appropriate data subscription, we will also subscribe to the data subscription.
     pub async fn indicator_subscribe(&self, indicator: IndicatorEnum) {
         //todo, add is_subscribed() for subscription manager so we can auto subscribe for indicators.
+        let subscriptions = self.subscriptions().await;
+        if !subscriptions.contains(&indicator.subscription()) {
+            self.subscribe(indicator.subscription(), indicator.history_to_retain() as u64).await;
+            println!("Data Subscription {} added for {}", indicator.subscription(), indicator.name());
+        }
         self.indicator_handler
             .add_indicator(indicator, self.time_utc())
             .await

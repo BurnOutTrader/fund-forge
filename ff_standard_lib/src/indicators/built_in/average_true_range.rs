@@ -98,6 +98,10 @@ impl Indicators for AverageTrueRange {
         self.name.clone()
     }
 
+    fn history_to_retain(&self) -> usize {
+        self.history.number.clone()
+    }
+
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
         if !base_data.is_closed() {
             return None;

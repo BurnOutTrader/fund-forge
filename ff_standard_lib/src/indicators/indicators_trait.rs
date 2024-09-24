@@ -35,7 +35,7 @@ pub trait Indicators {
             }
         }
     }
-
+    fn history_to_retain(&self) -> usize;
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues>;
 
     /// Returns the subscription for the indicator.
