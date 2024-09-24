@@ -128,7 +128,6 @@ fn example() {
         SymbolName::from("EUR-USD"),
         DataVendor::Test,
         Resolution::Seconds(5),
-        BaseDataType::QuoteBars,
         MarketType::Forex,
         CandleType::HeikinAshi,
       ),

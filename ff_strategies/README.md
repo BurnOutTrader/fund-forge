@@ -123,8 +123,8 @@ async fn main() {
         
         // the initial data subscriptions for the strategy. we can also subscribe or unsubscribe at run time.
         vec![
-            DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
-            DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex),
+            DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(10), BaseDataType::Candles, MarketType::Forex),
+            DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex),
             // we can subscribe to fundamental data and alternative data sources (no fundamental test data available yet)
             DataSubscription::new_fundamental("GDP-USA".to_string(), DataVendor::Test)
             //if using new() default candle type is CandleStick
@@ -329,7 +329,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
     // subscribing to multiple items while unsubscribing from existing items
     // if our strategy has already warmed up, the subscription will automatically have warm up to the maximum number of bars and have history available.
-    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), MarketType::Forex, CandleType::HeikinAshi);
     let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
 
     // Note that this function completely overrides our current subcsriptions, If we have any current subscriptions they will be unsubscribed if not also passed in.
@@ -388,7 +388,7 @@ If we want to have the engine keep a history automatically, we will need a refer
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     
     // if our strategy has already warmed up, the subscription will automatically have warm up to the maximum number of bars and have history available.
-    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), MarketType::Forex, CandleType::HeikinAshi);
 
     // this will return a RollingWindow<BaseData> for the subscription by cloning the history.
     // at the current point this clones the whole rolling window, and so is not suitable for frequent use of large history.
@@ -542,7 +542,7 @@ fn example(strategy: FundForgeStrategy) {
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     
     // Subscribe to a 60-minute candle for the AUD-CAD pair
-    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), MarketType::Forex, CandleType::HeikinAshi);
     strategy.subscriptions_update(vec![aud_cad_60m.clone()],100).await;
     
     // Create a manually managed indicator directly in the on_data_received function (14 period ATR, which retains 100 historical IndicatorValues)
@@ -718,7 +718,7 @@ This function will avoid look ahead bias, it will never return data.time_utc() >
 async fn example() {
     let strategy = FundForgeStrategy::default();
     
-    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex, CandleType::HeikinAshi);
+    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), MarketType::Forex, CandleType::HeikinAshi);
     let from_time = NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap();
     let time_zone = Australia/Sydney;
     
