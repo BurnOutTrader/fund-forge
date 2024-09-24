@@ -111,7 +111,7 @@ We might also need a certain amount of history to be available before starting, 
 ##### `subscriptions: Vec<DataSubscription>:` 
 The initial data subscriptions for the strategy.
 strategy_event_sender: mpsc::Sender<EventTimeSlice>: The sender for strategy events.
-If you subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
+If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
 
 ##### `fill_forward`: bool
 This is only regarding initial subscriptions.

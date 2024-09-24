@@ -81,14 +81,17 @@ impl AverageTrueRange {
 
         // Calculate the average of true ranges (ATR)
         let atr = if !true_ranges.is_empty() {
+            let sum = true_ranges.iter().sum::<Decimal>();
+            if sum == dec!(0.0) {
+                return dec!(0.0)
+            }
             round_to_tick_size(
-                true_ranges.iter().sum::<Decimal>() / Decimal::from_usize(true_ranges.len()).unwrap() ,
+                 sum / Decimal::from_usize(true_ranges.len()).unwrap(),
                 self.tick_size.clone(),
             )
         } else {
             dec!(0.0)
         };
-
         atr
     }
 }
@@ -106,6 +109,7 @@ impl Indicators for AverageTrueRange {
         if !base_data.is_closed() {
             return None;
         }
+
         self.base_data_history.add(base_data.clone());
         if self.is_ready == false {
             if !self.base_data_history.is_full() {
@@ -116,7 +120,7 @@ impl Indicators for AverageTrueRange {
         }
 
         let atr = self.calculate_true_range();
-        if atr.to_f64().unwrap() == 0.0 {
+        if atr == dec!(0.0) {
             return None;
         }
 
