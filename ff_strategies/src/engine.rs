@@ -145,26 +145,25 @@ impl HistoricalEngine {
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
 
-            let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
-            let mut subscription_changes = true;
-            while subscription_changes {
-                match self.primary_subscription_updates.try_recv() {
-                    Ok(new_primary_subscriptions) => {
-                        if primary_subscriptions != new_primary_subscriptions {
-                            primary_subscriptions = new_primary_subscriptions;
-                        }
-                    }
-                    Err(_) => {
-                        subscription_changes = false
-                    }
-                }
-            }
 
-            println!("Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
             'month_loop: loop {
                 let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
                 println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
-                println!("Engine: Organising historical data feed");
+                let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
+                let mut subscription_changes = true;
+                while subscription_changes {
+                    match self.primary_subscription_updates.try_recv() {
+                        Ok(new_primary_subscriptions) => {
+                            if primary_subscriptions != new_primary_subscriptions {
+                                primary_subscriptions = new_primary_subscriptions;
+                            }
+                        }
+                        Err(_) => {
+                            subscription_changes = false
+                        }
+                    }
+                }
+                println!("Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -188,13 +187,7 @@ impl HistoricalEngine {
 
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
                    match self.primary_subscription_updates.try_recv() {
-                        Ok(new_primary_subscriptions) => {
-                            if primary_subscriptions != new_primary_subscriptions {
-                                end_month = false;
-                                primary_subscriptions = new_primary_subscriptions;
-                                break 'time_instance_loop;
-                            }
-                        }
+                        Ok(_) => break 'time_instance_loop,
                         Err(_) => {}
                     }
 
