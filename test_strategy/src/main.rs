@@ -35,14 +35,12 @@ async fn main() {
         notify.clone(),
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2024, 6, 15)
+        NaiveDate::from_ymd_opt(2024, 6, 19)
             .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 06, 25)
+            .and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2024, 06, 21)
             .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+            .and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
         Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
@@ -257,7 +255,7 @@ pub async fn on_data_received(
 
                 StrategyEvent::ShutdownEvent(event) => {
                     println!("{}",event);
-                    strategy.export_trades(&String::from("/trades exports"));
+                    strategy.export_trades(&String::from("./trades exports"));
                     let ledgers = strategy.print_ledgers().await;
                     for ledger in ledgers {
                         println!("{:?}", ledger);

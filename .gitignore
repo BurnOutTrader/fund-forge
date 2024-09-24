@@ -17,5 +17,6 @@ ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2024-08.rkyv
 # Added by cargo
 #
 # already existing elements were commented out
-
+trades exports
+/trades exports
 #/target
