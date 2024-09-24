@@ -268,9 +268,9 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 chrono_tz will automatically handle live and historical time zone conversions for us.
 All serialized data should be saved in UTC time as a `DateTime<Utc>.to_string()`, and then converted to the strategy's time zone when needed.
 there are converters for both local and utc time in ff_standard_lib/src/helpers/converters.
-You can convert to a NaiveDateTime from a specific Tz like Australia/Sydney and the convert to a DateTime<Tz> object using the helper, from there you can call to_utc() to convert to a DateTime<Utc>, 
-this will make adjustments to the actual date and hour of the original DateTime<Tz>
-You must know the time zone of your data and you must parse it as DateTime<Utc>.to_string() for serialization!
+You can convert to a `NaiveDateTime` from a specific `Tz` like `Australia::Sydney` and the convert to a `DateTime<Tz>` object using the helper, from there you can call `time.to_utc()` to convert to a `DateTime<Utc>`, 
+this will make adjustments to the actual date and hour of the original `DateTime<Tz>`
+You must know the time zone of your data and you must parse it as `DateTime<Utc>.to_string()` for serialization!
 see https://docs.rs/chrono-tz/latest/chrono_tz/
 ### The engine is designed to handle all serialized data as UTC, and then convert it to the strategy's time zone when needed.
 ```rust
