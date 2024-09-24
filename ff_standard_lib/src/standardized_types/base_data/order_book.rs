@@ -1,8 +1,7 @@
-use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_str};
 use crate::standardized_types::base_data::quote::BookLevel;
 use crate::standardized_types::subscriptions::Symbol;
 use crate::standardized_types::{Price, TimeString};
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use chrono_tz::Tz;
 use futures::future::join_all;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -56,7 +55,7 @@ impl OrderBookUpdate {
     }
 
     pub fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
-        time_convert_utc_to_local(&time_zone, self.time_utc())
+        time_zone.from_utc_datetime(&self.time_utc().naive_utc())
     }
 }
 
@@ -124,7 +123,7 @@ impl OrderBook {
     }
 
     pub async fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
-        time_convert_utc_to_local(&time_zone, self.time_utc().await)
+        time_zone.from_utc_datetime(&self.time_utc().await.naive_utc())
     }
 
     pub async fn ask_level(&self, level: BookLevel) -> Option<Price> {
