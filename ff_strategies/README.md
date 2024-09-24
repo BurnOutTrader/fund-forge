@@ -262,11 +262,12 @@ there are converters for both local and utc time in ff_standard_lib/src/helpers/
 You can convert to a NaiveDateTime from a specific Tz like Australia/Sydney and the convert to a DateTime<Tz> object using the helper, from there you can call to_utc() to convert to a DateTime<Utc>, 
 this will make adjustments to the actual date and hour of the original DateTime<Tz>
 You must know the time zone of your data and you must parse it as DateTime<Utc>.to_string() for serialization!
-
+see https://docs.rs/chrono-tz/latest/chrono_tz/
 ### The engine is designed to handle all serialized data as UTC, and then convert it to the strategy's time zone when needed.
 ```rust
+use chrono_tz::Tz;
 use chrono_tz::Australia;
-
+use chrono_tz::America;
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         // time_local() will return the current time in the strategy's time zone as DateTime<FixedOffset>
@@ -288,7 +289,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         let strategy_time_utc: DateTime<Utc> = strategy.time_utc();
 
         /// Get back the strategy time with any passed in timezone
-        let nyc_time_zone = Americal::NewYork;
+        let nyc_time_zone: Tz = America::New_York;
         let strategy_time_nyc: DateTime<Tz> = strategy.time_from_tz(nyc_time_zone);
 
         notify.notify_one();
