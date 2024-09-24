@@ -33,7 +33,7 @@ pub(crate) struct HistoricalEngine {
     start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
     warmup_duration: ChronoDuration,
-    buffer_resolution: ChronoDuration,
+    buffer_resolution: Duration,
     notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
     gui_enabled: bool,
     primary_subscription_updates: Receiver<Vec<DataSubscription>>,
@@ -46,7 +46,7 @@ impl HistoricalEngine {
         start_date: DateTime<Utc>,
         end_date: DateTime<Utc>,
         warmup_duration: ChronoDuration,
-        buffer_resolution: ChronoDuration,
+        buffer_resolution: Duration,
         notify: Arc<Notify>,
         gui_enabled: bool,
     ) -> Self {

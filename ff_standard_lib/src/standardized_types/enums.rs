@@ -250,6 +250,10 @@ impl Resolution {
         duration.num_seconds()
     }
 
+    pub fn as_millis(&self) -> u128 {
+        self.as_duration().num_milliseconds() as u128
+    }
+
     pub fn is_greater_or_equal(&self, other: &Resolution) -> bool {
         self.as_duration() >= other.as_duration()
     }

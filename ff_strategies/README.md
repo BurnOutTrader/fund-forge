@@ -70,13 +70,24 @@ The delay in milliseconds between time slices for market replay style backtestin
 The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
 any additional subscriptions added later will be able to specify their own history requirements.
 
-##### `buffering_resolution: Option<Duration>:`
-If None then it will default to a 1-second buffer.
-The buffering resolution of the strategy. If we are backtesting, any data of a lower granularity will be consolidated into a single time slice.
+##### `buffering_millis: u64:`
+Used to create a `std::Duration::from_millis(buffering_millis)`
+
+The buffer takes effect in both back-testing and live trading.
+
+A lower buffer resolution will result in a slower backtest, don't go to low unless necessary, 30 to 100ms is fine for most cases.
+
+Any input <= 0 will default the buffer to 1ms.
+
+The buffering resolution of the strategy. If we are back testing, any data of a lower granularity will be consolidated into a single time slice.
+
 If our base data source is tick data, but we are trading only on 15min bars, then we can just set this to any Duration < 15 minutes and consolidate the tick data to ignore it in on_data_received().
+
 In live trading our strategy will capture the tick stream in a buffer and pass it to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn.
+
 In live: If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events of a higher than instant resolution.
-This also helps us get consistent results between backtesting and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
+
+This also helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
 
 ***Note: Since the backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtests where the println stops outputting over weekends or market close, it will shortly resume.
 This can be overridden using fill_forward***
@@ -131,10 +142,10 @@ async fn main() {
         // backtest_delay: An Option<Duration> we can pass in a delay for market replay style backtesting, this will be ignored in live trading.
         None,
         
-        //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
+        //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading.
         // In live trading we can set this to None to skip buffering and send the data directly to the strategy or we can use a buffer to keep live consistency with backtesting.
-        Some(Duration::seconds(1))
+        100
     ).await;
 }
 ```
@@ -187,9 +198,8 @@ async fn main() {
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
-        //strategy resolution, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
-        //this allows us full control over how the strategy buffers data and how it processes data, in live trading .
-        Some(Duration::seconds(1)),
+        //the buffer duration in milliseconds
+        100,
         GUI_DISABLED
     ).await;
 

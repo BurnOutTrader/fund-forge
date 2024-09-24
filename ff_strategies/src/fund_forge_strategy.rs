@@ -26,6 +26,7 @@ use ff_standard_lib::standardized_types::{Price, Volume};
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
 use std::sync::Arc;
+use std::time::Duration;
 use dashmap::DashMap;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
@@ -49,7 +50,7 @@ pub struct FundForgeStrategy {
 
     time_zone: Tz,
 
-    buffer_resolution: ChronoDuration,
+    buffer_resolution: Duration,
 
     subscription_handler: Arc<SubscriptionHandler>,
 
@@ -104,10 +105,14 @@ impl FundForgeStrategy {
         retain_history: u64,
         strategy_event_sender: mpsc::Sender<EventTimeSlice>,
         replay_delay_ms: Option<u64>,
-        buffering_resolution: ChronoDuration,
+        buffering_millis: u64,
         gui_enabled: bool
     ) -> FundForgeStrategy {
-
+        let mut buffering_millis = buffering_millis;
+        if buffering_millis <= 0 {
+            buffering_millis = 1;
+        }
+        let buffering_resolution = Duration::from_millis(buffering_millis);
         let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode).await);
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
@@ -473,8 +478,8 @@ impl FundForgeStrategy {
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
     pub async fn subscribe(&self, subscription: DataSubscription, retain_history: u64, fill_forward: bool) {
-        if subscription.resolution.as_duration() < self.buffer_resolution {
-            panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {}", subscription.resolution, self.buffer_resolution)
+        if subscription.resolution.as_millis() < self.buffer_resolution.as_millis() {
+            panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
         }
         self
             .subscription_handler
@@ -503,8 +508,8 @@ impl FundForgeStrategy {
         fill_forward: bool
     ) {
         for subscription in &subscriptions {
-            if subscription.resolution.as_duration() < self.buffer_resolution {
-                panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {}", subscription.resolution, self.buffer_resolution)
+            if subscription.resolution.as_millis() < self.buffer_resolution.as_millis() {
+                panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
             }
         }
         self.subscription_handler.set_subscriptions(subscriptions, retain_history, self.time_utc(), fill_forward).await;
