@@ -26,7 +26,7 @@ test_strategy = { path = "test_strategy" }
 ff_strategy_registry = {path = "ff_strategy_registry"}
 tokio = "*"
 chrono = "*"
-chrono-tz = "*"
+chrono-tz = "0.10.0"
 prost ="*"
 tungstenite = "0.23.0"
 tokio-tungstenite = { version = "0.23.1", features = ["stream", "native-tls"] }
