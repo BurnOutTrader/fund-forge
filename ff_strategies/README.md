@@ -797,10 +797,7 @@ async fn example() {
 ```
 
 ## Placing Orders
-The matching engines are inter-changeable, currently there is a Live engine and a back testing engine. These are defined by a `MarketHandlerEnum` variant.
-We can customise matching engines for backtesting specific strategies.
-A Triangular arbitrage strategy may need a more complex Market handler than a standard price action strategy.
-In backtesting a new ledger will be instantiated for each AccountID.
+In backtesting a new ledger will be instantiated for each AccountID and Brokerage combination to simulate any number of accounts.
 This is in its infancy, market handlers are very raw and untested and the way they are instantiated and interact with the engine will change in future updates.
 
 ```rust
