@@ -463,7 +463,7 @@ pub fn time_example() {
 ```
 Will create the terminal output:
 ```text
-Candle AUD-CAD: 2024-06-24 14:00:00 UTC, Local Time: 2024-06-25 00:00:00 AES
+Candle AUD-CAD: 2024-06-24 14:00:00 UTC, Local Time: 2024-06-25 00:00:00 AEST
 ```
 ## Decimal Accuracy
 Using a new type pattern for Price and Volume, both are rust decimals. This adds some additional work when working with price or volume, but has the advantage of accuracy for crypto and fx products.
