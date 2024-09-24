@@ -20,6 +20,7 @@ pub struct HeikinAshiConsolidator {
     previous_ha_close: Price,
     previous_ha_open: Price,
     tick_size: Price,
+    fill_forward: bool
 }
 
 impl HeikinAshiConsolidator {
@@ -208,6 +209,7 @@ impl HeikinAshiConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         history_to_retain: u64,
+        fill_forward: bool
     ) -> Result<HeikinAshiConsolidator, String> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(format!(
@@ -245,12 +247,13 @@ impl HeikinAshiConsolidator {
             previous_ha_close: dec!(0.0),
             previous_ha_open: dec!(0.0),
             tick_size,
+            fill_forward
         })
     }
 
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
         //todo add fill forward option for this
-        if self.current_data == None  {
+        if self.fill_forward && self.current_data == None  {
             let ha_open = round_to_tick_size(
                 (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
                 self.tick_size,

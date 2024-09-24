@@ -60,6 +60,7 @@ async fn main() {
                  MarketType::Forex,
                  CandleType::HeikinAshi,
              ),],
+        true,
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
@@ -256,7 +257,7 @@ pub async fn on_data_received(
 
                 StrategyEvent::ShutdownEvent(event) => {
                     println!("{}",event);
-                    strategy.export_trades(&String::from("/Test Trade Exports"));
+                    strategy.export_trades(&String::from("/trades exports"));
                     let ledgers = strategy.print_ledgers().await;
                     for ledger in ledgers {
                         println!("{:?}", ledger);

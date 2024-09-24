@@ -24,6 +24,7 @@ impl ConsolidatorEnum {
         history_to_retain: u64,
         to_time: DateTime<Utc>,
         strategy_mode: StrategyMode,
+        fill_forward: bool
     ) -> ConsolidatorEnum {
         //todo handle errors here gracefully
         let is_tick = match subscription.resolution {
@@ -57,12 +58,12 @@ impl ConsolidatorEnum {
                         .unwrap(),
                 ),
                 CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(
-                    HeikinAshiConsolidator::new(subscription.clone(), history_to_retain)
+                    HeikinAshiConsolidator::new(subscription.clone(), history_to_retain, fill_forward)
                         .await
                         .unwrap(),
                 ),
                 CandleType::CandleStick => ConsolidatorEnum::CandleStickConsolidator(
-                    CandleStickConsolidator::new(subscription.clone(), history_to_retain)
+                    CandleStickConsolidator::new(subscription.clone(), history_to_retain, fill_forward)
                         .await
                         .unwrap(),
                 ),

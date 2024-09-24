@@ -23,13 +23,14 @@ pub struct CandleStickConsolidator {
     tick_size: Price,
     last_close: Option<Price>,
     last_ask_close: Option<Price>,
-    last_bid_close: Option<Price>
+    last_bid_close: Option<Price>,
+    fill_forward: bool
 }
 
 impl CandleStickConsolidator {
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
         //todo add fill forward option for this
-        if self.current_data == None {
+        if self.fill_forward && self.current_data == None {
             match self.subscription.base_data_type {
                 BaseDataType::QuoteBars => {
                     if let (Some(last_bid_close), Some(last_ask_close)) = (self.last_bid_close, self.last_ask_close) {
@@ -285,6 +286,7 @@ impl CandleStickConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         history_to_retain: u64,
+        fill_forward: bool
     ) -> Result<Self, FundForgeError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(FundForgeError::ClientSideErrorDebug(format!(
@@ -315,6 +317,7 @@ impl CandleStickConsolidator {
             last_close: None,
             last_ask_close: None,
             last_bid_close: None,
+            fill_forward
         })
     }
 

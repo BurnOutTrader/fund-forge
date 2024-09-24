@@ -86,6 +86,7 @@ impl SubscriptionHandler {
         new_subscription: DataSubscription,
         history_to_retain: u64,
         current_time: DateTime<Utc>,
+        fill_forward: bool
     ) {
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         if !strategy_subscriptions.contains(&new_subscription) {
@@ -109,6 +110,7 @@ impl SubscriptionHandler {
                 history_to_retain,
                 current_time,
                 self.strategy_mode,
+                fill_forward
             )
             .await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
@@ -121,6 +123,7 @@ impl SubscriptionHandler {
                 history_to_retain,
                 current_time,
                 self.strategy_mode,
+                fill_forward
             )
             .await;
 
@@ -132,6 +135,7 @@ impl SubscriptionHandler {
             new_subscription: Vec<DataSubscription>,
             history_to_retain: u64,
             current_time: DateTime<Utc>,
+            fill_forward: bool
     ) {
         let current_subscriptions = self.subscriptions().await;
         for sub in current_subscriptions {
@@ -140,7 +144,7 @@ impl SubscriptionHandler {
             }
         }
         for sub in new_subscription {
-           self.subscribe(sub.clone(),history_to_retain.clone(), current_time.clone()).await;
+           self.subscribe(sub.clone(),history_to_retain.clone(), current_time.clone(), fill_forward).await;
         }
         self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
     }
@@ -363,6 +367,7 @@ impl SymbolSubscriptionHandler {
         history_to_retain: u64,
         warm_up_to: DateTime<Utc>,
         strategy_mode: StrategyMode,
+        fill_forward: bool
     ) -> Self {
         let handler = SymbolSubscriptionHandler {
             primary_subscription: RwLock::new(primary_subscription.clone()),
@@ -377,6 +382,7 @@ impl SymbolSubscriptionHandler {
                 history_to_retain,
                 warm_up_to,
                 strategy_mode,
+                fill_forward
             )
             .await;
         handler
@@ -436,6 +442,7 @@ impl SymbolSubscriptionHandler {
         history_to_retain: u64,
         to_time: DateTime<Utc>,
         strategy_mode: StrategyMode,
+        fill_forward: bool
     ) {
         let available_resolutions: Vec<SubscriptionResolutionType> = new_subscription
             .symbol
@@ -479,6 +486,7 @@ impl SymbolSubscriptionHandler {
                     history_to_retain,
                     to_time,
                     strategy_mode,
+                    fill_forward
                 )
                 .await,
             );
@@ -504,6 +512,7 @@ impl SymbolSubscriptionHandler {
         history_to_retain: u64,
         to_time: DateTime<Utc>,
         strategy_mode: StrategyMode,
+        fill_forward: bool
     ) {
         if self.all_subscriptions().await.contains(&new_subscription) {
             return;
@@ -536,6 +545,7 @@ impl SymbolSubscriptionHandler {
                         history_to_retain,
                         to_time,
                         strategy_mode,
+                        fill_forward
                     )
                     .await;
                     subscription_event_buffer
@@ -570,6 +580,7 @@ impl SymbolSubscriptionHandler {
                         history_to_retain,
                         to_time,
                         strategy_mode,
+                        fill_forward
                     )
                     .await;
                 } else {
@@ -580,6 +591,7 @@ impl SymbolSubscriptionHandler {
                         history_to_retain,
                         to_time,
                         strategy_mode,
+                        fill_forward
                     )
                     .await;
                     self.secondary_subscriptions

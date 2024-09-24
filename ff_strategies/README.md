@@ -113,6 +113,11 @@ The initial data subscriptions for the strategy.
 strategy_event_sender: mpsc::Sender<EventTimeSlice>: The sender for strategy events.
 If you subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
 
+##### `fill_forward`: bool
+If true we will create new bars when there is no data available, this can result in bars where ohlc price are all == to the last bars close price.
+Bars filling forward without data normally look like this: "_" where there was not price action. They could also open and then receive a price update sometime during the resolution period.
+With fill forward enabled, during market close you will receive a series of bars resembling `_ _ _ _ _` instead of no bars at all.
+
 #### `replay_delay_ms: Option<u64>:` 
 The delay in milliseconds between time slices for market replay style backtesting. this will be ignored in live trading.
 

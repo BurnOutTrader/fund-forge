@@ -263,6 +263,7 @@ async fn warmup(
                 (indicator.history().number * 2) as u64,
                 to_time,
                 strategy_mode,
+                false
             )
             .await;
             for data in consolidator.history().history {

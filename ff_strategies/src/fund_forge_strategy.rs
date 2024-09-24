@@ -111,6 +111,7 @@ impl FundForgeStrategy {
         time_zone: Tz,
         warmup_duration: ChronoDuration,
         subscriptions: Vec<DataSubscription>,
+        fill_forward: bool,
         retain_history: u64,
         strategy_event_sender: mpsc::Sender<EventTimeSlice>,
         replay_delay_ms: Option<u64>,
@@ -126,7 +127,7 @@ impl FundForgeStrategy {
         let start_time = time_convert_utc_naive_to_fixed_offset(&time_zone, start_date);
         let end_time = time_convert_utc_naive_to_fixed_offset(&time_zone, end_date);
 
-        subscription_handler.set_subscriptions(subscriptions, retain_history, start_time.to_utc() - warmup_duration).await;
+        subscription_handler.set_subscriptions(subscriptions, retain_history, start_time.to_utc() - warmup_duration, fill_forward).await;
         //todo There is a problem with quote bars not being produced consistently since refactoring
 
         let (order_sender, order_receiver) = mpsc::channel(100);
@@ -397,8 +398,7 @@ impl FundForgeStrategy {
         //todo, add is_subscribed() for subscription manager so we can auto subscribe for indicators.
         let subscriptions = self.subscriptions().await;
         if !subscriptions.contains(&indicator.subscription()) {
-            self.subscribe(indicator.subscription(), indicator.history_to_retain() as u64).await;
-            println!("Data Subscription {} added for {}", indicator.subscription(), indicator.name());
+            panic!("You have no subscription: {}, for the indicator subsciption {}", indicator.subscription(), indicator.name());
         }
         self.indicator_handler
             .add_indicator(indicator, self.time_utc())
@@ -487,13 +487,13 @@ impl FundForgeStrategy {
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
-    pub async fn subscribe(&self, subscription: DataSubscription, retain_history: u64) {
+    pub async fn subscribe(&self, subscription: DataSubscription, retain_history: u64, fill_forward: bool) {
         if subscription.resolution.as_duration() < self.buffer_resolution {
             panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {}", subscription.resolution, self.buffer_resolution)
         }
         self
             .subscription_handler
-            .subscribe(subscription.clone(), retain_history, self.time_utc())
+            .subscribe(subscription.clone(), retain_history, self.time_utc(), fill_forward)
             .await
     }
 
@@ -515,13 +515,14 @@ impl FundForgeStrategy {
         &self,
         subscriptions: Vec<DataSubscription>,
         retain_history: u64,
+        fill_forward: bool
     ) {
         for subscription in &subscriptions {
             if subscription.resolution.as_duration() < self.buffer_resolution {
                 panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {}", subscription.resolution, self.buffer_resolution)
             }
         }
-        self.subscription_handler.set_subscriptions(subscriptions, retain_history, self.time_utc()).await;
+        self.subscription_handler.set_subscriptions(subscriptions, retain_history, self.time_utc(), fill_forward).await;
     }
 
     /// returns the nth last bar at the specified index. 1 = 1 bar ago, 0 = current bar.
