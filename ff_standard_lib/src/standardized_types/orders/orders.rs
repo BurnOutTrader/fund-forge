@@ -148,6 +148,143 @@ impl Order {
         self.time_created_utc = time.to_string();
     }
 
+    pub fn limit_order(
+        symbol_name: SymbolName,
+        brokerage: Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        tag: String,
+        account_id: AccountId,
+        order_id: OrderId,
+        time: DateTime<Utc>,
+        limit_price: Price,
+        tif: TimeInForce
+    ) -> Self {
+        Self {
+            symbol_name,
+            brokerage,
+            quantity_ordered: quantity,
+            quantity_filled: dec!(0.0),
+            average_fill_price: None,
+            limit_price: Some(limit_price),
+            trigger_price: None,
+            side,
+            order_type: OrderType::Limit,
+            time_in_force: tif,
+            tag,
+            id: order_id,
+            time_created_utc: time.to_string(),
+            time_filled_utc: None,
+            state: OrderState::Created,
+            fees: dec!(0.0),
+            value: dec!(0.0),
+            account_id,
+        }
+    }
+
+    pub fn market_if_touched (
+        symbol_name: SymbolName,
+        brokerage: Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        tag: String,
+        account_id: AccountId,
+        order_id: OrderId,
+        time: DateTime<Utc>,
+        trigger_price: Price,
+        tif: TimeInForce
+    ) -> Self {
+        Self {
+            symbol_name,
+            brokerage,
+            quantity_ordered: quantity,
+            quantity_filled: dec!(0.0),
+            average_fill_price: None,
+            limit_price: None,
+            trigger_price: Some(trigger_price),
+            side,
+            order_type: OrderType::MarketIfTouched,
+            time_in_force: tif,
+            tag,
+            id: order_id,
+            time_created_utc: time.to_string(),
+            time_filled_utc: None,
+            state: OrderState::Created,
+            fees: dec!(0.0),
+            value: dec!(0.0),
+            account_id,
+        }
+    }
+
+    pub fn stop (
+        symbol_name: SymbolName,
+        brokerage: Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        tag: String,
+        account_id: AccountId,
+        order_id: OrderId,
+        time: DateTime<Utc>,
+        trigger_price: Price,
+        tif: TimeInForce
+    ) -> Self {
+        Self {
+            symbol_name,
+            brokerage,
+            quantity_ordered: quantity,
+            quantity_filled: dec!(0.0),
+            average_fill_price: None,
+            limit_price: None,
+            trigger_price: Some(trigger_price),
+            side,
+            order_type: OrderType::StopMarket,
+            time_in_force: tif,
+            tag,
+            id: order_id,
+            time_created_utc: time.to_string(),
+            time_filled_utc: None,
+            state: OrderState::Created,
+            fees: dec!(0.0),
+            value: dec!(0.0),
+            account_id,
+        }
+    }
+
+    pub fn stop_limit (
+        symbol_name: SymbolName,
+        brokerage: Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        tag: String,
+        account_id: AccountId,
+        order_id: OrderId,
+        time: DateTime<Utc>,
+        limit_price: Price,
+        trigger_price: Price,
+        tif: TimeInForce
+    ) -> Self {
+        Self {
+            symbol_name,
+            brokerage,
+            quantity_ordered: quantity,
+            quantity_filled: dec!(0.0),
+            average_fill_price: None,
+            limit_price: Some(trigger_price),
+            trigger_price: Some(trigger_price),
+            side,
+            order_type: OrderType::StopLimit,
+            time_in_force: tif,
+            tag,
+            id: order_id,
+            time_created_utc: time.to_string(),
+            time_filled_utc: None,
+            state: OrderState::Created,
+            fees: dec!(0.0),
+            value: dec!(0.0),
+            account_id,
+        }
+    }
+
     pub fn market_order(
         symbol_name: SymbolName,
         brokerage: Brokerage,

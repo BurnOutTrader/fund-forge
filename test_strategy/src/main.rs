@@ -33,7 +33,7 @@ async fn main() {
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         notify.clone(),
-        StrategyMode::Backtest, // Backtest, Live, LivePaper
+        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 6, 19)
             .unwrap()
@@ -63,7 +63,7 @@ async fn main() {
         strategy_event_sender, // the sender for the strategy events
         None,
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
-        //this allows us full control over how the strategy buffers data and how it processes data, in live trading.
+        //this allows us full control over how the strategy buffers data and how it processes data, in live trading and backtesting.
         100,
         GUI_DISABLED
     ).await;

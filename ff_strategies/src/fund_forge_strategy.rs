@@ -14,11 +14,12 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::history::range_data;
 use ff_standard_lib::standardized_types::base_data::order_book::OrderBook;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
-use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderUpdateType, ProtectiveOrder};
+use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateType, ProtectiveOrder, TimeInForce};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use ff_standard_lib::standardized_types::strategy_events::{
     EventTimeSlice, StrategyInteractionMode,
 };
+use rust_decimal_macros::dec;
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
@@ -346,6 +347,75 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
+        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        order_id
+    }
+
+    pub async fn limit_order(
+        &self,
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        limit_price: Price,
+        tif: TimeInForce,
+        tag: String,
+    ) -> OrderId {
+        let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Limit", side)).await;
+        let order = Order::limit_order(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(), limit_price, tif);
+        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        order_id
+    }
+
+    pub async fn market_if_touched (
+        &self,
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        trigger_price: Price,
+        tif: TimeInForce,
+        tag: String,
+    ) -> OrderId {
+        let order_id = self.order_id(&symbol_name, account_id, brokerage, format!("{} MIT", side)).await;
+        let order = Order::market_if_touched(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
+        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        order_id
+    }
+
+    pub async fn stop (
+        &self,
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        trigger_price: Price,
+        tif: TimeInForce,
+        tag: String,
+    ) -> OrderId {
+        let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Stop", side)).await;
+        let order = Order::stop(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
+        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        order_id
+    }
+
+    pub async fn stop_limit (
+        &self,
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        tag: String,
+        limit_price: Price,
+        trigger_price: Price,
+        tif: TimeInForce
+    ) -> OrderId {
+        let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Stop Limit", side)).await;
+        let order = Order::stop_limit(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),limit_price, trigger_price, tif);
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
         order_id
     }
