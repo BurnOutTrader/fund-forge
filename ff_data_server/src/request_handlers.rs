@@ -333,5 +333,6 @@ async fn order_response(request: OrderRequest) {
         OrderRequest::Create { .. } => {}
         OrderRequest::Cancel { .. } => {}
         OrderRequest::Update { .. } => {}
+        OrderRequest::CancelAll { .. } => {}
     }
 }

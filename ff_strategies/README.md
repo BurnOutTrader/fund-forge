@@ -820,7 +820,7 @@ async fn example() {
     */
 
     // Enter a long position and close any existing short position on the same account / symbol
-    let order_id = strategy.enter_long(
+    let order_id: OrderId = strategy.enter_long(
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
@@ -830,7 +830,7 @@ async fn example() {
     ).await;
 
     // Enter a short position and close any existing long position on the same account / symbol
-    let order_id = strategy.enter_short(
+    let order_id: OrderId = strategy.enter_short(
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
@@ -854,7 +854,7 @@ async fn example() {
     }
 
     // Exit a long position and get back the order_id
-    let order_id = strategy.exit_long(
+    let order_id: OrderId = strategy.exit_long(
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
@@ -863,7 +863,7 @@ async fn example() {
     ).await;
 
     // Exit a short position and get back the order_id
-    let order_id = strategy.exit_short(
+    let order_id: OrderId = strategy.exit_short(
         account_id: &AccountId,
        symbol_name: &SymbolName,
        brokerage: &Brokerage,
@@ -872,7 +872,7 @@ async fn example() {
     ).await;
 
     // Place a market buy order and get back the order_id
-    let order_id = strategy.buy_market(
+    let order_id: OrderId = strategy.buy_market(
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
@@ -890,7 +890,7 @@ async fn example() {
     ).await;
 
     // Place a limit order and get back the order_id
-    let order_id = strategy.limit_order(
+    let order_id: OrderId = strategy.limit_order(
         account_id: &AccountId, 
         symbol_name: &SymbolName, 
         brokerage: &Brokerage, 
@@ -902,7 +902,7 @@ async fn example() {
     ).await;
 
     // Enter a market if touched order
-    let order_id = strategy.market_if_touched (
+    let order_id: OrderId = strategy.market_if_touched (
         account_id: &AccountId, 
         symbol_name: &SymbolName, 
         brokerage: &Brokerage, 
@@ -914,7 +914,7 @@ async fn example() {
     ).await;
 
     // Enter a stop order (this is not a protective order)
-    let order_id = strategy.stop_order (
+    let order_id: OrderId = strategy.stop_order (
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
@@ -926,7 +926,7 @@ async fn example() {
     ).await;
 
     // Enter a stop limit order
-    strategy.stop_limit (
+    let order_id: OrderId = strategy.stop_limit (
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,

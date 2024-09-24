@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use crate::standardized_types::accounts::ledgers::{AccountId, Ledger};
 use crate::standardized_types::base_data::order_book::{OrderBook, OrderBookUpdate};
 use crate::standardized_types::enums::{OrderSide};
-use crate::standardized_types::orders::orders::{Order, OrderUpdateType, OrderRequest, OrderUpdateEvent};
+use crate::standardized_types::orders::orders::{Order, OrderUpdateType, OrderRequest, OrderUpdateEvent, TimeInForce};
 use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::{Price};
@@ -86,6 +86,39 @@ impl MarketHandler {
     pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) {
         let last_price = self.last_price.clone();
         let order_books = self.order_books.clone();
+
+        //todo, need to check the TimeInForce against order creation time and handle cancel orders that need canceling at specific time
+        // todo better design market handler, way to much locking involved, needs a special message type
+      /*  let mut remove: Vec<&Order> = vec![];
+        let cache = self.order_cache.clone();
+        let cache_ref = cache.read().await;
+        for order in &*cache_ref {
+            let order_time: DateTime<Utc> = DateTime::from_str(&order.time_created_utc).unwrap();
+            match order.time_in_force {
+                TimeInForce::GTC => {}
+                TimeInForce::IOC | TimeInForce::FOK   => {
+                    if time > order_time {
+                        remove.push(order);
+                    }
+                }
+                TimeInForce::Day => {
+                    if order_time.day() != time.day() {
+                        remove.push(order);
+                    }
+                }
+            }
+        }
+
+        if !remove.is_empty() {
+            let buffer = self.event_buffer.clone();
+            let mut buffer = buffer.lock().await;
+            let mut cache_ref = cache.lock().await;
+            for order in remove {
+                cache_ref.retain(|x| x.id != order.id);
+                let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Cancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order_id: order.id.clone() });
+                buffer.push(cancel_event);
+            }
+        }*/
 
         // Return early if the time_slice is empty
         if time_slice.is_empty() {
