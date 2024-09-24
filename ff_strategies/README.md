@@ -813,6 +813,13 @@ async fn example() {
     let brokerage: Brokerage = Brokerage.Test;
     let quantity: Volume = dec!(100.0); //Decimal to allow crypto
     let tag = String::from("Example Trade");
+    
+    /* The first 2 order types Enter Long and Enter short have the option of attaching brackets.
+        If you are already long and you place another enter long position, it will add to the existing position.
+        If you are already long and the new enter long position has brackets, those brackets will replace the existing brackets.
+        
+        More sophisticated brackets will be added in future versions.
+    */
 
     // Enter a long position and close any existing short position on the same account / symbol
     let order_id = strategy.enter_long(
@@ -820,6 +827,7 @@ async fn example() {
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
         quantity: Volume,
+        brackets: Option<Vec<ProtectiveOrder>>,
         tag: String
     ).await;
 
@@ -829,8 +837,26 @@ async fn example() {
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
         quantity: Volume,
+        brackets: Option<Vec<ProtectiveOrder>>,
         tag: String
     ).await;
+    
+    // Protective orders for Enter Long and Enter Short
+    pub enum ProtectiveOrder {
+        TakeProfit {
+            id: OrderId,
+            price: Price
+        },
+        StopLoss {
+            id: OrderId,
+            price: Price
+        },
+        TrailingStopLoss {
+            id: OrderId,
+            price: Price,
+            trail_value: Price
+        },
+    }
 
     // Exit a long position and get back the order_id
     let order_id = strategy.exit_long(
@@ -880,6 +906,7 @@ async fn example() {
         tag: String
     ).await;
 
+    // Enter a market if touched order
     let order_id = strategy.market_if_touched (
         account_id: &AccountId, 
         symbol_name: &SymbolName, 
@@ -891,6 +918,7 @@ async fn example() {
         tag: String
     ).await;
 
+    // Enter a stop order (this is not a protective order)
     let order_id = strategy.stop_order (
         account_id: &AccountId,
         symbol_name: &SymbolName,
@@ -902,6 +930,7 @@ async fn example() {
         tag: String,
     ).await;
 
+    // Enter a stop limit order
     strategy.stop_limit (
         account_id: &AccountId,
         symbol_name: &SymbolName,
@@ -926,7 +955,7 @@ async fn example() {
         symbol_name: SymbolName
     ).await;
 
-    // Update and order
+    // Update an order using its order_id
     strategy.update_order(
         order_id: OrderId, 
         order_update_type: OrderUpdateType

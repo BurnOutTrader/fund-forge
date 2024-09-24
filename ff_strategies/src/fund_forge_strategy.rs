@@ -223,8 +223,8 @@ impl FundForgeStrategy {
         account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
+        brackets: Option<Vec<ProtectiveOrder>>,
         tag: String,
-        brackets: Option<Vec<ProtectiveOrder>>
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Enter Long")).await;
         let order = Order::enter_long(
@@ -248,8 +248,8 @@ impl FundForgeStrategy {
         account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
+        brackets: Option<Vec<ProtectiveOrder>>,
         tag: String,
-        brackets: Option<Vec<ProtectiveOrder>>
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Enter Short")).await;
         let order = Order::enter_short(
