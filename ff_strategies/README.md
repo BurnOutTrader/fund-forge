@@ -25,9 +25,61 @@ It is possible to wrap the strategy in Arc if you need to pass it to multiple th
 The strategy object is an owned object, however it does not need to be owned or mutable to access strategy methods, all methods can be called with only a reference to the strategy object, this
 allows us to pass our strategy in an Arc to any other threads or functions and still utilise its full functionality, the strategy is protected from misuse by using interior mutability.
 
-### Use the test strategy for actual testing, these examples will be partially outdated!
+***Use the test strategy for actual testing, these examples will be partially outdated! But they are a good reference for helpful strategy functions***
 
-Note: Since the backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtests where the println stops outputting over weekends or market close, it will shortly resume.
+### Initializing and Creating a Strategy Instance
+#### Parameters for FundForgeStrategy::initialize()
+##### `notify: Arc<Notify>:`
+The notification mechanism for the strategy, this is useful to slow the message sender channel until we have processed the last message.
+
+##### `strategy_mode: StrategyMode:`
+The mode of the strategy (Backtest, Live, LivePaperTrading).
+
+##### `interaction_mode: StrategyInteractionMode:`
+The interaction mode for the strategy.
+
+##### `start_date: NaiveDateTime:`
+The start date of the strategy.
+
+##### `end_date: NaiveDateTime:`
+The end date of the strategy.
+
+##### `time_zone: Tz:`
+The time zone of the strategy, you can use Utc for default.
+
+##### `warmup_duration: Duration:`
+The warmup duration for the strategy. used if we need to warmup consolidators, indicators etc.
+We might also need a certain amount of history to be available before starting, this will ensure that it is.
+
+##### `subscriptions: Vec<DataSubscription>:`
+The initial data subscriptions for the strategy.
+strategy_event_sender: mpsc::Sender<EventTimeSlice>: The sender for strategy events.
+If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
+
+##### `fill_forward`: bool
+This is only regarding initial subscriptions.
+If true we will create new bars based on the time when there is no new primary data available, this can result in bars where ohlc price are all == to the last bars close price.
+Bars filling forward without data normally look like this: "_" where there was not price action. They could also open and then receive a price update sometime during the resolution period.
+With fill forward enabled, during market close you will receive a series of bars resembling `_ _ _ _ _` instead of no bars at all.
+You should consider that some indicators like ATR might see these bars and drop the ATR to 0 during these periods.
+
+#### `replay_delay_ms: Option<u64>:`
+The delay in milliseconds between time slices for market replay style backtesting. this will be ignored in live trading.
+
+#### `retain_history: u64:`
+The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
+any additional subscriptions added later will be able to specify their own history requirements.
+
+##### `buffering_resolution: Option<Duration>:`
+If None then it will default to a 1-second buffer.
+The buffering resolution of the strategy. If we are backtesting, any data of a lower granularity will be consolidated into a single time slice.
+If our base data source is tick data, but we are trading only on 15min bars, then we can just set this to any Duration < 15 minutes and consolidate the tick data to ignore it in on_data_received().
+In live trading our strategy will capture the tick stream in a buffer and pass it to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn.
+In live: If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events of a higher than instant resolution.
+This also helps us get consistent results between backtesting and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
+
+***Note: Since the backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtests where the println stops outputting over weekends or market close, it will shortly resume.
+This can be overridden using fill_forward***
 ```rust
 #[tokio::main]
 async fn main() {
@@ -68,6 +120,7 @@ async fn main() {
             // we can also specify candle types like HeikinAshi, Renko, CandleStick (more to come). 
             DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, Some(CandleType::HeikinAshi))
         ],
+        // Fill forward, when the market is closed or no primary data is available, consolidators will create bars based on the last close price. See parameters above
         true,
         //bars to retain in memory for the initial subscriptions
         100,
@@ -85,56 +138,6 @@ async fn main() {
     ).await;
 }
 ```
-#### Parameters for FundForgeStrategy::initialize()
-##### `notify: Arc<Notify>:` 
-The notification mechanism for the strategy, this is useful to slow the message sender channel until we have processed the last message.
-
-##### `strategy_mode: StrategyMode:` 
-The mode of the strategy (Backtest, Live, LivePaperTrading).
-
-##### `interaction_mode: StrategyInteractionMode:` 
-The interaction mode for the strategy.
-
-##### `start_date: NaiveDateTime:` 
-The start date of the strategy.
-
-##### `end_date: NaiveDateTime:` 
-The end date of the strategy.
-
-##### `time_zone: Tz:` 
-The time zone of the strategy, you can use Utc for default.
-
-##### `warmup_duration: Duration:` 
-The warmup duration for the strategy. used if we need to warmup consolidators, indicators etc.
-We might also need a certain amount of history to be available before starting, this will ensure that it is.
-
-##### `subscriptions: Vec<DataSubscription>:` 
-The initial data subscriptions for the strategy.
-strategy_event_sender: mpsc::Sender<EventTimeSlice>: The sender for strategy events.
-If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
-
-##### `fill_forward`: bool
-This is only regarding initial subscriptions.
-If true we will create new bars based on the time when there is no new primary data available, this can result in bars where ohlc price are all == to the last bars close price.
-Bars filling forward without data normally look like this: "_" where there was not price action. They could also open and then receive a price update sometime during the resolution period.
-With fill forward enabled, during market close you will receive a series of bars resembling `_ _ _ _ _` instead of no bars at all.
-You should consider that some indicators like ATR might see these bars and drop the ATR to 0 during these periods.
-
-#### `replay_delay_ms: Option<u64>:` 
-The delay in milliseconds between time slices for market replay style backtesting. this will be ignored in live trading.
-
-#### `retain_history: u64:` 
-The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
-any additional subscriptions added later will be able to specify their own history requirements.
-
-##### `buffering_resolution: Option<Duration>:`
-If None then it will default to a 1-second buffer.
-The buffering resolution of the strategy. If we are backtesting, any data of a lower granularity will be consolidated into a single time slice.
-If our base data source is tick data, but we are trading only on 15min bars, then we can just set this to any Duration < 15 minutes and consolidate the tick data to ignore it in on_data_received().
-In live trading our strategy will capture the tick stream in a buffer and pass it to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn.
-In live: If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events of a higher than instant resolution.
-This also helps us get consistent results between backtesting and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
-
 
 ### Running the strategy and receiving events
 Simply Initialize the strategy using the parameters above and pass it to our `fn on_data_received()` function.
@@ -252,11 +255,15 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
 
 ## Time
+### When downloading and parsing data from a DataVendor for the engine
 chrono_tz will automatically handle live and historical time zone conversions for us.
 All serialized data should be saved in UTC time as a `DateTime<Utc>.to_string()`, and then converted to the strategy's time zone when needed.
-there are converters for both local and utc time in ff_standard_lib/src/helpers.
-If you know the time zone of your data, you must parse it as UTC for serialization!
-The engine is designed to handle all serialized data as UTC, and then convert it to the strategy's time zone when needed.
+there are converters for both local and utc time in ff_standard_lib/src/helpers/converters.
+You can convert to a NaiveDateTime from a specific Tz like Australia/Sydney and the convert to a DateTime<Tz> object using the helper, from there you can call to_utc() to convert to a DateTime<Utc>, 
+this will make adjustments to the actual date and hour of the original DateTime<Tz>
+You must know the time zone of your data and you must parse it as DateTime<Utc>.to_string() for serialization!
+
+### The engine is designed to handle all serialized data as UTC, and then convert it to the strategy's time zone when needed.
 ```rust
 use chrono_tz::Australia;
 
