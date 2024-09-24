@@ -829,7 +829,7 @@ async fn example() {
         tag: String
     ).await;
 
-    // Enter a short position and close any existing short position on the same account / symbol
+    // Enter a short position and close any existing long position on the same account / symbol
     let order_id = strategy.enter_short(
         account_id: &AccountId,
         symbol_name: &SymbolName,
