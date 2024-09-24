@@ -135,7 +135,7 @@ pub async fn on_data_received(
                                     if candle.close > last_bar.high
                                         && !strategy.is_long(&brokerage, &account_name, &candle.symbol.name).await
                                     {
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long"), None).await;
+                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(1), None, String::from("Enter Long")).await;
                                         bars_since_entry_2 = 0;
                                     }
                                     else if bars_since_entry_2 > 10
@@ -173,7 +173,7 @@ pub async fn on_data_received(
                                     if quotebar.bid_close > last_bar.bid_high
                                         && !strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await
                                     {
-                                        let _entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long"), None).await;
+                                        let _entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), None, String::from("Enter Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
                                     else if bars_since_entry_1 > 10
