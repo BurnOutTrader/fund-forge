@@ -269,7 +269,8 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         println!("{}... time utc {}", count, strategy.time_utc().await);
         
         let data = Candle::default();
-        // The data time property is a string which has to do with 0 copy serde.
+        let time_string: String = data.time; // The data time property is a string which has to do with rkyv ser/de.
+        
         // to access data time we use a fn.
         let time_zone = Australia::Sydney;
         let candle_time_string: String = data.time.clone();
@@ -278,6 +279,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         let candle_time_sydney: DateTime<Tz> = candle.time_local(time_zone);
         let strategy_time_local: DateTime<Tz> = strategy.time_local();
         let strategy_time_utc: DateTime<Utc> = strategy.time_utc();
+
+        /// Get back the strategy time with any passed in timezone
+        let nyc_time_zone = Americal::NewYork;
+        let strategy_time_nyc: DateTime<Tz> = strategy.time_from_tz(nyc_time_zone);
 
         notify.notify_one();
     }

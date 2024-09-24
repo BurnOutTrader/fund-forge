@@ -27,6 +27,7 @@ use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use dashmap::DashMap;
+use futures::executor::block_on;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
@@ -156,7 +157,7 @@ impl FundForgeStrategy {
             interaction_handler,
             drawing_objects_handler
         ).await;
-        
+
         match strategy_mode {
             StrategyMode::Backtest => {
                 let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
@@ -529,8 +530,13 @@ impl FundForgeStrategy {
 
     /// Current Tz time, depends on the `StrategyMode`. \
     /// Backtest will return the last data point time, live will return the current time.
-    pub async fn time_local(&self) -> DateTime<Tz> {
+    pub fn time_local(&self) -> DateTime<Tz> {
         self.time_zone.from_utc_datetime(&self.time_utc().naive_utc())
+    }
+
+    /// Get back the strategy time as the passed in timezone
+    pub fn time_from_tz(&self, time_zone: Tz) -> DateTime<Tz> {
+        time_zone.from_utc_datetime(&self.time_utc().naive_utc())
     }
 
     /// Current Utc time, depends on the `StrategyMode`. \
