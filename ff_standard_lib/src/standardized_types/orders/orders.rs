@@ -69,15 +69,12 @@ pub enum TimeInForce {
 /// Protective Orders always exit the entire position, for custom exits we can just submit regular orders.
 pub enum ProtectiveOrder {
     TakeProfit {
-        id: OrderId,
         price: Price
     },
     StopLoss {
-        id: OrderId,
         price: Price
     },
     TrailingStopLoss {
-        id: OrderId,
         price: Price,
         trail_value: Price
     },

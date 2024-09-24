@@ -842,15 +842,12 @@ async fn example() {
     // Protective orders for Enter Long and Enter Short
     pub enum ProtectiveOrder {
         TakeProfit {
-            id: OrderId,
             price: Price
         },
         StopLoss {
-            id: OrderId,
             price: Price
         },
         TrailingStopLoss {
-            id: OrderId,
             price: Price,
             trail_value: Price
         },
