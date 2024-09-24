@@ -117,21 +117,20 @@ impl FundForgeStrategy {
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
 
-        let warm_up_start_time = start_time.to_utc() - warmup_duration;
+        let warm_up_start_time = start_time - warmup_duration;
 
-        subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time, fill_forward).await;
+        subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward).await;
         //todo There is a problem with quote bars not being produced consistently since refactoring
 
         let (order_sender, order_receiver) = mpsc::channel(100);
         let market_event_handler = match strategy_mode {
-            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(warm_up_start_time.to_utc() - warmup_duration, Some(order_receiver)).await,
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(warm_up_start_time.clone(), Some(order_receiver)).await,
             StrategyMode::Live => {
                 live_order_handler(strategy_mode, order_receiver).await;
-                MarketHandler::new(warm_up_start_time, None).await
+                MarketHandler::new(warm_up_start_time.clone(), None).await
             },
         };
         let market_event_handler = Arc::new(market_event_handler);
-
 
         let timed_event_handler = Arc::new(TimedEventHandler::new());
         let interaction_handler = Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode));
