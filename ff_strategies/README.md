@@ -68,7 +68,7 @@ async fn main() {
             // we can also specify candle types like HeikinAshi, Renko, CandleStick (more to come). 
             DataSubscription::new_custom("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex, Some(CandleType::HeikinAshi))
         ],
-        
+        true,
         //bars to retain in memory for the initial subscriptions
         100,
         
@@ -115,7 +115,7 @@ If your subscriptions are empty, you will need to add some at the start of your 
 
 ##### `fill_forward`: bool
 This is only regarding initial subscriptions.
-If true we will create new bars when there is no data available, this can result in bars where ohlc price are all == to the last bars close price.
+If true we will create new bars based on the time when there is no new primary data available, this can result in bars where ohlc price are all == to the last bars close price.
 Bars filling forward without data normally look like this: "_" where there was not price action. They could also open and then receive a price update sometime during the resolution period.
 With fill forward enabled, during market close you will receive a series of bars resembling `_ _ _ _ _` instead of no bars at all.
 You should consider that some indicators like ATR might see these bars and drop the ATR to 0 during these periods.
@@ -180,6 +180,7 @@ async fn main() {
                 MarketType::Forex,
                 CandleType::CandleStick,
             ),],
+        true,
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
