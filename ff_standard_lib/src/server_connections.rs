@@ -148,8 +148,10 @@ pub async fn live_subscription_handler(
     let settings_map_ref = settings_map.clone();
     println!("Handler: Start Live handler");
     tokio::task::spawn(async move {
-        //let mut engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
-        //engine.warmup().await;
+        {
+            //let mut engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
+            //engine.warmup().await;
+        }
         let mut current_subscriptions = SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await.clone();
         {
             println!("Handler: {:?}", current_subscriptions);
