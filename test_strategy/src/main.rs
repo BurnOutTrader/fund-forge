@@ -281,7 +281,7 @@ pub async fn on_data_received(
                         IndicatorEvents::IndicatorTimeSlice(slice_event) => {
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice_event {
-                                for (_name, plot) in indicator_values.values(){
+                                for (_name, plot) in indicator_values.plots(){
                                     println!("{}: {}: {:?}", indicator_values.name, plot.name, plot.value);
                                 }
                             }

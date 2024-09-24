@@ -37,13 +37,13 @@ pub struct IndicatorValues {
     pub name: IndicatorName,
     pub time: String,
     pub subscription: DataSubscription,
-    pub values: BTreeMap<PlotName, IndicatorPlot>,
+    pub plots: BTreeMap<PlotName, IndicatorPlot>,
 }
 
 impl Display for IndicatorValues {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut values_string = String::new();
-        for (plot_name, plot) in &self.values {
+        for (plot_name, plot) in &self.plots {
             values_string.push_str(&format!("{}: {}\n", plot_name, plot.value));
         }
         write!(f, "{}, {}, {}", self.name, self.subscription, values_string)
@@ -60,7 +60,7 @@ impl IndicatorValues {
         Self {
             name,
             subscription,
-            values,
+            plots: values,
             time: time.to_string(),
         }
     }
@@ -81,16 +81,16 @@ impl IndicatorValues {
 
     /// get the value of a plot by name
     pub fn get_plot(&self, plot_name: &PlotName) -> Option<IndicatorPlot> {
-        self.values.get(plot_name).cloned()
+        self.plots.get(plot_name).cloned()
     }
 
     /// get all the values `values: &AHashMap<PlotName, f64>`
-    pub fn values(&self) -> BTreeMap<PlotName, IndicatorPlot> {
-        self.values.clone()
+    pub fn plots(&self) -> BTreeMap<PlotName, IndicatorPlot> {
+        self.plots.clone()
     }
 
     /// insert a value into the values
     pub(crate) fn insert_plot(&mut self, plot_name: PlotName, value: IndicatorPlot) {
-        self.values.insert(plot_name, value);
+        self.plots.insert(plot_name, value);
     }
 }

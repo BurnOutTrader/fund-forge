@@ -471,46 +471,43 @@ If building a custom indicator be sure to add it to the IndicatorEnum and comple
 
 ### Indicator Values
 ```rust
-pub struct IndicatorValue {
-    pub name: PlotName,
-    pub value: f64,
-}
-
-///indicators return `IndicatorValues`, the values have the normal fund forge functions for time_utc() and time_local(Tz)
-pub struct IndicatorValues {
-    name: IndicatorName,
-    time: String,
-    subscription: DataSubscription,
-    values: Vec<IndicatorValue>
-}
-impl IndicatorValues {
-    /// get the name of the indicator (this is the name you pass in when creating the indicator)
-    pub fn name(&self) -> &IndicatorName {
-        &self.name
+fn example() {
+    pub struct IndicatorPlot {
+        pub name: PlotName,
+        pub value: Price,
+        pub color: Option<Color>,
     }
 
-    /// get the time in the UTC time zone
-    pub fn time_utc(&self) -> DateTime<Utc> {
-        DateTime::from_str(&self.time).unwrap()
+    // Some indicators need multiple values per time instance, so each time instance they create an IndicatorValues object, to hold values for all plots
+    pub struct IndicatorValues {
+        pub name: IndicatorName,
+        pub time: String,
+        pub subscription: DataSubscription,
+        pub plots: BTreeMap<PlotName, IndicatorPlot>, // we can look up a plot value by name
     }
+    
+    let mut values = IndicatorValues::default();
+    
+    let name: &IndicatorName = values.name();
 
-    /// get the time in the local time zone
-    pub fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        time_convert_utc_datetime_to_fixed_offset(time_zone, self.time_utc())
-    }
+    // get the time in the UTC time zone
+    let time: DateTime<Utc> = values.time_utc();
+
+    // get the time in the local time zone
+    let local_time: dateTime<Tz> = values.time_local(time_zone: &Tz);
 
     /// get the value of a plot by name
-    pub fn get_plot(&self, plot_name: &PlotName) -> Option<Decimal> {
-        for plot in &self.values {
-            if plot.name == *plot_name {
-                return Some(plot.value);
-            }
-        }
-        None
-    }
+    let plot: IndicatorPlot = values.get_plot(plot_name: &PlotName);
+
+    /// get all the plots`
+    let plots : BTreeMap<PlotName, IndicatorPlot> = values.plots();
+    
+    ///or we can just access the plots directly
+    let plots:  &BTreeMap<PlotName, IndicatorPlot> = &values.plots;
+
+    /// insert a value into the values
+     values.insert_plot(&mut self, plot_name: PlotName, value: IndicatorPlot);
 }
-
-
 ```
 
 ### Using Indicators
