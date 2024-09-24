@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 
-pub fn time_local_from_str(time_zone: &Tz, time: &str) -> DateTime<Tz> {
+pub fn time_local_from_utc_str(time_zone: &Tz, time: &str) -> DateTime<Tz> {
     let utc_time: DateTime<Utc> = DateTime::from_str(&time).unwrap();
     time_zone.from_utc_datetime(&utc_time.naive_utc())
 }

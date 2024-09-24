@@ -1,4 +1,4 @@
-use crate::helpers::converters::time_local_from_str;
+use crate::helpers::converters::time_local_from_utc_str;
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::OrderSide;
@@ -327,7 +327,7 @@ impl Order {
         DateTime::from_str(&self.time_created_utc).unwrap()
     }
     pub fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz> {
-        time_local_from_str(time_zone, &self.time_created_utc)
+        time_local_from_utc_str(time_zone, &self.time_created_utc)
     }
 
     pub fn time_filled_utc(&self) -> Option<DateTime<Utc>> {
@@ -339,7 +339,7 @@ impl Order {
 
     pub fn time_filled_local(&self, time_zone: &Tz) -> Option<DateTime<Tz>> {
         match &self.time_filled_utc {
-            Some(time) => Some(time_local_from_str(time_zone, time)),
+            Some(time) => Some(time_local_from_utc_str(time_zone, time)),
             None => None,
         }
     }

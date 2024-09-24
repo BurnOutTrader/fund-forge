@@ -1,4 +1,4 @@
-use crate::helpers::converters::time_local_from_str;
+use crate::helpers::converters::time_local_from_utc_str;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};

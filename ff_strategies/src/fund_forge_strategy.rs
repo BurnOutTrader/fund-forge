@@ -156,8 +156,7 @@ impl FundForgeStrategy {
             interaction_handler,
             drawing_objects_handler
         ).await;
-
-
+        
         match strategy_mode {
             StrategyMode::Backtest => {
                 let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
