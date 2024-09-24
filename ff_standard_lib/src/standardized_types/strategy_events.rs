@@ -8,7 +8,9 @@ use crate::standardized_types::{TimeString};
 use rkyv::ser::serializers::AllocSerializer;
 use rkyv::ser::Serializer;
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use std::fmt::Error;
+use rkyv::validation::CheckTypeError;
+use rkyv::validation::validators::DefaultValidator;
+use rkyv::vec::ArchivedVec;
 
 /// Used to determine if a strategy takes certain event inputs from the Ui.
 /// A trader can still effect the strategy via the broker, but the strategy will not take any input from the Ui unless in SemiAutomated mode.
@@ -130,12 +132,11 @@ impl StrategyEvent {
         vec
     }
 
-    pub fn from_array_bytes(data: &Vec<u8>) -> Result<Vec<StrategyEvent>, Error> {
+    pub fn from_array_bytes(data: &Vec<u8>) -> Result<Vec<StrategyEvent>, CheckTypeError<ArchivedVec<ArchivedStrategyEvent>, DefaultValidator>> {
         let archived_event = match rkyv::check_archived_root::<Vec<StrategyEvent>>(&data[..]) {
             Ok(data) => data,
             Err(e) => {
-                format!("Failed to deserialize data: {}", e);
-                return Err(Error);
+                return Err(e);
             }
         };
 

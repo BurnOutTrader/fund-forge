@@ -524,8 +524,8 @@ pub async fn initialize_static(
 
 pub async fn init_connections(gui_enabled: bool, buffer_duration: ChronoDuration, mode: StrategyMode, notify: Arc<Notify>) {
     let settings_map = initialise_settings().unwrap();
-    let mut server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
-    let mut server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());
+    let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
+    let server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());
 
     println!("Connections: {:?}", settings_map);
     // for each connection type specified in our server_settings.toml we will establish a connection

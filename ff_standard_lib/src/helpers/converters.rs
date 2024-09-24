@@ -1,7 +1,7 @@
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::DataSubscription;
 use chrono::{
-    DateTime, Datelike, FixedOffset, NaiveDate, NaiveDateTime, Offset, TimeZone, Timelike, Utc,
+    DateTime, Datelike, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc,
 };
 use chrono_tz::Tz;
 use std::fmt::Error;

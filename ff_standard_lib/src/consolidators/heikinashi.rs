@@ -8,7 +8,7 @@ use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use rust_decimal::prelude::{FromPrimitive};
 use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::{Price, Volume};

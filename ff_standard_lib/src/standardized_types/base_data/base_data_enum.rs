@@ -11,7 +11,7 @@ use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::traits::bytes::Bytes;
-use chrono::{DateTime, FixedOffset, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::ser::serializers::AllocSerializer;
 use rkyv::ser::Serializer;

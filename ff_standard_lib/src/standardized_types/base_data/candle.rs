@@ -3,7 +3,7 @@ use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
 use crate::standardized_types::{Price, TimeString, Volume};
-use chrono::{DateTime, FixedOffset, TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt;

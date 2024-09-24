@@ -9,7 +9,6 @@ use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::{Price};
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use async_std::task::block_on;
 use dashmap::DashMap;
 use tokio::sync::mpsc::{Receiver};
