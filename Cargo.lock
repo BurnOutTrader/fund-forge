@@ -1094,6 +1094,7 @@ dependencies = [
  "lazy_static",
  "once_cell",
  "rkyv",
+ "rust_decimal_macros",
  "serde",
  "strum_macros",
  "tokio",
