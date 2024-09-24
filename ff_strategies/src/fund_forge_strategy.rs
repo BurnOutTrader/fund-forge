@@ -27,7 +27,6 @@ use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use dashmap::DashMap;
-use futures::executor::block_on;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
@@ -382,10 +381,9 @@ impl FundForgeStrategy {
     /// see the indicator_enum.rs for more details
     /// If we subscribe to an indicator and we do not have the appropriate data subscription, we will also subscribe to the data subscription.
     pub async fn indicator_subscribe(&self, indicator: IndicatorEnum) {
-        //todo, add is_subscribed() for subscription manager so we can auto subscribe for indicators.
         let subscriptions = self.subscriptions().await;
         if !subscriptions.contains(&indicator.subscription()) {
-            panic!("You have no subscription: {}, for the indicator subsciption {}", indicator.subscription(), indicator.name());
+            panic!("You have no subscription: {}, for the indicator subscription {}", indicator.subscription(), indicator.name());
         }
         self.indicator_handler
             .add_indicator(indicator, self.time_utc())
