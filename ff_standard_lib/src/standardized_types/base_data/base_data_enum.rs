@@ -1,6 +1,4 @@
-use crate::helpers::converters::{
-    fund_forge_formatted_symbol_name, load_as_bytes, time_convert_utc_datetime_to_fixed_offset,
-};
+use crate::helpers::converters::{fund_forge_formatted_symbol_name, load_as_bytes, time_convert_utc_to_local};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
@@ -619,9 +617,9 @@ impl BaseData for BaseDataEnum {
         }
     }
 
-    /// Returns the data time at the specified time zone offset as a `DateTime<FixedOffset>`
-    fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        time_convert_utc_datetime_to_fixed_offset(time_zone, self.time_utc())
+    /// Returns the data time at the specified time zone offset as a `DateTime<Tz>`
+    fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        time_zone.from_utc_datetime(&self.time_utc().naive_utc())
     }
 
     /// This is the closing time of the `BaseDataEnum` variant, so for 1 hour quotebar, if the bar opens at 5pm, the closing time will be 6pm and the time_utc will be 6pm. time_object_unchanged(&self) will return the unaltered value.
@@ -651,8 +649,8 @@ impl BaseData for BaseDataEnum {
         }
     }
 
-    fn time_created_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        time_convert_utc_datetime_to_fixed_offset(time_zone, self.time_created_utc())
+    fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        time_zone.from_utc_datetime(&self.time_utc().naive_utc()) + self.resolution().as_duration()
     }
 
     /// Returns the `DataVendor` enum variant of the `BaseDataEnum` variant object

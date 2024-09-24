@@ -3,7 +3,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
 use crate::standardized_types::{Price, TimeString, Volume};
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt;
@@ -61,8 +61,8 @@ impl BaseData for QuoteBar {
     }
 
     /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
-    fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        time_local_from_str(time_zone, &self.time)
+    fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        time_zone.from_utc_datetime(&self.time_utc().naive_utc())
     }
 
     /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
@@ -74,7 +74,7 @@ impl BaseData for QuoteBar {
         self.time_utc() + self.resolution.as_duration()
     }
 
-    fn time_created_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
+    fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz> {
         self.time_local(time_zone) + self.resolution.as_duration()
     }
 

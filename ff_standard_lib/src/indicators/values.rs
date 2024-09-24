@@ -1,4 +1,3 @@
-use crate::helpers::converters::time_convert_utc_datetime_to_fixed_offset;
 use crate::indicators::indicators_trait::IndicatorName;
 use crate::standardized_types::subscriptions::DataSubscription;
 use crate::standardized_types::{Color, Price};
@@ -8,6 +7,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use crate::helpers::converters::time_convert_utc_to_local;
 
 pub type PlotName = String;
 
@@ -76,8 +76,8 @@ impl IndicatorValues {
     }
 
     /// get the time in the local time zone
-    pub fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        time_convert_utc_datetime_to_fixed_offset(time_zone, self.time_utc())
+    pub fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        time_convert_utc_to_local(&time_zone, self.time_utc())
     }
 
     /// get the value of a plot by name

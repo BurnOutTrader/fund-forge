@@ -1,4 +1,4 @@
-use crate::helpers::converters::time_local_from_str;
+use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_str};
 use crate::standardized_types::base_data::quote::BookLevel;
 use crate::standardized_types::subscriptions::Symbol;
 use crate::standardized_types::{Price, TimeString};
@@ -55,8 +55,8 @@ impl OrderBookUpdate {
         DateTime::from_str(&self.time).unwrap()
     }
 
-    pub fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        time_local_from_str(time_zone, &self.time)
+    pub fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        time_convert_utc_to_local(&time_zone, self.time_utc())
     }
 }
 
@@ -123,8 +123,8 @@ impl OrderBook {
         self.time.read().await.clone()
     }
 
-    pub async fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        time_local_from_str(time_zone, &self.time_utc().await.to_string())
+    pub async fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        time_convert_utc_to_local(&time_zone, self.time_utc().await)
     }
 
     pub async fn ask_level(&self, level: BookLevel) -> Option<Price> {

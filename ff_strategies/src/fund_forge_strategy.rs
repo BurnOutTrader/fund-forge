@@ -5,10 +5,6 @@ use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc, Duration as ChronoDurati
 use chrono_tz::Tz;
 use ff_standard_lib::drawing_objects::drawing_object_handler::DrawingObjectHandler;
 use ff_standard_lib::drawing_objects::drawing_tool_enum::DrawingTool;
-use ff_standard_lib::helpers::converters::{
-    convert_to_utc, time_convert_utc_datetime_to_fixed_offset,
-    time_convert_utc_naive_to_fixed_offset,
-};
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
 use ff_standard_lib::indicators::indicators_trait::{IndicatorName, Indicators};
@@ -31,6 +27,7 @@ use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
+use chrono_tz::Tz::UTC;
 use dashmap::DashMap;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
@@ -124,22 +121,20 @@ impl FundForgeStrategy {
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
         init_connections(gui_enabled, buffering_resolution.clone(), strategy_mode.clone(), notify.clone()).await;
 
-        let start_time =   time_zone.from_local_datetime(&start_date).single().unwrap();
-        let utc_start_time = start_time.with_timezone(&Utc);
-        let end_time = time_convert_utc_naive_to_fixed_offset(&time_zone, end_date).with_timezone(&Utc);
-        let utc_end_time = end_time.with_timezone(&Utc);
+        let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
+        let end_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
 
-        let warm_up_start_time = utc_start_time - warmup_duration;
+        let warm_up_start_time = start_time.to_utc() - warmup_duration;
 
-        subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward).await;
+        subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time, fill_forward).await;
         //todo There is a problem with quote bars not being produced consistently since refactoring
 
         let (order_sender, order_receiver) = mpsc::channel(100);
         let market_event_handler = match strategy_mode {
-            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(warm_up_start_time.clone(), Some(order_receiver)).await,
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(warm_up_start_time.to_utc() - warmup_duration, Some(order_receiver)).await,
             StrategyMode::Live => {
                 live_order_handler(strategy_mode, order_receiver).await;
-                MarketHandler::new(warm_up_start_time.clone(), None).await
+                MarketHandler::new(warm_up_start_time, None).await
             },
         };
         let market_event_handler = Arc::new(market_event_handler);
@@ -151,8 +146,8 @@ impl FundForgeStrategy {
 
         let strategy = FundForgeStrategy {
             mode: strategy_mode.clone(),
-            start_time: warm_up_start_time.clone(),
-            end_time: utc_end_time.clone(),
+            start_time: warm_up_start_time,
+            end_time,
             warmup_duration: warmup_duration.clone(),
             buffer_resolution: buffering_resolution.clone(),
             time_zone,
@@ -176,11 +171,11 @@ impl FundForgeStrategy {
 
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = HistoricalEngine::new(strategy_mode.clone(), utc_start_time.clone(),  utc_end_time.clone(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
+                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
-                live_subscription_handler(strategy_mode.clone(), warm_up_start_time.clone(), utc_end_time.clone(), warmup_duration, buffering_resolution).await;
+                live_subscription_handler(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration, buffering_resolution).await;
             },
         }
         strategy
@@ -546,14 +541,8 @@ impl FundForgeStrategy {
 
     /// Current Tz time, depends on the `StrategyMode`. \
     /// Backtest will return the last data point time, live will return the current time.
-    pub async fn time_local(&self) -> DateTime<FixedOffset> {
-        match self.mode {
-            StrategyMode::Backtest => time_convert_utc_datetime_to_fixed_offset(
-                &self.time_zone,
-                self.time_utc(),
-            ),
-            _ => time_convert_utc_datetime_to_fixed_offset(&self.time_zone, Utc::now()),
-        }
+    pub async fn time_local(&self) -> DateTime<Tz> {
+        self.time_zone.from_utc_datetime(&self.time_utc().naive_utc())
     }
 
     /// Current Utc time, depends on the `StrategyMode`. \
@@ -583,8 +572,8 @@ impl FundForgeStrategy {
         time_zone: Tz,
         subscription: &DataSubscription,
     ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
-        let start_date = convert_to_utc(from_time, time_zone);
-        range_data(start_date, self.time_utc(), subscription.clone()).await
+        let start_date = time_zone.from_utc_datetime(&from_time);
+        range_data(start_date.to_utc(), self.time_utc(), subscription.clone()).await
     }
 
     pub async fn history_from_utc_time(
@@ -603,15 +592,15 @@ impl FundForgeStrategy {
         time_zone: Tz,
         subscription: &DataSubscription,
     ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
-        let start_date = convert_to_utc(from_time, time_zone.clone());
-        let end_date = convert_to_utc(to_time, time_zone);
+        let start_date = time_zone.from_utc_datetime(&from_time);
+        let end_date =time_zone.from_utc_datetime(&to_time);
 
         let end_date = match end_date > self.time_utc() {
             true => self.time_utc(),
-            false => end_date,
+            false => end_date.to_utc(),
         };
 
-        range_data(start_date, end_date, subscription.clone()).await
+        range_data(start_date.to_utc(), end_date, subscription.clone()).await
     }
 
     pub async fn historical_range_from_utc_time(

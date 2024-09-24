@@ -3,7 +3,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::Price;
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt::{Debug, Display};
@@ -32,8 +32,8 @@ impl BaseData for TradePrice {
     }
 
     /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
-    fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        time_local_from_str(time_zone, &self.time)
+    fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        time_zone.from_utc_datetime(&self.time_utc().naive_utc())
     }
 
     /// The actual candle object time, not adjusted for close etc, this is used when drawing the candle on charts.
@@ -45,8 +45,8 @@ impl BaseData for TradePrice {
         self.time_utc()
     }
 
-    fn time_created_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
-        self.time_local(time_zone)
+    fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        time_zone.from_utc_datetime(&self.time_utc().naive_utc())
     }
 
     fn data_vendor(&self) -> DataVendor {

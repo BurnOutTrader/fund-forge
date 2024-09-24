@@ -9,12 +9,12 @@ pub trait BaseData {
     fn symbol_name(&self) -> Symbol;
 
     /// The time of the data point in the specified FixedOffset time zone.
-    fn time_local(&self, time_zone: &Tz) -> DateTime<FixedOffset>;
+    fn time_local(&self, time_zone: &Tz) -> DateTime<Tz>;
 
     /// UTC time of the data point.
     fn time_utc(&self) -> DateTime<Utc>;
     fn time_created_utc(&self) -> DateTime<Utc>;
-    fn time_created_local(&self, time_zone: &Tz) -> DateTime<FixedOffset>;
+    fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz>;
 
     fn data_vendor(&self) -> DataVendor;
 

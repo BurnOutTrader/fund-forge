@@ -326,7 +326,7 @@ impl Order {
     pub fn time_created_utc(&self) -> DateTime<Utc> {
         DateTime::from_str(&self.time_created_utc).unwrap()
     }
-    pub fn time_created_local(&self, time_zone: &Tz) -> DateTime<FixedOffset> {
+    pub fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz> {
         time_local_from_str(time_zone, &self.time_created_utc)
     }
 
@@ -337,7 +337,7 @@ impl Order {
         }
     }
 
-    pub fn time_filled_local(&self, time_zone: &Tz) -> Option<DateTime<FixedOffset>> {
+    pub fn time_filled_local(&self, time_zone: &Tz) -> Option<DateTime<Tz>> {
         match &self.time_filled_utc {
             Some(time) => Some(time_local_from_str(time_zone, time)),
             None => None,
