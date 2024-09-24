@@ -1,7 +1,7 @@
 use crate::engine::HistoricalEngine;
 use ff_standard_lib::interaction_handler::InteractionHandler;
 use ahash::AHashMap;
-use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc, Duration as ChronoDuration, TimeZone};
+use chrono::{DateTime, NaiveDateTime, Utc, Duration as ChronoDuration, TimeZone};
 use chrono_tz::Tz;
 use ff_standard_lib::drawing_objects::drawing_object_handler::DrawingObjectHandler;
 use ff_standard_lib::drawing_objects::drawing_tool_enum::DrawingTool;
@@ -26,8 +26,6 @@ use ff_standard_lib::standardized_types::{Price, Volume};
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::time::Duration;
-use chrono_tz::Tz::UTC;
 use dashmap::DashMap;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
@@ -49,15 +47,9 @@ use ff_standard_lib::server_connections::{init_connections, init_sub_handler, in
 pub struct FundForgeStrategy {
     mode: StrategyMode,
 
-    start_time: DateTime<Utc>,
-
-    end_time: DateTime<Utc>,
-
-    warmup_duration: ChronoDuration,
+    time_zone: Tz,
 
     buffer_resolution: ChronoDuration,
-
-    time_zone: Tz,
 
     subscription_handler: Arc<SubscriptionHandler>,
 
@@ -122,7 +114,7 @@ impl FundForgeStrategy {
         init_connections(gui_enabled, buffering_resolution.clone(), strategy_mode.clone(), notify.clone()).await;
 
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
-        let end_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
+        let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
 
         let warm_up_start_time = start_time.to_utc() - warmup_duration;
 
@@ -146,9 +138,6 @@ impl FundForgeStrategy {
 
         let strategy = FundForgeStrategy {
             mode: strategy_mode.clone(),
-            start_time: warm_up_start_time,
-            end_time,
-            warmup_duration: warmup_duration.clone(),
             buffer_resolution: buffering_resolution.clone(),
             time_zone,
             market_handler: market_event_handler.clone(),

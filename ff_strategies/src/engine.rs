@@ -97,7 +97,7 @@ impl HistoricalEngine {
             end_time.clone(),
         );
 
-        self.historical_data_feed(month_years, end_time.clone())
+        self.historical_data_feed(month_years, self.start_time.clone())
             .await;
 
         set_warmup_complete().await;
