@@ -20,7 +20,8 @@ use crate::apis::brokerage::broker_enum::Brokerage;
 pub enum OrderRequest {
     Create{brokerage: Brokerage, order: Order},
     Cancel{brokerage: Brokerage, order_id: OrderId, account_id: AccountId},
-    Update{brokerage: Brokerage, order_id: OrderId, account_id: AccountId, update: OrderUpdateType }
+    Update{brokerage: Brokerage, order_id: OrderId, account_id: AccountId, update: OrderUpdateType },
+    CancelAll{brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName}
 }
 
 impl OrderRequest {
@@ -29,6 +30,7 @@ impl OrderRequest {
             OrderRequest::Create { brokerage, .. } => brokerage.clone(),
             OrderRequest::Cancel { brokerage, .. } => brokerage.clone(),
             OrderRequest::Update { brokerage,.. } => brokerage.clone(),
+            OrderRequest::CancelAll { brokerage,.. } => brokerage.clone(),
         }
     }
 }

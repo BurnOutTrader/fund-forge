@@ -232,6 +232,23 @@ impl MarketHandler {
                             event_buffer.write().await.push(fail_event);
                         }
                     }
+                    OrderRequest::CancelAll { brokerage, account_id, symbol_name } => {
+                        let mut remove = vec![];
+                        let cache = order_cache.read().await;
+                        'order_search: for order in &*cache {
+                            if order.brokerage == brokerage && order.account_id == account_id && order.symbol_name == symbol_name {
+                                remove.push(order);
+                            }
+                        }
+
+                        let mut buffer = event_buffer.write().await;
+                        let mut cache = order_cache.write().await;
+                        for order in remove {
+                            cache.retain(|x| x.id != order.id);
+                            let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Cancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order_id: order.id.clone() });
+                            buffer.push(cancel_event);
+                        }
+                    }
                 }
                 let mut event_buffer = event_buffer.write().await;
                 if !event_buffer.is_empty() {

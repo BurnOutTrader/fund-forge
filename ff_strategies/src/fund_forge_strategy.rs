@@ -26,14 +26,15 @@ use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::standardized_types::{Price, Volume};
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc};
 use std::time::Duration;
 use dashmap::DashMap;
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{mpsc, Notify, RwLock};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::market_handler::market_handlers::{MarketHandler};
 use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static, live_order_handler, live_subscription_handler, subscribe_primary_subscription_updates};
+use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -67,7 +68,9 @@ pub struct FundForgeStrategy {
 
     orders_count: DashMap<Brokerage, i64>,
 
-    order_sender: Sender<OrderRequest>
+    order_sender: Sender<OrderRequest>,
+
+    orders: RwLock<AHashMap<OrderId, (Brokerage, AccountId)>>
 }
 
 impl FundForgeStrategy {
@@ -153,6 +156,7 @@ impl FundForgeStrategy {
             drawing_objects_handler: drawing_objects_handler.clone(),
             orders_count: Default::default(),
             order_sender,
+            orders: Default::default(),
         };
 
         initialize_static(
@@ -234,6 +238,7 @@ impl FundForgeStrategy {
             brackets
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -258,6 +263,7 @@ impl FundForgeStrategy {
             brackets
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -280,6 +286,7 @@ impl FundForgeStrategy {
             self.time_utc(),
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -302,6 +309,7 @@ impl FundForgeStrategy {
             self.time_utc(),
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -325,6 +333,7 @@ impl FundForgeStrategy {
             self.time_utc(),
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -348,6 +357,7 @@ impl FundForgeStrategy {
             self.time_utc(),
         );
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -365,6 +375,7 @@ impl FundForgeStrategy {
         let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Limit", side)).await;
         let order = Order::limit_order(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(), limit_price, tif);
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -382,10 +393,11 @@ impl FundForgeStrategy {
         let order_id = self.order_id(&symbol_name, account_id, brokerage, format!("{} MIT", side)).await;
         let order = Order::market_if_touched(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
-    pub async fn stop (
+    pub async fn stop_order (
         &self,
         account_id: &AccountId,
         symbol_name: &SymbolName,
@@ -399,6 +411,7 @@ impl FundForgeStrategy {
         let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Stop", side)).await;
         let order = Order::stop(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -417,26 +430,38 @@ impl FundForgeStrategy {
         let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Stop Limit", side)).await;
         let order = Order::stop_limit(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),limit_price, trigger_price, tif);
         self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
-    pub async fn cancel_order(&self, brokerage: Brokerage, order_id: OrderId, account_id: AccountId) {
-        let cancel_msg =  OrderRequest::Cancel{order_id, brokerage, account_id};
+    pub async fn cancel_order(&self, order_id: OrderId) {
+        let orders = self.orders.write().await;
+        if let Some((brokerage, account_id)) = orders.get(&order_id) {
+            let cancel_msg =  OrderRequest::Cancel{order_id, brokerage: brokerage.clone(), account_id: account_id.clone()};
+            self.order_sender.send(cancel_msg).await.unwrap()
+        }
+    }
+
+    pub async fn update_order(&self, order_id: OrderId, order_update_type: OrderUpdateType) {
+        let orders = self.orders.write().await;
+        if let Some((brokerage, account_id)) = orders.get(&order_id) {
+            let cancel_msg =  OrderRequest::Update {
+                brokerage: brokerage.clone(),
+                order_id,
+                account_id: account_id.clone(),
+                update: order_update_type,
+            };
+            self.order_sender.send(cancel_msg).await.unwrap()
+        }
+    }
+
+    pub async fn cancel_orders(&self, brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName) {
+        let cancel_msg =  OrderRequest::CancelAll{brokerage, account_id, symbol_name};
         self.order_sender.send(cancel_msg).await.unwrap()
     }
 
     pub async fn last_price(&self, symbol_name: &SymbolName) -> Option<Price> {
         self.market_handler.get_last_price(symbol_name).await
-    }
-
-    pub async fn update_order(&self, brokerage: Brokerage, order_id: OrderId, account_id: AccountId, update: OrderUpdateType) {
-        let cancel_msg =  OrderRequest::Update {
-            brokerage,
-            order_id,
-            account_id,
-            update,
-        };
-        self.order_sender.send(cancel_msg).await.unwrap()
     }
 
     pub async fn orders_pending(&self) -> Vec<Order> {

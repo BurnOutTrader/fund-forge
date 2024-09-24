@@ -815,23 +815,130 @@ async fn example() {
     let tag = String::from("Example Trade");
 
     // Enter a long position and close any existing short position on the same account / symbol
-    strategy.enter_long(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+    let order_id = strategy.enter_long(
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        tag: String
+    ).await;
 
     // Enter a short position and close any existing short position on the same account / symbol
-    strategy.enter_short(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+    let order_id = strategy.enter_short(
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        tag: String
+    ).await;
 
-    // Exit a long position
-    strategy.exit_long(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+    // Exit a long position and get back the order_id
+    let order_id = strategy.exit_long(
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        tag: String
+    ).await;
 
-    // Exit a short position
-    strategy.exit_short(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+    // Exit a short position and get back the order_id
+    let order_id = strategy.exit_short(
+        account_id: &AccountId,
+       symbol_name: &SymbolName,
+       brokerage: &Brokerage,
+       quantity: Volume,
+       tag: String
+    ).await;
 
-    // Place a market buy order
-    strategy.buy_market(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+    // Place a market buy order and get back the order_id
+    let order_id = strategy.buy_market(
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume, 
+        tag: String
+    ).await;
 
-    // Place a market sell order
-    strategy.sell_market(account_id.clone(), symbol_name.clone(), brokerage.clone(), quantity, tag.clone()).await;
+    // Place a market sell order and get back the order_id
+    let order_id: OrderId = strategy.sell_market(
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        tag: String
+    ).await;
+
+    // Place a limit order and get back the order_id
+    let order_id = strategy.limit_order(
+        account_id: &AccountId, 
+        symbol_name: &SymbolName, 
+        brokerage: &Brokerage, 
+        quantity: Volume, 
+        side: OrderSide, 
+        limit_price: Price, 
+        tif: TimeInForce, 
+        tag: String
+    ).await;
+
+    let order_id = strategy.market_if_touched (
+        account_id: &AccountId, 
+        symbol_name: &SymbolName, 
+        brokerage: &Brokerage, 
+        quantity: Volume, 
+        side: OrderSide, 
+        trigger_price: Price, 
+        tif: TimeInForce, 
+        tag: String
+    ).await;
+
+    let order_id = strategy.stop_order (
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        trigger_price: Price,
+        tif: TimeInForce,
+        tag: String,
+    ).await;
+
+    strategy.stop_limit (
+        account_id: &AccountId,
+        symbol_name: &SymbolName,
+        brokerage: &Brokerage,
+        quantity: Volume,
+        side: OrderSide,
+        tag: String,
+        limit_price: Price,
+        trigger_price: Price,
+        tif: TimeInForce
+    ).await;
+
+    // Cancel the order using the returned ID. the cancel result will show up in strategy events loop.
+    strategy.cancel_order(
+        order_id: OrderId
+    ).await;
     
-    //todo Add more supported orders.
+    // Cancel all orders for the symbol, with the brokerage and account
+    cancel_orders(
+        brokerage: Brokerage, 
+        account_id: AccountId, 
+        symbol_name: SymbolName
+    ).await;
+
+    // Update and order
+    strategy.update_order(
+        order_id: OrderId, 
+        order_update_type: OrderUpdateType
+    ).await;
+    
+    //update types
+    pub enum OrderUpdateType {
+        LimitPrice(Price),
+        TriggerPrice(Price),
+        TimeInForce(TimeInForce),
+        Quantity(Volume),
+        Tag(String),
+    }
 }
 ```
