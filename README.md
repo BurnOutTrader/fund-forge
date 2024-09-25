@@ -221,7 +221,6 @@ Change the following to suit the symbol and your directory.
 const YOUR_FOLDER_PATH: String = "".to_string();
 const SYMBOL_NAME: String = "".to_string();
 ```
-
 After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
 
 ## Setup
@@ -283,7 +282,7 @@ Strategies are intended to be run as individual Rust programs, either on your ma
 
 ## Contact
 
-You can contact me by creating a GitHub issue or reaching out via my project email: **BurnOutTrader@outlook.com**. Please note, this is not my main email, but I will try to keep an eye on it.
+You can contact me by creating a GitHub issue or discussion, on [discord](https://discord.gg/MNXH2jEExV) or reaching out via my project email: **BurnOutTrader@outlook.com**. Please note, this is not my main email, but I will try to keep an eye on it.
 
 ## Important Notes
 
