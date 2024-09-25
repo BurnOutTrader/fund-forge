@@ -1,4 +1,5 @@
 # Fund Forge
+Community [discord](https://discord.gg/MNXH2jEExV)
 
 **Fund Forge** is an algorithmic trading engine written in Rust.
 
