@@ -291,7 +291,7 @@ This repository is likely to undergo many changes and updates at short notice, s
 Since we are not ready for live trading, these changes shouldn't pose significant issues and I will try to keep future commits to be specific to limited sections of the code base.
 
 ## Rithmic API
-
+See [Rithmic Section of ff_data_Server README.md](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_data_server/README.md)
 If you would like to work on the Rithmic API, you will need to apply for your own dev kit and credentials from Rithmic. Additionally, you will need to complete the Rithmic conformance procedure.
 
 Since Fund Forge is not a company, each user must do this and create their own unique app name to pass conformance. You can find more information at [Rithmic](https://yyy3.rithmic.com/?page_id=17).

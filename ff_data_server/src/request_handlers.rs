@@ -316,7 +316,7 @@ async fn stream_response(stream_name: String, request: StreamRequest, sender: Se
                 DataVendor::Test => {
                     subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
                 }
-                DataVendor::RithmicTest => {
+                DataVendor::Rithmic => {
                     panic!()
                 }
             }

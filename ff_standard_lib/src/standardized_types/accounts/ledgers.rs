@@ -465,7 +465,7 @@ impl Bytes<Self> for AccountInfo {
     fn from_bytes(archived: &[u8]) -> Result<AccountInfo, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
         match rkyv::from_bytes::<AccountInfo>(archived) {
-            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `AccountInfoType` [E0277]
             Ok(response) => Ok(response),
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }

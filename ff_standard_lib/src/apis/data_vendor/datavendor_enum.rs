@@ -12,7 +12,7 @@ use crate::standardized_types::data_server_messaging::{FundForgeError};
 /// Each `DataVendor` implements its own logic to fetch the data from the source, this logic can be modified in the `ff_data_server` crate.
 pub enum DataVendor {
     Test, //DO NOT CHANGE ORDER
-    RithmicTest,
+    Rithmic,
 }
 
 impl FromStr for DataVendor {
@@ -21,7 +21,7 @@ impl FromStr for DataVendor {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "Test" => Ok(DataVendor::Test),
-            "RithmicTest" => Ok(DataVendor::RithmicTest),
+            "Rithmic" => Ok(DataVendor::Rithmic),
             _ => Err(FundForgeError::ClientSideErrorDebug(format!(
                 "Unknown DataVendor string: {}",
                 s

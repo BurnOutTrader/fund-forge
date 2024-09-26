@@ -7,6 +7,7 @@ use crate::standardized_types::subscriptions::SymbolName;
 use tokio::sync::RwLock;
 use chrono::{DateTime, Utc};
 use rust_decimal::prelude::FromPrimitive;
+use rust_decimal_macros::dec;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::market_handler::market_handlers::get_market_price;
 use crate::standardized_types::enums::OrderSide;
@@ -70,16 +71,16 @@ pub async fn backtest_matching_engine(
             let ledger = Ledger {
                 account_id: order.account_id.clone(),
                 brokerage: order.brokerage.clone(),
-                cash_value: Price::from_f64(100000.0).unwrap(),
-                cash_available:Price::from_f64(100000.0).unwrap(),
+                cash_value: dec!(100000.0),
+                cash_available:dec!(100000.0),
                 currency: Currency::USD,
-                cash_used: Price::from_f64(0.0).unwrap(),
+                cash_used: dec!(0.0),
                 positions: Default::default(),
                 positions_closed: Default::default(),
                 positions_counter: Default::default(),
                 symbol_info: Default::default(),
-                open_pnl: Price::from_f64(0.0).unwrap(),
-                booked_pnl: Price::from_f64(0.0).unwrap(),
+                open_pnl: dec!(0.0),
+                booked_pnl: dec!(0.0),
             };
             ledgers
                 .get_mut(&order.brokerage)?.value_mut()

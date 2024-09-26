@@ -1005,22 +1005,6 @@ dependencies = [
 [[package]]
 name = "ff_rithmic_api"
 version = "0.1.0"
-dependencies = [
- "dashmap",
- "futures-util",
- "prost",
- "prost-build",
- "serde",
- "thiserror",
- "tokio",
- "tokio-tungstenite",
- "toml",
- "tungstenite",
-]
-
-[[package]]
-name = "ff_rithmic_api"
-version = "0.1.0"
 source = "git+https://github.com/BurnOutTrader/ff_rithmic_api.git?branch=master#ba61cb05115ee4140379a217c620fecbf359e132"
 dependencies = [
  "dashmap",
@@ -1048,7 +1032,7 @@ dependencies = [
  "csv",
  "dashmap",
  "env_logger",
- "ff_rithmic_api 0.1.0 (git+https://github.com/BurnOutTrader/ff_rithmic_api.git?branch=master)",
+ "ff_rithmic_api",
  "float-cmp",
  "futures",
  "heck 0.4.1",
@@ -1190,7 +1174,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "ff_data_server",
- "ff_rithmic_api 0.1.0",
+ "ff_rithmic_api",
  "ff_standard_lib",
  "ff_strategies",
  "ff_strategy_registry",

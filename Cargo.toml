@@ -18,7 +18,7 @@ members = [
 opt-level = 3
 
 [dependencies]
-ff_rithmic_api = {path = "/Users/kevmonaghan/RustroverProjects/ff_rithmic_api"}
+ff_rithmic_api = { git = "https://github.com/BurnOutTrader/ff_rithmic_api.git", branch = "master" }
 ff_standard_lib = { path = "ff_standard_lib" }
 ff_strategies = { path = "ff_strategies" }
 ff_data_server = { path = "ff_data_server"}

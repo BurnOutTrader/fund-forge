@@ -62,7 +62,7 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::RithmicTest => {
+            DataVendor::Rithmic => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.symbols_response(stream_name, market_type, callback_id).await
                 }
@@ -79,7 +79,7 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::RithmicTest => {
+            DataVendor::Rithmic => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.resolutions_response(stream_name, market_type, callback_id).await
                 }
@@ -95,7 +95,7 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::RithmicTest => {
+            DataVendor::Rithmic => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.markets_response(stream_name, callback_id).await
                 }
@@ -112,7 +112,7 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::RithmicTest => {
+            DataVendor::Rithmic => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.decimal_accuracy_response(stream_name, symbol_name, callback_id).await
                 }
@@ -129,7 +129,7 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::RithmicTest => {
+            DataVendor::Rithmic => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.tick_size_response(stream_name, symbol_name, callback_id).await
                 }
@@ -141,7 +141,7 @@ impl VendorApiResponse for DataVendor {
 
     async fn data_feed_subscribe(&self, stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
         match self {
-            DataVendor::RithmicTest => {
+            DataVendor::Rithmic => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.data_feed_subscribe(stream_name, subscription, sender).await
                 }
@@ -153,7 +153,7 @@ impl VendorApiResponse for DataVendor {
 
     async fn data_feed_unsubscribe(&self, stream_name: String,  subscription: DataSubscription) -> DataServerResponse {
         match self {
-            DataVendor::RithmicTest => {
+            DataVendor::Rithmic => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.data_feed_unsubscribe(stream_name, subscription).await
                 }

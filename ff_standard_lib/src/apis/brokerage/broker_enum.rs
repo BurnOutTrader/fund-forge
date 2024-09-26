@@ -18,15 +18,14 @@ use crate::standardized_types::{Volume};
 #[archive_attr(derive(Debug))]
 pub enum Brokerage {
     Test, //DO NOT CHANGE ORDER
-    RithmicTest,
+    Rithmic,
 }
-
 impl FromStr for Brokerage {
     type Err = FundForgeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "RithmicTest" => Ok(Brokerage::RithmicTest),
+            "Rithmic" => Ok(Brokerage::Rithmic),
             "Test" => Ok(Brokerage::Test),
             _ => Err(FundForgeError::ClientSideErrorDebug(format!(
                 "Invalid brokerage string: {}",
@@ -109,7 +108,7 @@ impl BrokerApiResponse for Brokerage {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            Brokerage::RithmicTest => {
+            Brokerage::Rithmic => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
                     return client.symbols_response(stream_name, market_type, callback_id).await
                 }
@@ -127,7 +126,7 @@ impl BrokerApiResponse for Brokerage {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            Brokerage::RithmicTest => {
+            Brokerage::Rithmic => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
                     return client.account_info_response(stream_name, account_id, callback_id).await
                 }
@@ -139,7 +138,7 @@ impl BrokerApiResponse for Brokerage {
 
     async fn symbol_info_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         match self {
-            Brokerage::RithmicTest => {
+            Brokerage::Rithmic => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
                     return client.symbol_info_response(stream_name, symbol_name, callback_id).await
                 }
@@ -151,7 +150,7 @@ impl BrokerApiResponse for Brokerage {
 
     async fn margin_required_historical_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         match self {
-            Brokerage::RithmicTest => {
+            Brokerage::Rithmic => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
                     return client.margin_required_historical_response(stream_name, symbol_name, quantity, callback_id).await
                 }
@@ -163,7 +162,7 @@ impl BrokerApiResponse for Brokerage {
 
     async fn margin_required_live_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         match self {
-            Brokerage::RithmicTest => {
+            Brokerage::Rithmic => {
                 if let Some(client) = RITHMIC_CLIENTS.get(self) {
                     return client.margin_required_live_response(symbol_name, stream_name, quantity, callback_id).await
                 }

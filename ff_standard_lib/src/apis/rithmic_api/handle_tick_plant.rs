@@ -15,7 +15,7 @@ use tungstenite::Message;
 #[tokio::test]
 async fn test_rithmic_connection() -> Result<(), Box<dyn std::error::Error>> {
     /*// Define the file path for credentials
-    let file_path = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/rithmic_credentials/rithmic_credentials_test.toml".to_string());
+    let file_path = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/rithmic_credentials/topstep_trader.toml".to_string());
 
     // Define credentials
     let credentials = RithmicCredentials::load_credentials_from_file(&file_path).unwrap();
