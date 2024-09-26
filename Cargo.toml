@@ -18,6 +18,7 @@ members = [
 opt-level = 3
 
 [dependencies]
+ff_rithmic_api = "*"
 ff_standard_lib = { path = "ff_standard_lib" }
 ff_strategies = { path = "ff_strategies" }
 ff_data_server = { path = "ff_data_server"}
@@ -26,8 +27,5 @@ ff_strategy_registry = {path = "ff_strategy_registry"}
 tokio = "*"
 chrono = "*"
 chrono-tz = "0.10.0"
-prost ="*"
-tungstenite = "0.23.0"
-tokio-tungstenite = { version = "0.23.1", features = ["stream", "native-tls"] }
 async-std ="*"
 futures = "0.3.30"

@@ -191,8 +191,11 @@ impl HistoricalEngine {
 
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
                    match self.primary_subscription_updates.try_recv() {
-                        Ok(_) => break 'time_instance_loop,
-                        Err(_) => {}
+                        Ok(_) => {
+                            end_month = false;
+                            break 'time_instance_loop
+                        }
+                       Err(_) => {}
                     }
 
                     // Collect data from the primary feeds simulating a buffering range

@@ -1175,15 +1175,13 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "ff_data_server",
+ "ff_rithmic_api",
  "ff_standard_lib",
  "ff_strategies",
  "ff_strategy_registry",
  "futures",
- "prost",
  "test_strategy",
  "tokio",
- "tokio-tungstenite",
- "tungstenite",
 ]
 
 [[package]]
