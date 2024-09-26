@@ -75,9 +75,15 @@ impl RithmicClient {
         let file_path = format!("rithmic_credentials/{}", file);
         RithmicCredentials::load_credentials_from_file(&file_path).unwrap()
     }
-    pub fn new(broker: &Brokerage) -> Self {
+    pub fn new(
+        broker: &Brokerage,
+        app_name: String,
+        app_version: String,
+        aggregated_quotes: bool,
+        server_domains_toml: String,
+    ) -> Self {
         let credentials = RithmicClient::rithmic_credentials(&broker);
-        let client = RithmicApiClient::new(credentials);
+        let client = RithmicApiClient::new(credentials, app_name, app_version, aggregated_quotes, server_domains_toml).unwrap();
         let client = Self {
             client: Arc::new(client),
             symbol_info: Default::default(),

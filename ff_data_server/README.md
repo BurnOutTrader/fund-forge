@@ -48,7 +48,7 @@ pub fn example() {
     };
     
     // Note that we use credentials.system_name.file_string() for the file name, so that the server knows where to find credentials.
-    let save_path: String = format!("ff_data_server/rithmic_credentials/{}", credentials.system_name.file_string());
+    let save_path: String = format!("ff_data_server/rithmic_credentials/{}", credentials.file_name());
     credentials.save_credentials_to_file(&save_path);
 }
 ```

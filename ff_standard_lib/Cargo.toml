@@ -8,7 +8,7 @@ authors = ["Kevin Monaghan"]
 prost-build = "*"
 
 [dependencies]
-ff_rithmic_api = { git = "https://github.com/BurnOutTrader/ff_rithmic_api.git", branch = "master" }
+ff_rithmic_api = "0.1.0"
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
 rkyv = { version =  "*", features = ["std", "alloc", "validation"] }
@@ -39,10 +39,10 @@ async-std = "*"
 async-trait = "0.1.80"
 heck = "*"
 ahash = "*"
-dashmap = "*"
+dashmap = "6.1.0"
 csv ="*"
 rust_decimal_macros ="*"
-prost = "*"
+prost = "0.13.3"
 tungstenite = "0.23.0"
 tokio-tungstenite = { version = "0.23.1", features = ["stream", "native-tls"] }
 rayon = "1.10.0"
