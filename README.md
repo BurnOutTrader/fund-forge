@@ -46,7 +46,6 @@ pub async fn on_data_received(
                 StrategyEvent::TimeSlice(time, time_slice) => {
                     for base_data in &time_slice {
                         match base_data {
-                            BaseDataEnum::TradePrice(trade_price) => {}
                             BaseDataEnum::Candle(candle) => {}
                             BaseDataEnum::QuoteBar(quotebar) => {}
                             BaseDataEnum::Tick(tick) => {}
