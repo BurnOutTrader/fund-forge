@@ -9,7 +9,6 @@ Then you just follow the information you will get from rithmic, which is essenti
 
 The conformance is easy to pass if you just build a simple program from [ff_rithmic_api](https://github.com/BurnOutTrader/ff_rithmic_api)
 this fund forge crate has its own RithmicClient which uses my other project [ff_rithmic_api](https://github.com/BurnOutTrader/ff_rithmic_api) as a dependency.
-If you would like to work on the Rithmic API, you will need to apply for your own dev kit and credentials from Rithmic. Additionally, you will need to complete the Rithmic conformance procedure.
 
 Since Fund Forge is not a company, each user must do this and create their own unique app name to pass conformance. You can find more information at [Rithmic](https://yyy3.rithmic.com/?page_id=17).
 
