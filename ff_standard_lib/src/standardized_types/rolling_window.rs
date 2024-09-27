@@ -2,14 +2,14 @@
 #[derive(Clone, Debug)]
 pub struct RollingWindow<T> {
     pub(crate) history: Vec<T>,
-    pub(crate) number: usize,
+    pub(crate) number: u64,
 }
 
 impl<T: std::clone::Clone> RollingWindow<T> {
-    pub fn new(number: u64) -> Self {
+    pub fn new(number: usize) -> Self {
         RollingWindow {
-            history: Vec::with_capacity(number as usize),
-            number: number as usize,
+            history: Vec::with_capacity(number),
+            number: number as u64,
         }
     }
 
@@ -26,7 +26,7 @@ impl<T: std::clone::Clone> RollingWindow<T> {
         self.history.insert(0, data);
 
         // Remove the oldest data if we exceed the desired number
-        if self.history.len() > self.number {
+        if self.history.len() > self.number as usize {
             self.history.pop(); // Remove the last element
         }
     }
@@ -44,7 +44,7 @@ impl<T: std::clone::Clone> RollingWindow<T> {
     }
 
     pub fn is_full(&self) -> bool {
-        self.history.len() == self.number
+        self.history.len() == self.number as usize
     }
 
     pub fn history(&self) -> Vec<T> {

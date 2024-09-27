@@ -465,10 +465,10 @@ pub struct AccountInfo {
     pub cash_used: Price,
     pub positions: Vec<Position>,
     pub is_hedging: bool,
-    pub buy_limit: Option<u64>,
-    pub sell_limit: Option<u64>,
-    pub max_orders: Option<u64>,
-    pub daily_max_loss: Option<u64>,
+    pub buy_limit: Option<Volume>,
+    pub sell_limit: Option<Volume>,
+    pub max_orders: Option<Volume>,
+    pub daily_max_loss: Option<Price>,
     pub daily_max_loss_reset_time: Option<String>
 }
 

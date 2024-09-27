@@ -7,7 +7,6 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{Resolution, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::rolling_window::RollingWindow;
-use crate::standardized_types::subscriptions;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Utc};
@@ -17,8 +16,12 @@ use futures::StreamExt;
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::{RwLock};
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
+use crate::standardized_types::base_data::candle::Candle;
+use crate::standardized_types::base_data::fundamental::Fundamental;
+use crate::standardized_types::base_data::quote::Quote;
+use crate::standardized_types::base_data::quotebar::QuoteBar;
+use crate::standardized_types::base_data::tick::Tick;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::symbol_info::SymbolInfo;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -32,6 +35,13 @@ pub struct SubscriptionHandler {
     // subscriptions which the strategy actually subscribed to, not the raw data needed to full-fill the subscription.
     strategy_subscriptions: Arc<RwLock<Vec<DataSubscription>>>,
     primary_subscriptions_broadcaster: Arc<StaticInternalBroadcaster<Vec<DataSubscription>>>,
+    candle_history: DashMap<DataSubscription, RollingWindow<Candle>>,
+    bar_history: DashMap<DataSubscription, RollingWindow<QuoteBar>>,
+    tick_history: DashMap<DataSubscription, RollingWindow<Tick>>,
+    quote_history: DashMap<DataSubscription, RollingWindow<Quote>>,
+    fundamental_history: DashMap<DataSubscription, RollingWindow<Fundamental>>,
+    open_candles: DashMap<DataSubscription, Candle>,
+    open_bars: DashMap<DataSubscription, QuoteBar>
 }
 
 impl SubscriptionHandler {
@@ -43,6 +53,13 @@ impl SubscriptionHandler {
             strategy_mode,
             strategy_subscriptions: Default::default(),
             primary_subscriptions_broadcaster: Arc::new(StaticInternalBroadcaster::new()),
+            candle_history: Default::default(),
+            bar_history: Default::default(),
+            tick_history: Default::default(),
+            quote_history: Default::default(),
+            fundamental_history: Default::default(),
+            open_candles: Default::default(),
+            open_bars: Default::default(),
         };
         handler
     }
@@ -87,7 +104,8 @@ impl SubscriptionHandler {
         &self,
         new_subscription: DataSubscription,
         current_time: DateTime<Utc>,
-        fill_forward: bool
+        fill_forward: bool,
+        history_to_retain: usize
     ) {
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         if !strategy_subscriptions.contains(&new_subscription) {
@@ -119,20 +137,58 @@ impl SubscriptionHandler {
 
         self.symbol_subscriptions.get(&new_subscription.symbol).unwrap()
             .subscribe(
-                new_subscription,
+                new_subscription.clone(),
                 current_time,
                 self.strategy_mode,
                 fill_forward
             )
             .await;
-
+        if history_to_retain > 0 {
+            match new_subscription.base_data_type {
+                BaseDataType::Ticks => {
+                    if let Some(mut window) = self.tick_history.get_mut(&new_subscription) {
+                        window.value_mut().clear();
+                    } else {
+                        self.tick_history.insert(new_subscription, RollingWindow::new(history_to_retain));
+                    }
+                }
+                BaseDataType::Quotes => {
+                    if let Some(mut window) = self.quote_history.get_mut(&new_subscription) {
+                        window.value_mut().clear();
+                    } else {
+                        self.quote_history.insert(new_subscription, RollingWindow::new(history_to_retain));
+                    }
+                }
+                BaseDataType::QuoteBars => {
+                    if let Some(mut window) = self.bar_history.get_mut(&new_subscription) {
+                        window.value_mut().clear();
+                    } else {
+                        self.bar_history.insert(new_subscription, RollingWindow::new(history_to_retain));
+                    }
+                }
+                BaseDataType::Candles => {
+                    if let Some(mut window) = self.candle_history.get_mut(&new_subscription) {
+                        window.value_mut().clear();
+                    } else {
+                        self.candle_history.insert(new_subscription, RollingWindow::new(history_to_retain));
+                    }
+                }
+                BaseDataType::Fundamentals => {
+                    if let Some(mut window) = self.fundamental_history.get_mut(&new_subscription) {
+                        window.value_mut().clear();
+                    } else {
+                        self.fundamental_history.insert(new_subscription, RollingWindow::new(history_to_retain));
+                    }
+                }
+            }
+        }
         self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
     }
 
     pub async fn set_subscriptions(
             &self,
             new_subscription: Vec<DataSubscription>,
-            history_to_retain: u64,
+            history_to_retain: usize,
             current_time: DateTime<Utc>,
             fill_forward: bool
     ) {
@@ -143,7 +199,7 @@ impl SubscriptionHandler {
             }
         }
         for sub in new_subscription {
-           self.subscribe(sub.clone(), current_time.clone(), fill_forward).await;
+           self.subscribe(sub.clone(), current_time.clone(), fill_forward, history_to_retain).await;
         }
         self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
     }
@@ -168,11 +224,38 @@ impl SubscriptionHandler {
             return;
         }
 
-        let is_primary_needed = self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
+        self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         strategy_subscriptions.retain(|x| x != &subscription);
         if self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count() == 0 {
             self.symbol_subscriptions.remove(&subscription.symbol);
+        }
+        match subscription.base_data_type {
+            BaseDataType::Ticks => {
+                if let Some(mut window) = self.tick_history.get_mut(&subscription) {
+                    window.value_mut().clear();
+                }
+            }
+            BaseDataType::Quotes => {
+                if let Some(mut window) = self.quote_history.get_mut(&subscription) {
+                    window.value_mut().clear();
+                }
+            }
+            BaseDataType::QuoteBars => {
+                if let Some(mut window) = self.bar_history.get_mut(&subscription) {
+                    window.value_mut().clear();
+                }
+            }
+            BaseDataType::Candles => {
+                if let Some(mut window) = self.candle_history.get_mut(&subscription) {
+                    window.value_mut().clear();
+                }
+            }
+            BaseDataType::Fundamentals => {
+                if let Some(mut window) = self.fundamental_history.get_mut(&subscription) {
+                    window.value_mut().clear();
+                }
+            }
         }
         self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
     }
@@ -205,7 +288,7 @@ impl SubscriptionHandler {
     pub async fn update_time_slice(&self, time_slice: TimeSlice) -> Option<TimeSlice> {
         let symbol_subscriptions = self.symbol_subscriptions.clone();
         let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
-        let mut closed_bars = Vec::new();
+        let mut time_slice_bars = Vec::new();
 
         // Create a FuturesUnordered to collect all futures and run them concurrently.
         let mut update_futures = FuturesUnordered::new();
@@ -232,7 +315,35 @@ impl SubscriptionHandler {
         while let Some(data) = update_futures.next().await {
             for consolidated_bars in data {
                 if let Some(consolidated_bar) = consolidated_bars.closed_data {
-                    closed_bars.push(consolidated_bar);
+                    time_slice_bars.push(consolidated_bar.clone());
+                    let subscription = consolidated_bar.subscription();
+                    match consolidated_bar {
+                        BaseDataEnum::Tick(tick) => {
+                            if let Some(mut rolling_window) = self.tick_history.get_mut(&subscription) {
+                                rolling_window.add(tick);
+                            }
+                        }
+                        BaseDataEnum::Quote(quote) => {
+                            if let Some(mut rolling_window) = self.quote_history.get_mut(&subscription) {
+                                rolling_window.add(quote);
+                            }
+                        }
+                        BaseDataEnum::QuoteBar(qb) => {
+                            if let Some(mut rolling_window) = self.bar_history.get_mut(&subscription) {
+                                rolling_window.add(qb);
+                            }
+                        }
+                        BaseDataEnum::Candle(candle) => {
+                            if let Some(mut rolling_window) = self.candle_history.get_mut(&subscription) {
+                                rolling_window.add(candle);
+                            }
+                        }
+                        BaseDataEnum::Fundamental(fund) => {
+                            if let Some(mut rolling_window) = self.fundamental_history.get_mut(&subscription) {
+                                rolling_window.add(fund);
+                            }
+                        }
+                    }
                 }
                 open_bars.insert(consolidated_bars.open_data.subscription(), consolidated_bars.open_data);
             }
@@ -240,13 +351,104 @@ impl SubscriptionHandler {
 
         // Combine open and closed bars.
         for (_, data) in open_bars {
-            closed_bars.push(data);
+            match &data {
+                BaseDataEnum::Candle(ref candle) => {
+                    self.open_candles.insert(data.subscription(), candle.clone());
+                }
+                BaseDataEnum::QuoteBar(ref qb) => {
+                    self.open_bars.insert(data.subscription(), qb.clone());
+                }
+                _ => {}
+            }
+            time_slice_bars.push(data);
         }
 
-        match closed_bars.is_empty() {
+        match time_slice_bars.is_empty() {
             true => None,
-            false => Some(closed_bars)
+            false => Some(time_slice_bars)
         }
+    }
+
+    pub fn bar_history(&self, subscription: &DataSubscription) -> Option<RollingWindow<QuoteBar>> {
+        if let Some(window) = self.bar_history.get(subscription) {
+            return Some(window.value().clone())
+        }
+        None
+    }
+
+    pub fn candle_history(&self, subscription: &DataSubscription) -> Option<RollingWindow<Candle>> {
+        if let Some(window) = self.candle_history.get(subscription) {
+            return Some(window.value().clone())
+        }
+        None
+    }
+
+    pub fn tick_history(&self, subscription: &DataSubscription) -> Option<RollingWindow<Tick>> {
+        if let Some(window) = self.tick_history.get(subscription) {
+            return Some(window.value().clone())
+        }
+        None
+    }
+
+    pub fn quote_history(&self, subscription: &DataSubscription) -> Option<RollingWindow<Quote>> {
+        if let Some(window) = self.quote_history.get(subscription) {
+            return Some(window.value().clone())
+        }
+        None
+    }
+
+    pub fn open_bar(&self, subscription: &DataSubscription) -> Option<QuoteBar> {
+        match self.open_bars.get(subscription) {
+            None => None,
+            Some(data) => Some(data.value().clone())
+        }
+    }
+
+    pub fn open_candle(&self, subscription: &DataSubscription) -> Option<Candle> {
+        match self.open_candles.get(subscription) {
+            None => None,
+            Some(data) => Some(data.value().clone())
+        }
+    }
+
+    pub fn candle_index(&self, subscription: &DataSubscription, index: usize) -> Option<Candle> {
+        if let Some(window) = self.candle_history.get(subscription) {
+            return match window.get(index) {
+                None => None,
+                Some(data) => Some(data.clone())
+            }
+        }
+        None
+    }
+
+    pub fn bar_index(&self, subscription: &DataSubscription, index: usize) -> Option<QuoteBar> {
+        if let Some(window) = self.bar_history.get(subscription) {
+            return match window.get(index) {
+                None => None,
+                Some(data) => Some(data.clone())
+            }
+        }
+        None
+    }
+
+    pub fn tick_index(&self, subscription: &DataSubscription, index: usize) -> Option<Tick> {
+        if let Some(window) = self.tick_history.get(subscription) {
+            return match window.get(index) {
+                None => None,
+                Some(data) => Some(data.clone())
+            }
+        }
+        None
+    }
+
+    pub fn quote_index(&self, subscription: &DataSubscription, index: usize) -> Option<Quote> {
+        if let Some(window) = self.quote_history.get(subscription) {
+            return match window.get(index) {
+                None => None,
+                Some(data) => Some(data.clone())
+            }
+        }
+        None
     }
 
     pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> Option<TimeSlice> {
@@ -266,6 +468,36 @@ impl SubscriptionHandler {
         let mut time_slice = TimeSlice::new();
         for result in results {
             if let Some(data) = result {
+                for consolidated_data in &data {
+                    let subscription = consolidated_data.subscription();
+                    match consolidated_data {
+                        BaseDataEnum::Tick(ref tick) => {
+                            if let Some(mut rolling_window) = self.tick_history.get_mut(&subscription) {
+                                rolling_window.add(tick.clone());
+                            }
+                        }
+                        BaseDataEnum::Quote(ref quote) => {
+                            if let Some(mut rolling_window) = self.quote_history.get_mut(&subscription) {
+                                rolling_window.add(quote.clone());
+                            }
+                        }
+                        BaseDataEnum::QuoteBar(ref qb) => {
+                            if let Some(mut rolling_window) = self.bar_history.get_mut(&subscription) {
+                                rolling_window.add(qb.clone());
+                            }
+                        }
+                        BaseDataEnum::Candle(ref candle) => {
+                            if let Some(mut rolling_window) = self.candle_history.get_mut(&subscription) {
+                                rolling_window.add(candle.clone());
+                            }
+                        }
+                        BaseDataEnum::Fundamental(ref fund) => {
+                            if let Some(mut rolling_window) = self.fundamental_history.get_mut(&subscription) {
+                                rolling_window.add(fund.clone());
+                            }
+                        }
+                    }
+                }
                 time_slice.extend(data);
             }
         }
@@ -452,9 +684,12 @@ impl SymbolSubscriptionHandler {
                             }
                             if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
                                 SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
-
                             } else {
-                                SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
+                                if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)) {
+                                    SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
+                                } else {
+                                    SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
+                                }
                             }
                         }
                         _ => panic!("This cant happen")

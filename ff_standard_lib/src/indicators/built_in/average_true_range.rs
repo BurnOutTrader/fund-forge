@@ -37,7 +37,7 @@ impl AverageTrueRange {
     pub async fn new(
         name: IndicatorName,
         subscription: DataSubscription,
-        history_to_retain: u64,
+        history_to_retain: usize,
         period: u64,
         plot_color: Option<Color>,
     ) -> Self {
@@ -49,7 +49,7 @@ impl AverageTrueRange {
             name,
             subscription,
             history: RollingWindow::new(history_to_retain),
-            base_data_history: RollingWindow::new(period),
+            base_data_history: RollingWindow::new(period as usize),
             is_ready: false,
             tick_size,
             plot_color,
@@ -102,7 +102,7 @@ impl Indicators for AverageTrueRange {
     }
 
     fn history_to_retain(&self) -> usize {
-        self.history.number.clone()
+        self.history.number.clone() as usize
     }
 
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {

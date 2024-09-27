@@ -1005,9 +1005,9 @@ dependencies = [
 
 [[package]]
 name = "ff_rithmic_api"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a92a5a845c586d0e6127fe0cd7020520970773b73b49135ed2e890c098cde28f"
+checksum = "b2aa226fd07f086679446515283e5a848566075a991a9ce5331a7fa721e02d96"
 dependencies = [
  "dashmap",
  "futures-util",
@@ -1184,6 +1184,8 @@ dependencies = [
  "ff_strategy_registry",
  "futures",
  "prost",
+ "rust_decimal",
+ "rust_decimal_macros",
  "test_strategy",
  "tokio",
  "tokio-tungstenite",

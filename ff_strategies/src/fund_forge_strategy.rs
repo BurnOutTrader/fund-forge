@@ -10,16 +10,14 @@ use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
 use ff_standard_lib::indicators::indicators_trait::{IndicatorName, Indicators};
 use ff_standard_lib::indicators::values::IndicatorValues;
 use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
-use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::history::range_data;
 use ff_standard_lib::standardized_types::base_data::order_book::OrderBook;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
-use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateType, ProtectiveOrder, TimeInForce};
+use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderUpdateType, ProtectiveOrder, TimeInForce};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use ff_standard_lib::standardized_types::strategy_events::{
     EventTimeSlice, StrategyInteractionMode,
 };
-use rust_decimal_macros::dec;
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
@@ -33,8 +31,11 @@ use tokio::sync::{mpsc, Notify, RwLock};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::market_handler::market_handlers::{MarketHandler};
-use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static, live_order_handler, live_subscription_handler, subscribe_primary_subscription_updates};
-use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
+use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static, live_order_handler, live_subscription_handler};
+use ff_standard_lib::standardized_types::base_data::candle::Candle;
+use ff_standard_lib::standardized_types::base_data::quote::Quote;
+use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
+use ff_standard_lib::standardized_types::base_data::tick::Tick;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -107,7 +108,7 @@ impl FundForgeStrategy {
         warmup_duration: ChronoDuration,
         subscriptions: Vec<DataSubscription>,
         fill_forward: bool,
-        retain_history: u64,
+        retain_history: usize,
         strategy_event_sender: mpsc::Sender<EventTimeSlice>,
         replay_delay_ms: Option<u64>,
         buffering_millis: u64,
@@ -573,13 +574,13 @@ impl FundForgeStrategy {
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
-    pub async fn subscribe(&self, subscription: DataSubscription, fill_forward: bool) {
+    pub async fn subscribe(&self, subscription: DataSubscription, hsitory_to_retain: usize, fill_forward: bool) {
         if subscription.resolution.as_millis() < self.buffer_resolution.as_millis() {
             panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
         }
         self
             .subscription_handler
-            .subscribe(subscription.clone(), self.time_utc(), fill_forward)
+            .subscribe(subscription.clone(), self.time_utc(), fill_forward, hsitory_to_retain)
             .await
     }
 
@@ -600,7 +601,7 @@ impl FundForgeStrategy {
     pub async fn subscriptions_update(
         &self,
         subscriptions: Vec<DataSubscription>,
-        retain_history: u64,
+        retain_to_history: usize,
         fill_forward: bool
     ) {
         for subscription in &subscriptions {
@@ -608,20 +609,31 @@ impl FundForgeStrategy {
                 panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
             }
         }
-        self.subscription_handler.set_subscriptions(subscriptions, retain_history, self.time_utc(), fill_forward).await;
+        self.subscription_handler.set_subscriptions(subscriptions, retain_to_history, self.time_utc(), fill_forward).await;
     }
 
-    /// returns the nth last bar at the specified index. 1 = 1 bar ago, 0 = current bar.
-    pub async fn bar_index(
-        &self,
-        subscription: &DataSubscription,
-        index: usize,
-    ) -> Option<BaseDataEnum> {
-        todo!()
+    pub fn open_bar(&self, subscription: &DataSubscription) -> Option<QuoteBar> {
+        self.subscription_handler.open_bar(subscription)
     }
 
-    pub async fn bar_current(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
-       todo!()
+    pub fn open_candle(&self, subscription: &DataSubscription) -> Option<Candle> {
+        self.subscription_handler.open_candle(subscription)
+    }
+
+    pub fn candle_index(&self, subscription: &DataSubscription, index: usize) -> Option<Candle> {
+        self.subscription_handler.candle_index(subscription, index)
+    }
+
+    pub fn bar_index(&self, subscription: &DataSubscription, index: usize) -> Option<QuoteBar> {
+        self.subscription_handler.bar_index(subscription, index)
+    }
+
+    pub fn tick_index(&self, subscription: &DataSubscription, index: usize) -> Option<Tick> {
+        self.subscription_handler.tick_index(subscription, index)
+    }
+
+    pub fn quote_index(&self, subscription: &DataSubscription, index: usize) -> Option<Quote> {
+        self.subscription_handler.quote_index(subscription, index)
     }
 
     /// Current Tz time, depends on the `StrategyMode`. \

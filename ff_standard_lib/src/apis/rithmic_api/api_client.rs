@@ -1,4 +1,5 @@
 use std::sync::{Arc};
+use ahash::AHashMap;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
@@ -6,7 +7,7 @@ use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_account_list::UserType;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, RequestProductCodes, ResponseAccountRmsInfo};
+use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, RequestLoginInfo, RequestPnLPositionSnapshot, RequestProductCodes, ResponseAccountRmsInfo};
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::stream::SplitStream;
 use lazy_static::lazy_static;
@@ -22,14 +23,15 @@ use crate::apis::data_vendor::server_side_datavendor::VendorApiResponse;
 use crate::apis::StreamName;
 use crate::helpers::get_data_folder;
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
-use crate::standardized_types::accounts::ledgers::{AccountId, AccountName};
+use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{FundForgeError, DataServerResponse};
-use crate::standardized_types::enums::{Exchange, MarketType, Resolution, StrategyMode};
-use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
+use crate::standardized_types::enums::{Exchange, MarketType, Resolution, StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use crate::standardized_types::Volume;
+use crate::standardized_types::{Volume};
+use tokio::sync::{oneshot};
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
@@ -63,23 +65,48 @@ pub struct RithmicClient {
     pub brokerage: Brokerage,
     pub data_vendor: DataVendor,
     pub system: RithmicSystem,
+    pub fcm_id: Option<String>,
+    pub ib_id: Option<String>,
+    pub user_type: Option<i32>,
+
+    pub callbacks: DashMap<StreamName, AHashMap<u64, oneshot::Sender<DataServerResponse>>>,
 
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
     pub readers: DashMap<SysInfraType, Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>>,
 
+    // accounts
+    pub accounts: DashMap<AccountId, AccountInfo>,
+    pub account_rms_info: DashMap<AccountId, ResponseAccountRmsInfo>,
+
+    //products
+    pub products: DashMap<MarketType, Vec<Symbol>>,
+
     //subscribers
     data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<DataServerResponse>>>>,
-
-    // accounts
-    pub accounts: DashMap<AccountId, AccountName>,
-    pub account_liquidate_threshold: DashMap<AccountId, AccountName>,
-    pub account_pnl_positions: DashMap<AccountId, AccountPnLPositionUpdate>,
-    pub account_rms_info: DashMap<AccountId, ResponseAccountRmsInfo>,
 }
 
 impl RithmicClient {
+    async fn run_start_up(&self) {
+     /*   let accounts = RequestAccountList {
+            template_id: 302,
+            user_msg: vec![],
+            fcm_id: self.fcm_id.clone(),
+            ib_id: self.ib_id.clone(),
+            user_type: self.user_type.clone()
+        };
+        self.client.send_message(SysInfraType::OrderPlant, accounts).await.unwrap();*/
+        let rms_req = RequestAccountRmsInfo {
+            template_id: 304,
+            user_msg: vec![],
+            fcm_id: self.fcm_id.clone(),
+            ib_id: self.ib_id.clone(),
+            user_type: self.user_type.clone(),
+        };
+        self.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();
+    }
+
     pub async fn new(
         system: RithmicSystem,
         app_name: String,
@@ -90,19 +117,22 @@ impl RithmicClient {
         let brokerage = Brokerage::Rithmic(system.clone());
         let data_vendor = DataVendor::Rithmic(system.clone());
         let credentials = RithmicClient::rithmic_credentials(&brokerage).unwrap();
-        let client = RithmicApiClient::new(credentials, app_name, app_version, aggregated_quotes, server_domains_toml).unwrap();
+        let client = RithmicApiClient::new(credentials.clone(), app_name, app_version, aggregated_quotes, server_domains_toml).unwrap();
         let mut client = Self {
             brokerage,
             data_vendor,
             system,
+            fcm_id: credentials.fcm_id.clone(),
+            ib_id: credentials.ib_id.clone(),
+            user_type: credentials.user_type.clone(),
+            callbacks: Default::default(),
             client: Arc::new(client),
             symbol_info: Default::default(),
             readers: DashMap::with_capacity(5),
             data_feed_broadcasters: Default::default(),
             accounts: Default::default(),
-            account_liquidate_threshold: Default::default(),
-            account_pnl_positions: Default::default(),
             account_rms_info: Default::default(),
+            products: Default::default(),
         };
         let _ticker_receiver = match client.client.connect_and_login(SysInfraType::TickerPlant).await {
             Ok(r) => client.readers.insert(SysInfraType::TickerPlant, Arc::new(Mutex::new(r))),
@@ -152,27 +182,28 @@ impl RithmicClient {
         vec![DataSubscription::new(SymbolName::from("NQ"), self.data_vendor.clone(), Resolution::Instant, BaseDataType::Ticks, MarketType::Futures(Exchange::CME))]
     }
 
-
-    async fn run_start_up(&self) {
-        let accounts = RequestAccountList {
-            template_id: 302,
-            user_msg: vec![],
-            fcm_id: None,
-            ib_id: None,
-            user_type: Some(UserType::Trader.into())
-        };
-        self.client.send_message(SysInfraType::OrderPlant, accounts).await.unwrap();
-        let rms_req = RequestAccountRmsInfo {
-            template_id: 304,
-            user_msg: vec![],
-            fcm_id: None,
-            ib_id: None,
-            user_type: Some(UserType::Trader.into()),
-        };
-        self.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();
-
-
+    pub async fn send_callback(&self, stream_name: &StreamName, callback_id: u64, response: DataServerResponse) {
+        if let Some(mut stream_map) = self.callbacks.get_mut(stream_name) {
+            if let Some(sender) = stream_map.value_mut().remove(&callback_id) {
+                match sender.send(response) {
+                    Ok(_) => {}
+                    Err(_) => {}
+                }
+            }
+        }
     }
+
+    pub async fn register_callback(&self, stream_name: &StreamName, callback_id: u64, sender: oneshot::Sender<DataServerResponse>) {
+        if let Some(mut stream_map) = self.callbacks.get_mut(stream_name) {
+            stream_map.value_mut().insert(callback_id, sender);
+        } else {
+            let mut map = AHashMap::new();
+            map.insert(callback_id, sender);
+            self.callbacks.insert(stream_name.clone(), map);
+        }
+    }
+
+
     fn rithmic_credentials(broker: &Brokerage) -> Result<RithmicCredentials, FundForgeError> {
         match broker {
             Brokerage::Rithmic(system) => {
@@ -262,8 +293,25 @@ impl VendorApiResponse for RithmicClient {
         todo!()
     }
 
-    async fn resolutions_response(&self, mode: StrategyMode, _stream_name: String, _market_type: MarketType, _callback_id: u64) -> DataServerResponse {
-        todo!()
+    async fn resolutions_response(&self, mode: StrategyMode, _stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+        let subs = match mode {
+            StrategyMode::Backtest => {
+                vec![]
+            }
+            StrategyMode::LivePaperTrading | StrategyMode::Live => {
+                vec![
+                    SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
+                    SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
+                    SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles),
+                    SubscriptionResolutionType::new(Resolution::Minutes(1), BaseDataType::Candles),
+                ]
+            }
+        };
+        DataServerResponse::Resolutions {
+            callback_id,
+            subscription_resolutions_types: subs,
+            market_type: MarketType::Forex,
+        }
     }
 
     async fn markets_response(&self, mode: StrategyMode, _stream_name: String, _callback_id: u64) -> DataServerResponse {

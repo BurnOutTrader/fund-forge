@@ -405,7 +405,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // this will return a RollingWindow<BaseData> for the subscription by cloning the history.
     // at the current point this clones the whole rolling window, and so is not suitable for frequent use of large history.
     // An alternative would be to get the history once, after initializing the indicator, so we have a warmed up history, then keep the history in a separate variable and add the new data to it.
-    history: &RollingWindow<BaseDataEnum>  = strategy.history(&aud_usd_15m).await;
+    let history: Option<RollingWindow<Candle>>  = strategy.candle_history(&aud_usd_15m).await;
 
     // if we are keeping a large history and need to access it often, it could be better to manually keep the history we need to avoid clone()ing the whole history on every iter.
     // we could set the history_to_retain variable to some small number and keep the larger history in a separate variable.
@@ -414,13 +414,48 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         rolling_window.add(data);
     }
     
+
+    // we can get the open candle for a candles subscription, note we return an optional `Candle` object, not a `BaseDataEnum`
+    let aud_cad_60m_candles = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex);
+    let current_open_candle: Option<Candle> = strategy.open_candle(&aud_cad_60m_candles);
+    // we can get a historical candle from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed Candles)
+    let last_historical_candle: Option<Candle>  = candle_index(&aud_cad_60m_candles, 0);
+    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
+    let candle_history: Option<RollingWindow<Candle>>  = strategy.candle_history(&aud_cad_60m_candles).await;
+
+    // we can get the open quotebar for a quotebars subscription, note we return an optional `Candle` QuoteBar, not a `BaseDataEnum`
+    let aud_cad_60m_quotebars = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::QuoteBars, MarketType::Forex);
+    let current_open_candle: Option<QuoteBar> = strategy.open_bar(&aud_cad_60m_quotebars);
+    // we can get a historical quotebar from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed QuoteBars)
+    let last_historical_quotebar: Option<QuoteBar>  = bar_index(&aud_cad_60m, 0);
+    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
+    let bar_history: Option<RollingWindow<QuoteBar>>  = strategy.bar_history(&aud_cad_60m_quotebars).await; 
+
+    let aud_cad_ticks = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex);
+    // we can get a historical tick from the history we retained according to the 'history_to_retain' parameter when subscribing.
+    // since ticks are never open or closed the current tick is always in history as index 0, so the last tick is index 1
+    let current_tick: Option<Tick>  = tick_index(&aud_cad_ticks, 0);
+    let last_historical_tick: Option<Tick>  = tick_index(&aud_cad_ticks, 1);
+    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
+    let tick_history: Option<RollingWindow<Tick>>  = strategy.tick_history(&aud_cad_ticks).await;
+
+    let aud_cad_quotes = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
+    // we can get a historical quote from the history we retained according to the 'history_to_retain' parameter when subscribing.
+    // since quotes are never open or closed the current quote is always in history as index 0, so the last quote is index 1
+    let current_quote: Option<Quote>  = quote_index(&aud_cad_quotes, 0);
+    let last_historical_quote: Option<Quote>  = quote_index(&aud_cad_quotes, 1);
+    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
+    let quote_history: Option<RollingWindow<Quote>>  = strategy.quote_history(&aud_cad_quotes).await;
+
+    // if our strategy has already warmed up, the subscription will automatically have warmup to the maximum number of bars and have history available.
+    let aud_cad_60m = DataSubscription::new_custom("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), MarketType::Forex, CandleType::HeikinAshi);
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         // this will give us the closed bar, 2 bars ago
-        let two_bars_ago = &strategy.bar_index(&aud_usd_15m, 2).await;
+        let two_closed_bars_ago = &strategy.candle_index(&aud_cad_60m, 1).await;
         println!("{}...{} Three bars ago: {:?}", count, aud_cad_60m.symbol.name, three_bars_ago);
         
         // this will give us the current open bar
-        let data_current = &strategy.data_current(&aud_cad_60m).await;
+        let current_open_candle = &strategy.open_candle(&aud_cad_60m).await;
         println!("{}...{} Current data: {:?}, {}", count, aud_cad_60m.symbol.name, data_current.is_closed);
         
         //The data points can be accessed by index. where 0 is the latest data point.
