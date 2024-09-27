@@ -8,6 +8,7 @@ use crate::standardized_types::enums::{Resolution, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Duration, Utc};
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
 
 pub enum ConsolidatorEnum {
     Count(CountConsolidator),
@@ -20,9 +21,8 @@ impl ConsolidatorEnum {
     /// Creates a new consolidator based on the subscription. if is_warmed_up is true, the consolidator will warm up to the to_time on its own.
     pub async fn create_consolidator(
         is_warmed_up: bool,
+        warm_up_to_time: DateTime<Utc>,
         subscription: DataSubscription,
-        history_to_retain: u64,
-        to_time: DateTime<Utc>,
         strategy_mode: StrategyMode,
         fill_forward: bool
     ) -> ConsolidatorEnum {
@@ -36,14 +36,14 @@ impl ConsolidatorEnum {
             return match is_warmed_up {
                 true => {
                     let consolidator = ConsolidatorEnum::Count(
-                        CountConsolidator::new(subscription.clone(), history_to_retain)
+                        CountConsolidator::new(subscription.clone())
                             .await
                             .unwrap(),
                     );
-                    ConsolidatorEnum::warmup(consolidator, to_time, strategy_mode).await
+                    ConsolidatorEnum::warmup(consolidator, warm_up_to_time, strategy_mode).await
                 }
                 false => ConsolidatorEnum::Count(
-                    CountConsolidator::new(subscription.clone(), history_to_retain)
+                    CountConsolidator::new(subscription.clone())
                         .await
                         .unwrap(),
                 ),
@@ -53,17 +53,17 @@ impl ConsolidatorEnum {
         let consolidator = match &subscription.candle_type {
             Some(candle_type) => match candle_type {
                 CandleType::Renko => ConsolidatorEnum::Renko(
-                    RenkoConsolidator::new(subscription.clone(), history_to_retain)
+                    RenkoConsolidator::new(subscription.clone())
                         .await
                         .unwrap(),
                 ),
                 CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(
-                    HeikinAshiConsolidator::new(subscription.clone(), history_to_retain, fill_forward)
+                    HeikinAshiConsolidator::new(subscription.clone(), fill_forward)
                         .await
                         .unwrap(),
                 ),
                 CandleType::CandleStick => ConsolidatorEnum::CandleStickConsolidator(
-                    CandleStickConsolidator::new(subscription.clone(), history_to_retain, fill_forward)
+                    CandleStickConsolidator::new(subscription.clone(), fill_forward)
                         .await
                         .unwrap(),
                 ),
@@ -71,8 +71,8 @@ impl ConsolidatorEnum {
             _ => panic!("Candle type is required for CandleStickConsolidator"),
         };
 
-        match is_warmed_up {
-            true => ConsolidatorEnum::warmup(consolidator, to_time, strategy_mode).await,
+       match is_warmed_up {
+            true => ConsolidatorEnum::warmup(consolidator, warm_up_to_time, strategy_mode).await,
             false => consolidator,
         }
     }
@@ -124,58 +124,6 @@ impl ConsolidatorEnum {
     }
 
     /// Returns the history to retain for the consolidator.
-    pub fn history_to_retain(&self) -> usize {
-        match self {
-            ConsolidatorEnum::Count(count_consolidator) => count_consolidator.history.number,
-            ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
-                time_consolidator.history.number
-            }
-            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
-                heikin_ashi_consolidator.history.number
-            }
-            ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.history.number,
-        }
-    }
-
-    pub fn history(&self) -> RollingWindow<BaseDataEnum> {
-        match self {
-            ConsolidatorEnum::Count(count_consolidator) => count_consolidator.history(),
-            ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
-                time_consolidator.history()
-            }
-            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
-                heikin_ashi_consolidator.history()
-            }
-            ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.history(),
-        }
-    }
-
-    pub fn current(&self) -> Option<BaseDataEnum> {
-        match self {
-            ConsolidatorEnum::Count(count_consolidator) => count_consolidator.current(),
-            ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
-                time_consolidator.current()
-            }
-            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
-                heikin_ashi_consolidator.current()
-            }
-            ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.current(),
-        }
-    }
-
-    pub fn index(&self, index: usize) -> Option<BaseDataEnum> {
-        match self {
-            ConsolidatorEnum::Count(count_consolidator) => count_consolidator.index(index),
-            ConsolidatorEnum::CandleStickConsolidator(time_consolidator) => {
-                time_consolidator.index(index)
-            }
-            ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
-                heikin_ashi_consolidator.index(index)
-            }
-            ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.index(index),
-        }
-    }
-
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
         match self {
             ConsolidatorEnum::Count(_) => None,
@@ -215,8 +163,7 @@ impl ConsolidatorEnum {
         };
 
         let from_time = to_time
-            - (subscription.resolution.as_duration() * consolidator.history().number as i32)
-            - Duration::days(4); //we go back a bit further in case of holidays or weekends
+            - Duration::days(5);
 
         let base_subscription = DataSubscription::new(
             subscription.symbol.name.clone(),

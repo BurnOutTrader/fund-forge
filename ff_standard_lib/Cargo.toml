@@ -8,10 +8,10 @@ authors = ["Kevin Monaghan"]
 prost-build = "*"
 
 [dependencies]
-ff_rithmic_api = "0.1.0"
+ff_rithmic_api = "0.1.4"
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
-rkyv = { version =  "*", features = ["std", "alloc", "validation"] }
+rkyv = { version =  "0.7.44", features = ["std", "alloc", "validation"] }
 bytes = "*"
 zip = "*"
 log = "*"
@@ -21,7 +21,7 @@ once_cell = "*"
 lazy_static = "*"
 structopt = "*"
 indicatif = "*"
-strum_macros = "*"
+strum_macros = "0.26.4"
 strum ="*"
 reqwest = { version = "*", features = ["stream"] }
 urlencoding = "*"

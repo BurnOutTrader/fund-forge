@@ -6,3 +6,5 @@ pub mod rithmic_api;
 pub mod brokerage;
 pub mod data_vendor;
 pub mod test_api;
+
+pub type StreamName = String;

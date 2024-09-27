@@ -19,17 +19,15 @@ use crate::standardized_types::data_server_messaging::FundForgeError;
 pub struct CandleStickConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
-    pub(crate) history: RollingWindow<BaseDataEnum>,
     tick_size: Price,
     last_close: Option<Price>,
     last_ask_close: Option<Price>,
     last_bid_close: Option<Price>,
-    fill_forward: bool
+    fill_forward: bool,
 }
 
 impl CandleStickConsolidator {
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
-        //todo add fill forward option for this
         if self.fill_forward && self.current_data == None {
             match self.subscription.base_data_type {
                 BaseDataType::QuoteBars => {
@@ -105,7 +103,6 @@ impl CandleStickConsolidator {
                     }
                     _ => {}
                 }
-                self.history.add(consolidated_bar.clone());
                 let new_bar = self.new_candle(base_data);
                 self.current_data = Some(BaseDataEnum::Candle(new_bar.clone()));
                 return ConsolidatedData::with_closed(BaseDataEnum::Candle(new_bar), consolidated_bar);
@@ -127,13 +124,6 @@ impl CandleStickConsolidator {
                         candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size);
                         candle.close = new_candle.close;
                         candle.volume += new_candle.volume;
-                        return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
-                    }
-                    BaseDataEnum::TradePrice(price) => {
-                        candle.high = candle.high.max(price.price);
-                        candle.low = candle.low.min(price.price);
-                        candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size);
-                        candle.close = price.price;
                         return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                     }
                     _ => panic!(
@@ -186,7 +176,6 @@ impl CandleStickConsolidator {
             if base_data.time_created_utc() >= current_bar.time_created_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
-                self.history.add(consolidated_bar.clone());
                 let new_bar = self.new_quote_bar(base_data);
                 match &consolidated_bar {
                     BaseDataEnum::QuoteBar(quote_bar) => {
@@ -271,22 +260,13 @@ impl CandleStickConsolidator {
                 consolidated_candle.time = time.to_string();
                 consolidated_candle
             }
-            BaseDataEnum::TradePrice(price) => Candle::new(
-                self.subscription.symbol.clone(),
-                price.price,
-                Volume::from_f64(0.0).unwrap(),
-                time.to_string(),
-                self.subscription.resolution.clone(),
-                self.subscription.candle_type.clone().unwrap(),
-            ),
             _ => panic!("Invalid base data type for Candle consolidator"),
         }
     }
 
     pub(crate) async fn new(
         subscription: DataSubscription,
-        history_to_retain: u64,
-        fill_forward: bool
+        fill_forward: bool,
     ) -> Result<Self, FundForgeError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(FundForgeError::ClientSideErrorDebug(format!(
@@ -312,12 +292,11 @@ impl CandleStickConsolidator {
         Ok(CandleStickConsolidator {
             current_data: None,
             subscription,
-            history: RollingWindow::new(history_to_retain),
             tick_size,
             last_close: None,
             last_ask_close: None,
             last_bid_close: None,
-            fill_forward
+            fill_forward,
         })
     }
 
@@ -329,9 +308,6 @@ impl CandleStickConsolidator {
             BaseDataType::Quotes => {
                 self.update_quote_bars(base_data)
             }
-            BaseDataType::TradePrices => {
-               self.update_candles(base_data)
-            }
             BaseDataType::QuoteBars => {
                 self.update_quote_bars(base_data)
             }
@@ -339,24 +315,6 @@ impl CandleStickConsolidator {
                 self.update_candles(base_data)
             }
             BaseDataType::Fundamentals => panic!("Fundamentals are not supported"),
-        }
-    }
-
-    pub(crate) fn history(&self) -> RollingWindow<BaseDataEnum> {
-        self.history.clone()
-    }
-
-    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
-        match self.history.get(index) {
-            Some(data) => Some(data.clone()),
-            None => None,
-        }
-    }
-
-    pub(crate) fn current(&self) -> Option<BaseDataEnum> {
-        match &self.current_data {
-            Some(data) => Some(data.clone()),
-            None => None,
         }
     }
 }

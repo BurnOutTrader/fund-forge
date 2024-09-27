@@ -18,6 +18,7 @@ use ff_standard_lib::servers::settings::client_settings::initialise_settings;
 use crate::request_handlers::data_server_manage_async_requests;
 
 pub mod request_handlers;
+mod tests;
 
 #[derive(Debug)]
 pub enum StartUpMode {

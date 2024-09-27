@@ -18,14 +18,12 @@ pub struct CountConsolidator {
     counter: u64,
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
-    pub(crate) history: RollingWindow<BaseDataEnum>,
     tick_size: Price, //need to add this
 }
 
 impl CountConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
-        history_to_retain: u64,
     ) -> Result<Self, String> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
@@ -70,7 +68,6 @@ impl CountConsolidator {
             counter: 0,
             current_data,
             subscription,
-            history: RollingWindow::new(history_to_retain),
             tick_size,
         })
     }
@@ -100,8 +97,6 @@ impl CountConsolidator {
                     let mut consolidated_candle = self.current_data.clone();
                     consolidated_candle.is_closed = true;
                     self.counter = 0;
-                    let consolidated_data = BaseDataEnum::Candle(consolidated_candle.clone());
-                    self.history.add(consolidated_data.clone());
                     self.current_data = match self.subscription.base_data_type {
                         BaseDataType::Ticks => Candle::new(
                             self.subscription.symbol.clone(),
@@ -125,17 +120,6 @@ impl CountConsolidator {
                 "Invalid base data type for CountConsolidator: {}",
                 base_data.base_data_type()
             ),
-        }
-    }
-
-    pub(crate) fn history(&self) -> RollingWindow<BaseDataEnum> {
-        self.history.clone()
-    }
-
-    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
-        match self.history.get(index) {
-            Some(data) => Some(data.clone()),
-            None => None,
         }
     }
 

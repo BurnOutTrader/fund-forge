@@ -573,13 +573,13 @@ impl FundForgeStrategy {
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
-    pub async fn subscribe(&self, subscription: DataSubscription, retain_history: u64, fill_forward: bool) {
+    pub async fn subscribe(&self, subscription: DataSubscription, fill_forward: bool) {
         if subscription.resolution.as_millis() < self.buffer_resolution.as_millis() {
             panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
         }
         self
             .subscription_handler
-            .subscribe(subscription.clone(), retain_history, self.time_utc(), fill_forward)
+            .subscribe(subscription.clone(), self.time_utc(), fill_forward)
             .await
     }
 
@@ -617,13 +617,11 @@ impl FundForgeStrategy {
         subscription: &DataSubscription,
         index: usize,
     ) -> Option<BaseDataEnum> {
-        self.subscription_handler
-            .bar_index(subscription, index)
-            .await
+        todo!()
     }
 
     pub async fn bar_current(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
-        self.subscription_handler.bar_current(subscription).await
+       todo!()
     }
 
     /// Current Tz time, depends on the `StrategyMode`. \

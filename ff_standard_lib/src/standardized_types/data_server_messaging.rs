@@ -10,6 +10,7 @@ use rust_decimal::Decimal;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::orders::orders::{OrderRequest};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
@@ -149,6 +150,10 @@ pub enum DataServerRequest {
         data_vendor: DataVendor,
         market_type: MarketType
     },
+    BaseDataTypes {
+        callback_id: u64,
+        data_vendor: DataVendor
+    },
     SymbolsBroker {
         callback_id: u64,
         brokerage: Brokerage,
@@ -195,7 +200,8 @@ pub enum DataServerRequest {
         quantity: Volume,
         brokerage: Brokerage,
         symbol_name: SymbolName
-    }
+    },
+    Accounts{callback_id: u64, brokerage: Brokerage},
 }
 
 impl DataServerRequest {
@@ -218,6 +224,7 @@ impl DataServerRequest {
             DataServerRequest::SymbolsBroker { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Resolutions {callback_id, .. } => {*callback_id = id}
             DataServerRequest::AccountInfo { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::BaseDataTypes { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Markets { callback_id, .. } => {*callback_id = id}
             DataServerRequest::TickSize { callback_id, .. } => {*callback_id = id}
             DataServerRequest::DecimalAccuracy { callback_id, .. } => {*callback_id = id}
@@ -226,6 +233,7 @@ impl DataServerRequest {
             DataServerRequest::Register {  .. } => {}
             DataServerRequest::OrderRequest { .. } => {}
             DataServerRequest::MarginRequired { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::Accounts { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -261,6 +269,11 @@ DataServerResponse {
         callback_id: u64,
         symbols: Vec<Symbol>,
         market_type: MarketType
+    },
+
+    BaseDataTypes {
+        callback_id: u64,
+        base_data_types: Vec<BaseDataType>
     },
 
     /// Responds with a vec<(Resolution, BaseDataType)> which represents all the native resolutions available for the data types from the vendor api (note we only support intraday resolutions, higher resolutions are consolidated by the engine)
@@ -334,7 +347,9 @@ DataServerResponse {
 /*    AccountState(Brokerage, AccountId, AccountState),
     OrderUpdates(OrderUpdateEvent),
     PositionUpdates(PositionUpdateEvent),*/
-    DataUpdates(TimeSlice)
+    DataUpdates(TimeSlice),
+
+    Accounts{callback_id: u64, accounts: Vec<AccountId>},
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -369,9 +384,12 @@ impl DataServerResponse {
             DataServerResponse::SymbolInfo  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SymbolInfoMany  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::MarginRequired { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::BaseDataTypes { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SubscribeResponse { .. } => None,
             DataServerResponse::UnSubscribeResponse { .. } => None,
-            DataServerResponse::DataUpdates(_) => None
+            DataServerResponse::DataUpdates(_) => None,
+            DataServerResponse::Accounts {callback_id, ..} => Some(callback_id.clone()),
+
         }
     }
 }

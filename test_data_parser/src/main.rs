@@ -18,8 +18,8 @@ use ff_standard_lib::standardized_types::enums::{MarketType, Resolution};
 /// 1. Put all the csv data into one folder
 /// 2. Configure the subscription properties and directory path
 fn main() -> Result<(), Box<dyn Error>> {
-    const YOUR_FOLDER_PATH: String = "".to_string();
-    const SYMBOL_NAME: String = "AUD-CAD".to_string();
+    let YOUR_FOLDER_PATH: String = "/Users/kevmonaghan/Downloads".to_string();
+    let SYMBOL_NAME: String = "EUR-USD".to_string();
 
     let symbol = Symbol {
         name: SYMBOL_NAME, //CHANGE THIS
@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         data_vendor: DataVendor::Test,
     };
 
-    let dir_path = format!("{}/Downloads/{}", YOUR_FOLDER_PATH, symbol.name); //CHANGE THIS
+    let dir_path = format!("{}/{}", YOUR_FOLDER_PATH, symbol.name); //CHANGE THIS
     let base_data_path = PathBuf::from(format!("{}/data/parsed", YOUR_FOLDER_PATH)); //CHANGE THIS
 
     if !base_data_path.exists() {
@@ -58,7 +58,6 @@ fn main() -> Result<(), Box<dyn Error>> {
                     data.extend(ticks);
                 },
                 BaseDataType::Ticks => {},
-                BaseDataType::TradePrices => {},
                 BaseDataType::QuoteBars => {},
                 BaseDataType::Candles => {},
                 BaseDataType::Fundamentals => {},

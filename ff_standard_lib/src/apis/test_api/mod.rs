@@ -12,6 +12,7 @@ use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::brokerage::server_side_brokerage::BrokerApiResponse;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::apis::data_vendor::server_side_datavendor::VendorApiResponse;
+use crate::apis::StreamName;
 use crate::helpers::converters::load_as_bytes;
 use crate::helpers::decimal_calculators::round_to_decimals;
 use crate::helpers::get_data_folder;
@@ -66,6 +67,11 @@ impl BrokerApiResponse for TestApiClient {
             positions: vec![],
             account_id,
             is_hedging: false,
+            buy_limit: None,
+            sell_limit: None,
+            max_orders: None,
+            daily_max_loss: None,
+            daily_max_loss_reset_time: None,
         };
         DataServerResponse::AccountInfo {
             callback_id,
@@ -102,6 +108,10 @@ impl BrokerApiResponse for TestApiClient {
             symbol_name,
             price: value,
         }
+    }
+
+    async fn accounts_response(&self, stream_name: String, callback_id: u64) -> DataServerResponse {
+       DataServerResponse::Accounts {callback_id, accounts: vec!["TestAccount1".to_string(), "TestAccount2".to_string()]}
     }
 }
 
@@ -215,5 +225,12 @@ impl VendorApiResponse for TestApiClient {
             return DataServerResponse::UnSubscribeResponse{ success: true, subscription, reason: None}
         }
         DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("There is no active subscription for: {}", subscription))}
+    }
+
+    async fn base_data_types_response(&self, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+        DataServerResponse::BaseDataTypes {
+            callback_id,
+            base_data_types: vec![BaseDataType::Quotes],
+        }
     }
 }

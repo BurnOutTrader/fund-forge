@@ -100,8 +100,11 @@ pub async fn on_data_received(
 ```
 
 It is easy to subscribe to data, including custom candles like Heikin Ashi and Renko Blocks.
-Data subscriptions can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history.
+Data subscriptions can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history. (HISTORY IS TEMP DISABLED AND WILL BE MOVED TO HISTORY HANDLER)
 Data subscriptions will warm themselves up on creation if the strategy is already warmed up, so we can subscribe and unsubscribe at any time.
+The engine will automatically use any primary data vailable with the data vendor in historical mode, to speed up backtests and prevent using consolidators.
+In live mode the engine will subscribe to the lowest possible resolution data: tick, quote or lastly the lowest resolution candles or quotebars, 
+this is done so that when live streaming with mutlple strategies we only need to maintain 1 live data feed per symbol, no matter the number of strategies and resolutions subscribed.
 ```rust
 fn example() {
   let subscription = DataSubscription::new_custom(
@@ -197,7 +200,7 @@ Live trading is still a couple of months away and the architecture and code base
 I have only tested on Mac and Linux, but there should not be any problems with Windows.
 
 ## Demonstration Testing Data
-You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKEZD9BHCDbvCbHRmg?e=fiBcr3)
+You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKE5A1_lk97ixCmf-g?e=konBBU)
 Password "fundforge"
 The Forex folder should be put into the following director "ff_data_server/data/Test".
 

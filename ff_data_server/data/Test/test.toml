@@ -1,4 +1,0 @@
-[oanda]
-api_key = ""
-mode = "practice" 
-max_concurrent_downloads = "30"

@@ -3,6 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use strum_macros::Display;
 use std::str::FromStr;
+use ff_rithmic_api::systems::RithmicSystem;
 use crate::apis::brokerage::server_side_brokerage::BrokerApiResponse;
 use crate::apis::rithmic_api::api_client::RITHMIC_CLIENTS;
 use crate::apis::test_api::TEST_CLIENT;
@@ -18,19 +19,29 @@ use crate::standardized_types::{Volume};
 #[archive_attr(derive(Debug))]
 pub enum Brokerage {
     Test, //DO NOT CHANGE ORDER
-    Rithmic,
+    Rithmic(RithmicSystem),
 }
 impl FromStr for Brokerage {
     type Err = FundForgeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Rithmic" => Ok(Brokerage::Rithmic),
-            "Test" => Ok(Brokerage::Test),
-            _ => Err(FundForgeError::ClientSideErrorDebug(format!(
+        if s == "Test" {
+            Ok(Brokerage::Test)
+        } else if s.starts_with("Rithmic") {
+            let system_name = s.trim_start_matches("Rithmic ");
+            if let Some(system) = RithmicSystem::from_string(system_name) {
+                Ok(Brokerage::Rithmic(system))
+            } else {
+                Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Unknown RithmicSystem string: {}",
+                    system_name
+                )))
+            }
+        } else {
+            Err(FundForgeError::ClientSideErrorDebug(format!(
                 "Invalid brokerage string: {}",
                 s
-            ))),
+            )))
         }
     }
 }
@@ -38,11 +49,11 @@ impl FromStr for Brokerage {
 pub mod client_side_brokerage {
     use crate::apis::brokerage::broker_enum::Brokerage;
     use tokio::sync::oneshot;
-    use crate::server_connections::{get_sender, ConnectionType, StrategyRequest};
+    use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
     use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
     use crate::standardized_types::subscriptions::SymbolName;
     use crate::standardized_types::{Price, Volume};
-    use crate::standardized_types::accounts::ledgers::Currency;
+    use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
     use crate::standardized_types::symbol_info::SymbolInfo;
     impl Brokerage {
         pub async fn margin_required_historical(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Price, FundForgeError> {
@@ -54,9 +65,7 @@ pub mod client_side_brokerage {
             };
             let (sender, receiver) = oneshot::channel();
             let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
-            let sender = get_sender();
-            let sender = sender.lock().await;
-            sender.send(msg).await.unwrap();
+            send_request(msg).await;
             match receiver.await {
                 Ok(response) => {
                     match response {
@@ -77,9 +86,7 @@ pub mod client_side_brokerage {
             };
             let (sender, receiver) = oneshot::channel();
             let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
-            let sender = get_sender();
-            let sender = sender.lock().await;
-            sender.send(msg).await.unwrap();
+            send_request(msg).await;
             match receiver.await {
                 Ok(response) => {
                     match response {
@@ -92,8 +99,24 @@ pub mod client_side_brokerage {
             }
         }
 
-        pub fn currency(&self) -> Result<Currency, FundForgeError> {
-            todo!()
+        pub async fn accounts(&self) -> Result<Vec<AccountId>, FundForgeError> {
+            let request = DataServerRequest::Accounts {
+                callback_id: 0,
+                brokerage: self.clone(),
+            };
+            let (sender, receiver) = oneshot::channel();
+            let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
+            send_request(msg).await;
+            match receiver.await {
+                Ok(response) => {
+                    match response {
+                        DataServerResponse::Accounts { accounts, .. } => Ok(accounts),
+                        DataServerResponse::Error { error, .. } => Err(error),
+                        _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
+                    }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            }
         }
     }
 }
@@ -108,8 +131,8 @@ impl BrokerApiResponse for Brokerage {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            Brokerage::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(self) {
+            Brokerage::Rithmic(system) => {
+                if let Some(client) = RITHMIC_CLIENTS.get(system) {
                     return client.symbols_response(stream_name, market_type, callback_id).await
                 }
             },
@@ -126,8 +149,8 @@ impl BrokerApiResponse for Brokerage {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            Brokerage::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(self) {
+            Brokerage::Rithmic(system) => {
+                if let Some(client) = RITHMIC_CLIENTS.get(system) {
                     return client.account_info_response(stream_name, account_id, callback_id).await
                 }
             },
@@ -138,8 +161,8 @@ impl BrokerApiResponse for Brokerage {
 
     async fn symbol_info_response(&self, stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         match self {
-            Brokerage::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(self) {
+            Brokerage::Rithmic(system) => {
+                if let Some(client) = RITHMIC_CLIENTS.get(system) {
                     return client.symbol_info_response(stream_name, symbol_name, callback_id).await
                 }
             },
@@ -150,8 +173,8 @@ impl BrokerApiResponse for Brokerage {
 
     async fn margin_required_historical_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         match self {
-            Brokerage::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(self) {
+            Brokerage::Rithmic(system) => {
+                if let Some(client) = RITHMIC_CLIENTS.get(system) {
                     return client.margin_required_historical_response(stream_name, symbol_name, quantity, callback_id).await
                 }
             },
@@ -162,12 +185,24 @@ impl BrokerApiResponse for Brokerage {
 
     async fn margin_required_live_response(&self, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         match self {
-            Brokerage::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(self) {
+            Brokerage::Rithmic(system) => {
+                if let Some(client) = RITHMIC_CLIENTS.get(system) {
                     return client.margin_required_live_response(symbol_name, stream_name, quantity, callback_id).await
                 }
             },
             Brokerage::Test => return TEST_CLIENT.margin_required_live_response(stream_name, symbol_name, quantity, callback_id).await
+        }
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
+    }
+
+    async fn accounts_response(&self, stream_name: String, callback_id: u64) -> DataServerResponse {
+        match self {
+            Brokerage::Rithmic(system) => {
+                if let Some(client) = RITHMIC_CLIENTS.get(system) {
+                    return client.accounts_response(stream_name, callback_id).await
+                }
+            },
+            Brokerage::Test => return TEST_CLIENT.accounts_response(stream_name, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }

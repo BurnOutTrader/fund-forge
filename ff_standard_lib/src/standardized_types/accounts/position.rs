@@ -5,7 +5,7 @@ use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::{Price, Volume};
-use crate::standardized_types::accounts::ledgers::Currency;
+use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
 use crate::standardized_types::orders::orders::{OrderId, ProtectiveOrder};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
@@ -28,6 +28,7 @@ pub(crate) struct PositionExport {
 pub struct Position {
     pub symbol_name: SymbolName,
     pub brokerage: Brokerage,
+    pub account_id: AccountId,
     pub side: PositionSide,
     pub quantity_open: Volume,
     pub quantity_closed: Volume,
@@ -88,6 +89,7 @@ impl Position {
     pub fn enter(
         symbol_name: SymbolName,
         brokerage: Brokerage,
+        account_id: AccountId,
         side: PositionSide,
         quantity: Volume,
         average_price: Price,
@@ -99,6 +101,7 @@ impl Position {
         Self {
             symbol_name,
             brokerage,
+            account_id,
             side,
             quantity_open: quantity,
             quantity_closed: dec!(0.0),
@@ -211,7 +214,6 @@ pub(crate) mod historical_position {
 
             // Extract market price, highest price, and lowest price from base data
             let (market_price, highest_price, lowest_price) = match base_data {
-                BaseDataEnum::TradePrice(price) => (price.price, price.price, price.price),
                 BaseDataEnum::Candle(candle) => (candle.close, candle.high, candle.low),
                 BaseDataEnum::Tick(tick) => (tick.price, tick.price, tick.price),
                 BaseDataEnum::QuoteBar(bar) => match self.side {

@@ -14,14 +14,12 @@ use crate::standardized_types::subscriptions::DataSubscription;
 pub struct RenkoConsolidator {
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
-    pub(crate) history: RollingWindow<BaseDataEnum>,
     tick_size: f64,
 }
 
 impl RenkoConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
-        history_to_retain: u64,
     ) -> Result<Self, String> {
         let current_data = match &subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(
@@ -50,7 +48,6 @@ impl RenkoConsolidator {
         Ok(RenkoConsolidator {
             current_data,
             subscription,
-            history: RollingWindow::new(history_to_retain),
             tick_size: tick_size.try_into().unwrap(),
         })
     }
@@ -59,16 +56,6 @@ impl RenkoConsolidator {
     pub(crate) fn update(&mut self, _base_data: &BaseDataEnum) -> ConsolidatedData {
         //let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         todo!() //will need to be based on renko parameters
-    }
-    pub(crate) fn history(&self) -> RollingWindow<BaseDataEnum> {
-        self.history.clone()
-    }
-
-    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
-        match self.history.get(index) {
-            Some(data) => Some(data.clone()),
-            None => None,
-        }
     }
 
     pub(crate) fn current(&self) -> Option<BaseDataEnum> {

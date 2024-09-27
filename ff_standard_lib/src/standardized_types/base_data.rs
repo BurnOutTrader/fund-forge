@@ -5,7 +5,6 @@ pub mod candle;
 pub mod fundamental;
 pub mod history;
 pub mod order_book;
-pub mod price;
 pub mod quote;
 pub mod quotebar;
 pub mod tick;

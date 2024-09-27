@@ -130,9 +130,6 @@ impl MarketHandler {
             let last_price_ref = last_price.clone();
             let order_book_ref = order_books.clone();
             match base_data {
-                BaseDataEnum::TradePrice(ref price) => {
-                    last_price_ref.insert(price.symbol.name.clone(), price.price);
-                }
                 BaseDataEnum::Candle(ref candle) => {
                     last_price_ref.insert(candle.symbol.name.clone(), candle.close);
                 }

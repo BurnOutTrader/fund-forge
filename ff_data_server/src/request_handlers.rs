@@ -193,6 +193,20 @@ pub async fn data_server_manage_async_requests(
                         || data_vendor.tick_size_response(stream_name.to_string(), symbol_name, callback_id),
                         writer.clone()).await,
 
+                    DataServerRequest::Accounts {
+                        callback_id,
+                        brokerage
+                    } => handle_callback(
+                        || brokerage.accounts_response(stream_name.to_string(), callback_id),
+                        writer.clone()).await,
+
+                    DataServerRequest::BaseDataTypes {
+                        callback_id,
+                        data_vendor
+                    } => handle_callback(
+                        || data_vendor.base_data_types_response(stream_name.to_string(), callback_id),
+                        writer.clone()).await,
+
                     DataServerRequest::MarginRequired {
                         brokerage,
                         callback_id,
@@ -236,6 +250,7 @@ pub async fn data_server_manage_async_requests(
                         println!("{:?}", request);
                         order_response(request).await;
                     },
+
                 };
             });
         }
@@ -316,7 +331,7 @@ async fn stream_response(stream_name: String, request: StreamRequest, sender: Se
                 DataVendor::Test => {
                     subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
                 }
-                DataVendor::Rithmic => {
+                DataVendor::Rithmic(system) => {
                     panic!()
                 }
             }

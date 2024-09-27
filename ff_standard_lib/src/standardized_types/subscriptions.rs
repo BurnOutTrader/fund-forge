@@ -8,11 +8,10 @@ use std::fmt;
 use std::fmt::{Debug, Display, Error, Formatter};
 use tokio::sync::oneshot;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
-use crate::server_connections::{get_sender, ConnectionType, StrategyRequest};
+use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
 use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::standardized_types::Price;
 
-pub type ExchangeCode = String;
 pub type SymbolName = String;
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash,
@@ -50,9 +49,7 @@ impl Symbol {
         };
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request,sender);
-        let sender = get_sender();
-        let sender = sender.lock().await;
-        sender.send(msg).await.unwrap();
+        send_request(msg).await;
         match receiver.await {
             Ok(response) => {
                 match response {
@@ -303,6 +300,10 @@ impl DataSubscription {
         // Get the serialized bytes
         let vec = DataSubscription::vec_to_aligned(subscriptions);
         vec.to_vec()
+    }
+
+    pub fn subscription_resolution_type(&self) -> SubscriptionResolutionType {
+        SubscriptionResolutionType::new(self.resolution.clone(), self.base_data_type.clone())
     }
 }
 

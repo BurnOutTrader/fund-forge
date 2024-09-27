@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use tokio::sync::mpsc::{Sender};
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::apis::rithmic_api::api_client::{get_rithmic_client};
+use crate::apis::StreamName;
 use crate::apis::test_api::TEST_CLIENT;
 use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::standardized_types::enums::{MarketType};
@@ -50,6 +51,11 @@ pub trait VendorApiResponse: Sync + Send {
         stream_name: String,
         subscription: DataSubscription,
     ) -> DataServerResponse;
+    async fn base_data_types_response(
+        &self,
+        stream_name: StreamName,
+        callback_id: u64
+    ) -> DataServerResponse;
 }
 
 /// Responses
@@ -62,8 +68,8 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::Rithmic => {
-                if let Some(client) = get_rithmic_client(self) {
+            DataVendor::Rithmic(_) => {
+                if let Some(client) = get_rithmic_client(&self) {
                     return client.symbols_response(stream_name, market_type, callback_id).await
                 }
             },
@@ -79,7 +85,7 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::Rithmic => {
+            DataVendor::Rithmic(_) => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.resolutions_response(stream_name, market_type, callback_id).await
                 }
@@ -95,7 +101,7 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::Rithmic => {
+            DataVendor::Rithmic(_) => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.markets_response(stream_name, callback_id).await
                 }
@@ -112,7 +118,7 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::Rithmic => {
+            DataVendor::Rithmic(_) => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.decimal_accuracy_response(stream_name, symbol_name, callback_id).await
                 }
@@ -129,7 +135,7 @@ impl VendorApiResponse for DataVendor {
         callback_id: u64
     ) -> DataServerResponse {
         match self {
-            DataVendor::Rithmic => {
+            DataVendor::Rithmic(_) => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.tick_size_response(stream_name, symbol_name, callback_id).await
                 }
@@ -141,7 +147,7 @@ impl VendorApiResponse for DataVendor {
 
     async fn data_feed_subscribe(&self, stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
         match self {
-            DataVendor::Rithmic => {
+            DataVendor::Rithmic(_) => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.data_feed_subscribe(stream_name, subscription, sender).await
                 }
@@ -153,7 +159,7 @@ impl VendorApiResponse for DataVendor {
 
     async fn data_feed_unsubscribe(&self, stream_name: String,  subscription: DataSubscription) -> DataServerResponse {
         match self {
-            DataVendor::Rithmic => {
+            DataVendor::Rithmic(_) => {
                 if let Some(client) = get_rithmic_client(self) {
                     return client.data_feed_unsubscribe(stream_name, subscription).await
                 }
@@ -161,5 +167,17 @@ impl VendorApiResponse for DataVendor {
             DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(stream_name, subscription).await
         }
         DataServerResponse::UnSubscribeResponse{ success: false, subscription, reason: Some(format!("Unable to find api client instance for: {}", self))}
+    }
+
+    async fn base_data_types_response(&self, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+        match self {
+            DataVendor::Rithmic(_) => {
+                if let Some(client) = get_rithmic_client(self) {
+                    return client.base_data_types_response(stream_name, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.base_data_types_response(stream_name, callback_id).await
+        }
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
 }

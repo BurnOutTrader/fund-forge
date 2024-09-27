@@ -11,7 +11,7 @@ use crate::standardized_types::time_slices::UnstructuredSlice;
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, Bound, HashMap};
 use tokio::sync::oneshot;
-use crate::server_connections::{get_sender, ConnectionType, StrategyRequest};
+use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
 use dashmap::DashMap;
 use rayon::prelude::*;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -87,12 +87,10 @@ pub async fn get_historical_data(
 ) -> Result<BTreeMap<DateTime<Utc>, TimeSlice>, FundForgeError> {
 
     // Lock the sender only once and clone for each async task
-    let sender = get_sender();
     // FuturesUnordered allows concurrent requests to be handled and results to be processed as they complete
     let mut futures = FuturesUnordered::new();
     for sub in subscriptions {
         let sub = sub.clone();
-        let sender = sender.clone();
         futures.push(async move {
             let (tx, rx) = oneshot::channel();
             let request = StrategyRequest::CallBack(
@@ -106,12 +104,7 @@ pub async fn get_historical_data(
             );
 
             // Handle potential errors while sending the request
-            {
-                let sender = sender.lock().await;
-                if let Err(e) = sender.send(request).await {
-                    return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to send request: {}", e)));
-                }
-            }
+            send_request(request).await;
 
             // Await the response and handle different response types
             match rx.await {

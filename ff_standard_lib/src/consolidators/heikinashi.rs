@@ -16,11 +16,10 @@ use crate::standardized_types::{Price, Volume};
 pub struct HeikinAshiConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
-    pub(crate) history: RollingWindow<BaseDataEnum>,
     previous_ha_close: Price,
     previous_ha_open: Price,
     tick_size: Price,
-    fill_forward: bool
+    fill_forward: bool,
 }
 
 impl HeikinAshiConsolidator {
@@ -79,35 +78,6 @@ impl HeikinAshiConsolidator {
                     ha_low,
                     ha_close,
                     candle.volume,
-                    time.to_string(),
-                    false,
-                    ha_high - ha_low,
-                )
-            }
-            BaseDataEnum::TradePrice(price) => {
-                if self.previous_ha_close == dec!(0.0) && self.previous_ha_open == dec!(0.0) {
-                    self.previous_ha_close = price.price;
-                    self.previous_ha_open = price.price;
-                }
-                let ha_close = price.price;
-                let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
-                    self.tick_size,
-                );
-                let ha_high = ha_close.max(ha_open);
-                let ha_low = ha_close.min(ha_open);
-
-                // Update previous Heikin Ashi values for next bar
-                self.previous_ha_close = ha_close;
-                self.previous_ha_open = ha_open;
-                let time = open_time(&self.subscription, new_data.time_utc());
-
-                self.candle_from_base_data(
-                    ha_open,
-                    ha_high,
-                    ha_low,
-                    ha_close,
-                    dec!(0.0),
                     time.to_string(),
                     false,
                     ha_high - ha_low,
@@ -208,8 +178,7 @@ impl HeikinAshiConsolidator {
 impl HeikinAshiConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
-        history_to_retain: u64,
-        fill_forward: bool
+        fill_forward: bool,
     ) -> Result<HeikinAshiConsolidator, String> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(format!(
@@ -243,11 +212,10 @@ impl HeikinAshiConsolidator {
         Ok(HeikinAshiConsolidator {
             current_data: None,
             subscription,
-            history: RollingWindow::new(history_to_retain),
             previous_ha_close: dec!(0.0),
             previous_ha_open: dec!(0.0),
             tick_size,
-            fill_forward
+            fill_forward,
         })
     }
 
@@ -294,7 +262,6 @@ impl HeikinAshiConsolidator {
             if base_data.time_created_utc() >= current_bar.time_created_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
-                self.history.add(consolidated_bar.clone());
                 let new_bar = self.new_heikin_ashi_candle(base_data);
                 self.current_data = Some(BaseDataEnum::Candle(new_bar.clone()));
                 return ConsolidatedData::with_closed(BaseDataEnum::Candle(new_bar), consolidated_bar);
@@ -318,14 +285,6 @@ impl HeikinAshiConsolidator {
                             candle.range =
                                 round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             candle.volume += new_candle.volume;
-                            return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
-                        }
-                        BaseDataEnum::TradePrice(price) => {
-                            candle.high = price.price.max(candle.high);
-                            candle.low = price.price.min(candle.low);
-                            candle.close = price.price;
-                            candle.range =
-                                round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
                         BaseDataEnum::QuoteBar(bar) => {
@@ -360,17 +319,6 @@ impl HeikinAshiConsolidator {
             "Invalid base data type for Candle consolidator: {}",
             base_data.base_data_type()
         )
-    }
-
-    pub(crate) fn history(&self) -> RollingWindow<BaseDataEnum> {
-        self.history.clone()
-    }
-
-    pub(crate) fn index(&self, index: usize) -> Option<BaseDataEnum> {
-        match self.history.get(index) {
-            Some(data) => Some(data.clone()),
-            None => None,
-        }
     }
 
     pub(crate) fn current(&self) -> Option<BaseDataEnum> {

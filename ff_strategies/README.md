@@ -224,7 +224,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                             continue 'strategy_loop;
                         }
                         match base_data {
-                            BaseDataEnum::TradePrice(ref trade_price) => {}
                             BaseDataEnum::Candle(ref candle) => {}
                             BaseDataEnum::QuoteBar(ref quote_bar) => {}
                             BaseDataEnum::Tick(ref tick) => {}
@@ -311,12 +310,22 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
 ## Subscriptions
 Subscriptions can be updated at any time, and the engine will handle the consolidation of data to the required resolution.
+
 The engine will also warm up indicators and consolidators after the initial warm up cycle, this may result in a momentary pause in the strategy runtime during back tests, while the data is fetched, consolidated etc.
 In live trading this will happen in the background as an async task, and the strategy will continue to execute as normal.
+
 Only data we specifically subscribe to will be returned to the event loop, if the data is building from ticks and we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
+
 The SubscriptionHandler will automatically build data from the highest suitable resolution, if you plan on using open bars and you want the best resolution current bar price, you should also subscribe to that resolution,
 This only needs to be done for DataVendors where more than 1 resolution is available as historical data, if the vendor only has tick data, then current consolidated candles etc will always have the most recent tick price included.
 
+The engine will automatically use any primary data available with the data vendor in historical mode, to speed up backtests and prevent using consolidators.
+
+So we can have historical data in all resolutions to make backtests faster.
+
+In live mode the engine will subscribe to the lowest possible resolution data for data feeds: tick and quote is priority or lastly the lowest resolution candles or quotebars.
+
+this is done so that when live streaming with mutlple strategies we only need to maintain 1 live data feed per symbol, no matter the number of strategies and resolutions subscribed.
 ```rust
 // we can access resolution as a Duration with resolution.as_duration() or resolution.as_seconds();
 pub enum Resolution {
@@ -432,9 +441,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 StrategyEvent::TimeSlice(_time, time_slice) => {
                     'base_data_loop: for base_data in &time_slice {
                         match base_data {
-                            BaseDataEnum::Price(price) => {
-                                println!("{}...{} Price: {:?}", count, price.symbol.name, price.close);
-                            }
                             BaseDataEnum::Candle(candle) => {
                                 println!("{}...{} Candle: {:?}", count, candle.symbol.name, candle.close);
                             }

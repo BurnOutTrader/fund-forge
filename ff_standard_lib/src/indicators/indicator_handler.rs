@@ -213,66 +213,6 @@ async fn warmup(
     strategy_mode: StrategyMode,
     mut indicator: IndicatorEnum,
 ) -> IndicatorEnum {
-    let subscription = indicator.subscription();
-    let vendor_resolutions = filter_resolutions(
-        subscription
-            .symbol
-            .data_vendor
-            .resolutions(subscription.market_type.clone())
-            .await
-            .unwrap(),
-        subscription.resolution.clone(),
-    );
-    let max_resolution = vendor_resolutions.iter().max_by_key(|r| r.resolution);
-    let min_resolution = match max_resolution.is_none() {
-        true => panic!(
-            "{} does not have any resolutions available",
-            subscription.symbol.data_vendor
-        ),
-        false => max_resolution.unwrap(),
-    };
-
-    let from_time = to_time
-        - (subscription.resolution.as_duration() * indicator.history().number as i32)
-        - Duration::days(4); //we go back a bit further in case of holidays or weekends
-
-    let base_subscription = DataSubscription::new(
-        subscription.symbol.name.clone(),
-        subscription.symbol.data_vendor.clone(),
-        min_resolution.resolution,
-        min_resolution.base_data_type,
-        subscription.market_type.clone(),
-    );
-    let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
-
-    match base_subscription == subscription {
-        true => {
-            for (time, slice) in base_data {
-                if time > to_time {
-                    break;
-                }
-                for base_data in slice {
-                    indicator.update_base_data(&base_data);
-                }
-            }
-        }
-        false => {
-            let consolidator = ConsolidatorEnum::create_consolidator(
-                true,
-                indicator.subscription().clone(),
-                (indicator.history().number * 2) as u64,
-                to_time,
-                strategy_mode,
-                false
-            )
-            .await;
-            for data in consolidator.history().history {
-                indicator.update_base_data(&data);
-            }
-        }
-    }
-    if strategy_mode != StrategyMode::Backtest {
-        //todo() we will get any bars which are not in out serialized history here
-    }
+   //todo make new warm up fn
     indicator
 }

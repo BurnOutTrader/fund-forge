@@ -43,6 +43,12 @@ pub trait BrokerApiResponse: Sync + Send {
         quantity: Volume,
         callback_id: u64
     ) -> DataServerResponse;
+
+    async fn accounts_response(
+        &self,
+        stream_name: String,
+        callback_id: u64
+    ) -> DataServerResponse;
 }
 
 

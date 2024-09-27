@@ -6,7 +6,8 @@ use std::fmt;
 use std::fmt::Debug;
 use strum_macros::{Display, EnumIter};
 
-/// Used for internal ff calulcations
+
+// Enum for exchanges
 #[derive(
     Clone,
     Serialize_rkyv,
@@ -24,41 +25,38 @@ use strum_macros::{Display, EnumIter};
 )]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
+pub enum Exchange {
+    CBOT,
+    CME,
+    COMEX,
+    NYMEX,
+    // Add other exchanges if necessary
+}
+/// Used for internal ff calulcations
+#[derive(
+    Clone,
+    Serialize_rkyv,
+    Deserialize_rkyv,
+    Archive,
+    PartialEq,
+    Deserialize,
+    Eq,
+    Hash,
+    Display,
+    PartialOrd,
+    Ord,
+    Debug,
+)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
 pub enum MarketType {
     Forex,
     CFD,
-    Futures,
+    Futures(Exchange),
     Equities,
     Crypto,
     ETF,
     Fundamentals,
-}
-impl MarketType {
-    pub fn from_str(string_ref: &str) -> Result<Self, String> {
-        match string_ref.to_lowercase().as_str() {
-            "Forex" => Ok(MarketType::Forex),
-            "Cfd" => Ok(MarketType::CFD),
-            "Futures" => Ok(MarketType::Futures),
-            "Equities" => Ok(MarketType::Equities),
-            "Crypto" => Ok(MarketType::Crypto),
-            "Etf" => Ok(MarketType::ETF),
-            "Fundamentals" => Ok(MarketType::Fundamentals),
-            _ => Err(format!("Unknown MarketType: {}", string_ref)),
-        }
-    }
-
-    // Convert from MarketType to string
-    pub fn to_string(&self) -> String {
-        match self {
-            MarketType::Forex => "Forex".to_string(),
-            MarketType::CFD => "Cfd".to_string(),
-            MarketType::Futures => "Futures".to_string(),
-            MarketType::Equities => "Equities".to_string(),
-            MarketType::Crypto => "Crypto".to_string(),
-            MarketType::ETF => "Etf".to_string(),
-            MarketType::Fundamentals => "Fundamentals".to_string(),
-        }
-    }
 }
 
 // Bias

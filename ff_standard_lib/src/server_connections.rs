@@ -116,11 +116,8 @@ pub(crate) enum StrategyRequest {
     OneWay(ConnectionType, DataServerRequest),
 }
 static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<Sender<StrategyRequest>>>> = OnceCell::new();
-pub(crate) fn get_sender() -> Arc<Mutex<Sender<StrategyRequest>>> {
-    DATA_SERVER_SENDER.get().unwrap().clone() // Return a clone of the Arc to avoid moving the value out of the OnceCell
-}
 pub(crate) async fn send_request(req: StrategyRequest) {
-    get_sender().lock().await.send(req).await.unwrap(); // Return a clone of the Arc to avoid moving the value out of the OnceCell
+    DATA_SERVER_SENDER.get().unwrap().lock().await.send(req).await.unwrap(); // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
 static STRATEGY_SENDER: OnceCell<Sender<EventTimeSlice>> = OnceCell::new();

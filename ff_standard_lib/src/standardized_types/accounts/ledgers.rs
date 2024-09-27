@@ -15,6 +15,7 @@ use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::symbol_info::SymbolInfo;
 use serde_derive::{Deserialize, Serialize};
 pub type AccountId = String;
+pub type AccountName = String;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize, PartialOrd,)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -359,6 +360,7 @@ pub(crate) mod historical_ledgers {
                 let position = Position::enter(
                     symbol_name.clone(),
                     self.brokerage.clone(),
+                    self.account_id.clone(),
                     side,
                     quantity,
                     market_price,
@@ -447,6 +449,10 @@ pub(crate) mod historical_ledgers {
     }
 }
 
+pub enum RiskLimitStatus {
+    Ok,
+    Hit
+}
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
@@ -459,6 +465,11 @@ pub struct AccountInfo {
     pub cash_used: Price,
     pub positions: Vec<Position>,
     pub is_hedging: bool,
+    pub buy_limit: Option<u64>,
+    pub sell_limit: Option<u64>,
+    pub max_orders: Option<u64>,
+    pub daily_max_loss: Option<u64>,
+    pub daily_max_loss_reset_time: Option<String>
 }
 
 impl Bytes<Self> for AccountInfo {

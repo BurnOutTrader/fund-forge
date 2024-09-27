@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use ahash::AHashMap;
 use crate::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -17,6 +18,7 @@ use tokio::sync::mpsc::{Sender};
 use tokio::sync::{RwLock};
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::symbol_info::SymbolInfo;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -84,7 +86,6 @@ impl SubscriptionHandler {
     pub async fn subscribe(
         &self,
         new_subscription: DataSubscription,
-        history_to_retain: u64,
         current_time: DateTime<Utc>,
         fill_forward: bool
     ) {
@@ -105,14 +106,13 @@ impl SubscriptionHandler {
 
         if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
             let symbol_handler = SymbolSubscriptionHandler::new(
-                new_subscription.clone(),
+                new_subscription.symbol.clone(),
+                vec![new_subscription.clone()],
                 self.is_warmed_up.load(Ordering::SeqCst),
-                history_to_retain,
                 current_time,
                 self.strategy_mode,
                 fill_forward
-            )
-            .await;
+            ).await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
             //println!("Handler: Subscribed: {}", new_subscription);
         }
@@ -120,7 +120,6 @@ impl SubscriptionHandler {
         self.symbol_subscriptions.get(&new_subscription.symbol).unwrap()
             .subscribe(
                 new_subscription,
-                history_to_retain,
                 current_time,
                 self.strategy_mode,
                 fill_forward
@@ -144,7 +143,7 @@ impl SubscriptionHandler {
             }
         }
         for sub in new_subscription {
-           self.subscribe(sub.clone(),history_to_retain.clone(), current_time.clone(), fill_forward).await;
+           self.subscribe(sub.clone(), current_time.clone(), fill_forward).await;
         }
         self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
     }
@@ -169,13 +168,11 @@ impl SubscriptionHandler {
             return;
         }
 
-        self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
+        let is_primary_needed = self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
+        let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
+        strategy_subscriptions.retain(|x| x != &subscription);
         if self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count() == 0 {
             self.symbol_subscriptions.remove(&subscription.symbol);
-        }
-        let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
-        if strategy_subscriptions.contains(&subscription) {
-            strategy_subscriptions.retain(|x| x != &subscription);
         }
         self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
     }
@@ -187,7 +184,7 @@ impl SubscriptionHandler {
     pub async fn primary_subscriptions(&self) -> Vec<DataSubscription> {
         let mut primary_subscriptions = vec![];
         for symbol_handler in self.symbol_subscriptions.iter() {
-            primary_subscriptions.push(symbol_handler.value().primary_subscription().await);
+            primary_subscriptions.extend(symbol_handler.value().primary_subscriptions().await);
         }
         primary_subscriptions
     }
@@ -278,118 +275,60 @@ impl SubscriptionHandler {
             false => Some(time_slice)
         }
     }
-
-    pub async fn history(
-        &self,
-        subscription: &DataSubscription,
-    ) -> Option<RollingWindow<BaseDataEnum>> {
-        if subscription.base_data_type == BaseDataType::Fundamentals {
-            return None;
-        }
-        if let Some(symbol_subscription) = self
-            .symbol_subscriptions
-            .get(&subscription.symbol)
-        {
-            if let Some(consolidator) = symbol_subscription
-                .secondary_subscriptions
-                .get(subscription)
-            {
-                return Some(consolidator.history());
-            }
-        }
-        None
-    }
-
-    pub async fn bar_index(
-        &self,
-        subscription: &DataSubscription,
-        index: usize,
-    ) -> Option<BaseDataEnum> {
-        if subscription.base_data_type == BaseDataType::Fundamentals {
-            return None;
-        }
-        if let Some(symbol_subscription) = self
-            .symbol_subscriptions
-            .get(&subscription.symbol)
-        {
-            if let Some(consolidator) = symbol_subscription
-                .secondary_subscriptions
-                .get(subscription)
-            {
-                if consolidator.subscription() == subscription {
-                    return consolidator.index(index);
-                }
-            }
-        }
-        None
-    }
-
-    pub async fn bar_current(&self, subscription: &DataSubscription) -> Option<BaseDataEnum> {
-        if subscription.base_data_type == BaseDataType::Fundamentals {
-            return None;
-        }
-
-        if let Some(symbol_subscription) = self.symbol_subscriptions.get(&subscription.symbol) {
-            let primary_subscription = symbol_subscription.primary_subscription().await;
-            if &primary_subscription == subscription {
-                return None;
-            }
-            if let Some(consolidator) = symbol_subscription
-                .secondary_subscriptions
-                .get(subscription)
-            {
-                if consolidator.subscription() == subscription {
-                    return consolidator.current();
-                }
-            }
-        }
-        None
-    }
 }
 
 /// This Struct Handles when to consolidate data for a subscription from an existing subscription.
 /// Alternatively if a subscription is of a lower resolution subscription, then the new subscription becomes the primary data source and the existing subscription becomes the secondary data source.
 /// depending if the vendor has data available in that resolution.
 pub struct SymbolSubscriptionHandler {
+    symbol: Symbol,
     /// The primary subscription is the subscription where data is coming directly from the `DataVendor`, In the event of bar data, it is pre-consolidated.
-    primary_subscription: RwLock<DataSubscription>,
-    /// The secondary subscriptions are consolidators that are used to consolidate data from the primary subscription.
-    secondary_subscriptions: DashMap<DataSubscription, ConsolidatorEnum>,
+    primary_subscriptions: DashMap<SubscriptionResolutionType, DataSubscription>,
+    /// The secondary subscriptions are consolidators that are used to consolidate data from the primary subscription. the first key is the primary subscription for each consolidator
+    secondary_subscriptions: DashMap<SubscriptionResolutionType, AHashMap<DataSubscription, ConsolidatorEnum>>,
     subscription_event_buffer: RwLock<Vec<DataSubscriptionEvent>>,
+    vendor_primary_resolutions: Vec<SubscriptionResolutionType>,
+    vendor_data_types: Vec<BaseDataType>,
     is_warmed_up: AtomicBool,
-    primary_history: RwLock<RollingWindow<BaseDataEnum>>,
 }
 
 impl SymbolSubscriptionHandler {
     pub async fn new(
-        primary_subscription: DataSubscription,
+        symbol: Symbol,
+        initial_primary_subscriptions: Vec<DataSubscription>,
         is_warmed_up: bool,
-        history_to_retain: u64,
         warm_up_to: DateTime<Utc>,
         strategy_mode: StrategyMode,
         fill_forward: bool
     ) -> Self {
+        let vendor_primary_resolutions = symbol.data_vendor.resolutions(symbol.market_type.clone()).await.unwrap();
+        let vendor_data_types = symbol.data_vendor.base_data_types().await.unwrap();
         let handler = SymbolSubscriptionHandler {
-            primary_subscription: RwLock::new(primary_subscription.clone()),
-            secondary_subscriptions: Default::default(),
-            subscription_event_buffer: Default::default(),
+            symbol,
+            primary_subscriptions: DashMap::with_capacity(5),
+            secondary_subscriptions: DashMap::with_capacity(5),
+            subscription_event_buffer: RwLock::new(Vec::new()),
             is_warmed_up: AtomicBool::new(is_warmed_up),
-            primary_history: RwLock::new(RollingWindow::new(history_to_retain)),
+            vendor_primary_resolutions,
+            vendor_data_types
         };
-        handler
-            .select_primary_non_tick_subscription(
-                primary_subscription,
-                history_to_retain,
-                warm_up_to,
-                strategy_mode,
-                fill_forward
-            )
-            .await;
+        for sub in initial_primary_subscriptions {
+            if sub.base_data_type == BaseDataType::Fundamentals {
+                continue;
+            }
+            handler.subscribe(sub, warm_up_to.clone(), strategy_mode.clone(), fill_forward.clone()).await;
+        }
         handler
     }
 
     pub fn active_count(&self) -> usize {
-        self.secondary_subscriptions.len()
+        let mut count = 0;
+        for map in self.secondary_subscriptions.iter() {
+            for sub in map.value() {
+                count += 1;
+            }
+        }
+        count
     }
 
     pub async fn update(&self, base_data_enum: &BaseDataEnum) -> Vec<ConsolidatedData> {
@@ -398,25 +337,26 @@ impl SymbolSubscriptionHandler {
             return vec![];
         }
 
-        if base_data_enum.subscription() != *self.primary_subscription.read().await {
-            return vec![]
+        let sub_res = SubscriptionResolutionType::new(base_data_enum.resolution().clone(), base_data_enum.base_data_type());
+        if let Some(mut base_data_consoldiators) = self.secondary_subscriptions.get_mut(&sub_res){
+            let mut data = vec![];
+            for (_, consolidator) in base_data_consoldiators.iter_mut() {
+                let consolidated_data = consolidator.update(&base_data_enum);
+                data.push(consolidated_data);
+            }
+            return data
         }
-
-        self.primary_history.write().await.add(base_data_enum.clone());
-
-        let mut data = vec![];
-        for mut consolidator in self.secondary_subscriptions.iter_mut() {
-            data.push(consolidator.value_mut().update(base_data_enum))
-        }
-        data
+        vec![]
     }
 
     pub async fn update_time(&self, time: DateTime<Utc>) -> Option<Vec<BaseDataEnum>> {
         let mut consolidated_data = vec![];
         // Iterate over the secondary subscriptions and update them
-        for mut consolidator in self.secondary_subscriptions.iter_mut() {
-            let data = consolidator.value_mut().update_time(time.clone());
-            consolidated_data.extend(data);
+        for mut consolidator_map in self.secondary_subscriptions.iter_mut() {
+            for (_, consolidator) in consolidator_map.iter_mut() {
+                let data = consolidator.update_time(time.clone());
+                consolidated_data.extend(data);
+            }
         }
         match consolidated_data.is_empty() {
             true => None,
@@ -435,169 +375,151 @@ impl SymbolSubscriptionHandler {
         return_buffer
     }
 
-    /// This is only used
-    async fn select_primary_non_tick_subscription(
-        &self,
-        new_subscription: DataSubscription,
-        history_to_retain: u64,
-        to_time: DateTime<Utc>,
-        strategy_mode: StrategyMode,
-        fill_forward: bool
-    ) {
-        let available_resolutions: Vec<SubscriptionResolutionType> = new_subscription
-            .symbol
-            .data_vendor
-            .resolutions(new_subscription.market_type.clone())
-            .await
-            .unwrap();
-        //println!("Available Resolutions: {:?}", available_resolutions);
-        if available_resolutions.is_empty() {
-            panic!(
-                "{} does not have any resolutions available",
-                new_subscription.symbol.data_vendor
-            );
-        }
-        let resolution_types = subscriptions::filter_resolutions(
-            available_resolutions,
-            new_subscription.resolution.clone(),
-        );
-        if resolution_types.is_empty() {
-            panic!("{} does not have any resolutions available for {:?}, Problem in select_primary_non_tick_subscription or vendor.resolutions() fn", new_subscription.symbol.data_vendor, new_subscription);
-        }
-
-        let mut subscription_set = false;
-        let mut primary_subscription = self.primary_subscription.write().await;
-        //if we have the resolution avaialable from the vendor, just use it.
-        for subscription_resolution_type in &resolution_types {
-            if subscription_resolution_type.resolution == new_subscription.resolution && subscription_resolution_type.base_data_type == new_subscription.base_data_type {
-                self.subscription_event_buffer.write().await.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
-                *primary_subscription = new_subscription.clone();
-                self.primary_history.write().await.history.clear();
-                subscription_set = true;
-                break;
-            }
-        }
-        if !subscription_set {
-            self.secondary_subscriptions.insert(
-                new_subscription.clone(),
-                ConsolidatorEnum::create_consolidator(
-                    self.is_warmed_up.load(Ordering::SeqCst),
-                    new_subscription.clone(),
-                    history_to_retain,
-                    to_time,
-                    strategy_mode,
-                    fill_forward
-                )
-                .await,
-            );
-
-            let max_resolution = resolution_types.iter().max_by_key(|r| r.resolution);
-            if let Some(resolution_type) = max_resolution {
-                let subscription = DataSubscription::new(
-                    new_subscription.symbol.name.clone(),
-                    new_subscription.symbol.data_vendor.clone(),
-                    resolution_type.resolution,
-                    resolution_type.base_data_type,
-                    new_subscription.market_type.clone(),
-                );
-
-                *primary_subscription = subscription
-            }
-        }
-    }
-
     async fn subscribe(
         &self,
         new_subscription: DataSubscription,
-        history_to_retain: u64,
-        to_time: DateTime<Utc>,
+        warm_up_to_time: DateTime<Utc>,
         strategy_mode: StrategyMode,
         fill_forward: bool
     ) {
-        if self.all_subscriptions().await.contains(&new_subscription) {
+        if new_subscription.base_data_type == BaseDataType::Fundamentals {
             return;
         }
-
         let mut subscription_event_buffer = self.subscription_event_buffer.write().await;
-        match new_subscription.resolution {
-            Resolution::Ticks(number) => {
-
-                let res_type_tick =
-                    SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks);
-                if !new_subscription
-                    .symbol
-                    .data_vendor
-                    .resolutions(new_subscription.market_type.clone())
-                    .await
-                    .unwrap()
-                    .contains(&res_type_tick)
-                {
-                    panic!(
-                        "{} does not have tick data available",
-                        new_subscription.symbol.data_vendor
-                    );
+        // we need to determine if the data vendor has this kind of primary data
+        let is_primary_capable = self.vendor_primary_resolutions.contains(&new_subscription.subscription_resolution_type());
+        if is_primary_capable {
+            match strategy_mode {
+                StrategyMode::Backtest => {
+                    //In backtest mode we can just use the historical data so no need to reconsolidate
+                    self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
+                    subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription));
+                    return
                 }
-                // we switch to tick data as base resolution for any tick subscription
-                if number > 1 {
-                    let consolidator = ConsolidatorEnum::create_consolidator(
-                        self.is_warmed_up.load(Ordering::SeqCst),
-                        new_subscription.clone(),
-                        history_to_retain,
-                        to_time,
-                        strategy_mode,
-                        fill_forward
-                    )
-                    .await;
-                    subscription_event_buffer
-                        .push(DataSubscriptionEvent::Subscribed(
-                            consolidator.subscription().clone(),
-                        ));
-
-                    self.secondary_subscriptions
-                        .insert(consolidator.subscription().clone(), consolidator);
-                }
-                let mut primary_subscription = self.primary_subscription.write().await;
-                if primary_subscription.resolution != Resolution::Ticks(1) {
-                    let new_primary_subscription = DataSubscription::new(
-                        new_subscription.symbol.name.clone(),
-                        new_subscription.symbol.data_vendor.clone(),
-                        Resolution::Ticks(1),
-                        new_subscription.base_data_type.clone(),
-                        new_subscription.market_type.clone(),
-                    );
-                    *primary_subscription = new_primary_subscription.clone();
-                    subscription_event_buffer
-                        .push(DataSubscriptionEvent::Subscribed(
-                            new_primary_subscription.clone(),
-                        ));
-                }
+                //in live scenarios we want to subscribe the lowest resolution to avoid having to many api streams (considering we may have other strategies live)
+                _ => {}
             }
-            _ => {
-                // if the new subscription is of a lower resolution
-                if new_subscription.resolution < self.primary_subscription.read().await.resolution {
-                    self.select_primary_non_tick_subscription(
-                        new_subscription,
-                        history_to_retain,
-                        to_time,
-                        strategy_mode,
-                        fill_forward
-                    )
-                    .await;
-                } else {
-                    //if we have no problem with adding new the resolution we can just add the new subscription as a consolidator
-                    let consolidator = ConsolidatorEnum::create_consolidator(
-                        self.is_warmed_up.load(Ordering::SeqCst),
-                        new_subscription.clone(),
-                        history_to_retain,
-                        to_time,
-                        strategy_mode,
-                        fill_forward
-                    )
-                    .await;
-                    self.secondary_subscriptions
-                        .insert(new_subscription.clone(), consolidator);
-                    subscription_event_buffer
-                        .push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+        }
+
+        let sub_res_type = new_subscription.subscription_resolution_type();
+        // if the vendor doesn't supply this data we need to determine if we can atleast consolidate it from some source they do supply
+        if !is_primary_capable {
+            match new_subscription.base_data_type {
+                BaseDataType::Ticks => {
+                    if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
+                        let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
+                        subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                        return
+                    } else {
+
+                        if !self.primary_subscriptions.contains_key(&sub_res_type) {
+                            self.primary_subscriptions.insert(sub_res_type.clone(), new_subscription.clone());
+                        }
+                        if !self.secondary_subscriptions.contains_key(&sub_res_type) {
+                            self.secondary_subscriptions.insert(sub_res_type, AHashMap::new());
+                        }
+                    }
+                }
+                BaseDataType::Quotes => {
+                    if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) {
+                        let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
+                        subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription.clone(), msg));
+                        return
+                    } else {
+                        if !self.primary_subscriptions.contains_key(&sub_res_type) {
+                            self.primary_subscriptions.insert(sub_res_type.clone(), new_subscription.clone());
+                        }
+                        if !self.secondary_subscriptions.contains_key(&sub_res_type) {
+                            self.secondary_subscriptions.insert(sub_res_type, AHashMap::new());
+                        }
+                    }
+                }
+                BaseDataType::QuoteBars | BaseDataType::Candles => {
+                    let ideal_subscription = match new_subscription.base_data_type {
+                        BaseDataType::QuoteBars => {
+                            if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::QuoteBars) {
+                                let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
+                                subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                                return
+                            }
+                            SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
+                        }
+                        BaseDataType::Candles => {
+                            if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) && !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::Candles) {
+                                let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
+                                subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                                return
+                            }
+                            if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
+                                SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
+
+                            } else {
+                                SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
+                            }
+                        }
+                        _ => panic!("This cant happen")
+                    };
+
+                    //if we don't have quotes we subscribe to the lowest possible resolution
+                    if !self.vendor_primary_resolutions.contains(&ideal_subscription) {
+                        //if we haven't subscribe to quotebars to consolidate from we will need to
+                        let mut has_lower_resolution = false;
+                        let mut lowest_res = new_subscription.resolution;
+                        for kind in &self.vendor_primary_resolutions {
+                            if kind.resolution < new_subscription.resolution && kind.base_data_type == BaseDataType::QuoteBars {
+                                has_lower_resolution = true;
+                                if kind.resolution < lowest_res {
+                                    lowest_res = kind.resolution.clone()
+                                }
+                            }
+                        }
+                        if !has_lower_resolution {
+                            match self.vendor_primary_resolutions.contains(&new_subscription.subscription_resolution_type()) {
+                                true => {
+                                    self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
+                                    subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription));
+                                }
+                                false => {
+                                    let message = format!("{}: Does not have low enough resolution data to consolidate: {}", new_subscription.symbol.data_vendor, new_subscription);
+                                    subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, message));
+                                }
+                            }
+                            return
+                        }
+                        let lowest_possible_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), lowest_res, new_subscription.base_data_type.clone(), new_subscription.market_type.clone());
+                        let primary_res_sub_type = lowest_possible_primary.subscription_resolution_type();
+                        if !self.primary_subscriptions.contains_key(&primary_res_sub_type) {
+                            self.primary_subscriptions.insert(primary_res_sub_type.clone(), lowest_possible_primary);
+                            if !self.secondary_subscriptions.contains_key(&primary_res_sub_type) {
+                                self.secondary_subscriptions.insert(primary_res_sub_type.clone(), AHashMap::new());
+                            }
+                        }
+                        let consolidator = ConsolidatorEnum::create_consolidator(self.is_warmed_up.load(Ordering::SeqCst).clone(), warm_up_to_time, new_subscription.clone(), strategy_mode.clone(), fill_forward.clone()).await;
+                        if let Some(mut map) = self.secondary_subscriptions.get_mut(&primary_res_sub_type) {
+                            map.value_mut().insert(consolidator.subscription().clone(), consolidator);
+                        }
+                        subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+                    } else {
+                        //if we have quotes we subscribe to quotes
+                        if !self.primary_subscriptions.contains_key(&ideal_subscription) {
+                            let new_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), ideal_subscription.resolution, ideal_subscription.base_data_type, new_subscription.market_type.clone());
+                            self.primary_subscriptions.insert(new_primary.subscription_resolution_type(), new_primary.clone());
+                            let consolidator = ConsolidatorEnum::create_consolidator(self.is_warmed_up.load(Ordering::SeqCst).clone(), warm_up_to_time, new_subscription.clone(), strategy_mode.clone(), fill_forward.clone()).await;
+                            if let Some(mut consolidator_map) = self.secondary_subscriptions.get_mut(&new_primary.subscription_resolution_type()) {
+                                consolidator_map.insert(new_subscription.clone(), consolidator);
+                            } else {
+                                let mut new_map = AHashMap::new();
+                                new_map.insert(new_subscription.clone(), consolidator);
+                                self.secondary_subscriptions.insert(new_primary.subscription_resolution_type(), new_map);
+                            }
+                            subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+                        }
+                    }
+                }
+                BaseDataType::Fundamentals => {
+                    let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
+                    subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                    return
                 }
             }
         }
@@ -605,30 +527,50 @@ impl SymbolSubscriptionHandler {
 
     async fn unsubscribe(&self, subscription: &DataSubscription) {
         let mut subscription_event_buffer = self.subscription_event_buffer.write().await;
-
-        if subscription == &*self.primary_subscription.read().await {
-            if self.secondary_subscriptions.is_empty() {
-                subscription_event_buffer
-                    .push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
-                return;
+        let sub_res_type = subscription.subscription_resolution_type();
+        if self.primary_subscriptions.contains_key(&sub_res_type) {
+            //determine if we have secondaries for this
+            if let Some(mut map) = self.secondary_subscriptions.get_mut(&sub_res_type) {
+                if map.is_empty() {
+                    self.primary_subscriptions.remove(&sub_res_type);
+                }
+                self.secondary_subscriptions.remove(&sub_res_type);
+            }
+            subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()))
+        } else if let Some(mut map) = self.secondary_subscriptions.get_mut(&sub_res_type) {
+            let sub = map.remove(&subscription);
+            match sub {
+                None => subscription_event_buffer.push(DataSubscriptionEvent::FailedUnSubscribed(subscription.clone(), "No subscription to unsubscribe".to_string())),
+                Some(sub) => subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone())),
             }
         } else {
-            //if subscription is not the primary subscription, then it must be a consolidator and can be removed without changing the primary subscription
-            self.secondary_subscriptions.remove(subscription);
-            subscription_event_buffer
-                .push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
+            subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
         }
     }
 
     pub async fn all_subscriptions(&self) -> Vec<DataSubscription> {
-        let mut all_subscriptions = vec![self.primary_subscription.read().await.clone()];
-        for consolidator in self.secondary_subscriptions.iter() {
-            all_subscriptions.push(consolidator.subscription().clone());
+        // Collect primary subscriptions
+        let mut all_subscriptions: Vec<DataSubscription> = self
+            .primary_subscriptions
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect();
+
+        // Collect secondary subscriptions by iterating over the inner AHashMap keys
+        for entry in self.secondary_subscriptions.iter() {
+            let secondary_subs = entry
+                .value()
+                .keys()
+                .cloned() // Clone the keys (which are DataSubscriptions)
+                .collect::<Vec<DataSubscription>>();
+
+            all_subscriptions.extend(secondary_subs);
         }
+
         all_subscriptions
     }
 
-    pub async fn primary_subscription(&self) -> DataSubscription {
-        self.primary_subscription.read().await.clone()
+    pub async fn primary_subscriptions(&self) -> Vec<DataSubscription> {
+        self.primary_subscriptions.iter().map(|entry| entry.value().clone()).collect()
     }
 }

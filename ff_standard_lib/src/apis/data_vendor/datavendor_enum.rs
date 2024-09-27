@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use ff_rithmic_api::systems::RithmicSystem;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
 use strum_macros::Display;
@@ -12,20 +13,30 @@ use crate::standardized_types::data_server_messaging::{FundForgeError};
 /// Each `DataVendor` implements its own logic to fetch the data from the source, this logic can be modified in the `ff_data_server` crate.
 pub enum DataVendor {
     Test, //DO NOT CHANGE ORDER
-    Rithmic,
+    Rithmic(RithmicSystem),
 }
 
 impl FromStr for DataVendor {
     type Err = FundForgeError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "Test" => Ok(DataVendor::Test),
-            "Rithmic" => Ok(DataVendor::Rithmic),
-            _ => Err(FundForgeError::ClientSideErrorDebug(format!(
+        if s == "Test" {
+            Ok(DataVendor::Test)
+        } else if s.starts_with("Rithmic") {
+            let system_name = s.trim_start_matches("Rithmic ");
+            if let Some(system) = RithmicSystem::from_string(system_name) {
+                Ok(DataVendor::Rithmic(system))
+            } else {
+                Err(FundForgeError::ClientSideErrorDebug(format!(
+                    "Unknown RithmicSystem string: {}",
+                    system_name
+                )))
+            }
+        } else {
+            Err(FundForgeError::ClientSideErrorDebug(format!(
                 "Unknown DataVendor string: {}",
                 s
-            ))),
+            )))
         }
     }
 }
@@ -33,7 +44,8 @@ impl FromStr for DataVendor {
 pub mod client_side_data_vendors {
     use tokio::sync::oneshot;
     use crate::apis::data_vendor::datavendor_enum::DataVendor;
-    use crate::server_connections::{get_sender, ConnectionType, StrategyRequest};
+    use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
+    use crate::standardized_types::base_data::base_data_type::BaseDataType;
     use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
     use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
     use crate::standardized_types::Price;
@@ -48,13 +60,31 @@ pub mod client_side_data_vendors {
             };
             let (sender, receiver) = oneshot::channel();
             let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
-            let sender = get_sender();
-            let sender = sender.lock().await;
-            sender.send(msg).await.unwrap();
+            send_request(msg).await;
             match receiver.await {
                 Ok(response) => {
                     match response {
                         DataServerResponse::Symbols { symbols, .. } => Ok(symbols),
+                        DataServerResponse::Error {error,..} => Err(error),
+                        _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
+                    }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            }
+        }
+
+        pub async fn base_data_types(&self) -> Result<Vec<BaseDataType>, FundForgeError> {
+            let request = DataServerRequest::BaseDataTypes {
+                callback_id: 0,
+                data_vendor: self.clone(),
+            };
+            let (sender, receiver) = oneshot::channel();
+            let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
+            send_request(msg).await;
+            match receiver.await {
+                Ok(response) => {
+                    match response {
+                        DataServerResponse::BaseDataTypes { base_data_types, .. } => Ok(base_data_types),
                         DataServerResponse::Error {error,..} => Err(error),
                         _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
                     }
@@ -71,9 +101,7 @@ pub mod client_side_data_vendors {
             };
             let (sender, receiver) = oneshot::channel();
             let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
-            let server_sender = get_sender();
-            let server_sender = server_sender.lock().await;
-            server_sender.send(msg).await.unwrap();
+            send_request(msg).await;
             match receiver.await {
                 Ok(response) => {
                     match response {
@@ -93,9 +121,7 @@ pub mod client_side_data_vendors {
             };
             let (sender, receiver) = oneshot::channel();
             let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
-            let sender = get_sender();
-            let sender = sender.lock().await;
-            sender.send(msg).await.unwrap();
+            send_request(msg).await;
             match receiver.await {
                 Ok(response) => {
                     match response {
@@ -116,9 +142,7 @@ pub mod client_side_data_vendors {
             };
             let (sender, receiver) = oneshot::channel();
             let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
-            let sender = get_sender();
-            let sender = sender.lock().await;
-            sender.send(msg).await.unwrap();
+            send_request(msg).await;
             match receiver.await {
                 Ok(response) => {
                     match response {
@@ -139,9 +163,7 @@ pub mod client_side_data_vendors {
             };
             let (sender, receiver) = oneshot::channel();
             let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
-            let sender = get_sender();
-            let sender = sender.lock().await;
-            sender.send(msg).await.unwrap();
+            send_request(msg).await;
             match receiver.await {
                 Ok(response) => {
                     match response {
