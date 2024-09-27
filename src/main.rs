@@ -47,6 +47,7 @@ async fn main() {
         usecs: None,
     };
 
+    //order plant
     let req = RequestProductRmsInfo {
         template_id: 306,
         user_msg: vec!["callback_id".to_string()],
@@ -55,13 +56,14 @@ async fn main() {
         account_id: Some("S1Sep246906077".to_string()),
     };
 
+    //tick plant
     let req = RequestProductCodes {
         template_id: 111 ,
         user_msg: vec![],
         exchange: Some(Exchange::CME.to_string()),
         give_toi_products_only: Some(true),
     };
-    
+
   /*  let req = RequestMarketDataUpdate {
         template_id: 100,
         user_msg: vec![],
@@ -85,7 +87,8 @@ async fn main() {
             exchange: None,
         }*/
 
-    let req = RequestTimeBarUpdate {
+    //history plant
+/*    let req = RequestTimeBarUpdate {
         template_id: 200,
         user_msg: vec![],
         symbol: Some("NQ".to_string()),
@@ -93,9 +96,10 @@ async fn main() {
         request: Some(Request::Subscribe.into()),
         bar_type: Some(1),
         bar_type_period: Some(5),
-    };
+    };*/
 
-    let req = RequestTickBarUpdate {
+    //history plant
+   /* let req = RequestTickBarUpdate {
         template_id: 204,
         user_msg: vec![],
         symbol: Some("NQ".to_string()),
@@ -103,10 +107,10 @@ async fn main() {
         request: Some(Request::Subscribe.into()),
         bar_type: Some(1),
         bar_sub_type: Some(1),
-        bar_type_specifier: Some("100".to_string()),
+        bar_type_specifier: None,
         custom_session_open_ssm: None,
         custom_session_close_ssm: None,
-    };
+    };*/
 
     handle_received_responses(rithmic_client_arc.clone()).await;
 

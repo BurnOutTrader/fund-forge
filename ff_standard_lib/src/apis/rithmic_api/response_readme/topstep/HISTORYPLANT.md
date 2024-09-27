@@ -55,7 +55,7 @@ fn example() {
         request: Some(Request::Subscribe.into()),
         bar_type: Some(1),
         bar_sub_type: Some(1),
-        bar_type_specifier: Some("100".to_string()),
+        bar_type_specifier: None,
         custom_session_open_ssm: None,
         custom_session_close_ssm: None,
     };

@@ -1,6 +1,4 @@
-use std::fmt::format;
 use std::sync::{Arc};
-use ahash::AHashMap;
 use async_trait::async_trait;
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
@@ -15,7 +13,7 @@ use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::brokerage::server_side_brokerage::BrokerApiResponse;
@@ -288,7 +286,20 @@ impl VendorApiResponse for RithmicClient {
             exchange: Some(Exchange::CME.to_string()),
             request: Some(Request::Subscribe.into()),
             update_bits: Some(2), 1 for ticks 2 for quotes
-        };*/
+        };
+        let req = RequestTimeBarUpdate {
+        template_id: 200,
+        user_msg: vec![],
+        symbol: Some("NQ".to_string()),
+        exchange: Some(Exchange::CME.to_string()),
+        request: Some(Request::Subscribe.into()),
+        bar_type: Some(1),
+        bar_type_period: Some(5),
+    };
+    };
+
+
+        */
 
         /*let available_subscriptions = self.available_subscriptions();
         if available_subscriptions.contains(&subscription) {
