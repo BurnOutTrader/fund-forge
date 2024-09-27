@@ -1,7 +1,7 @@
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::{DataServerResponse};
 use crate::standardized_types::subscriptions::SymbolName;
-use crate::standardized_types::enums::MarketType;
+use crate::standardized_types::enums::{MarketType, StrategyMode};
 use async_trait::async_trait;
 use crate::standardized_types::Volume;
 
@@ -10,12 +10,14 @@ use crate::standardized_types::Volume;
 pub trait BrokerApiResponse: Sync + Send {
     async fn symbols_response(
         &self,
+        mode: StrategyMode,
         stream_name: String,
         market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse;
     async fn account_info_response(
         &self,
+        mode: StrategyMode,
         stream_name: String,
         account_id: AccountId,
         callback_id: u64
@@ -23,21 +25,15 @@ pub trait BrokerApiResponse: Sync + Send {
 
     async fn symbol_info_response(
         &self,
+        mode: StrategyMode,
         stream_name: String,
         symbol_name: SymbolName,
         callback_id: u64
     ) -> DataServerResponse;
 
-    async fn margin_required_historical_response(
+    async fn margin_required_response(
         &self,
-        stream_name: String,
-        symbol_name: SymbolName,
-        quantity: Volume,
-        callback_id: u64
-    ) -> DataServerResponse;
-
-    async fn margin_required_live_response(
-        &self,
+        mode: StrategyMode,
         stream_name: String,
         symbol_name: SymbolName,
         quantity: Volume,
@@ -46,6 +42,7 @@ pub trait BrokerApiResponse: Sync + Send {
 
     async fn accounts_response(
         &self,
+        mode: StrategyMode,
         stream_name: String,
         callback_id: u64
     ) -> DataServerResponse;

@@ -30,6 +30,8 @@ pub enum Exchange {
     CME,
     COMEX,
     NYMEX,
+    MGEX,
+    NYBOT
     // Add other exchanges if necessary
 }
 /// Used for internal ff calulcations

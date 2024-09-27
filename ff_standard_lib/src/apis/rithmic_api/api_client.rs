@@ -1,44 +1,34 @@
-use std::path::PathBuf;
+use std::fmt::format;
 use std::sync::{Arc};
-use std::time::Duration;
 use ahash::AHashMap;
-use async_std::task::block_on;
 use async_trait::async_trait;
-use chrono::{NaiveDate, TimeZone, Utc};
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_account_list::UserType;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, ResponseAccountRmsInfo};
+use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, RequestProductCodes, ResponseAccountRmsInfo};
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::stream::SplitStream;
 use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
-use tokio::io::WriteHalf;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{Mutex, RwLock};
-use tokio::time::sleep;
-use tokio_rustls::server::TlsStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::brokerage::server_side_brokerage::BrokerApiResponse;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::apis::data_vendor::server_side_datavendor::VendorApiResponse;
 use crate::apis::StreamName;
-use crate::helpers::converters::load_as_bytes;
 use crate::helpers::get_data_folder;
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
-use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo, AccountName};
-use crate::standardized_types::accounts::position::{Position, PositionId};
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use crate::standardized_types::accounts::ledgers::{AccountId, AccountName};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{FundForgeError, DataServerResponse};
-use crate::standardized_types::enums::{Exchange, MarketType, Resolution};
-use crate::standardized_types::orders::orders::{Order, OrderId};
+use crate::standardized_types::enums::{Exchange, MarketType, Resolution, StrategyMode};
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::Volume;
@@ -226,59 +216,80 @@ impl RithmicClient {
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
-    async fn symbols_response(&self, _stream_name: String, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn symbols_response(&self, mode: StrategyMode, _stream_name: String, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn account_info_response(&self, _stream_name: String, _account_id: AccountId, callback_id: u64) -> DataServerResponse {
+    async fn account_info_response(&self, mode: StrategyMode, _stream_name: String, _account_id: AccountId, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn symbol_info_response(&self, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
+    async fn symbol_info_response(&self, mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn margin_required_historical_response(&self, _stream_name: String, _symbol_name: SymbolName, _quantity: Volume, _callback_id: u64) -> DataServerResponse {
+    async fn margin_required_response(&self,  mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _quantity: Volume, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn margin_required_live_response(&self, _stream_name: String, _symbol_name: SymbolName, _quantity: Volume, _callback_id: u64) -> DataServerResponse {
-        todo!()
-    }
 
-    async fn accounts_response(&self, stream_name: String, callback_id: u64) -> DataServerResponse {
+    async fn accounts_response(&self, mode: StrategyMode, stream_name: String, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 }
 
 #[async_trait]
 impl VendorApiResponse for RithmicClient {
-    async fn symbols_response(&self, _stream_name: String, _market_type: MarketType, _callback_id: u64) -> DataServerResponse{
-        //1. create a oneshot
-        //2. create the rithmic message
-        //3. send to rithmic
-        //4. await on oneshot
-        //5. process rithmic message here, don't parse it until here, so that each response type can be used for diff functions
+    async fn symbols_response(&self, mode: StrategyMode, stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse{
+        const SYSTEM: SysInfraType = SysInfraType::TickerPlant;
+        match mode {
+            StrategyMode::Backtest => {
+
+            }
+            StrategyMode::LivePaperTrading | StrategyMode::Live => {
+                match market_type {
+                    MarketType::Futures(exchange) => {
+                        let req = RequestProductCodes {
+                            template_id: 111 ,
+                            user_msg: vec![stream_name, callback_id.to_string()],
+                            exchange: Some(exchange.to_string()),
+                            give_toi_products_only: Some(true),
+                        };
+                    }
+                    _ => return DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("Incrorrect market type: {} for: {}", market_type, self.data_vendor))}
+                }
+            }
+        }
+
         todo!()
     }
 
-    async fn resolutions_response(&self, _stream_name: String, _market_type: MarketType, _callback_id: u64) -> DataServerResponse {
+    async fn resolutions_response(&self, mode: StrategyMode, _stream_name: String, _market_type: MarketType, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn markets_response(&self, _stream_name: String, _callback_id: u64) -> DataServerResponse {
+    async fn markets_response(&self, mode: StrategyMode, _stream_name: String, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn decimal_accuracy_response(&self, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
+    async fn decimal_accuracy_response(&self, mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn tick_size_response(&self, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
+    async fn tick_size_response(&self, mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn data_feed_subscribe(&self, stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, mode: StrategyMode,stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
+       /* let req = RequestMarketDataUpdate {
+            template_id: 100,
+            user_msg: vec![],
+            symbol: Some("NQ".to_string()),
+            exchange: Some(Exchange::CME.to_string()),
+            request: Some(Request::Subscribe.into()),
+            update_bits: Some(2), 1 for ticks 2 for quotes
+        };*/
+
         /*let available_subscriptions = self.available_subscriptions();
         if available_subscriptions.contains(&subscription) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
@@ -327,11 +338,11 @@ impl VendorApiResponse for RithmicClient {
         todo!()
     }
 
-    async fn data_feed_unsubscribe(&self, _stream_name: String, _subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self, mode: StrategyMode,_stream_name: String, _subscription: DataSubscription) -> DataServerResponse {
         todo!()
     }
 
-    async fn base_data_types_response(&self, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+    async fn base_data_types_response(&self, mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 }

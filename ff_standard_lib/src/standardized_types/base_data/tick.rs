@@ -1,5 +1,5 @@
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::standardized_types::enums::{MarketType, OrderSide, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::{Price, TimeString, Volume};
 use chrono::{DateTime, TimeZone, Utc};
@@ -26,6 +26,7 @@ pub struct Tick {
     pub price: Price,
     pub time: TimeString,
     pub volume: Volume,
+    pub side: OrderSide
 }
 
 impl BaseData for Tick {
@@ -92,12 +93,13 @@ impl Tick {
     /// 4. `volume` - The volume of the trade.
     /// 5. `side` - The side of the trade `Side` enum variant.
     /// 6. `data_vendor` - The data vendor of the trade.
-    pub fn new(symbol: Symbol, price: Price, time: TimeString, volume: Volume) -> Self {
+    pub fn new(symbol: Symbol, price: Price, time: TimeString, volume: Volume, side: OrderSide) -> Self {
         Tick {
             symbol,
             price,
             time,
             volume,
+            side,
         }
     }
 }
@@ -106,8 +108,8 @@ impl fmt::Display for Tick {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:?},{},{},{}",
-            self.symbol, self.price, self.volume, self.time
+            "{:?},{},{},{},{}",
+            self.symbol, self.price, self.volume, self.side, self.time
         )
     }
 }
@@ -116,8 +118,8 @@ impl fmt::Debug for Tick {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Tick {{ symbol: {:?}, price: {}, volume: {}, time: {}}}",
-            self.symbol, self.price, self.volume, self.time
+            "Tick {{ symbol: {:?}, price: {}, volume: {}, side: {}, time: {}}}",
+            self.symbol, self.price, self.volume, self.side, self.time
         )
     }
 }

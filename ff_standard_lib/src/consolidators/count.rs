@@ -37,6 +37,8 @@ impl CountConsolidator {
                 subscription.symbol.clone(),
                 Price::from_f64(0.0).unwrap(),
                 Volume::from_f64(0.0).unwrap(),
+                Volume::from_f64(0.0).unwrap(),
+                Volume::from_f64(0.0).unwrap(),
                 "".to_string(),
                 Resolution::Ticks(number),
                 subscription.candle_type.clone().unwrap(),
@@ -101,6 +103,8 @@ impl CountConsolidator {
                         BaseDataType::Ticks => Candle::new(
                             self.subscription.symbol.clone(),
                             Price::from_f64(0.0).unwrap(),
+                            Volume::from_f64(0.0).unwrap(),
+                            Volume::from_f64(0.0).unwrap(),
                             Volume::from_f64(0.0).unwrap(),
                             base_data.time_utc().to_string(),
                             Resolution::Ticks(self.number),

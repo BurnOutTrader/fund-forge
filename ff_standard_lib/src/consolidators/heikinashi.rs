@@ -12,6 +12,7 @@ use rust_decimal::prelude::{FromPrimitive};
 use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::enums::OrderSide;
 
 pub struct HeikinAshiConsolidator {
     current_data: Option<BaseDataEnum>,
@@ -30,6 +31,8 @@ impl HeikinAshiConsolidator {
         ha_low: Price,
         ha_close: Price,
         volume: Volume,
+        ask_volume: Volume,
+        bid_volume: Volume,
         time: String,
         is_closed: bool,
         range: Price,
@@ -41,6 +44,8 @@ impl HeikinAshiConsolidator {
             low: ha_low,
             close: ha_close,
             volume,
+            ask_volume,
+            bid_volume,
             time,
             resolution: self.subscription.resolution.clone(),
             is_closed,
@@ -78,6 +83,8 @@ impl HeikinAshiConsolidator {
                     ha_low,
                     ha_close,
                     candle.volume,
+                    candle.ask_volume,
+                    candle.bid_volume,
                     time.to_string(),
                     false,
                     ha_high - ha_low,
@@ -107,6 +114,8 @@ impl HeikinAshiConsolidator {
                     ha_low,
                     ha_close,
                     bar.volume,
+                    bar.ask_volume,
+                    bar.bid_volume,
                     time.to_string(),
                     false,
                     ha_high - ha_low,
@@ -130,12 +139,19 @@ impl HeikinAshiConsolidator {
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
+                let (ask_volume, bid_volume) = match tick.side {
+                    OrderSide::Buy => (dec!(0.0), tick.volume),
+                    OrderSide::Sell => (tick.volume, dec!(0.0))
+                };
+
                 self.candle_from_base_data(
                     ha_open,
                     ha_high,
                     ha_low,
                     ha_close,
                     tick.volume,
+                    ask_volume,
+                    bid_volume,
                     time.to_string(),
                     false,
                     ha_high - ha_low,
@@ -164,7 +180,9 @@ impl HeikinAshiConsolidator {
                     ha_high,
                     ha_low,
                     ha_close,
-                    dec!(0.0),
+                    quote.ask_volume + quote.bid_volume,
+                    quote.ask_volume,
+                    quote.bid_volume,
                     time.to_string(),
                     false,
                     ha_high - ha_low,
@@ -234,6 +252,8 @@ impl HeikinAshiConsolidator {
                 low: ha_open,
                 close: ha_open,
                 volume: dec!(0.0),
+                ask_volume: dec!(0.0),
+                bid_volume: dec!(0.0),
                 time: time.to_string(),
                 resolution: self.subscription.resolution.clone(),
                 is_closed: false,
@@ -276,6 +296,10 @@ impl HeikinAshiConsolidator {
                             candle.range =
                                 round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             candle.volume += tick.volume;
+                            match tick.side {
+                                OrderSide::Buy => candle.bid_volume += tick.volume,
+                                OrderSide::Sell => candle.ask_volume += tick.volume
+                            };
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
                         BaseDataEnum::Candle(new_candle) => {
@@ -285,6 +309,8 @@ impl HeikinAshiConsolidator {
                             candle.range =
                                 round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             candle.volume += new_candle.volume;
+                            candle.ask_volume += new_candle.ask_volume;
+                            candle.bid_volume += new_candle.bid_volume;
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
                         BaseDataEnum::QuoteBar(bar) => {
@@ -294,11 +320,16 @@ impl HeikinAshiConsolidator {
                             candle.range =
                                 round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
                             candle.volume += bar.volume;
+                            candle.bid_volume += bar.bid_volume;
+                            candle.ask_volume += bar.ask_volume;
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
                         BaseDataEnum::Quote(quote) => {
                             candle.high = candle.high.max(quote.bid);
                             candle.low = candle.low.min(quote.bid);
+                            candle.ask_volume += quote.ask_volume;
+                            candle.bid_volume += quote.bid_volume;
+                            candle.volume += (quote.bid_volume + quote.ask_volume);
                             candle.close = quote.bid;
                             candle.range =
                                 round_to_tick_size(candle.high - candle.low, self.tick_size.clone());

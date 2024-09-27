@@ -184,13 +184,13 @@ pub(crate) mod historical_ledgers {
         }
 
         pub async fn subtract_margin_used(&mut self, symbol_name: SymbolName, quantity: Volume) {
-            let margin = self.brokerage.margin_required_historical(symbol_name, quantity).await.unwrap();
+            let margin = self.brokerage.margin_required(symbol_name, quantity).await.unwrap();
             self.cash_available += margin;
             self.cash_used -= margin;
         }
 
         pub async fn add_margin_used(&mut self, symbol_name: SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
-            let margin = self.brokerage.margin_required_historical(symbol_name, quantity).await?;
+            let margin = self.brokerage.margin_required(symbol_name, quantity).await?;
             // Check if the available cash is sufficient to cover the margin
             if self.cash_available < margin {
                 return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));

@@ -66,7 +66,7 @@ use std::collections::HashMap;
 use crate::standardized_types::enums::Exchange;
 
 // Function to map contract code to an exchange using the Exchange enum
-fn get_code_to_exchange_map() -> HashMap<&'static str, Exchange> {
+pub fn get_code_to_exchange_map() -> HashMap<&'static str, Exchange> {
     let mut code_to_exchange_map = HashMap::new();
     // CBOT contracts
     code_to_exchange_map.insert("XC", Exchange::CBOT);

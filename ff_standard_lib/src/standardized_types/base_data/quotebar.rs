@@ -45,6 +45,8 @@ pub struct QuoteBar {
     pub ask_open: Price,
     pub ask_close: Price,
     pub volume: Volume,
+    pub ask_volume: Volume,
+    pub bid_volume: Volume,
     pub range: Price,
     pub time: TimeString,
     pub spread: Price,
@@ -139,6 +141,8 @@ impl QuoteBar {
         bid_open: Price,
         ask_open: Price,
         volume: Volume,
+        ask_volume: Volume,
+        bid_volume: Volume,
         time: String,
         resolution: Resolution,
         candle_type: CandleType,
@@ -154,6 +158,8 @@ impl QuoteBar {
             ask_open,
             ask_close: ask_open,
             volume,
+            ask_volume,
+            bid_volume,
             range: dec!(0.0),
             time,
             spread: ask_open - bid_open,
@@ -204,6 +210,8 @@ impl QuoteBar {
         ask_open: Price,
         ask_close: Price,
         volume: Volume,
+        ask_volume: Volume,
+        bid_volume: Volume,
         time: DateTime<chrono::Utc>,
         resolution: Resolution,
         candle_type: CandleType,
@@ -219,6 +227,8 @@ impl QuoteBar {
             ask_open,
             ask_close,
             volume,
+            ask_volume,
+            bid_volume,
             range: (ask_high + bid_high) - (ask_low + bid_low),
             time: time.to_string(),
             spread: ask_high - bid_low,
@@ -233,7 +243,7 @@ impl Display for QuoteBar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{},{:?},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{:?},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.resolution,
             self.symbol,
             self.bid_high,
@@ -245,6 +255,8 @@ impl Display for QuoteBar {
             self.ask_open,
             self.ask_close,
             self.volume,
+            self.ask_volume,
+            self.bid_volume,
             self.range,
             self.spread,
             self.time,
@@ -258,8 +270,8 @@ impl Debug for QuoteBar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "QuoteBar {{ resolution: {}, symbol: {:?}, bid_high: {}, bid_low: {}, bid_open: {}, bid_close: {}, ask_high: {}, ask_low: {}, ask_open: {}, ask_close: {}, volume: {}, range: {}, spread: {}, time: {}, is_closed: {} }}",
-            self.resolution , self.symbol, self.bid_high, self.bid_low, self.bid_open, self.bid_close, self.ask_high, self.ask_low, self.ask_open, self.ask_close, self.volume, self.range, self.spread, self.time, self.is_closed
+            "QuoteBar {{ resolution: {}, symbol: {:?}, bid_high: {}, bid_low: {}, bid_open: {}, bid_close: {}, ask_high: {}, ask_low: {}, ask_open: {}, ask_close: {}, volume: {}, ask_volume: {}, bid_volume: {}, range: {}, spread: {}, time: {}, is_closed: {} }}",
+            self.resolution , self.symbol, self.bid_high, self.bid_low, self.bid_open, self.bid_close, self.ask_high, self.ask_low, self.ask_open, self.ask_close, self.volume, self.ask_volume, self.bid_volume ,self.range, self.spread, self.time, self.is_closed
         )
     }
 }

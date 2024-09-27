@@ -19,7 +19,7 @@ use ff_standard_lib::standardized_types::enums::{MarketType, Resolution};
 /// 2. Configure the subscription properties and directory path
 fn main() -> Result<(), Box<dyn Error>> {
     let YOUR_FOLDER_PATH: String = "/Users/kevmonaghan/Downloads".to_string();
-    let SYMBOL_NAME: String = "EUR-USD".to_string();
+    let SYMBOL_NAME: String = "AUD-CAD".to_string();
 
     let symbol = Symbol {
         name: SYMBOL_NAME, //CHANGE THIS

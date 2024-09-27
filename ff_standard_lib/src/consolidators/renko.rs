@@ -26,6 +26,8 @@ impl RenkoConsolidator {
                 subscription.symbol.clone(),
                 dec!(0.0),
                 dec!(0.0),
+                dec!(0.0),
+                dec!(0.0),
                 "".to_string(),
                 Resolution::Instant,
                 subscription.candle_type.clone().unwrap(),

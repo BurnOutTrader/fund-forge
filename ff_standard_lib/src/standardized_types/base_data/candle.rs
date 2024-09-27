@@ -62,6 +62,8 @@ pub struct Candle {
     pub open: Price,
     pub close: Price,
     pub volume: Volume,
+    pub ask_volume: Volume,
+    pub bid_volume: Volume,
     pub range: Price,
     pub time: TimeString,
     pub is_closed: bool,
@@ -73,7 +75,7 @@ impl Display for Candle {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{:?},{},{},{},{},{},{},{},{},{},{}",
+            "{:?},{},{},{},{},{},{},{},{},{},{},{},{}",
             self.symbol,
             self.resolution,
             self.high,
@@ -81,6 +83,8 @@ impl Display for Candle {
             self.open,
             self.close,
             self.volume,
+            self.ask_volume,
+            self.bid_volume,
             self.range,
             self.time,
             self.is_closed,
@@ -172,6 +176,8 @@ impl Candle {
             low,
             close,
             volume: quotebar.volume,
+            ask_volume: quotebar.ask_volume,
+            bid_volume: quotebar.bid_volume,
             range: high - low,
             resolution: quotebar.resolution,
             candle_type: CandleType::CandleStick,
@@ -182,6 +188,8 @@ impl Candle {
         symbol: Symbol,
         open: Price,
         volume: Volume,
+        ask_volume: Volume,
+        bid_volume: Volume,
         time: TimeString,
         resolution: Resolution,
         candle_type: CandleType,
@@ -193,6 +201,8 @@ impl Candle {
             open,
             close: open,
             volume,
+            ask_volume,
+            bid_volume,
             range: dec!(0.0),
             time,
             is_closed: false,
@@ -210,7 +220,9 @@ impl Candle {
         low: Price,
         open: Price,
         close: Price,
-        volume: Price,
+        volume: Volume,
+        ask_volume: Volume,
+        bid_volume: Volume,
         time: DateTime<chrono::Utc>,
         resolution: Resolution,
         candle_type: CandleType,
@@ -222,6 +234,8 @@ impl Candle {
             open,
             close,
             volume,
+            ask_volume,
+            bid_volume,
             range: high - low,
             time: time.to_string(),
             is_closed: true,
@@ -249,8 +263,8 @@ impl fmt::Debug for Candle {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Candle {{ resolution {}, symbol: {:?}, high: {}, low: {}, open: {}, close: {}, volume: {}, range: {}, time: {}, is_closed: {}, candle_type {} }}",
-            self.resolution, self.symbol, self.high, self.low, self.open, self.close, self.volume, self.range, self.time, self.is_closed, self.candle_type
+            "Candle {{ resolution {}, symbol: {:?}, high: {}, low: {}, open: {}, close: {}, volume: {}, ask_volume: {}, bid_volume: {} range: {}, time: {}, is_closed: {}, candle_type {} }}",
+            self.resolution, self.symbol, self.high, self.low, self.open, self.close, self.volume, self.ask_volume, self.bid_volume, self.range, self.time, self.is_closed, self.candle_type
         )
     }
 }

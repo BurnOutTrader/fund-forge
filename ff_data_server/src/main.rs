@@ -10,11 +10,14 @@ use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use structopt::StructOpt;
+use tokio::io::AsyncReadExt;
 use tokio::net::TcpListener;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor};
 use ff_standard_lib::servers::settings::client_settings::initialise_settings;
+use ff_standard_lib::standardized_types::data_server_messaging::DataServerRequest;
+use ff_standard_lib::standardized_types::enums::StrategyMode;
 use crate::request_handlers::data_server_manage_async_requests;
 
 pub mod request_handlers;
@@ -88,6 +91,7 @@ async fn main() -> io::Result<()> {
 }
 
 pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()> {
+    const LENGTH: usize = 8;
     task::spawn(async move {
         let acceptor = TlsAcceptor::from(Arc::new(config));
         let listener = match TcpListener::bind(&addr).await {
@@ -110,7 +114,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
             println!("{}, peer_addr: {:?}", Utc::now(), peer_addr);
             let acceptor = acceptor.clone();
 
-            let tls_stream = match acceptor.accept(stream).await {
+            let mut tls_stream = match acceptor.accept(stream).await {
                 Ok(stream) => stream,
                 Err(e) => {
                     eprintln!("Failed to accept TLS connection: {:?}", e);
@@ -118,9 +122,44 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
                 }
             };
 
+            let mut length_bytes = [0u8; LENGTH];
+            let mut mode = StrategyMode::Backtest;
+            'registration_loop: while let Ok(_) = tls_stream.read_exact(&mut length_bytes).await {
+                // Parse the length from the header
+                let msg_length = u64::from_be_bytes(length_bytes) as usize;
+                let mut message_body = vec![0u8; msg_length];
+
+                // Read the message body based on the length
+                match tls_stream.read_exact(&mut message_body).await {
+                    Ok(_) => {},
+                    Err(e) => {
+                        eprintln!("Error reading message body: {}", e);
+                        continue;
+                    }
+                }
+
+                // Parse the request from the message body
+                let request = match DataServerRequest::from_bytes(&message_body) {
+                    Ok(req) => req,
+                    Err(e) => {
+                        eprintln!("Failed to parse request: {:?}", e);
+                        continue;
+                    }
+                };
+                println!("{:?}", request);
+                // Handle the request and generate a response
+                match request {
+                    DataServerRequest::Register(registered_mode) => {
+                        mode = registered_mode;
+                        break 'registration_loop
+                    },
+                    _ => eprintln!("Strategy Did not register a Strategy mode")
+                }
+            }
             println!("TLS connection established with {:?}", peer_addr);
 
             data_server_manage_async_requests(
+                mode,
                 tls_stream
             )
             .await;
