@@ -3,7 +3,7 @@
 To use the rithmic api, you have to apply for a dev kit from rithmic and pass conformance, this is just a matter of creating a unique app name to pass into the RithmicClient;
 
 Then you just follow the information you will get from rithmic, which is essentially just:
-1. append a message to you app name. (do not use fund forge as app name, it is already used)
+1. prepend a message to your app name. (do not use fund forge as app name, it is already used)
 2. login with the api and stay connected to the rithmic test end point's while rithmic's engineers do some work approving your application name.
 3. receive back information required to complete the rithmic toml files in fund forge.
 
