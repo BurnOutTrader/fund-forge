@@ -34,7 +34,7 @@ Test = "You need to contact rithmic for this"
 
 For each rithmic RithmicSystem you intend to use, you will need to create a rithmic .toml file for the credentials.
 
-for each RithmicSystem system you intend to use you will need  RithmicCredentials file in ff_data_server/rithmic_credentials.
+for each RithmicSystem system you intend to use you will need  RithmicCredentials file in ff_data_server/data/rithmic_credentials.
 The file name is created using `credentials.system_name.file_string()`. This allows the credentials to be found by the data server.
 
 save the toml file as `ff_data_server/rithmic_credentials/credentials.system_name.file_string();`
