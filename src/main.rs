@@ -7,8 +7,10 @@ use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestProductRmsInfo, RequestReferenceData, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
+use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestMarketDataUpdate, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_account_list::UserType;
+use ff_rithmic_api::rithmic_proto_objects::rti::request_market_data_update::UpdateBits;
+use ff_rithmic_api::rithmic_proto_objects::rti::request_tick_bar_update::Request;
 use futures::stream::SplitStream;
 use prost::{Message as ProstMessage};
 use tokio::net::TcpStream;
@@ -19,11 +21,12 @@ use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage::Rithmic;
 use ff_standard_lib::apis::rithmic_api::api_client::RithmicClient;
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountInfo, Currency};
+use ff_standard_lib::standardized_types::enums::Exchange;
 
 /// This Test will fail when the market is closed.
 #[tokio::main]
 async fn main() {
-    /*// Define the file path for credentials
+    // Define the file path for credentials
     let servers_file_path = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data/rithmic_credentials/servers.toml".to_string());
     let credentials = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data/rithmic_credentials/topstep_trader.toml".to_string());
     // Define credentials
@@ -33,7 +36,7 @@ async fn main() {
 
     let rithmic_system = credentials.system_name.clone();
     let brokerage = Brokerage::Rithmic(rithmic_system.clone());
-    let ff_rithmic_client = RithmicClient::new(rithmic_system, app_name.clone(), app_version, false, servers_file_path);
+    let ff_rithmic_client = RithmicClient::new(rithmic_system, app_name.clone(), app_version, false, servers_file_path).await;
     let rithmic_client_arc = Arc::new(ff_rithmic_client);
 
     // send a heartbeat request as a test message, 'RequestHeartbeat' Template number 18
@@ -52,32 +55,70 @@ async fn main() {
         account_id: Some("S1Sep246906077".to_string()),
     };
 
-/*    let req = RequestAccountRmsInfo {
-        template_id: 304,
+    let req = RequestProductCodes {
+        template_id: 111 ,
         user_msg: vec![],
-        fcm_id: None,
-        ib_id: None,
-        user_type: Some(UserType::Trader.into()),
+        exchange: Some(Exchange::CME.to_string()),
+        give_toi_products_only: Some(true),
+    };
+    
+  /*  let req = RequestMarketDataUpdate {
+        template_id: 100,
+        user_msg: vec![],
+        symbol: Some("NQ".to_string()),
+        exchange: Some(Exchange::CME.to_string()),
+        request: Some(Request::Subscribe.into()),
+        update_bits: Some(2),
+    };*/
+    /*    let req = RequestAccountRmsInfo {
+            template_id: 304,
+            user_msg: vec![],
+            fcm_id: None,
+            ib_id: None,
+            user_type: Some(UserType::Trader.into()),
+        };
+
+        let req = RequestReferenceData {
+            template_id: 0,
+            user_msg: vec![],
+            symbol: None,
+            exchange: None,
+        }*/
+
+    let req = RequestTimeBarUpdate {
+        template_id: 200,
+        user_msg: vec![],
+        symbol: Some("NQ".to_string()),
+        exchange: Some(Exchange::CME.to_string()),
+        request: Some(Request::Subscribe.into()),
+        bar_type: Some(1),
+        bar_type_period: Some(5),
     };
 
-    let req = RequestReferenceData {
-        template_id: 0,
+    let req = RequestTickBarUpdate {
+        template_id: 204,
         user_msg: vec![],
-        symbol: None,
-        exchange: None,
-    }*/
+        symbol: Some("NQ".to_string()),
+        exchange: Some(Exchange::CME.to_string()),
+        request: Some(Request::Subscribe.into()),
+        bar_type: Some(1),
+        bar_sub_type: Some(1),
+        bar_type_specifier: Some("100".to_string()),
+        custom_session_open_ssm: None,
+        custom_session_close_ssm: None,
+    };
 
     handle_received_responses(rithmic_client_arc.clone()).await;
 
     // We can send messages with only a reference to the client, so we can wrap our client in Arc or share it between threads and still utilise all associated functions.
-    match rithmic_client_arc.client.send_message(SysInfraType::OrderPlant, req).await {
+    match rithmic_client_arc.client.send_message(SysInfraType::HistoryPlant, req).await {
         Ok(_) => println!("Heart beat sent"),
         Err(e) => eprintln!("Heartbeat send failed: {}", e)
     }
 
-    sleep(Duration::from_secs(10));
+    sleep(Duration::from_secs(15));
     // Logout and Shutdown all connections
-    rithmic_client_arc.client.shutdown_all().await.unwrap();*/
+    rithmic_client_arc.client.shutdown_all().await.unwrap();
 }
 
 pub async fn handle_received_responses(
@@ -417,7 +458,7 @@ pub async fn handle_responses_from_order_plant(
                                     Err(e) => eprintln!("Failed to read_extract message: {}", e)
                                 }
                                 if let Some(template_id) = client.client.extract_template_id(&message_buf) {
-                                    println!("Extracted template_id: {}", template_id);
+                                    //println!("Extracted template_id: {}", template_id);
                                     // Now you can use the template_id to determine which type to decode into the concrete types
                                     match template_id {
                                         15 => {
