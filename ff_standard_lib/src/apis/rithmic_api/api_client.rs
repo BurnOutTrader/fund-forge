@@ -80,7 +80,6 @@ pub struct RithmicClient {
     pub client: Arc<RithmicApiClient>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
     pub readers: DashMap<SysInfraType, Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>>,
-    pub callback_senders: DashMap<StreamName, Arc<Mutex<WriteHalf<TlsStream<TcpStream>>>>>, //the callback id doesn't matter, as it's only used on client side.
 
     //subscribers
     data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<DataServerResponse>>>>,
@@ -111,7 +110,6 @@ impl RithmicClient {
             client: Arc::new(client),
             symbol_info: Default::default(),
             readers: DashMap::with_capacity(5),
-            callback_senders: Default::default(),
             data_feed_broadcasters: Default::default(),
             accounts: Default::default(),
             account_liquidate_threshold: Default::default(),

@@ -72,14 +72,13 @@ pub async fn data_server_manage_async_requests(
     let stream_name = get_ip_addresses(&stream).await.to_string();
     println!("stream name: {}", stream_name);
     let (read_half, write_half) = io::split(stream);
-    let writer = Arc::new(Mutex::new(write_half));
     tokio::spawn(async move {
         const LENGTH: usize = 8;
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
         let mut strategy_mode = Arc::new(RwLock::new(StrategyMode::Backtest));
-        let (stream_sender, stream_receiver) = mpsc::channel(100);
-        let stream_handle = stream_handler(stream_receiver, writer.clone()).await;
+        let (stream_sender, stream_receiver) = mpsc::channel(1000);
+        let stream_handle = stream_handler(stream_receiver, write_half).await;
         while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
             // Parse the length from the header
             let msg_length = u64::from_be_bytes(length_bytes) as usize;
@@ -103,7 +102,6 @@ pub async fn data_server_manage_async_requests(
                 }
             };
             println!("{:?}", request);
-            let writer = writer.clone();
             let stream_name = stream_name.clone();
             let sender = stream_sender.clone();
             let strategy_mode = strategy_mode.clone();
@@ -120,7 +118,7 @@ pub async fn data_server_manage_async_requests(
                         symbol_name
                     } => handle_callback(
                         || data_vendor.decimal_accuracy_response(stream_name.to_string(), symbol_name, callback_id),
-                        writer.clone()
+                        sender.clone()
                     ).await,
 
                     DataServerRequest::SymbolInfo {
@@ -129,7 +127,7 @@ pub async fn data_server_manage_async_requests(
                         callback_id
                     } => handle_callback(
                         || brokerage.symbol_info_response(stream_name.to_string(), symbol_name, callback_id),
-                        writer.clone()
+                        sender.clone()
                     ).await,
 
                     DataServerRequest::HistoricalBaseData {
@@ -138,7 +136,7 @@ pub async fn data_server_manage_async_requests(
                         time,
                     } => handle_callback(
                         || base_data_response(subscription, time, callback_id),
-                        writer.clone()
+                        sender.clone()
                     ).await,
 
                     DataServerRequest::SymbolsVendor {
@@ -147,7 +145,7 @@ pub async fn data_server_manage_async_requests(
                         callback_id,
                     } => handle_callback(
                         || data_vendor.symbols_response(stream_name.to_string(), market_type, callback_id),
-                        writer.clone()
+                        sender.clone()
                     ).await,
 
                     DataServerRequest::SymbolsBroker {
@@ -156,7 +154,7 @@ pub async fn data_server_manage_async_requests(
                         market_type,
                     } => handle_callback(
                         || brokerage.symbols_response(stream_name.to_string(), market_type, callback_id),
-                        writer.clone()
+                        sender.clone()
                     ).await,
 
                     DataServerRequest::Resolutions {
@@ -165,7 +163,7 @@ pub async fn data_server_manage_async_requests(
                         market_type,
                     } => handle_callback(
                         || data_vendor.resolutions_response(stream_name.to_string(), market_type, callback_id),
-                        writer.clone()
+                        sender.clone()
                     ).await,
 
                     DataServerRequest::AccountInfo {
@@ -174,7 +172,7 @@ pub async fn data_server_manage_async_requests(
                         account_id,
                     } => handle_callback(
                         || brokerage.account_info_response(stream_name.to_string(), account_id, callback_id),
-                        writer.clone()
+                        sender.clone()
                     ).await,
 
                     DataServerRequest::Markets {
@@ -182,7 +180,7 @@ pub async fn data_server_manage_async_requests(
                         data_vendor,
                     } => handle_callback(
                         || data_vendor.markets_response(stream_name.to_string(), callback_id),
-                        writer.clone()
+                        sender.clone()
                     ).await,
 
                     DataServerRequest::TickSize {
@@ -191,21 +189,21 @@ pub async fn data_server_manage_async_requests(
                         symbol_name,
                     } => handle_callback(
                         || data_vendor.tick_size_response(stream_name.to_string(), symbol_name, callback_id),
-                        writer.clone()).await,
+                        sender.clone()).await,
 
                     DataServerRequest::Accounts {
                         callback_id,
                         brokerage
                     } => handle_callback(
                         || brokerage.accounts_response(stream_name.to_string(), callback_id),
-                        writer.clone()).await,
+                        sender.clone()).await,
 
                     DataServerRequest::BaseDataTypes {
                         callback_id,
                         data_vendor
                     } => handle_callback(
                         || data_vendor.base_data_types_response(stream_name.to_string(), callback_id),
-                        writer.clone()).await,
+                        sender.clone()).await,
 
                     DataServerRequest::MarginRequired {
                         brokerage,
@@ -217,12 +215,12 @@ pub async fn data_server_manage_async_requests(
                             StrategyMode::Backtest => {
                                 handle_callback(
                                     || brokerage.margin_required_historical_response(stream_name.to_string(), symbol_name, quantity, callback_id),
-                                    writer.clone()).await
+                                    sender.clone()).await
                             },
                             StrategyMode::LivePaperTrading | StrategyMode::Live => {
                                 handle_callback(
                                     || brokerage.margin_required_live_response(stream_name.to_string(), symbol_name, quantity, callback_id),
-                                    writer.clone()).await
+                                    sender.clone()).await
                             },
                         }
                     },
@@ -236,8 +234,8 @@ pub async fn data_server_manage_async_requests(
                         }
                         println!("{:?}", request);
                         handle_callback(
-                            || stream_response(stream_name.clone(), request, sender),
-                            writer.clone()).await
+                            || stream_response(stream_name.clone(), request, sender.clone()),
+                            sender.clone()).await
                     },
 
                     DataServerRequest::OrderRequest {
@@ -257,45 +255,32 @@ pub async fn data_server_manage_async_requests(
         stream_handle.abort();
     });
 }
-
-async fn handle_callback<F, Fut, T>(
+async fn handle_callback<F, Fut>(
     callback: F,
-    writer: Arc<Mutex<WriteHalf<TlsStream<TcpStream>>>>
+    sender: tokio::sync::mpsc::Sender<DataServerResponse>
 )
 where
     F: FnOnce() -> Fut,
-    Fut: Future<Output = T>,
-    T: Bytes<DataServerResponse>,  // Ensures `T` can be converted to bytes for sending
+    Fut: Future<Output = DataServerResponse>,
 {
     // Call the closure to get the future, then await the future to get the response
     let response = callback().await;
 
-    // Convert the response to bytes
-    let bytes = T::to_bytes(&response);
-
-    // Prepare the message with a 4-byte length header in big-endian format
-    let length = (bytes.len() as u64).to_be_bytes();
-
-    // Create a buffer containing the length header followed by the response bytes
-    let mut prefixed_msg = Vec::new();
-    prefixed_msg.extend_from_slice(&length);
-    prefixed_msg.extend_from_slice(&bytes);
-
-    //println!("Response type: {}", type_name::<T>());
-    // Write the response to the stream
-    let mut writer = writer.lock().await;
-    match writer.write_all(&prefixed_msg).await {
+    // Send the response through the channel to the stream handler
+    match sender.send(response).await {
         Err(e) => {
             // Handle the error (log it or take some other action)
+            println!("Failed to send response to stream handler: {:?}", e);
         }
         Ok(_) => {
-            // Successfully wrote the message
+            // Successfully sent the response
         }
     }
 }
 
-async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: Arc<Mutex<WriteHalf<TlsStream<TcpStream>>>>) -> JoinHandle<()> {
+async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>) -> JoinHandle<()> {
     let mut receiver = receiver;
+    let mut writer = writer;
     tokio::spawn(async move {
         while let Some(response) = receiver.recv().await {
             // Convert the response to bytes
@@ -308,7 +293,6 @@ async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: Arc<Mute
             prefixed_msg.extend_from_slice(&bytes);
 
             // Write the response to the stream
-            let mut writer = writer.lock().await;
             match writer.write_all(&prefixed_msg).await {
                 Err(e) => {
                     // Handle the error (log it or take some other action)
