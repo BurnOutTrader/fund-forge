@@ -1,12 +1,19 @@
 
 ## Rithmic
+To use the rithmic api, you have to apply for a dev kit from rithmic and pass conformance, this is just a matter of creating a unique app name to pass into the RithmicClient;
+Then you just follow the information you will get from rithmic, which is essentially just:
+1. append a message to you app name. (do not use fund forge as app name, it is already used)
+2. login with the api and stay connected to the rithmic test end point while rithmic do some work approving you app.
+3. receive back information required to complete the rithmic toml files in fund forge.
+
+The conformance is easy to pass if you just build a simple program from [ff_rithmic_api](https://github.com/BurnOutTrader/ff_rithmic_api)
+this fund forge crate has its own RithmicClient which uses my other project [ff_rithmic_api](https://github.com/BurnOutTrader/ff_rithmic_api) as a dependency.
 If you would like to work on the Rithmic API, you will need to apply for your own dev kit and credentials from Rithmic. Additionally, you will need to complete the Rithmic conformance procedure.
 
 Since Fund Forge is not a company, each user must do this and create their own unique app name to pass conformance. You can find more information at [Rithmic](https://yyy3.rithmic.com/?page_id=17).
 
-The skeleton of my initial Rithmic API is available [here](https://github.com/BurnOutTrader/ff_rithmic_api). Inside the `ff_standard_lib`, there is another Rithmic API object that uses the aforementioned project as a dependency (already included in `Cargo.toml` as a git link).
-
-You will need to create a servers.toml file at ff_data_server/rithmic_credentials and fill in the server domains given to you by rithmic.
+***After passing conformance:***
+You will need to create a servers.toml file at ff_data_server/data/rithmic_credentials and fill in the server domains given to you by rithmic.
 this is to generate a BTreeMap for Servers where Key is RithmicServer (eg: RithmicServer::Chicago) and value is the domain (eg: wss://{DETAILS_FROM_RITHMIC})
 ```toml
 [rithmic_servers]
