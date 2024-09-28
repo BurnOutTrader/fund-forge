@@ -91,19 +91,18 @@ impl HistoricalEngine {
 
     pub async fn warmup(&mut self) {
         println!("Engine: Warming up the strategy...");
-        let end_time = self.start_time;
-
+        let warm_up_start_time = self.start_time - self.warmup_duration;
+        let warm_up_end_time = self.start_time;
         // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
         let month_years = generate_file_dates(
-            self.start_time - self.warmup_duration,
-            self.start_time.clone(), //end time for warm up is strategy official start time
+            warm_up_start_time,
+            warm_up_end_time, //end time for warm up is strategy official start time
         );
 
         match self.buffer_resolution {
-            None => self.historical_data_feed_unbuffered(month_years, self.start_time.clone()).await,
-            Some(res) => self.historical_data_feed_buffered(month_years, self.start_time.clone(), res).await,
+            None => self.historical_data_feed_unbuffered(month_years, warm_up_end_time.clone()).await,
+            Some(res) => self.historical_data_feed_buffered(month_years, warm_up_end_time.clone(), res).await,
         }
-
 
         set_warmup_complete().await;
         let warmup_complete_event = vec![StrategyEvent::WarmUpComplete];
