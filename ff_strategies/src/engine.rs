@@ -90,7 +90,11 @@ impl HistoricalEngine {
     }
 
     pub async fn warmup(&mut self) {
-        println!("Engine: Warming up the strategy...");
+        let msg = match self.buffer_resolution {
+            None => String::from("Un-Buffered"),
+            Some(_) => String::from("Buffered")
+        };
+        println!("{} Engine: Warming up the strategy...", msg);
         let warm_up_start_time = self.start_time - self.warmup_duration;
         let warm_up_end_time = self.start_time;
         // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
@@ -110,15 +114,19 @@ impl HistoricalEngine {
         if self.mode != StrategyMode::Backtest {
             unsubscribe_primary_subscription_updates("Historical Engine".to_string()).await;
         }
-        println!("Engine: Warm up complete")
+        println!("{} Engine: Warm up complete", msg)
     }
 
     /// Runs the strategy backtest
     async fn run_backtest(&mut self) {
+        let msg = match self.buffer_resolution {
+            None => String::from("Un-Buffered"),
+            Some(_) => String::from("Buffered")
+        };
         if self.mode != StrategyMode::Backtest {
             panic!("Do not run backtest engine with mode set to: {:?}", self.mode)
         }
-        println!("Engine: Start {:?} ", self.mode);
+        println!("{} Engine: Start {:?} ", msg, self.mode);
         // we run the historical data feed from the start time until we reach the end date for the strategy
         let month_years = generate_file_dates(
             self.start_time,
@@ -156,24 +164,12 @@ impl HistoricalEngine {
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
             'month_loop: loop {
-                let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
-                let mut subscription_changes = true;
-                while subscription_changes {
-                    match self.primary_subscription_updates.try_recv() {
-                        Ok(new_primary_subscriptions) => {
-                            if primary_subscriptions != new_primary_subscriptions {
-                                primary_subscriptions = new_primary_subscriptions;
-                            }
-                        }
-                        Err(_) => {
-                            subscription_changes = false
-                        }
-                    }
-                }
+                let primary_subscriptions = subscription_handler.primary_subscriptions().await;
                 let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                //println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
+                println!("Un-Buffered Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
 
-                //println!("Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
+                println!("Un-Buffered Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
+                println!("Un-Buffered Engine: Preparing TimeSlices");
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -181,10 +177,11 @@ impl HistoricalEngine {
                         continue;
                     }
                 };
+                println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
                 let mut end_month = true;
                 'time_instance_loop: for (time, time_slice) in month_time_slices {
                     if time > end_time {
-                        println!("Engine: End Time: {}", end_time);
+                        println!("Un-Buffered Engine: End Time: {}", end_time);
                         break 'main_loop;
                     }
 
@@ -258,38 +255,26 @@ impl HistoricalEngine {
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
             'month_loop: loop {
-                let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
-                let mut subscription_changes = true;
-                while subscription_changes {
-                    match self.primary_subscription_updates.try_recv() {
-                        Ok(new_primary_subscriptions) => {
-                            if primary_subscriptions != new_primary_subscriptions {
-                                primary_subscriptions = new_primary_subscriptions;
-                            }
-                        }
-                        Err(_) => {
-                            subscription_changes = false
-                        }
-                    }
-                }
+                let primary_subscriptions = subscription_handler.primary_subscriptions().await;
                 let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                //println!("Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
+                println!("Buffered Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
 
-                //println!("Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
+                println!("Buffered Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
+                println!("Buffered Engine: Preparing TimeSlices");
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
-                        eprintln!("Engine: Error getting historical data for: {:?}: {:?}", start, e);
+                        eprintln!("Buffered Engine: Error getting historical data for: {:?}: {:?}", start, e);
                         continue;
                     }
                 };
-                //println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
+                println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
 
                 let mut end_month = true;
                 'time_instance_loop: loop {
                     let time = last_time + buffer_duration;
                     if time > end_time {
-                        println!("Engine: End Time: {}", end_time);
+                        println!("Buffered Engine: End Time: {}", end_time);
                         break 'main_loop;
                     }
                     if time.month() != start.month() {
