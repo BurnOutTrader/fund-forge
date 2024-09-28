@@ -24,7 +24,6 @@ use ff_standard_lib::standardized_types::Color;
 use ff_standard_lib::standardized_types::orders::orders::OrderUpdateEvent;
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 
-
 // to launch on separate machine
 #[tokio::main]
 async fn main() {
@@ -33,7 +32,7 @@ async fn main() {
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         notify.clone(),
-        StrategyMode::Backtest, // Backtest, Live, LivePaper
+        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 6, 19)
             .unwrap()
@@ -47,18 +46,18 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Seconds(5),
+                Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Seconds(5),
+                 Resolution::Seconds(1),
                  MarketType::Forex,
-                 CandleType::HeikinAshi,
+                 CandleType::CandleStick,
              ),],
-        false,
+        true,
         100,
         strategy_event_sender, // the sender for the strategy events
         None,
@@ -82,7 +81,7 @@ pub async fn on_data_received(
               DataSubscription::new(
                   SymbolName::from("EUR-USD"),
                   DataVendor::Test,
-                  Resolution::Seconds(5),
+                  Resolution::Seconds(1),
                   BaseDataType::QuoteBars,
                   MarketType::Forex,
               ),
@@ -117,7 +116,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    println!("Candle {}: {}, Local Time: {}", candle.symbol.name, candle.time_created_utc(), candle.time_created_local(strategy.time_zone()));
+                                    println!("Candle {}: {}, Local Time: {}", candle.symbol.name, candle.time_utc(), candle.time_local(strategy.time_zone()));
                                     history_2.add(candle.clone());
                                     let last_bar =
                                         match history_2.get(1) {
@@ -153,7 +152,7 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
-                                    println!("QuoteBar {}: {}, Local Time {}", quotebar.symbol.name, quotebar.time_created_utc(), quotebar.time_created_local(strategy.time_zone()));
+                                    println!("QuoteBar {}: {}, Local Time {}", quotebar.symbol.name, quotebar.time_utc(), quotebar.time_local(strategy.time_zone()));
                                     history_1.add(quotebar.clone());
                                     let last_bar =
                                     match history_1.get(1) {

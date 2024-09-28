@@ -9,6 +9,9 @@ use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Duration, Utc};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
+use crate::standardized_types::base_data::candle::Candle;
+use crate::standardized_types::base_data::quotebar::QuoteBar;
+use crate::standardized_types::time_slices::TimeSlice;
 
 pub enum ConsolidatorEnum {
     Count(CountConsolidator),
@@ -20,10 +23,7 @@ pub enum ConsolidatorEnum {
 impl ConsolidatorEnum {
     /// Creates a new consolidator based on the subscription. if is_warmed_up is true, the consolidator will warm up to the to_time on its own.
     pub async fn create_consolidator(
-        is_warmed_up: bool,
-        warm_up_to_time: DateTime<Utc>,
         subscription: DataSubscription,
-        strategy_mode: StrategyMode,
         fill_forward: bool
     ) -> ConsolidatorEnum {
         //todo handle errors here gracefully
@@ -33,21 +33,11 @@ impl ConsolidatorEnum {
         };
 
         if is_tick {
-            return match is_warmed_up {
-                true => {
-                    let consolidator = ConsolidatorEnum::Count(
-                        CountConsolidator::new(subscription.clone())
-                            .await
-                            .unwrap(),
-                    );
-                    ConsolidatorEnum::warmup(consolidator, warm_up_to_time, strategy_mode).await
-                }
-                false => ConsolidatorEnum::Count(
-                    CountConsolidator::new(subscription.clone())
-                        .await
-                        .unwrap(),
-                ),
-            };
+           return ConsolidatorEnum::Count(
+                CountConsolidator::new(subscription.clone())
+                    .await
+                    .unwrap(),
+            )
         }
 
         let consolidator = match &subscription.candle_type {
@@ -71,10 +61,7 @@ impl ConsolidatorEnum {
             _ => panic!("Candle type is required for CandleStickConsolidator"),
         };
 
-       match is_warmed_up {
-            true => ConsolidatorEnum::warmup(consolidator, warm_up_to_time, strategy_mode).await,
-            false => consolidator,
-        }
+       consolidator
     }
 
     /// Updates the consolidator with the new data point.
@@ -140,9 +127,9 @@ impl ConsolidatorEnum {
     pub async fn warmup(
         mut consolidator: ConsolidatorEnum,
         to_time: DateTime<Utc>,
+        history_to_retain: i32,
         strategy_mode: StrategyMode,
-    ) -> ConsolidatorEnum {
-        //todo if live we will tell the self.subscription.symbol.data_vendor to .update_historical_symbol()... we will wait then continue
+    ) -> (ConsolidatorEnum, RollingWindow<BaseDataEnum>) {
         let subscription = consolidator.subscription();
         let vendor_resolutions = filter_resolutions(
             subscription
@@ -162,8 +149,8 @@ impl ConsolidatorEnum {
             false => max_resolution.unwrap(),
         };
 
-        let from_time = to_time
-            - Duration::days(5);
+        let subtract_duration: Duration = consolidator.resolution().as_duration() * history_to_retain;
+        let from_time = to_time - subtract_duration - Duration::days(5);
 
         let base_subscription = DataSubscription::new(
             subscription.symbol.name.clone(),
@@ -172,26 +159,185 @@ impl ConsolidatorEnum {
             min_resolution.base_data_type,
             subscription.market_type.clone(),
         );
-        let base_data = range_data(from_time, to_time, base_subscription.clone()).await;
+        let primary_history = range_data(from_time, to_time, base_subscription.clone()).await;
 
         let mut last_time = from_time;
-        let subscription_resolution_duration = Duration::seconds(1);
+        let subscription_resolution_duration = consolidator.subscription().resolution.as_duration();
+        let mut history = RollingWindow::new(history_to_retain as usize);
         while last_time < to_time {
             let time = last_time + subscription_resolution_duration;
-            if let Some(slice) = base_data.get(&time) {
-                for base_data in slice {
-                    consolidator.update(base_data);
-                    consolidator.update_time(time);
+            let time_slice: TimeSlice = primary_history
+                .range(last_time..=time)
+                .flat_map(|(_, value)| value.iter().cloned())
+                .collect();
+            if !time_slice.is_empty() {
+                for base_data in time_slice {
+                    let consolidated_data = consolidator.update(&base_data);
+                    if let Some(closed_data) = consolidated_data.closed_data {
+                        history.add(closed_data);
+                    }
                 }
-            } else {
-                consolidator.update_time(time);
+            }
+            let optional_consolidated_data = consolidator.update_time(time);
+            if let Some(closed_data) = optional_consolidated_data {
+                history.add(closed_data);
             }
             last_time = time;
         }
         if strategy_mode != StrategyMode::Backtest {
             //todo() we will get any bars which are not in our serialized history here
         }
-        consolidator
+        (consolidator, history)
+    }
+
+    pub async fn warmup_candles(
+        mut consolidator: ConsolidatorEnum,
+        to_time: DateTime<Utc>,
+        history_to_retain: i32,
+        strategy_mode: StrategyMode,
+    ) -> (ConsolidatorEnum, RollingWindow<Candle>) {
+        let subscription = consolidator.subscription();
+        if subscription.base_data_type != BaseDataType::Candles {
+            panic!("Incorrect base data type for fn warmup_candles()")
+        }
+        let vendor_resolutions = filter_resolutions(
+            subscription
+                .symbol
+                .data_vendor
+                .resolutions(subscription.market_type.clone())
+                .await
+                .unwrap(),
+            consolidator.subscription().resolution,
+        );
+        let max_resolution = vendor_resolutions.iter().max_by_key(|r| r.resolution);
+        let min_resolution = match max_resolution.is_none() {
+            true => panic!(
+                "{} does not have any resolutions available",
+                subscription.symbol.data_vendor
+            ),
+            false => max_resolution.unwrap(),
+        };
+
+        let subtract_duration: Duration = consolidator.resolution().as_duration() * history_to_retain;
+        let from_time = to_time - subtract_duration - Duration::days(5);
+
+        let base_subscription = DataSubscription::new(
+            subscription.symbol.name.clone(),
+            subscription.symbol.data_vendor.clone(),
+            min_resolution.resolution,
+            min_resolution.base_data_type,
+            subscription.market_type.clone(),
+        );
+        let primary_history = range_data(from_time, to_time, base_subscription.clone()).await;
+
+        let mut last_time = from_time;
+        let subscription_resolution_duration = consolidator.subscription().resolution.as_duration();
+        let mut history = RollingWindow::new(history_to_retain as usize);
+        while last_time < to_time {
+            let time = last_time + subscription_resolution_duration;
+            let time_slice: TimeSlice = primary_history
+                .range(last_time..=time)
+                .flat_map(|(_, value)| value.iter().cloned())
+                .collect();
+            if !time_slice.is_empty() {
+                for base_data in time_slice {
+                    let consolidated_data = consolidator.update(&base_data);
+                    if let Some(closed_data) = consolidated_data.closed_data {
+                        match closed_data {
+                            BaseDataEnum::Candle(candle) =>  history.add(candle),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            if let Some(closed_data) =  consolidator.update_time(time) {
+                match closed_data {
+                    BaseDataEnum::Candle(candle) =>  history.add(candle),
+                    _ => {}
+                }
+            }
+            last_time = time;
+        }
+        if strategy_mode != StrategyMode::Backtest {
+            //todo() we will get any bars which are not in our serialized history here
+        }
+        (consolidator, history)
+    }
+
+    pub async fn warmup_quotebars(
+        mut consolidator: ConsolidatorEnum,
+        to_time: DateTime<Utc>,
+        history_to_retain: i32,
+        strategy_mode: StrategyMode,
+    ) -> (ConsolidatorEnum, RollingWindow<QuoteBar>) {
+        let subscription = consolidator.subscription();
+        if subscription.base_data_type != BaseDataType::QuoteBars {
+            panic!("Incorrect base data type for fn warmup_candles()")
+        }
+        let vendor_resolutions = filter_resolutions(
+            subscription
+                .symbol
+                .data_vendor
+                .resolutions(subscription.market_type.clone())
+                .await
+                .unwrap(),
+            consolidator.subscription().resolution,
+        );
+        let max_resolution = vendor_resolutions.iter().max_by_key(|r| r.resolution);
+        let min_resolution = match max_resolution.is_none() {
+            true => panic!(
+                "{} does not have any resolutions available",
+                subscription.symbol.data_vendor
+            ),
+            false => max_resolution.unwrap(),
+        };
+
+        let subtract_duration: Duration = consolidator.resolution().as_duration() * history_to_retain;
+        let from_time = to_time - subtract_duration - Duration::days(5);
+
+        let base_subscription = DataSubscription::new(
+            subscription.symbol.name.clone(),
+            subscription.symbol.data_vendor.clone(),
+            min_resolution.resolution,
+            min_resolution.base_data_type,
+            subscription.market_type.clone(),
+        );
+        let primary_history = range_data(from_time, to_time, base_subscription.clone()).await;
+
+        let mut last_time = from_time;
+        let subscription_resolution_duration = consolidator.subscription().resolution.as_duration();
+        let mut history = RollingWindow::new(history_to_retain as usize);
+        while last_time < to_time {
+            let time = last_time + subscription_resolution_duration;
+            let time_slice: TimeSlice = primary_history
+                .range(last_time..=time)
+                .flat_map(|(_, value)| value.iter().cloned())
+                .collect();
+            if !time_slice.is_empty() {
+                for base_data in time_slice {
+                    let consolidated_data = consolidator.update(&base_data);
+                    if let Some(closed_data) = consolidated_data.closed_data {
+                        match closed_data {
+                            BaseDataEnum::QuoteBar(qb) =>  history.add(qb),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            let optional_consolidated_data = consolidator.update_time(time);
+            if let Some(closed_data) = optional_consolidated_data {
+                match closed_data {
+                    BaseDataEnum::QuoteBar(qb) =>  history.add(qb),
+                    _ => {}
+                }
+
+            }
+            last_time = time;
+        }
+        if strategy_mode != StrategyMode::Backtest {
+            //todo() we will get any bars which are not in our serialized history here
+        }
+        (consolidator, history)
     }
 }
 

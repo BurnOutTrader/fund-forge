@@ -129,7 +129,8 @@ impl FundForgeStrategy {
 
         let warm_up_start_time = start_time - warmup_duration;
 
-        subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward).await;
+        subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
+
         //todo There is a problem with quote bars not being produced consistently since refactoring
 
         let (order_sender, order_receiver) = mpsc::channel(100);
@@ -580,7 +581,7 @@ impl FundForgeStrategy {
         }
         self
             .subscription_handler
-            .subscribe(subscription.clone(), self.time_utc(), fill_forward, hsitory_to_retain)
+            .subscribe(subscription.clone(), self.time_utc(), fill_forward, hsitory_to_retain, true)
             .await
     }
 
@@ -588,7 +589,7 @@ impl FundForgeStrategy {
     pub async fn unsubscribe(&self, subscription: DataSubscription) {
         self
             .subscription_handler
-            .unsubscribe(subscription.clone())
+            .unsubscribe(subscription.clone(), true)
             .await;
 
         self.indicator_handler
@@ -609,7 +610,7 @@ impl FundForgeStrategy {
                 panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
             }
         }
-        self.subscription_handler.set_subscriptions(subscriptions, retain_to_history, self.time_utc(), fill_forward).await;
+        self.subscription_handler.set_subscriptions(subscriptions, retain_to_history, self.time_utc(), fill_forward, true).await;
     }
 
     pub fn open_bar(&self, subscription: &DataSubscription) -> Option<QuoteBar> {
