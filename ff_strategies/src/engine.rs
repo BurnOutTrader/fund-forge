@@ -211,50 +211,26 @@ impl HistoricalEngine {
                             strategy_time_slice.push(data.clone());
                         }
 
+                        // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
+                        if let Some(consolidated_data) = subscription_handler.update_consolidators_time(time.clone()).await {
+                            strategy_time_slice.extend(consolidated_data);
+                        }
+
                         if !strategy_time_slice.is_empty() {
                             // Update indicators and get any generated events.
-                            if let Some(events) = indicator_handler.update_time_slice(&vec![data.clone()]).await {
+                            if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
                                 strategy_event_slice.extend(events);
                             }
-
                             // add the strategy time slice to the new events.
                             strategy_event_slice.push(StrategyEvent::TimeSlice(
                                 time.to_string(),
                                 strategy_time_slice,
                             ));
                         }
-
-                        // send the buffered strategy events to the strategy
                         if !strategy_event_slice.is_empty() {
                             send_strategy_event_slice(strategy_event_slice).await;
                             notify.notified().await;
                         }
-                    }
-                    let mut strategy_event_slice: EventTimeSlice = EventTimeSlice::new();
-                    let mut strategy_time_slice: TimeSlice = TimeSlice::new();
-
-                    // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
-                    if let Some(consolidated_data) = subscription_handler.update_consolidators_time(time.clone()).await {
-                        strategy_time_slice.extend(consolidated_data);
-                    }
-
-                    if !strategy_time_slice.is_empty() {
-                        // Update indicators and get any generated events.
-                        if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
-                            strategy_event_slice.extend(events);
-                        }
-
-                        // add the strategy time slice to the new events.
-                        strategy_event_slice.push(StrategyEvent::TimeSlice(
-                            time.to_string(),
-                            strategy_time_slice,
-                        ));
-                    }
-
-                    // send the buffered strategy events to the strategy
-                    if !strategy_event_slice.is_empty() {
-                        send_strategy_event_slice(strategy_event_slice).await;
-                        notify.notified().await;
                     }
                     last_time = time.clone();
                 }
