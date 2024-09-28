@@ -71,8 +71,12 @@ The delay in milliseconds between time slices for market replay style backtestin
 The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
 any additional subscriptions added later will be able to specify their own history requirements.
 
-##### `buffering_duration: core::time::Duration:`
+##### `buffering_duration: Option<core::time::Duration>` 
 Some(core::time::Duration::from_millis(100))
+
+if Some(buffer) we will use the buffered backtesting or buffered live trading engines / handlers.
+
+If None we will use the unbuffered versions. The backtesting versions will try to simulate the event flow of their respective live handlers.
 
 The buffer takes effect in both back-testing and live trading.
 
@@ -92,12 +96,15 @@ This also helps us get consistent results between back testing and live trading 
 
 ***Note: Since the backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtests where the println stops outputting over weekends or market close, it will shortly resume.
 This can be overridden using fill_forward, but be aware you will then capture flat bars in your history***
+
 ```rust
+use std::time::Duration;
+
 #[tokio::main]
 async fn main() {
     // we create a channel for the receiving strategy events
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
-    
+
     let strategy = FundForgeStrategy::initialize(
         // we create a notify object to control the message sender channel until we have processed the last message or to speed up the que. 
         // this gives us full async control over the engine and handlers
@@ -107,7 +114,7 @@ async fn main() {
         StrategyMode::Backtest,
 
         // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. 
-        StrategyInteractionMode::SemiAutomated,  
+        StrategyInteractionMode::SemiAutomated,
 
         // Starting date of the backtest is a NaiveDateTime not NaiveDate
         NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(),
@@ -119,8 +126,8 @@ async fn main() {
         Australia::Sydney,
 
         // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
-        Duration::days(3), 
-        
+        Duration::days(3),
+
         // the initial data subscriptions for the strategy. we can also subscribe or unsubscribe at run time.
         vec![
             DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(10), BaseDataType::Candles, MarketType::Forex),
@@ -136,17 +143,18 @@ async fn main() {
         true,
         //bars to retain in memory for the initial subscriptions
         100,
-        
+
         // the sender for the strategy events
         strategy_event_sender,
-        
+
         // backtest_delay: An Option<Duration> we can pass in a delay for market replay style backtesting, this will be ignored in live trading.
         None,
-        
-        //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 1 second or less depending on the data granularity
+
+        //if Some(buffer) we will use the buffered backtesting or buffered live trading engines / handlers.
+        //If None we will use the unbuffered versions of backtest engine or handlers. The backtesting versions will try to simulate the event flow of their respective live handlers.
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading.
         // In live trading we can set this to None to skip buffering and send the data directly to the strategy or we can use a buffer to keep live consistency with backtesting.
-        100
+        Some(Duration::from_millis(100))
     ).await;
 }
 ```
