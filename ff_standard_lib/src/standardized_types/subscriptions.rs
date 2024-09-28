@@ -13,17 +13,8 @@ use crate::standardized_types::data_server_messaging::{DataServerRequest, DataSe
 use crate::standardized_types::Price;
 
 pub type SymbolName = String;
-#[derive(
-    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash,
-)]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, )]
+#[archive(compare(PartialEq), check_bytesc)]
 #[archive_attr(derive(Debug))]
 pub struct Symbol {
     pub name: SymbolName,
@@ -63,17 +54,8 @@ impl Symbol {
     }
 }
 
-#[derive(
-    Debug, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Hash,
-)]
-#[archive(
-    // This will generate a PartialEq impl between our unarchived and archived
-    // types:
-    compare(PartialEq),
-    // bytecheck can be used to validate your data if you want. To use the safe
-    // API, you have to derive CheckBytes for the archived type:
-    check_bytes,
-)]
+#[derive(Debug, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Hash, )]
+#[archive(compare(PartialEq), check_bytes, )]
 #[archive_attr(derive(Debug))]
 pub enum CandleType {
     Renko,
@@ -118,17 +100,8 @@ impl Display for CandleType {
     }
 }
 
-#[derive(
-    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash,
-)]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, )]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Subscription struct is used to define requests for `Vec<BaseDataEnum>` data.
 /// The specific properties will define the request for the data.
