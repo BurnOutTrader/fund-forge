@@ -250,6 +250,10 @@ impl Resolution {
         duration.num_seconds()
     }
 
+    pub fn as_nanos(&self) -> i64 {
+        self.as_duration().num_nanoseconds().unwrap()
+    }
+
     pub fn as_millis(&self) -> u128 {
         self.as_duration().num_milliseconds() as u128
     }

@@ -43,7 +43,7 @@ async fn main() {
         Australia::Sydney,                      // the strategy time zone
         Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
-            DataSubscription::new(
+            /*DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
                 Resolution::Instant,
@@ -56,20 +56,20 @@ async fn main() {
                 Resolution::Instant,
                 BaseDataType::Quotes,
                 MarketType::Forex,
-            ),
+            ),*/
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Seconds(1),
+                Resolution::Seconds(15),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
-            DataSubscription::new(
+            DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Seconds(1),
-                 BaseDataType::QuoteBars,
+                 Resolution::Seconds(15),
                  MarketType::Forex,
+                 CandleType::HeikinAshi
              ),],
         false,
         100,
@@ -77,7 +77,7 @@ async fn main() {
         None,
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading and backtesting.
-        100,
+        None,//Some(core::time::Duration::from_millis(100)),
         GUI_DISABLED
     ).await;
 
@@ -95,7 +95,7 @@ pub async fn on_data_received(
               DataSubscription::new(
                   SymbolName::from("EUR-USD"),
                   DataVendor::Test,
-                  Resolution::Seconds(1),
+                  Resolution::Seconds(15),
                   BaseDataType::QuoteBars,
                   MarketType::Forex,
               ),

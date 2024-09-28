@@ -53,7 +53,7 @@ pub struct FundForgeStrategy {
 
     time_zone: Tz,
 
-    buffer_resolution: Duration,
+    buffer_resolution: Option<Duration>,
 
     subscription_handler: Arc<SubscriptionHandler>,
 
@@ -111,18 +111,13 @@ impl FundForgeStrategy {
         retain_history: usize,
         strategy_event_sender: mpsc::Sender<EventTimeSlice>,
         replay_delay_ms: Option<u64>,
-        buffering_millis: u64,
+        buffering_duration: Option<Duration>,
         gui_enabled: bool
     ) -> FundForgeStrategy {
-        let mut buffering_millis = buffering_millis;
-        if buffering_millis <= 0 {
-            buffering_millis = 1;
-        }
-        let buffering_resolution = Duration::from_millis(buffering_millis);
         let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode).await);
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
-        init_connections(gui_enabled, buffering_resolution.clone(), strategy_mode.clone(), notify.clone()).await;
+        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), notify.clone()).await;
 
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
@@ -149,7 +144,7 @@ impl FundForgeStrategy {
 
         let strategy = FundForgeStrategy {
             mode: strategy_mode.clone(),
-            buffer_resolution: buffering_resolution.clone(),
+            buffer_resolution: buffering_duration.clone(),
             time_zone,
             market_handler: market_event_handler.clone(),
             subscription_handler,
@@ -171,11 +166,11 @@ impl FundForgeStrategy {
 
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
+                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_duration.clone(), notify, gui_enabled.clone()).await;
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
-                live_subscription_handler(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration, buffering_resolution).await;
+                live_subscription_handler(strategy_mode.clone()).await;
             },
         }
         strategy
@@ -579,8 +574,10 @@ impl FundForgeStrategy {
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
     pub async fn subscribe(&self, subscription: DataSubscription, hsitory_to_retain: usize, fill_forward: bool) {
-        if subscription.resolution.as_millis() < self.buffer_resolution.as_millis() {
-            panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
+        if let Some(buffer) = self.buffer_resolution {
+            if subscription.resolution.as_nanos() < buffer.as_nanos() as i64 {
+                panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
+            }
         }
         self
             .subscription_handler
@@ -609,8 +606,10 @@ impl FundForgeStrategy {
         fill_forward: bool
     ) {
         for subscription in &subscriptions {
-            if subscription.resolution.as_millis() < self.buffer_resolution.as_millis() {
-                panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
+            if let Some(buffer) = self.buffer_resolution {
+                if subscription.resolution.as_nanos() < buffer.as_nanos() as i64 {
+                    panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
+                }
             }
         }
         self.subscription_handler.set_subscriptions(subscriptions, retain_to_history, self.time_utc(), fill_forward, true).await;

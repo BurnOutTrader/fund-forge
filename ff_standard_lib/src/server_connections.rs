@@ -127,10 +127,6 @@ pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
 
 pub async fn live_subscription_handler(
     mode: StrategyMode,
-    start_time: DateTime<Utc>,
-    end_date: DateTime<Utc>,
-    warmup_duration: ChronoDuration,
-    buffer_resolution: Duration,
 ) {
     if mode == StrategyMode::Backtest {
         return;
@@ -303,7 +299,124 @@ pub async fn request_handler(
 
     7. the buffer loop sleeps until the next scheduled instant while it is refilled by the streams and the process repeats.
 */
-pub async fn response_handler(
+pub async fn response_handler_unbuffered(
+    mode: StrategyMode,
+    settings_map: HashMap<ConnectionType, ConnectionSettings>,
+    server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
+    callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
+) {
+    for (connection, settings) in &settings_map {
+        if let Some((connection, stream)) = server_receivers.remove(connection) {
+            let register_message = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));
+            send_request(register_message).await;
+            let mut receiver = stream;
+            let callbacks = callbacks.clone();
+            let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
+            let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
+            let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
+            tokio::task::spawn(async move {
+                let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
+                const LENGTH: usize = 8;
+                //println!("{:?}: response handler start", incoming.key());
+                let mut length_bytes = [0u8; LENGTH];
+                while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
+                    // Parse the length from the header
+                    let msg_length = u64::from_be_bytes(length_bytes) as usize;
+                    let mut message_body = vec![0u8; msg_length];
+
+                    // Read the message body based on the length
+                    match receiver.read_exact(&mut message_body).await {
+                        Ok(_) => {
+                            //eprintln!("Ok reading message body");
+                        },
+                        Err(e) => {
+                            eprintln!("Error reading message body: {}", e);
+                            continue;
+                        }
+                    }
+                    // these will be buffered eventually into an EventTimeSlice
+                    let callbacks = callbacks.clone();
+                    let strategy_subscriptions = strategy_subscriptions.clone();
+                    let subscription_handler = subscription_handler.clone();
+                    let indicator_handler = indicator_handler.clone();
+                    tokio::task::spawn(async move {
+                        let response = DataServerResponse::from_bytes(&message_body).unwrap();
+                        match response.get_callback_id() {
+                            // if there is no callback id then we add it to the strategy event buffer
+                            None => {
+                                match response {
+                                    DataServerResponse::SubscribeResponse { success, subscription, reason } => {
+                                        //determine success or fail and add to the strategy event buffer
+                                        match success {
+                                            true => {
+                                                let event = DataSubscriptionEvent::Subscribed(subscription.clone());
+                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
+                                                send_strategy_event_slice(vec![event_slice]).await;
+                                            }
+                                            false => {
+                                                let event = DataSubscriptionEvent::FailedSubscribed(subscription.clone(), reason.unwrap());
+                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
+                                                send_strategy_event_slice(vec![event_slice]).await;
+                                            }
+                                        }
+                                    }
+                                    DataServerResponse::UnSubscribeResponse { success, subscription, reason } => {
+                                        match success {
+                                            true => {
+                                                let event = DataSubscriptionEvent::Unsubscribed(subscription);
+                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
+                                                send_strategy_event_slice(vec![event_slice]).await;
+                                            }
+                                            false => {
+                                                let event = DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap());
+                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
+                                                send_strategy_event_slice(vec![event_slice]).await;
+                                            }
+                                        }
+                                    }
+                                    DataServerResponse::DataUpdates(primary_data) => {
+                                        MARKET_HANDLER.get().unwrap().update_time_slice(Utc::now(), &primary_data).await;
+                                        let mut strategy_time_slice = TimeSlice::new();
+                                        if let Some(consolidated) = subscription_handler.update_time_slice(primary_data.clone()).await {
+                                            strategy_time_slice.extend(consolidated);
+                                        }
+                                        if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                                            strategy_time_slice.extend(consolidated);
+                                        }
+                                        for base_data in primary_data {
+                                            if strategy_subscriptions.contains(&base_data.subscription()) {
+                                                strategy_time_slice.push(base_data);
+                                            }
+                                        }
+                                        if strategy_time_slice.is_empty() {
+                                            return;
+                                        }
+                                        let mut event_buffer = EventTimeSlice::new();
+                                        if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&strategy_time_slice).await {
+                                            event_buffer.extend(indicator_events);
+                                        }
+
+                                        event_buffer.push(StrategyEvent::TimeSlice(Utc::now().to_string(), strategy_time_slice));
+                                        send_strategy_event_slice(event_buffer).await;
+                                    }
+                                    _ => panic!("Incorrect response here: {:?}", response)
+                                }
+                            }
+                            // if there is a callback id we just send it to the awaiting oneshot receiver
+                            Some(id) => {
+                                if let Some((_, callback)) = callbacks.remove(&id) {
+                                    let _ = callback.send(response);
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+        }
+    }
+}
+
+pub async fn response_handler_buffered(
     mode: StrategyMode,
     buffer_duration: Duration,
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
@@ -520,7 +633,7 @@ pub async fn initialize_static(
     }).clone();
 }
 
-pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode, notify: Arc<Notify>) {
+pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duration>, mode: StrategyMode, notify: Arc<Notify>) {
     let settings_map = initialise_settings().unwrap();
     let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
     let server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());
@@ -550,5 +663,8 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode
 
     let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     request_handler(rx, settings_map.clone(), server_senders, callbacks.clone()).await;
-    response_handler(mode, buffer_duration, settings_map, notify, server_receivers, callbacks).await;
+    match buffer_duration {
+        None => response_handler_unbuffered(mode, settings_map, server_receivers, callbacks).await,
+        Some(buffer) => response_handler_buffered(mode, buffer, settings_map, notify, server_receivers, callbacks).await
+    }
 }

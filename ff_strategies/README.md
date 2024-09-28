@@ -71,8 +71,8 @@ The delay in milliseconds between time slices for market replay style backtestin
 The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
 any additional subscriptions added later will be able to specify their own history requirements.
 
-##### `buffering_millis: u64:`
-Used to create a `std::Duration::from_millis(buffering_millis)`
+##### `buffering_duration: core::time::Duration:`
+Some(core::time::Duration::from_millis(100))
 
 The buffer takes effect in both back-testing and live trading.
 
