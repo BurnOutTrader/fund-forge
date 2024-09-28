@@ -142,7 +142,14 @@ fn example() {
       Some(Color::new(50,50,50)) //plot color rgb for charting 
     ).await,
   );
-  strategy.indicator_subscribe(heikin_atr_5).await;
+  
+  // auto subscribe will subscribe the strategy to the indicators required data feed if it is not already, 
+  // if this is false and you don't have the subscription, the strategy will panic instead.
+  // if true then the new data subscription will also show up in the strategy event loop
+  let auto_subscribe: bool = false;
+  
+  //subscribe the strategy to auto manage the indicator
+  strategy.indicator_subscribe(heikin_atr_5, auto_subscribe).await;
 }
 ```
 

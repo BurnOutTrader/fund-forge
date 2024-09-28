@@ -572,11 +572,14 @@ we can access the indicators values the same way we do for base_data
 fn example(strategy: FundForgeStrategy) {
     let mut heikin_atr = AverageTrueRange::new(String::from("heikin_atr"), aud_cad_60m.clone(), 100, 14).await;
     let heikin_atr_20 = IndicatorEnum::AverageTrueRange(AverageTrueRange::new(String::from("heikin_atr_20"), aud_cad_60m.clone(), 100, 20).await);
-    
-    // if the strategy is already warmed up, the indicator will warm itself up using historical data
-    strategy.indicator_subscribe(heikin_atr_20).await;
-    
-    
+
+    // auto subscribe will subscribe the strategy to the indicators required data feed if it is not already, 
+    // if this is false and you don't have the subscription, the strategy will panic instead.
+    // if true then the new data subscription will also show up in the strategy event loop
+    let auto_subscribe: bool = true;
+
+    //subscribe the strategy to auto manage the indicator
+    strategy.indicator_subscribe(heikin_atr_20, auto_subscribe).await;
 }
 ```
 ```rust

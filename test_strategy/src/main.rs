@@ -46,16 +46,30 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Seconds(5),
+                Resolution::Instant,
+                BaseDataType::Quotes,
+                MarketType::Forex,
+            ),
+            DataSubscription::new(
+                SymbolName::from("AUD-CAD"),
+                DataVendor::Test,
+                Resolution::Instant,
+                BaseDataType::Quotes,
+                MarketType::Forex,
+            ),
+            DataSubscription::new(
+                SymbolName::from("EUR-USD"),
+                DataVendor::Test,
+                Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
-            DataSubscription::new_custom(
+            DataSubscription::new(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Seconds(5),
+                 Resolution::Seconds(1),
+                 BaseDataType::QuoteBars,
                  MarketType::Forex,
-                 CandleType::CandleStick,
              ),],
         false,
         100,
@@ -81,7 +95,7 @@ pub async fn on_data_received(
               DataSubscription::new(
                   SymbolName::from("EUR-USD"),
                   DataVendor::Test,
-                  Resolution::Seconds(5),
+                  Resolution::Seconds(1),
                   BaseDataType::QuoteBars,
                   MarketType::Forex,
               ),
@@ -90,7 +104,7 @@ pub async fn on_data_received(
             Some(Color::new(50,50,50))
         ).await,
     );
-    strategy.indicator_subscribe(heikin_atr_5).await;
+    strategy.indicator_subscribe(heikin_atr_5, false).await;
 
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
@@ -194,11 +208,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Tick(_tick) => {}
                             BaseDataEnum::Quote(quote) => {
                                 // primary data feed won't show up in event loop unless specifically subscribed by the strategy
-                                println!(
-                                    "{} Quote: {}",
-                                    quote.symbol.name,
-                                    base_data.time_created_utc()
-                                );
+                                println!("{} Quote: {}, Local Time {}", quote.symbol.name, base_data.time_created_utc(), quote.time_local(strategy.time_zone()));
                             }
                             BaseDataEnum::Fundamental(_fundamental) => {}
                         }

@@ -483,10 +483,13 @@ impl FundForgeStrategy {
 
     /// see the indicator_enum.rs for more details
     /// If we subscribe to an indicator and we do not have the appropriate data subscription, we will also subscribe to the data subscription.
-    pub async fn indicator_subscribe(&self, indicator: IndicatorEnum) {
+    pub async fn indicator_subscribe(&self, indicator: IndicatorEnum, auto_subscribe: bool) {
         let subscriptions = self.subscriptions().await;
         if !subscriptions.contains(&indicator.subscription()) {
-            panic!("You have no subscription: {}, for the indicator subscription {}", indicator.subscription(), indicator.name());
+            match auto_subscribe {
+                true => self.subscribe(indicator.subscription(), indicator.history_to_retain(), false).await,
+                false => panic!("You have no subscription: {}, for the indicator subscription {} and AutoSubscribe is not enabled", indicator.subscription(), indicator.name())
+            }
         }
         self.indicator_handler
             .add_indicator(indicator, self.time_utc())
