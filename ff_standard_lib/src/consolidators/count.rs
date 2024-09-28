@@ -4,7 +4,7 @@ use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
-use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::enums::{Resolution, SubscriptionResolutionType};
 use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -19,11 +19,13 @@ pub struct CountConsolidator {
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
     tick_size: Price, //need to add this
+    subscription_resolution_type: SubscriptionResolutionType
 }
 
 impl CountConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
+        subscription_resolution_type: SubscriptionResolutionType
     ) -> Result<Self, String> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
@@ -71,11 +73,15 @@ impl CountConsolidator {
             current_data,
             subscription,
             tick_size,
+            subscription_resolution_type
         })
     }
 
     /// Returns a candle if the count is reached
     pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
+        if base_data.subscription().subscription_resolution_type() != self.subscription_resolution_type {
+            panic!("Unsupported type") //todo remove this check on final builds
+        }
         match base_data {
             BaseDataEnum::Tick(tick) => {
                 if self.counter == 0 {

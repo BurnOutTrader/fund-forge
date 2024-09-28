@@ -32,7 +32,7 @@ async fn main() {
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         notify.clone(),
-        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
+        StrategyMode::Backtest, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 6, 19)
             .unwrap()
@@ -46,18 +46,18 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Seconds(1),
+                Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Seconds(1),
+                 Resolution::Seconds(5),
                  MarketType::Forex,
                  CandleType::CandleStick,
              ),],
-        true,
+        false,
         100,
         strategy_event_sender, // the sender for the strategy events
         None,
@@ -81,7 +81,7 @@ pub async fn on_data_received(
               DataSubscription::new(
                   SymbolName::from("EUR-USD"),
                   DataVendor::Test,
-                  Resolution::Seconds(1),
+                  Resolution::Seconds(5),
                   BaseDataType::QuoteBars,
                   MarketType::Forex,
               ),

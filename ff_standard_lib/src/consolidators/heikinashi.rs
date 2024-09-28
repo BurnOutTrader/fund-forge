@@ -12,7 +12,7 @@ use rust_decimal::prelude::{FromPrimitive};
 use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::{Price, Volume};
-use crate::standardized_types::enums::OrderSide;
+use crate::standardized_types::enums::{OrderSide, SubscriptionResolutionType};
 
 pub struct HeikinAshiConsolidator {
     current_data: Option<BaseDataEnum>,
@@ -21,6 +21,7 @@ pub struct HeikinAshiConsolidator {
     previous_ha_open: Price,
     tick_size: Price,
     fill_forward: bool,
+    subscription_resolution_type: SubscriptionResolutionType
 }
 
 impl HeikinAshiConsolidator {
@@ -197,6 +198,7 @@ impl HeikinAshiConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         fill_forward: bool,
+        subscription_resolution_type: SubscriptionResolutionType
     ) -> Result<HeikinAshiConsolidator, String> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(format!(
@@ -228,6 +230,7 @@ impl HeikinAshiConsolidator {
         };
 
         Ok(HeikinAshiConsolidator {
+            subscription_resolution_type,
             current_data: None,
             subscription,
             previous_ha_close: dec!(0.0),
@@ -274,6 +277,9 @@ impl HeikinAshiConsolidator {
 
     //problem where this is returning a closed candle constantly
     pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
+        if base_data.subscription().subscription_resolution_type() != self.subscription_resolution_type {
+            panic!("Unsupported type") //todo remove this check on final builds
+        }
         if self.current_data.is_none() {
             let data = self.new_heikin_ashi_candle(base_data);
             self.current_data = Some(BaseDataEnum::Candle(data));

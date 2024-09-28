@@ -4,7 +4,7 @@ use crate::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::consolidators::renko::RenkoConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::history::range_data;
-use crate::standardized_types::enums::{Resolution, StrategyMode};
+use crate::standardized_types::enums::{Resolution, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Duration, Utc};
@@ -24,7 +24,8 @@ impl ConsolidatorEnum {
     /// Creates a new consolidator based on the subscription. if is_warmed_up is true, the consolidator will warm up to the to_time on its own.
     pub async fn create_consolidator(
         subscription: DataSubscription,
-        fill_forward: bool
+        fill_forward: bool,
+        subscription_resolution_type: SubscriptionResolutionType
     ) -> ConsolidatorEnum {
         //todo handle errors here gracefully
         let is_tick = match subscription.resolution {
@@ -34,7 +35,7 @@ impl ConsolidatorEnum {
 
         if is_tick {
            return ConsolidatorEnum::Count(
-                CountConsolidator::new(subscription.clone())
+                CountConsolidator::new(subscription.clone(), subscription_resolution_type)
                     .await
                     .unwrap(),
             )
@@ -43,17 +44,17 @@ impl ConsolidatorEnum {
         let consolidator = match &subscription.candle_type {
             Some(candle_type) => match candle_type {
                 CandleType::Renko => ConsolidatorEnum::Renko(
-                    RenkoConsolidator::new(subscription.clone())
+                    RenkoConsolidator::new(subscription.clone(), subscription_resolution_type)
                         .await
                         .unwrap(),
                 ),
                 CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(
-                    HeikinAshiConsolidator::new(subscription.clone(), fill_forward)
+                    HeikinAshiConsolidator::new(subscription.clone(), fill_forward, subscription_resolution_type)
                         .await
                         .unwrap(),
                 ),
                 CandleType::CandleStick => ConsolidatorEnum::CandleStickConsolidator(
-                    CandleStickConsolidator::new(subscription.clone(), fill_forward)
+                    CandleStickConsolidator::new(subscription.clone(), fill_forward, subscription_resolution_type)
                         .await
                         .unwrap(),
                 ),

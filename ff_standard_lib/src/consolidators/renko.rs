@@ -3,7 +3,7 @@ use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
-use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::enums::{Resolution, SubscriptionResolutionType};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;
 
@@ -15,11 +15,13 @@ pub struct RenkoConsolidator {
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
     tick_size: f64,
+    subscription_resolution_type: SubscriptionResolutionType
 }
 
 impl RenkoConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
+        subscription_resolution_type: SubscriptionResolutionType
     ) -> Result<Self, String> {
         let current_data = match &subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(
@@ -48,6 +50,7 @@ impl RenkoConsolidator {
             .unwrap();
 
         Ok(RenkoConsolidator {
+            subscription_resolution_type,
             current_data,
             subscription,
             tick_size: tick_size.try_into().unwrap(),

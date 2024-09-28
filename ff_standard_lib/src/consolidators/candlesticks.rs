@@ -5,7 +5,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::enums::{OrderSide, Resolution};
+use crate::standardized_types::enums::{OrderSide, Resolution, SubscriptionResolutionType};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
@@ -24,6 +24,7 @@ pub struct CandleStickConsolidator {
     last_ask_close: Option<Price>,
     last_bid_close: Option<Price>,
     fill_forward: bool,
+    subscription_resolution_type: SubscriptionResolutionType
 }
 
 impl CandleStickConsolidator {
@@ -92,6 +93,9 @@ impl CandleStickConsolidator {
     }
 
     fn update_candles(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
+        if base_data.subscription().subscription_resolution_type() != self.subscription_resolution_type {
+            panic!("Unsupported type") //todo remove this check on final builds
+        }
         if self.current_data.is_none() {
             let data = self.new_candle(base_data);
             self.current_data = Some(BaseDataEnum::Candle(data));
@@ -180,6 +184,9 @@ impl CandleStickConsolidator {
 
     /// We can use if time == some multiple of resolution then we can consolidate, we dont need to know the actual algo time, because we can get time from the base_data if self.last_time >
     fn update_quote_bars(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
+        if base_data.subscription().subscription_resolution_type() != self.subscription_resolution_type {
+            panic!("Unsupported type") //todo remove this check on final builds
+        }
         if self.current_data.is_none() {
             let data = self.new_quote_bar(base_data);
             self.current_data = Some(BaseDataEnum::QuoteBar(data));
@@ -292,6 +299,7 @@ impl CandleStickConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         fill_forward: bool,
+        subscription_resolution_type: SubscriptionResolutionType
     ) -> Result<Self, FundForgeError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(FundForgeError::ClientSideErrorDebug(format!(
@@ -322,6 +330,7 @@ impl CandleStickConsolidator {
             last_ask_close: None,
             last_bid_close: None,
             fill_forward,
+            subscription_resolution_type
         })
     }
 
