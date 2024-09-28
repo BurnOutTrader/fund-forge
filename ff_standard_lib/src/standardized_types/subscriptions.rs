@@ -14,7 +14,7 @@ use crate::standardized_types::Price;
 
 pub type SymbolName = String;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, )]
-#[archive(compare(PartialEq), check_bytesc)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct Symbol {
     pub name: SymbolName,
