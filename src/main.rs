@@ -7,20 +7,24 @@ use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestMarketDataUpdate, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
+use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_account_list::UserType;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_market_data_update::UpdateBits;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_tick_bar_update::Request;
+use ff_rithmic_api::rithmic_proto_objects::rti::response_login_info::UserType::Fcm;
 use futures::stream::SplitStream;
 use prost::{Message as ProstMessage};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal_macros::dec;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tungstenite::Message;
+use tungstenite::{client, Message};
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage::Rithmic;
 use ff_standard_lib::apis::rithmic_api::api_client::RithmicClient;
-use ff_standard_lib::standardized_types::accounts::ledgers::{AccountInfo, Currency};
+use ff_standard_lib::standardized_types::accounts::ledgers::{AccountInfo, Currency, Ledger};
 use ff_standard_lib::standardized_types::enums::Exchange;
 
 /// This Test will fail when the market is closed.
@@ -47,22 +51,27 @@ async fn main() {
         usecs: None,
     };
 
-    //order plant
+/*    //order plant
     let req = RequestProductRmsInfo {
         template_id: 306,
         user_msg: vec!["callback_id".to_string()],
         fcm_id: None,
         ib_id: Some("NQ".to_string()),
         account_id: Some("S1Sep246906077".to_string()),
-    };
+    };*/
 
     //tick plant
-    let req = RequestProductCodes {
+/*    let req = RequestProductCodes {
         template_id: 111 ,
         user_msg: vec![],
         exchange: Some(Exchange::CME.to_string()),
         give_toi_products_only: Some(true),
-    };
+    };*/
+
+/*    let req = RequestLoginInfo {
+        template_id: 300 ,
+        user_msg: vec![],
+    };*/
 
   /*  let req = RequestMarketDataUpdate {
         template_id: 100,
@@ -88,7 +97,7 @@ async fn main() {
         }*/
 
     //history plant
-/*    let req = RequestTimeBarUpdate {
+/*   let req = RequestTimeBarUpdate {
         template_id: 200,
         user_msg: vec![],
         symbol: Some("NQ".to_string()),
@@ -97,30 +106,25 @@ async fn main() {
         bar_type: Some(1),
         bar_type_period: Some(5),
     };*/
-
-    //history plant
-   /* let req = RequestTickBarUpdate {
-        template_id: 204,
+    
+    let req = RequestPnLPositionSnapshot {
+        template_id: 402 ,
         user_msg: vec![],
-        symbol: Some("NQ".to_string()),
-        exchange: Some(Exchange::CME.to_string()),
-        request: Some(Request::Subscribe.into()),
-        bar_type: Some(1),
-        bar_sub_type: Some(1),
-        bar_type_specifier: None,
-        custom_session_open_ssm: None,
-        custom_session_close_ssm: None,
-    };*/
+        fcm_id: Some("TopstepTrader".to_string()),
+        ib_id: Some("TopstepTrader".to_string()),
+        account_id: Some("S1Sep246906077".to_string()),
+    };
+
 
     handle_received_responses(rithmic_client_arc.clone()).await;
 
     // We can send messages with only a reference to the client, so we can wrap our client in Arc or share it between threads and still utilise all associated functions.
-    match rithmic_client_arc.client.send_message(SysInfraType::HistoryPlant, req).await {
+   match rithmic_client_arc.client.send_message(SysInfraType::PnlPlant, req).await {
         Ok(_) => println!("Heart beat sent"),
         Err(e) => eprintln!("Heartbeat send failed: {}", e)
     }
 
-    sleep(Duration::from_secs(15));
+    sleep(Duration::from_secs(120));
     // Logout and Shutdown all connections
     rithmic_client_arc.client.shutdown_all().await.unwrap();
 }
@@ -153,9 +157,9 @@ pub async fn handle_responses_from_ticker_plant(
                             println!("{}", text)
                         }
                         Message::Binary(bytes) => {
-                            // spawn a new task so that we can handle next message faster.
                             let client = client.clone();
                             tokio::task::spawn(async move {
+                                // spawn a new task so that we can handle next message faster.
                                 //messages will be forwarded here
                                 let mut cursor = Cursor::new(bytes);
                                 // Read the 4-byte length header
@@ -397,6 +401,7 @@ pub async fn handle_responses_from_ticker_plant(
                                 }
                             });
                         }
+
                         Message::Ping(ping) => {
                             println!("{:?}", ping)
                         }
@@ -486,20 +491,67 @@ pub async fn handle_responses_from_order_plant(
                                                 println!("Response Heartbeat (Template ID: 19) from Server: {:?}", msg);
                                             }
                                         },
+                                        301 => {
+                                            if let Ok(msg) = ResponseLoginInfo::decode(&message_buf[..]) {
+                                                // Account List Response
+                                                // From Server
+                                                println!("Response Login Info (Template ID: 303) from Server: {:?}", msg);
+                                            }
+                                        }
                                         303 => {
                                             if let Ok(msg) = ResponseAccountList::decode(&message_buf[..]) {
                                                 // Account List Response
                                                 // From Server
                                                 println!("Account List Response (Template ID: 303) from Server: {:?}", msg);
-                                                if let (Some(account_id), Some(account_name)) = (msg.account_id, msg.account_name) {
-                                                    client.accounts.insert(account_id, account_name);
-                                                }
                                             }
                                         },
                                         305 => {
                                             if let Ok(msg) = ResponseAccountRmsInfo::decode(&message_buf[..]) {
+                                                //println!("Response Account Rms Info (Template ID: 305) from Server: {:?}", msg);
                                                 if let Some(id) = &msg.account_id {
-                                                    client.account_rms_info.insert(id.clone(), msg);
+                                                    let mut account_info = AccountInfo {
+                                                        account_id: id.to_string(),
+                                                        brokerage: client.brokerage.clone(),
+                                                        cash_value: Default::default(),
+                                                        cash_available: Default::default(),
+                                                        currency: Currency::USD,
+                                                        cash_used: Default::default(),
+                                                        positions: vec![],
+                                                        is_hedging: false,
+                                                        buy_limit: None,
+                                                        sell_limit: None,
+                                                        max_orders: None,
+                                                        daily_max_loss: None,
+                                                        daily_max_loss_reset_time: None,
+                                                    };
+                                                    if let Some(ref currency) = msg.currency {
+                                                        account_info.currency = Currency::from_str(&currency);
+                                                    }
+                                                    if let Some(ref max_size) = msg.buy_limit {
+                                                        account_info.buy_limit = Some(Decimal::from_u32(max_size.clone() as u32).unwrap());
+                                                    }
+                                                    if let Some(ref max_size) = msg.sell_limit {
+                                                        account_info.sell_limit = Some(Decimal::from_u32(max_size.clone() as u32).unwrap());
+                                                    }
+                                                    if let Some(ref max_orders) = msg.max_order_quantity {
+                                                        account_info.max_orders = Some(Decimal::from_u32(max_orders.clone() as u32).unwrap());
+                                                    }
+                                                    if let Some(ref max_loss) = msg.loss_limit {
+                                                        account_info.daily_max_loss = Some(Decimal::from_u32(max_loss.clone() as u32).unwrap());
+                                                    }
+                                                    client.accounts.insert(id.clone(), account_info);
+                                                    client.account_rms_info.insert(id.clone(), msg.clone());
+                                                    let req = RequestPnLPositionSnapshot {
+                                                        template_id: 402,
+                                                        user_msg: vec![],
+                                                        fcm_id: client.fcm_id.clone(),
+                                                        ib_id: client.ib_id.clone(),
+                                                        account_id: Some(id.clone()),
+                                                    };
+                                                    match client.send_message(SysInfraType::PnlPlant, req).await {
+                                                        Ok(_) => {}
+                                                        Err(_) => {}
+                                                    }
                                                 }
                                             }
                                         },
@@ -1037,6 +1089,7 @@ pub async fn handle_responses_from_pnl_plant(
                                                 // PnL Position Snapshot Response
                                                 // From Server
                                                 println!("PnL Position Snapshot Response (Template ID: 403) from Server: {:?}", msg);
+
                                             }
                                         },
                                         450 => {
