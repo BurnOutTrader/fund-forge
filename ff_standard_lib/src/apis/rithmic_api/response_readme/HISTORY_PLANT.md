@@ -10,7 +10,7 @@ fn example() {
         exchange: Some(Exchange::CME.to_string()),
         request: Some(Request::Subscribe.into()),
         bar_type: Some(1),
-        bar_type_period: Some(5),
+        bar_type_period: Some(5), 
     };
 }
 
@@ -35,6 +35,7 @@ close_price: Some(20246.75), high_price: Some(20253.25), low_price: Some(20246.2
 ```
 
 ## Tick Bars
+Doesn't work, might need level 2 data feed
 ```rust
 fn example() {
     pub enum BarType {
