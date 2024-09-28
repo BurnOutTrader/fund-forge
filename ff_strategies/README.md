@@ -205,8 +205,7 @@ async fn main() {
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
-        //the buffer duration in milliseconds
-        100,
+        None,
         GUI_DISABLED
     ).await;
 
