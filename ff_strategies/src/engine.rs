@@ -188,10 +188,6 @@ impl HistoricalEngine {
                         println!("Engine: End Time: {}", end_time);
                         break 'main_loop;
                     }
-                    if time.month() != start.month() {
-                        //println!("Next Month Time");
-                        break 'month_loop;
-                    }
 
                     market_handler.update_time_slice(time.clone(), &time_slice).await;
                     for data in time_slice {
