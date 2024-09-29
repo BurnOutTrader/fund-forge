@@ -301,7 +301,7 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        let request = MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
         self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id

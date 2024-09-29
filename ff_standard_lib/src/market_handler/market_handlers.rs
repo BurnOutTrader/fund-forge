@@ -449,9 +449,7 @@ async fn fill_order(
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(account_map) = broker_map.get(&order.account_id) {
-                if account_map.value().is_long(&order.symbol_name) {
-                    account_map.value().update_or_create_paper_position(&order.symbol_name, order.quantity_filled, order.side.clone(), time, market_price).await;
-                }
+                account_map.value().update_or_create_paper_position(&order.symbol_name, order.quantity_filled, order.side.clone(), time, market_price).await;
             }
         }
     }
