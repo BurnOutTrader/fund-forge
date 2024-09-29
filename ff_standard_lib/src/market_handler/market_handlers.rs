@@ -316,7 +316,13 @@ pub async fn backtest_matching_engine(
     };
 
     'order_loop: for order in BACKTEST_OPEN_ORDER_CACHE.iter() {
-        let market_price = get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_ordered, order.brokerage).await.unwrap();
+        let market_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_ordered, order.brokerage).await {
+            Ok(price) => price,
+            Err(e) => {
+                eprintln!("{}: for {}", e, order.symbol_name);
+                continue
+            }
+        };
 
         //3. respond with an order event
         let mut is_fill_triggered = false;
