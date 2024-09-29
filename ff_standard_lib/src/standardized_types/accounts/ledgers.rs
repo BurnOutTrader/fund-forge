@@ -462,7 +462,7 @@ pub(crate) mod historical_ledgers {
         }
 
         pub async fn exit_position_paper(
-            &self,
+            &mut self,
             symbol_name: &SymbolName,
             time: DateTime<Utc>,
             market_price: Price,
@@ -473,6 +473,9 @@ pub(crate) mod historical_ledgers {
 
                 // Calculate booked profit by reducing the position size
                 let booked_profit = existing_position.reduce_position_size(market_price, existing_position.quantity_open, time).await;
+                self.booked_pnl += booked_profit;
+                self.cash_available += booked_profit;
+                self.subtract_margin_used(&symbol_name, existing_position.quantity_open).await;
 
                 // Add the closed position to the positions_closed DashMap
                 self.positions_closed

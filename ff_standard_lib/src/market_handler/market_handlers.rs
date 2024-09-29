@@ -375,9 +375,9 @@ pub async fn backtest_matching_engine(
                     Err(_) => continue
                 };
                 if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
-                    if let Some(account_map) = broker_map.get(&order.account_id) {
+                    if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                         if account_map.value().is_short(&order.symbol_name) {
-                            account_map.value().exit_position_paper(&order.symbol_name, time, market_price).await;
+                            account_map.value_mut().exit_position_paper(&order.symbol_name, time, market_price).await;
                         }
                     }
                 }
@@ -389,9 +389,9 @@ pub async fn backtest_matching_engine(
                     Err(_) => continue
                 };
                 if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
-                    if let Some(account_map) = broker_map.get(&order.account_id) {
+                    if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                         if account_map.value().is_long(&order.symbol_name) {
-                            account_map.value().exit_position_paper(&order.symbol_name, time, market_price).await;
+                            account_map.value_mut().exit_position_paper(&order.symbol_name, time, market_price).await;
                         }
                     }
                 }
@@ -441,7 +441,6 @@ async fn fill_order(
     market_price: Price,
 ) {
     if let Some((_, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
-
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
