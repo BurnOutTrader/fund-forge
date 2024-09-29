@@ -282,6 +282,9 @@ pub async fn backtest_matching_engine(
         return;
     }
 
+    //todo need a better way to simulate stop limits, use custom market price fn
+    // need to handle partial fills for data sets will volume. at-least partial fill stop limits and limits.
+
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
     let mut filled = Vec::new();
@@ -324,7 +327,8 @@ pub async fn backtest_matching_engine(
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap() && market_price < order.limit_price.unwrap()
                 };
                 if is_fill_triggered {
-                    filled.push((order.id.clone(),  order.limit_price.unwrap().clone())); //todo need a better way to simulate stop limits, use custom market price fn
+                    //todo need a better way to simulate stop limits, use custom market price fn to
+                    filled.push((order.id.clone(),  order.limit_price.unwrap().clone()));
                 }
             },
             OrderType::EnterLong(new_brackets) => {
