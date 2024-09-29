@@ -1,4 +1,3 @@
-use crate::indicators::indicators_trait::IndicatorName;
 use crate::standardized_types::subscriptions::DataSubscription;
 use crate::standardized_types::{Color, Price};
 use chrono::{DateTime, TimeZone, Utc};
@@ -7,6 +6,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use crate::indicators::indicators_trait::IndicatorName;
 
 pub type PlotName = String;
 
@@ -90,7 +90,7 @@ impl IndicatorValues {
     }
 
     /// insert a value into the values
-    pub(crate) fn insert_plot(&mut self, plot_name: PlotName, value: IndicatorPlot) {
+    pub fn insert_plot(&mut self, plot_name: PlotName, value: IndicatorPlot) {
         self.plots.insert(plot_name, value);
     }
 }

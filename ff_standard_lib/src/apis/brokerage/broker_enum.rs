@@ -14,7 +14,7 @@ use crate::standardized_types::subscriptions::{SymbolName};
 use crate::standardized_types::{Volume};
 
 #[derive(Serialize, Deserialize, Clone, Eq, Serialize_rkyv, Deserialize_rkyv,
-    Archive, PartialEq, Debug, Hash, PartialOrd, Ord, Display)]
+    Archive, PartialEq, Debug, Hash, PartialOrd, Ord, Display, Copy)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum Brokerage {

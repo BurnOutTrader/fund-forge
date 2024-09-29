@@ -25,6 +25,7 @@ use crate::standardized_types::data_server_messaging::{DataServerResponse};
 use crate::standardized_types::enums::{MarketType, Resolution, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
+use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::Volume;
 
 lazy_static! {
@@ -193,8 +194,7 @@ impl VendorApiResponse for TestApiClient {
                         BaseDataEnum::Quote(ref mut quote) => {
                             if broadcaster.has_subscribers() {
                                 quote.time = Utc::now().to_string();
-                                let response = DataServerResponse::DataUpdates(vec![base_data.clone()]);
-                                broadcaster.broadcast(response).await;
+                                broadcaster.broadcast(DataServerResponse::BaseDataUpdates(base_data)).await;
                                 sleep(Duration::from_millis(20)).await;
                             } else {
                                 println!("No subscribers");

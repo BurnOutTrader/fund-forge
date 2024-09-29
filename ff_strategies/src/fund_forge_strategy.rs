@@ -11,12 +11,11 @@ use ff_standard_lib::indicators::indicators_trait::{IndicatorName, Indicators};
 use ff_standard_lib::indicators::values::IndicatorValues;
 use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
 use ff_standard_lib::standardized_types::base_data::history::range_data;
-use ff_standard_lib::standardized_types::base_data::order_book::OrderBook;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderUpdateType, ProtectiveOrder, TimeInForce};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use ff_standard_lib::standardized_types::strategy_events::{
-    EventTimeSlice, StrategyInteractionMode,
+    StrategyEventBuffer, StrategyInteractionMode,
 };
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
@@ -27,15 +26,17 @@ use std::collections::BTreeMap;
 use std::sync::{Arc};
 use std::time::Duration;
 use dashmap::DashMap;
-use tokio::sync::{mpsc, Notify, RwLock};
+use dashmap::mapref::one::Ref;
+use tokio::sync::{mpsc, Mutex, Notify, RwLock};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
-use ff_standard_lib::market_handler::market_handlers::{MarketHandler};
-use ff_standard_lib::server_connections::{init_connections, init_sub_handler, initialize_static, live_order_handler, live_subscription_handler};
+use ff_standard_lib::market_handler::market_handlers::{get_market_fill_price_estimate, get_market_price, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
+use ff_standard_lib::server_connections::{get_backtest_time, init_connections, init_sub_handler, initialize_static, live_subscription_handler, update_historical_timestamp};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::base_data::tick::Tick;
+use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -59,8 +60,6 @@ pub struct FundForgeStrategy {
 
     indicator_handler: Arc<IndicatorHandler>,
 
-    market_handler: Arc<MarketHandler>,
-
     timed_event_handler: Arc<TimedEventHandler>,
 
     interaction_handler: Arc<InteractionHandler>,
@@ -69,7 +68,7 @@ pub struct FundForgeStrategy {
 
     orders_count: DashMap<Brokerage, i64>,
 
-    order_sender: Sender<OrderRequest>,
+    market_event_sender: Sender<MarketMessageEnum>,
 
     orders: RwLock<AHashMap<OrderId, (Brokerage, AccountId)>>
 }
@@ -99,7 +98,6 @@ impl FundForgeStrategy {
     /// If 0 then it will default to a 1-millisecond buffer.
     /// `gui_enabled: bool`: If true the engine will forward all StrategyEventSlice's sent to the strategy, to the strategy registry so they can be used by GUI implementations.
     pub async fn initialize(
-        notify: Arc<Notify>,
         strategy_mode: StrategyMode,
         interaction_mode: StrategyInteractionMode,
         start_date: NaiveDateTime,
@@ -109,34 +107,31 @@ impl FundForgeStrategy {
         subscriptions: Vec<DataSubscription>,
         fill_forward: bool,
         retain_history: usize,
-        strategy_event_sender: mpsc::Sender<EventTimeSlice>,
+        strategy_event_sender: mpsc::Sender<StrategyEventBuffer>,
         replay_delay_ms: Option<u64>,
         buffering_duration: Option<Duration>,
         gui_enabled: bool
     ) -> FundForgeStrategy {
-        let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode).await);
-        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
-        init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
-        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), notify.clone()).await;
-
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
-
         let warm_up_start_time = start_time - warmup_duration;
+        update_historical_timestamp(warm_up_start_time.clone());
+
+        let market_event_sender = market_handler(strategy_mode).await;
+        let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode, market_event_sender.clone()).await);
+        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
+
+
+
+        init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
+        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), market_event_sender.clone()).await;
+
 
         subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
 
         //todo There is a problem with quote bars not being produced consistently since refactoring
 
-        let (order_sender, order_receiver) = mpsc::channel(100);
-        let market_event_handler = match strategy_mode {
-            StrategyMode::Backtest | StrategyMode::LivePaperTrading => MarketHandler::new(warm_up_start_time.clone(), Some(order_receiver)).await,
-            StrategyMode::Live => {
-                live_order_handler(strategy_mode, order_receiver).await;
-                MarketHandler::new(warm_up_start_time.clone(), None).await
-            },
-        };
-        let market_event_handler = Arc::new(market_event_handler);
+
 
         let timed_event_handler = Arc::new(TimedEventHandler::new());
         let interaction_handler = Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode));
@@ -146,19 +141,17 @@ impl FundForgeStrategy {
             mode: strategy_mode.clone(),
             buffer_resolution: buffering_duration.clone(),
             time_zone,
-            market_handler: market_event_handler.clone(),
             subscription_handler,
             indicator_handler: indicator_handler.clone(),
             timed_event_handler: timed_event_handler.clone(),
             interaction_handler: interaction_handler.clone(),
             drawing_objects_handler: drawing_objects_handler.clone(),
             orders_count: Default::default(),
-            order_sender,
-            orders: Default::default(),
+            market_event_sender: market_event_sender.clone(),
+            orders: Default::default()
         };
 
         initialize_static(
-            market_event_handler,
             timed_event_handler,
             interaction_handler,
             drawing_objects_handler
@@ -166,7 +159,7 @@ impl FundForgeStrategy {
 
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_duration.clone(), notify, gui_enabled.clone()).await;
+                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_duration.clone(), gui_enabled.clone(), market_event_sender).await;
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
@@ -176,16 +169,42 @@ impl FundForgeStrategy {
         strategy
     }
 
-    pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        self.market_handler.is_long(brokerage, account_id, symbol_name).await
+    pub async fn get_market_fill_price_estimate (
+        &self,
+        order_side: OrderSide,
+        symbol_name: &SymbolName,
+        volume: Volume,
+        brokerage: Brokerage
+    ) -> Result<Price, FundForgeError> {
+        get_market_fill_price_estimate(order_side, symbol_name, volume, brokerage).await
     }
 
-    pub async fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        self.market_handler.is_flat(brokerage, account_id, symbol_name).await
+    pub async fn get_market_price (
+        order_side: OrderSide,
+        symbol_name: &SymbolName,
+    ) -> Result<Price, FundForgeError> {
+        get_market_price(order_side, symbol_name).await
     }
 
-    pub async fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        self.market_handler.is_short(brokerage, account_id, symbol_name).await
+    pub fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        match self.mode {
+            StrategyMode::Backtest => is_long_paper(brokerage, account_id, symbol_name),
+            StrategyMode::Live | StrategyMode::LivePaperTrading => is_long_live(brokerage, account_id, symbol_name)
+        }
+    }
+
+    pub fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        match self.mode {
+            StrategyMode::Backtest => is_flat_paper(brokerage, account_id, symbol_name),
+            StrategyMode::Live | StrategyMode::LivePaperTrading => is_flat_live(brokerage, account_id, symbol_name)
+        }
+    }
+
+    pub fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+        match self.mode {
+            StrategyMode::Backtest => is_short_paper(brokerage, account_id, symbol_name),
+            StrategyMode::Live | StrategyMode::LivePaperTrading => is_short_live(brokerage, account_id, symbol_name)
+        }
     }
 
     pub async fn order_id(
@@ -235,7 +254,8 @@ impl FundForgeStrategy {
             self.time_utc(),
             brackets
         );
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let market_request = MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(market_request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
@@ -260,7 +280,8 @@ impl FundForgeStrategy {
             self.time_utc(),
             brackets
         );
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let request = MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
@@ -283,7 +304,8 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
@@ -306,7 +328,8 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
@@ -330,7 +353,8 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
@@ -354,7 +378,8 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
@@ -372,7 +397,8 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Limit", side)).await;
         let order = Order::limit_order(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(), limit_price, tif);
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
@@ -390,7 +416,8 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(&symbol_name, account_id, brokerage, format!("{} MIT", side)).await;
         let order = Order::market_if_touched(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
@@ -408,7 +435,8 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Stop", side)).await;
         let order = Order::stop(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
@@ -427,43 +455,48 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Stop Limit", side)).await;
         let order = Order::stop_limit(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),limit_price, trigger_price, tif);
-        self.order_sender.send(OrderRequest::Create{ brokerage: order.brokerage.clone(), order}).await.unwrap();
+        let request = MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
+        self.market_event_sender.send(request).await.unwrap();
         self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
     pub async fn cancel_order(&self, order_id: OrderId) {
-        let orders = self.orders.write().await;
-        if let Some((brokerage, account_id)) = orders.get(&order_id) {
-            let cancel_msg =  OrderRequest::Cancel{order_id, brokerage: brokerage.clone(), account_id: account_id.clone()};
-            self.order_sender.send(cancel_msg).await.unwrap()
+        if let Some((brokerage, account_id)) = self.orders.read().await.get(&order_id) {
+            let request = MarketMessageEnum::OrderRequest(OrderRequest::Cancel { order_id, brokerage: brokerage.clone(), account_id: account_id.clone() });
+            self.market_event_sender.send(request).await.unwrap();
         }
     }
 
     pub async fn update_order(&self, order_id: OrderId, order_update_type: OrderUpdateType) {
-        let orders = self.orders.write().await;
-        if let Some((brokerage, account_id)) = orders.get(&order_id) {
-            let cancel_msg =  OrderRequest::Update {
+        if let Some((brokerage, account_id)) = self.orders.read().await.get(&order_id) {
+            let update_msg =  MarketMessageEnum::OrderRequest(OrderRequest::Update {
                 brokerage: brokerage.clone(),
                 order_id,
                 account_id: account_id.clone(),
                 update: order_update_type,
-            };
-            self.order_sender.send(cancel_msg).await.unwrap()
+            });
+            self.market_event_sender.send(update_msg).await.unwrap();
         }
     }
 
     pub async fn cancel_orders(&self, brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName) {
-        let cancel_msg =  OrderRequest::CancelAll{brokerage, account_id, symbol_name};
-        self.order_sender.send(cancel_msg).await.unwrap()
+        let cancel_msg =  MarketMessageEnum::OrderRequest(OrderRequest::CancelAll{brokerage, account_id, symbol_name});
+        self.market_event_sender.send(cancel_msg).await.unwrap();
     }
 
     pub async fn last_price(&self, symbol_name: &SymbolName) -> Option<Price> {
-        self.market_handler.get_last_price(symbol_name).await
+        match LAST_PRICE.get(symbol_name) {
+            None => None,
+            Some(price) => Some(price.clone())
+        }
     }
 
-    pub async fn orders_pending(&self) -> Vec<Order> {
-        self.market_handler.get_pending_orders().await
+    pub async fn orders_pending(&self) -> Arc<DashMap<OrderId, Order>> {
+        match self.mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => BACKTEST_OPEN_ORDER_CACHE.clone(),
+            StrategyMode::Live => LIVE_ORDER_CACHE.clone()
+        }
     }
 
     /// see the timed_event_handler.rs for more details
@@ -493,7 +526,7 @@ impl FundForgeStrategy {
 
     /// see the indicator_enum.rs for more details
     pub async fn indicator_unsubscribe(&self, name: &IndicatorName) {
-        self.indicator_handler.remove_indicator(name).await
+        self.indicator_handler.remove_indicator(self.time_utc(),name).await
     }
 
     /// see the indicator_enum.rs for more details
@@ -654,21 +687,21 @@ impl FundForgeStrategy {
     /// Backtest will return the last data point time, live will return the current time.
     pub fn time_utc(&self) -> DateTime<Utc> {
         match self.mode {
-            StrategyMode::Backtest => self.market_handler.get_last_time(),
+            StrategyMode::Backtest => get_backtest_time(),
             _ => Utc::now(),
         }
     }
 
     pub async fn print_ledgers(&self) -> Vec<String> {
-        self.market_handler.process_ledgers().await
+        todo!()
     }
 
     pub async fn print_ledger(&self, brokerage: Brokerage, account_id: AccountId) -> Option<String> {
-        self.market_handler.print_ledger(brokerage, account_id).await
+        todo!()
     }
 
     pub fn export_trades(&self, folder: &str) {
-        self.market_handler.export_trades(folder);
+        todo!()
     }
 
     pub async fn history_from_local_time(
@@ -723,9 +756,5 @@ impl FundForgeStrategy {
         };
 
         range_data(start_date, end_date, subscription.clone()).await
-    }
-
-    pub async fn get_order_book(&self, symbol_name: &SymbolName) -> Option<Arc<OrderBook>> {
-        self.market_handler.get_order_book(symbol_name).await
     }
 }

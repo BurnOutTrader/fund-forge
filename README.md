@@ -34,17 +34,17 @@ We have options for interacting with strategies using drawing tools and commands
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     notify: Arc<Notify>,
-    mut event_receiver: mpsc::Receiver<EventTimeSlice>,
+    mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
     let mut warmup_complete = false;
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        for strategy_event in event_slice {
+        for (time, strategy_event) in event_slice.iter() {
             match strategy_event {
                 StrategyEvent::DrawingToolEvents(event, _) => {
                     println!("Strategy: Drawing Tool Event: {:?}", event);
                 }
                 StrategyEvent::TimeSlice(time, time_slice) => {
-                    for base_data in &time_slice {
+                    for base_data in time_slice.iter() {
                         match base_data {
                             BaseDataEnum::Candle(candle) => {}
                             BaseDataEnum::QuoteBar(quotebar) => {}
@@ -96,6 +96,11 @@ pub async fn on_data_received(
         notify.notify_one();
     }
 }
+```
+
+We can also pull all the same type of an event directly out of the slice, this is useful in the event we want to use certain functions to handle certain events
+```rust
+
 ```
 
 It is easy to subscribe to data, including custom candles like Heikin Ashi and Renko Blocks.

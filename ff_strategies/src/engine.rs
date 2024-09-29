@@ -1,18 +1,19 @@
 use chrono::{DateTime, Datelike, Utc,  Duration as ChronoDuration};
-use ff_standard_lib::server_connections::{set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, MARKET_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, unsubscribe_primary_subscription_updates};
+use ff_standard_lib::server_connections::{set_warmup_complete, send_strategy_event_slice, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, unsubscribe_primary_subscription_updates, extend_buffer, add_buffer, forward_buffer, get_backtest_time, update_historical_timestamp};
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
+use ff_standard_lib::standardized_types::strategy_events::{StrategyEventBuffer, StrategyEvent};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tokio::sync::mpsc::{Receiver};
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::{mpsc, Mutex, Notify};
+use ff_standard_lib::market_handler::market_handlers::MarketMessageEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 
@@ -34,9 +35,9 @@ pub(crate) struct HistoricalEngine {
     end_time: DateTime<Utc>,
     warmup_duration: ChronoDuration,
     buffer_resolution: Option<Duration>,
-    notify: Arc<Notify>, //DO not wait for permits outside data feed or we will have problems with freezing
     gui_enabled: bool,
     primary_subscription_updates: Receiver<Vec<DataSubscription>>,
+    market_event_sender: Sender<MarketMessageEnum>,
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -47,13 +48,12 @@ impl HistoricalEngine {
         end_date: DateTime<Utc>,
         warmup_duration: ChronoDuration,
         buffer_resolution: Option<Duration>,
-        notify: Arc<Notify>,
         gui_enabled: bool,
+        market_event_sender: Sender<MarketMessageEnum>,
     ) -> Self {
         let (tx, rx) = mpsc::channel(10);
         subscribe_primary_subscription_updates("Historical Engine".to_string(), tx).await;
         let engine = HistoricalEngine {
-            notify,
             mode,
             start_time: start_date,
             end_time: end_date,
@@ -61,6 +61,7 @@ impl HistoricalEngine {
             buffer_resolution,
             gui_enabled,
             primary_subscription_updates: rx,
+            market_event_sender
         };
         engine
     }
@@ -82,8 +83,8 @@ impl HistoricalEngine {
                     self.run_backtest().await;
                     println!("Engine: Backtest complete");
                     let end_event = StrategyEvent::ShutdownEvent(String::from("Success"));
-                    let events = vec![end_event.clone()];
-                    send_strategy_event_slice(events).await;
+                    add_buffer(get_backtest_time(), end_event).await;
+                    forward_buffer().await;
                 }
             });
         });
@@ -108,9 +109,9 @@ impl HistoricalEngine {
             Some(res) => self.historical_data_feed_buffered(month_years, warm_up_end_time.clone(), res).await,
         }
 
-        set_warmup_complete().await;
-        let warmup_complete_event = vec![StrategyEvent::WarmUpComplete];
-        send_strategy_event_slice(warmup_complete_event).await;
+        set_warmup_complete();
+        add_buffer(get_backtest_time(), StrategyEvent::WarmUpComplete).await;
+        forward_buffer().await;
         if self.mode != StrategyMode::Backtest {
             unsubscribe_primary_subscription_updates("Historical Engine".to_string()).await;
         }
@@ -158,8 +159,6 @@ impl HistoricalEngine {
     ) {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
-        let market_handler = MARKET_HANDLER.get().unwrap().clone();
-        let notify = self.notify.clone();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
@@ -184,10 +183,9 @@ impl HistoricalEngine {
                         println!("Un-Buffered Engine: End Time: {}", end_time);
                         break 'main_loop;
                     }
-
-                    market_handler.update_time_slice(time.clone(), &time_slice).await;
-                    for data in time_slice {
-                        let mut strategy_event_slice: EventTimeSlice = EventTimeSlice::new();
+                    update_historical_timestamp(time.clone());
+                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
+                    for data in time_slice.iter() {
                         let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                         // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
                         match self.primary_subscription_updates.try_recv() {
@@ -200,12 +198,12 @@ impl HistoricalEngine {
 
                         // update our consolidators and create the strategies time slice with any new data or just create empty slice.
                         // Add only primary data which the strategy has subscribed to into the strategies time slice
-                        if let Some(consolidated_data) = subscription_handler.update_time_slice(vec![data.clone()]).await {
+                        if let Some(consolidated_data) = subscription_handler.update_base_data(data.clone()).await {
                             strategy_time_slice.extend(consolidated_data);
                         }
 
                         if strategy_subscriptions.contains(&data.subscription()) {
-                            strategy_time_slice.push(data.clone());
+                            strategy_time_slice.add(data.clone());
                         }
 
                         // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
@@ -215,19 +213,12 @@ impl HistoricalEngine {
 
                         if !strategy_time_slice.is_empty() {
                             // Update indicators and get any generated events.
-                            if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
-                                strategy_event_slice.extend(events);
-                            }
+                            indicator_handler.update_time_slice(time, &strategy_time_slice).await;
                             // add the strategy time slice to the new events.
-                            strategy_event_slice.push(StrategyEvent::TimeSlice(
-                                time.to_string(),
-                                strategy_time_slice,
-                            ));
+                            let slice_event = StrategyEvent::TimeSlice(strategy_time_slice);
+                            add_buffer(time, slice_event).await;
                         }
-                        if !strategy_event_slice.is_empty() {
-                            send_strategy_event_slice(strategy_event_slice).await;
-                            notify.notified().await;
-                        }
+                        forward_buffer().await;
                     }
                     last_time = time.clone();
                 }
@@ -249,8 +240,6 @@ impl HistoricalEngine {
     ) {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
-        let market_handler = MARKET_HANDLER.get().unwrap().clone();
-        let notify = self.notify.clone();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
@@ -281,7 +270,7 @@ impl HistoricalEngine {
                         //println!("Next Month Time");
                         break 'month_loop;
                     }
-
+                    update_historical_timestamp(time.clone());
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
                     match self.primary_subscription_updates.try_recv() {
                         Ok(_) => {
@@ -296,9 +285,9 @@ impl HistoricalEngine {
                         .range(last_time..=time)
                         .flat_map(|(_, value)| value.iter().cloned())
                         .collect();
-                    market_handler.update_time_slice(time.clone(), &time_slice).await;
+                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
 
-                    let mut strategy_event_slice: EventTimeSlice = EventTimeSlice::new();
+
                     let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                     // update our consolidators and create the strategies time slice with any new data or just create empty slice.
                     if !time_slice.is_empty() {
@@ -307,9 +296,9 @@ impl HistoricalEngine {
                             strategy_time_slice.extend(consolidated_data);
                         }
 
-                        for base_data in time_slice {
+                        for base_data in time_slice.iter() {
                             if strategy_subscriptions.contains(&base_data.subscription()) {
-                                strategy_time_slice.push(base_data);
+                                strategy_time_slice.add(base_data.clone());
                             }
                         }
                     }
@@ -321,22 +310,17 @@ impl HistoricalEngine {
 
                     if !strategy_time_slice.is_empty() {
                         // Update indicators and get any generated events.
-                        if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
-                            strategy_event_slice.extend(events);
-                        }
+                        indicator_handler.update_time_slice(time, &strategy_time_slice).await;
 
                         // add the strategy time slice to the new events.
-                        strategy_event_slice.push(StrategyEvent::TimeSlice(
-                            time.to_string(),
+                        let slice_event = StrategyEvent::TimeSlice(
                             strategy_time_slice,
-                        ));
+                        );
+                        add_buffer(time, slice_event).await;
                     }
 
                     // send the buffered strategy events to the strategy
-                    if !strategy_event_slice.is_empty() {
-                        send_strategy_event_slice(strategy_event_slice).await;
-                        notify.notified().await;
-                    }
+                    forward_buffer().await;
                     last_time = time.clone();
                 }
                 if end_month {

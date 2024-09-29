@@ -1,5 +1,5 @@
 use crate::standardized_types::data_server_messaging::{AddressString, FundForgeError};
-use crate::standardized_types::strategy_events::EventTimeSlice;
+use crate::standardized_types::strategy_events::StrategyEventBuffer;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 
@@ -31,7 +31,7 @@ impl Bytes<Self> for StrategyResponse {
 #[archive_attr(derive(Debug))]
 pub enum StrategyRegistryForward {
     ShutDown(i64),
-    StrategyEventUpdates(i64, EventTimeSlice),
+    //StrategyEventUpdates(i64, StrategyEventBuffer),
 }
 
 impl Bytes<Self> for StrategyRegistryForward {

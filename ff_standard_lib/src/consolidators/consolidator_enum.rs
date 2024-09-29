@@ -172,7 +172,7 @@ impl ConsolidatorEnum {
                 .flat_map(|(_, value)| value.iter().cloned())
                 .collect();
             if !time_slice.is_empty() {
-                for base_data in time_slice {
+                for base_data in time_slice.iter() {
                     let consolidated_data = consolidator.update(&base_data);
                     if let Some(closed_data) = consolidated_data.closed_data {
                         history.add(closed_data);
@@ -241,7 +241,7 @@ impl ConsolidatorEnum {
                 .flat_map(|(_, value)| value.iter().cloned())
                 .collect();
             if !time_slice.is_empty() {
-                for base_data in time_slice {
+                for base_data in time_slice.iter() {
                     let consolidated_data = consolidator.update(&base_data);
                     if let Some(closed_data) = consolidated_data.closed_data {
                         match closed_data {
@@ -315,7 +315,7 @@ impl ConsolidatorEnum {
                 .flat_map(|(_, value)| value.iter().cloned())
                 .collect();
             if !time_slice.is_empty() {
-                for base_data in time_slice {
+                for base_data in time_slice.iter() {
                     let consolidated_data = consolidator.update(&base_data);
                     if let Some(closed_data) = consolidated_data.closed_data {
                         match closed_data {

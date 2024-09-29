@@ -1,5 +1,6 @@
+use std::collections::BTreeMap;
+use chrono::{DateTime, Utc};
 use crate::drawing_objects::drawing_object_handler::DrawingToolEvent;
-use crate::indicators::indicator_handler::IndicatorEvents;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::orders::orders::OrderUpdateEvent;
 use crate::standardized_types::subscriptions::DataSubscriptionEvent;
@@ -11,6 +12,7 @@ use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Se
 use rkyv::validation::CheckTypeError;
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::vec::ArchivedVec;
+use crate::indicators::indicator_handler::IndicatorEvents;
 
 /// Used to determine if a strategy takes certain event inputs from the Ui.
 /// A trader can still effect the strategy via the broker, but the strategy will not take any input from the Ui unless in SemiAutomated mode.
@@ -34,6 +36,20 @@ check_bytes,
 pub enum OrderEvent {
     Create
 }*/
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Copy, Ord, PartialOrd, Eq)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub enum StrategyEventType {
+    OrderEvents,
+    DataSubscriptionEvents,
+    StrategyControls,
+    DrawingToolEvents,
+    TimeSlice,
+    ShutdownEvent,
+    WarmUpComplete,
+    IndicatorEvent,
+    PositionEvents,
+}
 
 /// All strategies can be sent or received by the strategy or the UI.
 /// This enum server multiple purposes.
@@ -69,29 +85,25 @@ pub enum StrategyEvent {
     ///
     /// # Parameters
     /// - `DataSubscriptionEvent`: The subscription event details.
-    /// - `i64`: A timestamp indicating when the event was created.
-    DataSubscriptionEvents(Vec<DataSubscriptionEvent>, i64),
+    DataSubscriptionEvent(DataSubscriptionEvent),
 
     /// Enables remote control of strategy operations.
     ///
     /// # Parameters
     /// - `StrategyControls`: The control command to be executed.
-    /// - `i64`: A timestamp indicating when the event was created.
-    StrategyControls(StrategyControls, i64),
+    StrategyControls(StrategyControls),
 
     /// Facilitates interaction with drawing tools between the UI and strategies.
     ///
     /// # Parameters
     /// - `DrawingToolEvent`: The drawing tool event details.
-    /// - `i64`: A timestamp indicating when the event was created.
-    DrawingToolEvents(DrawingToolEvent, i64),
+    DrawingToolEvents(DrawingToolEvent),
 
     /// Contains strategy BaseDataEnum's as TimeSlice.
     ///
     /// # Parameters
-    /// - "TimeString": The time of the slice event
     /// - `TimeSlice`: The time slice data.
-    TimeSlice(TimeString, TimeSlice),
+    TimeSlice(TimeSlice),
 
     //IndicatorSlice(OwnerId, IndicatorResults),
     ShutdownEvent(String),
@@ -130,6 +142,20 @@ impl StrategyEvent {
         // Get the serialized bytes
         let vec = serializer.into_serializer().into_inner();
         vec
+    }
+
+    pub fn get_type(&self) -> StrategyEventType {
+        match self {
+            StrategyEvent::OrderEvents(_) => StrategyEventType::OrderEvents,
+            StrategyEvent::DataSubscriptionEvent(_) => StrategyEventType::DataSubscriptionEvents,
+            StrategyEvent::StrategyControls(_) => StrategyEventType::StrategyControls,
+            StrategyEvent::DrawingToolEvents(_) => StrategyEventType::DrawingToolEvents,
+            StrategyEvent::TimeSlice(_) => StrategyEventType::TimeSlice,
+            StrategyEvent::ShutdownEvent(_) => StrategyEventType::ShutdownEvent,
+            StrategyEvent::WarmUpComplete => StrategyEventType::WarmUpComplete,
+            StrategyEvent::IndicatorEvent(_) => StrategyEventType::IndicatorEvent,
+            StrategyEvent::PositionEvents => StrategyEventType::PositionEvents,
+        }
     }
 
     pub fn from_array_bytes(data: &Vec<u8>) -> Result<Vec<StrategyEvent>, CheckTypeError<ArchivedVec<ArchivedStrategyEvent>, DefaultValidator>> {
@@ -188,4 +214,97 @@ pub enum StrategyControls {
     Delay(Option<u64>),
 }
 
-pub type EventTimeSlice = Vec<StrategyEvent>;
+#[derive(Clone, PartialEq, Debug)]
+pub struct StrategyEventBuffer {
+    /// Events stored with their DateTimes in order
+    events: Vec<(DateTime<Utc>, StrategyEvent)>,
+    /// Keep a record of event index by event type so we can seperate events.
+    events_by_type: BTreeMap<StrategyEventType, Vec<u64>>,
+}
+
+impl StrategyEventBuffer {
+    pub fn new() -> Self {
+        StrategyEventBuffer {
+            events: Vec::new(),
+            events_by_type: BTreeMap::new(),
+        }
+    }
+
+    // Adds an event with a given time maintaining the order of the event slice so that when we iterate earliest occurring events will be presented first
+    pub fn add_event(&mut self, time: DateTime<Utc>, event: StrategyEvent) {
+        // Insert event into the main list
+        self.events.push((time, event.clone()));
+        let event_index = self.events.len() - 1;
+
+        // Sort the events by time (stable sort keeps order for equal times)
+        self.events.sort_by_key(|(time, _)| *time);
+
+        // Instead of finding the index after sorting, we could assume the event may have shifted
+        // and directly locate it using binary search.
+        let sorted_event_index = self
+            .events
+            .binary_search_by_key(&time, |(t, _)| *t)
+            .unwrap_or_else(|_| panic!("Newly added event not found after sorting"));
+
+        // Insert the sorted index into the type map and keep it sorted by time
+        let entry = self
+            .events_by_type
+            .entry(event.get_type()) // Assuming StrategyEvent has a `get_type` method
+            .or_insert_with(Vec::new);
+
+        // Use binary search to find the correct insertion position
+        let insertion_position = entry
+            .binary_search_by_key(&time, |&idx| self.events[idx as usize].0)
+            .unwrap_or_else(|pos| pos); // Find the correct insertion position
+        entry.insert(insertion_position, sorted_event_index as u64);
+    }
+
+    // Iterate over the sorted events by time
+    pub fn iter(&self) -> impl Iterator<Item = &(DateTime<Utc>, StrategyEvent)> {
+        self.events.iter()
+    }
+
+    // Returns an iterator over events of a given type, sorted by time (borrowed version)
+    pub fn get_events_by_type(
+        &self,
+        event_type: StrategyEventType,
+    ) -> impl Iterator<Item = &(DateTime<Utc>, StrategyEvent)> {
+        self.events_by_type
+            .get(&event_type)
+            .into_iter()
+            .flat_map(move |indices| {
+                indices.iter().map(move |&idx| &self.events[idx as usize])
+            })
+    }
+
+    // Returns a Vec of events of a given type, sorted by time (owned version)
+    // This fn does not remove the events but instead clones them.
+    // If you are using this fn to move certain events to another function, be careful that you do not double handle events, ie react to the same event twice
+    pub fn get_owned_events_by_type(
+        &self,
+        event_type: StrategyEventType,
+    ) -> Vec<(DateTime<Utc>, StrategyEvent)> {
+        self.events_by_type
+            .get(&event_type)
+            .map_or_else(Vec::new, |indices| {
+                indices
+                    .iter()
+                    .map(|&idx| self.events[idx as usize].clone()) // Clone to return owned data
+                    .collect()
+            })
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.events.is_empty()
+    }
+
+    pub fn clear(&mut self) {
+        self.events.clear();
+        self.events_by_type.clear();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+}

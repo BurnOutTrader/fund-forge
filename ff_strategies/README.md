@@ -17,7 +17,7 @@ See the [Test strategy](https://github.com/BurnOutTrader/fund-forge/blob/main/te
 
 Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function. 
 This will automatically create the engine and start the strategy in the background. \
-Then we can receive events in our `fn on_data_received()` function. \
+Then we can receive `StrategyEventBuffer`s in our `fn on_data_received()` function. \
 The strategy object returned from `initialize()` is a fully owned object, and we can pass it to other function, wrap it in an arc etc. \
 It is best practice to use the strategies methods to interact with the strategy rather than calling on any private fields directly. \
 strategy methods only need a reference to the strategy object, and will handle all the necessary locking and thread safety for you. \
@@ -29,9 +29,6 @@ allows us to pass our strategy in an Arc to any other threads or functions and s
 
 ### Initializing and Creating a Strategy Instance
 #### Parameters for FundForgeStrategy::initialize()
-#### `notify: Arc<Notify>:`
-The notification mechanism for the strategy, this is useful to slow the message sender channel until we have processed the last message.
-
 #### `strategy_mode: StrategyMode:`
 The mode of the strategy (Backtest, Live, LivePaperTrading).
 
@@ -166,14 +163,16 @@ The engine will automatically be created and started in the background, and we w
 We can divert strategy events to different functions if we want to separate the logic, some tasks are less critical than others. 
 We can use  `notify.notify_one();` to slow the message sender channel until we have processed the last message.
 
+When we run the strategy we receive a `StrategyEventBuffer` in our receiver, the size of the buffer is determined by the Buffer Option<Duration>
+When we `iter()` the buffer we receive the events in the exact order they were captured.
+Similarly, when we `iter()` a `TimeSlice` we receive the `BaseDataEnum`'s in the exact order they were created.
+
 ```rust
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
-    let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
-        notify.clone(),
         StrategyMode::Backtest,                 // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 7, 23)
@@ -212,12 +211,13 @@ async fn main() {
     on_data_received(strategy, notify, strategy_event_receiver).await;
 }
 
-pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>)  {
+pub async fn on_data_received(strategy: FundForgeStrategy, mut event_receiver: mpsc::Receiver<StrategyEventBuffer>)  {
     let mut warmup_complete = false;
     
     // we can handle our events directly in the `strategy_loop` or we can divert them to other functions or threads.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        for strategy_event in event_slice {
+        // when we iterate the buffer the events are returned in the exact order they occured, the time property is the time the event was captured in the buffer, not the current strategy time.
+        for (time, strategy_event) in event_slice.iter() {
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
                 StrategyEvent::DrawingToolEvents(_, drawing_tool_event, _) => {
@@ -226,7 +226,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 }
                 // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                 StrategyEvent::TimeSlice(_time, time_slice) => {
-                    'base_data_loop: for base_data in &time_slice {
+                    'base_data_loop: for base_data in time_slice.iter() {
                         if !warmup_complete {
                             continue 'strategy_loop;
                         }
@@ -260,11 +260,59 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
             }
             
         }
-        // we can notify the engine that we have processed the message and it can send the next one.
-        notify.notify_one();
     }
     event_receiver.close();
     println!("Strategy Event Loop Ended");
+}
+```
+#### Alternative To Iterating The Buffer
+We don't have to iterate the event objects in the order they were buffered, we can separate the objects based on their event type and receive back and iterator of those objects.
+```rust
+fn example() {
+    pub enum StrategyEventType {
+        OrderEvents,
+        DataSubscriptionEvents,
+        StrategyControls,
+        DrawingToolEvents,
+        TimeSlice,
+        ShutdownEvent,
+        WarmUpComplete,
+        IndicatorEvent,
+        PositionEvents,
+    }
+    let event_buffer: StrategyEventBuffer = StrategyEventBuffer::new();
+    // Returns a Vec of events of a given type, (ref version)
+    let order_events_borrowed: Iterator<Item=&(DateTime<Utc>, StrategyEvent)> = event_buffer.get_events_by_type(StrategyEventType::OrderEvents);
+    // we could pass to a fn that only handles order events
+    handle_order_events(order_events_borrowed);
+
+    // Returns a Vec of events of a given type, sorted by time (owned version)
+    // This fn does not remove the events but instead clones them.
+    // If you are using this fn to move certain events to another function, be careful that you do not double handle events, ie react to the same event twice
+    let order_events_owned: Vec<(DateTime<Utc>, StrategyEvent)> = event_buffer.get_owned_events_by_type(StrategyEventType::OrderEvents);
+```
+
+#### Alternative To Iterating a TimeSlice
+Similarly, for TimeSlices we can retrieve an iterator for a specific type, allowing us to handle without iterating the entire time slice.
+```rust
+fn example() {
+    pub enum BaseDataType {
+        Ticks = 0,
+        Quotes = 1,
+        QuoteBars = 2,
+        Candles = 3,
+        Fundamentals = 4,
+    }
+    
+    let time_slice: TimeSlice = TimeSlice::new();
+    
+    // this will give us an owned iterator of all base data enums of the required type in the slice, so we can pass it to another function etc.
+    let owned_iter: Iterator<Item = BaseDataEnum> = time_slice.get_by_type(BaseDataType::Candles);
+    // we could pass to a fn that only handles candles.
+    handle_candles(owned_iter);
+
+    // this will give us a reference to an iterator of all objects of the required type
+    let borrowed_iter: Iterator<Item = &BaseDataEnum> = time_slice.get_by_type_borrowed(data_type: BaseDataType);
 }
 ```
 
@@ -309,8 +357,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         /// Get back the strategy time with any passed in timezone
         let nyc_time_zone: Tz = America::New_York;
         let strategy_time_nyc: DateTime<Tz> = strategy.time_from_tz(nyc_time_zone);
-
-        notify.notify_one();
     }
 }
 ```
@@ -605,10 +651,10 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     strategy.indicator_subscribe(heikin_atr_20).await;
     
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        for strategy_event in event_slice {
+        for (time, strategy_event) in event_slice.iter() {
             match strategy_event {
-                StrategyEvent::TimeSlice(_time, time_slice) => {
-                    'base_data_loop: for base_data in &time_slice {
+                StrategyEvent::TimeSlice(time_slice) => {
+                    'base_data_loop: for base_data in time_slice.iter() {
                         match base_data {
                             BaseDataEnum::Candle(candle) => {
                                 // lets update the indicator with the new candles
@@ -810,40 +856,55 @@ async fn example() {
 ```
 
 ## OrderBooks 
-If we are using `Quote` data feed or if we have subscribed to a `LevelTwoSubscription`, we can access order books for a symbol.
-To access levels above BookLevel 0 we will need a LevelTwoSubscription. (subscribing to level 2 not yet implemented)
-BookLevel = u8
-Price = f64
+THIS IS BEING OVERHAULED CURRENTLY
+***Things to consider***
+- The engine updates best bid, best offer, order book levels and last prices using `SymbolName` if we have more than 1 data feed per SymbolName, those streams will be combined into the same maps.
+- The best bid and best offer will always replace and == order book level 0
+- The order books are split into BID_BOOK and ASK_BOOK
+- There is no point in having 2 feeds for the same SymbolName from multiple `DataVendors`, just use the most accurate or fastest updating vendor.
+
 ```rust
 async fn example() {
-    let strategy = FundForgeStrategy::default();
-    let symbol = Symbol::new(SymbolName::from("AUD-USD"), DataVendor::Test, MarketType::Forex);
-    
-    // we can get a readable ref to the order book for a symbol
-    let order_book: Option<Arc<OrderBook>> = strategy.get_order_book(&symbol).await; 
-    
-    if let Some(order_book) =  order_book {
-        // we can access the ask or bid book directly and keep a readable ref. in the future this will return a read only ref to the actual book in real strategy time
-        let bid_book: Arc<RwLock<BTreeMap<BookLevel, Price>>> = order_book.bid_book();
-        let ask_book: Arc<RwLock<BTreeMap<BookLevel, Price>>> = order_book.ask_book();
-        
-        // then we need to create a read lock on the books, and we can view them in real time.
-        let bid_book = bid_book.read().await;
-        let ask_book = ask_book.read().await;
-        
-        // we can get a cloned snapshot of the book in its current state
-        let ask_snapshot: BTreeMap<BookLevel, Price> = order_book.ask_snapshot().await;
-        let bid_snapshot: BTreeMap<BookLevel, Price> = order_book.bid_snapshot().await;
-        
-        // Or we can access the index of the bid or ask without getting the whole book. 
-        // It is recommended to use this function as accessing the books directly will slow down writing updates.
-        // this returns an Option<Price> as there may not be a Quote available for the BookLevel.
-        let best_bid_ask_level: BookLevel = 0;
-        let bid: Option<Price> = order_book.bid_level(best_bid_ask_level).await;
-        let ask: Option<Price> = order_book.ask_level(best_bid_ask_level).await;
-    }
+   //this is being updated currently
 }
 ```
+[see Market Handler Code](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_standard_lib/src/market_handler/market_handlers.rs)
+
+## Estimate Fill Price
+There is a function used by the engine market handler to simulate live fills, if we have multiple order book levels the fill price will be averaged based on volume.
+This makes the assumption we get to consume all volume at each level as needed, without comptetion from other participants.
+When there is only best bid and best ask prices we will assume a full fill at that price.
+When there is no best bid or best ask, we will assume a fill at the last price.
+The strategy instance can also use this fn to estimate its fill price ahead of placing an order by calling the associated function:
+```rust
+fn example() {
+    let order_side: OrderSide = OrderSide::Buy;
+    let symbol_name: SymbolName =SymbolName::from("AUD-CAD");
+    let volume: Volume = dec!(0.0);
+    let brokerage: Brokerage = Brokerage::Test;
+    
+    // we can get the best estimate based on our intended trade volume
+    let estimated_fill_price: Result<Price, FundForgeError> = get_market_fill_price_estimate(order_side, symbol_name, volume, brokerage).await;
+    let price: Price = estimated_fill_price.unwrap();
+    
+    // we can get the closest market estimate without volume, just check best price if we have best bid offer we will get the correct return based on order side, else we just get the last price.
+    let order_side: OrderSide = OrderSide::Buy;
+    let symbol_name: SymbolName =SymbolName::from("AUD-CAD");
+    let estimated_price: Result<Price, FundForgeError> = get_market_price (
+        order_side: &OrderSide,
+        symbol_name: &SymbolName,
+    );
+    let price: Price = estimated_price.unwrap();
+}
+```
+***Things to consider***
+- If we have an order book feed this will be more accurate.
+- The engine updates best bid, best offer, order book levels and last prices using `SymbolName` if we have more than 1 data feed per SymbolName, those streams will be combined into the same maps.
+- The best bid and best offer will always replace  == order book level 0
+- The order books are split into BID_BOOK and ASK_BOOK
+- There is no point in having 2 feeds for the same SymbolName from multiple `DataVendors`, just use the most accurate or fastest updating vendor. 
+
+
 
 ## Placing Orders
 In backtesting a new ledger will be instantiated for each AccountId and Brokerage combination to simulate any number of accounts.

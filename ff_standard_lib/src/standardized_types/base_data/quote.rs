@@ -31,7 +31,6 @@ pub struct Quote {
     pub ask_volume: Volume,
     pub bid_volume: Volume,
     pub time: TimeString,
-    pub book_level: BookLevel,
 }
 
 
@@ -108,7 +107,6 @@ impl Quote {
         ask_volume: Price,
         bid_volume: Price,
         time: TimeString,
-        book_level: BookLevel,
     ) -> Self {
         Quote {
             symbol,
@@ -117,7 +115,6 @@ impl Quote {
             ask_volume,
             bid_volume,
             time,
-            book_level,
         }
     }
 }
@@ -126,14 +123,13 @@ impl Display for Quote {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:?},{},{},{},{},{},{}",
+            "{:?},{},{},{},{},{}",
             self.symbol,
             self.ask,
             self.bid,
             self.ask_volume,
             self.bid_volume,
             self.time,
-            self.book_level
         )
     }
 }
@@ -142,8 +138,8 @@ impl Debug for Quote {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "Quote {{ symbol: {:?}, ask: {}, bid: {}, ask_volume: {}, bid_volume: {}, time: {}, book_level: {}",
-            self.symbol, self.ask, self.bid, self.ask_volume, self.bid_volume, self.time, self.book_level
+            "Quote {{ symbol: {:?}, ask: {}, bid: {}, ask_volume: {}, bid_volume: {}, time: {}",
+            self.symbol, self.ask, self.bid, self.ask_volume, self.bid_volume, self.time
         )
     }
 }

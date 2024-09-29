@@ -1,5 +1,5 @@
 use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
-use ff_standard_lib::standardized_types::strategy_events::EventTimeSlice;
+use ff_standard_lib::standardized_types::strategy_events::StrategyEventBuffer;
 use ff_standard_lib::strategy_registry::guis::RegistryGuiResponse;
 use ff_standard_lib::strategy_registry::strategies::{StrategyRegistryForward, StrategyResponse};
 use ff_standard_lib::strategy_registry::RegistrationResponse;
@@ -17,7 +17,7 @@ lazy_static! {
     static ref BACKTEST_CONNECTED_STRATEGIES: Arc<RwLock<Vec<AddressString>>> = Arc::new(RwLock::new(Vec::new()));
     static ref LIVE_PAPER_CONNECTED_STRATEGIES: Arc<RwLock<Vec<AddressString>>> = Arc::new(RwLock::new(Vec::new()));
     static ref GUI_BROADCATSER: BytesBroadcaster = BytesBroadcaster::new(BroadCastType::Concurrent);
-    static ref STRATEGY_EVENTS_BUFFER: Arc<RwLock<HashMap<AddressString, Arc<RwLock<BTreeMap<i64, EventTimeSlice>>>>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref STRATEGY_EVENTS_BUFFER: Arc<RwLock<HashMap<AddressString, Arc<RwLock<BTreeMap<i64, StrategyEventBuffer >>>>>> = Arc::new(RwLock::new(HashMap::new()));
 }
 
 pub async fn broadcast(bytes: Vec<u8>) {
@@ -48,9 +48,9 @@ pub async fn get_live_paper_connected_strategies() -> Vec<AddressString> {
     LIVE_PAPER_CONNECTED_STRATEGIES.read().await.clone()
 }
 
-pub async fn get_events_buffer() -> BTreeMap<AddressString, BTreeMap<i64, EventTimeSlice>> {
+pub async fn get_events_buffer() -> BTreeMap<AddressString, BTreeMap<i64, StrategyEventBuffer>> {
     let buffer = STRATEGY_EVENTS_BUFFER.read().await;
-    let mut return_buffer: BTreeMap<AddressString, BTreeMap<i64, EventTimeSlice>> = BTreeMap::new();
+    let mut return_buffer: BTreeMap<AddressString, BTreeMap<i64, StrategyEventBuffer>> = BTreeMap::new();
     for (id, map) in &*buffer {
         return_buffer.insert(id.clone(), map.read().await.clone());
     }

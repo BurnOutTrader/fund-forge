@@ -1,20 +1,20 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use crate::consolidators::consolidator_enum::ConsolidatorEnum;
-use crate::indicators::indicator_enum::IndicatorEnum;
-use crate::indicators::indicators_trait::{IndicatorName, Indicators};
-use crate::indicators::values::IndicatorValues;
-use crate::standardized_types::base_data::history::range_data;
+use std::sync::atomic::{Ordering};
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::strategy_events::StrategyEvent;
-use crate::standardized_types::subscriptions::{filter_resolutions, DataSubscription};
+use crate::standardized_types::subscriptions::{DataSubscription};
 use crate::standardized_types::time_slices::TimeSlice;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use dashmap::DashMap;
 use tokio::sync::{RwLock};
+use crate::indicators::indicator_enum::IndicatorEnum;
+use crate::indicators::indicators_trait::{IndicatorName, Indicators};
+use crate::indicators::values::IndicatorValues;
+use crate::server_connections::{add_buffer, is_warmup_complete};
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
@@ -31,9 +31,7 @@ pub enum IndicatorRequest {}
 
 pub struct IndicatorHandler {
     indicators: Arc<DashMap<DataSubscription, DashMap<IndicatorName, IndicatorEnum>>>,
-    is_warm_up_complete: AtomicBool,
     strategy_mode: StrategyMode,
-    event_buffer: RwLock<Vec<StrategyEvent>>,
     subscription_map: DashMap<IndicatorName, DataSubscription>, //used to quickly find the subscription of an indicator by name.
 }
 
@@ -41,27 +39,10 @@ impl IndicatorHandler {
     pub async fn new(strategy_mode: StrategyMode) -> Self {
         let handler =Self {
             indicators: Default::default(),
-            is_warm_up_complete: AtomicBool::new(false),
             strategy_mode,
-            event_buffer: Default::default(),
             subscription_map: Default::default(),
         };
         handler
-    }
-
-    pub async fn get_event_buffer(&self) -> Option<Vec<StrategyEvent>> {
-        let mut buffer = self.event_buffer.write().await;
-        let buffer_cached = buffer.clone();
-        buffer.clear();
-
-        match buffer.is_empty() {
-            true => None,
-            false => Some(buffer_cached)
-        }
-    }
-
-    pub async fn set_warmup_complete(&self) {
-        self.is_warm_up_complete.store(true, Ordering::SeqCst);
     }
 
     pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) {
@@ -73,25 +54,15 @@ impl IndicatorHandler {
 
         let name = indicator.name().clone();
 
-        let indicator = match self.is_warm_up_complete.load(Ordering::SeqCst) {
+        let indicator = match is_warmup_complete() {
             true => warmup(time, self.strategy_mode.clone(), indicator).await,
             false => indicator,
         };
 
         if !self.subscription_map.contains_key(&name) {
-            self
-                .event_buffer
-                .write()
-                .await
-                .push(StrategyEvent::IndicatorEvent(
-                IndicatorEvents::IndicatorAdded(name.clone())));
+            add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorAdded(name.clone()))).await;
         } else {
-            self
-                .event_buffer
-                .write()
-                .await
-                .push(StrategyEvent::IndicatorEvent(
-                IndicatorEvents::Replaced(name.clone())));
+            add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::Replaced(name.clone()))).await;
         }
         if let Some(map) = self.indicators.get(&subscription) {
             map.insert(indicator.name(), indicator);
@@ -99,17 +70,12 @@ impl IndicatorHandler {
         self.subscription_map.insert(name.clone(), subscription.clone());
     }
 
-    pub async fn remove_indicator(&self, indicator: &IndicatorName) {
+    pub async fn remove_indicator(&self, time: DateTime<Utc>,indicator: &IndicatorName) {
         if let Some(map) =
             self.indicators.get_mut(&self.subscription_map.get(indicator).unwrap())
         {
             if map.remove(indicator).is_some() {
-                self.event_buffer
-                    .write()
-                    .await
-                    .push(StrategyEvent::IndicatorEvent(
-                        IndicatorEvents::IndicatorRemoved(indicator.clone()),
-                    ));
+                add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorRemoved(indicator.clone()))).await;
                 self.subscription_map.remove(indicator);
             }
         }
@@ -125,11 +91,11 @@ impl IndicatorHandler {
         }
     }
 
-    pub async fn update_time_slice(&self, time_slice: &TimeSlice) -> Option<Vec<StrategyEvent>>   {
+    pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) {
         let mut results: BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
         let indicators = self.indicators.clone();
 
-        for data in time_slice {
+        for data in time_slice.iter() {
             let subscription = data.subscription();
             if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
                 for mut indicators_dash_map in indicators_by_sub.iter_mut() {
@@ -141,22 +107,29 @@ impl IndicatorHandler {
             }
         }
 
-        let mut event_buffer: Vec<StrategyEvent>= vec![];
+        let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
+        if !results_vec.is_empty() {
+            add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await;
+        }
+    }
+
+    pub async fn update_base_data(&self, time: DateTime<Utc>, base_data: &BaseDataEnum) {
+        let mut results: BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
+        let indicators = self.indicators.clone();
+
+        let subscription = base_data.subscription();
+        if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
+            for mut indicators_dash_map in indicators_by_sub.iter_mut() {
+                let data = indicators_dash_map.value_mut().update_base_data(base_data);
+                if let Some(indicator_data) = data {
+                    results.insert(indicators_dash_map.key().clone(), indicator_data);
+                }
+            }
+        }
 
         let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
         if !results_vec.is_empty() {
-            event_buffer.push(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec)));
-        }
-
-        let buffered = self.event_buffer.read().await.clone();
-        if !buffered.is_empty() {
-            event_buffer.extend(buffered);
-            self.event_buffer.write().await.clear();
-        }
-
-        match event_buffer.is_empty() {
-            true => None,
-            false => Some(event_buffer)
+            add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await;
         }
     }
 

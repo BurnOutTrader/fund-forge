@@ -5,11 +5,10 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
-use ff_standard_lib::standardized_types::strategy_events::{EventTimeSlice, StrategyControls, StrategyEvent, StrategyInteractionMode};
+use ff_standard_lib::standardized_types::strategy_events::{StrategyEventBuffer, StrategyControls, StrategyEvent, StrategyInteractionMode};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use std::sync::Arc;
-use rust_decimal_macros::dec;
 use tokio::sync::{mpsc, Notify};
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::apis::data_vendor::datavendor_enum::DataVendor;
@@ -31,7 +30,6 @@ async fn main() {
     let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
-        notify.clone(),
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 6, 19)
@@ -77,7 +75,7 @@ async fn main() {
         None,
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading and backtesting.
-        Some(core::time::Duration::from_millis(100)), //todo Un buffered backtest engine has locking after backtest, need to update market handler... its the problem
+        Some(core::time::Duration::from_millis(100)),
         GUI_DISABLED
     ).await;
 
@@ -88,7 +86,7 @@ async fn main() {
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     notify: Arc<Notify>,
-    mut event_receiver: mpsc::Receiver<EventTimeSlice>,
+    mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
     let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("heikin_atr_5"),
@@ -115,23 +113,23 @@ pub async fn on_data_received(
     let account_name = AccountId::from("TestAccount");
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        for strategy_event in event_slice {
+        for (time, strategy_event) in event_slice.iter() {
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
-                StrategyEvent::DrawingToolEvents(event, _) => {
+                StrategyEvent::DrawingToolEvents(event) => {
                     println!("Strategy: Drawing Tool Event: {:?}", event);
                 }
 
-                StrategyEvent::TimeSlice(_time, time_slice) => {
+                StrategyEvent::TimeSlice(time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
-                    for base_data in &time_slice {
+                    for base_data in time_slice.iter() {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
                                     println!("Candle {}: {}, Local Time: {}", candle.symbol.name, candle.time_utc(), candle.time_local(strategy.time_zone()));
-                                    history_2.add(candle.clone());
+                                    /*history_2.add(candle.clone());
                                     let last_bar =
                                         match history_2.get(1) {
                                             None => {
@@ -160,14 +158,14 @@ pub async fn on_data_received(
 
                                     if strategy.is_long(&brokerage, &account_name, &candle.symbol.name).await {
                                         bars_since_entry_2 += 1;
-                                    }
+                                    }*/
                                 }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
                                     println!("QuoteBar {}: {}, Local Time {}", quotebar.symbol.name, quotebar.time_utc(), quotebar.time_local(strategy.time_zone()));
-                                    history_1.add(quotebar.clone());
+                                    /*history_1.add(quotebar.clone());
                                     let last_bar =
                                     match history_1.get(1) {
                                         None => {
@@ -198,7 +196,7 @@ pub async fn on_data_received(
 
                                     if strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await {
                                         bars_since_entry_1 += 1;
-                                    }
+                                    }*/
                                 }
                                 //do something with the current open bar
                                 if !quotebar.is_closed {
@@ -244,14 +242,12 @@ pub async fn on_data_received(
                 }
 
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
-                StrategyEvent::DataSubscriptionEvents(events,_) => {
-                    for event in events {
+                StrategyEvent::DataSubscriptionEvent(event) => {
                         println!("Strategy: Data Subscription Event: {:?}", event);
-                    }
                 }
 
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
-                StrategyEvent::StrategyControls(control, _) => {
+                StrategyEvent::StrategyControls(control) => {
                     match control {
                         StrategyControls::Continue => {}
                         StrategyControls::Pause => {}
@@ -263,11 +259,11 @@ pub async fn on_data_received(
 
                 StrategyEvent::ShutdownEvent(event) => {
                     println!("{}",event);
-                    strategy.export_trades(&String::from("./trades exports"));
+            /*        strategy.export_trades(&String::from("./trades exports"));
                     let ledgers = strategy.print_ledgers().await;
                     for ledger in ledgers {
                         println!("{:?}", ledger);
-                    }
+                    }*/
                     //we should handle shutdown gracefully by first ending the strategy loop.
                     break 'strategy_loop
                 },

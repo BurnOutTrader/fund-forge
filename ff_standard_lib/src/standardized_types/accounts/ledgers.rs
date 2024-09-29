@@ -270,13 +270,7 @@ pub(crate) mod historical_ledgers {
             account
         }
 
-        pub async fn generate_id(&self, symbol_name: &SymbolName, time: DateTime<Utc>, side: PositionSide) -> PositionId {
-            self.positions_counter.entry(symbol_name.clone())
-                .and_modify(|value| *value += 1)  // Increment the value if the key exists
-                .or_insert(1);
 
-            format!("{}-{}-{}-{}-{}-{}", self.brokerage, self.account_id, symbol_name, time.timestamp(), self.positions_counter.get(symbol_name).unwrap().value().clone(), side)
-        }
 
         pub fn process_closed_position(&self, position: Position) {
             if !self.positions_closed.contains_key(&position.symbol_name) {
@@ -288,95 +282,7 @@ pub(crate) mod historical_ledgers {
             }
         }
 
-        pub async fn update_or_create_paper_position(
-            &mut self,
-            symbol_name: &SymbolName,
-            quantity: Volume,
-            market_price: Price,
-            side: OrderSide,
-            time: &DateTime<Utc>,
-            brackets: Option<Vec<ProtectiveOrder>>
-        ) -> Result<(), FundForgeError>
-        {
-            // Check if there's an existing position for the given symbol
-            if self.positions.contains_key(symbol_name) {
-                let (_, mut existing_position) = self.positions.remove(symbol_name).unwrap();
-                let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell) || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
-                if is_reducing {
-                    if let Some(new_brackets) = brackets {
-                        existing_position.brackets = Some(new_brackets);
-                    }
 
-                    let pnl = existing_position.reduce_position_size(market_price, quantity, time);
-                    self.booked_pnl += pnl;
-
-                    self.subtract_margin_used(symbol_name.clone(), quantity).await;
-                    self.cash_value = self.cash_available + self.cash_used + self.booked_pnl + self.open_pnl;
-
-                    if !existing_position.is_closed {
-                        self.positions.insert(symbol_name.clone(), existing_position);
-                    } else {
-                        self.process_closed_position(existing_position);
-                    }
-                    Ok(())
-                } else {
-                    // Deduct margin from cash available
-                    match self.add_margin_used(symbol_name.clone(), quantity).await {
-                        Ok(_) => {}
-                        Err(e) => return Err(e)
-                    }
-
-                    existing_position.add_to_position(market_price, quantity, time);
-                    if let Some(new_brackets) = brackets {
-                        existing_position.brackets = Some(new_brackets);
-                    }
-
-
-                    self.positions.insert(symbol_name.clone(), existing_position);
-                    self.cash_value = self.cash_available + self.cash_used + self.booked_pnl + self.open_pnl;
-                    Ok(())
-                }
-            } else {
-                match self.add_margin_used(symbol_name.clone(), quantity).await {
-                    Ok(_) => {}
-                    Err(e) => return Err(e)
-                }
-
-                if !self.symbol_info.contains_key(symbol_name) {
-                    let symbol_info = match self.brokerage.symbol_info(symbol_name.clone()).await {
-                        Ok(info) => info,
-                        Err(_) => return Err(FundForgeError::ClientSideErrorDebug(format!("No Symbol info for: {}", symbol_name)))
-                    };
-                    self.symbol_info.insert(symbol_name.clone(), symbol_info);
-                }
-
-                // Determine the side of the position based on the order side
-                let side = match side {
-                    OrderSide::Buy => PositionSide::Long,
-                    OrderSide::Sell => PositionSide::Short
-                };
-
-                // Create a new position with the given details
-                let position = Position::enter(
-                    symbol_name.clone(),
-                    self.brokerage.clone(),
-                    self.account_id.clone(),
-                    side,
-                    quantity,
-                    market_price,
-                    self.generate_id(&symbol_name, time.clone(), side).await,
-                    self.symbol_info.get(symbol_name).unwrap().value().clone(),
-                    self.currency.clone(),
-                    brackets
-                );
-
-                // Insert the new position into the positions map
-                self.positions.insert(position.symbol_name.clone(), position);
-
-                self.cash_value = self.cash_available + self.cash_used + self.booked_pnl + self.open_pnl;
-                Ok(())
-            }
-        }
 
         pub async fn exit_position_paper(&mut self, symbol_name: &SymbolName, market_price: Price, time: DateTime<Utc>) {
             if !self.positions.contains_key(symbol_name) {
@@ -421,7 +327,7 @@ pub(crate) mod historical_ledgers {
         pub async fn on_historical_data_update(&mut self, time_slice: TimeSlice, time: &DateTime<Utc>) {
             let mut open_pnl = dec!(0.0);
             let mut brackets_booked_pnl = dec!(0.0);
-            for base_data_enum in time_slice {
+            for base_data_enum in time_slice.iter() {
                 let data_symbol_name = &base_data_enum.symbol().name;
                 if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
                     if position.is_closed {

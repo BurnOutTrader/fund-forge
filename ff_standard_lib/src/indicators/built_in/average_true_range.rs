@@ -1,6 +1,4 @@
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::indicators::indicators_trait::{IndicatorName, Indicators};
-use crate::indicators::values::{IndicatorPlot, IndicatorValues};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;
@@ -11,6 +9,8 @@ use std::fmt::{Display, Formatter};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive};
 use rust_decimal_macros::dec;
+use crate::indicators::indicators_trait::{IndicatorName, Indicators};
+use crate::indicators::values::{IndicatorPlot, IndicatorValues};
 use crate::standardized_types::base_data::traits::BaseData;
 
 pub struct AverageTrueRange {

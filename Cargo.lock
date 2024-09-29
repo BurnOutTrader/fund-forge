@@ -1005,9 +1005,9 @@ dependencies = [
 
 [[package]]
 name = "ff_rithmic_api"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2aa226fd07f086679446515283e5a848566075a991a9ce5331a7fa721e02d96"
+checksum = "fd1b2fee47b85bd9b17c49c91f47928259994c6513c9a2bab4eebb4d7b3764d6"
 dependencies = [
  "dashmap",
  "futures-util",
@@ -1082,6 +1082,7 @@ dependencies = [
  "lazy_static",
  "once_cell",
  "rkyv",
+ "rust_decimal",
  "rust_decimal_macros",
  "serde",
  "strum_macros",

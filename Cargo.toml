@@ -18,7 +18,7 @@ members = [
 opt-level = 3
 
 [dependencies]
-ff_rithmic_api = "0.1.5"
+ff_rithmic_api = "0.1.6"
 ff_standard_lib = { path = "ff_standard_lib" }
 ff_strategies = { path = "ff_strategies" }
 ff_data_server = { path = "ff_data_server"}

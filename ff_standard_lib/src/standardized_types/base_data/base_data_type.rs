@@ -30,9 +30,7 @@ use std::fmt::Display;
 /// This enum is used to form `NetworkMessage` objects which are used to request and send data to and from your running `ff_data_server` instance.
 pub enum BaseDataType {
     Ticks = 0,
-    /// A `Quote` is a data point that represents the current bid and ask prices for a given symbol.
     Quotes = 1,
-    /// A `Price` is a data point that represents the current price or last traded of a given symbol.
     QuoteBars = 2,
     Candles = 3,
     Fundamentals = 4,

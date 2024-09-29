@@ -64,10 +64,13 @@ async fn structured_que_builder(
 
         for data in base_data {
             let time = data.time_created_utc();
-            time_slices
-                .entry(time)
-                .or_insert_with(Vec::new)
-                .push(data);
+            if let Some(mut time_slice) = time_slices.get_mut(&time) {
+                time_slice.add(data)
+            } else {
+                let mut time_slice = TimeSlice::new();
+                time_slice.add(data);
+                time_slices.insert(time, time_slice);
+            }
         }
     });
 

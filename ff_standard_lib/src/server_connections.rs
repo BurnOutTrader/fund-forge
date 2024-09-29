@@ -7,11 +7,13 @@ use heck::ToPascalCase;
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, Utc,  Duration as ChronoDuration};
+use chrono::{DateTime, Utc, TimeZone};
 use dashmap::DashMap;
 use futures::SinkExt;
+use lazy_static::lazy_static;
 use strum_macros::Display;
 use tokio::io;
 use once_cell::sync::OnceCell;
@@ -24,14 +26,14 @@ use tokio_rustls::TlsStream;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::drawing_objects::drawing_object_handler::DrawingObjectHandler;
-use crate::indicators::indicator_handler::{IndicatorHandler};
+use crate::indicators::indicator_handler::IndicatorHandler;
 use crate::interaction_handler::InteractionHandler;
-use crate::market_handler::market_handlers::MarketHandler;
+use crate::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::orders::orders::{OrderRequest};
-use crate::standardized_types::strategy_events::{EventTimeSlice, StrategyEvent};
+use crate::standardized_types::strategy_events::{StrategyEventBuffer, StrategyEvent};
 use crate::standardized_types::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
 use crate::standardized_types::time_slices::TimeSlice;
@@ -77,6 +79,71 @@ impl FromStr for ConnectionType {
     }
 }
 
+lazy_static! {
+    static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
+}
+#[inline(always)]
+pub fn set_warmup_complete() {
+    WARM_UP_COMPLETE.store(true, Ordering::SeqCst);
+}
+#[inline(always)]
+pub fn is_warmup_complete() -> bool {
+    WARM_UP_COMPLETE.load(Ordering::SeqCst)
+}
+
+lazy_static! {
+    static ref ATOMIC_TIMESTAMP_NS: AtomicI64 = AtomicI64::new(0);
+}
+
+#[inline(always)]
+pub fn update_historical_timestamp(dt: DateTime<Utc>) {
+    ATOMIC_TIMESTAMP_NS.store(dt.timestamp_nanos_opt().unwrap(), Ordering::Release);
+}
+
+#[inline(always)]
+pub fn read_historical_timestamp_ns() -> i64 {
+    ATOMIC_TIMESTAMP_NS.load(Ordering::Acquire)
+}
+
+#[inline(always)]
+pub fn get_backtest_time() -> DateTime<Utc> {
+    let timestamp_ns = ATOMIC_TIMESTAMP_NS.load(Ordering::Acquire);
+    Utc.timestamp_nanos(timestamp_ns)
+}
+#[inline(always)]
+pub fn advance_historical_time(duration: chrono::Duration) {
+    ATOMIC_TIMESTAMP_NS.fetch_add(duration.num_nanoseconds().unwrap_or(0), Ordering::AcqRel);
+}
+
+
+lazy_static! {
+    pub static ref EVENT_BUFFER: Arc<Mutex<StrategyEventBuffer>> = Arc::new(Mutex::new(StrategyEventBuffer::new()));
+}
+
+#[inline(always)]
+pub async fn add_buffer(time: DateTime<Utc>, event: StrategyEvent) {
+    EVENT_BUFFER.lock().await.add_event(time, event);
+}
+
+
+#[inline(always)]
+pub async fn extend_buffer(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
+    let mut buffer = EVENT_BUFFER.lock().await;
+    for event in events {
+        buffer.add_event(time, event);
+    }
+}
+
+#[inline(always)]
+pub async fn forward_buffer() {
+    let mut buffer = EVENT_BUFFER.lock().await;
+    if !buffer.is_empty() {
+        let last_buffer = buffer.clone();
+        buffer.clear();
+        send_strategy_event_slice(last_buffer).await;
+    }
+}
+
 
 pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
 pub async fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
@@ -87,41 +154,25 @@ pub async fn unsubscribe_primary_subscription_updates(name: String) {
 }
 
 pub static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
-pub static MARKET_HANDLER: OnceCell<Arc<MarketHandler>> = OnceCell::new();
 static INTERACTION_HANDLER: OnceCell<Arc<InteractionHandler>> = OnceCell::new();
 static TIMED_EVENT_HANDLER: OnceCell<Arc<TimedEventHandler>> = OnceCell::new();
 static DRAWING_OBJECTS_HANDLER: OnceCell<Arc<DrawingObjectHandler>> = OnceCell::new();
-
-pub async fn set_warmup_complete() {
-    SUBSCRIPTION_HANDLER.get_or_init(|| {
-        panic!("SUBSCRIPTION_HANDLER Not found")
-    }).set_warmup_complete().await;
-    INDICATOR_HANDLER.get_or_init(|| {
-        panic!("INDICATOR_HANDLER Not found")
-    }).set_warmup_complete().await;
-    INTERACTION_HANDLER.get_or_init(|| {
-        panic!("INTERACTION_HANDLER Not found")
-    }).set_warmup_complete().await;
-    TIMED_EVENT_HANDLER.get_or_init(|| {
-        panic!("TIMED_EVENT_HANDLER Not found")
-    }).set_warmup_complete().await;
-    MARKET_HANDLER.get_or_init(|| {
-        panic!("MARKET_HANDLER Not found")
-    }).set_warmup_complete().await;
-}
-
 
 pub(crate) enum StrategyRequest {
     CallBack(ConnectionType, DataServerRequest, oneshot::Sender<DataServerResponse>),
     OneWay(ConnectionType, DataServerRequest),
 }
 static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<Sender<StrategyRequest>>>> = OnceCell::new();
+
+#[inline(always)]
 pub(crate) async fn send_request(req: StrategyRequest) {
     DATA_SERVER_SENDER.get().unwrap().lock().await.send(req).await.unwrap(); // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
-static STRATEGY_SENDER: OnceCell<Sender<EventTimeSlice>> = OnceCell::new();
-pub async fn send_strategy_event_slice(slice: EventTimeSlice) {
+static STRATEGY_SENDER: OnceCell<Sender<StrategyEventBuffer>> = OnceCell::new();
+
+#[inline(always)]
+pub async fn send_strategy_event_slice(slice: StrategyEventBuffer) {
     STRATEGY_SENDER.get().unwrap().send(slice).await.unwrap();
 }
 
@@ -209,30 +260,6 @@ pub async fn live_subscription_handler(
     });
 }
 
-pub async fn live_order_handler(
-    mode: StrategyMode,
-    order_receiver: mpsc::Receiver<OrderRequest>
-) {
-    let settings_map = Arc::new(initialise_settings().unwrap());
-    if mode == StrategyMode::Live {
-        let connection_map = settings_map;
-        tokio::task::spawn(async move {
-            let mut order_receiver = order_receiver;
-            while let Some(order_request) = order_receiver.recv().await {
-                let connection_type = ConnectionType::Broker(order_request.brokerage());
-                let connection_type = match connection_map.contains_key(&connection_type) {
-                    true => connection_type,
-                    false => ConnectionType::Default
-                };
-                let request = DataServerRequest::OrderRequest {
-                    request: order_request
-                };
-                send_request(StrategyRequest::OneWay(connection_type, request)).await;
-            }
-        });
-    }
-}
-
 /// This response handler is also acting as a live engine.
 pub async fn request_handler(
     receiver: mpsc::Receiver<StrategyRequest>,
@@ -282,28 +309,13 @@ pub async fn request_handler(
 }
 
 
-/*
-    1. primary data comes from server stream
-    2. primary data is fed to
-        a. subscription handler
-        b. market handler
-    3. consolidated data + primary data is fed to
-        a. indicator handler
 
-    4. data is added to the buffer
-
-    5. each buffer iteration (duration) before sending the buffer to the engine or strategy, we update consolidator time again.
-        to see if we have any closed bars, if we do we run the indicator update again.
-
-    6. All base data is added to a TimeSlice and the timeslice is added to the event slice
-
-    7. the buffer loop sleeps until the next scheduled instant while it is refilled by the streams and the process repeats.
-*/
 pub async fn response_handler_unbuffered(
     mode: StrategyMode,
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
+    market_update_sender: Sender<MarketMessageEnum>
 ) {
     for (connection, settings) in &settings_map {
         if let Some((connection, stream)) = server_receivers.remove(connection) {
@@ -314,6 +326,7 @@ pub async fn response_handler_unbuffered(
             let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
             let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
             let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
+            let market_update_sender = market_update_sender.clone();
             tokio::task::spawn(async move {
                 let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
                 const LENGTH: usize = 8;
@@ -339,6 +352,7 @@ pub async fn response_handler_unbuffered(
                     let strategy_subscriptions = strategy_subscriptions.clone();
                     let subscription_handler = subscription_handler.clone();
                     let indicator_handler = indicator_handler.clone();
+                    let market_update_sender = market_update_sender.clone();
                     tokio::task::spawn(async move {
                         let response = DataServerResponse::from_bytes(&message_body).unwrap();
                         match response.get_callback_id() {
@@ -350,32 +364,35 @@ pub async fn response_handler_unbuffered(
                                         match success {
                                             true => {
                                                 let event = DataSubscriptionEvent::Subscribed(subscription.clone());
-                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                                send_strategy_event_slice(vec![event_slice]).await;
+                                                let event_slice = StrategyEvent::DataSubscriptionEvent(event);
+                                                add_buffer(Utc::now(), event_slice).await;
+                                                forward_buffer().await;
                                             }
                                             false => {
                                                 let event = DataSubscriptionEvent::FailedSubscribed(subscription.clone(), reason.unwrap());
-                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                                send_strategy_event_slice(vec![event_slice]).await;
+                                                let event_slice = StrategyEvent::DataSubscriptionEvent(event);
+                                                add_buffer(Utc::now(), event_slice).await;
+                                                forward_buffer().await;
                                             }
                                         }
                                     }
                                     DataServerResponse::UnSubscribeResponse { success, subscription, reason } => {
                                         match success {
                                             true => {
-                                                let event = DataSubscriptionEvent::Unsubscribed(subscription);
-                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                                send_strategy_event_slice(vec![event_slice]).await;
+                                                let event_slice = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription));
+                                                add_buffer(Utc::now(), event_slice).await;
+                                                forward_buffer().await;
                                             }
                                             false => {
-                                                let event = DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap());
-                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                                send_strategy_event_slice(vec![event_slice]).await;
+                                                let mut buffer = StrategyEventBuffer::new();
+                                                buffer.add_event(Utc::now(), StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap())));
+                                                send_strategy_event_slice(buffer).await;
                                             }
                                         }
                                     }
-                                    DataServerResponse::DataUpdates(primary_data) => {
-                                        MARKET_HANDLER.get().unwrap().update_time_slice(Utc::now(), &primary_data).await;
+                                    DataServerResponse::TimeSliceUpdates(primary_data) => {
+                                        market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(primary_data.clone())).await.unwrap();
+                                        let time = Utc::now();
                                         let mut strategy_time_slice = TimeSlice::new();
                                         if let Some(consolidated) = subscription_handler.update_time_slice(primary_data.clone()).await {
                                             strategy_time_slice.extend(consolidated);
@@ -383,21 +400,40 @@ pub async fn response_handler_unbuffered(
                                         if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
                                             strategy_time_slice.extend(consolidated);
                                         }
-                                        for base_data in primary_data {
+                                        for base_data in primary_data.iter() {
                                             if strategy_subscriptions.contains(&base_data.subscription()) {
-                                                strategy_time_slice.push(base_data);
+                                                strategy_time_slice.add(base_data.clone());
                                             }
                                         }
                                         if strategy_time_slice.is_empty() {
                                             return;
                                         }
-                                        let mut event_buffer = EventTimeSlice::new();
-                                        if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&strategy_time_slice).await {
-                                            event_buffer.extend(indicator_events);
+                                        indicator_handler.as_ref().update_time_slice(time.clone(), &strategy_time_slice).await;
+                                        add_buffer(time.clone(), StrategyEvent::TimeSlice(strategy_time_slice)).await;
+                                        forward_buffer().await;
+                                    }
+                                    DataServerResponse::BaseDataUpdates(base_data) => {
+                                        let time = Utc::now();
+                                        market_update_sender.send(MarketMessageEnum::BaseDataUpdate(base_data.clone())).await.unwrap();
+                                        let mut strategy_time_slice = TimeSlice::new();
+                                        if let Some(consolidated) = subscription_handler.update_base_data(base_data.clone()).await {
+                                            strategy_time_slice.extend(consolidated);
+                                        }
+                                        if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                                            strategy_time_slice.extend(consolidated);
+                                        }
+                                        if strategy_subscriptions.contains(&base_data.subscription()) {
+                                            strategy_time_slice.add(base_data.clone());
                                         }
 
-                                        event_buffer.push(StrategyEvent::TimeSlice(Utc::now().to_string(), strategy_time_slice));
-                                        send_strategy_event_slice(event_buffer).await;
+                                        if strategy_time_slice.is_empty() {
+                                            return;
+                                        }
+
+                                        indicator_handler.as_ref().update_time_slice(Utc::now(), &strategy_time_slice).await;
+
+                                        add_buffer(time, StrategyEvent::TimeSlice(strategy_time_slice)).await;
+                                        forward_buffer().await;
                                     }
                                     _ => panic!("Incorrect response here: {:?}", response)
                                 }
@@ -420,54 +456,46 @@ pub async fn response_handler_buffered(
     mode: StrategyMode,
     buffer_duration: Duration,
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
-    notify: Arc<Notify>,
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
+    market_update_sender: Sender<MarketMessageEnum>
 ) {
     let callbacks = callbacks.clone();
-    let event_buffer = Arc::new(RwLock::new(EventTimeSlice::new()));
     let open_bars: Arc<DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>>> = Arc::new(DashMap::new());
     let time_slice = Arc::new(RwLock::new(TimeSlice::new()));
     if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
-        let event_buffer_ref = event_buffer.clone();
         let time_slice_ref = time_slice.clone();
         let open_bars_ref = open_bars.clone();
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
+        let event_buffer_ref = EVENT_BUFFER.clone();
         tokio::task::spawn(async move {
             subscription_handler.strategy_subscriptions().await;
             let mut instant = Instant::now() + buffer_duration;
             loop {
                 sleep_until(instant.into()).await;
                 { //we use a block here so if we await notified the buffer can keep filling up as we will drop locks
-                    let mut buffer = event_buffer_ref.write().await;
                     let mut time_slice = time_slice_ref.write().await;
                     {
                         for mut map in open_bars_ref.iter_mut() {
                             for (_, data) in &*map {
-                                time_slice.push(data.clone());
+                                time_slice.add(data.clone());
                             }
                             map.clear();
                         }
                     }
                     if let Some(remaining_time_slice) = subscription_handler.update_consolidators_time(Utc::now()).await {
-                        if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&remaining_time_slice).await {
-                            buffer.extend(indicator_events);
-                        }
+                        indicator_handler.as_ref().update_time_slice(Utc::now(), &remaining_time_slice).await;
                         time_slice.extend(remaining_time_slice);
                     }
 
-                    let slice = StrategyEvent::TimeSlice(Utc::now().to_string(), time_slice.clone());
-                    *time_slice = TimeSlice::new();
+                    let slice = StrategyEvent::TimeSlice(time_slice.clone());
+                    add_buffer(Utc::now(), slice).await;
+                    time_slice.clear();
 
-                    buffer.push(slice);
-                    if !buffer.is_empty() {
-                        send_strategy_event_slice(buffer.clone()).await;
-                        *buffer = EventTimeSlice::new();
-                    }
+                    forward_buffer().await;
                     instant = Instant::now() + buffer_duration;
                 }
-                notify.notified().await;
             }
         });
     }
@@ -481,10 +509,10 @@ pub async fn response_handler_buffered(
             let callbacks = callbacks.clone();
             let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
             let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-            let event_buffer = event_buffer.clone();
             let time_slice = time_slice.clone();
             let open_bars = open_bars.clone();
             let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
+            let market_update_sender = market_update_sender.clone();
             tokio::task::spawn(async move {
                 let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
                 const LENGTH: usize = 8;
@@ -509,10 +537,10 @@ pub async fn response_handler_buffered(
                     let callbacks = callbacks.clone();
                     let strategy_subscriptions = strategy_subscriptions.clone();
                     let subscription_handler = subscription_handler.clone();
-                    let event_buffer = event_buffer.clone();
                     let time_slice = time_slice.clone();
                     let open_bars = open_bars.clone();
                     let indicator_handler = indicator_handler.clone();
+                    let market_update_sender = market_update_sender.clone();
                     tokio::task::spawn(async move {
                         let response = DataServerResponse::from_bytes(&message_body).unwrap();
                         match response.get_callback_id() {
@@ -524,13 +552,13 @@ pub async fn response_handler_buffered(
                                         match success {
                                             true => {
                                                 let event = DataSubscriptionEvent::Subscribed(subscription.clone());
-                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                                send_strategy_event_slice(vec![event_slice]).await;
+                                                let event_slice = StrategyEvent::DataSubscriptionEvent(event);
+                                                add_buffer(Utc::now(), event_slice).await;
                                             }
                                             false => {
                                                 let event = DataSubscriptionEvent::FailedSubscribed(subscription.clone(), reason.unwrap());
-                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                                event_buffer.write().await.push(event_slice);
+                                                let event_slice = StrategyEvent::DataSubscriptionEvent(event);
+                                                add_buffer(Utc::now(), event_slice).await;
                                             }
                                         }
                                     }
@@ -538,18 +566,18 @@ pub async fn response_handler_buffered(
                                         match success {
                                             true => {
                                                 let event = DataSubscriptionEvent::Unsubscribed(subscription);
-                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                                event_buffer.write().await.push(event_slice);
+                                                let event_slice = StrategyEvent::DataSubscriptionEvent(event);
+                                                add_buffer(Utc::now(), event_slice).await;
                                             }
                                             false => {
                                                 let event = DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap());
-                                                let event_slice = StrategyEvent::DataSubscriptionEvents(vec![event], Utc::now().timestamp());
-                                                event_buffer.write().await.push(event_slice);
+                                                let event_slice = StrategyEvent::DataSubscriptionEvent(event);
+                                                add_buffer(Utc::now(), event_slice).await;
                                             }
                                         }
                                     }
-                                    DataServerResponse::DataUpdates(primary_data) => {
-                                        MARKET_HANDLER.get().unwrap().update_time_slice(Utc::now(), &primary_data).await;
+                                    DataServerResponse::TimeSliceUpdates(primary_data) => {
+                                        market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(primary_data.clone())).await.unwrap();
                                         let mut strategy_time_slice = TimeSlice::new();
                                         if let Some(consolidated) = subscription_handler.update_time_slice(primary_data.clone()).await {
                                             strategy_time_slice.extend(consolidated);
@@ -557,26 +585,54 @@ pub async fn response_handler_buffered(
                                         if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
                                             strategy_time_slice.extend(consolidated);
                                         }
-                                        for base_data in primary_data {
+                                        for base_data in primary_data.iter() {
                                             if strategy_subscriptions.contains(&base_data.subscription()) {
-                                                strategy_time_slice.push(base_data);
+                                                strategy_time_slice.add(base_data.clone());
                                             }
                                         }
                                         if strategy_time_slice.is_empty() {
                                             return;
                                         }
 
-                                        if let Some(indicator_events) = indicator_handler.as_ref().update_time_slice(&strategy_time_slice).await {
-                                            event_buffer.write().await.extend(indicator_events);
-                                        }
+                                        indicator_handler.as_ref().update_time_slice(Utc::now(), &strategy_time_slice).await;
 
-                                        for data in strategy_time_slice {
+                                        for data in strategy_time_slice.iter() {
                                             let subscription = data.subscription();
                                             if data.is_closed() {
-                                                time_slice.write().await.push(data);
+                                                time_slice.write().await.add(data.clone());
                                             } else {
                                                 let mut bar_map = AHashMap::new();
-                                                bar_map.insert(data.time_utc(), data);
+                                                bar_map.insert(data.time_utc(), data.clone());
+                                                open_bars.insert(subscription.clone(), bar_map);
+                                            }
+                                        }
+                                    }
+                                    DataServerResponse::BaseDataUpdates(base_data) => {
+                                        market_update_sender.send(MarketMessageEnum::BaseDataUpdate(base_data.clone())).await.unwrap();
+                                        let mut strategy_time_slice = TimeSlice::new();
+                                        if let Some(consolidated) = subscription_handler.update_base_data(base_data.clone()).await {
+                                            strategy_time_slice.extend(consolidated);
+                                        }
+                                        if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                                            strategy_time_slice.extend(consolidated);
+                                        }
+                                        if strategy_subscriptions.contains(&base_data.subscription()) {
+                                            strategy_time_slice.add(base_data.clone());
+                                        }
+
+                                        if strategy_time_slice.is_empty() {
+                                            return;
+                                        }
+
+                                        indicator_handler.as_ref().update_time_slice(Utc::now(), &strategy_time_slice).await;
+
+                                        for data in strategy_time_slice.iter() {
+                                            let subscription = data.subscription();
+                                            if data.is_closed() {
+                                                time_slice.write().await.add(data.clone());
+                                            } else {
+                                                let mut bar_map = AHashMap::new();
+                                                bar_map.insert(data.time_utc(), data.clone());
                                                 open_bars.insert(subscription.clone(), bar_map);
                                             }
                                         }
@@ -602,7 +658,7 @@ pub async fn response_handler_buffered(
 
 }*/
 
-pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>,  event_sender: Sender<EventTimeSlice>, indicator_handler: Arc<IndicatorHandler>,) {
+pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>, event_sender: Sender<StrategyEventBuffer>, indicator_handler: Arc<IndicatorHandler>) {
     let _ = STRATEGY_SENDER.get_or_init(|| {
         event_sender
     }).clone();
@@ -614,16 +670,12 @@ pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>,  e
     }).clone();
 }
 pub async fn initialize_static(
-    market_handler: Arc<MarketHandler>,
     timed_event_handler: Arc<TimedEventHandler>,
     interaction_handler: Arc<InteractionHandler>,
     drawing_objects_handler: Arc<DrawingObjectHandler>,
 ) {
     let _ = TIMED_EVENT_HANDLER.get_or_init(|| {
         timed_event_handler
-    }).clone();
-    let _ = MARKET_HANDLER.get_or_init(|| {
-        market_handler
     }).clone();
     let _ = INTERACTION_HANDLER.get_or_init(|| {
         interaction_handler
@@ -633,7 +685,7 @@ pub async fn initialize_static(
     }).clone();
 }
 
-pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duration>, mode: StrategyMode, notify: Arc<Notify>) {
+pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duration>, mode: StrategyMode, market_update_sender: Sender<MarketMessageEnum>) {
     let settings_map = initialise_settings().unwrap();
     let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
     let server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());
@@ -664,7 +716,7 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duratio
     let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     request_handler(rx, settings_map.clone(), server_senders, callbacks.clone()).await;
     match buffer_duration {
-        None => response_handler_unbuffered(mode, settings_map, server_receivers, callbacks).await,
-        Some(buffer) => response_handler_buffered(mode, buffer, settings_map, notify, server_receivers, callbacks).await
+        None => response_handler_unbuffered(mode, settings_map, server_receivers, callbacks, market_update_sender).await,
+        Some(buffer) => response_handler_buffered(mode, buffer, settings_map, server_receivers, callbacks, market_update_sender).await
     }
 }

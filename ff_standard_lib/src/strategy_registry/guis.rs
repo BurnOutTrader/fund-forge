@@ -1,5 +1,5 @@
 use crate::standardized_types::data_server_messaging::{AddressString, FundForgeError};
-use crate::standardized_types::strategy_events::EventTimeSlice;
+use crate::standardized_types::strategy_events::StrategyEventBuffer;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::standardized_types::enums::StrategyMode;
@@ -33,7 +33,7 @@ impl Bytes<Self> for GuiRequest {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum RegistryGuiResponse {
-    StrategyEventUpdates(AddressString,i64, EventTimeSlice),
+    //StrategyEventUpdates(AddressString, i64, StrategyEventBuffer),
     ListStrategiesResponse{backtest: Vec<AddressString>, live: Vec<AddressString>, live_paper: Vec<AddressString>},
     StrategyAdded(AddressString, StrategyMode, Vec<DataSubscription>),
     StrategyDisconnect(AddressString),

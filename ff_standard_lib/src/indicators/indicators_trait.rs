@@ -50,21 +50,6 @@ pub trait Indicators {
     /// returns the crrent value, useful for update on tick or price change indicators.
     fn current(&self) -> Option<IndicatorValues>;
 
-    /// returns a rolling window of the indicator, a result is:
-    ///  ```rust
-    /// use ahash::AHashMap;
-    /// use chrono::{DateTime, Utc};
-    ///
-    /// pub struct IndicatorValue {
-    ///     value: f64,
-    ///     time: DateTime<Utc>,
-    ///     plot_name: String,
-    ///    }
-    /// //Results are a AHashMap of results, where the key is the plot name
-    /// pub type IndicatorResults = AHashMap<String, IndicatorValue>;
-    ///
-    /// //if you have a rolling window of results for an ATR, you would have only 1 plot name "atr" but if you have a custom indicator with multiple plots, you would have multiple plot names
-    /// ```
     fn plots(&self) -> RollingWindow<IndicatorValues>;
 
     /// Returns true if the indicator is ready.

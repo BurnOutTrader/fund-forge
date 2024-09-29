@@ -9,6 +9,7 @@ use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestHeartbeat, RequestProductRmsInfo, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_account_list::UserType;
+use ff_rithmic_api::systems::RithmicSystem;
 use futures::stream::SplitStream;
 use prost::{Message as ProstMessage};
 use tokio::net::TcpStream;
@@ -22,7 +23,7 @@ use crate::apis::rithmic_api::api_client::RithmicClient;
 #[tokio::test]
 async fn test_rithmic_connection() -> Result<(), Box<dyn std::error::Error>> {
     // Define the file path for credentials
-    let servers_file_path = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data/rithmic_credentials/servers.toml".to_string());
+   /* let servers_file_path = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data/rithmic_credentials/servers.toml".to_string());
     let credentials = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data/rithmic_credentials/topstep_trader.toml".to_string());
     // Define credentials
     let credentials = RithmicCredentials::load_credentials_from_file(&credentials).unwrap();
@@ -31,7 +32,7 @@ async fn test_rithmic_connection() -> Result<(), Box<dyn std::error::Error>> {
 
     let rithmic_system = credentials.system_name.clone();
     let brokerage = Rithmic(rithmic_system);
-    let ff_rithmic_client = RithmicClient::new(brokerage, app_name.clone(), app_version, false, servers_file_path);
+    let ff_rithmic_client = RithmicClient::new(RithmicSystem::TopstepTrader, app_name.clone(), app_version, false, servers_file_path);
     let rithmic_client_arc = Arc::new(ff_rithmic_client);
 
     // send a heartbeat request as a test message, 'RequestHeartbeat' Template number 18
@@ -67,7 +68,7 @@ async fn test_rithmic_connection() -> Result<(), Box<dyn std::error::Error>> {
 
     sleep(Duration::from_secs(10));
     // Logout and Shutdown all connections
-    rithmic_client_arc.client.shutdown_all().await?;
+    rithmic_client_arc.client.shutdown_all().await?;*/
 
     Ok(())
 }

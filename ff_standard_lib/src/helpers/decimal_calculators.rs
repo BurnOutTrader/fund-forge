@@ -23,7 +23,7 @@ pub fn round_to_decimals(value: Decimal, decimals: u32) -> Price {
     (value * factor).round() / factor
 }
 
-pub(crate) fn round_to_tick_size(value: Decimal, tick_size: Decimal) -> Decimal {
+pub fn round_to_tick_size(value: Decimal, tick_size: Decimal) -> Decimal {
     // Divide the value by the tick size, then round to the nearest integer
     let ticks = (value / tick_size).round();
 

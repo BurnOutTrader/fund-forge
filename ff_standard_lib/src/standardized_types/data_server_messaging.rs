@@ -10,6 +10,7 @@ use rust_decimal::Decimal;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::orders::orders::{OrderRequest};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -347,7 +348,9 @@ DataServerResponse {
 /*    AccountState(Brokerage, AccountId, AccountState),
     OrderUpdates(OrderUpdateEvent),
     PositionUpdates(PositionUpdateEvent),*/
-    DataUpdates(TimeSlice),
+    TimeSliceUpdates(TimeSlice),
+
+    BaseDataUpdates(BaseDataEnum),
 
     Accounts{callback_id: u64, accounts: Vec<AccountId>},
 }
@@ -387,9 +390,9 @@ impl DataServerResponse {
             DataServerResponse::BaseDataTypes { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SubscribeResponse { .. } => None,
             DataServerResponse::UnSubscribeResponse { .. } => None,
-            DataServerResponse::DataUpdates(_) => None,
+            DataServerResponse::TimeSliceUpdates(_) => None,
             DataServerResponse::Accounts {callback_id, ..} => Some(callback_id.clone()),
-
+            DataServerResponse::BaseDataUpdates(_) => None
         }
     }
 }

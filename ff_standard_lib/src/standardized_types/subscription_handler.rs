@@ -15,7 +15,8 @@ use dashmap::DashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tokio::sync::mpsc::{Sender};
-use tokio::sync::{RwLock};
+use tokio::sync::{Mutex, RwLock};
+use crate::market_handler::market_handlers::MarketMessageEnum;
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
@@ -27,6 +28,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
+    market_event_sender: Sender<MarketMessageEnum>,
     /// Manages the consolidators of specific symbols
     symbol_subscriptions: Arc<DashMap<Symbol, SymbolSubscriptionHandler>>,
     /// fundamental data is not consolidated and so it does not need special handlers
@@ -47,8 +49,9 @@ pub struct SubscriptionHandler {
 }
 
 impl SubscriptionHandler {
-    pub async fn new(strategy_mode: StrategyMode) -> Self {
+    pub async fn new(strategy_mode: StrategyMode, market_event_sender: Sender<MarketMessageEnum>) -> Self {
         let handler = SubscriptionHandler {
+            market_event_sender,
             fundamental_subscriptions: Default::default(),
             symbol_subscriptions: Default::default(),
             is_warmed_up: AtomicBool::new(false),
@@ -132,6 +135,9 @@ impl SubscriptionHandler {
             ).await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
             //println!("Handler: Subscribed: {}", new_subscription);
+            //todo if have added a new symbol handler we need to register the symbol with the market handler
+            let register_msg = MarketMessageEnum::RegisterSymbol(new_subscription.symbol.clone());
+            self.market_event_sender.send(register_msg).await.unwrap();
         }
 
         let windows = self.symbol_subscriptions.get(&new_subscription.symbol).unwrap()
@@ -217,6 +223,8 @@ impl SubscriptionHandler {
         strategy_subscriptions.retain(|x| x != &subscription);
         if self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count() == 0 {
             self.symbol_subscriptions.remove(&subscription.symbol);
+            let register_msg = MarketMessageEnum::DeregisterSymbol(subscription.symbol.clone());
+            self.market_event_sender.send(register_msg).await.unwrap();
         }
         match subscription.base_data_type {
             BaseDataType::Ticks => {
@@ -268,7 +276,7 @@ impl SubscriptionHandler {
     pub async fn update_time_slice(&self, time_slice: TimeSlice) -> Option<TimeSlice> {
         let symbol_subscriptions = self.symbol_subscriptions.clone();
         let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
-        let mut time_slice_bars = Vec::new();
+        let mut time_slice_bars = TimeSlice::new();
 
         // Create a FuturesUnordered to collect all futures and run them concurrently.
         let mut update_futures = FuturesUnordered::new();
@@ -295,7 +303,7 @@ impl SubscriptionHandler {
         while let Some(data) = update_futures.next().await {
             for consolidated_bars in data {
                 if let Some(consolidated_bar) = consolidated_bars.closed_data {
-                    time_slice_bars.push(consolidated_bar.clone());
+                    time_slice_bars.add(consolidated_bar.clone());
                     let subscription = consolidated_bar.subscription();
                     match consolidated_bar {
                         BaseDataEnum::Tick(tick) => {
@@ -340,7 +348,89 @@ impl SubscriptionHandler {
                 }
                 _ => {}
             }
-            time_slice_bars.push(data);
+            time_slice_bars.add(data);
+        }
+
+        match time_slice_bars.is_empty() {
+            true => None,
+            false => Some(time_slice_bars)
+        }
+    }
+
+    pub async fn update_base_data(&self, base_data: BaseDataEnum) -> Option<TimeSlice> {
+        let symbol_subscriptions = self.symbol_subscriptions.clone();
+        let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
+        let mut time_slice_bars = TimeSlice::new();
+
+        // Create a FuturesUnordered to collect all futures and run them concurrently.
+        let mut update_futures = FuturesUnordered::new();
+
+        let symbol = base_data.symbol();
+        // let symbol_subscriptions = symbol_subscriptions.clone(); // Clone the Arc for each task.
+        let base_data = base_data.clone(); // Clone base_data to avoid borrowing issues.
+
+        let symbol_subscriptions = symbol_subscriptions.clone();
+        // Add the future to the FuturesUnordered.
+        update_futures.push(async move {
+            // Get a read guard inside the async block to avoid lifetime issues.
+            if let Some(handler) = symbol_subscriptions.get(&symbol) {
+                handler.update(&base_data).await
+            } else {
+                println!("No handler: {:?}", symbol);
+                Vec::new() // Return empty if handler is not found.
+            }
+        });
+
+        // Process all the updates concurrently.
+        while let Some(data) = update_futures.next().await {
+            for consolidated_bars in data {
+                if let Some(consolidated_bar) = consolidated_bars.closed_data {
+                    time_slice_bars.add(consolidated_bar.clone());
+                    let subscription = consolidated_bar.subscription();
+                    match consolidated_bar {
+                        BaseDataEnum::Tick(tick) => {
+                            if let Some(mut rolling_window) = self.tick_history.get_mut(&subscription) {
+                                rolling_window.add(tick);
+                            }
+                        }
+                        BaseDataEnum::Quote(quote) => {
+                            if let Some(mut rolling_window) = self.quote_history.get_mut(&subscription) {
+                                rolling_window.add(quote);
+                            }
+                        }
+                        BaseDataEnum::QuoteBar(qb) => {
+                            if let Some(mut rolling_window) = self.bar_history.get_mut(&subscription) {
+                                rolling_window.add(qb);
+                            }
+                        }
+                        BaseDataEnum::Candle(candle) => {
+                            if let Some(mut rolling_window) = self.candle_history.get_mut(&subscription) {
+                                rolling_window.add(candle);
+                            }
+                        }
+                        BaseDataEnum::Fundamental(fund) => {
+                            if let Some(mut rolling_window) = self.fundamental_history.get_mut(&subscription) {
+                                rolling_window.add(fund);
+                            }
+                        }
+                    }
+                }
+                open_bars.insert(consolidated_bars.open_data.subscription(), consolidated_bars.open_data);
+            }
+        }
+
+        // Combine open and closed bars.
+        for (_, data) in open_bars {
+            match &data {
+                BaseDataEnum::Candle(ref candle) => {
+                    self.open_candles.insert(data.subscription(), candle.clone());
+                }
+                BaseDataEnum::QuoteBar(ref qb) => {
+                    self.open_bars.insert(data.subscription(), qb.clone());
+                }
+                _ => {}
+            }
+            time_slice_bars.add(data);
         }
 
         match time_slice_bars.is_empty() {
@@ -478,7 +568,9 @@ impl SubscriptionHandler {
                         }
                     }
                 }
-                time_slice.extend(data);
+                for base_data in data {
+                    time_slice.add(base_data);
+                }
             }
         }
 
@@ -583,6 +675,8 @@ impl SymbolSubscriptionHandler {
         return_buffer
     }
 
+
+    //todo overhaul again, we will define a primary subsciption type as its own type, ticks and quotes only, then DataSubscriptions will be own object
     async fn subscribe(
         &self,
         new_subscription: DataSubscription,
@@ -627,8 +721,8 @@ impl SymbolSubscriptionHandler {
                 let primary_history = block_on(range_data(from_time, warm_up_to_time, closure_subscription.clone()));
                 let mut history = RollingWindow::new(history_to_retain);
                 for (_, slice) in primary_history {
-                    for data in slice {
-                        history.add(data);
+                    for data in slice.iter() {
+                        history.add(data.clone());
                     }
                 }
                 returned_windows.insert(closure_subscription.clone(), history);
@@ -755,8 +849,8 @@ impl SymbolSubscriptionHandler {
                             let primary_history = range_data(from_time, warm_up_to_time, lowest_possible_primary.clone()).await;
                             let mut history = RollingWindow::new(history_to_retain);
                             for (_, slice) in primary_history {
-                                for data in slice {
-                                    history.add(data);
+                                for data in slice.iter() {
+                                    history.add(data.clone());
                                 }
                             }
                             returned_windows.insert(lowest_possible_primary.clone(), history);
@@ -798,8 +892,8 @@ impl SymbolSubscriptionHandler {
                             let primary_history = range_data(from_time, warm_up_to_time, new_primary.clone()).await;
                             let mut history = RollingWindow::new(history_to_retain);
                             for (_, slice) in primary_history {
-                                for data in slice {
-                                    history.add(data);
+                                for data in slice.iter() {
+                                    history.add(data.clone());
                                 }
                             }
                             returned_windows.insert(new_primary.clone(), history);

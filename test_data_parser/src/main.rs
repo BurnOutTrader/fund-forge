@@ -102,7 +102,6 @@ fn load_csv_quotes(file_path: &str, symbol: Symbol) -> Result<BTreeMap<DateTime<
             ask: parts.get(2).expect("REASON").parse::<Decimal>()?,
             time: utc_datetime.to_string(),
             bid_volume: dec!(0.0),
-            book_level: 0,
         };
         quotes.insert(utc_datetime, BaseDataEnum::Quote(quote));
     }
