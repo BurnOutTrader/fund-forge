@@ -1,6 +1,5 @@
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
-use std::time::Duration;
 use chrono::{DateTime, TimeZone, Utc};
 use lazy_static::lazy_static;
 

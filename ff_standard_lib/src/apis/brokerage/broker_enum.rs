@@ -53,7 +53,7 @@ pub mod client_side_brokerage {
     use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
     use crate::standardized_types::subscriptions::SymbolName;
     use crate::standardized_types::{Price, Volume};
-    use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
+    use crate::standardized_types::accounts::ledgers::{AccountId};
     use crate::standardized_types::symbol_info::SymbolInfo;
     impl Brokerage {
         pub async fn margin_required(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Price, FundForgeError> {

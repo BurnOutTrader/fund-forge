@@ -5,7 +5,6 @@ use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
-use ff_rithmic_api::rithmic_proto_objects::rti::request_account_list::UserType;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, RequestLoginInfo, RequestPnLPositionSnapshot, RequestProductCodes, ResponseAccountRmsInfo};
 use ff_rithmic_api::systems::RithmicSystem;

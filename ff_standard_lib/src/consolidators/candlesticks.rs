@@ -6,14 +6,12 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::{OrderSide, Resolution, SubscriptionResolutionType};
-use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
-use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::converters::open_time;
-use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::{Price};
 use crate::standardized_types::data_server_messaging::FundForgeError;
 
 pub struct CandleStickConsolidator {
@@ -216,7 +214,7 @@ impl CandleStickConsolidator {
                             quote_bar.bid_low = quote_bar.bid_low.min(quote.bid);
                             quote_bar.ask_close = quote.ask;
                             quote_bar.bid_close = quote.bid;
-                            quote_bar.volume += (quote.ask_volume + quote.bid_volume);
+                            quote_bar.volume += quote.ask_volume + quote.bid_volume;
                             quote_bar.bid_volume += quote.bid_volume;
                             quote_bar.ask_volume += quote.ask_volume;
                             quote_bar.range = round_to_tick_size(

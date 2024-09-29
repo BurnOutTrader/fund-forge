@@ -7,7 +7,6 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::enums::{Resolution, SubscriptionResolutionType};
 use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;
 
 //Todo Replace all quantity and volume with Volume aka Decimal, same for price.

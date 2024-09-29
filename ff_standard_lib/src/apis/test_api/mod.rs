@@ -25,7 +25,6 @@ use crate::standardized_types::data_server_messaging::{DataServerResponse};
 use crate::standardized_types::enums::{MarketType, Resolution, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::Volume;
 
 lazy_static! {

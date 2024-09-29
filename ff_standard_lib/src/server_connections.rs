@@ -19,7 +19,7 @@ use tokio::io;
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, ReadHalf};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, oneshot, Mutex, Notify, RwLock};
+use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::sync::mpsc::Sender;
 use tokio::time::{sleep_until, Instant};
 use tokio_rustls::TlsStream;
@@ -317,7 +317,7 @@ pub async fn response_handler_unbuffered(
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
     market_update_sender: Sender<MarketMessageEnum>
 ) {
-    for (connection, settings) in &settings_map {
+    for (connection, _) in &settings_map {
         if let Some((connection, stream)) = server_receivers.remove(connection) {
             let register_message = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));
             send_request(register_message).await;
@@ -468,7 +468,6 @@ pub async fn response_handler_buffered(
         let open_bars_ref = open_bars.clone();
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
-        let event_buffer_ref = EVENT_BUFFER.clone();
         tokio::task::spawn(async move {
             subscription_handler.strategy_subscriptions().await;
             let mut instant = Instant::now() + buffer_duration;
@@ -501,7 +500,7 @@ pub async fn response_handler_buffered(
     }
 
 
-    for (connection, settings) in &settings_map {
+    for (connection, _) in &settings_map {
         if let Some((connection, stream)) = server_receivers.remove(connection) {
             let register_message = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));
             send_request(register_message).await;

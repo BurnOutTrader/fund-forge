@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 use ahash::AHashMap;
 use async_std::task::block_on;
 use crate::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
@@ -15,7 +14,7 @@ use dashmap::DashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tokio::sync::mpsc::{Sender};
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{RwLock};
 use crate::market_handler::market_handlers::MarketMessageEnum;
 use crate::server_connections::is_warmup_complete;
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
@@ -140,6 +139,7 @@ impl SubscriptionHandler {
 
         if let Some(windows) = windows {
             for (subscription, window) in windows {
+                //todo need to iter windows and get out the correct type of data
                 match new_subscription.base_data_type {
                     BaseDataType::Ticks => {
                         self.tick_history.insert(subscription, RollingWindow::new(history_to_retain));

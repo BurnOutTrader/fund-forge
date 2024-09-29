@@ -335,7 +335,7 @@ impl HeikinAshiConsolidator {
                             candle.low = candle.low.min(quote.bid);
                             candle.ask_volume += quote.ask_volume;
                             candle.bid_volume += quote.bid_volume;
-                            candle.volume += (quote.bid_volume + quote.ask_volume);
+                            candle.volume += quote.bid_volume + quote.ask_volume;
                             candle.close = quote.bid;
                             candle.range =
                                 round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
