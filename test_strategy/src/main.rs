@@ -59,14 +59,14 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Seconds(5),
+                Resolution::Seconds(15),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Seconds(5),
+                 Resolution::Seconds(15),
                  MarketType::Forex,
                  CandleType::HeikinAshi
              ),],
@@ -94,7 +94,7 @@ pub async fn on_data_received(
               DataSubscription::new(
                   SymbolName::from("EUR-USD"),
                   DataVendor::Test,
-                  Resolution::Seconds(5),
+                  Resolution::Seconds(15),
                   BaseDataType::QuoteBars,
                   MarketType::Forex,
               ),
@@ -216,7 +216,7 @@ pub async fn on_data_received(
 
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(event) => {
-                    match &event {
+                    /*match &event {
                         OrderUpdateEvent::Accepted { brokerage, account_id, order_id } => {
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
                         }
@@ -238,7 +238,7 @@ pub async fn on_data_received(
                         OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason } => {
                             println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap(), reason);
                         }
-                    };
+                    };*/
                     println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), event);
                 }
 

@@ -9,13 +9,12 @@ use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::standardized_types::{Price, Volume};
 use std::sync::Arc;
 use ahash::AHashMap;
-use async_std::task::block_on;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::{mpsc};
 use crate::apis::brokerage::broker_enum::Brokerage;
-use crate::server_connections::{add_buffer, get_backtest_time, is_warmup_complete, send_request, send_strategy_event_slice, ConnectionType, StrategyRequest};
+use crate::server_connections::{add_buffer, get_backtest_time, is_warmup_complete, send_request, ConnectionType, StrategyRequest};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::time_slices::TimeSlice;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -24,7 +23,6 @@ use rust_decimal_macros::dec;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::servers::settings::client_settings::{initialise_settings};
 use crate::standardized_types::accounts::position::{Position, PositionId};
-use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{DataServerRequest, FundForgeError};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
@@ -572,6 +570,9 @@ pub async fn get_market_fill_price_estimate (
                 if *available_volume == dec!(0.0) && total_volume_filled == dec!(0.0) {
                     return Ok(price.clone())
                 }
+                if *available_volume == dec!(0.0) {
+                    continue;
+                }
                 let volume_to_use = remaining_volume.min(*available_volume);
                 total_price_volume += *price * volume_to_use;
                 total_volume_filled += volume_to_use;
@@ -731,7 +732,6 @@ pub async fn generate_id(
 }
 
 pub async fn exit_position_paper(brokerage: Brokerage, account_id: &AccountId, symbol_name: &SymbolName, time: DateTime<Utc>) {
-
     if let Some(broker_map) = OPEN_BACKTEST_POSITIONS.get(&brokerage) {
         if let Some((account, position)) = broker_map.remove(account_id) {
             let side = match position.side {
