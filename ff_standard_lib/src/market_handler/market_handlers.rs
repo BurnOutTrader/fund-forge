@@ -160,7 +160,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                             }
                         }
                         StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
-                            simulated_order_matching(order_request, starting_balances, account_currency).await;
+                            simulated_order_matching(mode, order_request, starting_balances, account_currency).await;
                         }
                     }
                 }
@@ -225,6 +225,7 @@ fn update_base_data(mode: StrategyMode, base_data_enum: BaseDataEnum, time: &Dat
 
 // need to rethink this.. do we have ledgers or just static properties linked to account id's and positions and orders linked to account ids
 pub async fn simulated_order_matching(
+    mode: StrategyMode,
     order_request: OrderRequest,
     starting_balances: Decimal,
     account_currency: Currency
@@ -238,7 +239,7 @@ pub async fn simulated_order_matching(
                 BACKTEST_LEDGERS.insert(order.brokerage, broker_map);
             }
             if !BACKTEST_LEDGERS.get(&order.brokerage).unwrap().contains_key(&order.account_id) {
-                let ledger = Ledger::paper_account_init(order.account_id.clone(), order.brokerage, starting_balances, account_currency);
+                let ledger = Ledger::paper_account_init(mode, order.account_id.clone(), order.brokerage, starting_balances, account_currency);
                 BACKTEST_LEDGERS.get(&order.brokerage).unwrap().insert(order.account_id.clone(), ledger);
             }
             BACKTEST_OPEN_ORDER_CACHE.insert(order.id.clone(), order);
@@ -440,16 +441,31 @@ async fn fill_order(
     market_price: Price,
 ) {
     if let Some((_, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
-        order.time_filled_utc = Some(time.to_string());
-        order.state = OrderState::Filled;
-        order.average_fill_price = Some(market_price);
-        order.quantity_filled = order.quantity_ordered;
-        order.time_filled_utc = Some(time.to_string());
-        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::Filled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
+
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
-            if let Some(account_map) = broker_map.get(&order.account_id) {
-                account_map.value().update_or_create_paper_position(&order.symbol_name, order.quantity_filled, order.side.clone(), time, market_price).await;
+            if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
+                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_filled, order.side.clone(), time, market_price).await {
+                    Ok(_) => {
+                        order.time_filled_utc = Some(time.to_string());
+                        order.state = OrderState::Filled;
+                        order.average_fill_price = Some(market_price);
+                        order.quantity_filled = order.quantity_ordered;
+                        order.time_filled_utc = Some(time.to_string());
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::Filled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
+                    }
+                    Err(e) => {
+                        match &e {
+                            OrderUpdateEvent::Rejected { reason, .. } => {
+                                order.state = OrderState::Rejected(reason.clone());
+                                let event = StrategyEvent::OrderEvents(e);
+                                add_buffer(time, event).await;
+                            }
+                            _ => {}
+                        }
+
+                    }
+                }
             }
         }
     }

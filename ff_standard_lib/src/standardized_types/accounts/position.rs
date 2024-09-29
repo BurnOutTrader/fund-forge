@@ -88,7 +88,7 @@ pub enum PositionUpdateEvent {
 
 //todo make it so stop loss and take profit can be attached to positions, then instead of updating in the market handler, those orders update in the position and auto cancel themselves when position closes
 impl Position {
-    pub fn enter(
+    pub fn new (
         symbol_name: SymbolName,
         brokerage: Brokerage,
         account_id: AccountId,
@@ -277,77 +277,6 @@ pub(crate) mod historical_position {
                 &self.account_currency,
                 time,
             );
-
-            /*let mut bracket_triggered = false;
-            if let Some(brackets) = &mut self.brackets {
-                'bracket_loop: for bracket in brackets.iter_mut() {
-                    match bracket {
-                        ProtectiveOrder::TakeProfit { price } => match self.side {
-                            PositionSide::Long if highest_price >= *price => {
-                                bracket_triggered = true;
-                                break 'bracket_loop;
-                            }
-                            PositionSide::Short if lowest_price <= *price => {
-                                bracket_triggered = true;
-                                break 'bracket_loop;
-                            }
-                            _ => {}
-                        },
-                        ProtectiveOrder::StopLoss { price } => match self.side {
-                            PositionSide::Long if lowest_price <= *price => {
-                                bracket_triggered = true;
-                                break 'bracket_loop;
-                            }
-                            PositionSide::Short if highest_price >= *price => {
-                                bracket_triggered = true;
-                                break 'bracket_loop;
-                            }
-                            _ => {}
-                        },
-                        ProtectiveOrder::TrailingStopLoss { mut price, trail_value } => match self.side {
-                            PositionSide::Long => {
-                                if lowest_price <= price {
-                                    bracket_triggered = true;
-                                    break 'bracket_loop;
-                                }
-                                if highest_price > price + *trail_value {
-                                    price += *trail_value;
-                                }
-                            }
-                            PositionSide::Short => {
-                                if highest_price >= price {
-                                    bracket_triggered = true;
-                                    break 'bracket_loop;
-                                }
-                                if lowest_price < price - *trail_value {
-                                    price -= *trail_value;
-                                }
-                            }
-                        },
-                    }
-                }
-            }*/
-
-   /*         // If a bracket is triggered, close the position and return new PnL
-            if bracket_triggered {
-                let booked_pnl = self.open_pnl;
-                self.booked_pnl += self.open_pnl;
-                self.open_pnl = dec!(0.0);
-                self.is_closed = true;
-                self.quantity_closed += self.quantity_open;
-                self.quantity_open = dec!(0.0);
-                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Closed {
-                    position_id: self.position_id.clone(),
-                    total_quantity_open: self.quantity_open,
-                    total_quantity_closed: self.quantity_closed,
-                    average_price: self.average_price,
-                    booked_pnl: self.booked_pnl,
-                    average_exit_price: self.average_exit_price,
-                });
-                add_buffer(time, event).await;
-                return booked_pnl
-            }
-            dec!(0)*/
         }
     }
 }

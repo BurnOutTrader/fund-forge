@@ -1,7 +1,7 @@
 use std::fs::create_dir_all;
 use std::path::Path;
 use chrono::{DateTime, Utc};
-use crate::standardized_types::enums::PositionSide;
+use crate::standardized_types::enums::{PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::traits::bytes::Bytes;
 use dashmap::DashMap;
@@ -75,9 +75,10 @@ pub struct Ledger {
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
     pub open_pnl: Price,
     pub booked_pnl: Price,
+    pub mode: StrategyMode,
 }
 impl Ledger {
-    pub fn new(account_info: AccountInfo) -> Self {
+    pub fn new(account_info: AccountInfo, strategy_mode: StrategyMode) -> Self {
         let positions = account_info
             .positions
             .into_iter()
@@ -97,6 +98,7 @@ impl Ledger {
             symbol_info: DashMap::new(),
             open_pnl: dec!(0.0),
             booked_pnl: dec!(0.0),
+            mode: StrategyMode::Backtest,
         };
         ledger
     }
@@ -162,6 +164,7 @@ impl Ledger {
 pub(crate) mod historical_ledgers {
     use chrono::{DateTime, Utc};
     use dashmap::DashMap;
+    use dashmap::mapref::one::Ref;
     use rust_decimal::Decimal;
     use rust_decimal::prelude::FromPrimitive;
     use rust_decimal_macros::dec;
@@ -170,24 +173,46 @@ pub(crate) mod historical_ledgers {
     use crate::server_connections::add_buffer;
     use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
     use crate::standardized_types::data_server_messaging::FundForgeError;
-    use crate::standardized_types::enums::{OrderSide, PositionSide};
-    use crate::standardized_types::orders::orders::ProtectiveOrder;
+    use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
+    use crate::standardized_types::orders::orders::{OrderId, OrderUpdateEvent, ProtectiveOrder};
     use crate::standardized_types::{Price, Volume};
     use crate::standardized_types::accounts::position::{Position, PositionId, PositionUpdateEvent};
     use crate::standardized_types::base_data::traits::BaseData;
     use crate::standardized_types::strategy_events::StrategyEvent;
     use crate::standardized_types::subscriptions::SymbolName;
+    use crate::standardized_types::symbol_info::SymbolInfo;
     use crate::standardized_types::time_slices::TimeSlice;
 
     impl Ledger {
-        pub async fn subtract_margin_used(&mut self, symbol_name: SymbolName, quantity: Volume) {
-            let margin = self.brokerage.margin_required(symbol_name, quantity).await.unwrap();
+        pub async fn symbol_info(&self, symbol_name: &SymbolName) -> SymbolInfo {
+            match self.symbol_info.get(symbol_name) {
+                None => {
+                    match SYMBOL_INFO.get(symbol_name) {
+                        None => {
+                            let info =self.brokerage.symbol_info(symbol_name.clone()).await.unwrap();
+                            self.symbol_info.insert(symbol_name.clone(), info.clone());
+                            SYMBOL_INFO.insert(symbol_name.clone(), info.clone());
+                            info
+                        }
+                        Some(info) => {
+                            self.symbol_info.insert(symbol_name.clone(), info.clone());
+                            info.value().clone()
+                        }
+                    }
+                }
+                Some(info) => {
+                    info.value().clone()
+                }
+            }
+        }
+        pub async fn subtract_margin_used(&mut self, symbol_name: &SymbolName, quantity: Volume) {
+            let margin = self.brokerage.margin_required(symbol_name.clone(), quantity).await.unwrap();
             self.cash_available += margin;
             self.cash_used -= margin;
         }
 
-        pub async fn add_margin_used(&mut self, symbol_name: SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
-            let margin = self.brokerage.margin_required(symbol_name, quantity).await?;
+        pub async fn add_margin_used(&mut self, symbol_name: &SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
+            let margin = self.brokerage.margin_required(symbol_name.clone(), quantity).await?;
             // Check if the available cash is sufficient to cover the margin
             if self.cash_available < margin {
                 return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
@@ -245,6 +270,7 @@ pub(crate) mod historical_ledgers {
         }
 
         pub fn paper_account_init(
+            strategy_mode: StrategyMode,
             account_id: AccountId,
             brokerage: Brokerage,
             cash_value: Price,
@@ -263,6 +289,7 @@ pub(crate) mod historical_ledgers {
                 symbol_info: DashMap::new(),
                 open_pnl: dec!(0.0),
                 booked_pnl: dec!(0.0),
+                mode: strategy_mode,
             };
             account
         }
@@ -330,35 +357,61 @@ pub(crate) mod historical_ledgers {
         }
 
         pub async fn update_or_create_paper_position(
-            &self,
+            &mut self,
             symbol_name: &SymbolName,
+            order_id: OrderId,
             quantity: Volume,
             side: OrderSide,
             time: DateTime<Utc>,
             market_price: Price // we use the passed in price because we dont know what sort of order was filled, limit or market
-        ) {
+        ) -> Result<(), OrderUpdateEvent> {
             // Check if there's an existing position for the given symbol
-            if let Some(mut existing_position) = self.positions.get_mut(symbol_name) {
+            if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
                 let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell)
                     || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 
                 if is_reducing {
-                    existing_position.reduce_position_size(market_price, quantity, time);
+                    let booked_pnl= existing_position.reduce_position_size(market_price, quantity, time).await;
+                    self.cash_available += booked_pnl;
+                    self.subtract_margin_used(&symbol_name, quantity).await;
+
                 } else {
-                    existing_position.add_to_position(market_price, quantity, time);
-                    return
+                    match self.add_margin_used(&symbol_name, quantity).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            return Err(OrderUpdateEvent::Rejected {
+                                brokerage: self.brokerage,
+                                account_id: self.account_id.clone(),
+                                order_id,
+                                reason: e.to_string(),
+                            })
+                        }
+                    }
+                    existing_position.add_to_position(market_price, quantity, time).await;
+                    return Ok(())
+                }
+                if existing_position.is_closed {
+                    if let Some(mut positions_closed) = self.positions_closed.get_mut(&symbol_name){
+                        positions_closed.value_mut().push(existing_position);
+                    }
+                    Ok(())
+                } else {
+                    self.positions.insert(symbol_name, existing_position);
+                    Ok(())
                 }
             }
              else {
-                // Fetch symbol info if it doesn't exist
-                if !SYMBOL_INFO.contains_key(symbol_name) {
-                    match self.brokerage.symbol_info(symbol_name.clone()).await {
-                        Ok(info) => {
-                            SYMBOL_INFO.insert(symbol_name.clone(), info.clone());
-                        },
-                        Err(_) => panic!("Unable to retrieve symbol info")
-                    };
-                }
+                 match self.add_margin_used(&symbol_name, quantity).await {
+                     Ok(_) => {}
+                     Err(e) => {
+                         return Err(OrderUpdateEvent::Rejected {
+                             brokerage: self.brokerage,
+                             account_id: self.account_id.clone(),
+                             order_id,
+                             reason: e.to_string(),
+                         })
+                     }
+                 }
 
                 // Determine the side of the position based on the order side
                 let position_side = match side {
@@ -366,23 +419,30 @@ pub(crate) mod historical_ledgers {
                     OrderSide::Sell => PositionSide::Short,
                 };
 
-                let info = SYMBOL_INFO.get(symbol_name).unwrap().value().clone();
-
+                let info = self.symbol_info(symbol_name).await;
+                let id = self.generate_id(symbol_name, time.clone(), position_side);
                 // Create a new position
-                let position = Position::enter(
+                let position = Position::new(
                     symbol_name.clone(),
                     self.brokerage.clone(),
                     self.account_id.clone(),
                     position_side,
                     quantity,
                     market_price,
-                    self.generate_id(symbol_name, time.clone(), position_side),
+                    id.clone(),
                     info.clone(),
                     info.pnl_currency,
                 );
 
                 // Insert the new position into the positions map
                 self.positions.insert(symbol_name.clone(), position);
+                 if !self.positions_closed.contains_key(symbol_name) {
+                     self.positions_closed.insert(symbol_name.clone(), vec![]);
+                 }
+
+                 let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Opened(id));
+                 add_buffer(time, event).await;
+                 Ok(())
             }
         }
 
