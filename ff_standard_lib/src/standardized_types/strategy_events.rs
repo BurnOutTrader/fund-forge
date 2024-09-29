@@ -12,6 +12,7 @@ use rkyv::validation::CheckTypeError;
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::vec::ArchivedVec;
 use crate::indicators::indicator_handler::IndicatorEvents;
+use crate::standardized_types::accounts::position::PositionUpdateEvent;
 
 /// Used to determine if a strategy takes certain event inputs from the Ui.
 /// A trader can still effect the strategy via the broker, but the strategy will not take any input from the Ui unless in SemiAutomated mode.
@@ -112,7 +113,7 @@ pub enum StrategyEvent {
     IndicatorEvent(IndicatorEvents),
 
 
-    PositionEvents
+    PositionEvents(PositionUpdateEvent)
 }
 
 impl StrategyEvent {
@@ -153,7 +154,7 @@ impl StrategyEvent {
             StrategyEvent::ShutdownEvent(_) => StrategyEventType::ShutdownEvent,
             StrategyEvent::WarmUpComplete => StrategyEventType::WarmUpComplete,
             StrategyEvent::IndicatorEvent(_) => StrategyEventType::IndicatorEvent,
-            StrategyEvent::PositionEvents => StrategyEventType::PositionEvents,
+            StrategyEvent::PositionEvents(_) => StrategyEventType::PositionEvents,
         }
     }
 

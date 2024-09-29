@@ -9,7 +9,7 @@ use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicator_handler::IndicatorHandler;
 use ff_standard_lib::indicators::indicators_trait::{IndicatorName, Indicators};
 use ff_standard_lib::indicators::values::IndicatorValues;
-use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
+use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::history::range_data;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderUpdateType, ProtectiveOrder, TimeInForce};
@@ -27,10 +27,11 @@ use std::sync::{Arc};
 use std::time::Duration;
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;
+use rust_decimal::Decimal;
 use tokio::sync::{mpsc, Mutex, Notify, RwLock};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
-use ff_standard_lib::market_handler::market_handlers::{get_market_fill_price_estimate, get_market_price, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, print_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
+use ff_standard_lib::market_handler::market_handlers::{export_trades, get_market_fill_price_estimate, get_market_price, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
 use ff_standard_lib::server_connections::{get_backtest_time, init_connections, init_sub_handler, initialize_static, live_subscription_handler, update_historical_timestamp};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;
@@ -99,6 +100,8 @@ impl FundForgeStrategy {
     /// `gui_enabled: bool`: If true the engine will forward all StrategyEventSlice's sent to the strategy, to the strategy registry so they can be used by GUI implementations.
     pub async fn initialize(
         strategy_mode: StrategyMode,
+        backtest_accounts_starting_cash: Decimal,
+        backtest_account_currency: Currency,
         interaction_mode: StrategyInteractionMode,
         start_date: NaiveDateTime,
         end_date: NaiveDateTime,
@@ -117,11 +120,9 @@ impl FundForgeStrategy {
         let warm_up_start_time = start_time - warmup_duration;
         update_historical_timestamp(warm_up_start_time.clone());
 
-        let market_event_sender = market_handler(strategy_mode).await;
+        let market_event_sender = market_handler(strategy_mode, backtest_accounts_starting_cash, backtest_account_currency).await;
         let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode, market_event_sender.clone()).await);
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
-
-
 
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
         init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), market_event_sender.clone()).await;
@@ -240,7 +241,6 @@ impl FundForgeStrategy {
         account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
-        brackets: Option<Vec<ProtectiveOrder>>,
         tag: String,
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &"Enter Long").await;
@@ -252,7 +252,6 @@ impl FundForgeStrategy {
             account_id.clone(),
             order_id.clone(),
             self.time_utc(),
-            brackets
         );
         let market_request = MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
         self.market_event_sender.send(market_request).await.unwrap();
@@ -266,7 +265,6 @@ impl FundForgeStrategy {
         account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
-        brackets: Option<Vec<ProtectiveOrder>>,
         tag: String,
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &"Enter Short").await;
@@ -278,7 +276,6 @@ impl FundForgeStrategy {
             account_id.clone(),
             order_id.clone(),
             self.time_utc(),
-            brackets
         );
         let request = MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
         self.market_event_sender.send(request).await.unwrap();
@@ -493,6 +490,7 @@ impl FundForgeStrategy {
     }
 
     pub async fn orders_pending(&self) -> Arc<DashMap<OrderId, Order>> {
+        //todo make read only ref
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => BACKTEST_OPEN_ORDER_CACHE.clone(),
             StrategyMode::Live => LIVE_ORDER_CACHE.clone()
@@ -692,16 +690,21 @@ impl FundForgeStrategy {
         }
     }
 
-    pub fn print_ledgers(&self) {
-        print_ledgers()
+    pub fn print_ledger(&self, brokerage: Brokerage, account_id: &AccountId) {
+        if let Some(ledger_string) = print_ledger(brokerage, account_id) {
+            println!("{}", ledger_string);
+        }
     }
 
-    pub async fn print_ledger(&self, brokerage: Brokerage, account_id: AccountId) -> Option<String> {
-        todo!()
+    pub async fn print_ledgers(&self) {
+        let strings = process_ledgers();
+        for string in strings {
+            println!("{}", string);
+        }
     }
 
-    pub fn export_trades(&self, folder: &str) {
-        todo!()
+    pub fn export_trades(&self, directory: &str) {
+        export_trades(directory);
     }
 
     pub async fn history_from_local_time(

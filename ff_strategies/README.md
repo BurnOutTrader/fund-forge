@@ -32,6 +32,14 @@ allows us to pass our strategy in an Arc to any other threads or functions and s
 #### `strategy_mode: StrategyMode:`
 The mode of the strategy (Backtest, Live, LivePaperTrading).
 
+#### `backtest_accounts_starting_cash: Decimal`:
+Only used for backtest and live paper trading to initialize paper accounts
+This is per account.
+
+#### `backtest_account_currency: Currency`:
+Only used for backtest and live paper trading to initialize paper accounts
+For all accounts (currently no way to have unique currency per paper account)
+
 #### `interaction_mode: StrategyInteractionMode:`
 The interaction mode for the strategy.
 
@@ -103,12 +111,14 @@ async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
 
     let strategy = FundForgeStrategy::initialize(
-        // we create a notify object to control the message sender channel until we have processed the last message or to speed up the que. 
-        // this gives us full async control over the engine and handlers
-        Arc::new(Notify::new()),
-
         // Backtest, Live, LivePaper
         StrategyMode::Backtest,
+
+        //starting cash per account
+        dec!(100000.0),
+        
+        //backtest account currency
+        Currency::USD,
 
         // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. 
         StrategyInteractionMode::SemiAutomated,
@@ -174,6 +184,8 @@ async fn main() {
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest,                 // Backtest, Live, LivePaper
+        dec!(100000.0), //starting cash per account
+        Currency::USD,//backtest account currency
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 7, 23)
             .unwrap()
@@ -255,8 +267,9 @@ pub async fn on_data_received(strategy: FundForgeStrategy, mut event_receiver: m
                 StrategyEvent::IndicatorEvent(_, _) => {
 
                 }
-                StrategyEvent::PositionEvents(_) => {}
-                //todo add more event types 
+                StrategyEvent::PositionEvents(event) => {
+                    println!("{:?}", event);
+                }
             }
             
         }

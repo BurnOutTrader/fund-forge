@@ -39,10 +39,9 @@ pub struct Position {
     pub lowest_recoded_price: Price,
     pub average_exit_price: Option<Price>,
     pub is_closed: bool,
-    pub id: PositionId,
+    pub position_id: PositionId,
     pub symbol_info: SymbolInfo,
     pub account_currency: Currency,
-    pub(crate) brackets: Option<Vec<ProtectiveOrder>>
 }
 
 #[derive(
@@ -56,32 +55,35 @@ pub struct Position {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum PositionUpdateEvent {
-    Opened(PositionId, Position),
-    Reduced{
-        quantity_open: Volume,
-        quantity_closed: Volume,
+    Opened(PositionId),
+    Increased {
+        position_id: PositionId,
+        total_quantity_open: Volume,
         average_price: Price,
         open_pnl: Price,
         booked_pnl: Price,
-        average_exit_price: Option<Price>,
     },
-    Closed {
-        quantity_open: Volume,
-        quantity_closed: Volume,
+    Reduced{
+        position_id: PositionId,
+        total_quantity_open: Volume,
+        total_quantity_closed: Volume,
         average_price: Price,
         open_pnl: Price,
+        booked_pnl: Price,
+        average_exit_price: Price,
+    },
+    Closed {
+        position_id: PositionId,
+        total_quantity_open: Volume,
+        total_quantity_closed: Volume,
+        average_price: Price,
         booked_pnl: Price,
         average_exit_price: Option<Price>,
     },
     UpdateSnapShot {
-        quantity_open: Volume,
-        quantity_closed: Volume,
-        average_price: Price,
-        open_pnl: Price,
-        booked_pnl: Price,
+        position_id: PositionId,
+        position: Position
     },
-    BracketCreated(ProtectiveOrder),
-    BracketRemoved(OrderId)
 }
 
 //todo make it so stop loss and take profit can be attached to positions, then instead of updating in the market handler, those orders update in the position and auto cancel themselves when position closes
@@ -95,8 +97,7 @@ impl Position {
         average_price: Price,
         id: PositionId,
         symbol_info: SymbolInfo,
-        account_currency: Currency,
-        brackets: Option<Vec<ProtectiveOrder>>
+        account_currency: Currency
     ) -> Self {
         Self {
             symbol_name,
@@ -112,10 +113,9 @@ impl Position {
             lowest_recoded_price: average_price,
             average_exit_price: None,
             is_closed: false,
-            id,
+            position_id: id,
             symbol_info,
             account_currency,
-            brackets
         }
     }
 
@@ -135,18 +135,21 @@ impl Position {
 
 pub(crate) mod historical_position {
     use chrono::{DateTime, Utc};
+    use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use crate::helpers::decimal_calculators::round_to_tick_size;
+    use crate::server_connections::add_buffer;
     use crate::standardized_types::accounts::ledgers::calculate_pnl;
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
     use crate::standardized_types::orders::orders::ProtectiveOrder;
     use crate::standardized_types::{Price, Volume};
-    use crate::standardized_types::accounts::position::Position;
+    use crate::standardized_types::accounts::position::{Position, PositionUpdateEvent};
+    use crate::standardized_types::strategy_events::StrategyEvent;
 
     impl Position {
 
-        pub(crate) fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: &DateTime<Utc>) -> Price {
+        pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) -> Price {
             // Ensure quantity does not exceed the open quantity
             let quantity = if quantity > self.quantity_open {
                 self.quantity_open
@@ -176,13 +179,33 @@ pub(crate) mod historical_position {
 
             // Reset open PnL if position is closed
             if self.is_closed {
+                self.booked_pnl += self.open_pnl;
                 self.open_pnl = dec!(0.0);
+                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Closed {
+                    position_id: self.position_id.clone(),
+                    total_quantity_open: self.quantity_open,
+                    total_quantity_closed: self.quantity_closed,
+                    average_price: self.average_price,
+                    booked_pnl: self.booked_pnl,
+                    average_exit_price: self.average_exit_price,
+                });
+                add_buffer(time, event).await;
+            } else {
+                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Reduced {
+                    position_id: self.position_id.clone(),
+                    total_quantity_open: self.quantity_open,
+                    total_quantity_closed: self.quantity_closed,
+                    average_price: self.average_price,
+                    open_pnl: self.open_pnl,
+                    booked_pnl: self.booked_pnl,
+                    average_exit_price: self.average_exit_price.unwrap(),
+                });
+                add_buffer(time, event).await;
             }
-
             booked_pnl
         }
 
-        pub(crate) fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: &DateTime<Utc>) {
+        pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) {
             // Correct the average price calculation with proper parentheses
             self.average_price = round_to_tick_size(
                 ((self.quantity_open * self.average_price) + (quantity * market_price))
@@ -205,11 +228,22 @@ pub(crate) mod historical_position {
                 &self.account_currency,
                 time,
             );
+
+            let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Increased {
+                position_id: self.position_id.clone(),
+                total_quantity_open: self.quantity_open,
+                average_price: self.average_price,
+                open_pnl: self.open_pnl,
+                booked_pnl: self.booked_pnl,
+            });
+
+            add_buffer(time, event).await;
         }
 
-        pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: &DateTime<Utc>) -> Price {
+        //todo, this needs to be ddone by passing in the position, so we can use the market price, it should return what kind of order was triggered
+        pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: DateTime<Utc>) {
             if self.is_closed {
-                return dec!(0.0);
+                return;
             }
 
             // Extract market price, highest price, and lowest price from base data
@@ -244,7 +278,7 @@ pub(crate) mod historical_position {
                 time,
             );
 
-            let mut bracket_triggered = false;
+            /*let mut bracket_triggered = false;
             if let Some(brackets) = &mut self.brackets {
                 'bracket_loop: for bracket in brackets.iter_mut() {
                     match bracket {
@@ -292,20 +326,28 @@ pub(crate) mod historical_position {
                         },
                     }
                 }
-            }
+            }*/
 
-            // If a bracket is triggered, close the position and return new PnL
+   /*         // If a bracket is triggered, close the position and return new PnL
             if bracket_triggered {
-                let new_pnl = self.open_pnl;
-                self.booked_pnl += new_pnl;
+                let booked_pnl = self.open_pnl;
+                self.booked_pnl += self.open_pnl;
                 self.open_pnl = dec!(0.0);
                 self.is_closed = true;
                 self.quantity_closed += self.quantity_open;
                 self.quantity_open = dec!(0.0);
-                return new_pnl;
+                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Closed {
+                    position_id: self.position_id.clone(),
+                    total_quantity_open: self.quantity_open,
+                    total_quantity_closed: self.quantity_closed,
+                    average_price: self.average_price,
+                    booked_pnl: self.booked_pnl,
+                    average_exit_price: self.average_exit_price,
+                });
+                add_buffer(time, event).await;
+                return booked_pnl
             }
-
-            dec!(0.0)
+            dec!(0)*/
         }
     }
 }

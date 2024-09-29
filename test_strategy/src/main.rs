@@ -17,7 +17,7 @@ use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::server_connections::{GUI_DISABLED};
-use ff_standard_lib::standardized_types::accounts::ledgers::AccountId;
+use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::Color;
@@ -28,10 +28,11 @@ use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
-    let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest, // Backtest, Live, LivePaper
+        dec!(100000),
+        Currency::USD,
         StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 6, 19)
             .unwrap()
@@ -80,13 +81,12 @@ async fn main() {
         GUI_DISABLED
     ).await;
 
-    on_data_received(strategy, notify, strategy_event_receiver).await;
+    on_data_received(strategy, strategy_event_receiver).await;
 }
 
 /// Here we listen for incoming data and build our custom strategy logic. this is where the magic happens.
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
-    notify: Arc<Notify>,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
     let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
@@ -143,23 +143,24 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
+                                    let is_long = strategy.is_long(&brokerage, &account_name, &candle.symbol.name);
+
                                     if candle.close > last_bar.high
-                                        && !strategy.is_long(&brokerage, &account_name, &candle.symbol.name)
+                                        && !is_long
                                     {
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(1), None, String::from("Enter Long")).await;
+                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long")).await;
                                         bars_since_entry_2 = 0;
                                     }
-                                    else if bars_since_entry_2 > 10
-                                        //&& last_bar.bid_close < two_bars_ago.bid_low
-                                        && strategy.is_long(&brokerage, &account_name, &candle.symbol.name)
+
+                                    if bars_since_entry_2 > 10
+                                        &&is_long
                                     {
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
                                         bars_since_entry_2 = 0;
                                     }
 
-                                    if strategy.is_long(&brokerage, &account_name, &candle.symbol.name) {
+                                    if is_long {
                                         bars_since_entry_2 += 1;
-                                        println!("IS LONG")
                                     }
                                 }
                             }
@@ -181,22 +182,24 @@ pub async fn on_data_received(
                                     }
                                     //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
 
+                                    let is_long = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
 
                                     if quotebar.bid_close > last_bar.bid_high
-                                        && !strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name)
+                                        && !is_long
                                     {
-                                        let _entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), None, String::from("Enter Long")).await;
+                                        let _entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
-                                    else if bars_since_entry_1 > 10
+
+                                    if bars_since_entry_1 > 10
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
-                                        && strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name)
+                                        && is_long
                                     {
                                         let _exit_order_id = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
-                                    if strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name) {
+                                    if is_long {
                                         bars_since_entry_1 += 1;
                                     }
                                 }
@@ -217,30 +220,30 @@ pub async fn on_data_received(
 
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(event) => {
-                    strategy.print_ledgers();
-                    /*match &event {
+                    //strategy.print_ledgers();
+                    match &event {
                         OrderUpdateEvent::Accepted { brokerage, account_id, order_id } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         }
                         OrderUpdateEvent::Filled { brokerage, account_id, order_id } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         },
                         OrderUpdateEvent::PartiallyFilled { brokerage, account_id, order_id } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         }
                         OrderUpdateEvent::Cancelled { brokerage, account_id, order_id } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         }
                         OrderUpdateEvent::Rejected { brokerage, account_id, order_id, reason } => {
-                            println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap(), reason);
+                            println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id), reason);
                         }
                         OrderUpdateEvent::Updated { brokerage, account_id, order_id } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());
+                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         }
                         OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason } => {
-                            println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap(), reason);
+                            println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id), reason);
                         }
-                    };*/
+                    };
                     println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), event);
                 }
 
@@ -262,11 +265,8 @@ pub async fn on_data_received(
 
                 StrategyEvent::ShutdownEvent(event) => {
                     println!("{}",event);
-            /*        strategy.export_trades(&String::from("./trades exports"));
-                    let ledgers = strategy.print_ledgers().await;
-                    for ledger in ledgers {
-                        println!("{:?}", ledger);
-                    }*/
+                    strategy.export_trades(&String::from("./trades exports"));
+                    strategy.print_ledgers().await;
                     //we should handle shutdown gracefully by first ending the strategy loop.
                     break 'strategy_loop
                 },
@@ -301,12 +301,11 @@ pub async fn on_data_received(
                     // we could also get the automanaged indicator values from teh strategy at any time.
                 }
 
-                StrategyEvent::PositionEvents => {
-
+                StrategyEvent::PositionEvents(event) => {
+                    println!("{:?}", event);
                 }
             }
         }
-        notify.notify_one();
     }
     event_receiver.close();
     println!("Strategy: Event Loop Ended");

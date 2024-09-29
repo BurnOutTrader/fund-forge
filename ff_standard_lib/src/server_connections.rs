@@ -110,10 +110,6 @@ pub fn get_backtest_time() -> DateTime<Utc> {
     let timestamp_ns = ATOMIC_TIMESTAMP_NS.load(Ordering::Acquire);
     Utc.timestamp_nanos(timestamp_ns)
 }
-#[inline(always)]
-pub fn advance_historical_time(duration: chrono::Duration) {
-    ATOMIC_TIMESTAMP_NS.fetch_add(duration.num_nanoseconds().unwrap_or(0), Ordering::AcqRel);
-}
 
 
 lazy_static! {
@@ -277,7 +273,7 @@ pub async fn request_handler(
         while let Some(outgoing_message) = receiver.recv().await {
             match outgoing_message {
                 StrategyRequest::CallBack(connection_type, mut request, oneshot) => {
-                    callback_id_counter += 1;
+                    callback_id_counter = callback_id_counter.wrapping_add(1);
                     let callbacks = callbacks.clone();
                     let id = callback_id_counter.clone();
                     callbacks.insert(id, oneshot);

@@ -92,14 +92,14 @@ pub enum OrderType {
     /// If we are adding to  an existing position and have Some(brackets), the existing brackets will be replaced.
     /// # Arguments
     /// brackets: `Option<Vec<ProtectiveOrder>>`,
-    EnterLong(Option<Vec<ProtectiveOrder>>),
+    EnterLong,
     /// If we are adding to  an existing position and have Some(brackets), the existing brackets will be replaced.
     /// # Arguments
     /// brackets: `Option<Vec<ProtectiveOrder>>`,
-    EnterShort(Option<Vec<ProtectiveOrder>>),
+    EnterShort,
     ExitLong,
     ExitShort,
-    UpdateBrackets(Brokerage, AccountId, SymbolName, Vec<ProtectiveOrder>)
+    //UpdateBrackets(Brokerage, AccountId, SymbolName, Vec<ProtectiveOrder>)
 }
 
 #[derive(
@@ -386,7 +386,6 @@ impl Order {
         account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
-        brackets: Option<Vec<ProtectiveOrder>>
     ) -> Self {
         Order {
             id: order_id,
@@ -398,7 +397,7 @@ impl Order {
             limit_price: None,
             trigger_price: None,
             side: OrderSide::Buy,
-            order_type: OrderType::EnterLong(brackets),
+            order_type: OrderType::EnterLong,
             time_in_force: TimeInForce::FOK,
             tag,
             time_created_utc: time.to_string(),
@@ -418,7 +417,6 @@ impl Order {
         account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
-        brackets: Option<Vec<ProtectiveOrder>>
     ) -> Self {
         Order {
             id: order_id,
@@ -430,7 +428,7 @@ impl Order {
             limit_price: None,
             trigger_price: None,
             side: OrderSide::Sell,
-            order_type: OrderType::EnterShort(brackets),
+            order_type: OrderType::EnterShort,
             time_in_force: TimeInForce::FOK,
             tag,
             time_created_utc: time.to_string(),

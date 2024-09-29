@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap};
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
-use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
+use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::orders::orders::{Order, OrderUpdateType, OrderRequest, OrderUpdateEvent, OrderId, OrderState, ProtectiveOrder, OrderType};
 use crate::standardized_types::strategy_events::{StrategyEvent};
@@ -21,7 +21,6 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::market_handler::position_manager::PositionHandler;
 use crate::servers::settings::client_settings::{initialise_settings};
 use crate::standardized_types::accounts::position::{Position, PositionId};
 use crate::standardized_types::data_server_messaging::{DataServerRequest, FundForgeError};
@@ -70,43 +69,24 @@ lazy_static!(
     pub static ref LIVE_OPEN_PNL: Arc<DashMap<Brokerage, DashMap<AccountId, Decimal>>> = Arc::new(DashMap::new());
     pub static ref LIVE_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
     pub static ref LIVE_CLOSED_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
-    pub static ref LIVE_POSITIONS: Arc<PositionHandler> = Arc::new(PositionHandler::new());
-
+    pub static ref LIVE_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
 
     //BACKTEST STATICS
-    pub static ref BACKTEST_CASH_AVAILABLE: Arc<DashMap<Brokerage, DashMap<AccountId, Price>>> = Arc::new(DashMap::new());
-    pub static ref BACKTEST_CASH_USED: Arc<DashMap<Brokerage, DashMap<AccountId, Price>>> = Arc::new(DashMap::new());
-    pub static ref BACKTEST_CURRENCY: Arc<DashMap<Brokerage, DashMap<AccountId, Currency>>> = Arc::new(DashMap::new());
-    pub static ref BACKTEST_BOOKED_PNL: Arc<DashMap<Brokerage, DashMap<AccountId, Decimal>>> = Arc::new(DashMap::new());
     static ref BACKTEST_OPEN_PNL: Arc<DashMap<Brokerage, DashMap<AccountId, Decimal>>> = Arc::new(DashMap::new());
     pub static ref BACKTEST_OPEN_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
     pub static ref BACKTEST_CLOSED_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
-    pub static ref BACKTEST_POSITIONS: Arc<PositionHandler> = Arc::new(PositionHandler::new());
+    pub static ref BACKTEST_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
 );
 
-pub fn historical_booked_profit_adjustments(pnl: AHashMap<Brokerage, AHashMap<AccountId, Decimal>>) {
-    // Iterate over the provided booked profit data
-    for (brokerage, account_map) in pnl {
-        for (account_id, pnl) in account_map {
-            update_booked_profit(brokerage, &account_id, pnl);
+pub fn historical_time_slice_ledger_updates(time_slice: TimeSlice, time: DateTime<Utc>) {
+    for broker_map in BACKTEST_LEDGERS.iter() {
+        for mut account_map in broker_map.iter_mut() {
+            account_map.value_mut().on_historical_data_update(time_slice.clone(), time);
         }
     }
 }
 
-pub fn update_booked_profit(brokerage: Brokerage, account_id: &AccountId, booked_profit: Decimal) {
-    // Access the brokerage's booked PnL map or create it if it doesn't exist
-    let brokerage_map = BACKTEST_BOOKED_PNL.entry(brokerage).or_insert_with(DashMap::new);
-
-    // Update or create the booked profit for the specified account
-    let mut current_profit = brokerage_map
-        .entry(account_id.clone())
-        .or_insert(Decimal::ZERO); // Initialize to zero if it doesn't exist
-
-    // Accumulate the booked profit
-    *current_profit += booked_profit;
-}
-
-pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
+pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, account_currency: Currency) -> Sender<MarketMessageEnum> {
     let (sender, receiver) = mpsc::channel(1000);
     let mut receiver = receiver;
     tokio::task::spawn(async move{
@@ -126,8 +106,6 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time).await;
                     }
-                    let booked_pnl: AHashMap<Brokerage, AHashMap<AccountId, Decimal>> = BACKTEST_POSITIONS.on_data_updates(&base_data, &time);
-                    historical_booked_profit_adjustments(booked_pnl);
                     update_base_data(mode, base_data, &time);
                 }
                 MarketMessageEnum::TimeSliceUpdate(time_slice) => {
@@ -137,8 +115,6 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time).await;
                     }
-                    let booked_pnl = BACKTEST_POSITIONS.on_timeslice_updates(time_slice, &time);
-                    historical_booked_profit_adjustments(booked_pnl);
                 }
                 MarketMessageEnum::OrderBookSnapShot{symbol , bid_book, ask_book } => {
                     if !BID_BOOKS.contains_key(&symbol.name){
@@ -184,7 +160,7 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
                             }
                         }
                         StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
-                            simulated_order_matching(order_request).await;
+                            simulated_order_matching(order_request, starting_balances, account_currency).await;
                         }
                     }
                 }
@@ -250,11 +226,21 @@ fn update_base_data(mode: StrategyMode, base_data_enum: BaseDataEnum, time: &Dat
 // need to rethink this.. do we have ledgers or just static properties linked to account id's and positions and orders linked to account ids
 pub async fn simulated_order_matching(
     order_request: OrderRequest,
+    starting_balances: Decimal,
+    account_currency: Currency
 ) {
     let time = get_backtest_time();
     match order_request {
         OrderRequest::Create { order, .. } => {
             let time = DateTime::from_str(&order.time_created_utc).unwrap();
+            if !BACKTEST_LEDGERS.contains_key(&order.brokerage) {
+                let broker_map = DashMap::new();
+                BACKTEST_LEDGERS.insert(order.brokerage, broker_map);
+            }
+            if !BACKTEST_LEDGERS.get(&order.brokerage).unwrap().contains_key(&order.account_id) {
+                let ledger = Ledger::paper_account_init(order.account_id.clone(), order.brokerage, starting_balances, account_currency);
+                BACKTEST_LEDGERS.get(&order.brokerage).unwrap().insert(order.account_id.clone(), ledger);
+            }
             BACKTEST_OPEN_ORDER_CACHE.insert(order.id.clone(), order);
             backtest_matching_engine(time.clone()).await;
         }
@@ -326,7 +312,6 @@ pub async fn backtest_matching_engine(
     if BACKTEST_OPEN_ORDER_CACHE.len() == 0 {
         return;
     }
-
     //todo need a better way to simulate stop limits, use custom market price fn
     // need to handle partial fills for data sets will volume. at-least partial fill stop limits and limits.
 
@@ -335,7 +320,6 @@ pub async fn backtest_matching_engine(
     let mut filled = Vec::new();
     for order in BACKTEST_OPEN_ORDER_CACHE.iter() {
         //3. respond with an order event
-        let mut brackets: Option<Vec<ProtectiveOrder>> = None;
         match &order.order_type {
             OrderType::Limit => {
                 let market_price = match get_market_price(order.side, &order.symbol_name).await {
@@ -347,7 +331,7 @@ pub async fn backtest_matching_engine(
                     OrderSide::Sell => market_price >= order.limit_price.unwrap()
                 };
                 if is_fill_triggered {
-                    filled.push((order.id.clone(), order.limit_price.unwrap().clone(), None));
+                    filled.push((order.id.clone(), order.limit_price.unwrap().clone()));
                 }
             }
             OrderType::Market => {
@@ -355,7 +339,7 @@ pub async fn backtest_matching_engine(
                     Ok(price) => price,
                     Err(_) => continue
                 };
-                filled.push((order.id.clone(), market_price, None));
+                filled.push((order.id.clone(), market_price));
             },
             OrderType::MarketIfTouched | OrderType::StopMarket => {
                 let market_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_filled, order.brokerage).await {
@@ -367,7 +351,7 @@ pub async fn backtest_matching_engine(
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap()
                 };
                 if is_fill_triggered {
-                    filled.push((order.id.clone(), market_price, None));
+                    filled.push((order.id.clone(), market_price));
                 }
             }
             OrderType::StopLimit => {
@@ -381,34 +365,36 @@ pub async fn backtest_matching_engine(
                 };
                 if is_fill_triggered {
                     //todo need a better way to simulate stop limits, use custom market price fn to
-                    filled.push((order.id.clone(),  order.limit_price.unwrap().clone(), None));
+                    filled.push((order.id.clone(),  order.limit_price.unwrap().clone()));
                 }
             },
-            OrderType::EnterLong(new_brackets) => {
+            OrderType::EnterLong => {
                 let market_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_filled, order.brokerage).await {
                     Ok(price) => price,
                     Err(_) => continue
                 };
-                if is_short_paper(&order.brokerage, &order.account_id, &order.symbol_name) {
-                    //todo I need an order event to fire for this
-                  let booked_profit= BACKTEST_POSITIONS.exit_position_paper(order.brokerage, &order.account_id, &order.symbol_name, time.clone(), market_price).await;
-                    update_booked_profit(order.brokerage, &order.account_id, booked_profit);
+                if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
+                    if let Some(account_map) = broker_map.get(&order.account_id) {
+                        if account_map.value().is_short(&order.symbol_name) {
+                            account_map.value().exit_position_paper(&order.symbol_name, time, market_price).await;
+                        }
+                    }
                 }
-                filled.push((order.id.clone(), market_price, brackets));
-                brackets = new_brackets.clone();
+                filled.push((order.id.clone(), market_price));
             }
-            OrderType::EnterShort(new_brackets) => {
+            OrderType::EnterShort => {
                 let market_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_filled, order.brokerage).await {
                     Ok(price) => price,
                     Err(_) => continue
                 };
-                if is_long_paper(&order.brokerage, &order.account_id, &order.symbol_name) {
-                    //todo I need an order event to fire for this
-                    let booked_profit= BACKTEST_POSITIONS.exit_position_paper(order.brokerage, &order.account_id, &order.symbol_name, time.clone(), market_price).await;
-                    update_booked_profit(order.brokerage, &order.account_id, booked_profit);
+                if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
+                    if let Some(account_map) = broker_map.get(&order.account_id) {
+                        if account_map.value().is_long(&order.symbol_name) {
+                            account_map.value().exit_position_paper(&order.symbol_name, time, market_price).await;
+                        }
+                    }
                 }
-                filled.push((order.id.clone(), market_price, brackets));
-                brackets = new_brackets.clone();
+                filled.push((order.id.clone(), market_price));
             }
             OrderType::ExitLong => {
                 if is_long_paper(&order.brokerage, &order.account_id, &order.symbol_name) {
@@ -416,9 +402,7 @@ pub async fn backtest_matching_engine(
                         Ok(price) => price,
                         Err(_) => continue
                     };
-                    filled.push((order.id.clone(), market_price, None));
-                    let booked_profit= BACKTEST_POSITIONS.exit_position_paper(order.brokerage, &order.account_id, &order.symbol_name, time.clone(), market_price).await;
-                    update_booked_profit(order.brokerage, &order.account_id, booked_profit);
+                    filled.push((order.id.clone(), market_price));
                 } else {
                     let reason = "No long position to exit".to_string();
                     rejected.push((order.id.clone(), reason));
@@ -430,20 +414,10 @@ pub async fn backtest_matching_engine(
                         Ok(price) => price,
                         Err(_) => continue
                     };
-                    filled.push((order.id.clone(), market_price, None));
-                    let booked_profit= BACKTEST_POSITIONS.exit_position_paper(order.brokerage, &order.account_id, &order.symbol_name, time.clone(), market_price).await;
-                    update_booked_profit(order.brokerage, &order.account_id, booked_profit);
+                    filled.push((order.id.clone(), market_price));
                 } else {
                     let reason = "No short position to exit".to_string();
                     rejected.push((order.id.clone(), reason));
-                }
-            }
-            OrderType::UpdateBrackets(brokerage, account_id, symbol_name, brackets) => {
-                match BACKTEST_POSITIONS.update_brackets(&brokerage, &account_id, &symbol_name, brackets.clone(), time).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        rejected.push((order.id.clone(), e));
-                    }
                 }
             }
         }
@@ -455,8 +429,8 @@ pub async fn backtest_matching_engine(
     for order_id in accepted {
         accept_order(order_id, time).await;
     }
-    for (order_id, price, brackets) in filled {
-        fill_order(&order_id, time, price, brackets).await
+    for (order_id, price) in filled {
+        fill_order(&order_id, time, price).await
     }
 }
 
@@ -464,7 +438,6 @@ async fn fill_order(
     order_id: &OrderId,
     time: DateTime<Utc>,
     market_price: Price,
-    brackets: Option<Vec<ProtectiveOrder>>
 ) {
     if let Some((_, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
         order.time_filled_utc = Some(time.to_string());
@@ -474,7 +447,13 @@ async fn fill_order(
         order.time_filled_utc = Some(time.to_string());
         add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::Filled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
-        BACKTEST_POSITIONS.update_or_create_paper_position(&order.symbol_name, order.brokerage, &order.account_id,order.quantity_filled ,order.side, &time, brackets, market_price).await;
+        if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
+            if let Some(account_map) = broker_map.get(&order.account_id) {
+                if account_map.value().is_long(&order.symbol_name) {
+                    account_map.value().update_or_create_paper_position(&order.symbol_name, order.quantity_filled, order.side.clone(), time, market_price).await;
+                }
+            }
+        }
     }
 }
 
@@ -519,54 +498,85 @@ async fn accept_order(
     }
 }
 
-pub async fn process_ledgers() -> Vec<String> {
-    // Acquire a read lock on the RwLock
-    // Iterate over the HashMap while holding the read lock
-    /*let mut return_strings = vec![];
-    for brokerage_map in self.ledgers.iter() {
-        for ledger in brokerage_map.iter() {
-            return_strings.push(format!("{} \n", ledger.value().print()));
+pub fn process_ledgers() -> Vec<String> {
+    let mut return_strings = vec![];
+    for broker_map in BACKTEST_LEDGERS.iter() {
+        for account_map in broker_map.iter_mut() {
+            return_strings.push(account_map.value().print());
         }
     }
-    return_strings*/
-    todo!()
+    return_strings
 }
 
-pub fn print_ledgers()  {
-    for map in BACKTEST_BOOKED_PNL.iter() {
-        for dash in map.iter() {
-            println!("Booked Pnl{:?}", dash.value());
+pub fn export_trades(directory: &str) {
+    for broker_map in BACKTEST_LEDGERS.iter() {
+        for account_map in broker_map.iter_mut() {
+            account_map.export_positions_to_csv(directory);
         }
     }
-    for map in BACKTEST_CASH_AVAILABLE.iter() {
-        for dash in map.iter() {
-            println!("Booked Pnl{:?}", dash.value());
+}
+
+pub fn print_ledger(brokerage: Brokerage, account_id: &AccountId) -> Option<String>  {
+    if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return Some(account_map.value().print())
         }
     }
+    None
 }
 
 pub fn is_long_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-    LIVE_POSITIONS.is_long(brokerage, account_id, symbol_name)
+    if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().is_long(symbol_name)
+        }
+    }
+    false
 }
 
 pub fn is_short_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-    LIVE_POSITIONS.is_short(brokerage, account_id, symbol_name)
+    if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().is_short(symbol_name)
+        }
+    }
+    false
 }
 
 pub fn is_flat_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-    LIVE_POSITIONS.is_flat(brokerage, account_id, symbol_name)
+    if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().is_flat(symbol_name)
+        }
+    }
+    true
 }
 
 pub fn is_long_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-    BACKTEST_POSITIONS.is_long(brokerage, account_id, symbol_name)
+    if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().is_long(symbol_name)
+        }
+    }
+    false
 }
 
 pub fn is_short_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-    BACKTEST_POSITIONS.is_short(brokerage, account_id, symbol_name)
+    if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().is_short(symbol_name)
+        }
+    }
+    false
 }
 
 pub fn is_flat_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-    BACKTEST_POSITIONS.is_flat(brokerage, account_id, symbol_name)
+    if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().is_flat(symbol_name)
+        }
+    }
+    true
 }
 
 pub async fn get_market_fill_price_estimate (
