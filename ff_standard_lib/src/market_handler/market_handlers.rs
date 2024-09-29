@@ -529,7 +529,7 @@ pub async fn get_market_fill_price_estimate (
 
         for level in 0.. {
             if let Some((price, available_volume)) = book_price_volume_map.value().get(&level) {
-                if *available_volume == dec!(0.0) {
+                if *available_volume == dec!(0.0) && total_volume_filled == dec!(0.0) {
                     return Ok(price.clone())
                 }
                 let volume_to_use = remaining_volume.min(*available_volume);
