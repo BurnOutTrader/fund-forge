@@ -1,11 +1,10 @@
-use std::arch::aarch64::vorn_s8;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap};
 use std::str::FromStr;
-use chrono::{DateTime, Datelike, Utc};
-use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
+use chrono::{DateTime, Utc};
+use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
-use crate::standardized_types::orders::orders::{Order, OrderUpdateType, OrderRequest, OrderUpdateEvent, TimeInForce, OrderId, OrderState, ProtectiveOrder, OrderType};
-use crate::standardized_types::strategy_events::{StrategyEventBuffer, StrategyEvent};
+use crate::standardized_types::orders::orders::{Order, OrderUpdateType, OrderRequest, OrderUpdateEvent, OrderId, OrderState, ProtectiveOrder, OrderType};
+use crate::standardized_types::strategy_events::{StrategyEvent};
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::standardized_types::{Price, Volume};
 use std::sync::Arc;
@@ -14,7 +13,7 @@ use async_std::task::block_on;
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::sync::mpsc::{Sender};
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{mpsc};
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::server_connections::{add_buffer, get_backtest_time, is_warmup_complete, send_request, send_strategy_event_slice, ConnectionType, StrategyRequest};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -25,6 +24,7 @@ use rust_decimal_macros::dec;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::servers::settings::client_settings::{initialise_settings};
 use crate::standardized_types::accounts::position::{Position, PositionId};
+use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{DataServerRequest, FundForgeError};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
@@ -98,7 +98,7 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
             match message {
                 MarketMessageEnum::RegisterSymbol(symbol) => {
                     BID_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
-                    ASK_BOOKS.insert(symbol.name, BTreeMap::new());
+                    ASK_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
                 }
                 MarketMessageEnum::BaseDataUpdate(base_data ) => {
                     update_base_data(mode, base_data);
@@ -187,8 +187,14 @@ fn update_base_data(mode: StrategyMode, base_data_enum: BaseDataEnum) {
             LAST_PRICE.insert(tick.symbol.name, tick.price);
         }
         BaseDataEnum::Quote(quote) => {
+            if !BID_BOOKS.contains_key(&quote.symbol.name) {
+                BID_BOOKS.insert(quote.symbol.name.clone(), BTreeMap::new());
+            }
             if let Some(mut bid_book) = BID_BOOKS.get_mut(&quote.symbol.name) {
                 bid_book.value_mut().insert(0, (quote.bid, quote.bid_volume));
+            }
+            if !ASK_BOOKS.contains_key(&quote.symbol.name) {
+                ASK_BOOKS.insert(quote.symbol.name.clone(), BTreeMap::new());
             }
             if let Some(mut ask_book) = ASK_BOOKS.get_mut(&quote.symbol.name) {
                 ask_book.value_mut().insert(0, (quote.ask, quote.ask_volume));
