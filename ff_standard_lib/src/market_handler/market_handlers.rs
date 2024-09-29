@@ -284,37 +284,6 @@ pub async fn backtest_matching_engine(
         return;
     }
 
-    let fill_order = | order_id: &OrderId, last_time_utc: DateTime<Utc>, market_price: Price| {
-        if let Some((order_id, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
-            order.time_filled_utc = Some(last_time_utc.to_string());
-            order.state = OrderState::Filled;
-            order.average_fill_price = Some(market_price);
-            order.quantity_filled = order.quantity_ordered;
-            order.time_filled_utc = Some(last_time_utc.to_string());
-            block_on(add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::Filled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })));
-            BACKTEST_OPEN_ORDER_CACHE.remove(&order.id);
-            BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
-        }
-    };
-
-    let reject_order = |reason: String, order_id: &OrderId, last_time_utc: DateTime<Utc>| {
-        if let Some((order_id, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
-            order.state = OrderState::Rejected(reason.clone());
-            order.time_created_utc = last_time_utc.to_string();
-            block_on(add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::Rejected { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone(), reason })));
-            BACKTEST_OPEN_ORDER_CACHE.remove(&order.id);
-            BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
-        }
-    };
-
-    let accept_order = |order_id: &OrderId, last_time_utc: DateTime<Utc>| {
-        if let Some(mut order) = BACKTEST_OPEN_ORDER_CACHE.get_mut(order_id) {
-            order.state = OrderState::Accepted;
-            order.time_created_utc = last_time_utc.to_string();
-            block_on(add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::Accepted { order_id: order.id.clone(), brokerage: order.brokerage.clone(), account_id: order.account_id.clone() })));
-        }
-    };
-
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
     let mut filled = Vec::new();
@@ -411,14 +380,74 @@ pub async fn backtest_matching_engine(
             }
         }
     }
+
     for (order_id, reason) in rejected {
-        reject_order(reason, &order_id, time)
+        reject_order(reason, &order_id, time).await
     }
     for order_id in accepted {
-        accept_order(order_id, time);
+        accept_order(order_id, time).await;
     }
     for (order_id, price) in filled {
-        fill_order(&order_id, time, price)
+        fill_order(&order_id, time, price).await
+    }
+}
+
+async fn fill_order(
+    order_id: &OrderId,
+    last_time_utc: DateTime<Utc>,
+    market_price: Price
+) {
+    if let Some((order_id, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
+        order.time_filled_utc = Some(last_time_utc.to_string());
+        order.state = OrderState::Filled;
+        order.average_fill_price = Some(market_price);
+        order.quantity_filled = order.quantity_ordered;
+        order.time_filled_utc = Some(last_time_utc.to_string());
+        add_buffer(last_time_utc, StrategyEvent::OrderEvents(OrderUpdateEvent::Filled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
+        BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
+    }
+}
+
+async fn reject_order(
+    reason: String,
+    order_id: &OrderId,
+    time: DateTime<Utc>,
+) {
+    if let Some((order_id, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
+        order.state = OrderState::Rejected(reason.clone());
+        order.time_created_utc = time.to_string();
+
+        // Await the async `add_buffer` function
+        add_buffer(
+            time,
+            StrategyEvent::OrderEvents(OrderUpdateEvent::Rejected {
+                order_id: order.id.clone(),
+                brokerage: order.brokerage,
+                account_id: order.account_id.clone(),
+                reason,
+            }),
+        ).await;
+        BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
+    }
+}
+
+async fn accept_order(
+    order_id: &OrderId,
+    time: DateTime<Utc>,
+) {
+    if let Some(mut order) = BACKTEST_OPEN_ORDER_CACHE.get_mut(order_id) {
+        order.state = OrderState::Accepted;
+        order.time_created_utc = time.to_string();
+
+        // Await the async `add_buffer` function
+        add_buffer(
+            time,
+            StrategyEvent::OrderEvents(OrderUpdateEvent::Accepted {
+                order_id: order.id.clone(),
+                brokerage: order.brokerage.clone(),
+                account_id: order.account_id.clone(),
+            }),
+        ).await;
     }
 }
 
@@ -642,10 +671,9 @@ pub async fn update_or_create_paper_position(
     } else {
         // Fetch symbol info if it doesn't exist
         if !SYMBOL_INFO.contains_key(symbol_name) {
-            let symbol_info = match brokerage.symbol_info(symbol_name.clone()).await {
+            match brokerage.symbol_info(symbol_name.clone()).await {
                 Ok(info) => {
                     SYMBOL_INFO.insert(symbol_name.clone(), info.clone());
-                    info
                 },
                 Err(_) => return Err(FundForgeError::ClientSideErrorDebug(format!("No Symbol info for: {}", symbol_name)))
             };
