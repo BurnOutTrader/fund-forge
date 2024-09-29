@@ -216,6 +216,7 @@ pub async fn on_data_received(
 
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(event) => {
+                    strategy.print_ledgers();
                     /*match &event {
                         OrderUpdateEvent::Accepted { brokerage, account_id, order_id } => {
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id.clone()).await.unwrap());

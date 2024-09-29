@@ -30,7 +30,7 @@ use dashmap::mapref::one::Ref;
 use tokio::sync::{mpsc, Mutex, Notify, RwLock};
 use tokio::sync::mpsc::Sender;
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
-use ff_standard_lib::market_handler::market_handlers::{get_market_fill_price_estimate, get_market_price, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
+use ff_standard_lib::market_handler::market_handlers::{get_market_fill_price_estimate, get_market_price, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, print_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
 use ff_standard_lib::server_connections::{get_backtest_time, init_connections, init_sub_handler, initialize_static, live_subscription_handler, update_historical_timestamp};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;
@@ -188,22 +188,22 @@ impl FundForgeStrategy {
 
     pub fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         match self.mode {
-            StrategyMode::Backtest => is_long_paper(brokerage, account_id, symbol_name),
-            StrategyMode::Live | StrategyMode::LivePaperTrading => is_long_live(brokerage, account_id, symbol_name)
+            StrategyMode::Backtest| StrategyMode::LivePaperTrading => is_long_paper(brokerage, account_id, symbol_name),
+            StrategyMode::Live  => is_long_live(brokerage, account_id, symbol_name)
         }
     }
 
     pub fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         match self.mode {
-            StrategyMode::Backtest => is_flat_paper(brokerage, account_id, symbol_name),
-            StrategyMode::Live | StrategyMode::LivePaperTrading => is_flat_live(brokerage, account_id, symbol_name)
+            StrategyMode::Backtest| StrategyMode::LivePaperTrading => is_flat_paper(brokerage, account_id, symbol_name),
+            StrategyMode::Live  => is_flat_live(brokerage, account_id, symbol_name)
         }
     }
 
     pub fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         match self.mode {
-            StrategyMode::Backtest => is_short_paper(brokerage, account_id, symbol_name),
-            StrategyMode::Live | StrategyMode::LivePaperTrading => is_short_live(brokerage, account_id, symbol_name)
+            StrategyMode::Backtest| StrategyMode::LivePaperTrading => is_short_paper(brokerage, account_id, symbol_name),
+            StrategyMode::Live => is_short_live(brokerage, account_id, symbol_name)
         }
     }
 
@@ -212,7 +212,7 @@ impl FundForgeStrategy {
         symbol_name: &SymbolName,
         account_id: &AccountId,
         brokerage: &Brokerage,
-        order_string: String
+        order_string: &str
     ) -> OrderId {
         let num = match self.orders_count.get_mut(brokerage) {
             None => {
@@ -243,7 +243,7 @@ impl FundForgeStrategy {
         brackets: Option<Vec<ProtectiveOrder>>,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Enter Long")).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Enter Long").await;
         let order = Order::enter_long(
             symbol_name.clone(),
             brokerage.clone(),
@@ -269,7 +269,7 @@ impl FundForgeStrategy {
         brackets: Option<Vec<ProtectiveOrder>>,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Enter Short")).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Enter Short").await;
         let order = Order::enter_short(
             symbol_name.clone(),
             brokerage.clone(),
@@ -294,7 +294,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Exit Long")).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Exit Long").await;
         let order = Order::exit_long(
             symbol_name.clone(),
             brokerage.clone(),
@@ -318,7 +318,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Exit Short")).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Exit Short").await;
         let order = Order::exit_short(
             symbol_name.clone(),
             brokerage.clone(),
@@ -342,7 +342,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Buy Market")).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Buy Market").await;
         let order = Order::market_order(
             symbol_name.clone(),
             brokerage.clone(),
@@ -367,7 +367,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, String::from("Sell Market")).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Sell Market").await;
         let order = Order::market_order(
             symbol_name.clone(),
             brokerage.clone(),
@@ -395,7 +395,7 @@ impl FundForgeStrategy {
         tif: TimeInForce,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Limit", side)).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Limit", side)).await;
         let order = Order::limit_order(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(), limit_price, tif);
         let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
         self.market_event_sender.send(request).await.unwrap();
@@ -414,7 +414,7 @@ impl FundForgeStrategy {
         tif: TimeInForce,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(&symbol_name, account_id, brokerage, format!("{} MIT", side)).await;
+        let order_id = self.order_id(&symbol_name, account_id, brokerage, &format!("{} MIT", side)).await;
         let order = Order::market_if_touched(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
         let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
         self.market_event_sender.send(request).await.unwrap();
@@ -433,7 +433,7 @@ impl FundForgeStrategy {
         tif: TimeInForce,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Stop", side)).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop", side)).await;
         let order = Order::stop(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
         let request =MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
         self.market_event_sender.send(request).await.unwrap();
@@ -453,7 +453,7 @@ impl FundForgeStrategy {
         trigger_price: Price,
         tif: TimeInForce
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, format!("{} Stop Limit", side)).await;
+        let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop Limit", side)).await;
         let order = Order::stop_limit(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),limit_price, trigger_price, tif);
         let request = MarketMessageEnum::OrderRequest(OrderRequest::Create{ brokerage: order.brokerage.clone(), order});
         self.market_event_sender.send(request).await.unwrap();
@@ -692,8 +692,8 @@ impl FundForgeStrategy {
         }
     }
 
-    pub async fn print_ledgers(&self) -> Vec<String> {
-        todo!()
+    pub fn print_ledgers(&self) {
+        print_ledgers()
     }
 
     pub async fn print_ledger(&self, brokerage: Brokerage, account_id: AccountId) -> Option<String> {
