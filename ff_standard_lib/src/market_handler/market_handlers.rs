@@ -58,21 +58,14 @@ lazy_static!(
     pub static ref LAST_PRICE: Arc<DashMap<SymbolName, Price>> = Arc::new(DashMap::new());
     pub static ref SYMBOL_INFO: Arc<DashMap<SymbolName, SymbolInfo>> = Arc::new(DashMap::new());
     //static ref LAST_PRICE_MOMENTUM: Arc<DashMap<Symbol, BTreeMap<u8, > = Arc::new(DashMap::new()); we could use this to record last tick was up or down for x periods
-    static ref POSITIONS_COUNTER: Arc<DashMap<Brokerage, DashMap<AccountId, AHashMap<SymbolName, u64>>>> = Arc::new(DashMap::new());
     //ToDO implement a 4th strategy mode variant to trade live and paper in parallel
 
     //LIVE STATICS
-    pub static ref LIVE_CASH_AVAILABLE: Arc<DashMap<Brokerage, DashMap<AccountId, Price>>> = Arc::new(DashMap::new());
-    pub static ref LIVE_CASH_USED: Arc<DashMap<Brokerage, DashMap<AccountId, Price>>> = Arc::new(DashMap::new());
-    static ref LIVE_CURRENCY: Arc<DashMap<Brokerage, DashMap<AccountId, Currency>>> = Arc::new(DashMap::new());
-    pub static ref LIVE_BOOKED_PNL: Arc<DashMap<Brokerage, DashMap<AccountId, Decimal>>> = Arc::new(DashMap::new());
-    pub static ref LIVE_OPEN_PNL: Arc<DashMap<Brokerage, DashMap<AccountId, Decimal>>> = Arc::new(DashMap::new());
     pub static ref LIVE_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
     pub static ref LIVE_CLOSED_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
     pub static ref LIVE_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
 
     //BACKTEST STATICS
-    static ref BACKTEST_OPEN_PNL: Arc<DashMap<Brokerage, DashMap<AccountId, Decimal>>> = Arc::new(DashMap::new());
     pub static ref BACKTEST_OPEN_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
     pub static ref BACKTEST_CLOSED_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
     pub static ref BACKTEST_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
