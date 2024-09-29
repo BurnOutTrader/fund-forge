@@ -303,7 +303,7 @@ pub async fn backtest_matching_engine(
                     OrderSide::Sell => market_price >= order.limit_price.unwrap()
                 };
                 if is_fill_triggered {
-                    filled.push((order.id.clone(), market_price));
+                    filled.push((order.id.clone(), order.limit_price.unwrap().clone()));
                 }
             }
             OrderType::Market => {
@@ -324,7 +324,7 @@ pub async fn backtest_matching_engine(
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap() && market_price < order.limit_price.unwrap()
                 };
                 if is_fill_triggered {
-                    filled.push((order.id.clone(), market_price));
+                    filled.push((order.id.clone(),  order.limit_price.unwrap().clone())); //todo need a better way to simulate stop limits, use custom market price fn
                 }
             },
             OrderType::EnterLong(new_brackets) => {
