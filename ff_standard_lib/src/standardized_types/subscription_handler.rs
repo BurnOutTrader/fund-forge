@@ -17,6 +17,7 @@ use futures::StreamExt;
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::{Mutex, RwLock};
 use crate::market_handler::market_handlers::MarketMessageEnum;
+use crate::server_connections::is_warmup_complete;
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
@@ -33,8 +34,6 @@ pub struct SubscriptionHandler {
     symbol_subscriptions: Arc<DashMap<Symbol, SymbolSubscriptionHandler>>,
     /// fundamental data is not consolidated and so it does not need special handlers
     fundamental_subscriptions: Arc<RwLock<Vec<DataSubscription>>>,
-    /// Keeps a record when the strategy has updated its subscriptions, so we can pause the backtest to fetch new data.
-    is_warmed_up: AtomicBool,
     strategy_mode: StrategyMode,
     // subscriptions which the strategy actually subscribed to, not the raw data needed to full-fill the subscription.
     strategy_subscriptions: Arc<RwLock<Vec<DataSubscription>>>,
@@ -54,7 +53,6 @@ impl SubscriptionHandler {
             market_event_sender,
             fundamental_subscriptions: Default::default(),
             symbol_subscriptions: Default::default(),
-            is_warmed_up: AtomicBool::new(false),
             strategy_mode,
             strategy_subscriptions: Default::default(),
             primary_subscriptions_broadcaster: Arc::new(StaticInternalBroadcaster::new()),
@@ -75,15 +73,6 @@ impl SubscriptionHandler {
 
     pub(crate) async fn unsubscribe_primary_subscription_updates(&self, name: String) {
         self.primary_subscriptions_broadcaster.unsubscribe(name).await;
-    }
-
-    /// Sets the SubscriptionHandler as warmed up, so we can start processing data.
-    /// This lets the handler know that it needs to manually warm up any future subscriptions.
-    pub async fn set_warmup_complete(&self) {
-        self.is_warmed_up.store(true, Ordering::SeqCst);
-        for symbol_handler in self.symbol_subscriptions.iter() {
-            symbol_handler.value().set_warmed_up().await;
-        }
     }
 
     /// Returns all the subscription events that have occurred since the last time this method was called.
@@ -131,7 +120,6 @@ impl SubscriptionHandler {
         if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
             let symbol_handler = SymbolSubscriptionHandler::new(
                 new_subscription.symbol.clone(),
-                self.is_warmed_up.load(Ordering::SeqCst),
             ).await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
             //println!("Handler: Subscribed: {}", new_subscription);
@@ -593,13 +581,11 @@ pub struct SymbolSubscriptionHandler {
     subscription_event_buffer: RwLock<Vec<DataSubscriptionEvent>>,
     vendor_primary_resolutions: Vec<SubscriptionResolutionType>,
     vendor_data_types: Vec<BaseDataType>,
-    is_warmed_up: AtomicBool,
 }
 
 impl SymbolSubscriptionHandler {
     pub async fn new(
         symbol: Symbol,
-        is_warmed_up: bool,
     ) -> Self {
         let vendor_primary_resolutions = symbol.data_vendor.resolutions(symbol.market_type.clone()).await.unwrap();
         let vendor_data_types = symbol.data_vendor.base_data_types().await.unwrap();
@@ -608,7 +594,6 @@ impl SymbolSubscriptionHandler {
             primary_subscriptions: DashMap::with_capacity(5),
             secondary_subscriptions: DashMap::with_capacity(5),
             subscription_event_buffer: RwLock::new(Vec::new()),
-            is_warmed_up: AtomicBool::new(is_warmed_up),
             vendor_primary_resolutions,
             vendor_data_types
         };
@@ -664,10 +649,6 @@ impl SymbolSubscriptionHandler {
         }
     }
 
-    pub async fn set_warmed_up(&self) {
-        self.is_warmed_up.store(true, Ordering::SeqCst);
-    }
-
     pub async fn get_subscription_event_buffer(&self) -> Vec<DataSubscriptionEvent> {
         let mut buffer = self.subscription_event_buffer.write().await;
         let return_buffer = buffer.clone();
@@ -703,7 +684,7 @@ impl SymbolSubscriptionHandler {
                 return None
             }
         }
-        let is_warmed_up = self.is_warmed_up.load(Ordering::SeqCst);
+        let is_warmed_up =   is_warmup_complete();
 
         let mut returned_windows = AHashMap::new();
         let load_data_closure = |closure_subscription: &DataSubscription| -> Option<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>>{
@@ -835,7 +816,7 @@ impl SymbolSubscriptionHandler {
                     let mut returned_windows = AHashMap::new();
                     if !self.primary_subscriptions.contains_key(&primary_res_sub_type) {
                         self.primary_subscriptions.insert(primary_res_sub_type.clone(), lowest_possible_primary.clone());
-                        if self.is_warmed_up.load(Ordering::SeqCst) {
+                        if is_warmed_up {
                             let from_time = match lowest_possible_primary.resolution == Resolution::Instant {
                                 true => {
                                     let subtract_duration: Duration = Duration::seconds(2) * history_to_retain as i32;

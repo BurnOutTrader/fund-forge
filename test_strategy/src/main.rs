@@ -9,6 +9,7 @@ use ff_standard_lib::standardized_types::strategy_events::{StrategyEventBuffer, 
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use std::sync::Arc;
+use rust_decimal_macros::dec;
 use tokio::sync::{mpsc, Notify};
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::apis::data_vendor::datavendor_enum::DataVendor;
@@ -129,7 +130,7 @@ pub async fn on_data_received(
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
                                     println!("Candle {}: {}, Local Time: {}", candle.symbol.name, candle.time_utc(), candle.time_local(strategy.time_zone()));
-                                    /*history_2.add(candle.clone());
+                                    history_2.add(candle.clone());
                                     let last_bar =
                                         match history_2.get(1) {
                                             None => {
@@ -143,29 +144,29 @@ pub async fn on_data_received(
                                     }
 
                                     if candle.close > last_bar.high
-                                        && !strategy.is_long(&brokerage, &account_name, &candle.symbol.name).await
+                                        && !strategy.is_long(&brokerage, &account_name, &candle.symbol.name)
                                     {
                                         let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(1), None, String::from("Enter Long")).await;
                                         bars_since_entry_2 = 0;
                                     }
                                     else if bars_since_entry_2 > 10
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
-                                        && strategy.is_long(&brokerage, &account_name, &candle.symbol.name).await
+                                        && strategy.is_long(&brokerage, &account_name, &candle.symbol.name)
                                     {
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
                                         bars_since_entry_2 = 0;
                                     }
 
-                                    if strategy.is_long(&brokerage, &account_name, &candle.symbol.name).await {
+                                    if strategy.is_long(&brokerage, &account_name, &candle.symbol.name) {
                                         bars_since_entry_2 += 1;
-                                    }*/
+                                    }
                                 }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
                                     println!("QuoteBar {}: {}, Local Time {}", quotebar.symbol.name, quotebar.time_utc(), quotebar.time_local(strategy.time_zone()));
-                                    /*history_1.add(quotebar.clone());
+                                    history_1.add(quotebar.clone());
                                     let last_bar =
                                     match history_1.get(1) {
                                         None => {
@@ -181,22 +182,22 @@ pub async fn on_data_received(
 
 
                                     if quotebar.bid_close > last_bar.bid_high
-                                        && !strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await
+                                        && !strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name)
                                     {
                                         let _entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), None, String::from("Enter Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
                                     else if bars_since_entry_1 > 10
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
-                                        && strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await
+                                        && strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name)
                                     {
                                         let _exit_order_id = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
-                                    if strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name).await {
+                                    if strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name) {
                                         bars_since_entry_1 += 1;
-                                    }*/
+                                    }
                                 }
                                 //do something with the current open bar
                                 if !quotebar.is_closed {

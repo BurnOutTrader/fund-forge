@@ -127,6 +127,7 @@ impl IndicatorHandler {
             }
         }
 
+
         let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
         if !results_vec.is_empty() {
             add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await;
