@@ -353,7 +353,7 @@ pub(crate) mod historical_ledgers {
                 }
             }
             self.open_pnl = open_pnl;
-            self.cash_value = self.cash_used + self.cash_available + self.booked_pnl + self.open_pnl;
+            self.cash_value = self.cash_used + self.cash_available + self.open_pnl;
         }
 
         pub async fn update_or_create_paper_position(
