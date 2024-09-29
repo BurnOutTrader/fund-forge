@@ -287,7 +287,7 @@ pub async fn backtest_matching_engine(
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
     let mut filled = Vec::new();
-    'order_loop: for order in BACKTEST_OPEN_ORDER_CACHE.iter() {
+    for order in BACKTEST_OPEN_ORDER_CACHE.iter() {
         let market_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_ordered, order.brokerage).await {
             Ok(price) => price,
             Err(e) => {
@@ -349,7 +349,6 @@ pub async fn backtest_matching_engine(
                 } else {
                     let reason = "No long position to exit".to_string();
                     rejected.push((order.id.clone(), reason));
-                    continue 'order_loop;
                 }
             }
             OrderType::ExitShort => {
@@ -358,7 +357,6 @@ pub async fn backtest_matching_engine(
                 } else {
                     let reason = "No short position to exit".to_string();
                     rejected.push((order.id.clone(), reason));
-                    continue 'order_loop;
                 }
             }
             OrderType::UpdateBrackets(broker, account_id, symbol_name, brackets) => {
@@ -375,7 +373,6 @@ pub async fn backtest_matching_engine(
                 } else {
                     let reason = "No position for update brackets".to_string();
                     rejected.push((order.id.clone(), reason));
-                    continue 'order_loop;
                 }
             }
         }
@@ -417,7 +414,6 @@ async fn reject_order(
         order.state = OrderState::Rejected(reason.clone());
         order.time_created_utc = time.to_string();
 
-        // Await the async `add_buffer` function
         add_buffer(
             time,
             StrategyEvent::OrderEvents(OrderUpdateEvent::Rejected {
@@ -439,7 +435,6 @@ async fn accept_order(
         order.state = OrderState::Accepted;
         order.time_created_utc = time.to_string();
 
-        // Await the async `add_buffer` function
         add_buffer(
             time,
             StrategyEvent::OrderEvents(OrderUpdateEvent::Accepted {
