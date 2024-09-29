@@ -29,15 +29,25 @@ use crate::standardized_types::symbol_info::SymbolInfo;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
+pub struct BookLevel {
+    level: u8,
+    price: Decimal,
+    volume: Volume
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
 pub enum MarketMessageEnum {
     RegisterSymbol(Symbol),
     BaseDataUpdate(BaseDataEnum),
     TimeSliceUpdate(TimeSlice),
     OrderRequest(OrderRequest),
-    OrderBookSnapShot{symbol: Symbol, bid_book: BTreeMap<u8, (f64, f64)>, ask_book: BTreeMap<u8, (f64, f64)>},
+    OrderBookSnapShot{symbol: Symbol, bid_book: Vec<BookLevel>, ask_book: Vec<BookLevel>},
     DeregisterSymbol(Symbol),
     LiveOrderUpdate(OrderUpdateEvent)
 }
+
 
 /*
    pub account_id: AccountId,
@@ -102,8 +112,22 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
                     update_base_data(mode, base_data);
                 }
                 MarketMessageEnum::OrderBookSnapShot{symbol , bid_book, ask_book } => {
-                   // BID_BOOKS.insert(symbol.name.clone(), bid_book);
-                   // ASK_BOOKS.insert(symbol.name, ask_book);
+                    if !BID_BOOKS.contains_key(&symbol.name){
+                        BID_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
+                    }
+                    if let Some(mut order_book) = BID_BOOKS.get_mut(&symbol.name) {
+                        for book_level in bid_book {
+                            order_book.value_mut().insert(book_level.level, (book_level.price, book_level.volume));
+                        }
+                    }
+                    if !ASK_BOOKS.contains_key(&symbol.name){
+                        ASK_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
+                    }
+                    if let Some(mut order_book) = ASK_BOOKS.get_mut(&symbol.name) {
+                        for book_level in ask_book {
+                            order_book.value_mut().insert(book_level.level, (book_level.price, book_level.volume));
+                        }
+                    }
                 }
                 MarketMessageEnum::TimeSliceUpdate(time_slice) => {
                     for base_data in time_slice.iter() {
@@ -163,21 +187,15 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
 fn update_base_data(mode: StrategyMode, base_data_enum: BaseDataEnum) {
     match base_data_enum {
         BaseDataEnum::Candle(candle) => {
-            //todo overhaul again, we will define a primary subsciption type as its own type, ticks and quotes only, then DataSubscriptions will be own object
-            // this will be used only as a last resort for backtesting scenarios
-            if mode == StrategyMode::Backtest {
-                LAST_PRICE.insert(candle.symbol.name, candle.close);
-            }
+            LAST_PRICE.insert(candle.symbol.name, candle.close);
         }
         BaseDataEnum::QuoteBar(quotebar) => {
-            //todo overhaul again, we will define a primary subsciption type as its own type, ticks and quotes only, then DataSubscriptions will be own object
-            // this will be used only as a last resort for backtesting scenarios
             if mode == StrategyMode::Backtest {
                 if let Some(mut bid_book) = BID_BOOKS.get_mut(&quotebar.symbol.name) {
-                    bid_book.value_mut().insert(0, (quotebar.bid_close, quotebar.bid_volume));
+                    bid_book.value_mut().insert(0, (quotebar.bid_close, dec!(0.0)));
                 }
                 if let Some(mut ask_book) = ASK_BOOKS.get_mut(&quotebar.symbol.name) {
-                    ask_book.value_mut().insert(0, (quotebar.ask_close, quotebar.ask_volume));
+                    ask_book.value_mut().insert(0, (quotebar.ask_close, dec!(0.0)));
                 }
             }
         }
