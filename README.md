@@ -98,11 +98,6 @@ pub async fn on_data_received(
 }
 ```
 
-We can also pull all the same type of an event directly out of the slice, this is useful in the event we want to use certain functions to handle certain events
-```rust
-
-```
-
 It is easy to subscribe to data, including custom candles like Heikin Ashi and Renko Blocks.
 Data subscriptions can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history.
 Data subscriptions will warm themselves up on creation if the strategy is already warmed up, so we can subscribe and unsubscribe at any time.
