@@ -315,6 +315,9 @@ pub async fn backtest_matching_engine(
         }
     };
 
+    let mut rejected = Vec::new();
+    let mut accepted = Vec::new();
+    let mut filled = Vec::new();
     'order_loop: for order in BACKTEST_OPEN_ORDER_CACHE.iter() {
         let market_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_ordered, order.brokerage).await {
             Ok(price) => price,
@@ -325,84 +328,97 @@ pub async fn backtest_matching_engine(
         };
 
         //3. respond with an order event
-        let mut is_fill_triggered = false;
         let mut brackets: Option<Vec<ProtectiveOrder>> = None;
         match &order.order_type {
             OrderType::Limit => {
-                is_fill_triggered = match order.side {
+                let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price <= order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.limit_price.unwrap()
                 };
+                if is_fill_triggered {
+                    filled.push((order.id.clone(), market_price));
+                }
             }
             OrderType::Market => {
-                is_fill_triggered = true;
+                filled.push((order.id.clone(), market_price));
             },
             OrderType::MarketIfTouched | OrderType::StopMarket => {
-                is_fill_triggered = match order.side {
+                let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price <= order.trigger_price.unwrap(),
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap()
                 };
+                if is_fill_triggered {
+                    filled.push((order.id.clone(), market_price));
+                }
             }
             OrderType::StopLimit => {
-                is_fill_triggered = match order.side {
+                let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price <= order.trigger_price.unwrap() && market_price > order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap() && market_price < order.limit_price.unwrap()
                 };
+                if is_fill_triggered {
+                    filled.push((order.id.clone(), market_price));
+                }
             },
             OrderType::EnterLong(new_brackets) => {
                 if is_short_paper(&order.brokerage, &order.account_id, &order.symbol_name) {
                     exit_position_paper(order.brokerage, &order.account_id, &order.symbol_name, time.clone()).await;
                 }
-                is_fill_triggered = true;
+                filled.push((order.id.clone(), market_price));
                 brackets = new_brackets.clone();
             }
             OrderType::EnterShort(new_brackets) => {
                 if is_long_paper(&order.brokerage, &order.account_id, &order.symbol_name) {
                     exit_position_paper(order.brokerage, &order.account_id, &order.symbol_name, time.clone()).await;
                 }
-                is_fill_triggered = true;
+                filled.push((order.id.clone(), market_price));
                 brackets = new_brackets.clone();
             }
             OrderType::ExitLong => {
                 if is_long_paper(&order.brokerage, &order.account_id, &order.symbol_name) {
-                    is_fill_triggered = true;
+                    filled.push((order.id.clone(), market_price));
                 } else {
                     let reason = "No long position to exit".to_string();
-                    reject_order(reason, &order.id, time.clone());
+                    rejected.push((order.id.clone(), reason));
                     continue 'order_loop;
                 }
             }
             OrderType::ExitShort => {
                 if is_short_paper(&order.brokerage, &order.account_id, &order.symbol_name) {
-                    is_fill_triggered = true;
+                    filled.push((order.id.clone(), market_price));
                 } else {
                     let reason = "No short position to exit".to_string();
-                    reject_order(reason, &order.id, time.clone());
+                    rejected.push((order.id.clone(), reason));
                     continue 'order_loop;
                 }
             }
             OrderType::UpdateBrackets(broker, account_id, symbol_name, brackets) => {
-                is_fill_triggered = false;
                 if let Some(brokerage_map) = OPEN_BACKTEST_POSITIONS.get_mut(&broker) {
                     if let Some(mut position) = brokerage_map.get_mut(account_id) {
                         position.brackets = Some(brackets.clone());
-                        accept_order(&order.id, time);
+                        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::Updated {
+                            brokerage: order.brokerage,
+                            account_id: order.id.clone(),
+                            order_id: order.id.clone(),
+                        });
+                        add_buffer(time, event).await;
                     }
                 } else {
                     let reason = "No position for update brackets".to_string();
-                    reject_order(reason, &order.id, time.clone());
+                    rejected.push((order.id.clone(), reason));
                     continue 'order_loop;
                 }
             }
         }
-        if is_fill_triggered {
-            match update_or_create_paper_position(&order.symbol_name.clone(), order.brokerage, &order.account_id, order.quantity_ordered, order.side, &time.clone(), brackets, market_price).await {
-                Ok(_) => fill_order(&order.id, time.clone(), market_price),
-                Err(e) => reject_order(e.to_string(), &order.id, time.clone())
-            }
-        } else {
-            accept_order(&order.id, time.clone());
-        }
+    }
+    for (order_id, reason) in rejected {
+        reject_order(reason, &order_id, time)
+    }
+    for order_id in accepted {
+        accept_order(order_id, time);
+    }
+    for (order_id, price) in filled {
+        fill_order(&order_id, time, price)
     }
 }
 
