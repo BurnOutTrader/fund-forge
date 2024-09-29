@@ -125,6 +125,9 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
                     let booked_pnl: AHashMap<Brokerage, AHashMap<AccountId, Decimal>> = BACKTEST_POSITIONS.on_data_updates(&base_data, &time);
                     historical_booked_profit_adjustments(booked_pnl);
                     update_base_data(mode, base_data, &time);
+                    if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
+                        backtest_matching_engine(time).await;
+                    }
                 }
                 MarketMessageEnum::TimeSliceUpdate(time_slice) => {
                     for base_data in time_slice.iter() {
@@ -132,6 +135,9 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
                     }
                     let booked_pnl = BACKTEST_POSITIONS.on_timeslice_updates(time_slice, &time);
                     historical_booked_profit_adjustments(booked_pnl);
+                    if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
+                        backtest_matching_engine(time).await;
+                    }
                 }
                 MarketMessageEnum::OrderBookSnapShot{symbol , bid_book, ask_book } => {
                     if !BID_BOOKS.contains_key(&symbol.name){
@@ -149,6 +155,9 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
                         for book_level in ask_book {
                             order_book.value_mut().insert(book_level.level, (book_level.price, book_level.volume));
                         }
+                    }
+                    if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
+                        backtest_matching_engine(time).await;
                     }
                 }
                 MarketMessageEnum::OrderRequest(order_request) => {
@@ -456,7 +465,7 @@ async fn fill_order(
     market_price: Price,
     brackets: Option<Vec<ProtectiveOrder>>
 ) {
-    if let Some((order_id, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
+    if let Some((_, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
         order.time_filled_utc = Some(time.to_string());
         order.state = OrderState::Filled;
         order.average_fill_price = Some(market_price);
@@ -473,7 +482,7 @@ async fn reject_order(
     order_id: &OrderId,
     time: DateTime<Utc>,
 ) {
-    if let Some((order_id, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
+    if let Some((_, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
         order.state = OrderState::Rejected(reason.clone());
         order.time_created_utc = time.to_string();
 
