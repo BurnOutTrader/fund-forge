@@ -11,7 +11,9 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive};
 use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
+use crate::market_handler::market_handlers::SYMBOL_INFO;
 use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::{OrderSide, SubscriptionResolutionType};
 
 pub struct HeikinAshiConsolidator {
@@ -199,34 +201,33 @@ impl HeikinAshiConsolidator {
         subscription: DataSubscription,
         fill_forward: bool,
         subscription_resolution_type: SubscriptionResolutionType
-    ) -> Result<HeikinAshiConsolidator, String> {
+    ) -> Result<HeikinAshiConsolidator, FundForgeError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
-            return Err(format!(
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
                     "{} is an Invalid base data type for HeikinAshiConsolidator",
                     subscription.base_data_type
                 ),
-            );
+            ));
         }
 
         if let Some(candle_type) = &subscription.candle_type {
             if candle_type != &CandleType::HeikinAshi {
-                return Err(format!(
+                return Err(FundForgeError::ClientSideErrorDebug(format!(
                         "{:?} is an Invalid candle type for HeikinAshiConsolidator",
                         candle_type
                     ),
-                );
+                ));
             }
         }
-        let tick_size = match subscription
-            .symbol
-            .tick_size()
-            .await
-        {
-            Ok(size) => size,
-            Err(e) => {
-                return Err(format!("Error getting tick size: {}", e),
-                )
-            }
+
+        let tick_size = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
+            info.tick_size
+        } else {
+            let tick_size = match subscription.symbol.tick_size().await {
+                Ok(size) => size,
+                Err(e) => return Err(e)
+            };
+            tick_size
         };
 
         Ok(HeikinAshiConsolidator {

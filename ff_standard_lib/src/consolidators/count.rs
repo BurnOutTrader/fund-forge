@@ -1,12 +1,14 @@
 use rust_decimal::prelude::FromPrimitive;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::decimal_calculators::round_to_tick_size;
+use crate::market_handler::market_handlers::SYMBOL_INFO;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::enums::{Resolution, SubscriptionResolutionType};
 use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::subscriptions::DataSubscription;
 
 //Todo Replace all quantity and volume with Volume aka Decimal, same for price.
@@ -25,11 +27,11 @@ impl CountConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         subscription_resolution_type: SubscriptionResolutionType
-    ) -> Result<Self, String> {
+    ) -> Result<Self, FundForgeError> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
             _ => {
-                return Err(format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution))
+                return Err(FundForgeError::ClientSideErrorDebug(format!("{:?} is an Invalid resolution for CountConsolidator", subscription.resolution)))
             }
         };
 
@@ -45,25 +47,18 @@ impl CountConsolidator {
                 subscription.candle_type.clone().unwrap(),
             ),
             _ => {
-                return Err(
-                    format!(
-                        "{} is an Invalid base data type for CountConsolidator",
-                        subscription.base_data_type
-                    ),
-                )
+                return Err(FundForgeError::ClientSideErrorDebug(format!("{} is an Invalid base data type for CountConsolidator", subscription.base_data_type)))
             }
         };
 
-        let tick_size = match subscription
-            .symbol
-            .tick_size()
-            .await
-        {
-            Ok(size) => size,
-            Err(e) => {
-                return Err(format!("Error getting tick size: {}", e),
-                )
-            }
+        let tick_size = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
+            info.tick_size
+        } else {
+            let tick_size = match subscription.symbol.tick_size().await {
+                Ok(size) => size,
+                Err(e) => return Err(e)
+            };
+            tick_size
         };
 
         Ok(CountConsolidator {

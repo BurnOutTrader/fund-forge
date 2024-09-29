@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::converters::open_time;
+use crate::market_handler::market_handlers::SYMBOL_INFO;
 use crate::standardized_types::{Price};
 use crate::standardized_types::data_server_messaging::FundForgeError;
 
@@ -315,9 +316,14 @@ impl CandleStickConsolidator {
             );
         }
 
-        let tick_size = match subscription.symbol.tick_size().await {
-            Ok(size) => size,
-            Err(e) => return Err(e)
+        let tick_size = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
+            info.tick_size
+        } else {
+            let tick_size = match subscription.symbol.tick_size().await {
+                Ok(size) => size,
+                Err(e) => return Err(e)
+            };
+            tick_size
         };
 
         Ok(CandleStickConsolidator {

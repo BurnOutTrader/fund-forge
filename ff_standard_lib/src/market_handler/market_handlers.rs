@@ -49,21 +49,6 @@ pub enum MarketMessageEnum {
 }
 
 
-/*
-   pub account_id: AccountId,
-    pub brokerage: Brokerage,
-    pub cash_value: Price,
-    pub cash_available: Price,
-    pub currency: Currency,
-    pub cash_used: Price,
-    pub positions: DashMap<SymbolName, Position>,
-    pub positions_closed: DashMap<SymbolName, Vec<Position>>,
-    pub positions_counter: DashMap<SymbolName, u64>,
-    pub symbol_info: DashMap<SymbolName, SymbolInfo>,
-    pub open_pnl: Price,
-    pub booked_pnl: Price,
-*/
-
 lazy_static!(
     pub static ref BID_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u8, (Price, Volume)>>>= Arc::new(DashMap::new());
     pub static ref ASK_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u8, (Price, Volume)>>> = Arc::new(DashMap::new());
