@@ -122,22 +122,23 @@ pub async fn market_handler(mode: StrategyMode) -> Sender<MarketMessageEnum> {
                     ASK_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
                 }
                 MarketMessageEnum::BaseDataUpdate(base_data ) => {
-                    let booked_pnl: AHashMap<Brokerage, AHashMap<AccountId, Decimal>> = BACKTEST_POSITIONS.on_data_updates(&base_data, &time);
-                    historical_booked_profit_adjustments(booked_pnl);
-                    update_base_data(mode, base_data, &time);
+                    update_base_data(mode, base_data.clone(), &time);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time).await;
                     }
+                    let booked_pnl: AHashMap<Brokerage, AHashMap<AccountId, Decimal>> = BACKTEST_POSITIONS.on_data_updates(&base_data, &time);
+                    historical_booked_profit_adjustments(booked_pnl);
+                    update_base_data(mode, base_data, &time);
                 }
                 MarketMessageEnum::TimeSliceUpdate(time_slice) => {
                     for base_data in time_slice.iter() {
                         update_base_data(mode, base_data.clone(), &time);
                     }
-                    let booked_pnl = BACKTEST_POSITIONS.on_timeslice_updates(time_slice, &time);
-                    historical_booked_profit_adjustments(booked_pnl);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time).await;
                     }
+                    let booked_pnl = BACKTEST_POSITIONS.on_timeslice_updates(time_slice, &time);
+                    historical_booked_profit_adjustments(booked_pnl);
                 }
                 MarketMessageEnum::OrderBookSnapShot{symbol , bid_book, ask_book } => {
                     if !BID_BOOKS.contains_key(&symbol.name){
