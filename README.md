@@ -35,7 +35,8 @@ There is an Option for using a buffered or unbuffered engine in backtesting and 
 in the unbuffered version events are forwarded to the strategy receiver as soon as they occur. In the buffered version events are buffered for X Duration and forwarded as a `StrategyEventBuffer`.
 The strategy will choose which engine to use depending on the initializing parameter `buffering_duration: Option<Duration>`.
 
-The strategy engine will be started in the background depending on the StrategyMode. The strategy can be shared between threads and maintain full functionality, allowing the strategy logic to be delegated between custom user functions and use async architectures.
+The strategy engine will be started in the background depending on the StrategyMode. 
+The strategy can be shared between threads as an `Arc<FundForgeStrategy>` and maintain full functionality, allowing the strategy logic to be delegated between custom user functions and async architectures.
 
 After creating the strategy instance using `FundForgeStrategy::initialize();` we will receive data and events as an `EventTimeSlice` in our event_receiver.
 Events are a vec collection of all `StrategyEvent`s that occurred within a buffer period.
