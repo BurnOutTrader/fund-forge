@@ -178,7 +178,7 @@ impl Indicators for AverageTrueRange {
         self.history.clone()
     }
 
-    fn data_required_to_fill(&self) -> u64 {
+    fn data_required_warmup(&self) -> u64 {
         (self.history.len() as u64 + self.period + 1)
     }
 }

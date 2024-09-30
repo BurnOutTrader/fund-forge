@@ -195,7 +195,7 @@ async fn warmup(
     match subscription.base_data_type {
         BaseDataType::Ticks => {
             if let Some(history) = subscription_handler.tick_history(&subscription) {
-                if history.len() >= indicator.data_required_to_fill() as usize {
+                if history.len() >= indicator.data_required_warmup() as usize {
                     for data in history.history {
                         let base_data = BaseDataEnum::Tick(data);
                         indicator.update_base_data(&base_data);
@@ -206,7 +206,7 @@ async fn warmup(
         }
         BaseDataType::Quotes => {
             if let Some(history) = subscription_handler.quote_history(&subscription) {
-                if history.len() >= indicator.data_required_to_fill() as usize {
+                if history.len() >= indicator.data_required_warmup() as usize {
                     for data in history.history {
                         let base_data = BaseDataEnum::Quote(data);
                         indicator.update_base_data(&base_data);
@@ -217,7 +217,7 @@ async fn warmup(
         }
         BaseDataType::QuoteBars => {
             if let Some(history) = subscription_handler.bar_history(&subscription) {
-                if history.len() >= indicator.data_required_to_fill() as usize {
+                if history.len() >= indicator.data_required_warmup() as usize {
                     for data in history.history {
                         let base_data = BaseDataEnum::QuoteBar(data);
                         indicator.update_base_data(&base_data);
@@ -228,7 +228,7 @@ async fn warmup(
         }
         BaseDataType::Candles => {
             if let Some(history) = subscription_handler.candle_history(&subscription) {
-                if history.len() >= indicator.data_required_to_fill() as usize {
+                if history.len() >= indicator.data_required_warmup() as usize {
                     for data in history.history {
                         let base_data = BaseDataEnum::Candle(data);
                         indicator.update_base_data(&base_data);
@@ -241,7 +241,7 @@ async fn warmup(
     }
 
     let consolidator = ConsolidatorEnum::create_consolidator(subscription.clone(), false, SubscriptionResolutionType::new(subscription.resolution, subscription.base_data_type)).await;
-    let (consolidator, window) = ConsolidatorEnum::warmup(consolidator, to_time, (indicator.data_required_to_fill() + 1) as i32, strategy_mode).await;
+    let (consolidator, window) = ConsolidatorEnum::warmup(consolidator, to_time, (indicator.data_required_warmup() + 1) as i32, strategy_mode).await;
     for data in window.history {
         let _ = indicator.update_base_data(&data);
     }

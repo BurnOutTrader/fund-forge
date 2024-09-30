@@ -100,10 +100,10 @@ impl Indicators for IndicatorEnum {
         }
     }
 
-    fn data_required_to_fill(&self) -> u64 {
+    fn data_required_warmup(&self) -> u64 {
         match self {
-            IndicatorEnum::AverageTrueRange(atr) => atr.data_required_to_fill(),
-            IndicatorEnum::Custom(indicator) => indicator.data_required_to_fill(),
+            IndicatorEnum::AverageTrueRange(atr) => atr.data_required_warmup(),
+            IndicatorEnum::Custom(indicator) => indicator.data_required_warmup(),
         }
     }
 }
