@@ -231,7 +231,7 @@ I have only tested on Mac and Linux, but there should not be any problems with W
 ## Demonstration Testing Data
 You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKE5Vp170W2GI9ITKw?e=FKn7Oc)
 Password "fundforge"
-The Forex folder should be put into the following director "ff_data_server/data/Test".
+The Forex folder should be put into the following directory "ff_data_server/data/Test".
 
 *Note that between updates old data may become incompatible, this will only be during initial development, but be sure to keep original backups of any data if you parse your own data into the engine.
 
