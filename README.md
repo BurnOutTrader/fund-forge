@@ -5,9 +5,10 @@ Community [discord](https://discord.gg/MNXH2jEExV)
 
 ### Current Method To Run Test Strategy
 ***You cannot run the test strategy from the main fund forge directory**
-1. cargo buid in the fund forge directory
-2. navigate to ff_data_server directory and `cargo run`
-3. navigate to test_strategy directory and `cargo run`
+1. get the testing data (instructions below)
+2. cargo buid in the fund forge directory
+3. navigate to ff_data_server directory and `cargo run`
+4. navigate to test_strategy directory and `cargo run`
 
 The working directory must be the strategy directory, or the strategy will not find its resources' folder.
 [see](./test_strategy/README.md)
@@ -393,7 +394,7 @@ I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using en
 
 'ff_strategy_registry': decouples the strategy instance to allow front end Gui implementations in any programming language. 
 
-'ff_data_servers': decouples api instances from any specific server and allows a microservices approach to maintaining api connections.
+`ff_data_servers`: decouples api instances from any specific server and allows a microservices approach to maintaining api connections.
 If no settings are provided in the `resources/server_settings.toml` then that brokerage or vendor will use the default server addresses, this way we have the option for maximum and minimum segregation of api instances.
 
 When running a Strategy or Ui each vendor or brokerage instance will automatically generate an Asynchronous connection per individual `Brokerage` or `DataVendor` specification, if no unique specs are input in the `server_settings.toml` then the default connection will be assumed to host the api instance.
@@ -410,7 +411,7 @@ Brokerages utilize the `BrokerApiResponse` trait.
 
 On the client side the function calls are automatically forwarded to the correct api and so no changes to `ClientSideDataVendor` or `ClientSideBrokerage` need to be made
 
-All requests made by the engine will use the DataVendor or Brokerage variant in some way.
+All requests made by the engine will use the `DataVendor` or `Brokerage` enum variants in some way.
 We are simply: 
 1. Sending a request to the server using the DataVendor or Brokerage enum variant
 2. The server is returning a response with the data we require based on that variant.
