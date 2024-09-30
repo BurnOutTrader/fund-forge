@@ -324,18 +324,16 @@ If you manage to begin live trading before me, then you will need to test proper
 - Docker builds have not been tested recently and probably will not work without some minor code adjustments to the docker files.
 
 ## Current Objectives
-1. Complete all simulated functionality for the TEST api variants.
-2. Complete full Rithmic functionality after conformance is approved.
-3. Complete at least 1 crypto, 1 forex/cfd and 1 equities api.
-4. Improve event driven functions for live data/trading scenarios by testing completed apis.
-5. Complete overhaul for the ledger and market handlers.
-6. Complete the back testing functionality by running test strategies on local paper ledger in parallel with live paper trading, to compare results and create a new ledger model.
-7. Conduct live testing
-8. Lock down handler and strategy Architecture to avoid breaking changes in future versions.
-9. Slowly improve performance by updating individual components as I learn and experiment more.
-10. Add more indicators including support for multi symbol indicators
-11. finish charting and gui api development.
-12. Add support for building strategies in other languages while using the rust engine and backend. This will be done via a mix of json and a c-types interface to convert from rust data types to a general purpose interface for other languages.
+1. Complete full Rithmic functionality.
+2. Complete at least 1 crypto, 1 forex/cfd and 1 equities api.
+3. Improve event driven functions for live data/trading scenarios by testing completed apis.
+4. Complete the back testing functionality by running test strategies on local paper ledger in parallel with live paper trading, to compare results and create a new ledger model.
+5. Conduct live testing
+6. Lock down handler and strategy Architecture to avoid breaking changes in future versions.
+7. Slowly improve performance by updating individual components as I learn and experiment more. 
+8. Add more indicators including support for multi symbol indicators 
+9. finish charting and gui api development. 
+10. Add support for building strategies in other languages while using the rust engine and backend. This will be done via a mix of json and a c-types interface to convert from rust data types to a general purpose interface for other languages.
 
 ## Licence and Disclaimer
 The project has been a way for me to learn rust and build a portfolio of useful projects, my objective is to keep the engine open source, where I might get help with development from more seasoned developers.
