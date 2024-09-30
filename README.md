@@ -21,8 +21,8 @@ The engine can consolidate data into any bar type and resolution automatically u
 There are event driven handlers and a buffering system for maintaining speed and consistency from back testing to live trading.
 
 There is an Option for using a buffered or unbuffered engine in backtesting and live trading, the backtesting engines are designed to mimic the live trading engines, 
-in the unbuffered version events are forwarded to the strategy receiver as soon as they occur. In the buffered version events are buffered for X Duration and forwarded as a 'StrategyEventBuffer'.
-The strategy will choose which engine to use depending on the initializing parameter 'buffering_duration: Option<Duration>'.
+in the unbuffered version events are forwarded to the strategy receiver as soon as they occur. In the buffered version events are buffered for X Duration and forwarded as a `StrategyEventBuffer`.
+The strategy will choose which engine to use depending on the initializing parameter `buffering_duration: Option<Duration>`.
 
 This allows people familiar with concepts from common retail trading platforms to start building strategies without having to understand the entire code base.
 Simply build using high level abstractions like you would in any familiar commercial trading platform, but enjoy the benefits of the rust programing language.
