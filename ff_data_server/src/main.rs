@@ -6,7 +6,7 @@ use rustls_pemfile::{certs, private_key};
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use structopt::StructOpt;
@@ -49,22 +49,23 @@ struct ServerLaunchOptions {
     pub ssl_auth_folder: PathBuf,
 
     #[structopt(
-        short = "s",
-        long = "synchronous_address",
-        default_value = "0.0.0.0:8080"
+        short = "a",
+        long = "address",
+        default_value = "127.0.0.1"
     )]
-    pub listener_address: String,
+    pub listener_address: IpAddr,
 
-    #[structopt(short = "p", long = "async_address", default_value = "0.0.0.0:8081")]
-    pub async_listener_address: String,
+    #[structopt(
+        short = "p",
+        long = "port",
+        default_value = "8081"
+    )]
+    pub port: u16,
 }
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
-    let settings_map = initialise_settings().unwrap();
     let options = ServerLaunchOptions::from_args();
-    let settings = settings_map.get(&ConnectionType::Default).unwrap();
-
     let cert = Path::join(&options.ssl_auth_folder, "cert.pem");
     let key = Path::join(&options.ssl_auth_folder, "key.pem");
 
@@ -76,8 +77,8 @@ async fn main() -> io::Result<()> {
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
-
-    let async_server_handle = async_server(config.into(), settings.address).await;
+    let address = SocketAddr::new(options.listener_address, options.port);
+    let async_server_handle = async_server(config.into(), address).await;
 
     let async_result = async_server_handle.await;
 
