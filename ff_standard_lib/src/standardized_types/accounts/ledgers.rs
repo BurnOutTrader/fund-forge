@@ -74,7 +74,7 @@ pub struct Ledger {
     pub positions_closed: DashMap<SymbolName, Vec<Position>>,
     pub positions_counter: DashMap<SymbolName, u64>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
-    pub open_pnl: Price,
+    pub open_pnl: DashMap<SymbolName, Price>,
     pub booked_pnl: Price,
     pub mode: StrategyMode,
 }
@@ -97,7 +97,7 @@ impl Ledger {
             positions_closed: DashMap::new(),
             positions_counter: DashMap::new(),
             symbol_info: DashMap::new(),
-            open_pnl: dec!(0.0),
+            open_pnl: DashMap::new(),
             booked_pnl: dec!(0.0),
             mode: StrategyMode::Backtest,
         };
@@ -287,7 +287,7 @@ pub(crate) mod historical_ledgers {
                 positions_closed: DashMap::new(),
                 positions_counter: DashMap::new(),
                 symbol_info: DashMap::new(),
-                open_pnl: dec!(0.0),
+                open_pnl: DashMap::new(),
                 booked_pnl: dec!(0.0),
                 mode: strategy_mode,
             };
@@ -331,7 +331,6 @@ pub(crate) mod historical_ledgers {
         }
 
         pub fn on_historical_timeslice_update(&mut self, time_slice: TimeSlice, time: DateTime<Utc>) {
-            let mut open_pnl = dec!(0.0);
             for base_data_enum in time_slice.iter() {
                 let data_symbol_name = &base_data_enum.symbol().name;
                 if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
@@ -340,7 +339,7 @@ pub(crate) mod historical_ledgers {
                     }
                     //returns booked pnl if exit on brackets
                     position.backtest_update_base_data(&base_data_enum, time);
-                    open_pnl += position.open_pnl;
+                    self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
 
                     if position.is_closed {
                         // Move the position to the closed positions map
@@ -352,8 +351,7 @@ pub(crate) mod historical_ledgers {
                     }
                 }
             }
-            self.open_pnl = open_pnl;
-            self.cash_value = self.cash_used + self.cash_available + self.open_pnl;
+            self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
         }
 
         pub fn on_base_data_update(&mut self, base_data_enum: BaseDataEnum, time: DateTime<Utc>) {
@@ -364,8 +362,8 @@ pub(crate) mod historical_ledgers {
                 }
                 //returns booked pnl if exit on brackets
                 position.backtest_update_base_data(&base_data_enum, time);
-                self.open_pnl += position.open_pnl;
-                    self.cash_value = self.cash_used + self.cash_available + self.open_pnl;
+                    self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
+                self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
                 if position.is_closed {
                     // Move the position to the closed positions map
                     let (symbol_name, position) = self.positions.remove(data_symbol_name).unwrap();
@@ -375,6 +373,14 @@ pub(crate) mod historical_ledgers {
                         .push(position);
                 }
             }
+        }
+
+        pub fn get_open_pnl(&self) -> Price {
+            let mut pnl = dec!(0);
+            for price in self.open_pnl.iter() {
+                pnl += price.value().clone()
+            }
+            pnl
         }
 
         pub async fn update_or_create_paper_position(
@@ -395,7 +401,7 @@ pub(crate) mod historical_ledgers {
                     let booked_pnl= existing_position.reduce_position_size(market_price, quantity, time).await;
                     self.cash_available += booked_pnl;
                     self.subtract_margin_used(&symbol_name, quantity).await;
-                    self.cash_value = self.cash_used + self.cash_available + self.open_pnl;
+                    self.cash_value = self.cash_used + self.cash_available;
                 } else {
                     match self.add_margin_used(&symbol_name, quantity).await {
                         Ok(_) => {}
@@ -409,7 +415,7 @@ pub(crate) mod historical_ledgers {
                         }
                     }
                     existing_position.add_to_position(market_price, quantity, time).await;
-                    self.cash_value = self.cash_used + self.cash_available + self.open_pnl;
+                    self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
                     return Ok(())
                 }
                 if existing_position.is_closed {
@@ -464,7 +470,7 @@ pub(crate) mod historical_ledgers {
 
                  let event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionOpened(id));
                  add_buffer(time, event).await;
-                 self.cash_value = self.cash_used + self.cash_available + self.open_pnl;
+                 self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
                  Ok(())
             }
         }
@@ -498,7 +504,7 @@ pub(crate) mod historical_ledgers {
                 self.booked_pnl += booked_profit;
                 self.cash_available += booked_profit;
                 self.subtract_margin_used(&symbol_name, existing_position.quantity_open).await;
-                self.cash_value = self.cash_used + self.cash_available + self.open_pnl;
+                self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
                 // Add the closed position to the positions_closed DashMap
                 self.positions_closed
                     .entry(symbol_name.clone())                  // Access the entry for the symbol name
