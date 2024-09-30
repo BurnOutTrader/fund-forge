@@ -115,7 +115,7 @@ It is easy to subscribe to data, including custom candles like Heikin Ashi and R
 Data subscriptions can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history.
 
 If the strategy is already warmed up, Data subscriptions will warm up to fill their history window, so we can subscribe and unsubscribe at any time and access history for the subscription.
-(this needs to be properly tested, it is only a basic implementation at present and i recently overhauled the subscribtion handlers)
+(this needs to be properly tested, it is only a basic implementation at present and I recently overhauled the subscribtion handlers)
 
 To speed up backtests and prevent using consolidators, the engine will automatically use any primary data available with the data vendor in historical mode (according to what serialized data we have).
 This means we can pre consolidate and save commonly back tested resolutions. (I will build a server command for this)
@@ -215,6 +215,8 @@ fn example() {
   let symbol_name: SymbolName = SymbolName::from("AUD-USD");
 }
 ```
+***Advanced note*** Currently the engine will combine price feeds with the same symbol name in the market handler, so when a tick, quote or bar is received, it will be used to calculate the current market price. 
+This only has an impact on backtesting fills, duplicate SymbolName subscriptions from different `DataVendors` will still flow into the strategy event receiver and can be handled as unique feeds using the `BaseDataEnum.symbol()`
 
 For a full look at strategies see
 [test_strategy](./test_strategy/src/main.rs)
