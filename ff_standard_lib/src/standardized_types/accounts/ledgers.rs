@@ -23,6 +23,8 @@ pub type AccountName = String;
 pub enum Currency {
     AUD,
     USD,
+    CAD,
+    EUR,
     BTC,
 }
 
@@ -164,7 +166,6 @@ impl Ledger {
 pub(crate) mod historical_ledgers {
     use chrono::{DateTime, Utc};
     use dashmap::DashMap;
-    use dashmap::mapref::one::Ref;
     use rust_decimal::Decimal;
     use rust_decimal::prelude::FromPrimitive;
     use rust_decimal_macros::dec;

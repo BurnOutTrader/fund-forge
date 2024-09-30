@@ -22,27 +22,6 @@ pub(crate) struct PositionExport {
     lowest_recoded_price: Price,
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize,     PartialOrd,)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
-pub struct Position {
-    pub symbol_name: SymbolName,
-    pub brokerage: Brokerage,
-    pub account_id: AccountId,
-    pub side: PositionSide,
-    pub quantity_open: Volume,
-    pub quantity_closed: Volume,
-    pub average_price: Price,
-    pub open_pnl: Price,
-    pub booked_pnl: Price,
-    pub highest_recoded_price: Price,
-    pub lowest_recoded_price: Price,
-    pub average_exit_price: Option<Price>,
-    pub is_closed: bool,
-    pub position_id: PositionId,
-    pub symbol_info: SymbolInfo,
-    pub account_currency: Currency,
-}
 
 #[derive(
     Clone,
@@ -84,6 +63,28 @@ pub enum PositionUpdateEvent {
         position_id: PositionId,
         position: Position
     },
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize,     PartialOrd,)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct Position {
+    pub symbol_name: SymbolName,
+    pub brokerage: Brokerage,
+    pub account_id: AccountId,
+    pub side: PositionSide,
+    pub quantity_open: Volume,
+    pub quantity_closed: Volume,
+    pub average_price: Price,
+    pub open_pnl: Price,
+    pub booked_pnl: Price,
+    pub highest_recoded_price: Price,
+    pub lowest_recoded_price: Price,
+    pub average_exit_price: Option<Price>,
+    pub is_closed: bool,
+    pub position_id: PositionId,
+    pub symbol_info: SymbolInfo,
+    pub account_currency: Currency,
 }
 
 //todo make it so stop loss and take profit can be attached to positions, then instead of updating in the market handler, those orders update in the position and auto cancel themselves when position closes
@@ -172,10 +173,22 @@ pub(crate) mod historical_position {
 
             // Update position
             self.booked_pnl += booked_pnl;
+            self.average_exit_price = match self.average_exit_price {
+                Some(existing_exit_price) => {
+                    let exited_quantity = Decimal::from(self.quantity_closed);
+                    let new_exit_price = market_price;
+                    let new_exit_quantity = quantity;
+                    // Calculate the weighted average of the existing exit price and the new exit price
+                    let total_exit_quantity = exited_quantity + new_exit_quantity;
+                    let weighted_existing_exit = existing_exit_price * exited_quantity;
+                    let weighted_new_exit = new_exit_price * new_exit_quantity;
+                    Some(round_to_tick_size((weighted_existing_exit + weighted_new_exit) / total_exit_quantity, self.symbol_info.tick_size))
+                }
+                None => Some(market_price)
+            };
             self.quantity_open -= quantity;
             self.quantity_closed += quantity;
             self.is_closed = self.quantity_open <= dec!(0.0);
-            self.average_exit_price = Some(market_price);
 
             // Reset open PnL if position is closed
             if self.is_closed {
@@ -207,11 +220,17 @@ pub(crate) mod historical_position {
 
         pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) {
             // Correct the average price calculation with proper parentheses
-            self.average_price = round_to_tick_size(
-                ((self.quantity_open * self.average_price) + (quantity * market_price))
-                    / (self.quantity_open + quantity),
-                self.symbol_info.tick_size,
-            );
+            if self.quantity_open + quantity != Decimal::ZERO {
+                self.average_price = round_to_tick_size(
+                    (self.quantity_open * self.average_price + quantity * market_price)
+                        / (self.quantity_open + quantity),
+                    self.symbol_info.tick_size,
+                );
+            } else {
+                // Handle the case where total quantity would be zero
+                // This could be setting to zero, logging an error, or another appropriate action
+                self.average_price = Decimal::ZERO;
+            }
 
             // Update the total quantity
             self.quantity_open += quantity;
@@ -241,9 +260,9 @@ pub(crate) mod historical_position {
         }
 
         //todo, this needs to be ddone by passing in the position, so we can use the market price, it should return what kind of order was triggered
-        pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: DateTime<Utc>) {
+        pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: DateTime<Utc>) -> Decimal {
             if self.is_closed {
-                return;
+                return dec!(0)
             }
 
             // Extract market price, highest price, and lowest price from base data
@@ -277,6 +296,8 @@ pub(crate) mod historical_position {
                 &self.account_currency,
                 time,
             );
+
+            self.open_pnl.clone()
         }
     }
 }

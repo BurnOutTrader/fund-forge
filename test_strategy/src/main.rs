@@ -60,14 +60,14 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Seconds(15),
+                Resolution::Minutes(15),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Seconds(15),
+                 Resolution::Minutes(15),
                  MarketType::Forex,
                  CandleType::HeikinAshi
              ),],
@@ -94,7 +94,7 @@ pub async fn on_data_received(
               DataSubscription::new(
                   SymbolName::from("EUR-USD"),
                   DataVendor::Test,
-                  Resolution::Seconds(15),
+                  Resolution::Minutes(15),
                   BaseDataType::QuoteBars,
                   MarketType::Forex,
               ),
