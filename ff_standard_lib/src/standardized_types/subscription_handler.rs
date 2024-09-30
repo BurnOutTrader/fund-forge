@@ -597,12 +597,6 @@ impl SymbolSubscriptionHandler {
             vendor_primary_resolutions,
             vendor_data_types
         };
- /*       for sub in initial_primary_subscriptions {
-            if sub.base_data_type == BaseDataType::Fundamentals {
-                continue;
-            }
-            handler.subscribe(sub, warm_up_to.clone(), strategy_mode.clone(), fill_forward.clone()).await;
-        }*/
         handler
     }
 

@@ -546,19 +546,3 @@ impl fmt::Display for OrderUpdateEvent {
         }
     }
 }
-
-impl OrderUpdateEvent {
-    fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
-        vec.into()
-    }
-
-    fn from_bytes(archived: &[u8]) -> Result<OrderUpdateEvent, FundForgeError> {
-        // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<OrderUpdateEvent>(archived) {
-            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
-            Ok(response) => Ok(response),
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
-        }
-    }
-}

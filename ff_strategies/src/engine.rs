@@ -1,5 +1,5 @@
 use chrono::{DateTime, Datelike, Utc,  Duration as ChronoDuration};
-use ff_standard_lib::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, unsubscribe_primary_subscription_updates, extend_buffer, add_buffer, forward_buffer, get_backtest_time, update_historical_timestamp};
+use ff_standard_lib::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, unsubscribe_primary_subscription_updates, add_buffer, forward_buffer, get_backtest_time, update_historical_timestamp};
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
@@ -129,7 +129,6 @@ impl HistoricalEngine {
         let mut warm_up_complete = false;
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
-            let mut last_time = start.clone();
             'month_loop: loop {
                 let primary_subscriptions = subscription_handler.primary_subscriptions().await;
                 for subscription in &primary_subscriptions {
@@ -210,7 +209,6 @@ impl HistoricalEngine {
                         }
                         forward_buffer().await;
                     }
-                    last_time = time.clone();
                 }
                 if end_month {
                     break 'month_loop;
@@ -278,11 +276,11 @@ impl HistoricalEngine {
                             println!("Buffered Engine: Start Backtest");
                         }
                     }
+
                     if time.month() != start.month() {
                         //println!("Next Month Time");
                         break 'month_loop;
                     }
-
 
                     update_historical_timestamp(time.clone());
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.

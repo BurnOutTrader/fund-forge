@@ -18,7 +18,7 @@ The only major difference in fund forge is the idea of the ff_data_server, a ser
 
 It is easy to build and run strategies across multiple machines, build indicators and add brokers or data feeds, including fundamental data.
 
-Take a quick look at [strategy features here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md). You will need to complete the setup outlined below to run the test strategy.
+Take a quick look at [strategy features here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md).
 
 I will create a YouTube video on setting up the platform for development purposes in the near future.
 
@@ -240,41 +240,21 @@ There is a crude test data parser [here](https://github.com/BurnOutTrader/fund-f
 You will need to manually download the files, then put all the .csv files into 1 folder and change the variables such as input/output folders and Symbol of the data.
 
 Change the following to suit the symbol and your directory.
+
+The parsing logic expects the original files to be in a director with the same symbol name eg "/Users/kevmonaghan/Downloads/AUD-CAD"
 ```rust
-const YOUR_FOLDER_PATH: String = "".to_string();
-const SYMBOL_NAME: String = "".to_string();
+let YOUR_FOLDER_PATH: String = "/Users/kevmonaghan/Downloads".to_string(); //it will be assumed there is a folder named  "AUD-CAD" here
+let SYMBOL_NAME: String = "AUD-CAD".to_string();
 ```
 After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
 
-## Setup
-I will simplify this setup in the future.
-You will need to change these hard coded directories in `ff_standard_lib::helpers` `mod.rs`
-```rust
-/// This is the path to the folder we use to store all base data from vendors
-pub fn get_data_folder() -> PathBuf {
-    PathBuf::from("{PATH_TO_FOLDER}/fund-forge/ff_data_server/data")
-}
+## Advanced Setup
+To create strategies in a strategy in a separate crate you will need to copy the resources folder from test strategy.
 
-// The path to the resources folder
-pub fn get_resources() -> PathBuf {  
-    PathBuf::from("{PATH_TO_FOLDER}/fund-forge/resources")  
-}
-```
-On first run a `server_settings.toml` file will be created in `fund-forge/resources` it will contain the default settings based on your `get_toml_file_path()`
-If you try to launch before changing the path mentioned above, just delete the `server_settings.toml` and it will be recreated.
-```rust
-impl Default for ConnectionSettings {
-        fn default() -> Self {
-            ConnectionSettings {
-                ssl_auth_folder: get_toml_file_path(),
-                server_name: String::from("fundforge"), //if using my default (insecure) certificates you will need to keep the currecnt server name.
-                address:  SocketAddr::from_str("127.0.0.1:8080").unwrap(), 
-                address_synchronous: SocketAddr::from_str("127.0.0.1:8081").unwrap() //all communication is now async only using a callback system
-            }
-        }
-    }
-```
-To run the test strategy you will first need to launch the ff_data_server on local host, by using cargo run in the data server folder.
+This folder contains the client and server authentication keys.
+
+It also contains the servers.toml file, which is used by strategies to find the address of your data servers.
+
 
 ## Current Status
 

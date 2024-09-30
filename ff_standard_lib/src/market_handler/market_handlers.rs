@@ -48,10 +48,6 @@ pub enum MarketMessageEnum {
     LiveOrderUpdate(OrderUpdateEvent)
 }
 
-pub struct BrokerPositions {
-    positions: DashMap<AccountId, AHashMap<SymbolName, Position>>
-}
-
 lazy_static!(
     pub static ref BID_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u8, (Price, Volume)>>>= Arc::new(DashMap::new());
     pub static ref ASK_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u8, (Price, Volume)>>> = Arc::new(DashMap::new());

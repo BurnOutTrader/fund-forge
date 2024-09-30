@@ -21,8 +21,7 @@ use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Currency
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::Color;
-use ff_standard_lib::standardized_types::orders::orders::{OrderId, OrderUpdateEvent};
-use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
+use ff_standard_lib::standardized_types::orders::orders::{OrderId};
 
 // to launch on separate machine
 #[tokio::main]

@@ -36,7 +36,7 @@ struct ServerLaunchOptions {
         short = "f",
         long = "data_folder",
         parse(from_os_str),
-        default_value = "/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data"
+        default_value = "./data"
     )]
     pub data_folder: PathBuf,
 
@@ -44,7 +44,7 @@ struct ServerLaunchOptions {
         short = "l",
         long = "ssl_folder",
         parse(from_os_str),
-        default_value = "/Users/kevmonaghan/RustroverProjects/fund-forge/resources/keys"
+        default_value = "./resources/keys"
     )]
     pub ssl_auth_folder: PathBuf,
 
@@ -57,8 +57,6 @@ struct ServerLaunchOptions {
 
     #[structopt(short = "p", long = "async_address", default_value = "0.0.0.0:8081")]
     pub async_listener_address: String,
-    /*    #[structopt(short = "c", long = "connection_type"]
-    pub start_up_mode: String,*/
 }
 
 #[tokio::main]
