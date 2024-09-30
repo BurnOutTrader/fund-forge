@@ -431,6 +431,10 @@ pub async fn response_handler_unbuffered(
                                         add_buffer(time, StrategyEvent::TimeSlice(strategy_time_slice)).await;
                                         forward_buffer().await;
                                     }
+                                    DataServerResponse::OrderUpdates(event) => {
+                                        let event = MarketMessageEnum::LiveOrderUpdate(event);
+                                        market_update_sender.send(event).await.unwrap();
+                                    }
                                     _ => panic!("Incorrect response here: {:?}", response)
                                 }
                             }
@@ -631,6 +635,10 @@ pub async fn response_handler_buffered(
                                                 open_bars.insert(subscription.clone(), bar_map);
                                             }
                                         }
+                                    }
+                                    DataServerResponse::OrderUpdates(event) => {
+                                        let event = MarketMessageEnum::LiveOrderUpdate(event);
+                                        market_update_sender.send(event).await.unwrap();
                                     }
                                     _ => panic!("Incorrect response here: {:?}", response)
                                 }

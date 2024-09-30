@@ -12,7 +12,7 @@ use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::orders::orders::{OrderRequest};
+use crate::standardized_types::orders::orders::{OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
 
@@ -353,6 +353,8 @@ DataServerResponse {
     BaseDataUpdates(BaseDataEnum),
 
     Accounts{callback_id: u64, accounts: Vec<AccountId>},
+
+    OrderUpdates(OrderUpdateEvent)
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -392,7 +394,8 @@ impl DataServerResponse {
             DataServerResponse::UnSubscribeResponse { .. } => None,
             DataServerResponse::TimeSliceUpdates(_) => None,
             DataServerResponse::Accounts {callback_id, ..} => Some(callback_id.clone()),
-            DataServerResponse::BaseDataUpdates(_) => None
+            DataServerResponse::BaseDataUpdates(_) => None,
+            DataServerResponse::OrderUpdates(_) => None
         }
     }
 }
