@@ -101,9 +101,10 @@ It is easy to subscribe to data, including custom candles like Heikin Ashi and R
 
 Data subscriptions can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history.
 
-Data subscriptions will warm themselves up on creation if the strategy is already warmed up, so we can subscribe and unsubscribe at any time.
+If the strategy is already warmed up, Data subscriptions will warm up to fill their history window, so we can subscribe and unsubscribe at any time and access history for the subscription.
+(this needs to be properly tested, it is only basic implementation at present)
 
-The engine will automatically use any primary data vailable with the data vendor in historical mode, to speed up backtests and prevent using consolidators.
+To speed up backtests and prevent using consolidators, the engine will automatically use any primary data available with the data vendor in historical mode.
 
 In live mode the engine will subscribe to the lowest possible resolution data: tick, quote or lastly the lowest resolution candles or quotebars, 
 this is done so that when live streaming with mutlple strategies we only need to maintain 1 live data feed per symbol, no matter the number of strategies and resolutions subscribed.
