@@ -48,14 +48,14 @@ pub trait VendorApiResponse: Sync + Send {
     async fn data_feed_subscribe(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         subscription: DataSubscription,
         sender: Sender<DataServerResponse>
     ) -> DataServerResponse;
     async fn data_feed_unsubscribe(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: &str,
         subscription: DataSubscription,
     ) -> DataServerResponse;
     async fn base_data_types_response(
@@ -179,7 +179,7 @@ impl VendorApiResponse for DataVendor {
     async fn data_feed_unsubscribe(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: &str,
         subscription: DataSubscription
     ) -> DataServerResponse {
         match self {

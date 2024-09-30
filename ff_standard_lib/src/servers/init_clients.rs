@@ -7,7 +7,6 @@ use std::io::BufReader;
 use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::io::{ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
 use tokio_rustls::{TlsConnector, TlsStream};
 

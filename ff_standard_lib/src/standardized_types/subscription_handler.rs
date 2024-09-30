@@ -66,12 +66,12 @@ impl SubscriptionHandler {
         handler
     }
 
-    pub(crate) async fn subscribe_primary_subscription_updates(&self, name: String, sender: Sender<Vec<DataSubscription>>) {
-        self.primary_subscriptions_broadcaster.subscribe(name, sender).await;
+    pub(crate) fn subscribe_primary_subscription_updates(&self, name: String, sender: Sender<Vec<DataSubscription>>) {
+        self.primary_subscriptions_broadcaster.subscribe(name, sender);
     }
 
-    pub(crate) async fn unsubscribe_primary_subscription_updates(&self, name: String) {
-        self.primary_subscriptions_broadcaster.unsubscribe(name).await;
+    pub(crate) fn unsubscribe_primary_subscription_updates(&self, name: &str) {
+        self.primary_subscriptions_broadcaster.unsubscribe(name);
     }
 
     /// Returns all the subscription events that have occurred since the last time this method was called.
@@ -138,7 +138,7 @@ impl SubscriptionHandler {
             .await;
 
         if let Some(windows) = windows {
-            for (subscription, window) in windows {
+            for (subscription, _window) in windows {
                 //todo need to iter windows and get out the correct type of data
                 match new_subscription.base_data_type {
                     BaseDataType::Ticks => {
@@ -573,7 +573,6 @@ impl SubscriptionHandler {
 /// Alternatively if a subscription is of a lower resolution subscription, then the new subscription becomes the primary data source and the existing subscription becomes the secondary data source.
 /// depending if the vendor has data available in that resolution.
 pub struct SymbolSubscriptionHandler {
-    symbol: Symbol,
     /// The primary subscription is the subscription where data is coming directly from the `DataVendor`, In the event of bar data, it is pre-consolidated.
     primary_subscriptions: DashMap<SubscriptionResolutionType, DataSubscription>,
     /// The secondary subscriptions are consolidators that are used to consolidate data from the primary subscription. the first key is the primary subscription for each consolidator
@@ -590,7 +589,6 @@ impl SymbolSubscriptionHandler {
         let vendor_primary_resolutions = symbol.data_vendor.resolutions(symbol.market_type.clone()).await.unwrap();
         let vendor_data_types = symbol.data_vendor.base_data_types().await.unwrap();
         let handler = SymbolSubscriptionHandler {
-            symbol,
             primary_subscriptions: DashMap::with_capacity(5),
             secondary_subscriptions: DashMap::with_capacity(5),
             subscription_event_buffer: RwLock::new(Vec::new()),
@@ -603,7 +601,7 @@ impl SymbolSubscriptionHandler {
     pub fn active_count(&self) -> usize {
         let mut count = 0;
         for map in self.secondary_subscriptions.iter() {
-            for sub in map.value() {
+            for _sub in map.value() {
                 count += 1;
             }
         }
@@ -672,7 +670,7 @@ impl SymbolSubscriptionHandler {
             }
         }
         if let Some(subscriptions) = self.secondary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
-            if let Some(subscription) = subscriptions.get(&new_subscription) {
+            if let Some(_subscription) = subscriptions.get(&new_subscription) {
                 let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
                 subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
                 return None
@@ -906,7 +904,7 @@ impl SymbolSubscriptionHandler {
         let sub_res_type = subscription.subscription_resolution_type();
         if self.primary_subscriptions.contains_key(&sub_res_type) {
             //determine if we have secondaries for this
-            if let Some(mut map) = self.secondary_subscriptions.get_mut(&sub_res_type) {
+            if let Some(map) = self.secondary_subscriptions.get(&sub_res_type) {
                 if map.is_empty() {
                     self.primary_subscriptions.remove(&sub_res_type);
                 }
@@ -917,7 +915,7 @@ impl SymbolSubscriptionHandler {
             let sub = map.remove(&subscription);
             match sub {
                 None => subscription_event_buffer.push(DataSubscriptionEvent::FailedUnSubscribed(subscription.clone(), "No subscription to unsubscribe".to_string())),
-                Some(sub) => subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone())),
+                Some(_consolidator) => subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone())),
             }
         } else {
             subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));

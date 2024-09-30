@@ -29,9 +29,18 @@ use crate::standardized_types::symbol_info::SymbolInfo;
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct BookLevel {
-    level: u8,
-    price: Decimal,
+    level: u16,
+    price: Price,
     volume: Volume
+}
+impl BookLevel {
+    pub fn new(level: u16, price: Price, volume: Volume) -> Self {
+        BookLevel {
+            level,
+            price,
+            volume
+        }
+    }
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
@@ -42,14 +51,15 @@ pub enum MarketMessageEnum {
     BaseDataUpdate(BaseDataEnum),
     TimeSliceUpdate(TimeSlice),
     OrderRequest(OrderRequest),
-    OrderBookSnapShot{symbol: Symbol, bid_book: Vec<BookLevel>, ask_book: Vec<BookLevel>},
+    OrderBookSnapShot{symbol: Symbol, bid_book: BTreeMap<u16, BookLevel>, ask_book: BTreeMap<u16, BookLevel>},
     DeregisterSymbol(Symbol),
     LiveOrderUpdate(OrderUpdateEvent)
 }
 
 lazy_static!(
-    pub static ref BID_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u8, (Price, Volume)>>>= Arc::new(DashMap::new());
-    pub static ref ASK_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u8, (Price, Volume)>>> = Arc::new(DashMap::new());
+    pub static ref BID_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>>= Arc::new(DashMap::new());
+    pub static ref ASK_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>> = Arc::new(DashMap::new());
+    static ref HAS_QUOTES: DashMap<SymbolName, bool> = DashMap::new();
     pub static ref LAST_PRICE: Arc<DashMap<SymbolName, Price>> = Arc::new(DashMap::new());
     pub static ref SYMBOL_INFO: Arc<DashMap<SymbolName, SymbolInfo>> = Arc::new(DashMap::new());
     //static ref LAST_PRICE_MOMENTUM: Arc<DashMap<Symbol, BTreeMap<u8, > = Arc::new(DashMap::new()); we could use this to record last tick was up or down for x periods
@@ -98,7 +108,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                     ASK_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
                 }
                 MarketMessageEnum::BaseDataUpdate(base_data ) => {
-                    update_base_data(mode, base_data.clone(), &time);
+                    update_base_data(base_data.clone(), &time);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time, is_buffered).await;
                     }
@@ -106,7 +116,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                 }
                 MarketMessageEnum::TimeSliceUpdate(time_slice) => {
                     for base_data in time_slice.iter() {
-                        update_base_data(mode, base_data.clone(), &time);
+                        update_base_data(base_data.clone(), &time);
                     }
                     historical_time_slice_ledger_updates(time_slice.clone(), time);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
@@ -117,19 +127,8 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                     if !BID_BOOKS.contains_key(&symbol.name){
                         BID_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
                     }
-                    if let Some(mut order_book) = BID_BOOKS.get_mut(&symbol.name) {
-                        for book_level in bid_book {
-                            order_book.value_mut().insert(book_level.level, (book_level.price, book_level.volume));
-                        }
-                    }
-                    if !ASK_BOOKS.contains_key(&symbol.name){
-                        ASK_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
-                    }
-                    if let Some(mut order_book) = ASK_BOOKS.get_mut(&symbol.name) {
-                        for book_level in ask_book {
-                            order_book.value_mut().insert(book_level.level, (book_level.price, book_level.volume));
-                        }
-                    }
+                    BID_BOOKS.insert(symbol.name.clone(), bid_book);
+                    ASK_BOOKS.insert(symbol.name.clone(), ask_book);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time, is_buffered).await;
                     }
@@ -150,7 +149,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                             };
                             send_request(StrategyRequest::OneWay(connection_type, datat_server_request)).await;
                             match order_request {
-                                OrderRequest::Create { brokerage, order } => {
+                                OrderRequest::Create { order, .. } => {
                                     LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                                 }
                                 _ => {}
@@ -179,7 +178,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                                 }
                             }
                             if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-                                if let Some(account_ledger) = broker_map.get_mut(&account_id) {
+                                if let Some(_account_ledger) = broker_map.get_mut(&account_id) {
                                     todo!()
                                 }
                             }
@@ -193,7 +192,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                                     forward_buffer().await;
                                 }
                                 if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-                                    if let Some(account_ledger) = broker_map.get_mut(&account_id) {
+                                    if let Some(_account_ledger) = broker_map.get_mut(&account_id) {
                                         todo!()
                                     }
                                 }
@@ -209,7 +208,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                                     forward_buffer().await;
                                 }
                                 if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-                                    if let Some(account_ledger) = broker_map.get_mut(&account_id) {
+                                    if let Some(_account_ledger) = broker_map.get_mut(&account_id) {
                                         todo!()
                                     }
                                 }
@@ -264,36 +263,42 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
     sender
 }
 
-fn update_base_data(mode: StrategyMode, base_data_enum: BaseDataEnum, time: &DateTime<Utc>) {
+fn update_base_data(base_data_enum: BaseDataEnum, time: &DateTime<Utc>) {
     match base_data_enum {
         BaseDataEnum::Candle(candle) => {
             LAST_PRICE.insert(candle.symbol.name, candle.close);
         }
         BaseDataEnum::QuoteBar(quotebar) => {
-            if mode == StrategyMode::Backtest {
-                if let Some(mut bid_book) = BID_BOOKS.get_mut(&quotebar.symbol.name) {
-                    bid_book.value_mut().insert(0, (quotebar.bid_close, dec!(0.0)));
-                }
-                if let Some(mut ask_book) = ASK_BOOKS.get_mut(&quotebar.symbol.name) {
-                    ask_book.value_mut().insert(0, (quotebar.ask_close, dec!(0.0)));
-                }
+            if HAS_QUOTES.contains_key(&quotebar.symbol.name) {
+                return;
+            }
+            if !BID_BOOKS.contains_key(&quotebar.symbol.name) {
+                BID_BOOKS.insert(quotebar.symbol.name.clone(), BTreeMap::new());
+            }
+            if let Some(mut bid_book) = BID_BOOKS.get_mut(&quotebar.symbol.name) {
+                bid_book.value_mut().insert(0, BookLevel::new(0, quotebar.bid_close, dec!(0.0)));
+            }
+            if !ASK_BOOKS.contains_key(&quotebar.symbol.name) {
+                ASK_BOOKS.insert(quotebar.symbol.name.clone(), BTreeMap::new());
+            }
+            if let Some(mut ask_book) = ASK_BOOKS.get_mut(&quotebar.symbol.name) {
+                ask_book.value_mut().insert(0,  BookLevel::new(0, quotebar.ask_close, dec!(0.0)));
             }
         }
         BaseDataEnum::Tick(tick) => {
             LAST_PRICE.insert(tick.symbol.name, tick.price);
         }
         BaseDataEnum::Quote(quote) => {
-            if !BID_BOOKS.contains_key(&quote.symbol.name) {
+            if !HAS_QUOTES.contains_key(&quote.symbol.name) {
+                HAS_QUOTES.insert(quote.symbol.name.clone(), true);
                 BID_BOOKS.insert(quote.symbol.name.clone(), BTreeMap::new());
-            }
-            if let Some(mut bid_book) = BID_BOOKS.get_mut(&quote.symbol.name) {
-                bid_book.value_mut().insert(0, (quote.bid, quote.bid_volume));
-            }
-            if !ASK_BOOKS.contains_key(&quote.symbol.name) {
                 ASK_BOOKS.insert(quote.symbol.name.clone(), BTreeMap::new());
             }
+            if let Some(mut bid_book) = BID_BOOKS.get_mut(&quote.symbol.name) {
+                bid_book.value_mut().insert(0, BookLevel::new(0, quote.bid, quote.bid_volume));
+            }
             if let Some(mut ask_book) = ASK_BOOKS.get_mut(&quote.symbol.name) {
-                ask_book.value_mut().insert(0, (quote.ask, quote.ask_volume));
+                ask_book.value_mut().insert(0,  BookLevel::new(0, quote.ask, quote.ask_volume));
             }
         }
         _ => panic!("Incorrect data type in Market Updates: {}", base_data_enum.base_data_type())
@@ -341,8 +346,7 @@ pub async fn simulated_order_matching(
             }
         }
         OrderRequest::Update{ brokerage, order_id, account_id, update } => {
-            let mut existing_order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
-            if let Some((order_id, mut order)) = existing_order {
+            if let Some((order_id, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id) {
                 match update {
                     OrderUpdateType::LimitPrice(price) => {
                         if let Some(ref mut limit_price) = order.limit_price {
@@ -427,6 +431,8 @@ pub async fn backtest_matching_engine(
                 };
                 if is_fill_triggered {
                     filled.push((order.id.clone(), order.limit_price.unwrap().clone()));
+                }  else if order.state == OrderState::Created {
+                    accepted.push((order.id.clone(), time, is_buffered))
                 }
             }
             OrderType::Market => {
@@ -447,6 +453,8 @@ pub async fn backtest_matching_engine(
                 };
                 if is_fill_triggered {
                     filled.push((order.id.clone(), market_price));
+                } else if order.state == OrderState::Created {
+                    accepted.push((order.id.clone(), time, is_buffered))
                 }
             }
             OrderType::StopLimit => {
@@ -461,6 +469,8 @@ pub async fn backtest_matching_engine(
                 if is_fill_triggered {
                     //todo need a better way to simulate stop limits, use custom market price fn to
                     filled.push((order.id.clone(),  order.limit_price.unwrap().clone()));
+                } else if order.state == OrderState::Created {
+                    accepted.push((order.id.clone(), time, is_buffered))
                 }
             },
             OrderType::EnterLong => {
@@ -521,8 +531,8 @@ pub async fn backtest_matching_engine(
     for (order_id, reason) in rejected {
         reject_order(reason, &order_id, time, is_buffered).await
     }
-    for order_id in accepted {
-        accept_order(order_id, time, is_buffered).await;
+    for (order_id , time, is_buffered)in accepted {
+        accept_order(&order_id, time, is_buffered).await;
     }
     for (order_id, price) in filled {
         fill_order(&order_id, time, price, is_buffered).await;
@@ -725,15 +735,15 @@ pub async fn get_market_fill_price_estimate (
         let mut remaining_volume = volume;
 
         for level in 0.. {
-            if let Some((price, available_volume)) = book_price_volume_map.value().get(&level) {
-                if *available_volume == dec!(0.0) && total_volume_filled == dec!(0.0) {
-                    return Ok(price.clone())
+            if let Some(bool_level) = book_price_volume_map.value().get(&level) {
+                if bool_level.volume == dec!(0.0) && total_volume_filled == dec!(0.0) {
+                    return Ok(bool_level.price.clone())
                 }
-                if *available_volume == dec!(0.0) {
+                if bool_level.volume == dec!(0.0) {
                     continue;
                 }
-                let volume_to_use = remaining_volume.min(*available_volume);
-                total_price_volume += *price * volume_to_use;
+                let volume_to_use = remaining_volume.min(bool_level.volume);
+                total_price_volume += bool_level.price * volume_to_use;
                 total_volume_filled += volume_to_use;
                 remaining_volume -= volume_to_use;
 
@@ -773,8 +783,8 @@ pub async fn get_market_price (
     };
 
     if let Some(symbol_book) = order_book {
-        if let Some((price, _)) = symbol_book.value().get(&0) {
-            return Ok(price.clone())
+        if let Some(book_level) = symbol_book.value().get(&0) {
+            return Ok(book_level.price.clone())
         }
     }
 

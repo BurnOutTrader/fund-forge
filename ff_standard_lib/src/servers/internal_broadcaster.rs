@@ -14,17 +14,17 @@ impl<T: Clone + Send> StaticInternalBroadcaster<T> {
     }
 
     /// Clear all subscribers to signal that the broadcaster will be shut down.
-    pub async fn shut_down(&self) {
+    pub fn shut_down(&self) {
         self.subscribers.clear();
     }
 
     /// adds the subscriber to the subscriptions for this manager
-    pub async fn subscribe(&self, name: String, subscriber: Sender<T>) {
+    pub fn subscribe(&self, name: String, subscriber: Sender<T>) {
         self.subscribers.insert(name, subscriber);
     }
 
-    pub async fn unsubscribe(&self, name: String) {
-        self.subscribers.remove(&name);
+    pub fn unsubscribe(&self, name: &str) {
+        self.subscribers.remove(name);
     }
 
     pub fn has_subscribers(&self) -> bool {

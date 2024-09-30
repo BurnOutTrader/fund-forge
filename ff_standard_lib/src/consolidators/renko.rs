@@ -61,8 +61,4 @@ impl RenkoConsolidator {
         //let _lock = self.lock.lock().await; //to protect against race conditions where a time slice contains multiple data points of same subscrption
         todo!() //will need to be based on renko parameters
     }
-
-    pub(crate) fn current(&self) -> Option<BaseDataEnum> {
-        Some(BaseDataEnum::Candle(self.current_data.clone()))
-    }
 }

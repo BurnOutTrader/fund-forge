@@ -33,7 +33,7 @@ impl InteractionHandler {
     }
 
     pub async fn subscribe(&self, name: String, sender: Sender<StrategyControls>) {
-        self.broadcaster.subscribe(name, sender).await;
+        self.broadcaster.subscribe(name, sender);
     }
 
     pub async fn set_control_state(&self, control_state: StrategyControls) {

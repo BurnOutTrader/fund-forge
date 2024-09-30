@@ -196,11 +196,11 @@ impl VendorApiResponse for TestApiClient {
         }
         if !self.data_feed_broadcasters.contains_key(&subscription) {
             self.data_feed_broadcasters.insert(subscription.clone(), Arc::new(StaticInternalBroadcaster::new()));
-            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name, sender).await;
+            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name, sender);
             println!("Subscribing: {}", subscription);
         } else {
             // If we already have a running task, we dont need a new one, we just subscribe to the broadcaster
-            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name, sender).await;
+            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name, sender);
             return DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
         }
         println!("data_feed_subscribe Starting loop");
@@ -244,9 +244,9 @@ impl VendorApiResponse for TestApiClient {
         DataServerResponse::SubscribeResponse{ success: true, subscription: subscription_clone_2.clone(), reason: None}
     }
 
-    async fn data_feed_unsubscribe(&self,  mode: StrategyMode, stream_name: String, subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self,  mode: StrategyMode, stream_name: &str, subscription: DataSubscription) -> DataServerResponse {
         if let Some(broadcaster) = self.data_feed_broadcasters.get(&subscription) {
-            broadcaster.unsubscribe(stream_name).await;
+            broadcaster.unsubscribe(stream_name);
             return DataServerResponse::UnSubscribeResponse{ success: true, subscription, reason: None}
         }
         DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("There is no active subscription for: {}", subscription))}

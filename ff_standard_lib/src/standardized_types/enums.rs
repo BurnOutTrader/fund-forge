@@ -4,7 +4,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::fmt::Debug;
-use strum_macros::{Display, EnumIter};
+use strum_macros::{Display};
 
 // Enum for exchanges
 #[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]

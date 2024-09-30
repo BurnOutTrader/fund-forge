@@ -70,7 +70,7 @@ pub struct FundForgeStrategy {
 
     market_event_sender: Sender<MarketMessageEnum>,
 
-    orders: RwLock<AHashMap<OrderId, (Brokerage, AccountId)>>
+    orders: RwLock<AHashMap<OrderId, (Brokerage, AccountId)>>,
 }
 
 impl FundForgeStrategy {
@@ -515,7 +515,7 @@ impl FundForgeStrategy {
         let subscriptions = self.subscriptions().await;
         if !subscriptions.contains(&indicator.subscription()) {
             match auto_subscribe {
-                true => self.subscribe(indicator.subscription(), indicator.history_to_retain(), false).await,
+                true => self.subscribe(indicator.subscription(), (indicator.data_required_to_fill() + 1) as usize, false).await,
                 false => panic!("You have no subscription: {}, for the indicator subscription {} and AutoSubscribe is not enabled", indicator.subscription(), indicator.name())
             }
         }

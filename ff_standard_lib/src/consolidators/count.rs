@@ -126,8 +126,4 @@ impl CountConsolidator {
             ),
         }
     }
-
-    pub(crate) fn current(&self) -> Option<BaseDataEnum> {
-        Some(BaseDataEnum::Candle(self.current_data.clone()))
-    }
 }

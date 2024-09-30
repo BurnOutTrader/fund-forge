@@ -186,7 +186,13 @@ impl RithmicClient {
             if let Some(sender) = stream_map.value_mut().remove(&callback_id) {
                 match sender.send(response) {
                     Ok(_) => {}
-                    Err(_) => {}
+                    Err(e) => {
+                        eprintln!("Callback error: {:?} Dumping subscriber: {}", e, stream_name);
+                        self.callbacks.remove(stream_name);
+                        for broadcaster in self.data_feed_broadcasters.iter() {
+                            broadcaster.unsubscribe(stream_name);
+                        }
+                    }
                 }
             }
         }
@@ -396,7 +402,7 @@ impl VendorApiResponse for RithmicClient {
         todo!()
     }
 
-    async fn data_feed_unsubscribe(&self, mode: StrategyMode,_stream_name: String, _subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self, mode: StrategyMode,_stream_name: &str, _subscription: DataSubscription) -> DataServerResponse {
         todo!()
     }
 

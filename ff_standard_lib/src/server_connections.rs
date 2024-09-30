@@ -12,7 +12,6 @@ use std::time::Duration;
 use ahash::AHashMap;
 use chrono::{DateTime, Utc, TimeZone};
 use dashmap::DashMap;
-use futures::SinkExt;
 use lazy_static::lazy_static;
 use strum_macros::Display;
 use tokio::io;
@@ -32,7 +31,6 @@ use crate::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::StrategyMode;
-use crate::standardized_types::orders::orders::{OrderRequest};
 use crate::standardized_types::strategy_events::{StrategyEventBuffer, StrategyEvent};
 use crate::standardized_types::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
@@ -142,11 +140,11 @@ pub async fn forward_buffer() {
 
 
 pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
-pub async fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
-    SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
+pub fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
+    SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender) // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
-pub async fn unsubscribe_primary_subscription_updates(name: String) {
-    SUBSCRIPTION_HANDLER.get().unwrap().unsubscribe_primary_subscription_updates(name).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
+pub fn unsubscribe_primary_subscription_updates(stream_name: &str) {
+    SUBSCRIPTION_HANDLER.get().unwrap().unsubscribe_primary_subscription_updates(stream_name) // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
 pub static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
@@ -180,7 +178,7 @@ pub async fn live_subscription_handler(
     }
 
     let (tx, rx) = mpsc::channel(100);
-    subscribe_primary_subscription_updates("Live Subscription Updates".to_string(), tx).await;
+    subscribe_primary_subscription_updates("Live Subscription Updates".to_string(), tx);
 
     let settings_map = Arc::new(initialise_settings().unwrap());
     let mut subscription_update_channel = rx;
@@ -257,7 +255,7 @@ pub async fn live_subscription_handler(
 }
 
 /// This response handler is also acting as a live engine.
-pub async fn request_handler(
+async fn request_handler(
     receiver: mpsc::Receiver<StrategyRequest>,
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
     server_senders: DashMap<ConnectionType, ExternalSender>,
