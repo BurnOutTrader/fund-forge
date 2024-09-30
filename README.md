@@ -3,6 +3,15 @@ Community [discord](https://discord.gg/MNXH2jEExV)
 
 **Fund Forge** is an algorithmic trading engine written in Rust.
 
+### Current Method To Run Test Strategy
+***You cannot run the test strategy from the main fund forge directory**
+1. cargo buid in the fund forge directory
+2. navigate to ff_data_server directory and `cargo run`
+3. navigate to test_strategy directory and `cargo run`
+
+The working directory must be the strategy directory, or the strategy will not find its resources' folder.
+[see](./test_strategy/README.md)
+
 The engine is designed to allow simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators and
 managing orders, connections and data streams.
 

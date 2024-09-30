@@ -46,7 +46,6 @@ pub mod client_settings {
                 ssl_auth_folder: get_resources().join("keys"),
                 server_name: String::from("fundforge"),
                 address: SocketAddr::from_str("127.0.0.1:8082").unwrap(),
-                address_synchronous: SocketAddr::from_str("127.0.0.1:8083").unwrap(),
             };
             map.insert(ConnectionType::StrategyRegistry, dafault_registry_settings);
 
@@ -90,8 +89,6 @@ pub mod client_settings {
         pub server_name: String,
         /// the listener for async streaming type communications
         pub address: SocketAddr,
-        ///the listener for synchrnous rest type communications
-        pub address_synchronous: SocketAddr,
     }
 
     impl Default for ConnectionSettings {
@@ -99,8 +96,7 @@ pub mod client_settings {
             ConnectionSettings {
                 ssl_auth_folder: get_resources().join("keys"),
                 server_name: String::from("fundforge"),
-                address: SocketAddr::from_str("127.0.0.1:8080").unwrap(),
-                address_synchronous: SocketAddr::from_str("127.0.0.1:8081").unwrap(),
+                address: SocketAddr::from_str("127.0.0.1:8081").unwrap(),
             }
         }
     }
