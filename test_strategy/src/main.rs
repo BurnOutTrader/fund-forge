@@ -214,6 +214,7 @@ pub async fn on_data_received(
                 StrategyEvent::OrderEvents(event) => {
                     strategy.print_ledgers();
                     let msg = format!("{}, Strategy: Order Event: {}", strategy.time_utc(), event);
+                    println!("{}", msg.as_str().bright_yellow());
                 }
 
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
@@ -242,8 +243,8 @@ pub async fn on_data_received(
                     break 'strategy_loop
                 },
 
-                StrategyEvent::WarmUpComplete{} => {
-                    let msg = format!("Strategy: Warmup Complete");
+                StrategyEvent::WarmUpComplete => {
+                    let msg = String::from("Strategy: Warmup Complete");
                     println!("{}", msg.as_str().bright_magenta());
                     warmup_complete = true;
                 }
