@@ -58,7 +58,7 @@ pub(crate) fn calculate_pnl(
 
     // Calculate PnL by multiplying with value per tick and quantity
     let pnl = raw_ticks * value_per_tick * quantity;
-
+    println!("Calculate Pnl fn: {}", pnl);
     pnl
 }
 
@@ -175,7 +175,7 @@ pub(crate) mod historical_ledgers {
     use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
     use crate::standardized_types::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
-    use crate::standardized_types::orders::orders::{OrderId, OrderUpdateEvent, ProtectiveOrder};
+    use crate::standardized_types::orders::orders::{OrderId, OrderUpdateEvent};
     use crate::standardized_types::{Price, Volume};
     use crate::standardized_types::accounts::position::{Position, PositionId, PositionUpdateEvent};
     use crate::standardized_types::base_data::traits::BaseData;
@@ -250,16 +250,16 @@ pub(crate) mod historical_ledgers {
                 dec!(0.0)
             };
 
-            // Calculate profit factor
             let profit_factor = if loss_pnl != dec!(0.0) {
-                win_pnl / -loss_pnl // negate loss_pnl
+                win_pnl / -loss_pnl
+            } else if win_pnl > dec!(0.0) {
+                dec!(1000) // or use a defined constant for infinity
             } else {
-                dec!(0.0)
+                dec!(1.0) // when both win_pnl and loss_pnl are zero
             };
 
-            // Calculate win rate
             let win_rate = if total_trades > 0 {
-                Decimal::from_usize(wins).unwrap() / Decimal::from_usize(total_trades).unwrap() * Decimal::from_f64(100.0).unwrap()
+                (Decimal::from_usize(wins).unwrap() / Decimal::from_usize(total_trades).unwrap()) * dec!(100.0)
             } else {
                 dec!(0.0)
             };
@@ -380,7 +380,7 @@ pub(crate) mod historical_ledgers {
                     match self.add_margin_used(&symbol_name, quantity).await {
                         Ok(_) => {}
                         Err(e) => {
-                            return Err(OrderUpdateEvent::Rejected {
+                            return Err(OrderUpdateEvent::OrderRejected {
                                 brokerage: self.brokerage,
                                 account_id: self.account_id.clone(),
                                 order_id,
@@ -405,7 +405,7 @@ pub(crate) mod historical_ledgers {
                  match self.add_margin_used(&symbol_name, quantity).await {
                      Ok(_) => {}
                      Err(e) => {
-                         return Err(OrderUpdateEvent::Rejected {
+                         return Err(OrderUpdateEvent::OrderRejected {
                              brokerage: self.brokerage,
                              account_id: self.account_id.clone(),
                              order_id,
@@ -441,7 +441,7 @@ pub(crate) mod historical_ledgers {
                      self.positions_closed.insert(symbol_name.clone(), vec![]);
                  }
 
-                 let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Opened(id));
+                 let event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionOpened(id));
                  add_buffer(time, event).await;
                  Ok(())
             }

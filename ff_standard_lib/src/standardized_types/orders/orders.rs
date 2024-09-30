@@ -504,19 +504,19 @@ pub enum OrderUpdateType {
 ///
 /// This enum is used to communicate changes in order status between the trading strategy, the user interface, and the brokerage connection. Each variant represents a specific type of update or state change that an order can experience.
 pub enum OrderUpdateEvent {
-    Accepted{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
+    OrderAccepted {brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    Filled{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
+    OrderFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    PartiallyFilled{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
+    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    Cancelled{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
+    OrderCancelled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    Rejected{brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
+    OrderRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
 
-    Updated{brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
+    OrderUpdated {brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
 
-    UpdateRejected{brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
+    OrderUpdateRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
 }
 
 impl OrderUpdateEvent {

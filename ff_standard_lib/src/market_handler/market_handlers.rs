@@ -165,13 +165,13 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                 MarketMessageEnum::LiveOrderUpdate(order_upate_event) => {
                     //todo we update our live positions here
                     match order_upate_event {
-                        OrderUpdateEvent::Accepted { .. } => {}
-                        OrderUpdateEvent::Filled { .. } => {}
-                        OrderUpdateEvent::PartiallyFilled { .. } => {}
-                        OrderUpdateEvent::Cancelled { .. } => {}
-                        OrderUpdateEvent::Rejected { .. } => {}
-                        OrderUpdateEvent::Updated { .. } => {}
-                        OrderUpdateEvent::UpdateRejected { .. } => {}
+                        OrderUpdateEvent::OrderAccepted { .. } => {}
+                        OrderUpdateEvent::OrderFilled { .. } => {}
+                        OrderUpdateEvent::OrderPartiallyFilled { .. } => {}
+                        OrderUpdateEvent::OrderCancelled { .. } => {}
+                        OrderUpdateEvent::OrderRejected { .. } => {}
+                        OrderUpdateEvent::OrderUpdated { .. } => {}
+                        OrderUpdateEvent::OrderUpdateRejected { .. } => {}
                     }
                 }
             }
@@ -241,11 +241,11 @@ pub async fn simulated_order_matching(
         OrderRequest::Cancel{brokerage, order_id, account_id } => {
             let existing_order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
             if let Some((existing_order_id, order)) = existing_order {
-                let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Cancelled{ brokerage, account_id: order.account_id.clone(), order_id: existing_order_id});
+                let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage, account_id: order.account_id.clone(), order_id: existing_order_id});
                 add_buffer(time, cancel_event).await;
                 BACKTEST_CLOSED_ORDER_CACHE.insert(order_id, order);
             } else {
-                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found") });
+                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found") });
                 add_buffer(time, fail_event).await;
             }
         }
@@ -273,11 +273,11 @@ pub async fn simulated_order_matching(
                         order.tag = tag;
                     }
                 }
-                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Updated{ brokerage, account_id: order.account_id.clone(), order_id: order.id.clone()});
+                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone()});
                 BACKTEST_OPEN_ORDER_CACHE.insert(order_id, order);
                 add_buffer(time, update_event).await;
             } else {
-                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found") });
+                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found") });
                 add_buffer(time, fail_event).await;
             }
         }
@@ -291,7 +291,7 @@ pub async fn simulated_order_matching(
             for order_id in remove {
                 let order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
                 if let Some((order_id, order)) = order {
-                    let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::Cancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order_id: order.id.clone() });
+                    let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order_id: order.id.clone() });
                     add_buffer(time.clone(), cancel_event).await;
                     BACKTEST_CLOSED_ORDER_CACHE.insert(order_id, order);
                 }
@@ -437,18 +437,18 @@ async fn fill_order(
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
-                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_filled, order.side.clone(), time, market_price).await {
+                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_ordered, order.side.clone(), time, market_price).await {
                     Ok(_) => {
                         order.time_filled_utc = Some(time.to_string());
                         order.state = OrderState::Filled;
                         order.average_fill_price = Some(market_price);
                         order.quantity_filled = order.quantity_ordered;
                         order.time_filled_utc = Some(time.to_string());
-                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::Filled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
                     }
                     Err(e) => {
                         match &e {
-                            OrderUpdateEvent::Rejected { reason, .. } => {
+                            OrderUpdateEvent::OrderRejected { reason, .. } => {
                                 order.state = OrderState::Rejected(reason.clone());
                                 let event = StrategyEvent::OrderEvents(e);
                                 add_buffer(time, event).await;
@@ -474,7 +474,7 @@ async fn reject_order(
 
         add_buffer(
             time,
-            StrategyEvent::OrderEvents(OrderUpdateEvent::Rejected {
+            StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
                 order_id: order.id.clone(),
                 brokerage: order.brokerage,
                 account_id: order.account_id.clone(),
@@ -495,7 +495,7 @@ async fn accept_order(
 
         add_buffer(
             time,
-            StrategyEvent::OrderEvents(OrderUpdateEvent::Accepted {
+            StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
                 order_id: order.id.clone(),
                 brokerage: order.brokerage.clone(),
                 account_id: order.account_id.clone(),

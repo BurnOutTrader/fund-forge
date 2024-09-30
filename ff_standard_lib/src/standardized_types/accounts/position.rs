@@ -34,7 +34,7 @@ pub(crate) struct PositionExport {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum PositionUpdateEvent {
-    Opened(PositionId),
+    PositionOpened(PositionId),
     Increased {
         position_id: PositionId,
         total_quantity_open: Volume,
@@ -42,7 +42,7 @@ pub enum PositionUpdateEvent {
         open_pnl: Price,
         booked_pnl: Price,
     },
-    Reduced{
+    PositionReduced {
         position_id: PositionId,
         total_quantity_open: Volume,
         total_quantity_closed: Volume,
@@ -51,7 +51,7 @@ pub enum PositionUpdateEvent {
         booked_pnl: Price,
         average_exit_price: Price,
     },
-    Closed {
+    PositionClosed {
         position_id: PositionId,
         total_quantity_open: Volume,
         total_quantity_closed: Volume,
@@ -59,7 +59,7 @@ pub enum PositionUpdateEvent {
         booked_pnl: Price,
         average_exit_price: Option<Price>,
     },
-    UpdateSnapShot {
+    PositionUpdateSnapShot {
         position_id: PositionId,
         position: Position
     },
@@ -194,7 +194,7 @@ pub(crate) mod historical_position {
             if self.is_closed {
                 self.booked_pnl += self.open_pnl;
                 self.open_pnl = dec!(0.0);
-                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Closed {
+                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionClosed {
                     position_id: self.position_id.clone(),
                     total_quantity_open: self.quantity_open,
                     total_quantity_closed: self.quantity_closed,
@@ -204,7 +204,7 @@ pub(crate) mod historical_position {
                 });
                 add_buffer(time, event).await;
             } else {
-                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Reduced {
+                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionReduced {
                     position_id: self.position_id.clone(),
                     total_quantity_open: self.quantity_open,
                     total_quantity_closed: self.quantity_closed,

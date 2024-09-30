@@ -222,25 +222,25 @@ pub async fn on_data_received(
                 StrategyEvent::OrderEvents(event) => {
                     //strategy.print_ledgers();
                     match &event {
-                        OrderUpdateEvent::Accepted { brokerage, account_id, order_id } => {
+                        OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id } => {
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         }
-                        OrderUpdateEvent::Filled { brokerage, account_id, order_id } => {
+                        OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id } => {
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         },
-                        OrderUpdateEvent::PartiallyFilled { brokerage, account_id, order_id } => {
+                        OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id } => {
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         }
-                        OrderUpdateEvent::Cancelled { brokerage, account_id, order_id } => {
+                        OrderUpdateEvent::OrderCancelled { brokerage, account_id, order_id } => {
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         }
-                        OrderUpdateEvent::Rejected { brokerage, account_id, order_id, reason } => {
+                        OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason } => {
                             println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id), reason);
                         }
-                        OrderUpdateEvent::Updated { brokerage, account_id, order_id } => {
+                        OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id } => {
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         }
-                        OrderUpdateEvent::UpdateRejected { brokerage, account_id, order_id, reason } => {
+                        OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason } => {
                             println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id), reason);
                         }
                     };
