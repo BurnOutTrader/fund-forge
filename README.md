@@ -171,7 +171,7 @@ fn example() {
   let auto_subscribe: bool = false;
   
   //subscribe the strategy to auto manage the indicator
-  strategy.indicator_subscribe(heikin_atr_5, auto_subscribe).await;
+  strategy.subscribe_indicator(heikin_atr_5, auto_subscribe).await;
 }
 ```
 

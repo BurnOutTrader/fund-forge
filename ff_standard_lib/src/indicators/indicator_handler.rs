@@ -200,6 +200,71 @@ async fn warmup(
                         let base_data = BaseDataEnum::Tick(data);
                         indicator.update_base_data(&base_data);
                     }
+                    return indicator
+                }
+            }
+        }
+        BaseDataType::Quotes => {
+            if let Some(history) = subscription_handler.quote_history(&subscription) {
+                if history.len() >= indicator.data_required_warmup() as usize {
+                    for data in history.history {
+                        let base_data = BaseDataEnum::Quote(data);
+                        indicator.update_base_data(&base_data);
+                    }
+                    return indicator
+                }
+            }
+        }
+        BaseDataType::QuoteBars => {
+            if let Some(history) = subscription_handler.bar_history(&subscription) {
+                if history.len() >= indicator.data_required_warmup() as usize {
+                    for data in history.history {
+                        let base_data = BaseDataEnum::QuoteBar(data);
+                        indicator.update_base_data(&base_data);
+                    }
+                    return indicator
+                }
+
+            }
+        }
+        BaseDataType::Candles => {
+            if let Some(history) = subscription_handler.candle_history(&subscription) {
+                if history.len() >= indicator.data_required_warmup() as usize {
+                    for data in history.history {
+                        let base_data = BaseDataEnum::Candle(data);
+                        indicator.update_base_data(&base_data);
+                    }
+                    return indicator
+                }
+            }
+        }
+        _ => {}
+    }
+
+    let consolidator = ConsolidatorEnum::create_consolidator(subscription.clone(), false, SubscriptionResolutionType::new(subscription.resolution, subscription.base_data_type)).await;
+    let (_, window) = ConsolidatorEnum::warmup(consolidator, to_time, (indicator.data_required_warmup() + 1) as i32, strategy_mode).await;
+    for data in window.history {
+        let _ = indicator.update_base_data(&data);
+    }
+    indicator
+}
+
+async fn warmup_async(
+    to_time: DateTime<Utc>,
+    strategy_mode: StrategyMode,
+    mut indicator: IndicatorEnum,
+) -> IndicatorEnum {
+    //1. Check if we have history for the indicator.subscription
+    let subscription_handler =   SUBSCRIPTION_HANDLER.get().unwrap();
+    let subscription =  indicator.subscription();
+    match subscription.base_data_type {
+        BaseDataType::Ticks => {
+            if let Some(history) = subscription_handler.tick_history(&subscription) {
+                if history.len() >= indicator.data_required_warmup() as usize {
+                    for data in history.history {
+                        let base_data = BaseDataEnum::Tick(data);
+                        indicator.update_base_data(&base_data);
+                    }
                 }
                 return indicator
             }
@@ -217,6 +282,7 @@ async fn warmup(
         }
         BaseDataType::QuoteBars => {
             if let Some(history) = subscription_handler.bar_history(&subscription) {
+                println!("Warming up indicator");
                 if history.len() >= indicator.data_required_warmup() as usize {
                     for data in history.history {
                         let base_data = BaseDataEnum::QuoteBar(data);

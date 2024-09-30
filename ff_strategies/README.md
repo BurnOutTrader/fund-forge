@@ -652,7 +652,7 @@ fn example(strategy: FundForgeStrategy) {
     let auto_subscribe: bool = true;
 
     //subscribe the strategy to auto manage the indicator
-    strategy.indicator_subscribe(heikin_atr_20, auto_subscribe).await;
+    strategy.subscribe_indicator(heikin_atr_20, auto_subscribe).await;
 }
 ```
 ```rust

@@ -151,7 +151,7 @@ impl ConsolidatorEnum {
         };
 
         let subtract_duration: Duration = consolidator.resolution().as_duration() * history_to_retain;
-        let from_time = to_time - subtract_duration - Duration::days(5);
+        let from_time = to_time - subtract_duration - Duration::days(1);
 
         let base_subscription = DataSubscription::new(
             subscription.symbol.name.clone(),

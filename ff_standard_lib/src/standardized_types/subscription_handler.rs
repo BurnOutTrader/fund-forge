@@ -16,7 +16,7 @@ use futures::StreamExt;
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::{RwLock};
 use crate::market_handler::market_handlers::MarketMessageEnum;
-use crate::server_connections::is_warmup_complete;
+use crate::server_connections::{add_buffer, is_warmup_complete};
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
@@ -25,6 +25,7 @@ use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::strategy_events::StrategyEvent;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -74,15 +75,6 @@ impl SubscriptionHandler {
         self.primary_subscriptions_broadcaster.unsubscribe(name);
     }
 
-    /// Returns all the subscription events that have occurred since the last time this method was called.
-    pub async fn subscription_events(&self) -> Vec<DataSubscriptionEvent> {
-        let mut subscription_events = vec![];
-        for symbol_handler in self.symbol_subscriptions.iter() {
-            subscription_events.extend(symbol_handler.value().get_subscription_event_buffer().await);
-        }
-        subscription_events
-    }
-
     pub async fn strategy_subscriptions(&self) -> Vec<DataSubscription> {
         let strategy_subscriptions = self.strategy_subscriptions.read().await;
         strategy_subscriptions.clone()
@@ -104,6 +96,9 @@ impl SubscriptionHandler {
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         if !strategy_subscriptions.contains(&new_subscription) {
             strategy_subscriptions.push(new_subscription.clone());
+        } else {
+            let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
+            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription.clone(), msg))).await;
         }
 
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
@@ -129,6 +124,7 @@ impl SubscriptionHandler {
 
         let windows = self.symbol_subscriptions.get(&new_subscription.symbol).unwrap()
             .subscribe(
+                current_time,
                 new_subscription.clone(),
                 current_time,
                 history_to_retain,
@@ -138,27 +134,68 @@ impl SubscriptionHandler {
             .await;
 
         if let Some(windows) = windows {
-            for (subscription, _window) in windows {
+            for (subscription, window) in windows {
                 //todo need to iter windows and get out the correct type of data
                 match new_subscription.base_data_type {
                     BaseDataType::Ticks => {
-                        self.tick_history.insert(subscription, RollingWindow::new(history_to_retain));
+                        self.tick_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let (mut tick_window) = self.tick_history.get_mut(&subscription).unwrap() {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::Tick(tick) => tick_window.value_mut().add(tick),
+                                    _ => {}
+                                }
+                            }
+                        }
                     }
                     BaseDataType::Quotes => {
-                        self.quote_history.insert(subscription, RollingWindow::new(history_to_retain));
+                        self.quote_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let (mut quote_window) = self.quote_history.get_mut(&subscription).unwrap() {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::Quote(quote) => quote_window.value_mut().add(quote),
+                                    _ => {}
+                                }
+                            }
+                        }
                     }
                     BaseDataType::QuoteBars => {
-                        self.bar_history.insert(subscription, RollingWindow::new(history_to_retain));
+                        self.bar_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let (mut bar_window) = self.bar_history.get_mut(&subscription).unwrap() {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::QuoteBar(quote) => bar_window.value_mut().add(quote),
+                                    _ => {}
+                                }
+                            }
+                        }
                     }
                     BaseDataType::Candles => {
-                        self.candle_history.insert(subscription, RollingWindow::new(history_to_retain));
+                        self.candle_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let (mut candle_window) = self.candle_history.get_mut(&subscription).unwrap() {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::Candle(candle) => candle_window.value_mut().add(candle),
+                                    _ => {}
+                                }
+                            }
+                        }
                     }
                     BaseDataType::Fundamentals => {
-                        self.fundamental_history.insert(subscription, RollingWindow::new(history_to_retain));
+                        self.fundamental_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let (mut fundamental_window) = self.fundamental_history.get_mut(&subscription).unwrap() {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::Fundamental(funda) => fundamental_window.value_mut().add(funda),
+                                    _ => {}
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
+
         if broadcast {
             self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
         }
@@ -175,7 +212,7 @@ impl SubscriptionHandler {
         let current_subscriptions = self.subscriptions().await;
         for sub in current_subscriptions {
             if !new_subscription.contains(&sub) {
-                self.unsubscribe(sub.clone(), false).await;
+                self.unsubscribe(current_time.clone(), sub.clone(), false).await;
             }
         }
         for sub in new_subscription {
@@ -190,7 +227,7 @@ impl SubscriptionHandler {
     /// 'subscription: DataSubscription' The subscription to unsubscribe from.
     /// 'current_time: DateTime<Utc>' The current time is used to change our base data subscription and warm up any new consolidators if we are adjusting our base resolution.
     /// 'strategy_mode: StrategyMode' The strategy mode is used to determine how to warm up the history, in live mode we may not yet have a serialized history to the current time.
-    pub async fn unsubscribe(&self, subscription: DataSubscription, broadcast: bool) {
+    pub async fn unsubscribe(&self, current_time: DateTime<Utc>,subscription: DataSubscription, broadcast: bool) {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             let mut fundamental_subscriptions = self.fundamental_subscriptions.write().await;
             if fundamental_subscriptions.contains(&subscription) {
@@ -206,7 +243,7 @@ impl SubscriptionHandler {
             return;
         }
 
-        self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
+        self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(current_time, &subscription).await;
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         strategy_subscriptions.retain(|x| x != &subscription);
         if self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count() == 0 {
@@ -243,8 +280,9 @@ impl SubscriptionHandler {
     pub async fn primary_subscriptions(&self) -> Vec<DataSubscription> {
         let mut primary_subscriptions = vec![];
         for symbol_handler in self.symbol_subscriptions.iter() {
-            primary_subscriptions.extend(symbol_handler.value().primary_subscriptions().await);
+            primary_subscriptions.extend(symbol_handler.value().primary_subscriptions());
         }
+        primary_subscriptions.extend(self.fundamental_subscriptions.read().await.clone());
         primary_subscriptions
     }
 
@@ -252,11 +290,9 @@ impl SubscriptionHandler {
     pub async fn subscriptions(&self) -> Vec<DataSubscription> {
         let mut all_subscriptions = vec![];
         for symbol_handler in self.symbol_subscriptions.iter() {
-            all_subscriptions.append(&mut symbol_handler.value().all_subscriptions().await);
+            all_subscriptions.append(&mut symbol_handler.value().all_subscriptions());
         }
-        for subscription in self.fundamental_subscriptions.read().await.iter() {
-            all_subscriptions.push(subscription.clone());
-        }
+        all_subscriptions.extend(self.fundamental_subscriptions.read().await.clone());
         all_subscriptions
     }
 
@@ -577,7 +613,6 @@ pub struct SymbolSubscriptionHandler {
     primary_subscriptions: DashMap<SubscriptionResolutionType, DataSubscription>,
     /// The secondary subscriptions are consolidators that are used to consolidate data from the primary subscription. the first key is the primary subscription for each consolidator
     secondary_subscriptions: DashMap<SubscriptionResolutionType, AHashMap<DataSubscription, ConsolidatorEnum>>,
-    subscription_event_buffer: RwLock<Vec<DataSubscriptionEvent>>,
     vendor_primary_resolutions: Vec<SubscriptionResolutionType>,
     vendor_data_types: Vec<BaseDataType>,
 }
@@ -591,7 +626,6 @@ impl SymbolSubscriptionHandler {
         let handler = SymbolSubscriptionHandler {
             primary_subscriptions: DashMap::with_capacity(5),
             secondary_subscriptions: DashMap::with_capacity(5),
-            subscription_event_buffer: RwLock::new(Vec::new()),
             vendor_primary_resolutions,
             vendor_data_types
         };
@@ -641,17 +675,10 @@ impl SymbolSubscriptionHandler {
         }
     }
 
-    pub async fn get_subscription_event_buffer(&self) -> Vec<DataSubscriptionEvent> {
-        let mut buffer = self.subscription_event_buffer.write().await;
-        let return_buffer = buffer.clone();
-        buffer.clear();
-        return_buffer
-    }
-
-
     //todo overhaul again, we will define a primary subsciption type as its own type, ticks and quotes only, then DataSubscriptions will be own object
     async fn subscribe(
         &self,
+        current_time: DateTime<Utc>,
         new_subscription: DataSubscription,
         warm_up_to_time: DateTime<Utc>,
         history_to_retain: usize,
@@ -661,18 +688,18 @@ impl SymbolSubscriptionHandler {
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
             return None;
         }
-        let mut subscription_event_buffer = self.subscription_event_buffer.write().await;
+
         if let Some(subscription) = self.primary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
             if *subscription.value() == new_subscription {
                 let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
-                subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
                 return None
             }
         }
         if let Some(subscriptions) = self.secondary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
             if let Some(_subscription) = subscriptions.get(&new_subscription) {
                 let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
-                subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
                 return None
             }
         }
@@ -710,7 +737,7 @@ impl SymbolSubscriptionHandler {
         if is_primary_capable && strategy_mode == StrategyMode::Backtest  {
             //In backtest mode we can just use the historical data so no need to reconsolidate
             self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-            subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
             return load_data_closure(&new_subscription)
         }
 
@@ -720,7 +747,7 @@ impl SymbolSubscriptionHandler {
             BaseDataType::Ticks => {
                 if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
                     let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                    subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                    add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
                     return None
                 } else {
                     if !self.primary_subscriptions.contains_key(&sub_res_type) {
@@ -735,7 +762,7 @@ impl SymbolSubscriptionHandler {
             BaseDataType::Quotes => {
                 if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) {
                     let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                    subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription.clone(), msg));
+                    add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
                     return None
                 } else {
                     if !self.primary_subscriptions.contains_key(&sub_res_type) {
@@ -752,7 +779,7 @@ impl SymbolSubscriptionHandler {
                     BaseDataType::QuoteBars => {
                         if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::QuoteBars) {
                             let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                            subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
                             return None
                         }
                         SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
@@ -760,7 +787,7 @@ impl SymbolSubscriptionHandler {
                     BaseDataType::Candles => {
                         if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) && !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::Candles) {
                             let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                            subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
                             return None
                         }
                         if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
@@ -793,12 +820,12 @@ impl SymbolSubscriptionHandler {
                         match self.vendor_primary_resolutions.contains(&new_subscription.subscription_resolution_type()) {
                             true => {
                                 self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-                                subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+                                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
                                 return load_data_closure(&new_subscription)
                             }
                             false => {
                                 let message = format!("{}: Does not have low enough resolution data to consolidate: {}", new_subscription.symbol.data_vendor, new_subscription);
-                                subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, message));
+                                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, message))).await;
                                 return None
                             }
                         }
@@ -843,7 +870,7 @@ impl SymbolSubscriptionHandler {
                         map.value_mut().insert(consolidator.subscription().clone(), consolidator);
                     }
                     returned_windows.insert(new_subscription.clone(), window);
-                    subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription));
+                    add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
                     return Some(returned_windows)
                 } else {
                     let mut returned_windows = AHashMap::new();
@@ -887,20 +914,19 @@ impl SymbolSubscriptionHandler {
                         self.secondary_subscriptions.insert(new_primary.subscription_resolution_type(), new_map);
                     }
                     returned_windows.insert(new_subscription.clone(), window);
-                    subscription_event_buffer.push(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+                    add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
                     return Some(returned_windows)
                 }
             }
             BaseDataType::Fundamentals => {
                 let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                subscription_event_buffer.push(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg));
+                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
                 return None
             }
         }
     }
 
-    async fn unsubscribe(&self, subscription: &DataSubscription) {
-        let mut subscription_event_buffer = self.subscription_event_buffer.write().await;
+    async fn unsubscribe(&self, current_time: DateTime<Utc>, subscription: &DataSubscription) {
         let sub_res_type = subscription.subscription_resolution_type();
         if self.primary_subscriptions.contains_key(&sub_res_type) {
             //determine if we have secondaries for this
@@ -910,19 +936,19 @@ impl SymbolSubscriptionHandler {
                 }
                 self.secondary_subscriptions.remove(&sub_res_type);
             }
-            subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()))
+            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()))).await;
         } else if let Some(mut map) = self.secondary_subscriptions.get_mut(&sub_res_type) {
             let sub = map.remove(&subscription);
             match sub {
-                None => subscription_event_buffer.push(DataSubscriptionEvent::FailedUnSubscribed(subscription.clone(), "No subscription to unsubscribe".to_string())),
-                Some(_consolidator) => subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone())),
+                None => add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedUnSubscribed(subscription.clone(), "No subscription to unsubscribe".to_string()))).await,
+                Some(_consolidator) => add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()))).await,
             }
         } else {
-            subscription_event_buffer.push(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
+            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()))).await;
         }
     }
 
-    pub async fn all_subscriptions(&self) -> Vec<DataSubscription> {
+    pub fn all_subscriptions(&self) -> Vec<DataSubscription> {
         // Collect primary subscriptions
         let mut all_subscriptions: Vec<DataSubscription> = self
             .primary_subscriptions
@@ -944,7 +970,7 @@ impl SymbolSubscriptionHandler {
         all_subscriptions
     }
 
-    pub async fn primary_subscriptions(&self) -> Vec<DataSubscription> {
+    pub fn primary_subscriptions(&self) -> Vec<DataSubscription> {
         self.primary_subscriptions.iter().map(|entry| entry.value().clone()).collect()
     }
 }

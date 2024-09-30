@@ -511,7 +511,7 @@ impl FundForgeStrategy {
 
     /// see the indicator_enum.rs for more details
     /// If we subscribe to an indicator and we do not have the appropriate data subscription, we will also subscribe to the data subscription.
-    pub async fn indicator_subscribe(&self, indicator: IndicatorEnum, auto_subscribe: bool) {
+    pub async fn subscribe_indicator(&self, indicator: IndicatorEnum, auto_subscribe: bool) {
         let subscriptions = self.subscriptions().await;
         if !subscriptions.contains(&indicator.subscription()) {
             match auto_subscribe {
@@ -606,7 +606,7 @@ impl FundForgeStrategy {
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
-    pub async fn subscribe(&self, subscription: DataSubscription, hsitory_to_retain: usize, fill_forward: bool) {
+    pub async fn subscribe(&self, subscription: DataSubscription, history_to_retain: usize, fill_forward: bool) {
         if let Some(buffer) = self.buffer_resolution {
             if subscription.resolution.as_nanos() < buffer.as_nanos() as i64 {
                 panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
@@ -614,15 +614,15 @@ impl FundForgeStrategy {
         }
         self
             .subscription_handler
-            .subscribe(subscription.clone(), self.time_utc(), fill_forward, hsitory_to_retain, true)
+            .subscribe(subscription.clone(), self.time_utc(), fill_forward, history_to_retain, true)
             .await
     }
 
     /// Unsubscribes from a subscription.
-    pub async fn unsubscribe(&self, subscription: DataSubscription) {
+    pub async fn unsubscribe(&self,subscription: DataSubscription) {
         self
             .subscription_handler
-            .unsubscribe(subscription.clone(), true)
+            .unsubscribe(self.time_utc(), subscription.clone(), true)
             .await;
 
         self.indicator_handler
