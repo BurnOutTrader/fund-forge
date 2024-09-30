@@ -21,6 +21,7 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::servers::settings::client_settings::{initialise_settings};
+use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{DataServerRequest, FundForgeError};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
@@ -68,7 +69,15 @@ lazy_static!(
 pub fn historical_time_slice_ledger_updates(time_slice: TimeSlice, time: DateTime<Utc>) {
     for broker_map in BACKTEST_LEDGERS.iter() {
         for mut account_map in broker_map.iter_mut() {
-            account_map.value_mut().on_historical_data_update(time_slice.clone(), time);
+            account_map.value_mut().on_historical_timeslice_update(time_slice.clone(), time);
+        }
+    }
+}
+
+pub fn historical_base_data_updates(base_data_enum: BaseDataEnum, time: DateTime<Utc>) {
+    for broker_map in BACKTEST_LEDGERS.iter() {
+        if let Some(mut account_map) = broker_map.get_mut(&base_data_enum.symbol().name) {
+            account_map.value_mut().on_base_data_update(base_data_enum.clone(), time);
         }
     }
 }
@@ -93,12 +102,13 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time, is_buffered).await;
                     }
-                    update_base_data(mode, base_data, &time);
+                    historical_base_data_updates(base_data, time);
                 }
                 MarketMessageEnum::TimeSliceUpdate(time_slice) => {
                     for base_data in time_slice.iter() {
                         update_base_data(mode, base_data.clone(), &time);
                     }
+                    historical_time_slice_ledger_updates(time_slice.clone(), time);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time, is_buffered).await;
                     }

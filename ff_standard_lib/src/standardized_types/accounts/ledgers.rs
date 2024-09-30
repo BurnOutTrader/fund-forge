@@ -177,6 +177,7 @@ pub(crate) mod historical_ledgers {
     use crate::standardized_types::orders::orders::{OrderId, OrderUpdateEvent};
     use crate::standardized_types::{Price, Volume};
     use crate::standardized_types::accounts::position::{Position, PositionId, PositionUpdateEvent};
+    use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::base_data::traits::BaseData;
     use crate::standardized_types::strategy_events::StrategyEvent;
     use crate::standardized_types::subscriptions::SymbolName;
@@ -329,7 +330,7 @@ pub(crate) mod historical_ledgers {
             }
         }
 
-        pub fn on_historical_data_update(&mut self, time_slice: TimeSlice, time: DateTime<Utc>) {
+        pub fn on_historical_timeslice_update(&mut self, time_slice: TimeSlice, time: DateTime<Utc>) {
             let mut open_pnl = dec!(0.0);
             for base_data_enum in time_slice.iter() {
                 let data_symbol_name = &base_data_enum.symbol().name;
@@ -353,6 +354,27 @@ pub(crate) mod historical_ledgers {
             }
             self.open_pnl = open_pnl;
             self.cash_value = self.cash_used + self.cash_available + self.open_pnl;
+        }
+
+        pub fn on_base_data_update(&mut self, base_data_enum: BaseDataEnum, time: DateTime<Utc>) {
+                let data_symbol_name = &base_data_enum.symbol().name;
+                if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
+                if position.is_closed {
+                    return
+                }
+                //returns booked pnl if exit on brackets
+                position.backtest_update_base_data(&base_data_enum, time);
+                self.open_pnl += position.open_pnl;
+                    self.cash_value = self.cash_used + self.cash_available + self.open_pnl;
+                if position.is_closed {
+                    // Move the position to the closed positions map
+                    let (symbol_name, position) = self.positions.remove(data_symbol_name).unwrap();
+                    self.positions_closed
+                        .entry(symbol_name)
+                        .or_insert_with(Vec::new)
+                        .push(position);
+                }
+            }
         }
 
         pub async fn update_or_create_paper_position(
