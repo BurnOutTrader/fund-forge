@@ -345,9 +345,8 @@ I have started building a GUI in iced for a full rust implementation, I have als
 
 The current problem with the TradingView option is that lightweight charts free api does not support Renko or Heikin Ashi charts, so I temporarily halted development on this option in favour of completing a [rust charting](https://youtu.be/BU9TU3e1-UY) api using iced.rs. 
 
-I am considering making a cheap paid cross-platform GUI in the future so that I can use the Trading View's `Platform edition api` which requires to have an established company, for this reason I have included only a single prohibition in the licence, to restrict commercial use in regard to re-selling any part of the fund-forge repository.
+I am considering making a paid cross-platform GUI to connect to the engine in the future for this reason I have included only a single prohibition in the licence, to restrict commercial use in regard to re-selling any part of the fund-forge repository.
 
-I won't know how realistic this option is until I know how many people are using the engine, I will continue development of the rust charting api until I have a better sense of the overall direction and popularity (since this is a fairly niche repo). \
 Since the engine is open source you will need to undergo the rithmic verification independently, you can see Rithmic section below.
 [Current Licence](https://github.com/BurnOutTrader/fund-forge/blob/main/LICENCE.md)
 
