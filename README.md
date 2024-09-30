@@ -104,7 +104,8 @@ Data subscriptions can also be set to keep a history, so you can call the last .
 If the strategy is already warmed up, Data subscriptions will warm up to fill their history window, so we can subscribe and unsubscribe at any time and access history for the subscription.
 (this needs to be properly tested, it is only basic implementation at present)
 
-To speed up backtests and prevent using consolidators, the engine will automatically use any primary data available with the data vendor in historical mode.
+To speed up backtests and prevent using consolidators, the engine will automatically use any primary data available with the data vendor in historical mode (according to what serialized data we have).
+This means we can pre consolidate and save commonly back tested resolutions. (I will build a server command for this)
 
 In live mode the engine will subscribe to the lowest possible resolution data: tick, quote or lastly the lowest resolution candles or quotebars, 
 this is done so that when live streaming with mutlple strategies we only need to maintain 1 live data feed per symbol, no matter the number of strategies and resolutions subscribed.
