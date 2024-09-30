@@ -163,7 +163,7 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
-                                    let msg = format!("{} {} Candle Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.time_created_local(strategy.time_zone()));
+                                    let msg = format!("{} {} QuoteBar Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.time_created_local(strategy.time_zone()));
                                     if quotebar.bid_close == quotebar.bid_open {
                                         println!("{}", msg.as_str().blue())
                                     } else {
