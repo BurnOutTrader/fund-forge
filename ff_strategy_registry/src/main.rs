@@ -1,5 +1,4 @@
 use chrono::Utc;
-use ff_standard_lib::server_connections::ConnectionType;
 use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use ff_standard_lib::servers::registry_request_handlers::registry_manage_async_requests;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
@@ -8,7 +7,7 @@ use rustls_pemfile::{certs, private_key};
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
-use std::net::SocketAddr;
+use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use structopt::StructOpt;
@@ -17,7 +16,6 @@ use tokio::sync::Mutex;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_rustls::TlsAcceptor;
-use ff_standard_lib::servers::settings::client_settings::initialise_settings;
 
 pub mod handle_gui;
 pub mod handle_strategies;
@@ -38,41 +36,32 @@ pub(crate) fn load_keys(path: &Path) -> Option<PrivateKeyDer<'static>> {
 
 #[derive(Debug, StructOpt)]
 struct ServerLaunchOptions {
-    /// Sets the data folder
-    #[structopt(
-        short = "f",
-        long = "data_folder",
-        parse(from_os_str),
-        default_value = "/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data"
-    )]
-    pub data_folder: PathBuf,
-
     #[structopt(
         short = "l",
         long = "ssl_folder",
         parse(from_os_str),
-        default_value = "/Users/kevmonaghan/RustroverProjects/fund-forge/resources/keys"
+        default_value = "./resources/keys"
     )]
     pub ssl_auth_folder: PathBuf,
 
     #[structopt(
-        short = "s",
-        long = "synchronous_address",
-        default_value = "0.0.0.0:8083"
+        short = "a",
+        long = "address",
+        default_value = "127.0.0.1"
     )]
-    pub listener_address: String,
+    pub listener_address: IpAddr,
 
-    #[structopt(short = "p", long = "async_address", default_value = "0.0.0.0:8084")]
-    pub async_listener_address: String,
-    /*    #[structopt(short = "c", long = "connection_type"]
-    pub start_up_mode: String,*/
+    #[structopt(
+        short = "p",
+        long = "port",
+        default_value = "8082"
+    )]
+    pub port: u16,
 }
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let options = ServerLaunchOptions::from_args();
-    let settings_map = initialise_settings().unwrap();
-    let settings = settings_map.get(&ConnectionType::StrategyRegistry).unwrap();
 
     let cert = Path::join(&options.ssl_auth_folder, "cert.pem");
     let key = Path::join(&options.ssl_auth_folder, "key.pem");
@@ -88,7 +77,8 @@ async fn main() -> io::Result<()> {
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))
         .unwrap();
 
-    let async_server_handle = async_server(config.into(), settings.address).await;
+    let address = SocketAddr::new(options.listener_address, options.port);
+    let async_server_handle = async_server(config.into(), address).await;
 
     let async_result = async_server_handle.await;
 

@@ -38,7 +38,6 @@ Events are a vec collection of all `StrategyEvent`s that occurred within a buffe
 
 We have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
 ```rust
-
 //let strategy = FundForgeStrategy::initialize(); //parameters excluded for brevity
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
