@@ -241,7 +241,7 @@ async fn warmup(
     }
 
     let consolidator = ConsolidatorEnum::create_consolidator(subscription.clone(), false, SubscriptionResolutionType::new(subscription.resolution, subscription.base_data_type)).await;
-    let (consolidator, window) = ConsolidatorEnum::warmup(consolidator, to_time, (indicator.data_required_warmup() + 1) as i32, strategy_mode).await;
+    let (_, window) = ConsolidatorEnum::warmup(consolidator, to_time, (indicator.data_required_warmup() + 1) as i32, strategy_mode).await;
     for data in window.history {
         let _ = indicator.update_base_data(&data);
     }
