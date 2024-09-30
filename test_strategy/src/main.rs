@@ -201,12 +201,12 @@ pub async fn on_data_received(
                                     count += 1;
 
                                     if count == 50 {
-                                        let msg = "Subscribing to new indicator heikin_atr15_15min and warming up subscriptions".to_string();
+                                        let msg = "Subscribing to new indicator heikin_atr3_3min and warming up subscriptions".to_string();
                                         println!("{}",msg.as_str().purple());
                                         // this will test both our auto warm up for indicators and data subscriptions
                                         let heikin_atr15_15min = IndicatorEnum::AverageTrueRange(
                                             AverageTrueRange::new(
-                                                IndicatorName::from("heikin_atr15_15min"),
+                                                IndicatorName::from("heikin_atr3_3min"),
                                                 DataSubscription::new(
                                                     SymbolName::from("EUR-USD"),
                                                     DataVendor::Test,
@@ -214,8 +214,8 @@ pub async fn on_data_received(
                                                     BaseDataType::QuoteBars,
                                                     MarketType::Forex,
                                                 ),
-                                                100,
-                                                15,
+                                                5,
+                                                3,
                                                 Some(Color::new(30,30,50))
                                             ).await,
                                         );
