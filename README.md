@@ -33,7 +33,6 @@ We have options for interacting with strategies using drawing tools and commands
 //let strategy = FundForgeStrategy::initialize(); //parameters excluded for brevity
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
-    notify: Arc<Notify>,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
     let mut warmup_complete = false;
