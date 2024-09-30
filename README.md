@@ -226,9 +226,6 @@ and
 I intend to build a full glossary and video tutorial series when live trading features are completed.
 I will walk through the entire code base during the video tutorial to assist people creating new Brokerage or DataVendor implementations.
 
-The current setup requires a little bit of changes to some hardcoded variables, but it is easy to get up and running with the test strategy.
-Live trading is still a couple of months away and the architecture and code base will be cleaned up once I have made some final design decisions.
-
 I have only tested on Mac and Linux, but there should not be any problems with Windows.
 
 ## Demonstration Testing Data
