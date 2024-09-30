@@ -56,4 +56,7 @@ pub trait Indicators {
     fn is_ready(&self) -> bool;
 
     fn history(&self) -> RollingWindow<IndicatorValues>;
+
+    /// the number of base data points we need to fill the history on warm up, for example an 5 period ATR indicator that keeps a history of 12 data points will require 17 base data enums to warm up
+    fn data_required_to_fill(&self) -> u64;
 }

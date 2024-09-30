@@ -21,6 +21,7 @@ pub struct AverageTrueRange {
     is_ready: bool,
     tick_size: Price,
     plot_color: Option<Color>,
+    period: u64
 }
 
 impl Display for AverageTrueRange {
@@ -53,6 +54,7 @@ impl AverageTrueRange {
             is_ready: false,
             tick_size,
             plot_color,
+            period
         };
         atr
     }
@@ -174,5 +176,9 @@ impl Indicators for AverageTrueRange {
 
     fn history(&self) -> RollingWindow<IndicatorValues> {
         self.history.clone()
+    }
+
+    fn data_required_to_fill(&self) -> u64 {
+        (self.history.len() as u64 + self.period + 1)
     }
 }

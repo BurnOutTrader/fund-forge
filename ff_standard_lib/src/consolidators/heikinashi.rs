@@ -4,7 +4,6 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -357,12 +356,5 @@ impl HeikinAshiConsolidator {
             "Invalid base data type for Candle consolidator: {}",
             base_data.base_data_type()
         )
-    }
-
-    pub(crate) fn current(&self) -> Option<BaseDataEnum> {
-        match &self.current_data {
-            Some(data) => Some(data.clone()),
-            None => None,
-        }
     }
 }
