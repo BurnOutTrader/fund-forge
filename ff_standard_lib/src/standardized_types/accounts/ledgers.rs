@@ -117,7 +117,7 @@ impl Ledger {
 
         // Use brokerage and account ID to format the filename
         let brokerage = self.brokerage.to_string(); // Assuming brokerage can be formatted as string
-        let file_name = format!("{}/{}_{}_{}.csv", folder, brokerage, self.account_id, date);
+        let file_name = format!("{}/{:?}_Results_{}_{}_{}.csv", folder, self.mode ,brokerage, self.account_id, date);
 
         // Create a writer for the CSV file
         let file_path = Path::new(&file_name);
