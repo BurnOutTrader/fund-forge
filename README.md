@@ -13,12 +13,12 @@ The working directory must be the strategy directory, or the strategy will not f
 [see](./test_strategy/README.md)
 
 The engine is designed to allow simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators and
-managing orders, connections and data streams.
+managing orders, connections and data streams. To allow for simple strategy design and management similar to
+common retail trading platforms.
 
 The engine can consolidate data into any bar type and resolution automatically using simple methods like `strategy.subscribe()` and `strategy.subscribe_indicator()`.
 
-There are event driven handlers and a buffering system for maintaining speed and consistency from back testing to live trading, to allow for simple strategy design and management similar to 
-common retail trading platforms.
+There are event driven handlers and a buffering system for maintaining speed and consistency from back testing to live trading.
 
 There is an Option for using a buffered or unbuffered engine in backtesting and live trading, the backtesting engines are designed to mimic the live trading engines, 
 in the unbuffered version events are forwarded to the strategy receiver as soon as they occur. In the buffered version events are buffered for X Duration and forwarded as a 'StrategyEventBuffer'.
