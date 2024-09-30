@@ -27,7 +27,7 @@ The only major difference in fund forge is the idea of the ff_data_server, a ser
 
 It is easy to build and run strategies across multiple machines, build indicators and add brokers or data feeds, including fundamental data.
 
-Take a quick look at [strategy features here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md).
+Take a quick look at [strategy features here](./ff_strategies/README.md).
 
 I will create a YouTube video on setting up the platform for development purposes in the near future.
 
@@ -213,9 +213,9 @@ fn example() {
 ```
 
 For a full look at strategies see
-[test_strategy](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs)
+[test_strategy](./test_strategy/src/main.rs)
 and
-[strategies readme](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
+[strategies readme](./ff_strategies/README.md)
 
 I intend to build a full glossary and video tutorial series when live trading features are completed.
 I will walk through the entire code base during the video tutorial to assist people creating new Brokerage or DataVendor implementations.
@@ -295,7 +295,7 @@ This repository is likely to undergo many changes and updates at short notice, s
 Since we are not ready for live trading, these changes shouldn't pose significant issues and I will try to keep future commits to be specific to limited sections of the code base.
 
 ## Rithmic API
-See [Rithmic Section of ff_data_Server README.md](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_data_server/README.md)
+See [Rithmic Section of ff_data_Server README.md](./ff_data_server/README.md)
 If you would like to work on the Rithmic API, you will need to apply for your own dev kit and credentials from Rithmic. Additionally, you will need to complete the Rithmic conformance procedure.
 
 Since Fund Forge is not a company, each user must do this and create their own unique app name to pass conformance. You can find more information at [Rithmic](https://yyy3.rithmic.com/?page_id=17).
@@ -361,7 +361,7 @@ To use rithmic API's you will need to request a dev kit for RProtocol (Proto Buf
 You will need to have a unique app name in your rithmic_credentials.toml files.
 
 ## Strategies
-Once you have followed the setup instructions above, you can play with a test strategy by reviewing [Strategies Guide](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_strategies/README.md)
+Once you have followed the setup instructions above, you can play with a test strategy by reviewing [Strategies Guide](./ff_strategies/README.md)
 
 ## Gui
 Decoupled.
