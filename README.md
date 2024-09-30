@@ -449,7 +449,7 @@ When using low resolution primary data such as ticks or quotes, consolidators wi
 We can observe this by using: 
 ```rust
 fn example() {
-    if candle.is_closed == true {
+    if candle.is_closed == false {
       //candle is closed candle
       candle.time_utc(); // == opening time at 13:00
     } else if candle.is_closed == true {
