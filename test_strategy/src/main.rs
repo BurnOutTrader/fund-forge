@@ -145,13 +145,13 @@ pub async fn on_data_received(
                                     let is_short = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
                                     if candle.close < last_candle.low
                                         && !is_short {
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
+                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Short")).await;
                                         bars_since_entry_2 = 0;
                                     }
 
                                     if bars_since_entry_2 > 10
                                         &&is_short {
-                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Long")).await;
+                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Short")).await;
                                         bars_since_entry_2 = 0;
                                     }
 
@@ -181,13 +181,13 @@ pub async fn on_data_received(
                                     let is_long: bool = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
                                     if quotebar.bid_close > last_bar.bid_high
                                         && !is_long {
-                                        let _entry_order_id: OrderId = strategy.enter_short(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Short")).await;
+                                        let _entry_order_id: OrderId = strategy.enter_short(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
                                     if bars_since_entry_1 > 10
                                         && is_long {
-                                        let _exit_order_id: OrderId = strategy.enter_short(&quotebar.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Short")).await;
+                                        let _exit_order_id: OrderId = strategy.enter_short(&quotebar.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
