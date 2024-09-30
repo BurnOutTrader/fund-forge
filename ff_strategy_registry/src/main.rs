@@ -54,7 +54,7 @@ struct ServerLaunchOptions {
     #[structopt(
         short = "p",
         long = "port",
-        default_value = "8082"
+        default_value = "8083"
     )]
     pub port: u16,
 }
