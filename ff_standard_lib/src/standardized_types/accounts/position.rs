@@ -192,7 +192,6 @@ pub(crate) mod historical_position {
 
             // Reset open PnL if position is closed
             if self.is_closed {
-                self.booked_pnl += self.open_pnl;
                 self.open_pnl = dec!(0.0);
                 let event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionClosed {
                     position_id: self.position_id.clone(),
