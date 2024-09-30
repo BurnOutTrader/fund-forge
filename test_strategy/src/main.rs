@@ -102,8 +102,8 @@ pub async fn on_data_received(
             Some(Color::new(50,50,50))
         ).await,
     );
-    strategy.indicator_subscribe(heikin_atr_5, false).await;
-
+    strategy.subscribe_indicator(heikin_atr_5, false).await;
+    let mut count = 0;
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
@@ -139,6 +139,10 @@ pub async fn on_data_received(
                                     if !warmup_complete {
                                         continue;
                                     }
+
+                                  /*  let candle_10_ago = strategy.candle_index(&base_data.subscription(), 11).unwrap();
+                                    let msg = format!("{} {} 10 Candles Ago Close: {}, {}", candle_10_ago.symbol.name, candle_10_ago.resolution, candle_10_ago.close, candle_10_ago.time_closed_local(strategy.time_zone()));
+                                    println!("{}", msg.as_str().on_bright_black());*/
 
                                     let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
                                     let is_short = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
@@ -192,6 +196,32 @@ pub async fn on_data_received(
 
                                     if is_long {
                                         bars_since_entry_1 += 1;
+                                    }
+
+                                    count += 1;
+
+                                    if count == 50 {
+                                        let msg = "Subscribing to new indicator heikin_atr15_15min and warming up subscriptions".to_string();
+                                        println!("{}",msg.as_str().purple());
+                                        // this will test both our auto warm up for indicators and data subscriptions
+                                        let heikin_atr15_15min = IndicatorEnum::AverageTrueRange(
+                                            AverageTrueRange::new(
+                                                IndicatorName::from("heikin_atr15_15min"),
+                                                DataSubscription::new(
+                                                    SymbolName::from("EUR-USD"),
+                                                    DataVendor::Test,
+                                                    Resolution::Minutes(3),
+                                                    BaseDataType::QuoteBars,
+                                                    MarketType::Forex,
+                                                ),
+                                                100,
+                                                15,
+                                                Some(Color::new(30,30,50))
+                                            ).await,
+                                        );
+                                        // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
+                                        // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
+                                        strategy.subscribe_indicator(heikin_atr15_15min, true).await;
                                     }
                                 }
                                 //do something with the current open bar
