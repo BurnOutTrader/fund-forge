@@ -151,7 +151,7 @@ pub async fn on_data_received(
 
                                     if bars_since_entry_2 > 10
                                         &&is_short {
-                                        let _exit_order_id = strategy.enter_short(&candle.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Short")).await;
+                                        let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Short")).await;
                                         bars_since_entry_2 = 0;
                                     }
 
@@ -187,7 +187,7 @@ pub async fn on_data_received(
 
                                     if bars_since_entry_1 > 10
                                         && is_long {
-                                        let _exit_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Long")).await;
+                                        let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
