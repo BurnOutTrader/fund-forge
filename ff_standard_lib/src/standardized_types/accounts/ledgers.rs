@@ -11,10 +11,8 @@ use rust_decimal_macros::dec;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::accounts::position::Position;
-use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::symbol_info::SymbolInfo;
 use serde_derive::{Deserialize, Serialize};
-use crate::standardized_types::orders::orders::Order;
 
 pub type AccountId = String;
 pub type AccountName = String;
@@ -510,20 +508,4 @@ pub struct AccountInfo {
     pub max_orders: Option<Volume>,
     pub daily_max_loss: Option<Price>,
     pub daily_max_loss_reset_time: Option<String>
-}
-
-impl Bytes<Self> for AccountInfo {
-    fn from_bytes(archived: &[u8]) -> Result<AccountInfo, FundForgeError> {
-        // If the archived bytes do not end with the delimiter, proceed as before
-        match rkyv::from_bytes::<AccountInfo>(archived) {
-            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `AccountInfoType` [E0277]
-            Ok(response) => Ok(response),
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
-        }
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
-        vec.into()
-    }
 }
