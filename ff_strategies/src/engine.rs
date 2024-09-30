@@ -174,41 +174,41 @@ impl HistoricalEngine {
                     }
                     update_historical_timestamp(time.clone());
                     self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
+                    let mut strategy_time_slice: TimeSlice = TimeSlice::new();
+                    // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
+                    match self.primary_subscription_updates.try_recv() {
+                        Ok(_) => {
+                            end_month = false;
+                            break 'time_instance_loop
+                        }
+                        Err(_) => {}
+                    }
+
+                    // update our consolidators and create the strategies time slice with any new data or just create empty slice.
+                    // Add only primary data which the strategy has subscribed to into the strategies time slice
+                    if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
+                        strategy_time_slice.extend(consolidated_data);
+                    }
+
+                    // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
+                    if let Some(consolidated_data) = subscription_handler.update_consolidators_time(time.clone()).await {
+                        strategy_time_slice.extend(consolidated_data);
+                    }
+
                     for data in time_slice.iter() {
-                        let mut strategy_time_slice: TimeSlice = TimeSlice::new();
-                        // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
-                        match self.primary_subscription_updates.try_recv() {
-                            Ok(_) => {
-                                end_month = false;
-                                break 'time_instance_loop
-                            }
-                            Err(_) => {}
-                        }
-
-                        // update our consolidators and create the strategies time slice with any new data or just create empty slice.
-                        // Add only primary data which the strategy has subscribed to into the strategies time slice
-                        if let Some(consolidated_data) = subscription_handler.update_base_data(data.clone()).await {
-                            strategy_time_slice.extend(consolidated_data);
-                        }
-
                         if strategy_subscriptions.contains(&data.subscription()) {
                             strategy_time_slice.add(data.clone());
                         }
-
-                        // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
-                        if let Some(consolidated_data) = subscription_handler.update_consolidators_time(time.clone()).await {
-                            strategy_time_slice.extend(consolidated_data);
-                        }
-
-                        if !strategy_time_slice.is_empty() {
-                            // Update indicators and get any generated events.
-                            indicator_handler.update_time_slice(time, &strategy_time_slice).await;
-                            // add the strategy time slice to the new events.
-                            let slice_event = StrategyEvent::TimeSlice(strategy_time_slice);
-                            add_buffer(time, slice_event).await;
-                        }
-                        forward_buffer().await;
                     }
+
+                    if !strategy_time_slice.is_empty() {
+                        // Update indicators and get any generated events.
+                        indicator_handler.update_time_slice(time, &strategy_time_slice).await;
+                        // add the strategy time slice to the new events.
+                        let slice_event = StrategyEvent::TimeSlice(strategy_time_slice);
+                        add_buffer(time, slice_event).await;
+                    }
+                    forward_buffer().await;
                 }
                 if end_month {
                     break 'month_loop;
