@@ -142,20 +142,20 @@ pub async fn on_data_received(
                                     }
 
                                     let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
-                                    let is_long = strategy.is_long(&brokerage, &account_name, &candle.symbol.name);
-                                    if candle.close > last_candle.high
-                                        && !is_long {
+                                    let is_short = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
+                                    if candle.close < last_candle.low
+                                        && !is_short {
                                         let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
                                         bars_since_entry_2 = 0;
                                     }
 
                                     if bars_since_entry_2 > 10
-                                        &&is_long {
+                                        &&is_short {
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Long")).await;
                                         bars_since_entry_2 = 0;
                                     }
 
-                                    if is_long {
+                                    if is_short {
                                         bars_since_entry_2 += 1;
                                     }
                                 }
@@ -178,20 +178,20 @@ pub async fn on_data_received(
                                     }
 
                                     let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
-                                    let is_short: bool = strategy.is_short(&brokerage, &account_name, &quotebar.symbol.name);
+                                    let is_long: bool = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
                                     if quotebar.bid_close > last_bar.bid_high
-                                        && !is_short {
+                                        && !is_long {
                                         let _entry_order_id: OrderId = strategy.enter_short(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Short")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
                                     if bars_since_entry_1 > 10
-                                        && is_short {
+                                        && is_long {
                                         let _exit_order_id: OrderId = strategy.enter_short(&quotebar.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Short")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
-                                    if is_short {
+                                    if is_long {
                                         bars_since_entry_1 += 1;
                                     }
                                 }
