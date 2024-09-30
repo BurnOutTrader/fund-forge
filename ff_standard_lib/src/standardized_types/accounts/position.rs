@@ -214,7 +214,7 @@ pub(crate) mod historical_position {
 
     impl Position {
 
-        pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) -> Price {
+        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) -> Price {
             // Ensure quantity does not exceed the open quantity
             let quantity = if quantity > self.quantity_open {
                 self.quantity_open

@@ -398,7 +398,7 @@ pub(crate) mod historical_ledgers {
                     || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 
                 if is_reducing {
-                    let booked_pnl= existing_position.reduce_position_size(market_price, quantity, time).await;
+                    let booked_pnl= existing_position.reduce_paper_position_size(market_price, quantity, time).await;
                     self.cash_available += booked_pnl;
                     self.subtract_margin_used(&symbol_name, quantity).await;
                     self.cash_value = self.cash_used + self.cash_available;
@@ -500,7 +500,7 @@ pub(crate) mod historical_ledgers {
                 existing_position.is_closed = true;
 
                 // Calculate booked profit by reducing the position size
-                let booked_profit = existing_position.reduce_position_size(market_price, existing_position.quantity_open, time).await;
+                let booked_profit = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time).await;
                 self.booked_pnl += booked_profit;
                 self.cash_available += booked_profit;
                 self.subtract_margin_used(&symbol_name, existing_position.quantity_open).await;
