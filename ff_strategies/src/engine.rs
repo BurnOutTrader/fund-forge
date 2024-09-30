@@ -75,68 +75,33 @@ impl HistoricalEngine {
         thread::spawn(move|| {
             // Run the engine logic on a dedicated OS thread
             tokio::runtime::Runtime::new().unwrap().block_on(async {
-                self.warmup().await;
+                let warm_up_start_time = self.start_time - self.warmup_duration;
+                let end_time = match self.mode {
+                    StrategyMode::Backtest => self.end_time,
+                    StrategyMode::Live | StrategyMode::LivePaperTrading => self.start_time
+                };
+                let month_years = generate_file_dates(
+                    warm_up_start_time,
+                    end_time,
+                );
 
-                //be sure not to allow launching historical engine when not in backtest mode
-                if self.mode == StrategyMode::Backtest {
-                    self.run_backtest().await;
-                    println!("Engine: Backtest complete");
-                    let end_event = StrategyEvent::ShutdownEvent(String::from("Success"));
-                    add_buffer(get_backtest_time(), end_event).await;
-                    forward_buffer().await;
+                match self.buffer_resolution {
+                    None => self.historical_data_feed_unbuffered(month_years, warm_up_start_time, end_time, self.mode).await,
+                    Some(res) => self.historical_data_feed_buffered(month_years, warm_up_start_time, end_time, res, self.mode).await,
+                }
+
+                match self.mode {
+                    StrategyMode::Backtest => {
+                        add_buffer(end_time, StrategyEvent::ShutdownEvent("Backtest Complete".to_string()) ).await;
+                        forward_buffer().await;
+                    }
+                    StrategyMode::Live => {}
+                    StrategyMode::LivePaperTrading => {}
                 }
             });
         });
     }
 
-    pub async fn warmup(&mut self) {
-        let msg = match self.buffer_resolution {
-            None => String::from("Un-Buffered"),
-            Some(_) => String::from("Buffered")
-        };
-        println!("{} Engine: Warming up the strategy...", msg);
-        let warm_up_start_time = self.start_time - self.warmup_duration;
-        let warm_up_end_time = self.start_time;
-        // we run the historical data feed from the start time minus the warmup duration until we reach the start date for the strategy
-        let month_years = generate_file_dates(
-            warm_up_start_time,
-            warm_up_end_time, //end time for warm up is strategy official start time
-        );
-
-        match self.buffer_resolution {
-            None => self.historical_data_feed_unbuffered(month_years, warm_up_end_time.clone()).await,
-            Some(res) => self.historical_data_feed_buffered(month_years, warm_up_end_time.clone(), res).await,
-        }
-
-        set_warmup_complete();
-        add_buffer(get_backtest_time(), StrategyEvent::WarmUpComplete).await;
-        forward_buffer().await;
-        if self.mode != StrategyMode::Backtest {
-            unsubscribe_primary_subscription_updates("Historical Engine".to_string()).await;
-        }
-        println!("{} Engine: Warm up complete", msg)
-    }
-
-    /// Runs the strategy backtest
-    async fn run_backtest(&mut self) {
-        let msg = match self.buffer_resolution {
-            None => String::from("Un-Buffered"),
-            Some(_) => String::from("Buffered")
-        };
-        if self.mode != StrategyMode::Backtest {
-            panic!("Do not run backtest engine with mode set to: {:?}", self.mode)
-        }
-        println!("{} Engine: Start {:?} ", msg, self.mode);
-        // we run the historical data feed from the start time until we reach the end date for the strategy
-        let month_years = generate_file_dates(
-            self.start_time,
-            self.end_time.clone(),
-        );
-        match self.buffer_resolution {
-            None => self.historical_data_feed_unbuffered(month_years, self.end_time.clone()).await,
-            Some(res) => self.historical_data_feed_buffered(month_years, self.end_time.clone(), res).await,
-        }
-    }
 
     async fn get_base_time_slices(
         &self,
@@ -154,20 +119,30 @@ impl HistoricalEngine {
     async fn historical_data_feed_unbuffered(
         &mut self,
         month_years: BTreeMap<i32, DateTime<Utc>>,
+        warm_up_start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
+        mode: StrategyMode
     ) {
+        println!("Un-Buffered Engine: Warming up the strategy...");
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
+        let mut warm_up_complete = false;
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
             'month_loop: loop {
                 let primary_subscriptions = subscription_handler.primary_subscriptions().await;
+                for subscription in &primary_subscriptions {
+                    println!("Un-Buffered Engine: Primary Subscription: {}", subscription);
+                }
                 let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                println!("Un-Buffered Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
+                for subscription in &strategy_subscriptions {
+                    println!("Un-Buffered Engine: Strategy Subscription: {}", subscription);
+                }
 
                 println!("Un-Buffered Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
-                println!("Un-Buffered Engine: Preparing TimeSlices");
+
+                println!("Un-Buffered Engine:  Preparing TimeSlices for: {} to {}", start.date_naive(), start.date_naive());
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -175,12 +150,28 @@ impl HistoricalEngine {
                         continue;
                     }
                 };
-                println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
+                println!("{} Data Points Recovered from Server: {} for {}", start.date_naive(), month_time_slices.len(), start.date_naive());
                 let mut end_month = true;
                 'time_instance_loop: for (time, time_slice) in month_time_slices {
                     if time > end_time {
                         println!("Un-Buffered Engine: End Time: {}", end_time);
                         break 'main_loop;
+                    }
+                    if time < warm_up_start_time {
+                        continue
+                    }
+                    if !warm_up_complete {
+                        if time >= self.start_time {
+                            warm_up_complete = true;
+                            set_warmup_complete();
+                            add_buffer(get_backtest_time(), StrategyEvent::WarmUpComplete).await;
+                            forward_buffer().await;
+                            if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
+                                unsubscribe_primary_subscription_updates("Historical Engine".to_string()).await;
+                                break 'main_loop
+                            }
+                            println!("Un-Buffered Engine: Start Backtest");
+                        }
                     }
                     update_historical_timestamp(time.clone());
                     self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
@@ -234,21 +225,28 @@ impl HistoricalEngine {
     async fn historical_data_feed_buffered(
         &mut self,
         month_years: BTreeMap<i32, DateTime<Utc>>,
+        warm_up_start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
-        buffer_duration: Duration
+        buffer_duration: Duration,
+        mode: StrategyMode
     ) {
+        println!("Buffered Engine: Warming up the strategy...");
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
+        let mut warm_up_complete = false;
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
             'month_loop: loop {
                 let primary_subscriptions = subscription_handler.primary_subscriptions().await;
+                for subscription in &primary_subscriptions {
+                    println!("Buffered Engine: Primary Subscription: {}", subscription);
+                }
                 let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                println!("Buffered Engine: Strategy Subscriptions: {:?}", strategy_subscriptions);
-
-                println!("Buffered Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
-                println!("Buffered Engine: Preparing TimeSlices");
+                for subscription in &strategy_subscriptions {
+                    println!("Buffered Engine: Strategy Subscription: {}", subscription);
+                }
+                println!("Buffered Engine: Preparing TimeSlices for: {}", start.date_naive());
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -256,8 +254,7 @@ impl HistoricalEngine {
                         continue;
                     }
                 };
-                println!("{} Data Points Recovered from Server: {}", start.date_naive(), month_time_slices.len());
-
+                println!("{} Data Points Recovered from Server: {} for {}", start.date_naive(), month_time_slices.len(), start.date_naive());
                 let mut end_month = true;
                 'time_instance_loop: loop {
                     let time = last_time + buffer_duration;
@@ -265,10 +262,28 @@ impl HistoricalEngine {
                         println!("Buffered Engine: End Time: {}", end_time);
                         break 'main_loop;
                     }
+                    if time < warm_up_start_time {
+                        continue
+                    }
+                    if !warm_up_complete {
+                        if time >= self.start_time {
+                            warm_up_complete = true;
+                            set_warmup_complete();
+                            add_buffer(get_backtest_time(), StrategyEvent::WarmUpComplete).await;
+                            forward_buffer().await;
+                            if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
+                                unsubscribe_primary_subscription_updates("Historical Engine".to_string()).await;
+                                break 'main_loop
+                            }
+                            println!("Buffered Engine: Start Backtest");
+                        }
+                    }
                     if time.month() != start.month() {
                         //println!("Next Month Time");
                         break 'month_loop;
                     }
+
+
                     update_historical_timestamp(time.clone());
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
                     match self.primary_subscription_updates.try_recv() {
