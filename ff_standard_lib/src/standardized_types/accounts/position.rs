@@ -22,7 +22,6 @@ pub(crate) struct PositionExport {
     lowest_recoded_price: Price,
 }
 
-
 #[derive(
     Clone,
     rkyv::Serialize,

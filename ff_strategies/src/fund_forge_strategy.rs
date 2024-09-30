@@ -119,8 +119,11 @@ impl FundForgeStrategy {
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
         let warm_up_start_time = start_time - warmup_duration;
         update_historical_timestamp(warm_up_start_time.clone());
-
-        let market_event_sender = market_handler(strategy_mode, backtest_accounts_starting_cash, backtest_account_currency).await;
+        let is_buffered = match buffering_duration {
+            None => false,
+            Some(_) => true
+        };
+        let market_event_sender = market_handler(strategy_mode, backtest_accounts_starting_cash, backtest_account_currency, is_buffered).await;
         let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode, market_event_sender.clone()).await);
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
 
