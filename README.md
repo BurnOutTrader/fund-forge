@@ -177,7 +177,7 @@ fn example() {
 It is easy to place orders, including attaching bracket orders to the new position.
 ```rust
 fn example() {
-    let entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long"), None).await;
+    let entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long")).await;
     let exit_order_id = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
 }
 ```
@@ -320,7 +320,6 @@ If you manage to begin live trading before me, then you will need to test proper
 - Currently building a Rithmic API as the first live trading and back testing api. I did build an Oanda implementation, but they closed my live account without any reason (Not salty but I am not sure what the misunderstanding was) so I have scraped that for now as I needed to proceed with development, I will come back to oanda api later.
 - Backtest ledgers and statistics very crude and incomplete/inaccurate.
 - Only TEST variant API is working, which is just a hard coded simulated api.
-- Currently working on simulating data streams and order updates for 'Test' variants, while securing a rithmic account to continue rithmic API development
 - Docker builds have not been tested recently and probably will not work without some minor code adjustments to the docker files.
 
 ## Current Objectives
@@ -410,9 +409,6 @@ You can implement your api however you like, as long as you return all the requi
 Brokerages utilize the `BrokerApiResponse` trait. 
 
 On the client side the function calls are automatically forwarded to the correct api and so no changes to `ClientSideDataVendor` or `ClientSideBrokerage` need to be made
-
-**Note: In the future I may implement different trait 'levels' so we can implement `Level 1 broker` `Level 2 Broker` to allow diversity in broker api integrations which can vary vastly.
-Currently the market handler is very crude, backtesting results are innacurate, it is for development purposes only.
 
 All requests made by the engine will use the DataVendor or Brokerage variant in some way.
 We are simply: 
