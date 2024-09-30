@@ -1,5 +1,6 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::{Australia};
+use colored::Colorize;
 use ff_standard_lib::indicators::indicator_handler::IndicatorEvents;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -128,7 +129,15 @@ pub async fn on_data_received(
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    println!("Candle {}: {}, Local Time: {}", candle.symbol.name, candle.time_created_utc(), candle.time_created_local(strategy.time_zone()));
+                                    let msg = format!("Candle {}: {}, Local Time {}", candle.symbol.name, candle.time_created_utc(), candle.time_created_local(strategy.time_zone()));
+                                    if candle.close == candle.open {
+                                        println!("{}", msg.as_str().blue())
+                                    } else {
+                                        match candle.close > candle.open {
+                                            true => println!("{}", msg.as_str().green()),
+                                            false => println!("{}", msg.as_str().red()),
+                                        }
+                                    }
                                     history_2.add(candle.clone());
                                     let last_bar =
                                         match history_2.get(1) {
@@ -164,7 +173,15 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
-                                    println!("QuoteBar {}: {}, Local Time {}", quotebar.symbol.name, quotebar.time_created_utc(), quotebar.time_created_local(strategy.time_zone()));
+                                    let msg = format!("QuoteBar {}: {}, Local Time {}", quotebar.symbol.name, quotebar.time_created_utc(), quotebar.time_created_local(strategy.time_zone()));
+                                    if quotebar.bid_close == quotebar.bid_open {
+                                        println!("{}", msg.as_str().blue())
+                                    } else {
+                                        match quotebar.bid_close > quotebar.bid_open {
+                                            true => println!("{}", msg.as_str().green()),
+                                            false => println!("{}", msg.as_str().red()),
+                                        }
+                                    }
                                     history_1.add(quotebar.clone());
                                     let last_bar =
                                     match history_1.get(1) {
@@ -206,7 +223,8 @@ pub async fn on_data_received(
                             BaseDataEnum::Tick(_tick) => {}
                             BaseDataEnum::Quote(quote) => {
                                 // primary data feed won't show up in event loop unless specifically subscribed by the strategy
-                                println!("{} Quote: {}, Local Time {}", quote.symbol.name, base_data.time_created_utc(), quote.time_local(strategy.time_zone()));
+                                let msg = format!("{} Quote: {}, Local Time {}", quote.symbol.name, base_data.time_created_utc(), quote.time_local(strategy.time_zone()));
+                                println!("{}", msg.as_str().purple());
                             }
                             BaseDataEnum::Fundamental(_fundamental) => {}
                         }
@@ -216,12 +234,13 @@ pub async fn on_data_received(
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(event) => {
                     strategy.print_ledgers();
-                    println!("{}, Strategy: Order Event: {}", strategy.time_utc(), event);
+                    let msg = format!("{}, Strategy: Order Event: {}", strategy.time_utc(), event);
                 }
 
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
                 StrategyEvent::DataSubscriptionEvent(event) => {
-                        println!("Strategy: Data Subscription Event: {}", event);
+                        let msg = format!("Strategy: Data Subscription Event: {}", event);
+                        println!("{}", msg.as_str().bright_magenta());
                 }
 
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
@@ -236,7 +255,8 @@ pub async fn on_data_received(
                 }
 
                 StrategyEvent::ShutdownEvent(event) => {
-                    println!("{}",event);
+                    let msg = format!("{}",event);
+                    println!("{}", msg.as_str().bright_magenta());
                     strategy.export_trades(&String::from("./trades exports"));
                     strategy.print_ledgers();
                     //we should handle shutdown gracefully by first ending the strategy loop.
@@ -244,7 +264,8 @@ pub async fn on_data_received(
                 },
 
                 StrategyEvent::WarmUpComplete{} => {
-                    println!("Strategy: Warmup Complete");
+                    let msg = format!("Strategy: Warmup Complete");
+                    println!("{}", msg.as_str().bright_magenta());
                     warmup_complete = true;
                 }
 
@@ -252,21 +273,25 @@ pub async fn on_data_received(
                     //we can handle indicator events here, this is useful for debugging and monitoring the state of the indicators.
                     match indicator_event {
                         IndicatorEvents::IndicatorAdded(added_event) => {
-                            println!("Strategy:Indicator Added: {:?}", added_event);
+                            let msg = format!("Strategy:Indicator Added: {:?}", added_event);
+                            println!("{}", msg.as_str().yellow());
                         }
                         IndicatorEvents::IndicatorRemoved(removed_event) => {
-                            println!("Strategy:Indicator Removed: {:?}", removed_event);
+                            let msg = format!("Strategy:Indicator Removed: {:?}", removed_event);
+                            println!("{}", msg.as_str().yellow());
                         }
                         IndicatorEvents::IndicatorTimeSlice(slice_event) => {
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice_event {
                                 for (_name, plot) in indicator_values.plots(){
-                                    println!("{}: {}: {:?}", indicator_values.name, plot.name, plot.value);
+                                    let msg = format!("{}: {}: {:?}", indicator_values.name, plot.name, plot.value);
+                                    println!("{}", msg.as_str().bright_cyan());
                                 }
                             }
                         }
                         IndicatorEvents::Replaced(replace_event) => {
-                            println!("Strategy:Indicator Replaced: {:?}", replace_event);
+                            let msg = format!("Strategy:Indicator Replaced: {:?}", replace_event);
+                            println!("{}", msg.as_str().yellow());
                         }
                     }
 
@@ -274,7 +299,8 @@ pub async fn on_data_received(
                 }
 
                 StrategyEvent::PositionEvents(event) => {
-                    println!("{}", event);
+                    let msg = format!("{}", event);
+                    println!("{}", msg.as_str().yellow());
                 }
             }
         }
