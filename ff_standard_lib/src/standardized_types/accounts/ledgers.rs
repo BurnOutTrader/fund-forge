@@ -113,7 +113,7 @@ impl Ledger {
         }
 
         // Get current date in desired format
-        let date = Utc::now().format("%Y-%m-%d").to_string();
+        let date = Utc::now().format("%Y-%m-%d %H:%M").to_string();
 
         // Use brokerage and account ID to format the filename
         let brokerage = self.brokerage.to_string(); // Assuming brokerage can be formatted as string
