@@ -255,8 +255,10 @@ Change the following to suit the symbol and your directory.
 
 The parsing logic expects the original files to be in a director with the same symbol name eg "/Users/{username}/Downloads/AUD-CAD"
 ```rust
-let YOUR_FOLDER_PATH: String = "/Downloads".to_string(); //it will be assumed there is a folder named "AUD-CAD" here
-let SYMBOL_NAME: String = "AUD-CAD".to_string();
+fn main() {
+    let YOUR_FOLDER_PATH: String = "/Downloads".to_string(); //it will be assumed there is a folder named "AUD-CAD" here
+    let SYMBOL_NAME: String = "AUD-CAD".to_string();
+}
 ```
 After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
 
