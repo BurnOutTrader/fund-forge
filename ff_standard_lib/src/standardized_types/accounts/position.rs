@@ -1,3 +1,4 @@
+use std::fmt;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
@@ -62,6 +63,72 @@ pub enum PositionUpdateEvent {
         position_id: PositionId,
         position: Position
     },
+}
+
+impl fmt::Display for PositionUpdateEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PositionUpdateEvent::PositionOpened(position_id) => {
+                write!(f, "PositionOpened: Position ID = {}", position_id)
+            }
+            PositionUpdateEvent::Increased {
+                position_id,
+                total_quantity_open,
+                average_price,
+                open_pnl,
+                booked_pnl,
+            } => {
+                write!(
+                    f,
+                    "PositionIncreased: Position ID = {}, Total Quantity Open = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}",
+                    position_id, total_quantity_open, average_price, open_pnl, booked_pnl
+                )
+            }
+            PositionUpdateEvent::PositionReduced {
+                position_id,
+                total_quantity_open,
+                total_quantity_closed,
+                average_price,
+                open_pnl,
+                booked_pnl,
+                average_exit_price,
+            } => {
+                write!(
+                    f,
+                    "PositionReduced: Position ID = {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Average Exit Price = {}",
+                    position_id, total_quantity_open, total_quantity_closed, average_price, open_pnl, booked_pnl, average_exit_price
+                )
+            }
+            PositionUpdateEvent::PositionClosed {
+                position_id,
+                total_quantity_open,
+                total_quantity_closed,
+                average_price,
+                booked_pnl,
+                average_exit_price,
+            } => {
+                write!(
+                    f,
+                    "PositionClosed: Position ID = {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Booked PnL = {}, Average Exit Price = {}",
+                    position_id, total_quantity_open, total_quantity_closed, average_price, booked_pnl,
+                    match average_exit_price {
+                        Some(price) => price.to_string(),
+                        None => "None".to_string(),
+                    }
+                )
+            }
+            PositionUpdateEvent::PositionUpdateSnapShot {
+                position_id,
+                position,
+            } => {
+                write!(
+                    f,
+                    "PositionUpdateSnapShot: Position ID = {}, Position Details = {:?}",
+                    position_id, position
+                )
+            }
+        }
+    }
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize,     PartialOrd,)]

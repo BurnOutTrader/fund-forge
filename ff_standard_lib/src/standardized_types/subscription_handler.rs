@@ -364,7 +364,7 @@ impl SubscriptionHandler {
             if let Some(handler) = symbol_subscriptions.get(&symbol) {
                 handler.update(&base_data).await
             } else {
-                println!("No handler: {:?}", symbol);
+                eprintln!("No handler: {:?}", symbol);
                 Vec::new() // Return empty if handler is not found.
             }
         });

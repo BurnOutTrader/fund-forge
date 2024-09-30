@@ -1,3 +1,4 @@
+use std::fmt;
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::OrderSide;
@@ -497,7 +498,7 @@ pub enum OrderUpdateType {
     Tag(String),
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Display)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Represents the various states and updates an order can undergo in the trading system.
@@ -517,6 +518,33 @@ pub enum OrderUpdateEvent {
     OrderUpdated {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, order: Order},
 
     OrderUpdateRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
+}
+impl fmt::Display for OrderUpdateEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id } => {
+                write!(f, "Order Accepted: Brokerage: {}, Account ID: {}, Order ID: {}", brokerage, account_id, order_id)
+            }
+            OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id } => {
+                write!(f, "Order Filled: Brokerage: {}, Account ID: {}, Order ID: {}", brokerage, account_id, order_id)
+            }
+            OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id } => {
+                write!(f, "Order Partially Filled: Brokerage: {}, Account ID: {}, Order ID: {}", brokerage, account_id, order_id)
+            }
+            OrderUpdateEvent::OrderCancelled { brokerage, account_id, order_id } => {
+                write!(f, "Order Cancelled: Brokerage: {}, Account ID: {}, Order ID: {}", brokerage, account_id, order_id)
+            }
+            OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason } => {
+                write!(f, "Order Rejected: Brokerage: {}, Account ID: {}, Order ID: {}. Reason: {}", brokerage, account_id, order_id, reason)
+            }
+            OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, order } => {
+                write!(f, "Order Updated: Brokerage: {}, Account ID: {}, Order ID: {}", brokerage, account_id, order_id)
+            }
+            OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason } => {
+                write!(f, "Order Update Rejected: Brokerage: {}, Account ID: {}, Order ID: {}. Reason: {}", brokerage, account_id, order_id, reason)
+            }
+        }
+    }
 }
 
 impl OrderUpdateEvent {

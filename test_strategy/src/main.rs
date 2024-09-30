@@ -215,36 +215,13 @@ pub async fn on_data_received(
 
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(event) => {
-                    //strategy.print_ledgers();
-                    match &event {
-                        OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
-                        }
-                        OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
-                        },
-                        OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
-                        }
-                        OrderUpdateEvent::OrderCancelled { brokerage, account_id, order_id } => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
-                        }
-                        OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason } => {
-                            println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id), reason);
-                        }
-                        OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, order} => {
-                            println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
-                        }
-                        OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason } => {
-                            println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id), reason);
-                        }
-                    };
-                    println!("{}, Strategy: Order Event: {:?}", strategy.time_utc(), event);
+                    strategy.print_ledgers();
+                    println!("{}, Strategy: Order Event: {}", strategy.time_utc(), event);
                 }
 
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
                 StrategyEvent::DataSubscriptionEvent(event) => {
-                        println!("Strategy: Data Subscription Event: {:?}", event);
+                        println!("Strategy: Data Subscription Event: {}", event);
                 }
 
                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
@@ -261,7 +238,7 @@ pub async fn on_data_received(
                 StrategyEvent::ShutdownEvent(event) => {
                     println!("{}",event);
                     strategy.export_trades(&String::from("./trades exports"));
-                    strategy.print_ledgers().await;
+                    strategy.print_ledgers();
                     //we should handle shutdown gracefully by first ending the strategy loop.
                     break 'strategy_loop
                 },
@@ -297,7 +274,7 @@ pub async fn on_data_received(
                 }
 
                 StrategyEvent::PositionEvents(event) => {
-                    println!("{:?}", event);
+                    println!("{}", event);
                 }
             }
         }

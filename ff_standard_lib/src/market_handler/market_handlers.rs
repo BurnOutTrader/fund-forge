@@ -153,7 +153,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                             }
                         }
                         StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
-                            simulated_order_matching(mode, order_request, starting_balances, account_currency, is_buffered).await;
+                            simulated_order_matching(mode, order_request, starting_balances, account_currency, is_buffered, time).await;
                         }
                     }
                 }
@@ -302,9 +302,9 @@ pub async fn simulated_order_matching(
     order_request: OrderRequest,
     starting_balances: Decimal,
     account_currency: Currency,
-    is_buffered: bool
+    is_buffered: bool,
+    time: DateTime<Utc>
 ) {
-    let time = get_backtest_time();
     match order_request {
         OrderRequest::Create { order, .. } => {
             let time = DateTime::from_str(&order.time_created_utc).unwrap();

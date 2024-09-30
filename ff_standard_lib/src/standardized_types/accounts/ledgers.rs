@@ -60,7 +60,6 @@ pub(crate) fn calculate_pnl(
 
     // Calculate PnL by multiplying with value per tick and quantity
     let pnl = raw_ticks * value_per_tick * quantity;
-    println!("Calculate Pnl fn: {}", pnl);
     pnl
 }
 
@@ -424,7 +423,7 @@ pub(crate) mod historical_ledgers {
                 };
 
                 let info = self.symbol_info(symbol_name).await;
-                let id = self.generate_id(symbol_name, time.clone(), position_side);
+                let id = self.generate_id(symbol_name, position_side);
                 // Create a new position
                 let position = Position::new(
                     symbol_name.clone(),
@@ -454,7 +453,6 @@ pub(crate) mod historical_ledgers {
         pub fn generate_id(
             &self,
             symbol_name: &SymbolName,
-            time: DateTime<Utc>,
             side: PositionSide
         ) -> PositionId {
             // Increment the counter for the symbol, or insert it if it doesn't exist
@@ -463,7 +461,7 @@ pub(crate) mod historical_ledgers {
                 .or_insert(1).value().clone();
 
             // Return the generated position ID
-            format!("{}-{}-{}-{}-{}-{}", self.brokerage, self.account_id, symbol_name, counter, time.timestamp_nanos_opt().unwrap(), side)
+            format!("{}-{}-{}-{}-{}", self.brokerage, self.account_id, symbol_name, side, counter)
         }
 
         pub async fn exit_position_paper(

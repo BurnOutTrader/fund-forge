@@ -289,6 +289,20 @@ pub enum DataSubscriptionEvent {
     FailedSubscribed(DataSubscription, String),
     FailedUnSubscribed(DataSubscription, String),
 }
+impl fmt::Display for DataSubscriptionEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DataSubscriptionEvent::Subscribed(sub) => write!(f, "Subscribed to: {}", sub),
+            DataSubscriptionEvent::Unsubscribed(sub) => write!(f, "Unsubscribed from: {}", sub),
+            DataSubscriptionEvent::FailedSubscribed(sub, reason) => {
+                write!(f, "Failed to subscribe to: {}. Reason: {}", sub, reason)
+            }
+            DataSubscriptionEvent::FailedUnSubscribed(sub, reason) => {
+                write!(f, "Failed to unsubscribe from: {}. Reason: {}", sub, reason)
+            }
+        }
+    }
+}
 
 pub fn filter_resolutions(
     available_resolutions: Vec<SubscriptionResolutionType>,

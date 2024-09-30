@@ -698,7 +698,7 @@ impl FundForgeStrategy {
         }
     }
 
-    pub async fn print_ledgers(&self) {
+    pub fn print_ledgers(&self) {
         let strings = process_ledgers();
         for string in strings {
             println!("{}", string);
