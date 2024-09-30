@@ -451,10 +451,12 @@ We can observe this by using:
 fn example() {
     if candle.is_closed == false {
       //candle is closed candle
-      candle.time_utc(); // == opening time at 13:00
+      candle.time_utc(); // == opening time at 14:00)
+      candle.time_closed(); // == the candles future closing time at 15:00
     } else if candle.is_closed == true {
       //candle is open
-      candle.time_utc() // == opening time 14:00
+      candle.time_utc() // == opening time 13:00
+      candle.time_closed(); // == the candles closing time at 14:00
     }
 }
 ```
