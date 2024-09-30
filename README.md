@@ -446,7 +446,7 @@ To avoid look ahead bias on our bars during backtesting, a tick that occurred at
 This also allows us to reliably combine historical data feeds of different resolutions.
 
 When using low resolution primary data such as ticks or quotes, consolidators will return both an open and closed bar. for example if subscirbed to hourly candles using a 100ms buffer at 14:00 we will receive a closed bar and the new open bar.
-We can observe this by using 
+We can observe this by using: 
 ```rust
 fn example() {
     let candle = Candle::default();
