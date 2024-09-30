@@ -501,6 +501,8 @@ It also contains the servers.toml file, which is used by strategies to find the 
 
 If you want to have multiple ff_data_server instances you will need to edit the server_settings.toml file for each connection type that you want to run independently on its own server.
 Any connections not specified will use the default server address.
+
+For optimal security, please ensure that you generate new authentication certificates before running your server, and ensure to add them to git ignore etc.
 ```rust
 pub enum ConnectionType {
     Vendor(DataVendor),
@@ -509,7 +511,29 @@ pub enum ConnectionType {
     StrategyRegistry,
 }
 ```
+Eample server_settings.toml
+```toml
+[settings.Default]
+ssl_auth_folder = "./resources/keys"
+server_name = "fundforge"
+address = "127.0.0.1:8081"
 
+[settings.StrategyRegistry]
+ssl_auth_folder = "./resources/keys"
+server_name = "fundforge"
+address = "127.0.0.1:8082"
+```
+
+## Creating SSL Cert
+creating certs on macOS 
+```shell
+
+openssl req -new -x509 -key /path/to/your_directory/key.pem -out /path/to/your_directory/cert.pem -days 365
+```
+Create a new key
+```shell
+openssl genpkey -algorithm RSA -out /path/to/your_directory/key.pem -pkeyopt rsa_keygen_bits:2048
+```
 
 
 
