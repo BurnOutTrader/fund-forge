@@ -42,14 +42,14 @@ impl Currency {
 }
 
 pub(crate) fn calculate_pnl(
-    side: &PositionSide,
+    side: PositionSide,
     entry_price: Price,
     market_price: Price,
     tick_size: Price,
     value_per_tick: Price,
     quantity: Volume,
-    _base_currency: &Currency,
-    _account_currency: &Currency,
+    _base_currency: Currency,
+    _account_currency: Currency,
     _time: DateTime<Utc>,
 ) -> Price {
     // Calculate the price difference based on position side

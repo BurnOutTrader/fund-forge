@@ -224,14 +224,14 @@ pub(crate) mod historical_position {
 
             // Calculate booked PnL
             let booked_pnl = calculate_pnl(
-                &self.side,
+                self.side,
                 self.average_price,
                 market_price,
                 self.symbol_info.tick_size,
                 self.symbol_info.value_per_tick,
                 quantity,
-                &self.symbol_info.pnl_currency,
-                &self.account_currency,
+                self.symbol_info.pnl_currency,
+                self.account_currency,
                 time,
             );
 
@@ -300,14 +300,14 @@ pub(crate) mod historical_position {
 
             // Recalculate open PnL
             self.open_pnl = calculate_pnl(
-                &self.side,
+                self.side,
                 self.average_price,
                 market_price,
                 self.symbol_info.tick_size,
                 self.symbol_info.value_per_tick,
                 self.quantity_open,
-                &self.symbol_info.pnl_currency,
-                &self.account_currency,
+                self.symbol_info.pnl_currency,
+                self.account_currency,
                 time,
             );
 
@@ -349,14 +349,14 @@ pub(crate) mod historical_position {
 
             // Calculate the open PnL
             self.open_pnl = calculate_pnl(
-                &self.side,
+                self.side,
                 self.average_price,
                 market_price,
                 self.symbol_info.tick_size,
                 self.symbol_info.value_per_tick,
                 self.quantity_open,
-                &self.symbol_info.pnl_currency,
-                &self.account_currency,
+                self.symbol_info.pnl_currency,
+                self.account_currency,
                 time,
             );
 
