@@ -21,7 +21,7 @@ use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Currency
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::Color;
-use ff_standard_lib::standardized_types::orders::orders::OrderUpdateEvent;
+use ff_standard_lib::standardized_types::orders::orders::{OrderId, OrderUpdateEvent};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 
 // to launch on separate machine
@@ -109,8 +109,6 @@ pub async fn on_data_received(
     let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
     let mut bars_since_entry_2 = 0;
-    let mut history_1 : RollingWindow<QuoteBar> = RollingWindow::new(10);
-    let mut history_2 : RollingWindow<Candle> = RollingWindow::new(10);
     let account_name = AccountId::from("TestAccount");
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -129,7 +127,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    let msg = format!("Candle {}: {}, Local Time {}", candle.symbol.name, candle.time_created_utc(), candle.time_created_local(strategy.time_zone()));
+                                    let msg = format!("{} {} Candle Close: {}, {}", candle.symbol.name, candle.resolution, candle.close, candle.time_created_local(strategy.time_zone()));
                                     if candle.close == candle.open {
                                         println!("{}", msg.as_str().blue())
                                     } else {
@@ -138,22 +136,14 @@ pub async fn on_data_received(
                                             false => println!("{}", msg.as_str().red()),
                                         }
                                     }
-                                    history_2.add(candle.clone());
-                                    let last_bar =
-                                        match history_2.get(1) {
-                                            None => {
-                                                continue;
-                                            },
-                                            Some(bar) => bar
-                                        };
 
                                     if !warmup_complete {
                                         continue;
                                     }
 
+                                    let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
                                     let is_long = strategy.is_long(&brokerage, &account_name, &candle.symbol.name);
-
-                                    if candle.close > last_bar.high
+                                    if candle.close > last_candle.high
                                         && !is_long {
                                         let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
                                         bars_since_entry_2 = 0;
@@ -173,7 +163,7 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
-                                    let msg = format!("QuoteBar {}: {}, Local Time {}", quotebar.symbol.name, quotebar.time_created_utc(), quotebar.time_created_local(strategy.time_zone()));
+                                    let msg = format!("{} {} Candle Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.time_created_local(strategy.time_zone()));
                                     if quotebar.bid_close == quotebar.bid_open {
                                         println!("{}", msg.as_str().blue())
                                     } else {
@@ -182,36 +172,26 @@ pub async fn on_data_received(
                                             false => println!("{}", msg.as_str().red()),
                                         }
                                     }
-                                    history_1.add(quotebar.clone());
-                                    let last_bar =
-                                    match history_1.get(1) {
-                                        None => {
-                                            continue;
-                                        },
-                                        Some(bar) => bar
-                                    };
 
                                     if !warmup_complete {
                                         continue;
                                     }
-                                    //todo, make a candle_index and quote_bar_index to get specific data types and save pattern matching
 
-                                    let is_long = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
-
+                                    let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
+                                    let is_short: bool = strategy.is_short(&brokerage, &account_name, &quotebar.symbol.name);
                                     if quotebar.bid_close > last_bar.bid_high
-                                        && !is_long {
-                                        let _entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
+                                        && !is_short {
+                                        let _entry_order_id: OrderId = strategy.enter_short(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Short")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
                                     if bars_since_entry_1 > 10
-                                        //&& last_bar.bid_close < two_bars_ago.bid_low
-                                        && is_long {
-                                        let _exit_order_id = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Long")).await;
+                                        && is_short {
+                                        let _exit_order_id: OrderId = strategy.enter_short(&quotebar.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Short")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
-                                    if is_long {
+                                    if is_short {
                                         bars_since_entry_1 += 1;
                                     }
                                 }
