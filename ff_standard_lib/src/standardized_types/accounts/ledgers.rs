@@ -33,6 +33,8 @@ impl Currency {
         match string {
             "AUD" => Currency::AUD,
             "USD" => Currency::USD,
+            "CAD" => Currency::CAD,
+            "EUR" => Currency::EUR,
             "BTC" => Currency::BTC,
             _ => panic!("No currency matching string, please implement")
         }
