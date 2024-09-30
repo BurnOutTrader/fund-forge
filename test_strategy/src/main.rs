@@ -8,9 +8,8 @@ use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, Strateg
 use ff_standard_lib::standardized_types::strategy_events::{StrategyEventBuffer, StrategyControls, StrategyEvent, StrategyInteractionMode};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
-use std::sync::Arc;
 use rust_decimal_macros::dec;
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{mpsc};
 use ff_standard_lib::apis::brokerage::broker_enum::Brokerage;
 use ff_standard_lib::apis::data_vendor::datavendor_enum::DataVendor;
 use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
@@ -114,7 +113,7 @@ pub async fn on_data_received(
     let account_name = AccountId::from("TestAccount");
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        for (time, strategy_event) in event_slice.iter() {
+        for (_time, strategy_event) in event_slice.iter() {
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
                 StrategyEvent::DrawingToolEvents(event) => {
@@ -237,7 +236,7 @@ pub async fn on_data_received(
                         OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason } => {
                             println!("{}: {:?}: {}", order_id, strategy.print_ledger(brokerage.clone(), account_id), reason);
                         }
-                        OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id } => {
+                        OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, order} => {
                             println!("{}: {:?}", order_id, strategy.print_ledger(brokerage.clone(), account_id));
                         }
                         OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason } => {

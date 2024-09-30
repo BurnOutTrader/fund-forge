@@ -167,7 +167,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                     match order_upate_event {
                         OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id } => {
                             if let Some(mut order) = LIVE_ORDER_CACHE.get_mut(&order_id) {
-                                order.value_mut().state == OrderState::Accepted;
+                                order.value_mut().state = OrderState::Accepted;
                                 let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {order_id, account_id: account_id.clone(), brokerage});
                                 add_buffer(Utc::now(), event).await;
                                 if !is_buffered {
@@ -182,8 +182,39 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                         }
                         OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id } => {
                             if let Some((order_id,mut order)) = LIVE_ORDER_CACHE.remove(&order_id) {
-                                order.state == OrderState::Accepted;
-                                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id: order_id.clone(), account_id, brokerage});
+                                order.state = OrderState::Filled;
+                                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id: order_id.clone(), account_id: account_id.clone(), brokerage});
+                                add_buffer(Utc::now(), event).await;
+                                if !is_buffered {
+                                    forward_buffer().await;
+                                }
+                                if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+                                    if let Some(account_ledger) = broker_map.get_mut(&account_id) {
+                                        todo!()
+                                    }
+                                }
+                                LIVE_CLOSED_ORDER_CACHE.insert(order_id.clone(), order);
+                            }
+                        }
+                        OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id } => {
+                            if let Some(mut order) = LIVE_ORDER_CACHE.get_mut(&order_id) {
+                                order.value_mut().state = OrderState::PartiallyFilled;
+                                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id, account_id: account_id.clone(), brokerage});
+                                add_buffer(Utc::now(), event).await;
+                                if !is_buffered {
+                                    forward_buffer().await;
+                                }
+                                if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+                                    if let Some(account_ledger) = broker_map.get_mut(&account_id) {
+                                        todo!()
+                                    }
+                                }
+                            }
+                        }
+                        OrderUpdateEvent::OrderCancelled { brokerage, account_id, order_id } => {
+                            if let Some((order_id, mut order)) = LIVE_ORDER_CACHE.remove(&order_id) {
+                                order.state = OrderState::Cancelled;
+                                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {order_id: order_id.clone(), account_id: account_id.clone(), brokerage});
                                 add_buffer(Utc::now(), event).await;
                                 if !is_buffered {
                                     forward_buffer().await;
@@ -191,20 +222,36 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                                 LIVE_CLOSED_ORDER_CACHE.insert(order_id.clone(), order);
                             }
                         }
-                        OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id } => {
-                            if let Some(mut order) = LIVE_ORDER_CACHE.get_mut(&order_id) {
-                                order.value_mut().state == OrderState::Accepted;
-                                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id, account_id, brokerage});
+                        OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason } => {
+                            if let Some((order_id, mut order)) = LIVE_ORDER_CACHE.remove(&order_id) {
+                                order.state = OrderState::Rejected(reason.clone());
+                                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {order_id: order_id.clone(), account_id, brokerage, reason });
                                 add_buffer(Utc::now(), event).await;
                                 if !is_buffered {
                                     forward_buffer().await;
                                 }
+                                LIVE_CLOSED_ORDER_CACHE.insert(order_id.clone(), order);
                             }
                         }
-                        OrderUpdateEvent::OrderCancelled { .. } => {}
-                        OrderUpdateEvent::OrderRejected { .. } => {}
-                        OrderUpdateEvent::OrderUpdated { .. } => {}
-                        OrderUpdateEvent::OrderUpdateRejected { .. } => {}
+                        OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, order} => {
+                            LIVE_ORDER_CACHE.insert(order_id.clone(), order.clone());
+                            let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated {order_id, account_id, brokerage, order});
+                            add_buffer(Utc::now(), event).await;
+                            if !is_buffered {
+                                forward_buffer().await;
+                            }
+                        }
+                        OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason } => {
+                            if let Some((order_id, order)) = LIVE_ORDER_CACHE.remove(&order_id) {
+                                LIVE_CLOSED_ORDER_CACHE.insert(order_id.clone(), order);
+                            }
+                            let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected {order_id, account_id, brokerage, reason});
+                            add_buffer(Utc::now(), event).await;
+                            if !is_buffered {
+                                forward_buffer().await;
+                            }
+
+                        }
                     }
                 }
             }
@@ -313,7 +360,7 @@ pub async fn simulated_order_matching(
                         order.tag = tag;
                     }
                 }
-                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone()});
+                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone(), order: order.clone()});
                 BACKTEST_OPEN_ORDER_CACHE.insert(order_id, order);
                 add_buffer(time, update_event).await;
                 if !is_buffered {

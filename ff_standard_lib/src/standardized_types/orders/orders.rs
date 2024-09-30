@@ -497,7 +497,7 @@ pub enum OrderUpdateType {
     Tag(String),
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Display, Eq, PartialOrd, Ord,)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Display)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// Represents the various states and updates an order can undergo in the trading system.
@@ -514,7 +514,7 @@ pub enum OrderUpdateEvent {
 
     OrderRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
 
-    OrderUpdated {brokerage:Brokerage, account_id: AccountId, order_id: OrderId},
+    OrderUpdated {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, order: Order},
 
     OrderUpdateRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
 }
