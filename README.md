@@ -452,7 +452,7 @@ fn example() {
     // Let's Assume the time is 14:00 
     if candle.is_closed == false {
       //candle is an open candle
-      candle.time_utc(); // == opening time at 14:00)
+      candle.time_utc(); // == opening time at 14:00
       candle.time_closed(); // == the candles future closing time at 15:00
     } else if candle.is_closed == true {
       //candle is a closed candle
@@ -461,6 +461,7 @@ fn example() {
     }
 }
 ```
+To better understand the above concept, picture/look at a regular candlestick chart, candles are plotted on the chart using their opening time.
 
 I will be keeping `DateTime<Utc>` as the standard for the application, this will never change, all future timezone confusion can be avoided by parsing data to UTC as soon as it is received from the DataVendor.
 
