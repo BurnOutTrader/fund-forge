@@ -63,7 +63,7 @@ async fn structured_que_builder(
             };
 
         for data in base_data {
-            let time = data.time_created_utc();
+            let time = data.time_closed_utc();
             if let Some(mut time_slice) = time_slices.get_mut(&time) {
                 time_slice.add(data)
             } else {

@@ -142,7 +142,7 @@ impl HistoricalEngine {
 
                 println!("Un-Buffered Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
 
-                println!("Un-Buffered Engine: Preparing TimeSlices for: {}", start.date_naive().format("%B %Y"));
+                println!("Un-Buffered Engine: Preparing TimeSlices For: {}", start.date_naive().format("%B %Y"));
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
@@ -246,7 +246,7 @@ impl HistoricalEngine {
                 for subscription in &strategy_subscriptions {
                     println!("Buffered Engine: Strategy Subscription: {}", subscription);
                 }
-                println!("Buffered Engine: Preparing TimeSlices for: {}", start.date_naive().format("%B %Y"));
+                println!("Buffered Engine: Preparing TimeSlices For: {}", start.date_naive().format("%B %Y"));
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {

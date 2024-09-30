@@ -127,7 +127,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    let msg = format!("{} {} Candle Close: {}, {}", candle.symbol.name, candle.resolution, candle.close, candle.time_created_local(strategy.time_zone()));
+                                    let msg = format!("{} {} Candle Close: {}, {}", candle.symbol.name, candle.resolution, candle.close, candle.time_closed_local(strategy.time_zone()));
                                     if candle.close == candle.open {
                                         println!("{}", msg.as_str().blue())
                                     } else {
@@ -163,7 +163,7 @@ pub async fn on_data_received(
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
-                                    let msg = format!("{} {} QuoteBar Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.time_created_local(strategy.time_zone()));
+                                    let msg = format!("{} {} QuoteBar Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.time_closed_local(strategy.time_zone()));
                                     if quotebar.bid_close == quotebar.bid_open {
                                         println!("{}", msg.as_str().blue())
                                     } else {
@@ -203,7 +203,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Tick(_tick) => {}
                             BaseDataEnum::Quote(quote) => {
                                 // primary data feed won't show up in event loop unless specifically subscribed by the strategy
-                                let msg = format!("{} Quote: {}, Local Time {}", quote.symbol.name, base_data.time_created_utc(), quote.time_local(strategy.time_zone()));
+                                let msg = format!("{} Quote: {}, Local Time {}", quote.symbol.name, base_data.time_closed_utc(), quote.time_local(strategy.time_zone()));
                                 println!("{}", msg.as_str().purple());
                             }
                             BaseDataEnum::Fundamental(_fundamental) => {}

@@ -81,7 +81,7 @@ impl CandleStickConsolidator {
             }
         }
         if let Some(current_data) = self.current_data.as_mut() {
-            if time >= current_data.time_created_utc() {
+            if time >= current_data.time_closed_utc() {
                 let mut return_data = current_data.clone();
                 return_data.set_is_closed(true);
                 self.current_data = None;
@@ -101,7 +101,7 @@ impl CandleStickConsolidator {
             return ConsolidatedData::with_open(self.current_data.clone().unwrap())
         }
         else if let Some(current_bar) = self.current_data.as_mut() {
-            if base_data.time_created_utc() >= current_bar.time_created_utc() {
+            if base_data.time_closed_utc() >= current_bar.time_closed_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
                 match &consolidated_bar {
@@ -191,7 +191,7 @@ impl CandleStickConsolidator {
             self.current_data = Some(BaseDataEnum::QuoteBar(data));
             return ConsolidatedData::with_open(self.current_data.clone().unwrap())
         } else if let Some(current_bar) = self.current_data.as_mut() {
-            if base_data.time_created_utc() >= current_bar.time_created_utc() {
+            if base_data.time_closed_utc() >= current_bar.time_closed_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
                 let new_bar = self.new_quote_bar(base_data);

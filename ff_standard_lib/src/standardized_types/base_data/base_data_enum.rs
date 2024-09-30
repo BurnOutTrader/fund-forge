@@ -617,7 +617,7 @@ impl BaseData for BaseDataEnum {
         }
     }
 
-    fn time_created_utc(&self) -> DateTime<Utc> {
+    fn time_closed_utc(&self) -> DateTime<Utc> {
         match self {
             BaseDataEnum::Candle(candle) => candle.time_utc() + candle.resolution.as_duration(),
             BaseDataEnum::QuoteBar(quote_bar) => {
@@ -629,7 +629,7 @@ impl BaseData for BaseDataEnum {
         }
     }
 
-    fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+    fn time_closed_local(&self, time_zone: &Tz) -> DateTime<Tz> {
         time_zone.from_utc_datetime(&self.time_utc().naive_utc()) + self.resolution().as_duration()
     }
 

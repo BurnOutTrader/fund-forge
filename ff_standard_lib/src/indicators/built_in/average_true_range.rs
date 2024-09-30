@@ -134,7 +134,7 @@ impl Indicators for AverageTrueRange {
             self.name.clone(),
             self.subscription.clone(),
             plots,
-            base_data.time_created_utc()
+            base_data.time_closed_utc()
         );
 
         self.history.add(values.clone());

@@ -13,8 +13,8 @@ pub trait BaseData {
 
     /// UTC time of the data point.
     fn time_utc(&self) -> DateTime<Utc>;
-    fn time_created_utc(&self) -> DateTime<Utc>;
-    fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz>;
+    fn time_closed_utc(&self) -> DateTime<Utc>;
+    fn time_closed_local(&self, time_zone: &Tz) -> DateTime<Tz>;
 
     fn data_vendor(&self) -> DataVendor;
 

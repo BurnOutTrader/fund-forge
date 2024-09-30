@@ -108,11 +108,11 @@ impl BaseData for Candle {
         DateTime::from_str(&self.time).unwrap()
     }
 
-    fn time_created_utc(&self) -> DateTime<Utc> {
+    fn time_closed_utc(&self) -> DateTime<Utc> {
         self.time_utc() + self.resolution.as_duration()
     }
 
-    fn time_created_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+    fn time_closed_local(&self, time_zone: &Tz) -> DateTime<Tz> {
         time_zone.from_utc_datetime(&self.time_utc().naive_utc()) + self.resolution.as_duration()
     }
 

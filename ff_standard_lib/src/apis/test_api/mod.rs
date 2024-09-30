@@ -223,7 +223,7 @@ impl VendorApiResponse for TestApiClient {
                 let month_time_slices = BaseDataEnum::from_array_bytes(&data).unwrap();
 
                 for mut base_data in month_time_slices {
-                    last_time = base_data.time_created_utc();
+                    last_time = base_data.time_closed_utc();
                     match base_data {
                         BaseDataEnum::Quote(ref mut quote) => {
                             if broadcaster.has_subscribers() {

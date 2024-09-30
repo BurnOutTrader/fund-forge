@@ -359,13 +359,20 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         let time_string: String = data.time; // The data time property is a string which has to do with rkyv ser/de.
         
         // to access data time we use a fn.
+        let candle_time_string: String = data.time.clone(); //the open time of the candle
+        let candle_time_utc: DateTime<Utc> = candle.time_utc(); //the open time of the candle
+        let candle_time_local: DateTime<Tz> = candle.time_local(strategy.time_zone()); //the open time of the candle
+
+        //the close time of the candle (we can do the same with quote bars and the raw BaseDataEnum) 
+        // if we call time closed on a enum variant other than Candle or QuoteBar it will just return the data time the same as if we called time_local()
+        let candle_close_utc: DateTime<Utc> = candle.time_closed_utc(); //candle close time in utc time
+        let candle_close_local: DateTime<Utc> = candle.time_closed_local(strategy.time_zone()); //close time of the candle in local time
+        
+        // using specific time zone other than strategy time zone or utc
         let time_zone = Australia::Sydney;
-        let candle_time_string: String = data.time.clone();
-        let candle_time_utc: DateTime<Utc> = candle.time_utc();
-        let candle_time_local: DateTime<Tz> = candle.time_local(strategy.time_zone());
-        let candle_time_sydney: DateTime<Tz> = candle.time_local(time_zone);
-        let strategy_time_local: DateTime<Tz> = strategy.time_local();
-        let strategy_time_utc: DateTime<Utc> = strategy.time_utc();
+        let candle_time_sydney: DateTime<Tz> = candle.time_local(time_zone); //the open time of the candle
+        let strategy_time_local: DateTime<Tz> = strategy.time_local(); 
+        let strategy_time_utc: DateTime<Utc> = strategy.time_utc(); 
 
         /// Get back the strategy time with any passed in timezone
         let nyc_time_zone: Tz = America::New_York;

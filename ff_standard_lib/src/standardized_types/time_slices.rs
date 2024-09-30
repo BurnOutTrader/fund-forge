@@ -30,7 +30,7 @@ impl FromIterator<BaseDataEnum> for TimeSlice {
             data: Vec::from_iter(iter),
         };
         // Sort the slice by timestamp after collecting
-        slice.data.sort_by_key(|base_data| base_data.time_created_utc());
+        slice.data.sort_by_key(|base_data| base_data.time_closed_utc());
         slice
     }
 }
@@ -44,13 +44,13 @@ impl TimeSlice {
     // Insert a new BaseDataEnum and keep the slice sorted
     pub fn add(&mut self, item: BaseDataEnum) {
         self.data.push(item);
-        self.data.sort_by_key(|base_data| base_data.time_created_utc()); // Sort by the timestamp after insertion
+        self.data.sort_by_key(|base_data| base_data.time_closed_utc()); // Sort by the timestamp after insertion
     }
 
     // Insert a collection of BaseDataEnum, ensuring sorted order
     pub fn extend(&mut self, slice: TimeSlice) {
         self.data.extend(slice.data);
-        self.data.sort_by_key(|base_data| base_data.time_created_utc()); // Sort after adding multiple items
+        self.data.sort_by_key(|base_data| base_data.time_closed_utc()); // Sort after adding multiple items
     }
 
     // Access the sorted data as an iterator
