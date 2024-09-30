@@ -6,23 +6,8 @@ use std::fmt;
 use std::fmt::Debug;
 use strum_macros::{Display, EnumIter};
 
-
 // Enum for exchanges
-#[derive(
-    Clone,
-    Serialize_rkyv,
-    Deserialize_rkyv,
-    Archive,
-    PartialEq,
-    Deserialize,
-    Eq,
-    Hash,
-    Display,
-    PartialOrd,
-    Ord,
-    Debug,
-    EnumIter,
-)]
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum Exchange {
@@ -35,20 +20,7 @@ pub enum Exchange {
     // Add other exchanges if necessary
 }
 /// Used for internal ff calulcations
-#[derive(
-    Clone,
-    Serialize_rkyv,
-    Deserialize_rkyv,
-    Archive,
-    PartialEq,
-    Deserialize,
-    Eq,
-    Hash,
-    Display,
-    PartialOrd,
-    Ord,
-    Debug,
-)]
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum MarketType {
@@ -62,22 +34,7 @@ pub enum MarketType {
 }
 
 // Bias
-#[derive(
-    Serialize,
-    Deserialize,
-    Clone,
-    Serialize_rkyv,
-    Deserialize_rkyv,
-    Archive,
-    PartialOrd,
-    Eq,
-    Ord,
-    PartialEq,
-    Copy,
-    Debug,
-    Display,
-    Hash,
-)]
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// A bias is a general direction of the market. It can be bullish, bearish, or neutral.
@@ -87,22 +44,7 @@ pub enum Bias {
     Neutral,
 }
 
-#[derive(
-    Serialize,
-    Deserialize,
-    Clone,
-    Serialize_rkyv,
-    Deserialize_rkyv,
-    Archive,
-    PartialOrd,
-    Eq,
-    Ord,
-    PartialEq,
-    Copy,
-    Debug,
-    Display,
-    Hash,
-)]
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// The `Side` enum is used to specify the side of a trade.
@@ -111,22 +53,7 @@ pub enum OrderSide {
     Sell,
 }
 
-#[derive(
-    Serialize,
-    Deserialize,
-    Clone,
-    Serialize_rkyv,
-    Deserialize_rkyv,
-    Archive,
-    PartialOrd,
-    Eq,
-    Ord,
-    PartialEq,
-    Copy,
-    Debug,
-    Display,
-    Hash,
-)]
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum PositionSide {
@@ -143,29 +70,8 @@ pub enum StrategyMode {
     LivePaperTrading,
 }
 
-#[derive(
-    Serialize,
-    Deserialize,
-    Clone,
-    Serialize_rkyv,
-    Deserialize_rkyv,
-    Archive,
-    PartialOrd,
-    Eq,
-    Ord,
-    PartialEq,
-    Copy,
-    Debug,
-    Hash,
-)]
-#[archive(
-    // This will generate a PartialEq impl between our unarchived and archived
-    // types:
-    compare(PartialEq),
-    // bytecheck can be used to validate your data if you want. To use the safe
-    // API, you have to derive CheckBytes for the archived type:
-    check_bytes,
-)]
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Hash)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct SubscriptionResolutionType {
     pub base_data_type: BaseDataType,
@@ -183,29 +89,8 @@ impl SubscriptionResolutionType {
 
 ///The resolution of a data point, which determines the time period it covers.
 
-#[derive(
-    Serialize,
-    Deserialize,
-    Clone,
-    Serialize_rkyv,
-    Deserialize_rkyv,
-    Archive,
-    PartialOrd,
-    Eq,
-    Ord,
-    PartialEq,
-    Copy,
-    Debug,
-    Hash,
-)]
-#[archive(
-// This will generate a PartialEq impl between our unarchived and archived
-// types:
-compare(PartialEq),
-// bytecheck can be used to validate your data if you want. To use the safe
-// API, you have to derive CheckBytes for the archived type:
-check_bytes,
-)]
+#[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Hash)]
+#[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum Resolution {
     Instant,
