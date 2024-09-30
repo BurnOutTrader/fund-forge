@@ -13,7 +13,7 @@ use crate::apis::brokerage::server_side_brokerage::BrokerApiResponse;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::apis::data_vendor::server_side_datavendor::VendorApiResponse;
 use crate::apis::StreamName;
-use crate::helpers::converters::load_as_bytes;
+use crate::helpers::converters::{fund_forge_formatted_symbol_name, load_as_bytes};
 use crate::helpers::decimal_calculators::round_to_decimals;
 use crate::helpers::get_data_folder;
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
@@ -21,7 +21,7 @@ use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo, Curre
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::data_server_messaging::{DataServerResponse};
+use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::standardized_types::enums::{MarketType, Resolution, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -79,25 +79,58 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
-    async fn symbol_info_response(&self,  mode: StrategyMode, _stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn symbol_info_response(
+        &self,
+        mode: StrategyMode,
+        _stream_name: String,
+        symbol_name: SymbolName,
+        callback_id: u64
+    ) -> DataServerResponse {
+        let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
+        let (pnl_currency, value_per_tick, tick_size) = match symbol_name.as_str() {
+            "EUR-USD" => (Currency::USD, dec!(1.0), dec!(0.0001)), // EUR/USD with $1 per tick
+            "AUD-CAD" => (Currency::USD, dec!(1.0), dec!(0.0001)), // AUD/CAD with $1 per tick (approximate)
+            _ => (Currency::USD, dec!(0.1), dec!(0.00001))         // Default values
+        };
+
         let symbol_info = SymbolInfo {
             symbol_name,
-            pnl_currency: Currency::USD,
-            value_per_tick: dec!(0.1),
-            tick_size: dec!(0.00001),
+            pnl_currency,
+            value_per_tick,
+            tick_size,
         };
+
         DataServerResponse::SymbolInfo {
             callback_id,
             symbol_info,
         }
     }
 
-    async fn margin_required_response(&self, mode: StrategyMode, _stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-        let value = round_to_decimals(quantity  * dec!(100.0), 2);
+    async fn margin_required_response(
+        &self,
+        mode: StrategyMode,
+        _stream_name: String,
+        symbol_name: SymbolName,
+        quantity: Volume,
+        callback_id: u64
+    ) -> DataServerResponse {
+        // Ensure quantity is not zero
+        let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
+        if quantity == dec!(0) {
+            return DataServerResponse::Error {
+                callback_id,
+                error: FundForgeError::ClientSideErrorDebug("Quantity cannot be 0".to_string())
+            };
+        }
+
+        // Assuming 100:1 leverage, calculate margin required
+        // You may want to factor in symbol-specific prices if available
+        let margin_required = round_to_decimals(quantity / dec!(100.0), 2);
+
         DataServerResponse::MarginRequired {
             callback_id,
             symbol_name,
-            price: value,
+            price: margin_required,  // Here price represents the margin required
         }
     }
 
@@ -139,14 +172,16 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn decimal_accuracy_response(&self, mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn decimal_accuracy_response(&self, mode: StrategyMode, _stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         DataServerResponse::DecimalAccuracy {
             callback_id,
             accuracy: 5,
         }
     }
 
-    async fn tick_size_response(&self,  mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+    async fn tick_size_response(&self,  mode: StrategyMode, _stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         DataServerResponse::TickSize {
             callback_id,
             tick_size: dec!(0.00001),

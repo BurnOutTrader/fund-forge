@@ -145,16 +145,14 @@ pub async fn on_data_received(
                                     let is_long = strategy.is_long(&brokerage, &account_name, &candle.symbol.name);
 
                                     if candle.close > last_bar.high
-                                        && !is_long
-                                    {
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long")).await;
+                                        && !is_long {
+                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
                                         bars_since_entry_2 = 0;
                                     }
 
                                     if bars_since_entry_2 > 10
-                                        &&is_long
-                                    {
-                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
+                                        &&is_long {
+                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Long")).await;
                                         bars_since_entry_2 = 0;
                                     }
 
@@ -184,17 +182,15 @@ pub async fn on_data_received(
                                     let is_long = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
 
                                     if quotebar.bid_close > last_bar.bid_high
-                                        && !is_long
-                                    {
-                                        let _entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(1), String::from("Enter Long")).await;
+                                        && !is_long {
+                                        let _entry_order_id = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
                                     if bars_since_entry_1 > 10
                                         //&& last_bar.bid_close < two_bars_ago.bid_low
-                                        && is_long
-                                    {
-                                        let _exit_order_id = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(1), String::from("Exit Long")).await;
+                                        && is_long {
+                                        let _exit_order_id = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Long")).await;
                                         bars_since_entry_1 = 0;
                                     }
 
