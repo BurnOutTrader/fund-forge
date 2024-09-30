@@ -250,20 +250,12 @@ You will need to manually download the files, then put all the .csv files into 1
 
 Change the following to suit the symbol and your directory.
 
-The parsing logic expects the original files to be in a director with the same symbol name eg "/Users/kevmonaghan/Downloads/AUD-CAD"
+The parsing logic expects the original files to be in a director with the same symbol name eg "/Users/{username}/Downloads/AUD-CAD"
 ```rust
-let YOUR_FOLDER_PATH: String = "/Users/kevmonaghan/Downloads".to_string(); //it will be assumed there is a folder named  "AUD-CAD" here
+let YOUR_FOLDER_PATH: String = "/Downloads".to_string(); //it will be assumed there is a folder named "AUD-CAD" here
 let SYMBOL_NAME: String = "AUD-CAD".to_string();
 ```
 After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
-
-## Advanced Setup
-To create strategies in a strategy in a separate crate you will need to copy the resources folder from test strategy.
-
-This folder contains the client and server authentication keys.
-
-It also contains the servers.toml file, which is used by strategies to find the address of your data servers.
-
 
 ## Current Status
 
@@ -341,11 +333,7 @@ If you manage to begin live trading before me, then you will need to test proper
 12. Add support for building strategies in other languages while using the rust engine and backend. This will be done via a mix of json and a c-types interface to convert from rust data types to a general purpose interface for other languages.
 
 ## Licence and Disclaimer
-The project has been a way for me to learn rust and build a portfolio of useful projects, my objective is to keep the engine open source, where I might get help with development from more seasoned developers. 
-
-I haven't had any formal coding experience in software and I have learned by building this project after learning basic coding by developing strategies with `Pro Real Time`, `NinjaTrader` and `QuantConnect`. 
-It was the superior documentation and support of those companies that gave me a foothold into programming and I will try to maintain the same standard of documentation which those companies have set as the benchmark for trading software.
-This is a preliminary readme and I aim to provide a full index of documentation towards completion.
+The project has been a way for me to learn rust and build a portfolio of useful projects, my objective is to keep the engine open source, where I might get help with development from more seasoned developers.
 
 ### Restrictions and Reasons
 After reading the above statement it should go without saying that you should not expect to use this project for live trading for the foreseeable future without conducting thorough paper testing. 
@@ -503,6 +491,24 @@ The client side is already handled, but if you want to add new request/response 
 Since I am avoiding dynamic dispatch in favour of using an enum variant for each api object this will require you to complete a matching statement for all existing api implementations.
 
 It is easy to add a new `DataServerResponse` and `DataServerRequest` variants to handle new api requirements.
+
+## Advanced Setup Options
+To create strategies in a separate crate you will need to copy the resources folder from test strategy.
+
+This folder contains the client and server authentication keys.
+
+It also contains the servers.toml file, which is used by strategies to find the address of your data servers.
+
+If you want to have multiple ff_data_server instances you will need to edit the server_settings.toml file for each connection type that you want to run independently on its own server.
+Any connections not specified will use the default server address.
+```rust
+pub enum ConnectionType {
+    Vendor(DataVendor),
+    Broker(Brokerage),
+    Default,
+    StrategyRegistry,
+}
+```
 
 
 
