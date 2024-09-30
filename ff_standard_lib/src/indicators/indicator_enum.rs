@@ -99,4 +99,11 @@ impl Indicators for IndicatorEnum {
             IndicatorEnum::Custom(indicator) => indicator.history(),
         }
     }
+
+    fn data_required_to_fill(&self) -> u64 {
+        match self {
+            IndicatorEnum::AverageTrueRange(atr) => atr.data_required_to_fill(),
+            IndicatorEnum::Custom(indicator) => indicator.data_required_to_fill(),
+        }
+    }
 }
