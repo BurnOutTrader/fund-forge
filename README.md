@@ -438,8 +438,27 @@ can take a large collection of base data and format it into separate files, 1 fi
 
 Please see the base_data_enum.rs file for more info when building DataVendor implementations.
 
-When handling historical data it is assumed that the `time` property of `Candle` and `QuoteBar` object is the opening time, so in the historical data requests we add the `base_data_enum.resolution.as_seconds()` or `base_data_enum.resolution.as_duration()`  to get the `base_data_enum.time_closed()` which represents the closing time of the bar. 
-To properly align the historical candles and quotebars with other historical data types such as ticks, which represent a single instance in time and therefore do not need to be adjusted. To avoid look ahead bias on our bars during backtesting, a tick that occurred at say 16:00 will be correctly aligned with the bar that closed at 16:00 instead of the bar that opened. This also allows us to reliably combine historical data feeds of different resolutions.
+When handling historical data it is assumed that the `time` property of `Candle` and `QuoteBar` object is the opening time, so in the historical data requests we add the `base_data_enum.resolution.as_seconds()` or `base_data_enum.resolution.as_duration()`  
+to get the `base_data_enum.time_closed()` which represents the closing time of the bar. 
+
+To properly align the historical candles and quotebars with other historical data types such as ticks, which represent a single instance in time and therefore do not need to be adjusted. 
+To avoid look ahead bias on our bars during backtesting, a tick that occurred at say 16:00 will be correctly aligned with the bar closing price at 16:00 instead of the bar opening price. 
+This also allows us to reliably combine historical data feeds of different resolutions.
+
+When using low resolution primary data such as ticks or quotes, consolidators will return both an open and closed bar. for example if subscirbed to hourly candles using a 100ms buffer at 14:00 we will receive a closed bar and the new open bar.
+We can observe this by using 
+```rust
+fn example() {
+    let candle = Candle::default();
+    if candle.is_closed {
+      //candle is closed candle
+      candle.time_utc(); //will == opening time at 13:00
+    } else {
+      //candle is open
+      candle.time_utc() // == opening time 14:00
+    }
+}
+```
 
 I will be keeping `DateTime<Utc>` as the standard for the application, this will never change, all future timezone confusion can be avoided by parsing data to UTC as soon as it is received from the DataVendor.
 
