@@ -452,7 +452,7 @@ fn example() {
     let candle = Candle::default();
     if candle.is_closed {
       //candle is closed candle
-      candle.time_utc(); //will == opening time at 13:00
+      candle.time_utc(); // == opening time at 13:00
     } else {
       //candle is open
       candle.time_utc() // == opening time 14:00
