@@ -215,7 +215,7 @@ fn example() {
   let symbol_name: SymbolName = SymbolName::from("AUD-USD");
 }
 ```
-***Advanced note*** Currently the engine will combine price feeds with the same symbol name in the market handler, so when a tick, quote or bar is received, it will be used to calculate the current market price. 
+***Advanced note*** Currently the engine will combine price feeds with the same symbol name in the market handler, so when a tick or quote is received it will be used to calculate the current market price for that `SymbolName`. 
 This only has an impact on backtesting fills, duplicate SymbolName subscriptions from different `DataVendors` will still flow into the strategy event receiver and can be handled as unique feeds using the `BaseDataEnum.symbol()`
 
 For a full look at strategies see
