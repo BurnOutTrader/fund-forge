@@ -1,18 +1,23 @@
 use std::fs::create_dir_all;
 use std::path::Path;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use crate::standardized_types::enums::{PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::traits::bytes::Bytes;
 use dashmap::DashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use csv::Writer;
+use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::accounts::position::Position;
 use crate::standardized_types::symbol_info::SymbolInfo;
 use serde_derive::{Deserialize, Serialize};
+lazy_static! {
+    //todo get low res historical data and build currency conversion api
+    static ref EARLIEST_CURRENCY_CONVERSIONS: DateTime<Utc> = Utc.with_ymd_and_hms(2010, 1, 1, 0, 0, 0).unwrap();
+}
 
 pub type AccountId = String;
 pub type AccountName = String;
@@ -41,22 +46,28 @@ impl Currency {
     }
 }
 
-pub(crate) fn calculate_pnl(
+
+pub(crate) fn calculate_historical_pnl(
     side: PositionSide,
     entry_price: Price,
     market_price: Price,
     tick_size: Price,
     value_per_tick: Price,
     quantity: Volume,
-    _base_currency: Currency,
-    _account_currency: Currency,
-    _time: DateTime<Utc>,
+    pnl_currency: Currency,
+    account_currency: Currency,
+    time: DateTime<Utc>,
 ) -> Price {
     // Calculate the price difference based on position side
     let raw_ticks = match side {
         PositionSide::Long => ((market_price - entry_price) / tick_size).round(),   // Profit if market price > entry price
         PositionSide::Short => ((entry_price - market_price) / tick_size).round(), // Profit if entry price > market price
     };
+
+ /*   if pnl_currency != account_currency && time > *EARLIEST_CURRENCY_CONVERSIONS {
+        //todo historical currency conversion using time
+        // return pnl in account currency
+    }*/
 
     // Calculate PnL by multiplying with value per tick and quantity
     let pnl = raw_ticks * value_per_tick * quantity;

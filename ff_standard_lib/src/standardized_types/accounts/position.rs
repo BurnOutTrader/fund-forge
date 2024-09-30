@@ -205,7 +205,7 @@ pub(crate) mod historical_position {
     use rust_decimal_macros::dec;
     use crate::helpers::decimal_calculators::round_to_tick_size;
     use crate::server_connections::add_buffer;
-    use crate::standardized_types::accounts::ledgers::calculate_pnl;
+    use crate::standardized_types::accounts::ledgers::calculate_historical_pnl;
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
     use crate::standardized_types::{Price, Volume};
@@ -223,7 +223,7 @@ pub(crate) mod historical_position {
             };
 
             // Calculate booked PnL
-            let booked_pnl = calculate_pnl(
+            let booked_pnl = calculate_historical_pnl(
                 self.side,
                 self.average_price,
                 market_price,
@@ -299,7 +299,7 @@ pub(crate) mod historical_position {
             self.quantity_open += quantity;
 
             // Recalculate open PnL
-            self.open_pnl = calculate_pnl(
+            self.open_pnl = calculate_historical_pnl(
                 self.side,
                 self.average_price,
                 market_price,
@@ -348,7 +348,7 @@ pub(crate) mod historical_position {
             self.lowest_recoded_price = self.lowest_recoded_price.min(lowest_price);
 
             // Calculate the open PnL
-            self.open_pnl = calculate_pnl(
+            self.open_pnl = calculate_historical_pnl(
                 self.side,
                 self.average_price,
                 market_price,
