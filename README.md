@@ -38,7 +38,7 @@ The strategy will choose which engine to use depending on the initializing param
 The strategy engine will be started in the background depending on the StrategyMode. 
 The strategy can be shared between threads as an `Arc<FundForgeStrategy>` and maintain full functionality, allowing the strategy logic to be delegated between custom user functions and async architectures.
 
-After creating the strategy instance using `FundForgeStrategy::initialize();` we will receive data and events as an `EventTimeSlice` in our event_receiver.
+After creating the strategy instance using `FundForgeStrategy::initialize();` we will receive data and events as an `StrategyEventBuffer` in our event_receiver.
 Events are a vec collection of all `StrategyEvent`s that occurred within a buffer period.
 
 We have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
@@ -49,8 +49,8 @@ pub async fn on_data_received(
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
     let mut warmup_complete = false;
-    'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        for (time, strategy_event) in event_slice.iter() {
+    'strategy_loop: while let Some(event_buffer) = event_receiver.recv().await {
+        for (time, strategy_event) in event_buffer.iter() {
             match strategy_event {
                 StrategyEvent::DrawingToolEvents(event, _) => {
                     println!("Strategy: Drawing Tool Event: {:?}", event);
