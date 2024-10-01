@@ -1,6 +1,6 @@
 use crate::engine::HistoricalEngine;
 use ahash::AHashMap;
-use chrono::{DateTime, NaiveDateTime, Utc, Duration as ChronoDuration, TimeZone};
+use chrono::{DateTime, Duration as ChronoDuration, NaiveDateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use ff_standard_lib::drawing_objects::drawing_object_handler::DrawingObjectHandler;
 use ff_standard_lib::drawing_objects::drawing_tool_enum::DrawingTool;
@@ -13,16 +13,13 @@ use ff_standard_lib::standardized_types::base_data::history::range_data;
 use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderUpdateType, TimeInForce};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
-use ff_standard_lib::standardized_types::strategy_events::{
-    StrategyEventBuffer,
-};
+use ff_standard_lib::standardized_types::strategy_events::StrategyEventBuffer;
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use ff_standard_lib::standardized_types::{Price, Volume};
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
 use rust_decimal::Decimal;
@@ -36,6 +33,7 @@ use ff_standard_lib::standardized_types::base_data::quote::Quote;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::base_data::tick::Tick;
 use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
+use ff_standard_lib::standardized_types::new_types::{Price, Volume};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///

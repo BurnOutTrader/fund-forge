@@ -4,7 +4,7 @@ use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::enums::{MarketType, StrategyMode};
 use async_trait::async_trait;
 use crate::apis::StreamName;
-use crate::standardized_types::Volume;
+use crate::standardized_types::new_types::Volume;
 
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
 #[async_trait]

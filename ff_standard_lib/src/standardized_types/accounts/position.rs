@@ -5,8 +5,8 @@ use serde_derive::{Deserialize, Serialize};
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::SymbolName;
-use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
+use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
 pub type PositionId = String;
@@ -208,8 +208,8 @@ pub(crate) mod historical_position {
     use crate::standardized_types::accounts::ledgers::calculate_historical_pnl;
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
-    use crate::standardized_types::{Price, Volume};
     use crate::standardized_types::accounts::position::{Position, PositionUpdateEvent};
+    use crate::standardized_types::new_types::{Price, Volume};
     use crate::standardized_types::strategy_events::StrategyEvent;
 
     impl Position {

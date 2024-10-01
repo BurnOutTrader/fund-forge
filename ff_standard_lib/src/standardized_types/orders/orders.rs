@@ -1,8 +1,7 @@
 use std::fmt;
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::enums::OrderSide;
-use crate::standardized_types::subscriptions::{SymbolName};
-use crate::standardized_types::{Price, Volume};
+use crate::standardized_types::subscriptions::SymbolName;
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -10,6 +9,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use rust_decimal_macros::dec;
 use crate::apis::brokerage::broker_enum::Brokerage;
+use crate::standardized_types::new_types::{Price, Volume};
 
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,

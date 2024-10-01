@@ -48,7 +48,7 @@ pub mod client_side_data_vendors {
     use crate::standardized_types::base_data::base_data_type::BaseDataType;
     use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
     use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
-    use crate::standardized_types::Price;
+    use crate::standardized_types::new_types::Price;
     use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 
     impl DataVendor {

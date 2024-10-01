@@ -9,10 +9,11 @@ use csv::Writer;
 use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
 use crate::apis::brokerage::broker_enum::Brokerage;
-use crate::standardized_types::{Price, Volume};
 use crate::standardized_types::accounts::position::Position;
 use crate::standardized_types::symbol_info::SymbolInfo;
 use serde_derive::{Deserialize, Serialize};
+use crate::standardized_types::new_types::{Price, Volume};
+
 lazy_static! {
     //todo get low res historical data and build currency conversion api
     static ref EARLIEST_CURRENCY_CONVERSIONS: DateTime<Utc> = Utc.with_ymd_and_hms(2010, 1, 1, 0, 0, 0).unwrap();
@@ -187,10 +188,10 @@ pub(crate) mod historical_ledgers {
     use crate::standardized_types::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
     use crate::standardized_types::orders::orders::{OrderId, OrderUpdateEvent};
-    use crate::standardized_types::{Price, Volume};
     use crate::standardized_types::accounts::position::{Position, PositionId, PositionUpdateEvent};
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::base_data::traits::BaseData;
+    use crate::standardized_types::new_types::{Price, Volume};
     use crate::standardized_types::strategy_events::StrategyEvent;
     use crate::standardized_types::subscriptions::SymbolName;
     use crate::standardized_types::symbol_info::SymbolInfo;

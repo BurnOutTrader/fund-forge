@@ -1,7 +1,7 @@
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{Bias, MarketType, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::standardized_types::TimeString;
+use crate::standardized_types::new_types::TimeString;
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};

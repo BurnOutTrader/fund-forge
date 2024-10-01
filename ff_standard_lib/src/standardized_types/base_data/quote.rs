@@ -1,7 +1,6 @@
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, Resolution};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::standardized_types::{Price, TimeString, Volume};
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -10,6 +9,7 @@ use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::new_types::{Price, TimeString, Volume};
 
 pub type BookLevel = u8;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]

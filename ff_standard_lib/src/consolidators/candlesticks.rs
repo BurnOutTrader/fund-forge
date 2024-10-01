@@ -1,5 +1,5 @@
 use crate::helpers::converters;
-use crate::helpers::decimal_calculators::{round_to_tick_size};
+use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
@@ -12,8 +12,8 @@ use rust_decimal_macros::dec;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::converters::open_time;
 use crate::market_handler::market_handlers::SYMBOL_INFO;
-use crate::standardized_types::{Price};
 use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::standardized_types::new_types::Price;
 
 pub struct CandleStickConsolidator {
     current_data: Option<BaseDataEnum>,

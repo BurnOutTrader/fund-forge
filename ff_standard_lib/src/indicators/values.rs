@@ -1,11 +1,12 @@
 use crate::standardized_types::subscriptions::DataSubscription;
-use crate::standardized_types::{Color, Price};
+use crate::standardized_types::new_types::Price;
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use crate::app::settings::Color;
 use crate::indicators::indicators_trait::IndicatorName;
 
 pub type PlotName = String;

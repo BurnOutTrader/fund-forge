@@ -10,7 +10,7 @@ use tokio::sync::oneshot;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
 use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
-use crate::standardized_types::Price;
+use crate::standardized_types::new_types::Price;
 
 pub type SymbolName = String;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, )]

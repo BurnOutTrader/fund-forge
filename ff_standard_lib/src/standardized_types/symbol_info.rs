@@ -1,6 +1,6 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::standardized_types::accounts::ledgers::Currency;
-use crate::standardized_types::Price;
+use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::SymbolName;
 use serde_derive::{Deserialize, Serialize};
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]

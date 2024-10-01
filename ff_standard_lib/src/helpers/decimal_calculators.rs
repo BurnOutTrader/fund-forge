@@ -1,6 +1,6 @@
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive, Zero};
 use rust_decimal::Decimal;
-use crate::standardized_types::Price;
+use crate::standardized_types::new_types::Price;
 
 /// Safely divides two f64 values using Decimal for precision.
 /// Panics if the divisor is zero or if conversion fails.

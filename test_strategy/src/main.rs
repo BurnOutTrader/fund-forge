@@ -20,7 +20,7 @@ use ff_standard_lib::server_connections::{GUI_DISABLED};
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
-use ff_standard_lib::standardized_types::Color;
+use ff_standard_lib::app::settings::Color;
 use ff_standard_lib::standardized_types::orders::orders::{OrderId};
 
 // to launch on separate machine

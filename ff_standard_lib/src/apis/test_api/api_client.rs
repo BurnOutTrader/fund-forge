@@ -23,7 +23,7 @@ use crate::standardized_types::data_server_messaging::{DataServerResponse, FundF
 use crate::standardized_types::enums::{MarketType, Resolution, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use crate::standardized_types::Volume;
+use crate::standardized_types::new_types::Volume;
 use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
 
