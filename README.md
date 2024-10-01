@@ -29,10 +29,10 @@ It is possible to have multiple data server instances and it is easy to configur
 
 By default all Api's will launch on a single server instance.
 
-It is easy to build and run strategies which can be deployed and communicate across multiple individual machines, docker containers or simply run everything locally.
+It is easy to build and run strategies which can be deployed and communicate across multiple machines, docker containers or simply run everything locally.
 It is easy to build new indicators and add new brokers or data feeds, including fundamental data feeds.
 
-There are event driven handlers and a buffering system for maintaining speed and consistency from back testing to live trading.
+There are event driven handlers and an optional buffering system for maintaining speed and consistency from back testing to live trading.
 
 There is an Option for using a buffered or unbuffered engine in backtesting and live trading, the backtesting engines are designed to mimic the live trading engines,
 in the unbuffered version events are forwarded to the strategy receiver as soon as they occur. In the buffered version events are buffered for X Duration and forwarded as a `StrategyEventBuffer`.
