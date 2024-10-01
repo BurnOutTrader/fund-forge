@@ -22,7 +22,7 @@ use crate::client_features::connections::ConnectionType;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::client_features::settings::client_settings::initialise_settings;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::data_server_messaging::{DataServerRequest, FundForgeError};
+use crate::messages::data_server_messaging::{DataServerRequest, FundForgeError};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
 

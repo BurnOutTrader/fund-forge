@@ -1,6 +1,6 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::indicators::indicators_trait::IndicatorName;
-use crate::indicators::values::IndicatorValues;
+use crate::strategies::indicators::indicators_trait::IndicatorName;
+use crate::strategies::indicators::values::IndicatorValues;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(compare(PartialEq), check_bytes)]

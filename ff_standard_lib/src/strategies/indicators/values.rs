@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use crate::app::settings::Color;
-use crate::indicators::indicators_trait::IndicatorName;
+use crate::strategies::indicators::indicators_trait::IndicatorName;
 
 pub type PlotName = String;
 

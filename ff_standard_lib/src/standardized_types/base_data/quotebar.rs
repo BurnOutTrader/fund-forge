@@ -1,5 +1,5 @@
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
@@ -11,6 +11,7 @@ use rust_decimal_macros::dec;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, TimeString, Volume};
+use crate::standardized_types::resolution::Resolution;
 
 /// Represents a single quote bar in a financial chart, commonly used
 /// in the financial technical analysis of price patterns.

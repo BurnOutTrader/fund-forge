@@ -4,7 +4,7 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::server_features::rithmic_api::api_client::{get_rithmic_client};
 use crate::server_features::StreamName;
 use crate::server_features::test_api::api_client::TEST_CLIENT;
-use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError};
+use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
 

@@ -1,10 +1,10 @@
 use crate::helpers::converters::next_month;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::data_server_messaging::{
+use crate::messages::data_server_messaging::{
     BaseDataPayload, DataServerRequest, DataServerResponse, FundForgeError,
 };
-use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::time_slices::UnstructuredSlice;

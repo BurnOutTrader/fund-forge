@@ -1,6 +1,6 @@
 use rkyv::AlignedVec;
 
-use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::messages::data_server_messaging::FundForgeError;
 
 pub trait Bytes<T> {
     fn from_bytes<'a>(data: &'a [u8]) -> Result<T, FundForgeError>;

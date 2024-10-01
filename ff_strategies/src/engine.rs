@@ -3,7 +3,7 @@ use ff_standard_lib::server_connections::{set_warmup_complete, SUBSCRIPTION_HAND
 use ff_standard_lib::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
-use ff_standard_lib::standardized_types::data_server_messaging::FundForgeError;
+use ff_standard_lib::messages::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
@@ -12,7 +12,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{mpsc};
-use ff_standard_lib::market_handler::market_handlers::MarketMessageEnum;
+use ff_standard_lib::strategies::market_handler::market_handlers::MarketMessageEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 

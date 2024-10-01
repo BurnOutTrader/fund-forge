@@ -1,14 +1,15 @@
 use rust_decimal::prelude::FromPrimitive;
 use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::market_handler::market_handlers::SYMBOL_INFO;
+use crate::strategies::market_handler::market_handlers::SYMBOL_INFO;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
-use crate::standardized_types::enums::{Resolution, SubscriptionResolutionType};
+use crate::standardized_types::enums::SubscriptionResolutionType;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::new_types::{Price, Volume};
+use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::DataSubscription;
 
 //Todo Replace all quantity and volume with Volume aka Decimal, same for price.

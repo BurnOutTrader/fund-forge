@@ -1,6 +1,6 @@
 use crate::server_features::api_modes::Mode;
 use crate::client_features::connections::ConnectionType;
-use crate::standardized_types::data_server_messaging::ApiKey;
+use crate::messages::data_server_messaging::ApiKey;
 
 pub struct ApiSettings {
     pub connection_type: ConnectionType,

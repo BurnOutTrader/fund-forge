@@ -25,12 +25,13 @@ use crate::helpers::get_data_folder;
 use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError};
-use crate::standardized_types::enums::{Exchange, MarketType, Resolution, StrategyMode, SubscriptionResolutionType};
+use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
+use crate::standardized_types::enums::{Exchange, MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use tokio::sync::oneshot;
 use crate::standardized_types::new_types::Volume;
+use crate::standardized_types::resolution::Resolution;
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);

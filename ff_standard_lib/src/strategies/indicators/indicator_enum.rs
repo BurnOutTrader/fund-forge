@@ -1,9 +1,9 @@
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;
-use crate::indicators::built_in::average_true_range::AverageTrueRange;
-use crate::indicators::indicators_trait::{IndicatorName, Indicators};
-use crate::indicators::values::IndicatorValues;
+use crate::strategies::indicators::built_in::average_true_range::AverageTrueRange;
+use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
+use crate::strategies::indicators::values::IndicatorValues;
 
 /// An enum for all indicators
 /// Custom(Box<dyn Indicators + Send + Sync>) is for custom indicators which we want to handle automatically in the engine

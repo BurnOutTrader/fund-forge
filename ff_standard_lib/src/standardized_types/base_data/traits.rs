@@ -1,8 +1,9 @@
-use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use crate::standardized_types::datavendor_enum::DataVendor;
+use crate::standardized_types::resolution::Resolution;
 
 /// Properties are used to update the data que during strategy execution.
 pub trait BaseData {

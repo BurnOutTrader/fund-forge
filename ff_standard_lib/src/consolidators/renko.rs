@@ -3,7 +3,8 @@ use crate::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
-use crate::standardized_types::enums::{Resolution, SubscriptionResolutionType};
+use crate::standardized_types::enums::SubscriptionResolutionType;
+use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::DataSubscription;
 
 //renko parameters will have to be strings so we can implement hash etc

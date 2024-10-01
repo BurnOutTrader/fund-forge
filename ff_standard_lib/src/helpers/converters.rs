@@ -1,4 +1,4 @@
-use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::DataSubscription;
 use chrono::{
     DateTime, Datelike, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc,

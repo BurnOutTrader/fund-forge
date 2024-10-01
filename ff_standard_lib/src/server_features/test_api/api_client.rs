@@ -19,13 +19,14 @@ use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo, Curre
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError};
-use crate::standardized_types::enums::{MarketType, Resolution, StrategyMode, SubscriptionResolutionType};
+use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
+use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::new_types::Volume;
 use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
+use crate::standardized_types::resolution::Resolution;
 
 lazy_static! {
     pub static ref TEST_CLIENT: Arc<TestApiClient> = Arc::new(TestApiClient::new());

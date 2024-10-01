@@ -10,8 +10,8 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::app::settings::Color;
-use crate::indicators::indicators_trait::{IndicatorName, Indicators};
-use crate::indicators::values::{IndicatorPlot, IndicatorValues};
+use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
+use crate::strategies::indicators::values::{IndicatorPlot, IndicatorValues};
 use crate::standardized_types::base_data::traits::BaseData;
 
 pub struct AverageTrueRange {

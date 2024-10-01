@@ -1,5 +1,5 @@
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{Bias, MarketType, Resolution};
+use crate::standardized_types::enums::{Bias, MarketType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::new_types::TimeString;
 use chrono::{DateTime, TimeZone, Utc};
@@ -9,6 +9,7 @@ use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::resolution::Resolution;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]

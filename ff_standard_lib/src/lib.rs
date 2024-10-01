@@ -2,15 +2,13 @@
 pub mod server_features;
 pub mod app;
 pub mod consolidators;
-pub mod drawing_objects;
 pub mod helpers;
 pub mod server_connections;
 pub mod communicators;
 pub mod standardized_types;
 pub mod timed_events_handler;
 pub mod traits;
-pub mod market_handler;
 pub mod historical_time;
-pub mod indicators;
 pub mod client_features;
 pub mod messages;
+pub mod strategies;

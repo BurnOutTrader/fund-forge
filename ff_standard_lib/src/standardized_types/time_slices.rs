@@ -1,7 +1,7 @@
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::enums::Resolution;
+use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::Symbol;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 

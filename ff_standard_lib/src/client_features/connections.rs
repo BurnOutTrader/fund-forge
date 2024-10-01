@@ -3,7 +3,7 @@ use serde_derive::{Deserialize, Serialize};
 use strum_macros::Display;
 use heck::ToPascalCase;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::datavendor_enum::DataVendor;
 
 pub const GUI_ENABLED: bool = true;

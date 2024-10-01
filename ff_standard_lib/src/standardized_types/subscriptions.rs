@@ -1,6 +1,6 @@
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{MarketType, Resolution, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
 use rkyv::ser::serializers::AllocSerializer;
 use rkyv::ser::Serializer;
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -10,8 +10,9 @@ use tokio::sync::oneshot;
 use crate::client_features::connections::ConnectionType;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::server_connections::{send_request, StrategyRequest};
-use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
+use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::standardized_types::new_types::Price;
+use crate::standardized_types::resolution::Resolution;
 
 pub type SymbolName = String;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, )]

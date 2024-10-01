@@ -12,7 +12,8 @@ use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;
-use ff_standard_lib::standardized_types::enums::{MarketType, Resolution};
+use ff_standard_lib::standardized_types::enums::MarketType;
+use ff_standard_lib::standardized_types::resolution::Resolution;
 
 /// to parse free testing data from https://www.histdata.com/
 /// 1. Put all the csv data into one folder

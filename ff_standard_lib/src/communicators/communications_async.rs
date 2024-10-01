@@ -5,7 +5,7 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, Mutex};
 use tokio_rustls::server::TlsStream as ServerTlsStream;
 use tokio_rustls::TlsStream;
-use crate::standardized_types::data_server_messaging::FundForgeError;
+use crate::messages::data_server_messaging::FundForgeError;
 
 /// With an 8-byte (64-bit) length field, you can represent data sizes up to approximately 17179869184 GB, which is equivalent to 16777216 TB, or 16 exabytes (EB).
 const LENGTH: usize = 8;

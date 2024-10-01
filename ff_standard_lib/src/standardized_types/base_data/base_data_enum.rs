@@ -6,8 +6,8 @@ use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::data_server_messaging::FundForgeError;
-use crate::standardized_types::enums::{MarketType, Resolution};
+use crate::messages::data_server_messaging::FundForgeError;
+use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::traits::bytes::Bytes;
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
@@ -23,6 +23,7 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
 use crate::standardized_types::datavendor_enum::DataVendor;
+use crate::standardized_types::resolution::Resolution;
 
 /// Enum for the different types of base data
 /// This is the main_window enum for all the different types of base data

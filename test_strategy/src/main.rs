@@ -1,11 +1,11 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
-use ff_standard_lib::indicators::events::IndicatorEvents;
+use ff_standard_lib::strategies::indicators::events::IndicatorEvents;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
 use ff_standard_lib::standardized_types::strategy_events::{StrategyControls, StrategyEvent, StrategyEventBuffer};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
@@ -13,15 +13,16 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::indicators::built_in::average_true_range::AverageTrueRange;
-use ff_standard_lib::indicators::indicator_enum::IndicatorEnum;
-use ff_standard_lib::indicators::indicators_trait::IndicatorName;
+use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
+use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
+use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::app::settings::Color;
 use ff_standard_lib::client_features::connections::GUI_DISABLED;
 use ff_standard_lib::standardized_types::orders::orders::OrderId;
+use ff_standard_lib::standardized_types::resolution::Resolution;
 
 // to launch on separate machine
 #[tokio::main]
