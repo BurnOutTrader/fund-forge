@@ -202,16 +202,16 @@ pub async fn on_data_received(
                                     count += 1;
 
                                     if count == 50 {
-                                        let msg = "Subscribing to new indicator heikin_atr3_15min and warming up subscriptions".to_string();
+                                        let msg = "Subscribing to new indicator heikin_atr3_5min and warming up subscriptions".to_string();
                                         println!("{}",msg.as_str().purple());
                                         // this will test both our auto warm up for indicators and data subscriptions
-                                     /*   let heikin_atr15_15min = IndicatorEnum::AverageTrueRange(
+                                        let heikin_atr3_5min = IndicatorEnum::AverageTrueRange(
                                             AverageTrueRange::new(
-                                                IndicatorName::from("heikin_atr3_15min"),
+                                                IndicatorName::from("heikin_atr3_5min"),
                                                 DataSubscription::new(
                                                     SymbolName::from("EUR-USD"),
                                                     DataVendor::Test,
-                                                    Resolution::Minutes(15),
+                                                    Resolution::Minutes(5),
                                                     BaseDataType::QuoteBars,
                                                     MarketType::Forex,
                                                 ),
@@ -222,15 +222,15 @@ pub async fn on_data_received(
                                         );
                                         // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
                                         // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
-                                        strategy.subscribe_indicator(heikin_atr15_15min, true).await;*/
-                                        let subscription =  DataSubscription::new(
+                                        strategy.subscribe_indicator(heikin_atr3_5min, true).await;
+                                      /*  let subscription =  DataSubscription::new(
                                             SymbolName::from("EUR-USD"),
                                             DataVendor::Test,
                                             Resolution::Minutes(5),
                                             BaseDataType::QuoteBars,
                                             MarketType::Forex,
                                         );
-                                        strategy.subscribe(subscription, 5, false).await;
+                                        strategy.subscribe(subscription, 5, false).await;*/
                                     }
                                 }
                                 //do something with the current open bar
