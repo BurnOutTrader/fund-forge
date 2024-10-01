@@ -25,7 +25,8 @@ This allows people familiar with concepts from common automated trading platform
 Simply build strategies using higher level abstractions like you would in any familiar commercial trading platform, but enjoy the benefits of the rust programing language.
 
 The only major difference in fund forge is the idea of the ff_data_server, a server which hosts your api instances locally or on a remote machine and allows multiple strategies to connect or disconnect while persisting historical data from a centralized location.
-It is possible to have multiple data server instances and it is easy to configure different servers to host specific broker or data vendor API's 
+It is possible to have multiple data server instances and it is easy to configure different servers to host specific broker or data vendor API's.
+
 By default all Api's will launch on a single server instance.
 
 It is easy to build and run strategies which can be deployed and communicate across multiple individual machines, docker containers or simply run everything locally.
