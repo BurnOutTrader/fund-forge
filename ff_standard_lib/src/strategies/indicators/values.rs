@@ -6,7 +6,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
-use crate::app::settings::Color;
+use crate::gui_types::settings::Color;
 use crate::strategies::indicators::indicators_trait::IndicatorName;
 
 pub type PlotName = String;

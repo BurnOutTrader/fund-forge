@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use ahash::AHashMap;
 use async_std::task::block_on;
-use crate::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
+use crate::strategies::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};

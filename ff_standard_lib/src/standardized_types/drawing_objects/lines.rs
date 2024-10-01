@@ -1,4 +1,4 @@
-use crate::app::settings::GraphElementSettings;
+use crate::gui_types::settings::GraphElementSettings;
 use crate::standardized_types::subscriptions::DataSubscription;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 

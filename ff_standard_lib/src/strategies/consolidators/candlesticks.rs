@@ -9,7 +9,7 @@ use crate::standardized_types::enums::{OrderSide, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
 use rust_decimal_macros::dec;
-use crate::consolidators::consolidator_enum::ConsolidatedData;
+use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::converters::open_time;
 use crate::strategies::market_handlers::SYMBOL_INFO;
 use crate::messages::data_server_messaging::FundForgeError;

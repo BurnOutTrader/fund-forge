@@ -19,7 +19,7 @@ use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::standardized_types::accounts::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
-use ff_standard_lib::app::settings::Color;
+use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::client_features::connection_types::GUI_DISABLED;
 use ff_standard_lib::standardized_types::orders::orders::OrderId;
 use ff_standard_lib::standardized_types::resolution::Resolution;

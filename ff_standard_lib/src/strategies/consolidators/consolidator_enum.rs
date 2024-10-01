@@ -1,7 +1,7 @@
-use crate::consolidators::candlesticks::CandleStickConsolidator;
-use crate::consolidators::count::CountConsolidator;
-use crate::consolidators::heikinashi::HeikinAshiConsolidator;
-use crate::consolidators::renko::RenkoConsolidator;
+use crate::strategies::consolidators::candlesticks::CandleStickConsolidator;
+use crate::strategies::consolidators::count::CountConsolidator;
+use crate::strategies::consolidators::heikinashi::HeikinAshiConsolidator;
+use crate::strategies::consolidators::renko::RenkoConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};

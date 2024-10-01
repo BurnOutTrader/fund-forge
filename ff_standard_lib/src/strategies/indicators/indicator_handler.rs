@@ -7,7 +7,7 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use crate::consolidators::consolidator_enum::ConsolidatorEnum;
+use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 use crate::strategies::indicators::events::IndicatorEvents;
 use crate::strategies::indicators::indicator_enum::IndicatorEnum;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
