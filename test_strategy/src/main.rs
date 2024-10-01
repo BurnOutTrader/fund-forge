@@ -303,7 +303,7 @@ pub async fn on_data_received(
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice_event {
                                 for (_name, plot) in indicator_values.plots(){
-                                    let msg = format!("{}: {}: {:?}", indicator_values.name, plot.name, plot.value);
+                                    let msg = format!("{}: {}: {:?}, {}", indicator_values.name, plot.name, plot.value, strategy.time_local());
                                     println!("{}", msg.as_str().bright_cyan());
                                 }
                             }

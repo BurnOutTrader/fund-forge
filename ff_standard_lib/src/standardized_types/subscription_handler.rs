@@ -194,10 +194,10 @@ impl SubscriptionHandler {
                         }
                     }
                 }
-                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription))).await;
+                //add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription))).await;
             }
             Err(e) => {
-                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedToSubscribe(new_subscription, e))).await;
+                //add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedToSubscribe(new_subscription, e))).await;
             }
         }
 
@@ -741,7 +741,6 @@ impl SymbolSubscriptionHandler {
         if is_primary_capable && strategy_mode == StrategyMode::Backtest  {
             //In backtest mode we can just use the historical data so no need to reconsolidate
             self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
             return load_data_closure(&new_subscription)
         }
 
@@ -816,7 +815,6 @@ impl SymbolSubscriptionHandler {
                         match self.vendor_primary_resolutions.contains(&new_subscription.subscription_resolution_type()) {
                             true => {
                                 self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-                                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
                                 return load_data_closure(&new_subscription)
                             }
                             false => {
@@ -897,7 +895,10 @@ impl SymbolSubscriptionHandler {
                     }
                     let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone(), new_primary.subscription_resolution_type()).await;
                     let (final_consolidator, window) = match is_warmed_up {
-                        true =>ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await,
+                        true => {
+                            let (final_consolidator, window) = ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await;
+                            (final_consolidator, window)
+                        },
                         false => (consolidator, RollingWindow::new(history_to_retain))
                     };
                     self.secondary_subscriptions
