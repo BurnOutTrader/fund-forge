@@ -171,7 +171,7 @@ pub async fn on_data_received(
                                     }
 
                                     if count == 20 {
-                                        let msg = "Subscribing to new Candle Resolution and warming subscription, this will take time as we don't have warm up data in memory".to_string();
+                                        let msg = "Subscribing to new Candle Resolution and warming subscription, this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
                                         println!("{}",msg.as_str().purple());
                                         let heikin_1_hour = DataSubscription::new_custom(
                                             SymbolName::from("AUD-CAD"),
