@@ -85,7 +85,7 @@ impl SubscriptionHandler {
     /// 'history_to_retain: usize' The number of bars to retain in the history.
     /// 'current_time: DateTime<Utc>' The current time is used to warm up consolidator history if we have already done our initial strategy warm up.
     /// 'strategy_mode: StrategyMode' The strategy mode is used to determine how to warm up the history, in live mode we may not yet have a serialized history to the current time.
-    pub async fn subscribe(
+    pub async fn subscribe( //todo, when subscribing to data, if we already have a lower resolution subscribed for a symbol and it has a history window big enough to warm up, we could pass it in to speed warm ups
         &self,
         new_subscription: DataSubscription,
         current_time: DateTime<Utc>,
@@ -282,7 +282,10 @@ impl SubscriptionHandler {
         for symbol_handler in self.symbol_subscriptions.iter() {
             primary_subscriptions.extend(symbol_handler.value().primary_subscriptions());
         }
-        primary_subscriptions.extend(self.fundamental_subscriptions.read().await.clone());
+        let fundamentals = self.fundamental_subscriptions.read().await.clone();
+        if !fundamentals.is_empty() {
+            primary_subscriptions.extend(fundamentals);
+        }
         primary_subscriptions
     }
 
@@ -715,7 +718,7 @@ impl SymbolSubscriptionHandler {
                     }
                     false => {
                         let subtract_duration: Duration = closure_subscription.resolution.as_duration() * history_to_retain as i32;
-                        warm_up_to_time - subtract_duration - Duration::days(5)
+                        warm_up_to_time - subtract_duration - Duration::days(2)
                     }
                 };
                 let primary_history = block_on(range_data(from_time, warm_up_to_time, closure_subscription.clone()));
