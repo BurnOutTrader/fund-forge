@@ -7,8 +7,8 @@ Community [discord](https://discord.gg/MNXH2jEExV)
 ***You cannot run the test strategy from the main fund forge directory**
 1. get the testing data (instructions below)
 2. cargo buid in the fund forge directory
-3. navigate to ff_data_server directory and `cargo run`
-4. navigate to test_strategy directory and `cargo run`
+3. navigate to [ff_data_server](./ff_data_server) directory and `cargo run`
+4. navigate to [test_strategy](./test_strategy) directory and `cargo run`
 
 The working directory must be the strategy directory, or the strategy will not find its resources' folder.
 [see](./test_strategy/README.md)
