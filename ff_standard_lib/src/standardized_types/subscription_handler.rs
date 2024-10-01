@@ -810,13 +810,23 @@ impl SymbolSubscriptionHandler {
                             }
                         }
                     }
-                    // if we are try to build candles we can check we have quote bars to consolidate from as a last resort
+                    // if we are try to build candles we can check we have quotes, then quote bars to consolidate from as a last resort
                     if !has_lower_resolution {
                         for kind in &self.vendor_primary_resolutions {
-                            if kind.resolution < new_subscription.resolution && (kind.base_data_type == BaseDataType::QuoteBars && new_subscription.base_data_type == BaseDataType::Candles) {
+                            if kind.resolution < new_subscription.resolution && (kind.base_data_type == BaseDataType::Quotes && new_subscription.base_data_type == BaseDataType::Candles) {
                                 has_lower_resolution = true;
                                 if kind.resolution < lowest_res {
                                     lowest_res = kind.resolution.clone()
+                                }
+                            }
+                        }
+                        if !has_lower_resolution {
+                            for kind in &self.vendor_primary_resolutions {
+                                if kind.resolution < new_subscription.resolution && (kind.base_data_type == BaseDataType::QuoteBars && new_subscription.base_data_type == BaseDataType::Candles) {
+                                    has_lower_resolution = true;
+                                    if kind.resolution < lowest_res {
+                                        lowest_res = kind.resolution.clone()
+                                    }
                                 }
                             }
                         }
