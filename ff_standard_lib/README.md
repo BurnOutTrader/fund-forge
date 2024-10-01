@@ -2,8 +2,7 @@
 See the [server_features](src/server_features) mod
 Any mod inside this mod will be visible only to crates which enabled the 'server' feature flag for the 'ff_standard_lib'.
 This helps to prevent direct api calls for `Brokerage` and `DataVednor` implementations on the client/strategy side.
-
-
+The only crate that uses this feature by default is the `ff_data_server`.
 
 ## Using rkyv crate
 rkyv implements total zero-copy deserialization, 
