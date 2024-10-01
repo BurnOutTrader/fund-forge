@@ -1,6 +1,5 @@
 use chrono::Utc;
 use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
-use ff_standard_lib::servers::registry_request_handlers::registry_manage_async_requests;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
@@ -16,6 +15,8 @@ use tokio::sync::Mutex;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_rustls::TlsAcceptor;
+use ff_standard_lib::strategy_registry::RegistrationRequest;
+use ff_standard_lib::traits::bytes::Bytes;
 
 pub mod handle_gui;
 pub mod handle_strategies;
@@ -131,4 +132,39 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> Join
             println!("TLS connection established with {:?}", peer_addr);
         }
     })
+}
+
+
+/// this is used when launching in single machine
+pub async fn registry_manage_async_requests(
+    _sender: Arc<SecondaryDataSender>,
+    receiver: Arc<Mutex<SecondaryDataReceiver>>,
+) {
+    tokio::spawn(async move {
+        let receiver = receiver.clone();
+        //let sender = sender;
+        let binding = receiver.clone();
+        let mut listener = binding.lock().await;
+        'register_loop: while let Some(data) = listener.receive().await {
+            let request = match RegistrationRequest::from_bytes(&data) {
+                Ok(request) => request,
+                Err(e) => {
+                    println!("Failed to parse request: {:?}", e);
+                    continue;
+                }
+            };
+            match request {
+                RegistrationRequest::Strategy(_owner, _mode, _subscriptions) => {
+                    //handle_strategies(owner.clone(), sender, receiver, mode.clone()).await;
+                    //let gui_response = RegistryGuiResponse::StrategyAdded(owner, mode, subscriptions);
+                    //broadcast(gui_response.to_bytes()).await;
+                    break 'register_loop;
+                }
+                RegistrationRequest::Gui => {
+                    //handle_gui(sender, receiver).await;
+                    break 'register_loop;
+                }
+            };
+        }
+    });
 }

@@ -1,5 +1,5 @@
 #[cfg(feature = "server")]
-pub mod apis;
+pub mod server_features;
 pub mod app;
 pub mod consolidators;
 pub mod drawing_objects;
