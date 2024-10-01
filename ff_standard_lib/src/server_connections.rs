@@ -19,7 +19,7 @@ use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, ReadHalf};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::{sleep_until, Instant};
 use tokio_rustls::TlsStream;
 use crate::apis::brokerage::broker_enum::Brokerage;
@@ -117,6 +117,18 @@ lazy_static! {
 #[inline(always)]
 pub async fn add_buffer(time: DateTime<Utc>, event: StrategyEvent) {
     EVENT_BUFFER.lock().await.add_event(time, event);
+}
+
+// todo, make a buffer using a receiver, this can reduce the handlers to 1
+pub async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_duration: Option<Duration>) {
+    let mut receiver = receiver;
+    tokio::task::spawn(async move {
+        let mut open_bars: DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>> = DashMap::new();
+        let mut buffer = StrategyEventBuffer::new();
+        while let Some((time, event)) = receiver.recv().await {
+            buffer.add_event(time, event);
+        }
+    });
 }
 
 

@@ -1,9 +1,12 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
+use ahash::AHashMap;
 use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use crate::drawing_objects::drawing_object_handler::DrawingToolEvent;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::standardized_types::orders::orders::OrderUpdateEvent;
-use crate::standardized_types::subscriptions::DataSubscriptionEvent;
+use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
 use crate::standardized_types::time_slices::TimeSlice;
 use rkyv::ser::serializers::AllocSerializer;
 use rkyv::ser::Serializer;
@@ -13,6 +16,7 @@ use rkyv::validation::validators::DefaultValidator;
 use rkyv::vec::ArchivedVec;
 use crate::indicators::indicator_handler::IndicatorEvents;
 use crate::standardized_types::accounts::position::PositionUpdateEvent;
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 
 /// Used to determine if a strategy takes certain event inputs from the Ui.
 /// A trader can still effect the strategy via the broker, but the strategy will not take any input from the Ui unless in SemiAutomated mode.
@@ -234,7 +238,6 @@ impl StrategyEventBuffer {
     pub fn add_event(&mut self, time: DateTime<Utc>, event: StrategyEvent) {
         // Insert event into the main list
         self.events.push((time, event.clone()));
-        let event_index = self.events.len() - 1;
 
         // Sort the events by time (stable sort keeps order for equal times)
         self.events.sort_by_key(|(time, _)| *time);

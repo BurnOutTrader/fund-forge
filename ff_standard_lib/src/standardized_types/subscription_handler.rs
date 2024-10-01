@@ -122,16 +122,15 @@ impl SubscriptionHandler {
             self.market_event_sender.send(register_msg).await.unwrap();
         }
 
-        let windows = self.symbol_subscriptions.get(&new_subscription.symbol).unwrap()
-            .subscribe(
+        let symbol_subscriptions = self.symbol_subscriptions.get(&new_subscription.symbol).unwrap();
+        let windows = symbol_subscriptions.value().subscribe(
                 current_time,
                 new_subscription.clone(),
                 current_time,
                 history_to_retain,
                 self.strategy_mode,
                 fill_forward
-            )
-            .await;
+            ).await;
 
         if let Some(windows) = windows {
             for (subscription, window) in windows {
@@ -905,19 +904,24 @@ impl SymbolSubscriptionHandler {
                         }
                     }
                     let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone(), new_primary.subscription_resolution_type()).await;
-                    let (consolidator, window) = match is_warmed_up {
-                        true => ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await,
+                    let (final_consolidator, window) = match is_warmed_up {
+                        true =>{
+                            let (final_consolidator, window) = ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await;
+                            println!("returned consoldait");
+                                (final_consolidator, window)
+                        },
                         false => (consolidator, RollingWindow::new(history_to_retain))
                     };
-                    if let Some(mut consolidator_map) = self.secondary_subscriptions.get_mut(&new_primary.subscription_resolution_type()) {
-                        consolidator_map.insert(new_subscription.clone(), consolidator);
-                    } else {
-                        let mut new_map = AHashMap::new();
-                        new_map.insert(new_subscription.clone(), consolidator);
-                        self.secondary_subscriptions.insert(new_primary.subscription_resolution_type(), new_map);
-                    }
+                    println!("adding to subsc");
+                    self.secondary_subscriptions
+                        .entry(new_primary.subscription_resolution_type())
+                        .or_insert_with(AHashMap::new)
+                        .insert(new_subscription.clone(), final_consolidator);
+                    println!("Added");
                     returned_windows.insert(new_subscription.clone(), window);
-                    add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
+                    println!("Add buffer"); // we lock after this print line
+                   // add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
+                    println!("window");
                     return Some(returned_windows)
                 }
             }

@@ -164,21 +164,12 @@ impl ConsolidatorEnum {
 
         let mut history = RollingWindow::new(history_to_retain as usize);
         for (time, time_slice) in primary_history {
-            if !time_slice.is_empty() {
-                for base_data in time_slice.iter() {
-                    let consolidated_data = consolidator.update(&base_data);
-                    if let Some(closed_data) = consolidated_data.closed_data {
-                        history.add(closed_data);
-                    }
+            for base_data in time_slice.iter() {
+                let consolidated_data = consolidator.update(&base_data);
+                if let Some(closed_data) = consolidated_data.closed_data {
+                    history.add(closed_data);
                 }
             }
-            let optional_consolidated_data = consolidator.update_time(time);
-            if let Some(closed_data) = optional_consolidated_data {
-                history.add(closed_data);
-            }
-        }
-        if strategy_mode != StrategyMode::Backtest {
-            //todo() we will get any bars which are not in our serialized history here
         }
         (consolidator, history)
     }
