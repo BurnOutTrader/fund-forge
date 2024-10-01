@@ -10,11 +10,6 @@ pub enum StrategyResponse {
 }
 
 impl Bytes<Self> for StrategyResponse {
-    fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
-        vec.into()
-    }
-
     fn from_bytes(archived: &[u8]) -> Result<StrategyResponse, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
         match rkyv::from_bytes::<StrategyResponse>(archived) {
@@ -22,6 +17,11 @@ impl Bytes<Self> for StrategyResponse {
             Ok(response) => Ok(response),
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
+        vec.into()
     }
 }
 
