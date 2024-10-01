@@ -40,7 +40,8 @@ impl FromStr for Brokerage {
 pub mod client_side_brokerage {
     use crate::standardized_types::broker_enum::Brokerage;
     use tokio::sync::oneshot;
-    use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
+    use crate::client_features::connections::ConnectionType;
+    use crate::server_connections::{send_request, StrategyRequest};
     use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
     use crate::standardized_types::subscriptions::SymbolName;
     use crate::standardized_types::accounts::ledgers::AccountId;

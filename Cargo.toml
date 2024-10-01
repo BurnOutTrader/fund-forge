@@ -7,8 +7,7 @@ members = [
     "ff_data_server",
     "test_strategy",
     "ff_strategy_registry",
-    "test_data_parser"
-]
+    "test_data_parser"]
 
 
 

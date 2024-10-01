@@ -1,19 +1,15 @@
-use std::collections::{HashMap};
-use crate::communicators::communications_async::{ExternalSender};
-use crate::communicators::init_clients::{create_async_api_client};
+use std::collections::HashMap;
+use crate::communicators::communications_async::ExternalSender;
+use crate::communicators::init_clients::create_async_api_client;
 use crate::communicators::settings::client_settings::{initialise_settings, ConnectionSettings};
-use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError, StreamRequest};
-use heck::ToPascalCase;
-use serde_derive::{Deserialize, Serialize};
-use std::str::FromStr;
+use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, StreamRequest};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, Utc, TimeZone};
+use chrono::{DateTime, TimeZone, Utc};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
-use strum_macros::Display;
 use tokio::io;
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, ReadHalf};
@@ -22,59 +18,19 @@ use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::{sleep_until, Instant};
 use tokio_rustls::TlsStream;
-use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::datavendor_enum::DataVendor;
+use crate::client_features::connections::ConnectionType;
 use crate::drawing_objects::drawing_object_handler::DrawingObjectHandler;
 use crate::indicators::indicator_handler::IndicatorHandler;
 use crate::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::StrategyMode;
-use crate::standardized_types::strategy_events::{StrategyEventBuffer, StrategyEvent};
+use crate::standardized_types::strategy_events::{StrategyEvent, StrategyEventBuffer};
 use crate::standardized_types::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::timed_events_handler::TimedEventHandler;
 use crate::traits::bytes::Bytes;
-
-pub const GUI_ENABLED: bool = true;
-pub const GUI_DISABLED: bool = false;
-
-/// A wrapper to allow us to pass in either a `Brokerage` or a `DataVendor`
-/// # Variants
-/// * `Broker(Brokerage)` - Containing a `Brokerage` object
-/// * `Vendor(DataVendor)` - Containing a `DataVendor` object
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Serialize, Deserialize, Debug, Display)]
-pub enum ConnectionType {
-    Vendor(DataVendor),
-    Broker(Brokerage),
-    Default,
-    StrategyRegistry,
-}
-
-impl FromStr for ConnectionType {
-    type Err = FundForgeError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let string = s.to_pascal_case();
-        match string.as_str() {
-            "Default" => Ok(ConnectionType::Default),
-            "StrategyRegistry" => Ok(ConnectionType::StrategyRegistry),
-            _ if s.starts_with("Broker:") => {
-                let data = s.trim_start_matches("Broker:").trim();
-                Ok(ConnectionType::Broker(Brokerage::from_str(data)?))
-            }
-            _ if s.starts_with("Vendor:") => {
-                let data = s.trim_start_matches("Vendor:").trim();
-                Ok(ConnectionType::Vendor(DataVendor::from_str(data)?))
-            }
-            _ => Err(FundForgeError::ClientSideErrorDebug(format!(
-                "Connection Type {} is not recognized",
-                s
-            ))),
-        }
-    }
-}
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);

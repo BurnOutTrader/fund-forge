@@ -2,7 +2,7 @@ use crate::helpers::converters::next_month;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{
-    BaseDataPayload, FundForgeError, DataServerRequest, DataServerResponse,
+    BaseDataPayload, DataServerRequest, DataServerResponse, FundForgeError,
 };
 use crate::standardized_types::enums::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
@@ -11,10 +11,12 @@ use crate::standardized_types::time_slices::UnstructuredSlice;
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, Bound, HashMap};
 use tokio::sync::oneshot;
-use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
+use crate::server_connections::{send_request, StrategyRequest};
 use dashmap::DashMap;
 use rayon::prelude::*;
 use futures::stream::{FuturesUnordered, StreamExt};
+use crate::client_features::connections::ConnectionType;
+
 /// Method responsible for structuring raw historical data into combined time slices, where all data points a combined into BTreeMap<DateTime<Utc>, TimeSlice> where data.time_created() is key and value is TimeSlice.
 ///
 /// # Arguments

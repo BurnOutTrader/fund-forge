@@ -13,3 +13,4 @@ pub mod traits;
 pub mod market_handler;
 pub mod historical_time;
 pub mod indicators;
+pub mod client_features;

@@ -3,7 +3,7 @@ use ff_rithmic_api::systems::RithmicSystem;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
 use strum_macros::Display;
-use crate::standardized_types::data_server_messaging::{FundForgeError};
+use crate::standardized_types::data_server_messaging::FundForgeError;
 
 #[derive(Serialize, Deserialize, Clone, Eq, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Hash, PartialOrd, Ord, Display)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -43,8 +43,9 @@ impl FromStr for DataVendor {
 
 pub mod client_side_data_vendors {
     use tokio::sync::oneshot;
+    use crate::client_features::connections::ConnectionType;
     use crate::standardized_types::datavendor_enum::DataVendor;
-    use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
+    use crate::server_connections::{send_request, StrategyRequest};
     use crate::standardized_types::base_data::base_data_type::BaseDataType;
     use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
     use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
