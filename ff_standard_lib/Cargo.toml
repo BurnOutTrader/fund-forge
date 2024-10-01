@@ -30,7 +30,7 @@ chrono-tz = "0.10.0"
 serde_derive = "*"
 env_logger = "*"
 futures = "*"
-rustls = "*"
+rustls = "0.23.5"
 tokio-rustls = "*"
 rust_decimal = { version = "*", features = ["rkyv", "rkyv-safe"] }
 float-cmp = "*"

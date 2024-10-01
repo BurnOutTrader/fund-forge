@@ -11,7 +11,7 @@ ff_strategies = { path = "../ff_strategies" }
 chrono = "*"
 tokio = { version = "*", features = ["full"] }
 futures = "*"
-rustls = "*"
+rustls = "0.23.5"
 rustls-pemfile = "*"
 tokio-rustls = "0.26.0"
 serde = { version = "1.0.197", features = ["derive"] }

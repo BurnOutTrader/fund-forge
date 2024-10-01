@@ -1046,19 +1046,14 @@ name = "ff_strategies"
 version = "0.1.0"
 dependencies = [
  "ahash 0.8.11",
- "bytes",
  "chrono",
  "chrono-tz",
  "dashmap",
  "ff_standard_lib",
- "futures",
- "lazy_static",
- "once_cell",
  "rkyv 0.8.8",
  "rust_decimal",
  "rust_decimal_macros",
  "serde",
- "strum_macros",
  "tokio",
 ]
 
