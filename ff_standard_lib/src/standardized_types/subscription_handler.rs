@@ -17,7 +17,7 @@ use tokio::sync::mpsc::{Sender};
 use tokio::sync::{RwLock};
 use crate::market_handler::market_handlers::MarketMessageEnum;
 use crate::server_connections::{add_buffer, is_warmup_complete};
-use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
+use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
 use crate::standardized_types::base_data::history::range_data;

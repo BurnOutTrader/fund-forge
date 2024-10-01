@@ -1,7 +1,7 @@
 use std::collections::{HashMap};
-use crate::servers::communications_async::{ExternalSender};
-use crate::servers::init_clients::{create_async_api_client};
-use crate::servers::settings::client_settings::{initialise_settings, ConnectionSettings};
+use crate::communicators::communications_async::{ExternalSender};
+use crate::communicators::init_clients::{create_async_api_client};
+use crate::communicators::settings::client_settings::{initialise_settings, ConnectionSettings};
 use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError, StreamRequest};
 use heck::ToPascalCase;
 use serde_derive::{Deserialize, Serialize};

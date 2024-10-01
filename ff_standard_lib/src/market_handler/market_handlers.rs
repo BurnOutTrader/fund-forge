@@ -19,7 +19,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::servers::settings::client_settings::initialise_settings;
+use crate::communicators::settings::client_settings::initialise_settings;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{DataServerRequest, FundForgeError};
 use crate::standardized_types::new_types::{Price, Volume};

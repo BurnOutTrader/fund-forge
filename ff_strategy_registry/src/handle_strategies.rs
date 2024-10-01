@@ -1,14 +1,14 @@
-use ff_standard_lib::servers::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
+use ff_standard_lib::communicators::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use ff_standard_lib::standardized_types::strategy_events::StrategyEventBuffer;
-use ff_standard_lib::strategy_registry::guis::RegistryGuiResponse;
-use ff_standard_lib::strategy_registry::strategies::{StrategyRegistryForward, StrategyResponse};
-use ff_standard_lib::strategy_registry::RegistrationResponse;
+use ff_standard_lib::registry_messages::guis::RegistryGuiResponse;
+use ff_standard_lib::registry_messages::strategies::{StrategyRegistryForward, StrategyResponse};
+use ff_standard_lib::registry_messages::RegistrationResponse;
 use ff_standard_lib::traits::bytes::Bytes;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use structopt::lazy_static::lazy_static;
 use tokio::sync::{Mutex, RwLock};
-use ff_standard_lib::servers::bytes_broadcaster::{BroadCastType, BytesBroadcaster};
+use ff_standard_lib::communicators::bytes_broadcaster::{BroadCastType, BytesBroadcaster};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 
 lazy_static! {

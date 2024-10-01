@@ -1,4 +1,4 @@
-use crate::servers::communications_async::{SecondaryDataSender};
+use crate::communicators::communications_async::{SecondaryDataSender};
 use std::sync::Arc;
 use dashmap::DashMap;
 

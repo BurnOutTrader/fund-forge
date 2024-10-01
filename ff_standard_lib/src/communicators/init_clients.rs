@@ -1,4 +1,4 @@
-use crate::servers::settings::client_settings::ConnectionSettings;
+use crate::communicators::settings::client_settings::ConnectionSettings;
 use crate::standardized_types::data_server_messaging::FundForgeError;
 use rustls::pki_types::ServerName;
 use rustls::ClientConfig;

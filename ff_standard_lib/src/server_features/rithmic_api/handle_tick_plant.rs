@@ -20,7 +20,7 @@ use crate::standardized_types::accounts::ledgers::{AccountInfo, Currency};
 #[tokio::test]
 async fn test_rithmic_connection() -> Result<(), Box<dyn std::error::Error>> {
     // Define the file path for credentials
-    let servers_file_path = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data/rithmic_credentials/servers.toml".to_string());
+    let servers_file_path = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data/rithmic_credentials/communicators.toml".to_string());
     let credentials = String::from("/Users/kevmonaghan/RustroverProjects/fund-forge/ff_data_server/data/rithmic_credentials/topstep_trader.toml".to_string());
     // Define credentials
     let credentials = RithmicCredentials::load_credentials_from_file(&credentials).unwrap();
