@@ -9,14 +9,9 @@ authors = ["Kevin Monaghan"]
 ff_standard_lib = { path = "../ff_standard_lib"}
 chrono = "*"
 tokio = { version = "*", features = ["full", "macros"] }
-bytes = "*"
 rkyv = "*"
 serde = { version = "*", features = ["derive"] }
-lazy_static = "*"
-futures = "*"
-once_cell = "*"
 chrono-tz = "0.10.0"
-strum_macros = "*"
 ahash = "*"
 dashmap = "*"
 rust_decimal_macros = "*"
