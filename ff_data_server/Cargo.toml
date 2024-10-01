@@ -7,7 +7,7 @@ authors = ["Kevin Monaghan"]
 
 [dependencies]
 ff_rithmic_api = "0.1.6"
-ff_standard_lib = { path = "../ff_standard_lib" }
+ff_standard_lib = { path = "../ff_standard_lib", features = ["server"]}
 chrono = "*"
 tokio = { version = "*", features = ["full"] }
 futures = "*"
