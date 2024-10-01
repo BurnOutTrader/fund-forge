@@ -6,8 +6,8 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
-use ff_standard_lib::standardized_types::strategy_events::{StrategyEventBuffer, StrategyControls, StrategyEvent, StrategyInteractionMode};
-use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent, SymbolName};
+use ff_standard_lib::standardized_types::strategy_events::{StrategyEventBuffer, StrategyControls, StrategyEvent};
+use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::{mpsc};
@@ -33,13 +33,8 @@ async fn main() {
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
-        StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
-        NaiveDate::from_ymd_opt(2024, 6, 19)
-            .unwrap()
-            .and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 06, 21)
-            .unwrap()
-            .and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2024, 6, 19).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2024, 06, 21).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
         Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
@@ -74,7 +69,6 @@ async fn main() {
         false,
         100,
         strategy_event_sender, // the sender for the strategy events
-        None,
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading and backtesting.
         //ToDo: Test Un-Buffered engines (None) vs Buffered Some(Duration)

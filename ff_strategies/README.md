@@ -15,13 +15,15 @@ Everything found here could be changed during development, you will have to cons
 
 See the [Test strategy](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs) for the most up-to-date working strategy example.
 
-Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function. 
-This will automatically create the engine and start the strategy in the background. \
-Then we can receive `StrategyEventBuffer`s in our `fn on_data_received()` function. \
-The strategy object returned from `initialize()` is a fully owned object, and we can pass it to other function, wrap it in an arc etc. \
-It is best practice to use the strategies methods to interact with the strategy rather than calling on any private fields directly. \
-strategy methods only need a reference to the strategy object, and will handle all the necessary locking and thread safety for you. \
-It is possible to wrap the strategy in Arc if you need to pass it to multiple threads, all functionality will remain. \
+- Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function,
+this will automatically create the engine and start the strategy in the background.
+- Then we can receive `StrategyEventBuffer`s in our `fn on_data_received()` function.
+- The strategy object returned from `initialize()` is a fully owned object, and we can pass it to other function, wrap it in an arc etc. 
+
+It is best practice to use the strategies methods to interact with the strategy rather than calling on any private fields directly.
+strategy methods only need a reference to the strategy object, and will handle all the necessary locking and thread safety for you.
+It is possible to wrap the strategy in Arc if you need to pass it to multiple threads, all functionality will remain. 
+
 The strategy object is an owned object, however it does not need to be owned or mutable to access strategy methods, all methods can be called with only a reference to the strategy object, this
 allows us to pass our strategy in an Arc to any other threads or functions and still utilise its full functionality, the strategy is protected from misuse by using interior mutability.
 
@@ -39,9 +41,6 @@ This is per account.
 #### `backtest_account_currency: Currency`:
 Only used for backtest and live paper trading to initialize paper accounts
 For all accounts (currently no way to have unique currency per paper account)
-
-#### `interaction_mode: StrategyInteractionMode:`
-The interaction mode for the strategy.
 
 #### `start_date: NaiveDateTime:`
 The start date of the strategy.
@@ -65,12 +64,9 @@ If your subscriptions are empty, you will need to add some at the start of your 
 This is only regarding initial subscriptions, additional subscriptions will have to specify the option.
 If true we will create new bars based on the time when there is no new primary data available, this can result in bars where ohlc price are all == to the last bars close price.
 Bars filling forward without data normally look like this: "_" where there was not price action. They could also open and then receive a price update sometime during the resolution period.
-With fill forward enabled, during market close you will receive a series of bars resembling `_ _ _ _ _` instead of no bars at all.
+With fill forward enabled, during market close you will receive a series of bars resembling _ _ _ _ _ instead of no bars at all.
 You should consider that some indicators like ATR might see these bars and drop the ATR to 0 during these periods.
 If this is false, you will see periods of no data in backtests when the market is closed, as the engine ticks at buffering_millis through the close hours, until new  data is received.
-
-#### `replay_delay_ms: Option<u64>:`
-The delay in milliseconds between time slices for market replay style backtesting. this will be ignored in live trading.
 
 #### `retain_history: u64:`
 The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
@@ -84,22 +80,18 @@ if Some(buffer) we will use the buffered backtesting or buffered live trading en
 If None we will use the unbuffered versions. The backtesting versions will try to simulate the event flow of their respective live handlers.
 
 The buffer takes effect in both back-testing and live trading.
-
 A lower buffer resolution will result in a slower backtest, don't go to low unless necessary, 30 to 100ms is fine for most cases.
-
 Any input <= 0 will default the buffer to 1ms.
 
 The buffering resolution of the strategy. If we are back testing, any data of a lower granularity will be consolidated into a single time slice.
-
 If our base data source is tick data, but we are trading only on 15min bars, then we can just set this to any Duration < 15 minutes and consolidate the tick data to ignore it in on_data_received().
 
 In live trading our strategy will capture the tick stream in a buffer and pass it to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn.
-
 In live: If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events of a higher than instant resolution.
 
-This also helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
+This helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
 
-***Note: Since the backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtests where the println stops outputting over weekends or market close, it will shortly resume.
+***Note: Since the buffered backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtesting where the println stops outputting over weekends or market close, it will shortly resume.
 This can be overridden using fill_forward, but be aware you will then capture flat bars in your history***
 
 ```rust
@@ -119,9 +111,6 @@ async fn main() {
         
         //backtest account currency
         Currency::USD,
-
-        // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. 
-        StrategyInteractionMode::SemiAutomated,
 
         // Starting date of the backtest is a NaiveDateTime not NaiveDate
         NaiveDate::from_ymd_opt(2023, 03, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(),
@@ -154,9 +143,6 @@ async fn main() {
         // the sender for the strategy events
         strategy_event_sender,
 
-        // backtest_delay: An Option<Duration> we can pass in a delay for market replay style backtesting, this will be ignored in live trading.
-        None,
-
         //if Some(buffer) we will use the buffered backtesting or buffered live trading engines / handlers.
         //If None we will use the unbuffered versions of backtest engine or handlers. The backtesting versions will try to simulate the event flow of their respective live handlers.
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading.
@@ -186,7 +172,6 @@ async fn main() {
         StrategyMode::Backtest,                 // Backtest, Live, LivePaper
         dec!(100000.0), //starting cash per account
         Currency::USD,//backtest account currency
-        StrategyInteractionMode::SemiAutomated, // In semi-automated the strategy can interact with the user drawing tools and the user can change data subscriptions, in automated they cannot. // the base currency of the strategy
         NaiveDate::from_ymd_opt(2024, 7, 23)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -215,7 +200,6 @@ async fn main() {
         true,
         5,
         strategy_event_sender, // the sender for the strategy events
-        None,
         None,
         GUI_DISABLED
     ).await;
@@ -328,7 +312,6 @@ fn example() {
     let borrowed_iter: Iterator<Item = &BaseDataEnum> = time_slice.get_by_type_borrowed(data_type: BaseDataType);
 }
 ```
-
 
 ## Time
 ### When downloading and parsing data from a DataVendor for the engine
@@ -458,7 +441,8 @@ and expect no noticeable impact from the additional consolidators.
 
 In back-testing subscribing to multiple symbols, will have a linear performance impact, with each symbol subscribed we are increasing the size of the data which must be sorted into our primary data feed by n(1).
 This is one downside of the microservice API instances, we need to check each symbol data vendor api address and request the data per symbol.
-If you are backtesting a large number of symbols, you will see a delay in the backtest as we pull new primary resolution data from the data server 1 symbol at a time.
+If you are backtesting a large number of symbols, you will see a delay in the backtest at the start of each historical month as we pull new primary resolution data from the data server 1 symbol at a time.
+
 I have made some functions to make this concurrent but using them would involve hard coding the platform to only allow 1 data server instance for all DataVendor apis and eliminate the possibility of using api microservices.
 I felt the trade-off of longer back-tests was worth it. 
 

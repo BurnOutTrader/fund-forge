@@ -1,5 +1,4 @@
 use crate::engine::HistoricalEngine;
-use ff_standard_lib::interaction_handler::InteractionHandler;
 use ahash::AHashMap;
 use chrono::{DateTime, NaiveDateTime, Utc, Duration as ChronoDuration, TimeZone};
 use chrono_tz::Tz;
@@ -15,7 +14,7 @@ use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderUpdateType, TimeInForce};
 use ff_standard_lib::standardized_types::rolling_window::RollingWindow;
 use ff_standard_lib::standardized_types::strategy_events::{
-    StrategyEventBuffer, StrategyInteractionMode,
+    StrategyEventBuffer,
 };
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, SymbolName};
@@ -62,8 +61,6 @@ pub struct FundForgeStrategy {
 
     timed_event_handler: Arc<TimedEventHandler>,
 
-    interaction_handler: Arc<InteractionHandler>,
-
     drawing_objects_handler: Arc<DrawingObjectHandler>,
 
     orders_count: DashMap<Brokerage, i64>,
@@ -101,7 +98,6 @@ impl FundForgeStrategy {
         strategy_mode: StrategyMode,
         backtest_accounts_starting_cash: Decimal,
         backtest_account_currency: Currency,
-        interaction_mode: StrategyInteractionMode,
         start_date: NaiveDateTime,
         end_date: NaiveDateTime,
         time_zone: Tz,
@@ -110,7 +106,6 @@ impl FundForgeStrategy {
         fill_forward: bool,
         retain_history: usize,
         strategy_event_sender: mpsc::Sender<StrategyEventBuffer>,
-        replay_delay_ms: Option<u64>,
         buffering_duration: Option<Duration>,
         gui_enabled: bool
     ) -> FundForgeStrategy {
@@ -137,7 +132,6 @@ impl FundForgeStrategy {
 
 
         let timed_event_handler = Arc::new(TimedEventHandler::new());
-        let interaction_handler = Arc::new(InteractionHandler::new(replay_delay_ms, interaction_mode));
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
 
         let strategy = FundForgeStrategy {
@@ -147,7 +141,6 @@ impl FundForgeStrategy {
             subscription_handler,
             indicator_handler: indicator_handler.clone(),
             timed_event_handler: timed_event_handler.clone(),
-            interaction_handler: interaction_handler.clone(),
             drawing_objects_handler: drawing_objects_handler.clone(),
             orders_count: Default::default(),
             market_event_sender: market_event_sender.clone(),
@@ -156,7 +149,6 @@ impl FundForgeStrategy {
 
         initialize_static(
             timed_event_handler,
-            interaction_handler,
             drawing_objects_handler
         ).await;
 

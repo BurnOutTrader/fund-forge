@@ -26,7 +26,6 @@ use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
 use crate::drawing_objects::drawing_object_handler::DrawingObjectHandler;
 use crate::indicators::indicator_handler::IndicatorHandler;
-use crate::interaction_handler::InteractionHandler;
 use crate::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -119,19 +118,28 @@ pub async fn add_buffer(time: DateTime<Utc>, event: StrategyEvent) {
     EVENT_BUFFER.lock().await.add_event(time, event);
 }
 
-/*// could potentially make a buffer using a receiver, this can reduce the handlers to 1
-pub async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_duration: Option<Duration>) {
+// could potentially make a buffer using a receiver, this can reduce the handlers to 1
+pub async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_duration: Duration, start_time: DateTime<Utc>) {
     let mut receiver = receiver;
     tokio::task::spawn(async move {
-        let mut open_bars: DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>> = DashMap::new();
+
         let mut buffer = StrategyEventBuffer::new();
+        let mut buffer_send_time = start_time + buffer_duration;
         while let Some((time, event)) = receiver.recv().await {
-            buffer.add_event(time, event);
+            if Utc::now() < buffer_send_time {
+                buffer.add_event(time, event);
+            } else {
+                buffer.add_event(time, event);
+                buffer.clear();
+            }
         }
     });
+
+    let mut open_bars: DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>> = DashMap::new();
+    // have another receiver for time slices
 }
 
-*/
+
 #[inline(always)]
 pub async fn extend_buffer(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
     let mut buffer = EVENT_BUFFER.lock().await;
@@ -160,7 +168,6 @@ pub fn unsubscribe_primary_subscription_updates(stream_name: &str) {
 }
 
 pub static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
-static INTERACTION_HANDLER: OnceCell<Arc<InteractionHandler>> = OnceCell::new();
 static TIMED_EVENT_HANDLER: OnceCell<Arc<TimedEventHandler>> = OnceCell::new();
 static DRAWING_OBJECTS_HANDLER: OnceCell<Arc<DrawingObjectHandler>> = OnceCell::new();
 
@@ -684,14 +691,10 @@ pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>, ev
 }
 pub async fn initialize_static(
     timed_event_handler: Arc<TimedEventHandler>,
-    interaction_handler: Arc<InteractionHandler>,
     drawing_objects_handler: Arc<DrawingObjectHandler>,
 ) {
     let _ = TIMED_EVENT_HANDLER.get_or_init(|| {
         timed_event_handler
-    }).clone();
-    let _ = INTERACTION_HANDLER.get_or_init(|| {
-        interaction_handler
     }).clone();
     let _ = DRAWING_OBJECTS_HANDLER.get_or_init(|| {
         drawing_objects_handler

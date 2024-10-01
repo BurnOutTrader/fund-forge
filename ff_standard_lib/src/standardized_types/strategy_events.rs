@@ -16,20 +16,6 @@ use rkyv::validation::validators::DefaultValidator;
 use rkyv::vec::ArchivedVec;
 use crate::indicators::indicator_handler::IndicatorEvents;
 use crate::standardized_types::accounts::position::PositionUpdateEvent;
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-
-/// Used to determine if a strategy takes certain event inputs from the Ui.
-/// A trader can still effect the strategy via the broker, but the strategy will not take any input from the Ui unless in SemiAutomated mode.
-/// In replays this allows us to signal when the event was created by the strategy or the Ui.
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Copy)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
-pub enum StrategyInteractionMode {
-    /// Takes subscription and orders input from the ui as well as programmatically
-    SemiAutomated,
-    /// Takes no input from the Ui
-    Automated,
-}
 
 /*#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Copy)]
 #[archive(
@@ -109,7 +95,6 @@ pub enum StrategyEvent {
     /// - `TimeSlice`: The time slice data.
     TimeSlice(TimeSlice),
 
-    //IndicatorSlice(OwnerId, IndicatorResults),
     ShutdownEvent(String),
 
     WarmUpComplete,
