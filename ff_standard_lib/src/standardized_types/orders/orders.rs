@@ -267,7 +267,7 @@ impl Order {
             quantity_ordered: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
-            limit_price: Some(trigger_price),
+            limit_price: Some(limit_price),
             trigger_price: Some(trigger_price),
             side,
             order_type: OrderType::StopLimit,
@@ -535,7 +535,7 @@ impl fmt::Display for OrderUpdateEvent {
             OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason } => {
                 write!(f, "Order Rejected: Brokerage: {}, Account ID: {}, Order ID: {}. Reason: {}", brokerage, account_id, order_id, reason)
             }
-            OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, order } => {
+            OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, .. } => {
                 write!(f, "Order Updated: Brokerage: {}, Account ID: {}, Order ID: {}", brokerage, account_id, order_id)
             }
             OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason } => {

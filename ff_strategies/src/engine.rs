@@ -220,6 +220,7 @@ impl HistoricalEngine {
 
     /// Feeds the historical data to the strategy, along with any events that were created.
     /// Simulates trading with a live buffer, where we catch events for x duration before forwarding to the strategy
+    #[allow(unused_assignments)]
     async fn historical_data_feed_buffered(
         &mut self,
         month_years: BTreeMap<i32, DateTime<Utc>>,

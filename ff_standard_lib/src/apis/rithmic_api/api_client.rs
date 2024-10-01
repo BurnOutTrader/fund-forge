@@ -6,6 +6,7 @@ use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
+#[allow(unused_imports)]
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, RequestLoginInfo, RequestPnLPositionSnapshot, RequestProductCodes, ResponseAccountRmsInfo};
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::stream::SplitStream;
@@ -24,7 +25,6 @@ use crate::helpers::get_data_folder;
 use crate::servers::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::data_server_messaging::{FundForgeError, DataServerResponse};
 use crate::standardized_types::enums::{Exchange, MarketType, Resolution, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
@@ -117,7 +117,7 @@ impl RithmicClient {
         let data_vendor = DataVendor::Rithmic(system.clone());
         let credentials = RithmicClient::rithmic_credentials(&brokerage).unwrap();
         let client = RithmicApiClient::new(credentials.clone(), app_name, app_version, aggregated_quotes, server_domains_toml).unwrap();
-        let mut client = Self {
+        let client = Self {
             brokerage,
             data_vendor,
             system,
@@ -165,15 +165,15 @@ impl RithmicClient {
         client
     }
 
-    pub fn is_long(&self, account_id: AccountId, symbol_name: SymbolName) -> bool {
+    pub fn is_long(&self, _account_id: AccountId, _symbol_name: SymbolName) -> bool {
         todo!()
     }
 
-    pub fn is_short(&self, account_id: AccountId, symbol_name: SymbolName) -> bool {
+    pub fn is_short(&self, _account_id: AccountId, _symbol_name: SymbolName) -> bool {
         todo!()
     }
 
-    pub fn is_flat(&self, account_id: AccountId, symbol_name: SymbolName) -> bool {
+    pub fn is_flat(&self, _account_id: AccountId, _symbol_name: SymbolName) -> bool {
         todo!()
     }
 
@@ -220,7 +220,7 @@ impl RithmicClient {
                 let file_path = format!("{}/rithmic_credentials/{}", data_folder, file);
                 match RithmicCredentials::load_credentials_from_file(&file_path) {
                     Ok(file) => Ok(file),
-                    Err(e) => Err(FundForgeError::ServerErrorDebug(format!("Failed to load credentials for: {}", broker)))
+                    Err(_e) => Err(FundForgeError::ServerErrorDebug(format!("Failed to load credentials for: {}", broker)))
                 }
             },
             _ => Err(FundForgeError::ServerErrorDebug(format!("{} Incorrect brokerage to load rithmic credentials", broker)))
@@ -235,6 +235,7 @@ impl RithmicClient {
         self.client.send_message(plant, message).await
     }
 
+    #[allow(dead_code)]
     async fn intermittent(&self) {
         //spawan a task, sleepuntil x minutes then runstartup, data upaters etc
     }
@@ -250,28 +251,28 @@ impl RithmicClient {
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
-    async fn symbols_response(&self, mode: StrategyMode, _stream_name: String, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn symbols_response(&self, _mode: StrategyMode, _stream_name: String, _market_type: MarketType, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn account_info_response(&self, mode: StrategyMode, _stream_name: String, _account_id: AccountId, callback_id: u64) -> DataServerResponse {
+    async fn account_info_response(&self, _mode: StrategyMode, _stream_name: String, _account_id: AccountId, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn symbol_info_response(&self, mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
+    async fn symbol_info_response(&self, _mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn margin_required_response(&self,  mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _quantity: Volume, _callback_id: u64) -> DataServerResponse {
+    async fn margin_required_response(&self,  _mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _quantity: Volume, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
 
-    async fn accounts_response(&self, mode: StrategyMode, stream_name: String, callback_id: u64) -> DataServerResponse {
+    async fn accounts_response(&self, _mode: StrategyMode, _stream_name: String, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 }
-
+#[allow(dead_code)]
 #[async_trait]
 impl VendorApiResponse for RithmicClient {
     async fn symbols_response(&self, mode: StrategyMode, stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse{
@@ -283,7 +284,7 @@ impl VendorApiResponse for RithmicClient {
             StrategyMode::LivePaperTrading | StrategyMode::Live => {
                 match market_type {
                     MarketType::Futures(exchange) => {
-                        let req = RequestProductCodes {
+                        let _req = RequestProductCodes {
                             template_id: 111 ,
                             user_msg: vec![stream_name, callback_id.to_string()],
                             exchange: Some(exchange.to_string()),
@@ -298,7 +299,7 @@ impl VendorApiResponse for RithmicClient {
         todo!()
     }
 
-    async fn resolutions_response(&self, mode: StrategyMode, _stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn resolutions_response(&self, mode: StrategyMode, _stream_name: String, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
         let subs = match mode {
             StrategyMode::Backtest => {
                 vec![]
@@ -319,19 +320,19 @@ impl VendorApiResponse for RithmicClient {
         }
     }
 
-    async fn markets_response(&self, mode: StrategyMode, _stream_name: String, _callback_id: u64) -> DataServerResponse {
+    async fn markets_response(&self, _mode: StrategyMode, _stream_name: String, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn decimal_accuracy_response(&self, mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
+    async fn decimal_accuracy_response(&self, _mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn tick_size_response(&self, mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
+    async fn tick_size_response(&self, _mode: StrategyMode, _stream_name: String, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn data_feed_subscribe(&self, mode: StrategyMode,stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, _mode: StrategyMode,_stream_name: String, _subscription: DataSubscription, _sender: Sender<DataServerResponse>) -> DataServerResponse {
        /* let req = RequestMarketDataUpdate {
             template_id: 100,
             user_msg: vec![],
@@ -402,11 +403,11 @@ impl VendorApiResponse for RithmicClient {
         todo!()
     }
 
-    async fn data_feed_unsubscribe(&self, mode: StrategyMode,_stream_name: &str, _subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self, _mode: StrategyMode,_stream_name: &str, _subscription: DataSubscription) -> DataServerResponse {
         todo!()
     }
 
-    async fn base_data_types_response(&self, mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+    async fn base_data_types_response(&self, _mode: StrategyMode, _stream_name: StreamName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 }

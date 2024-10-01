@@ -124,7 +124,7 @@ pub async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_d
     tokio::task::spawn(async move {
 
         let mut buffer = StrategyEventBuffer::new();
-        let mut buffer_send_time = start_time + buffer_duration;
+        let buffer_send_time = start_time + buffer_duration;
         while let Some((time, event)) = receiver.recv().await {
             if Utc::now() < buffer_send_time {
                 buffer.add_event(time, event);
@@ -135,7 +135,7 @@ pub async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_d
         }
     });
 
-    let mut open_bars: DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>> = DashMap::new();
+    let _open_bars: DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>> = DashMap::new();
     // have another receiver for time slices
 }
 

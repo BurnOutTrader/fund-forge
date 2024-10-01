@@ -137,7 +137,7 @@ impl SubscriptionHandler {
                     match new_subscription.base_data_type {
                         BaseDataType::Ticks => {
                             self.tick_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                            if let (mut tick_window) = self.tick_history.get_mut(&subscription).unwrap() {
+                            if let Some(mut tick_window) = self.tick_history.get_mut(&subscription) {
                                 for data in window.history {
                                     match data {
                                         BaseDataEnum::Tick(tick) => tick_window.value_mut().add(tick),
@@ -148,7 +148,7 @@ impl SubscriptionHandler {
                         }
                         BaseDataType::Quotes => {
                             self.quote_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                            if let (mut quote_window) = self.quote_history.get_mut(&subscription).unwrap() {
+                            if let Some(mut quote_window) = self.quote_history.get_mut(&subscription) {
                                 for data in window.history {
                                     match data {
                                         BaseDataEnum::Quote(quote) => quote_window.value_mut().add(quote),
@@ -159,7 +159,7 @@ impl SubscriptionHandler {
                         }
                         BaseDataType::QuoteBars => {
                             self.bar_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                            if let (mut bar_window) = self.bar_history.get_mut(&subscription).unwrap() {
+                            if let Some(mut bar_window) = self.bar_history.get_mut(&subscription) {
                                 for data in window.history {
                                     match data {
                                         BaseDataEnum::QuoteBar(quote) => bar_window.value_mut().add(quote),
@@ -170,7 +170,7 @@ impl SubscriptionHandler {
                         }
                         BaseDataType::Candles => {
                             self.candle_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                            if let (mut candle_window) = self.candle_history.get_mut(&subscription).unwrap() {
+                            if let Some(mut candle_window) = self.candle_history.get_mut(&subscription) {
                                 for data in window.history {
                                     match data {
                                         BaseDataEnum::Candle(candle) => candle_window.value_mut().add(candle),
@@ -181,7 +181,7 @@ impl SubscriptionHandler {
                         }
                         BaseDataType::Fundamentals => {
                             self.fundamental_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                            if let (mut fundamental_window) = self.fundamental_history.get_mut(&subscription).unwrap() {
+                            if let Some(mut fundamental_window) = self.fundamental_history.get_mut(&subscription) {
                                 for data in window.history {
                                     match data {
                                         BaseDataEnum::Fundamental(funda) => fundamental_window.value_mut().add(funda),

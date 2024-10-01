@@ -1,5 +1,4 @@
 use chrono::Utc;
-use ff_standard_lib::server_connections::ConnectionType;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
@@ -77,7 +76,7 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
     let address = SocketAddr::new(options.listener_address, options.port);
-    let async_server_handle = async_server(config.into(), address).await;
+    let async_server_handle = async_server(config.into(), address, options.data_folder).await;
 
     let async_result = async_server_handle.await;
 
@@ -88,7 +87,7 @@ async fn main() -> io::Result<()> {
     Ok(())
 }
 
-pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) -> JoinHandle<()> {
+pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr, _data_folder: PathBuf) -> JoinHandle<()> {
     const LENGTH: usize = 8;
     task::spawn(async move {
         let acceptor = TlsAcceptor::from(Arc::new(config));

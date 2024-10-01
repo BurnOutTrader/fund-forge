@@ -1,8 +1,3 @@
-[package]
-name = "fund-forge"
-version = "0.1.0"
-edition = "2021"
-authors = ["Kevin Monaghan"]
 [workspace]
 members = [
     "ff_standard_lib",
@@ -15,20 +10,3 @@ members = [
 
 
 
-[dependencies]
-ff_rithmic_api = "0.1.6"
-ff_standard_lib = { path = "ff_standard_lib" }
-ff_strategies = { path = "ff_strategies" }
-ff_data_server = { path = "ff_data_server"}
-test_strategy = { path = "test_strategy" }
-ff_strategy_registry = {path = "ff_strategy_registry"}
-tokio = "*"
-chrono = "*"
-chrono-tz = "0.10.0"
-async-std ="*"
-futures = "0.3.30"
-prost = "0.13.3"
-tokio-tungstenite = "0.23.1"
-tungstenite = "0.23.0"
-rust_decimal_macros ="*"
-rust_decimal = "*"

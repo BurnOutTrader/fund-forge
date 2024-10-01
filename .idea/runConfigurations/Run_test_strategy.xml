@@ -14,6 +14,8 @@
     <option name="redirectInputPath" value="" />
     <method v="2">
       <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      <option name="RunConfigurationTask" enabled="true" run_configuration_name="build standard lib" run_configuration_type="CargoCommandRunConfiguration" />
+      <option name="RunConfigurationTask" enabled="true" run_configuration_name="build ff_strategies" run_configuration_type="CargoCommandRunConfiguration" />
     </method>
   </configuration>
 </component>

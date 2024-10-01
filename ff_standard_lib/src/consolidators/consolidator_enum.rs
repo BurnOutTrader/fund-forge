@@ -8,10 +8,6 @@ use crate::standardized_types::enums::{Resolution, StrategyMode, SubscriptionRes
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Duration, Utc};
-use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::base_data::candle::Candle;
-use crate::standardized_types::base_data::quotebar::QuoteBar;
-use crate::standardized_types::time_slices::TimeSlice;
 
 pub enum ConsolidatorEnum {
     Count(CountConsolidator),
@@ -129,7 +125,7 @@ impl ConsolidatorEnum {
         mut consolidator: ConsolidatorEnum,
         to_time: DateTime<Utc>,
         history_to_retain: i32,
-        strategy_mode: StrategyMode,
+        _strategy_mode: StrategyMode,
     ) -> (ConsolidatorEnum, RollingWindow<BaseDataEnum>) {
         let subscription = consolidator.subscription();
         let vendor_resolutions = filter_resolutions(
@@ -163,7 +159,7 @@ impl ConsolidatorEnum {
         let primary_history = range_data(from_time, to_time, base_subscription.clone()).await;
 
         let mut history = RollingWindow::new(history_to_retain as usize);
-        for (time, time_slice) in primary_history {
+        for (_time, time_slice) in primary_history {
             for base_data in time_slice.iter() {
                 let consolidated_data = consolidator.update(&base_data);
                 if let Some(closed_data) = consolidated_data.closed_data {

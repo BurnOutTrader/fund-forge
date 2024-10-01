@@ -45,7 +45,7 @@ impl TestApiClient {
 
 #[async_trait]
 impl BrokerApiResponse for TestApiClient {
-    async fn symbols_response(&self, mode: StrategyMode, _stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn symbols_response(&self, _mode: StrategyMode, _stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
         DataServerResponse::Symbols {
             callback_id,
             symbols: vec![
@@ -57,7 +57,7 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
-    async fn account_info_response(&self, mode: StrategyMode, _stream_name: String, account_id: AccountId, callback_id: u64) -> DataServerResponse {
+    async fn account_info_response(&self, _mode: StrategyMode, _stream_name: String, account_id: AccountId, callback_id: u64) -> DataServerResponse {
         let account_info = AccountInfo {
             brokerage: Brokerage::Test,
             cash_value: dec!(100000),
@@ -81,7 +81,7 @@ impl BrokerApiResponse for TestApiClient {
 
     async fn symbol_info_response(
         &self,
-        mode: StrategyMode,
+        _mode: StrategyMode,
         _stream_name: String,
         symbol_name: SymbolName,
         callback_id: u64
@@ -108,7 +108,7 @@ impl BrokerApiResponse for TestApiClient {
 
     async fn margin_required_response(
         &self,
-        mode: StrategyMode,
+        _mode: StrategyMode,
         _stream_name: String,
         symbol_name: SymbolName,
         quantity: Volume,
@@ -134,14 +134,14 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
-    async fn accounts_response(&self, mode: StrategyMode,stream_name: String, callback_id: u64) -> DataServerResponse {
+    async fn accounts_response(&self, _mode: StrategyMode,_stream_name: String, callback_id: u64) -> DataServerResponse {
        DataServerResponse::Accounts {callback_id, accounts: vec!["TestAccount1".to_string(), "TestAccount2".to_string()]}
     }
 }
 
 #[async_trait]
 impl VendorApiResponse for TestApiClient {
-    async fn symbols_response(&self,  mode: StrategyMode, _stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse{
+    async fn symbols_response(&self,  _mode: StrategyMode, _stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse{
         DataServerResponse::Symbols {
             callback_id,
             symbols: vec![
@@ -153,7 +153,7 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn resolutions_response(&self, mode: StrategyMode, _stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn resolutions_response(&self, _mode: StrategyMode, _stream_name: String, market_type: MarketType, callback_id: u64) -> DataServerResponse {
         let res = SubscriptionResolutionType {
             base_data_type: BaseDataType::Quotes,
             resolution: Resolution::Instant,
@@ -165,30 +165,30 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn markets_response(&self, mode: StrategyMode, _stream_name: String, callback_id: u64) -> DataServerResponse {
+    async fn markets_response(&self, _mode: StrategyMode, _stream_name: String, callback_id: u64) -> DataServerResponse {
         DataServerResponse::Markets {
             callback_id,
             markets: vec![MarketType::Forex],
         }
     }
 
-    async fn decimal_accuracy_response(&self, mode: StrategyMode, _stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
+    async fn decimal_accuracy_response(&self, _mode: StrategyMode, _stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        let _symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         DataServerResponse::DecimalAccuracy {
             callback_id,
             accuracy: 5,
         }
     }
 
-    async fn tick_size_response(&self,  mode: StrategyMode, _stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
+    async fn tick_size_response(&self,  _mode: StrategyMode, _stream_name: String, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        let _symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         DataServerResponse::TickSize {
             callback_id,
             tick_size: dec!(0.00001),
         }
     }
 
-    async fn data_feed_subscribe(&self,  mode: StrategyMode, stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self,  _mode: StrategyMode, stream_name: String, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
         let available_subscription_1 = DataSubscription::new(SymbolName::from("AUD-CAD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
         let available_subscription_2 = DataSubscription::new(SymbolName::from("EUR-USD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
         if subscription != available_subscription_1 && subscription != available_subscription_2 {
@@ -244,7 +244,7 @@ impl VendorApiResponse for TestApiClient {
         DataServerResponse::SubscribeResponse{ success: true, subscription: subscription_clone_2.clone(), reason: None}
     }
 
-    async fn data_feed_unsubscribe(&self,  mode: StrategyMode, stream_name: &str, subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self,  _mode: StrategyMode, stream_name: &str, subscription: DataSubscription) -> DataServerResponse {
         if let Some(broadcaster) = self.data_feed_broadcasters.get(&subscription) {
             broadcaster.unsubscribe(stream_name);
             return DataServerResponse::UnSubscribeResponse{ success: true, subscription, reason: None}
@@ -252,7 +252,7 @@ impl VendorApiResponse for TestApiClient {
         DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("There is no active subscription for: {}", subscription))}
     }
 
-    async fn base_data_types_response(&self,  mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+    async fn base_data_types_response(&self,  _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         DataServerResponse::BaseDataTypes {
             callback_id,
             base_data_types: vec![BaseDataType::Quotes],

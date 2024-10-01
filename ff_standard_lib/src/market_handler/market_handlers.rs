@@ -108,7 +108,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                     ASK_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
                 }
                 MarketMessageEnum::BaseDataUpdate(base_data ) => {
-                    update_base_data(base_data.clone(), &time);
+                    update_base_data(base_data.clone());
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time, is_buffered).await;
                     }
@@ -116,7 +116,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
                 }
                 MarketMessageEnum::TimeSliceUpdate(time_slice) => {
                     for base_data in time_slice.iter() {
-                        update_base_data(base_data.clone(), &time);
+                        update_base_data(base_data.clone());
                     }
                     historical_time_slice_ledger_updates(time_slice.clone(), time);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
@@ -263,7 +263,7 @@ pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, acco
     sender
 }
 
-fn update_base_data(base_data_enum: BaseDataEnum, time: &DateTime<Utc>) {
+fn update_base_data(base_data_enum: BaseDataEnum) {
     match base_data_enum {
         BaseDataEnum::Candle(candle) => {
             LAST_PRICE.insert(candle.symbol.name, candle.close);

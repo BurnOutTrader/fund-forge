@@ -100,6 +100,8 @@ async fn handle_disconnect(address_string: AddressString, mode: StrategyMode) {
     broadcast(strategy_shutdown.to_bytes()).await;
 }
 
+#[allow(unused)]
+#[allow(unused_assignments)]
 pub async fn handle_strategies(
     address_string: AddressString,
     sender: Arc<SecondaryDataSender>,
@@ -126,6 +128,8 @@ pub async fn handle_strategies(
 
         let receiver = receiver.clone();
         let mut listener = receiver.lock().await;
+
+
         let mut good_shutdown = false;
 
         while let Some(data) = listener.receive().await {
@@ -137,14 +141,14 @@ pub async fn handle_strategies(
                     Err(_) => return,
                 };
                 match request {
-                    StrategyRegistryForward::StrategyEventUpdates(utc_time_stamp, slice) => {
+              /*      StrategyRegistryForward::StrategyEventUpdates(utc_time_stamp, slice) => {
                         let response = RegistryGuiResponse::StrategyEventUpdates(
                             address_string.clone(),
                             utc_time_stamp.clone(),
                             slice,
                         );
                         broadcast(response.to_bytes()).await
-                    }
+                    }*/
                     StrategyRegistryForward::ShutDown(_last_time) => {
                         let response = StrategyResponse::ShutDownAcknowledged(address_string.clone());
                         match sender.send(&response.to_bytes()).await {
@@ -152,6 +156,8 @@ pub async fn handle_strategies(
                             Err(_) => {}
                         }
                         handle_disconnect(address_string.clone(), mode.clone()).await;
+
+
                         good_shutdown = true;
                     }
                 }

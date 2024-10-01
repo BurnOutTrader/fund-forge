@@ -3,19 +3,17 @@ use std::net::SocketAddr;
 use ff_standard_lib::helpers::converters::load_as_bytes;
 use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use ff_standard_lib::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, DataServerRequest, DataServerResponse, StreamRequest, StreamResponse};
+use ff_standard_lib::standardized_types::data_server_messaging::{BaseDataPayload, FundForgeError, DataServerRequest, DataServerResponse, StreamRequest};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::traits::bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
-use std::sync::Arc;
 use dashmap::DashMap;
-use ff_rithmic_api::systems::RithmicSystem;
 use structopt::lazy_static::lazy_static;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::sync::{mpsc};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio_rustls::server::TlsStream;
@@ -296,7 +294,7 @@ async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: WriteHal
 
             // Write the response to the stream
             match writer.write_all(&prefixed_msg).await {
-                Err(e) => {
+                Err(_e) => {
                     // Handle the error (log it or take some other action)
                 }
                 Ok(_) => {
@@ -317,7 +315,7 @@ async fn stream_response(mode: StrategyMode, stream_name: String, request: Strea
                 DataVendor::Test => {
                     subscription.symbol.data_vendor.data_feed_subscribe(mode, stream_name, subscription.clone(), sender).await
                 }
-                DataVendor::Rithmic(system) => {
+                DataVendor::Rithmic(_system) => {
                     panic!()
                 }
             }

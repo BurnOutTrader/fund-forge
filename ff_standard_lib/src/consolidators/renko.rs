@@ -10,6 +10,7 @@ use crate::standardized_types::subscriptions::DataSubscription;
 //todo, just have different kinds of renko consolidators for the different kinds of renko
 /// A consolidator that produces a new piece of data after a certain number of data points have been added.
 /// Supports Ticks only.
+#[allow(dead_code)]
 pub struct RenkoConsolidator {
     current_data: Candle,
     pub(crate) subscription: DataSubscription,

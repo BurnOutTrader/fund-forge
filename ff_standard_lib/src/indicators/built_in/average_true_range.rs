@@ -179,6 +179,6 @@ impl Indicators for AverageTrueRange {
     }
 
     fn data_required_warmup(&self) -> u64 {
-        (self.history.len() as u64 + self.period)
+        self.history.len() as u64 + self.period
     }
 }

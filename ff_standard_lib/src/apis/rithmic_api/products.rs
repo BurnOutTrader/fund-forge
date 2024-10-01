@@ -1,5 +1,6 @@
 use ahash::AHashMap;
 
+#[allow(dead_code)]
 pub fn futures_code_to_name() -> AHashMap<&'static str, &'static str> {
     let mut futures = AHashMap::new();
 
@@ -128,6 +129,7 @@ pub fn get_code_to_exchange_map() -> HashMap<&'static str, Exchange> {
     code_to_exchange_map
 }
 
+#[allow(dead_code)]
 // Function to input contract code and get the exchange
 pub fn get_exchange_by_code(code: &str) -> Option<Exchange> {
     let code_to_exchange_map = get_code_to_exchange_map();

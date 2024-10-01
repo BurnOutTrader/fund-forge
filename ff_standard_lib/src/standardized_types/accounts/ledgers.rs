@@ -3,7 +3,6 @@ use std::path::Path;
 use chrono::{DateTime, TimeZone, Utc};
 use crate::standardized_types::enums::{PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::SymbolName;
-use crate::traits::bytes::Bytes;
 use dashmap::DashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use csv::Writer;
@@ -54,9 +53,9 @@ pub(crate) fn calculate_historical_pnl(
     tick_size: Price,
     value_per_tick: Price,
     quantity: Volume,
-    pnl_currency: Currency,
-    account_currency: Currency,
-    time: DateTime<Utc>,
+    _pnl_currency: Currency,
+    _account_currency: Currency,
+    _time: DateTime<Utc>,
 ) -> Price {
     // Calculate the price difference based on position side
     let raw_ticks = match side {
@@ -112,7 +111,7 @@ impl Ledger {
             symbol_info: DashMap::new(),
             open_pnl: DashMap::new(),
             booked_pnl: dec!(0.0),
-            mode: StrategyMode::Backtest,
+            mode: strategy_mode,
         };
         ledger
     }

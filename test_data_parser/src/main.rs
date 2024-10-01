@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
-use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, Symbol};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
 use std::fs::File;
 use std::io::{self, BufRead};
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
@@ -18,17 +18,17 @@ use ff_standard_lib::standardized_types::enums::{MarketType, Resolution};
 /// 1. Put all the csv data into one folder
 /// 2. Configure the subscription properties and directory path
 fn main() -> Result<(), Box<dyn Error>> {
-    let YOUR_FOLDER_PATH: String = "/Users/kevmonaghan/Downloads".to_string();
-    let SYMBOL_NAME: String = "AUD-CAD".to_string();
+    let your_folder_path: String = "/Users/kevmonaghan/Downloads".to_string();
+    let symbol_name: String = "AUD-CAD".to_string();
 
     let symbol = Symbol {
-        name: SYMBOL_NAME, //CHANGE THIS
+        name: symbol_name, //CHANGE THIS
         market_type: MarketType::Forex,
         data_vendor: DataVendor::Test,
     };
 
-    let dir_path = format!("{}/{}", YOUR_FOLDER_PATH, symbol.name); //CHANGE THIS
-    let base_data_path = PathBuf::from(format!("{}/data/parsed", YOUR_FOLDER_PATH)); //CHANGE THIS
+    let dir_path = format!("{}/{}", your_folder_path, symbol.name); //CHANGE THIS
+    let base_data_path = PathBuf::from(format!("{}/data/parsed", your_folder_path)); //CHANGE THIS
 
     if !base_data_path.exists() {
         fs::create_dir_all(&base_data_path)?;
