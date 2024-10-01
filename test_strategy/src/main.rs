@@ -106,6 +106,7 @@ pub async fn on_data_received(
             Some(Color::new(50,50,50))
         ).await,
     );
+    //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
     strategy.subscribe_indicator(heikin_atr_5, true).await;
     let mut count = 0;
     let brokerage = Brokerage::Test;
