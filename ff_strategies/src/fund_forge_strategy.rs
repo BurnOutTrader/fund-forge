@@ -607,11 +607,6 @@ impl FundForgeStrategy {
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
     pub async fn subscribe(&self, subscription: DataSubscription, history_to_retain: usize, fill_forward: bool) {
-        if let Some(buffer) = self.buffer_resolution {
-            if subscription.resolution.as_nanos() < buffer.as_nanos() as i64 {
-                panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
-            }
-        }
         self
             .subscription_handler
             .subscribe(subscription.clone(), self.time_utc(), fill_forward, history_to_retain, true)
