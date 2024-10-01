@@ -149,7 +149,7 @@ pub async fn on_data_received(
                                     let msg = format!("{} {} 10 Candles Ago Close: {}, {}", candle_10_ago.symbol.name, candle_10_ago.resolution, candle_10_ago.close, candle_10_ago.time_closed_local(strategy.time_zone()));
                                     println!("{}", msg.as_str().on_bright_black());*/
 
-                                    if candle.resolution == Resolution::Minutes(20) && candle.symbol.name == "AUD-CAD" {
+                                    if candle.resolution == Resolution::Minutes(20) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
                                         let is_short = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
 
@@ -214,7 +214,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "EUR-USD" {
+                                    if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "EUR-USD" && quotebar.symbol.data_vendor == DataVendor::Test {
                                         let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
                                         let is_long: bool = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
 
