@@ -2,7 +2,7 @@ use std::fmt;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
-use crate::apis::brokerage::broker_enum::Brokerage;
+use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::accounts::ledgers::{AccountId, Currency};

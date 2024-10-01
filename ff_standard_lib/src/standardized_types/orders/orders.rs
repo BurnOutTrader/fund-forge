@@ -8,7 +8,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use rust_decimal_macros::dec;
-use crate::apis::brokerage::broker_enum::Brokerage;
+use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::new_types::{Price, Volume};
 
 #[derive(

@@ -22,7 +22,7 @@ use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::str::FromStr;
-use crate::apis::data_vendor::datavendor_enum::DataVendor;
+use crate::standardized_types::datavendor_enum::DataVendor;
 
 /// Enum for the different types of base data
 /// This is the main_window enum for all the different types of base data

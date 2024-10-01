@@ -8,7 +8,7 @@ use std::fmt;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 use rust_decimal_macros::dec;
-use crate::apis::data_vendor::datavendor_enum::DataVendor;
+use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, TimeString, Volume};
 

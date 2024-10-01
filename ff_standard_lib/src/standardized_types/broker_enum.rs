@@ -38,7 +38,7 @@ impl FromStr for Brokerage {
 }
 
 pub mod client_side_brokerage {
-    use crate::apis::brokerage::broker_enum::Brokerage;
+    use crate::standardized_types::broker_enum::Brokerage;
     use tokio::sync::oneshot;
     use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
     use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};

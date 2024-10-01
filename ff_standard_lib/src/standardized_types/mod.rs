@@ -11,5 +11,7 @@ pub mod subscriptions;
 pub mod time_slices;
 pub mod symbol_info;
 pub mod new_types;
+pub mod datavendor_enum;
+pub mod broker_enum;
 
 

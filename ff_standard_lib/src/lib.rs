@@ -1,3 +1,4 @@
+#[cfg(feature = "server")]
 pub mod apis;
 pub mod app;
 pub mod consolidators;

@@ -8,7 +8,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use csv::Writer;
 use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
-use crate::apis::brokerage::broker_enum::Brokerage;
+use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::accounts::position::Position;
 use crate::standardized_types::symbol_info::SymbolInfo;
 use serde_derive::{Deserialize, Serialize};
@@ -181,7 +181,7 @@ pub(crate) mod historical_ledgers {
     use rust_decimal::Decimal;
     use rust_decimal::prelude::FromPrimitive;
     use rust_decimal_macros::dec;
-    use crate::apis::brokerage::broker_enum::Brokerage;
+    use crate::standardized_types::broker_enum::Brokerage;
     use crate::market_handler::market_handlers::SYMBOL_INFO;
     use crate::server_connections::add_buffer;
     use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};

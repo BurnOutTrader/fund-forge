@@ -8,7 +8,7 @@ use std::io::{self, BufRead};
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use ff_standard_lib::apis::data_vendor::datavendor_enum::DataVendor;
+use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;

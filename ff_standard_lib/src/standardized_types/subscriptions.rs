@@ -7,7 +7,7 @@ use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Se
 use std::fmt;
 use std::fmt::{Debug, Display, Error, Formatter};
 use tokio::sync::oneshot;
-use crate::apis::data_vendor::datavendor_enum::DataVendor;
+use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::server_connections::{send_request, ConnectionType, StrategyRequest};
 use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::standardized_types::new_types::Price;

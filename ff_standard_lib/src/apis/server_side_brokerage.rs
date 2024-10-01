@@ -3,16 +3,13 @@ use crate::standardized_types::data_server_messaging::{DataServerResponse, FundF
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::enums::{MarketType, StrategyMode};
 use async_trait::async_trait;
-use crate::apis::brokerage::broker_enum::Brokerage;
-#[cfg(feature = "server")]
+use crate::standardized_types::broker_enum::Brokerage;
 use crate::apis::rithmic_api::api_client::RITHMIC_CLIENTS;
 use crate::apis::StreamName;
-#[cfg(feature = "server")]
 use crate::apis::test_api::api_client::TEST_CLIENT;
 use crate::standardized_types::new_types::Volume;
 
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
-#[cfg(feature = "server")]
 #[async_trait]
 pub trait BrokerApiResponse: Sync + Send {
     async fn symbols_response(
@@ -56,7 +53,6 @@ pub trait BrokerApiResponse: Sync + Send {
 }
 
 /// Responses
-#[cfg(feature = "server")]
 #[async_trait]
 impl BrokerApiResponse for Brokerage {
     async fn symbols_response(
