@@ -9,15 +9,14 @@ use std::sync::Arc;
 use structopt::lazy_static::lazy_static;
 use tokio::sync::{Mutex, RwLock};
 use ff_standard_lib::servers::bytes_broadcaster::{BroadCastType, BytesBroadcaster};
-use ff_standard_lib::standardized_types::data_server_messaging::AddressString;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 
 lazy_static! {
-    static ref LIVE_CONNECTED_STRATEGIES: Arc<RwLock<Vec<AddressString>>> = Arc::new(RwLock::new(Vec::new()));
-    static ref BACKTEST_CONNECTED_STRATEGIES: Arc<RwLock<Vec<AddressString>>> = Arc::new(RwLock::new(Vec::new()));
-    static ref LIVE_PAPER_CONNECTED_STRATEGIES: Arc<RwLock<Vec<AddressString>>> = Arc::new(RwLock::new(Vec::new()));
+    static ref LIVE_CONNECTED_STRATEGIES: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
+    static ref BACKTEST_CONNECTED_STRATEGIES: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
+    static ref LIVE_PAPER_CONNECTED_STRATEGIES: Arc<RwLock<Vec<String>>> = Arc::new(RwLock::new(Vec::new()));
     static ref GUI_BROADCATSER: BytesBroadcaster = BytesBroadcaster::new(BroadCastType::Concurrent);
-    static ref STRATEGY_EVENTS_BUFFER: Arc<RwLock<HashMap<AddressString, Arc<RwLock<BTreeMap<i64, StrategyEventBuffer >>>>>> = Arc::new(RwLock::new(HashMap::new()));
+    static ref STRATEGY_EVENTS_BUFFER: Arc<RwLock<HashMap<String, Arc<RwLock<BTreeMap<i64, StrategyEventBuffer >>>>>> = Arc::new(RwLock::new(HashMap::new()));
 }
 
 pub async fn broadcast(bytes: Vec<u8>) {
@@ -36,28 +35,28 @@ pub async fn unsubscribe(id: usize) {
     GUI_BROADCATSER.unsubscribe(id).await
 }
 
-pub async fn get_live_connected_strategies() -> Vec<AddressString> {
+pub async fn get_live_connected_strategies() -> Vec<String> {
     LIVE_CONNECTED_STRATEGIES.read().await.clone()
 }
 
-pub async fn get_backtest_connected_strategies() -> Vec<AddressString> {
+pub async fn get_backtest_connected_strategies() -> Vec<String> {
     BACKTEST_CONNECTED_STRATEGIES.read().await.clone()
 }
 
-pub async fn get_live_paper_connected_strategies() -> Vec<AddressString> {
+pub async fn get_live_paper_connected_strategies() -> Vec<String> {
     LIVE_PAPER_CONNECTED_STRATEGIES.read().await.clone()
 }
 
-pub async fn get_events_buffer() -> BTreeMap<AddressString, BTreeMap<i64, StrategyEventBuffer>> {
+pub async fn get_events_buffer() -> BTreeMap<String, BTreeMap<i64, StrategyEventBuffer>> {
     let buffer = STRATEGY_EVENTS_BUFFER.read().await;
-    let mut return_buffer: BTreeMap<AddressString, BTreeMap<i64, StrategyEventBuffer>> = BTreeMap::new();
+    let mut return_buffer: BTreeMap<String, BTreeMap<i64, StrategyEventBuffer>> = BTreeMap::new();
     for (id, map) in &*buffer {
         return_buffer.insert(id.clone(), map.read().await.clone());
     }
     return_buffer
 }
 
-async fn handle_registration(address_string: AddressString, mode: StrategyMode) -> Result<RegistrationResponse, RegistrationResponse> {
+async fn handle_registration(address_string: String, mode: StrategyMode) -> Result<RegistrationResponse, RegistrationResponse> {
     let registry = match mode {
         StrategyMode::Backtest => {
             BACKTEST_CONNECTED_STRATEGIES.clone()
@@ -83,7 +82,7 @@ async fn handle_registration(address_string: AddressString, mode: StrategyMode) 
     }
 }
 
-async fn handle_disconnect(address_string: AddressString, mode: StrategyMode) {
+async fn handle_disconnect(address_string: String, mode: StrategyMode) {
     let registry = match mode {
         StrategyMode::Backtest => {
             BACKTEST_CONNECTED_STRATEGIES.clone()
@@ -103,7 +102,7 @@ async fn handle_disconnect(address_string: AddressString, mode: StrategyMode) {
 #[allow(unused)]
 #[allow(unused_assignments)]
 pub async fn handle_strategies(
-    address_string: AddressString,
+    address_string: String,
     sender: Arc<SecondaryDataSender>,
     receiver: Arc<Mutex<SecondaryDataReceiver>>,
     mode: StrategyMode
@@ -150,7 +149,7 @@ pub async fn handle_strategies(
                         broadcast(response.to_bytes()).await
                     }*/
                     StrategyRegistryForward::ShutDown(_last_time) => {
-                        let response = StrategyResponse::ShutDownAcknowledged(address_string.clone());
+                        let response = StrategyResponse::ShutDownAcknowledged;
                         match sender.send(&response.to_bytes()).await {
                             Ok(_) => {}
                             Err(_) => {}

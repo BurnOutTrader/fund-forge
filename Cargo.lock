@@ -1073,6 +1073,7 @@ dependencies = [
  "futures",
  "once_cell",
  "rkyv 0.8.8",
+ "rkyv_derive 0.7.45",
  "rustls",
  "rustls-native-certs",
  "rustls-pemfile",

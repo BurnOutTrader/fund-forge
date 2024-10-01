@@ -5,7 +5,6 @@ use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use std::fmt::{Debug, Display};
-use std::net::{SocketAddr, ToSocketAddrs};
 use rust_decimal::Decimal;
 use crate::apis::brokerage::broker_enum::Brokerage;
 use crate::apis::data_vendor::datavendor_enum::DataVendor;
@@ -19,14 +18,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 /// An Api key String
 pub type ApiKey = String;
 
-#[derive(
-    Clone,
-    Serialize,
-    Deserialize,
-    Archive,
-    Debug,
-    PartialEq,
-)]
+#[derive(Clone, Serialize, Deserialize, Archive, Debug, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum StreamResponse {
@@ -34,19 +26,7 @@ pub enum StreamResponse {
     UnSubscribeBaseData(DataSubscription),
 }
 
-#[derive(
-    Clone,
-    Serialize,
-    Deserialize,
-    Archive,
-    Debug,
-    SerdeSerialize,
-    SerdeDeserialize,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-)]
+#[derive(Clone, Serialize, Deserialize, Archive, Debug, SerdeSerialize, SerdeDeserialize, PartialEq, Eq, PartialOrd, Ord, )]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct AccountState {
@@ -55,17 +35,7 @@ pub struct AccountState {
     equity_available: Decimal
 }
 
-#[derive(
-    Clone,
-    Serialize,
-    Deserialize,
-    Archive,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-)]
+#[derive(Clone, Serialize, Deserialize, Archive, Debug, PartialEq, Eq, PartialOrd, Ord, )]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum StreamRequest {
@@ -73,56 +43,6 @@ pub enum StreamRequest {
     Subscribe(DataSubscription),
     Unsubscribe(DataSubscription)
 }
-
-/// A socket Address in String format
-#[derive(
-    Clone,
-    Serialize,
-    Deserialize,
-    Archive,
-    Debug,
-    SerdeSerialize,
-    SerdeDeserialize,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash
-)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
-pub struct AddressString(String);
-impl AddressString {
-    pub fn new(s: String) -> Self {
-        AddressString(s)
-    }
-
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-
-    // If you want to consume the AddressString and get the inner String
-    pub fn into_inner(self) -> String {
-        self.0
-    }
-
-    pub fn to_socket_addrs(&self) -> Result<SocketAddr, std::io::Error> {
-        // Attempt to convert the contained string to a SocketAddr
-        // Note: We're assuming only a single address needs to be parsed, not multiple.
-        // This may need to be adjusted depending on your use case.
-        self.0.to_socket_addrs()?.next().ok_or_else(|| {
-            std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid socket address")
-        })
-    }
-}
-
-impl Display for AddressString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-pub enum HistoricalDataReason {}
 
 #[derive(Clone, Serialize, Deserialize, Archive, Debug)]
 #[archive(compare(PartialEq), check_bytes, )]
@@ -202,6 +122,10 @@ pub enum DataServerRequest {
         brokerage: Brokerage,
         symbol_name: SymbolName
     },
+    PrimarySubscriptionFor {
+        callback_id: u64,
+        subscription: DataSubscription
+    },
     Accounts{callback_id: u64, brokerage: Brokerage},
 }
 
@@ -235,6 +159,7 @@ impl DataServerRequest {
             DataServerRequest::OrderRequest { .. } => {}
             DataServerRequest::MarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Accounts { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::PrimarySubscriptionFor { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -354,6 +279,8 @@ DataServerResponse {
 
     Accounts{callback_id: u64, accounts: Vec<AccountId>},
 
+    PrimarySubscriptionFor{callback_id: u64, primary_subscription: DataSubscription},
+
     OrderUpdates(OrderUpdateEvent)
 }
 
@@ -367,7 +294,7 @@ impl Bytes<DataServerResponse> for DataServerResponse {
         }
     }
     fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
+        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
         vec.into()
     }
 }
@@ -395,7 +322,8 @@ impl DataServerResponse {
             DataServerResponse::TimeSliceUpdates(_) => None,
             DataServerResponse::Accounts {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::BaseDataUpdates(_) => None,
-            DataServerResponse::OrderUpdates(_) => None
+            DataServerResponse::OrderUpdates(_) => None,
+            DataServerResponse::PrimarySubscriptionFor {callback_id, ..} => Some(callback_id.clone()),
         }
     }
 }

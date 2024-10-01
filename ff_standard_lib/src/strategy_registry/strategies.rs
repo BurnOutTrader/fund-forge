@@ -1,4 +1,4 @@
-use crate::standardized_types::data_server_messaging::{AddressString, FundForgeError};
+use crate::standardized_types::data_server_messaging::FundForgeError;
 use crate::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 
@@ -6,7 +6,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum StrategyResponse {
-    ShutDownAcknowledged(AddressString),
+    ShutDownAcknowledged,
 }
 
 impl Bytes<Self> for StrategyResponse {
@@ -34,11 +34,6 @@ pub enum StrategyRegistryForward {
 }
 
 impl Bytes<Self> for StrategyRegistryForward {
-    fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 100000>(self).unwrap();
-        vec.into()
-    }
-
     fn from_bytes(archived: &[u8]) -> Result<StrategyRegistryForward, FundForgeError> {
         // If the archived bytes do not end with the delimiter, proceed as before
         match rkyv::from_bytes::<StrategyRegistryForward>(archived) {
@@ -46,5 +41,10 @@ impl Bytes<Self> for StrategyRegistryForward {
             Ok(response) => Ok(response),
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
         }
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
+        vec.into()
     }
 }

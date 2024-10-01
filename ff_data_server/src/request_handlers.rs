@@ -247,6 +247,9 @@ pub async fn data_server_manage_async_requests(
                         order_response(request).await;
                     },
 
+                    DataServerRequest::PrimarySubscriptionFor { .. } => {
+                        todo!()
+                    }
                 };
             });
         }
