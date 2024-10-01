@@ -1,3 +1,8 @@
+# Obvious solution
+1. Make subscription events a Result type that is returned directly to the calling function and not a `StrategyEvent`.
+The strategy knows its trying to subscribe, it is better to know right away if that attempt failed, rather than handle an event.
+2. Since the Strategy Registry is being overhauled, make it use its own Strategy Buffer type, to allow diversification of requirements
+
 ### Problems 
 The static buffer is an issue, some events don't need to be buffered and cause deadlock when added after warm up
 This issue is directly related to warming up subscriptions and indicators, somehow adding a buffer event to the public static buffer causes Mutex dead lock...
