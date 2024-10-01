@@ -13,22 +13,19 @@ Community [discord](https://discord.gg/MNXH2jEExV)
 The working directory must be the strategy directory, or the strategy will not find its resources' folder.
 [see](./test_strategy/README.md)
 
-The engine is designed to allow simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators and
-managing orders, connections and data streams. To allow for simple strategy design and management similar to
-common retail trading platforms.
+The engine is designed to provide simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators,
+or managing orders, brokers and data streams. 
 
 The engine can consolidate data into any bar type and resolution automatically using simple methods like `strategy.subscribe()` and `strategy.subscribe_indicator()`.
 
-This allows people familiar with concepts from common retail trading platforms to start building strategies without having to understand the entire code base.
-Simply build using high level abstractions like you would in any familiar commercial trading platform, but enjoy the benefits of the rust programing language.
+This allows people familiar with concepts from common automated trading platforms to start building strategies without having to understand the entire code base.
+Simply build strategies using higher level abstractions like you would in any familiar commercial trading platform, but enjoy the benefits of the rust programing language.
 
-The only major difference in fund forge is the idea of the ff_data_server, a server which hosts your api instances locally or on a remote machine and allows multiple strategies to connect or disconnect while persisting historical data from a centralized location
+The only major difference in fund forge is the idea of the ff_data_server, a server which hosts your api instances locally or on a remote machine and allows multiple strategies to connect or disconnect while persisting historical data from a centralized location.
+It is possible to have multiple data server instances and it is easy to configure different servers to host specific broker or data vendor API's 
 
-It is easy to build and run strategies across multiple machines, build indicators and add brokers or data feeds, including fundamental data.
-
-Take a quick look at [strategy features here](./ff_strategies/README.md).
-
-I will create a YouTube video on setting up the platform for development purposes in the near future.
+It is easy to build and run strategies which can be deployed and communicate across multiple individual machines, docker containers or simply run everything locally.
+It is easy to build new indicators and add new brokers or data feeds, including fundamental data feeds.
 
 There are event driven handlers and a buffering system for maintaining speed and consistency from back testing to live trading.
 
@@ -36,13 +33,14 @@ There is an Option for using a buffered or unbuffered engine in backtesting and 
 in the unbuffered version events are forwarded to the strategy receiver as soon as they occur. In the buffered version events are buffered for X Duration and forwarded as a `StrategyEventBuffer`.
 The strategy will choose which engine to use depending on the initializing parameter `buffering_duration: Option<Duration>`.
 
-The strategy engine will be started in the background depending on the StrategyMode. 
+The correct strategy engine will be started in the background depending on the StrategyMode. 
 The strategy can be shared between threads as an `Arc<FundForgeStrategy>` and maintain full functionality, allowing the strategy logic to be delegated between custom user functions and async architectures.
 
-After creating the strategy instance using `FundForgeStrategy::initialize();` we will receive data and events as an `StrategyEventBuffer` in our event_receiver.
-Events are a vec collection of all `StrategyEvent`s that occurred within a buffer period.
+After creating the strategy instance using `FundForgeStrategy::initialize();` we will receive data and events as a `StrategyEventBuffer` in our event_receiver.
+The `StrategyEventBuffer` is an Iterable object with a collection of all `StrategyEvent`s that occurred within a buffer period.
 
-We have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
+We also have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
+Take a more in depth look at [strategy features here](./ff_strategies/README.md).
 ```rust
 //let strategy = FundForgeStrategy::initialize(); //parameters excluded for brevity
 pub async fn on_data_received(
