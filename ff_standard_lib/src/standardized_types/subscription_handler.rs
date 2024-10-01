@@ -691,6 +691,7 @@ impl SymbolSubscriptionHandler {
     /// 2. Live or Live paper, it will subscribe to the most appropriate lowest resolution for the new subscription.
     /// Example for Live: if you subscribed to 1 min QuoteBars, it will try to subscribe to quote data, if that fails it will try to subscribe to the lowest res quotebar data.
     /// for consolidating candles it will try to get tick data, failing that it will try to get quotes and failing that it will try to get other candles, as a last resort it will try to get quote bars.
+    /// todo simplify live subscribing by just sending base subscription request to data server, and await callback for primary feed.
     async fn subscribe(
         &self,
         current_time: DateTime<Utc>,
