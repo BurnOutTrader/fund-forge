@@ -882,7 +882,10 @@ THIS IS BEING OVERHAULED CURRENTLY
 - The best bid and best offer will always replace and == order book level 0
 - The order books are split into BID_BOOK and ASK_BOOK
 - There is no point in having 2 feeds for the same SymbolName from multiple `DataVendors`, just use the most accurate or fastest updating vendor.
-
+- If we have Quote order order book data, backtest fills will be simulated as realistically as possible, this will depend on volume and the number of book levels.
+- If we have quotes with no volume we will fill at the bid or ask. 
+- If we have a full order book, we will consume volume ascending or descending book levels until we fill our order and we will fill at the average price, this assumes we get to absorb all volume.
+- A historical currency converter api will be made for backtesting, this will allow currency conversions depending on the symbols pnl currency into the account currency.
 ```rust
 async fn example() {
    //this is being updated currently
