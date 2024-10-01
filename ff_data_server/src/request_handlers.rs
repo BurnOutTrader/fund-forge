@@ -70,14 +70,14 @@ async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
 }
 
 lazy_static! {
-    pub static ref STREAM_CALLBACK_SENDERS: DashMap<StreamName , Sender<DataServerResponse>> = DashMap::new();
+    pub static ref STREAM_CALLBACK_SENDERS: DashMap<u16 , Sender<DataServerResponse>> = DashMap::new();
 }
 
 pub async fn data_server_manage_async_requests(
     strategy_mode: StrategyMode,
     stream: TlsStream<TcpStream>
 ) {
-    let stream_name = get_ip_addresses(&stream).await.to_string();
+    let stream_name = get_ip_addresses(&stream).await.port();
     println!("stream name: {}", stream_name);
     let (read_half, write_half) = io::split(stream);
     let strategy_mode = strategy_mode;
@@ -125,7 +125,7 @@ pub async fn data_server_manage_async_requests(
                         callback_id,
                         symbol_name
                     } => handle_callback(
-                        || data_vendor.decimal_accuracy_response(mode, stream_name.to_string(), symbol_name, callback_id),
+                        || data_vendor.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id),
                         sender.clone()
                     ).await,
 
@@ -134,7 +134,7 @@ pub async fn data_server_manage_async_requests(
                         brokerage,
                         callback_id
                     } => handle_callback(
-                        || brokerage.symbol_info_response(mode, stream_name.to_string(), symbol_name, callback_id),
+                        || brokerage.symbol_info_response(mode, stream_name, symbol_name, callback_id),
                         sender.clone()
                     ).await,
 
@@ -152,7 +152,7 @@ pub async fn data_server_manage_async_requests(
                         market_type,
                         callback_id,
                     } => handle_callback(
-                        || data_vendor.symbols_response(mode,stream_name.to_string(), market_type, callback_id),
+                        || data_vendor.symbols_response(mode,stream_name, market_type, callback_id),
                         sender.clone()
                     ).await,
 
@@ -161,7 +161,7 @@ pub async fn data_server_manage_async_requests(
                         callback_id,
                         market_type,
                     } => handle_callback(
-                        || brokerage.symbols_response(mode,stream_name.to_string(), market_type, callback_id),
+                        || brokerage.symbols_response(mode,stream_name, market_type, callback_id),
                         sender.clone()
                     ).await,
 
@@ -170,7 +170,7 @@ pub async fn data_server_manage_async_requests(
                         data_vendor,
                         market_type,
                     } => handle_callback(
-                        || data_vendor.resolutions_response(mode, stream_name.to_string(), market_type, callback_id),
+                        || data_vendor.resolutions_response(mode, stream_name, market_type, callback_id),
                         sender.clone()
                     ).await,
 
@@ -179,7 +179,7 @@ pub async fn data_server_manage_async_requests(
                         brokerage,
                         account_id,
                     } => handle_callback(
-                        || brokerage.account_info_response(mode, stream_name.to_string(), account_id, callback_id),
+                        || brokerage.account_info_response(mode, stream_name, account_id, callback_id),
                         sender.clone()
                     ).await,
 
@@ -187,7 +187,7 @@ pub async fn data_server_manage_async_requests(
                         callback_id,
                         data_vendor,
                     } => handle_callback(
-                        || data_vendor.markets_response(mode, stream_name.to_string(), callback_id),
+                        || data_vendor.markets_response(mode, stream_name, callback_id),
                         sender.clone()
                     ).await,
 
@@ -196,21 +196,21 @@ pub async fn data_server_manage_async_requests(
                         data_vendor,
                         symbol_name,
                     } => handle_callback(
-                        || data_vendor.tick_size_response(mode, stream_name.to_string(), symbol_name, callback_id),
+                        || data_vendor.tick_size_response(mode, stream_name, symbol_name, callback_id),
                         sender.clone()).await,
 
                     DataServerRequest::Accounts {
                         callback_id,
                         brokerage
                     } => handle_callback(
-                        || brokerage.accounts_response(mode, stream_name.to_string(), callback_id),
+                        || brokerage.accounts_response(mode, stream_name, callback_id),
                         sender.clone()).await,
 
                     DataServerRequest::BaseDataTypes {
                         callback_id,
                         data_vendor
                     } => handle_callback(
-                        || data_vendor.base_data_types_response(mode, stream_name.to_string(), callback_id),
+                        || data_vendor.base_data_types_response(mode, stream_name, callback_id),
                         sender.clone()).await,
 
                     DataServerRequest::MarginRequired {
@@ -219,7 +219,7 @@ pub async fn data_server_manage_async_requests(
                         symbol_name,
                         quantity
                     } => handle_callback(
-                        || brokerage.margin_required_response(mode, stream_name.to_string(), symbol_name, quantity, callback_id),
+                        || brokerage.margin_required_response(mode, stream_name, symbol_name, quantity, callback_id),
                         sender.clone()).await,
 
 
@@ -232,7 +232,7 @@ pub async fn data_server_manage_async_requests(
                         }
                         println!("{:?}", request);
                         handle_callback(
-                            || stream_response(mode, stream_name.clone(), request, sender.clone()),
+                            || stream_response(mode, stream_name, request, sender.clone()),
                             sender.clone()).await
                     },
 
@@ -308,7 +308,7 @@ async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: WriteHal
     })
 }
 
-async fn stream_response(mode: StrategyMode, stream_name: String, request: StreamRequest, sender: Sender<DataServerResponse>) -> DataServerResponse {
+async fn stream_response(mode: StrategyMode, stream_name: StreamName, request: StreamRequest, sender: Sender<DataServerResponse>) -> DataServerResponse {
     match request {
         StreamRequest::AccountUpdates(_, _) => {
             panic!()

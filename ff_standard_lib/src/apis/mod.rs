@@ -7,4 +7,4 @@ pub mod brokerage;
 pub mod data_vendor;
 pub mod test_api;
 
-pub type StreamName = String;
+pub type StreamName = u16;

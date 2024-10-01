@@ -14,34 +14,34 @@ pub trait VendorApiResponse: Sync + Send {
     async fn symbols_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse;
     async fn resolutions_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse;
     async fn markets_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         callback_id: u64
     ) -> DataServerResponse;
     async fn decimal_accuracy_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64
     ) -> DataServerResponse;
     async fn tick_size_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64
     ) -> DataServerResponse;
@@ -55,7 +55,7 @@ pub trait VendorApiResponse: Sync + Send {
     async fn data_feed_unsubscribe(
         &self,
         mode: StrategyMode,
-        stream_name: &str,
+        stream_name: StreamName,
         subscription: DataSubscription,
     ) -> DataServerResponse;
     async fn base_data_types_response(
@@ -72,7 +72,7 @@ impl VendorApiResponse for DataVendor {
     async fn symbols_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse {
@@ -90,7 +90,7 @@ impl VendorApiResponse for DataVendor {
     async fn resolutions_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse {
@@ -108,7 +108,7 @@ impl VendorApiResponse for DataVendor {
     async fn markets_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         callback_id: u64
     ) -> DataServerResponse {
         match self {
@@ -125,7 +125,7 @@ impl VendorApiResponse for DataVendor {
     async fn decimal_accuracy_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64
     ) -> DataServerResponse {
@@ -143,7 +143,7 @@ impl VendorApiResponse for DataVendor {
     async fn tick_size_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64
     ) -> DataServerResponse {
@@ -161,7 +161,7 @@ impl VendorApiResponse for DataVendor {
     async fn data_feed_subscribe(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         subscription: DataSubscription,
         sender: Sender<DataServerResponse>
     ) -> DataServerResponse {
@@ -179,7 +179,7 @@ impl VendorApiResponse for DataVendor {
     async fn data_feed_unsubscribe(
         &self,
         mode: StrategyMode,
-        stream_name: &str,
+        stream_name: StreamName,
         subscription: DataSubscription
     ) -> DataServerResponse {
         match self {

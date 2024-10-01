@@ -6,6 +6,7 @@ use std::str::FromStr;
 use ff_rithmic_api::systems::RithmicSystem;
 use crate::apis::brokerage::server_side_brokerage::BrokerApiResponse;
 use crate::apis::rithmic_api::api_client::RITHMIC_CLIENTS;
+use crate::apis::StreamName;
 use crate::apis::test_api::TEST_CLIENT;
 use crate::standardized_types::accounts::ledgers::AccountId;
 use crate::standardized_types::data_server_messaging::{DataServerResponse, FundForgeError};
@@ -127,7 +128,7 @@ impl BrokerApiResponse for Brokerage {
     async fn symbols_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse {
@@ -145,7 +146,7 @@ impl BrokerApiResponse for Brokerage {
     async fn account_info_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         account_id: AccountId,
         callback_id: u64
     ) -> DataServerResponse {
@@ -163,7 +164,7 @@ impl BrokerApiResponse for Brokerage {
     async fn symbol_info_response(
         &self,
         mode: StrategyMode,
-        stream_name: String,
+        stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64
     ) -> DataServerResponse {
@@ -178,7 +179,7 @@ impl BrokerApiResponse for Brokerage {
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
 
-    async fn margin_required_response(&self,  mode: StrategyMode, stream_name: String, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn margin_required_response(&self,  mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         match self {
             Brokerage::Rithmic(system) => {
                 if let Some(client) = RITHMIC_CLIENTS.get(system) {
@@ -190,7 +191,7 @@ impl BrokerApiResponse for Brokerage {
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
 
-    async fn accounts_response(&self, mode: StrategyMode, stream_name: String, callback_id: u64) -> DataServerResponse {
+    async fn accounts_response(&self, mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         match self {
             Brokerage::Rithmic(system) => {
                 if let Some(client) = RITHMIC_CLIENTS.get(system) {
