@@ -5,9 +5,11 @@ This issue is directly related to warming up subscriptions and indicators, someh
  - Possibly indicator events
 
 ## Solutions
-- All 3 fns are called directly by the strategy instance's associated fns, this is likely the cause of the dead-lock on the buffer mutex,
-The obvious solution is to just return the events to the calling functions and the strategy struct can add to the buffer after the functions have ran.
-- If above still dead locks, send events directly to the strategy without buffering, subscription events are not time sensitive so synchronization is not an issue.
+- All 3 fns are called directly by the strategy instance's associated fns, this is likely the cause of the deadlock on the buffer mutex,
+The obvious solution is to just return the events to the calling functions and the strategy struct can add to the buffer after the functions have run.
+- If above still deadlocks, send events directly to the strategy without buffering, subscription events are not time sensitive so synchronization is not an issue.. 
+- these events are more of a debug issue and could possibly be moved to a simple `Result<>` return type... they are only considered strategy events for the sake of the strategy registry GUI connections.
+- There is the option to just use the strategy sender directly and not buffer events, but then synchronization could become an issue.
 
 
 ## Problem fns
