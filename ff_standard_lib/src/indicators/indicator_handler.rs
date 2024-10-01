@@ -45,7 +45,7 @@ impl IndicatorHandler {
         handler
     }
 
-    pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) {
+    pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) { //todo, just return a result directly, no  add buffer
         let subscription = indicator.subscription();
 
         if !self.indicators.contains_key(&subscription) {
@@ -70,11 +70,12 @@ impl IndicatorHandler {
         self.subscription_map.insert(name.clone(), subscription.clone());
     }
 
-    pub async fn remove_indicator(&self, time: DateTime<Utc>,indicator: &IndicatorName) {
+    pub async fn remove_indicator(&self, time: DateTime<Utc>,indicator: &IndicatorName)  { //todo, just return a result directly, no  add buffer
         if let Some(map) =
             self.indicators.get_mut(&self.subscription_map.get(indicator).unwrap())
         {
             if map.remove(indicator).is_some() {
+                //todo if unsubscribe indicator causes problem we need to remove this
                 add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorRemoved(indicator.clone()))).await;
                 self.subscription_map.remove(indicator);
             }
