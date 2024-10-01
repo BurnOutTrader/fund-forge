@@ -106,7 +106,7 @@ pub async fn on_data_received(
             Some(Color::new(50,50,50))
         ).await,
     );
-    strategy.subscribe_indicator(heikin_atr_5, false).await;
+    strategy.subscribe_indicator(heikin_atr_5, true).await;
     let mut count = 0;
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
