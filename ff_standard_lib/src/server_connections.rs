@@ -119,7 +119,7 @@ pub async fn add_buffer(time: DateTime<Utc>, event: StrategyEvent) {
     EVENT_BUFFER.lock().await.add_event(time, event);
 }
 
-// todo, make a buffer using a receiver, this can reduce the handlers to 1
+/*// could potentially make a buffer using a receiver, this can reduce the handlers to 1
 pub async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_duration: Option<Duration>) {
     let mut receiver = receiver;
     tokio::task::spawn(async move {
@@ -131,7 +131,7 @@ pub async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_d
     });
 }
 
-
+*/
 #[inline(always)]
 pub async fn extend_buffer(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
     let mut buffer = EVENT_BUFFER.lock().await;
@@ -375,7 +375,7 @@ pub async fn response_handler_unbuffered(
                                                 forward_buffer().await;
                                             }
                                             false => {
-                                                let event = DataSubscriptionEvent::FailedSubscribed(subscription.clone(), reason.unwrap());
+                                                let event = DataSubscriptionEvent::FailedToSubscribe(subscription.clone(), reason.unwrap());
                                                 let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                                 add_buffer(Utc::now(), event_slice).await;
                                                 forward_buffer().await;
@@ -565,7 +565,7 @@ pub async fn response_handler_buffered(
                                                 add_buffer(Utc::now(), event_slice).await;
                                             }
                                             false => {
-                                                let event = DataSubscriptionEvent::FailedSubscribed(subscription.clone(), reason.unwrap());
+                                                let event = DataSubscriptionEvent::FailedToSubscribe(subscription.clone(), reason.unwrap());
                                                 let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                                 add_buffer(Utc::now(), event_slice).await;
                                             }
