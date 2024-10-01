@@ -286,7 +286,7 @@ impl DataSubscription {
 pub enum DataSubscriptionEvent {
     Subscribed(DataSubscription),
     Unsubscribed(DataSubscription),
-    FailedSubscribed(DataSubscription, String),
+    FailedToSubscribe(DataSubscription, String),
     FailedUnSubscribed(DataSubscription, String),
 }
 impl fmt::Display for DataSubscriptionEvent {
@@ -294,7 +294,7 @@ impl fmt::Display for DataSubscriptionEvent {
         match self {
             DataSubscriptionEvent::Subscribed(sub) => write!(f, "Subscribed to: {}", sub),
             DataSubscriptionEvent::Unsubscribed(sub) => write!(f, "Unsubscribed from: {}", sub),
-            DataSubscriptionEvent::FailedSubscribed(sub, reason) => {
+            DataSubscriptionEvent::FailedToSubscribe(sub, reason) => {
                 write!(f, "Failed to subscribe to: {}. Reason: {}", sub, reason)
             }
             DataSubscriptionEvent::FailedUnSubscribed(sub, reason) => {

@@ -98,7 +98,7 @@ impl SubscriptionHandler {
             strategy_subscriptions.push(new_subscription.clone());
         } else {
             let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
-            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription.clone(), msg))).await;
+            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), msg))).await;
         }
 
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
@@ -132,66 +132,72 @@ impl SubscriptionHandler {
                 fill_forward
             ).await;
 
-        if let Some(windows) = windows {
-            for (subscription, window) in windows {
-                //todo need to iter windows and get out the correct type of data
-                match new_subscription.base_data_type {
-                    BaseDataType::Ticks => {
-                        self.tick_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let (mut tick_window) = self.tick_history.get_mut(&subscription).unwrap() {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::Tick(tick) => tick_window.value_mut().add(tick),
-                                    _ => {}
+        match windows {
+            Ok(windows) => {
+                for (subscription, window) in windows {
+                    //todo need to iter windows and get out the correct type of data
+                    match new_subscription.base_data_type {
+                        BaseDataType::Ticks => {
+                            self.tick_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                            if let (mut tick_window) = self.tick_history.get_mut(&subscription).unwrap() {
+                                for data in window.history {
+                                    match data {
+                                        BaseDataEnum::Tick(tick) => tick_window.value_mut().add(tick),
+                                        _ => {}
+                                    }
                                 }
                             }
                         }
-                    }
-                    BaseDataType::Quotes => {
-                        self.quote_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let (mut quote_window) = self.quote_history.get_mut(&subscription).unwrap() {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::Quote(quote) => quote_window.value_mut().add(quote),
-                                    _ => {}
+                        BaseDataType::Quotes => {
+                            self.quote_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                            if let (mut quote_window) = self.quote_history.get_mut(&subscription).unwrap() {
+                                for data in window.history {
+                                    match data {
+                                        BaseDataEnum::Quote(quote) => quote_window.value_mut().add(quote),
+                                        _ => {}
+                                    }
                                 }
                             }
                         }
-                    }
-                    BaseDataType::QuoteBars => {
-                        self.bar_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let (mut bar_window) = self.bar_history.get_mut(&subscription).unwrap() {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::QuoteBar(quote) => bar_window.value_mut().add(quote),
-                                    _ => {}
+                        BaseDataType::QuoteBars => {
+                            self.bar_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                            if let (mut bar_window) = self.bar_history.get_mut(&subscription).unwrap() {
+                                for data in window.history {
+                                    match data {
+                                        BaseDataEnum::QuoteBar(quote) => bar_window.value_mut().add(quote),
+                                        _ => {}
+                                    }
                                 }
                             }
                         }
-                    }
-                    BaseDataType::Candles => {
-                        self.candle_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let (mut candle_window) = self.candle_history.get_mut(&subscription).unwrap() {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::Candle(candle) => candle_window.value_mut().add(candle),
-                                    _ => {}
+                        BaseDataType::Candles => {
+                            self.candle_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                            if let (mut candle_window) = self.candle_history.get_mut(&subscription).unwrap() {
+                                for data in window.history {
+                                    match data {
+                                        BaseDataEnum::Candle(candle) => candle_window.value_mut().add(candle),
+                                        _ => {}
+                                    }
                                 }
                             }
                         }
-                    }
-                    BaseDataType::Fundamentals => {
-                        self.fundamental_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
-                        if let (mut fundamental_window) = self.fundamental_history.get_mut(&subscription).unwrap() {
-                            for data in window.history {
-                                match data {
-                                    BaseDataEnum::Fundamental(funda) => fundamental_window.value_mut().add(funda),
-                                    _ => {}
+                        BaseDataType::Fundamentals => {
+                            self.fundamental_history.insert(subscription.clone(), RollingWindow::new(history_to_retain));
+                            if let (mut fundamental_window) = self.fundamental_history.get_mut(&subscription).unwrap() {
+                                for data in window.history {
+                                    match data {
+                                        BaseDataEnum::Fundamental(funda) => fundamental_window.value_mut().add(funda),
+                                        _ => {}
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription))).await;
+            }
+            Err(e) => {
+                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedToSubscribe(new_subscription, e))).await;
             }
         }
 
@@ -686,29 +692,25 @@ impl SymbolSubscriptionHandler {
         history_to_retain: usize,
         strategy_mode: StrategyMode,
         fill_forward: bool
-    ) -> Option<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>> {
+    ) -> Result<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>, String> {
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
-            return None;
+            return Err("Symbol handler does not handle Fundamental subcsriptions".to_string());
         }
 
         if let Some(subscription) = self.primary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
             if *subscription.value() == new_subscription {
-                let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
-                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
-                return None
+                return Err(format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name))
             }
         }
         if let Some(subscriptions) = self.secondary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
             if let Some(_subscription) = subscriptions.get(&new_subscription) {
-                let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
-                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
-                return None
+                return Err(format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name))
             }
         }
         let is_warmed_up =   is_warmup_complete();
 
         let mut returned_windows = AHashMap::new();
-        let load_data_closure = |closure_subscription: &DataSubscription| -> Option<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>>{
+        let load_data_closure = |closure_subscription: &DataSubscription| -> Result<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>, String>{
             if is_warmed_up {
                 let from_time = match closure_subscription.resolution == Resolution::Instant {
                     true => {
@@ -728,10 +730,10 @@ impl SymbolSubscriptionHandler {
                     }
                 }
                 returned_windows.insert(closure_subscription.clone(), history);
-                return Some(returned_windows)
+                return Ok(returned_windows)
             }
             returned_windows.insert(closure_subscription.clone(), RollingWindow::new(history_to_retain));
-            Some(returned_windows)
+            Ok(returned_windows)
         };
 
         // we need to determine if the data vendor has this kind of primary data
@@ -748,9 +750,7 @@ impl SymbolSubscriptionHandler {
         match new_subscription.base_data_type {
             BaseDataType::Ticks => {
                 if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
-                    let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                    add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
-                    return None
+                        Err( format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription))
                 } else {
                     if !self.primary_subscriptions.contains_key(&sub_res_type) {
                         self.primary_subscriptions.insert(sub_res_type.clone(), new_subscription.clone());
@@ -763,9 +763,7 @@ impl SymbolSubscriptionHandler {
             }
             BaseDataType::Quotes => {
                 if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) {
-                    let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                    add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
-                    return None
+                    Err( format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription))
                 } else {
                     if !self.primary_subscriptions.contains_key(&sub_res_type) {
                         self.primary_subscriptions.insert(sub_res_type.clone(), new_subscription.clone());
@@ -780,17 +778,13 @@ impl SymbolSubscriptionHandler {
                 let ideal_subscription = match new_subscription.base_data_type {
                     BaseDataType::QuoteBars => {
                         if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::QuoteBars) {
-                            let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
-                            return None
+                            return Err( format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription))
                         }
                         SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
                     }
                     BaseDataType::Candles => {
                         if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) && !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::Candles) {
-                            let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
-                            return None
+                            return Err(format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription))
                         }
                         if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
                             SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
@@ -826,9 +820,7 @@ impl SymbolSubscriptionHandler {
                                 return load_data_closure(&new_subscription)
                             }
                             false => {
-                                let message = format!("{}: Does not have low enough resolution data to consolidate: {}", new_subscription.symbol.data_vendor, new_subscription);
-                                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, message))).await;
-                                return None
+                                return Err(format!("{}: Does not have low enough resolution data to consolidate: {}", new_subscription.symbol.data_vendor, new_subscription))
                             }
                         }
                     }
@@ -873,7 +865,7 @@ impl SymbolSubscriptionHandler {
                     }
                     returned_windows.insert(new_subscription.clone(), window);
                     add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
-                    return Some(returned_windows)
+                    Ok(returned_windows)
                 } else {
                     let mut returned_windows = AHashMap::new();
                     //if we have quotes we subscribe to quotes
@@ -905,31 +897,18 @@ impl SymbolSubscriptionHandler {
                     }
                     let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone(), new_primary.subscription_resolution_type()).await;
                     let (final_consolidator, window) = match is_warmed_up {
-                        true =>{
-                            let (final_consolidator, window) = ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await;
-                            println!("returned consoldait");
-                                (final_consolidator, window)
-                        },
+                        true =>ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await,
                         false => (consolidator, RollingWindow::new(history_to_retain))
                     };
-                    println!("adding to subsc");
                     self.secondary_subscriptions
                         .entry(new_primary.subscription_resolution_type())
                         .or_insert_with(AHashMap::new)
                         .insert(new_subscription.clone(), final_consolidator);
-                    println!("Added");
                     returned_windows.insert(new_subscription.clone(), window);
-                    println!("Add buffer"); // we lock after this print line
-                   // add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
-                    println!("window");
-                    return Some(returned_windows)
+                    Ok(returned_windows)
                 }
             }
-            BaseDataType::Fundamentals => {
-                let msg = format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription);
-                add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedSubscribed(new_subscription, msg))).await;
-                return None
-            }
+            _ => panic!("This shouldnt be possible")
         }
     }
 
