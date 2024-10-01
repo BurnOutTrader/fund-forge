@@ -149,7 +149,7 @@ pub async fn on_data_received(
                                     let msg = format!("{} {} 10 Candles Ago Close: {}, {}", candle_10_ago.symbol.name, candle_10_ago.resolution, candle_10_ago.close, candle_10_ago.time_closed_local(strategy.time_zone()));
                                     println!("{}", msg.as_str().on_bright_black());*/
 
-                                    if candle.resolution == Resolution::Minutes(20) {
+                                    if candle.resolution == Resolution::Minutes(20) && candle.symbol.name == "AUD-CAD" {
                                         let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
                                         let is_short = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
 
@@ -159,14 +159,14 @@ pub async fn on_data_received(
                                             bars_since_entry_2 = 0;
                                         }
 
+                                        if is_short {
+                                            bars_since_entry_2 += 1;
+                                        }
+
                                         if bars_since_entry_2 > 10
                                             && is_short {
                                             let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Exit Short")).await;
                                             bars_since_entry_2 = 0;
-                                        }
-
-                                        if is_short {
-                                            bars_since_entry_2 += 1;
                                         }
                                     }
 
@@ -214,7 +214,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    if quotebar.resolution == Resolution::Minutes(3) {
+                                    if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "EUR-USD" {
                                         let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
                                         let is_long: bool = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
 
@@ -224,14 +224,14 @@ pub async fn on_data_received(
                                             bars_since_entry_1 = 0;
                                         }
 
+                                        if is_long {
+                                            bars_since_entry_1 += 1;
+                                        }
+
                                         if bars_since_entry_1 > 10
                                             && is_long {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Exit Long")).await;
                                             bars_since_entry_1 = 0;
-                                        }
-
-                                        if is_long {
-                                            bars_since_entry_1 += 1;
                                         }
                                     }
 
