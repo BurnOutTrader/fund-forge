@@ -1,4 +1,6 @@
 
-# If running the strategy in your IDE, the working directory needs to be the strategy directory not fund-forge repo
+**When running the server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.**
+
+**When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.**
 
 ![strategyrunconfig.png](strategyrunconfig.png)

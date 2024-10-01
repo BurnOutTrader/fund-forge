@@ -10,8 +10,11 @@ Community [discord](https://discord.gg/MNXH2jEExV)
 3. navigate to [ff_data_server](./ff_data_server) directory and `cargo run`
 4. navigate to [test_strategy](./test_strategy) directory and `cargo run`
 
-The working directory must be the strategy directory, or the strategy will not find its resources' folder.
-[see](./test_strategy/README.md)
+*When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](./test_strategy/README.md)
+
+*When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](./test_strategy/README.md)
+
+
 
 The engine is designed to provide simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators,
 or managing orders, brokers and data streams. 
