@@ -3,7 +3,7 @@ Community [discord](https://discord.gg/MNXH2jEExV)
 
 **Fund Forge** is an algorithmic trading engine written in Rust.
 
-An algorithmic trading platform written in rust. Focused on backtesting, charting, live trading. With an emphasis for semi-automated strategies. 
+Focused on backtesting, charting, live trading. With an emphasis for semi-automated strategies. 
 
 fund-forge is built to allow simple abstractions for common strategy functionality: trade multiple symbols, with multiple indicators and data streams.
 
