@@ -885,7 +885,7 @@ THIS IS BEING OVERHAULED CURRENTLY
 - If we have Quote order order book data, backtest fills will be simulated as realistically as possible, this will depend on volume and the number of book levels.
 - If we have quotes with no volume we will fill at the bid or ask. 
 - If we have a full order book, we will consume volume ascending or descending book levels until we fill our order and we will fill at the average price, this assumes we get to absorb all volume.
-- A historical currency converter api will be made for backtesting, this will allow currency conversions depending on the symbols pnl currency into the account currency.
+- A historical currency converter api will be made for backtesting, this will allow currency conversions depending on the symbols pnl currency into the account currency for higher accuracy backtesting.
 ```rust
 async fn example() {
    //this is being updated currently
