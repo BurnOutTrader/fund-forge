@@ -77,8 +77,9 @@ async fn main() {
         None,
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading and backtesting.
-        //ToDo: Test Un-Buffered engines vs Buffered
+        //ToDo: Test Un-Buffered engines (None) vs Buffered Some(Duration)
         Some(core::time::Duration::from_millis(100)),
+        //None,
 
         GUI_DISABLED
     ).await;
@@ -148,22 +149,25 @@ pub async fn on_data_received(
                                     let msg = format!("{} {} 10 Candles Ago Close: {}, {}", candle_10_ago.symbol.name, candle_10_ago.resolution, candle_10_ago.close, candle_10_ago.time_closed_local(strategy.time_zone()));
                                     println!("{}", msg.as_str().on_bright_black());*/
 
-                                    let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
-                                    let is_short = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
-                                    if candle.close < last_candle.low
-                                        && !is_short {
-                                        let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Short")).await;
-                                        bars_since_entry_2 = 0;
-                                    }
+                                    if candle.resolution == Resolution::Minutes(20) {
+                                        let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
+                                        let is_short = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
 
-                                    if bars_since_entry_2 > 10
-                                        &&is_short {
-                                        let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Short")).await;
-                                        bars_since_entry_2 = 0;
-                                    }
+                                        if candle.close < last_candle.low
+                                            && !is_short {
+                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Short")).await;
+                                            bars_since_entry_2 = 0;
+                                        }
 
-                                    if is_short {
-                                        bars_since_entry_2 += 1;
+                                        if bars_since_entry_2 > 10
+                                            && is_short {
+                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Exit Short")).await;
+                                            bars_since_entry_2 = 0;
+                                        }
+
+                                        if is_short {
+                                            bars_since_entry_2 += 1;
+                                        }
                                     }
 
                                     if count == 20 {
@@ -172,7 +176,7 @@ pub async fn on_data_received(
                                         let heikin_1_hour = DataSubscription::new_custom(
                                             SymbolName::from("AUD-CAD"),
                                             DataVendor::Test,
-                                            Resolution::Hours(1),
+                                            Resolution::Minutes(20),
                                             MarketType::Forex,
                                             CandleType::HeikinAshi
                                         );
@@ -210,22 +214,25 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
-                                    let is_long: bool = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
-                                    if quotebar.bid_close > last_bar.bid_high
-                                        && !is_long {
-                                        let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
-                                        bars_since_entry_1 = 0;
-                                    }
+                                    if quotebar.resolution == Resolution::Minutes(3) {
+                                        let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
+                                        let is_long: bool = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
 
-                                    if bars_since_entry_1 > 10
-                                        && is_long {
-                                        let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage,dec!(10), String::from("Exit Long")).await;
-                                        bars_since_entry_1 = 0;
-                                    }
+                                        if quotebar.bid_close > last_bar.bid_high
+                                            && !is_long {
+                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
+                                            bars_since_entry_1 = 0;
+                                        }
 
-                                    if is_long {
-                                        bars_since_entry_1 += 1;
+                                        if bars_since_entry_1 > 10
+                                            && is_long {
+                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Exit Long")).await;
+                                            bars_since_entry_1 = 0;
+                                        }
+
+                                        if is_long {
+                                            bars_since_entry_1 += 1;
+                                        }
                                     }
 
                                     count += 1;
