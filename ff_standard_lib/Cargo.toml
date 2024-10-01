@@ -11,7 +11,7 @@ prost-build = "*"
 ff_rithmic_api = "0.1.6"
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
-rkyv = { version =  "0.7.45", features = ["std", "alloc", "validation"] }
+rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }
 bytes = "*"
 zip = "*"
 log = "*"

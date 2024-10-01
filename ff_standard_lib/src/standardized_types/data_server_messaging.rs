@@ -131,7 +131,7 @@ pub enum DataServerRequest {
 
 impl DataServerRequest {
     pub fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 256>(self).unwrap();
+        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
         vec.into()
     }
     pub fn from_bytes(archived: &[u8]) -> Result<DataServerRequest, FundForgeError> {

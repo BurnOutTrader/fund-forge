@@ -27,7 +27,7 @@ impl Bytes<Self> for RegistrationRequest {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 100000>(self).unwrap();
+        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
         vec.into()
     }
 }

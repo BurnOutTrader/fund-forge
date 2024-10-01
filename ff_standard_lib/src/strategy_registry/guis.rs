@@ -23,7 +23,7 @@ impl Bytes<Self> for GuiRequest {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 100000>(self).unwrap();
+        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
         vec.into()
     }
 }
@@ -50,7 +50,7 @@ impl Bytes<Self> for RegistryGuiResponse {
     }
 
     fn to_bytes(&self) -> Vec<u8> {
-        let vec = rkyv::to_bytes::<_, 100000>(self).unwrap();
+        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
         vec.into()
     }
 }
