@@ -126,21 +126,18 @@ impl HistoricalEngine {
         println!("Un-Buffered Engine: Warming up the strategy...");
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
+        let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
+        for subscription in &primary_subscriptions {
+            println!("Un-Buffered Engine: Primary Subscription: {}", subscription);
+        }
+        let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
+        for subscription in &strategy_subscriptions {
+            println!("Un-Buffered Engine: Strategy Subscription: {}", subscription);
+        }
         let mut warm_up_complete = false;
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         'main_loop: for (_, start) in &month_years {
             'month_loop: loop {
-                let primary_subscriptions = subscription_handler.primary_subscriptions().await;
-                for subscription in &primary_subscriptions {
-                    println!("Un-Buffered Engine: Primary Subscription: {}", subscription);
-                }
-                let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                for subscription in &strategy_subscriptions {
-                    println!("Un-Buffered Engine: Strategy Subscription: {}", subscription);
-                }
-
-                println!("Un-Buffered Engine: Primary resolution subscriptions: {:?}", primary_subscriptions);
-
                 println!("Un-Buffered Engine: Preparing TimeSlices For: {}", start.date_naive().format("%B %Y"));
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
@@ -177,9 +174,12 @@ impl HistoricalEngine {
                     let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
                     match self.primary_subscription_updates.try_recv() {
-                        Ok(_) => {
-                            end_month = false;
-                            break 'time_instance_loop
+                        Ok(updates) => {
+                            if updates != primary_subscriptions {
+                                primary_subscriptions = updates;
+                                end_month = false;
+                                break 'time_instance_loop
+                            }
                         }
                         Err(_) => {}
                     }
@@ -233,17 +233,17 @@ impl HistoricalEngine {
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         let mut warm_up_complete = false;
+        let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
+        for subscription in &primary_subscriptions {
+            println!("Buffered Engine: Primary Subscription: {}", subscription);
+        }
+        let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
+        for subscription in &strategy_subscriptions {
+            println!("Buffered Engine: Strategy Subscription: {}", subscription);
+        }
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
             'month_loop: loop {
-                let primary_subscriptions = subscription_handler.primary_subscriptions().await;
-                for subscription in &primary_subscriptions {
-                    println!("Buffered Engine: Primary Subscription: {}", subscription);
-                }
-                let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-                for subscription in &strategy_subscriptions {
-                    println!("Buffered Engine: Strategy Subscription: {}", subscription);
-                }
                 println!("Buffered Engine: Preparing TimeSlices For: {}", start.date_naive().format("%B %Y"));
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
@@ -285,9 +285,12 @@ impl HistoricalEngine {
                     update_historical_timestamp(time.clone());
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
                     match self.primary_subscription_updates.try_recv() {
-                        Ok(_) => {
-                            end_month = false;
-                            break 'time_instance_loop
+                        Ok(updates) => {
+                            if updates != primary_subscriptions {
+                                primary_subscriptions = updates;
+                                end_month = false;
+                                break 'time_instance_loop
+                            }
                         }
                         Err(_) => {}
                     }
