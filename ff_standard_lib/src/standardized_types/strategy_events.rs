@@ -216,6 +216,10 @@ pub enum StrategyControls {
     Start,
     /// Used to set the delay time, to speed up or slow down backtests
     Delay(Option<u64>),
+    /// Use Strings to set custom commands to the strategy
+    Custom(String),
+    /// Send bytes over TCP for larger more complex commands that can be deserialized to concrete types by a u64 identifier
+    CustomBytes(u64, Vec<u8>)
 }
 
 #[derive(Clone, PartialEq, Debug)]

@@ -299,6 +299,8 @@ pub async fn on_data_received(
                         StrategyControls::Stop => {}
                         StrategyControls::Start => {}
                         StrategyControls::Delay(_) => {}
+                        StrategyControls::Custom(_) => {}
+                        StrategyControls::CustomBytes(_, _) => {}
                     }
                 }
 
