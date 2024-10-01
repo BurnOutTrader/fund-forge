@@ -92,13 +92,13 @@ impl SubscriptionHandler {
         fill_forward: bool,
         history_to_retain: usize,
         broadcast: bool
-    ) {
+    ) -> Result<DataSubscriptionEvent, DataSubscriptionEvent> {
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         if !strategy_subscriptions.contains(&new_subscription) {
             strategy_subscriptions.push(new_subscription.clone());
         } else {
             let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
-            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), msg))).await;
+            return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), msg));
         }
 
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
@@ -108,7 +108,7 @@ impl SubscriptionHandler {
                 fundamental_subscriptions.push(new_subscription.clone());
             }
             self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
-            return;
+            return Ok(DataSubscriptionEvent::Subscribed(new_subscription));
         }
 
         if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
@@ -116,8 +116,6 @@ impl SubscriptionHandler {
                 new_subscription.symbol.clone(),
             ).await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
-            //println!("Handler: Subscribed: {}", new_subscription);
-            //todo if have added a new symbol handler we need to register the symbol with the market handler
             let register_msg = MarketMessageEnum::RegisterSymbol(new_subscription.symbol.clone());
             self.market_event_sender.send(register_msg).await.unwrap();
         }
@@ -194,16 +192,14 @@ impl SubscriptionHandler {
                         }
                     }
                 }
-                // this causes a dead-lock
-                //add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription))).await;
+                if broadcast {
+                    self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+                }
+                return Ok(DataSubscriptionEvent::Subscribed(new_subscription));
             }
             Err(e) => {
-                //add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedToSubscribe(new_subscription, e))).await;
+                Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription, e.to_string()))
             }
-        }
-
-        if broadcast {
-            self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
         }
     }
 
@@ -222,7 +218,11 @@ impl SubscriptionHandler {
             }
         }
         for sub in new_subscription {
-           self.subscribe(sub.clone(), current_time.clone(), fill_forward, history_to_retain, false).await;
+           let result = self.subscribe(sub.clone(), current_time.clone(), fill_forward, history_to_retain, false).await;
+            match result {
+                Ok(sub_result) => println!("{}", sub_result),
+                Err(sub_result) =>  eprintln!("{}", sub_result),
+            }
         }
         if broadcast {
             self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
@@ -684,7 +684,13 @@ impl SymbolSubscriptionHandler {
         }
     }
 
-    //todo overhaul again, we will define a primary subsciption type as its own type, ticks and quotes only, then DataSubscriptions will be own object
+    //todo, split this into 5 functions, 1 per base data type tp be more easily read and maintained
+    /// Currently This function works in 1 of 2 ways,
+    /// 1. Backtesting, it will try to subscribe directly to any historical data directly available from the data server, the downside to this would be that you will not have open bars for that subscription as they will always be closed.
+    /// The advantage is backetest speed. we should todo, we should also check here that we don't have a subscription of a lower resolution we can use, its pointless to use serialized bars in this case, might as well consolidate
+    /// 2. Live or Live paper, it will subscribe to the most appropriate lowest resolution for the new subscription.
+    /// Example for Live: if you subscribed to 1 min QuoteBars, it will try to subscribe to quote data, if that fails it will try to subscribe to the lowest res quotebar data.
+    /// for consolidating candles it will try to get tick data, failing that it will try to get quotes and failing that it will try to get other candles, as a last resort it will try to get quote bars.
     async fn subscribe(
         &self,
         current_time: DateTime<Utc>,
@@ -693,34 +699,34 @@ impl SymbolSubscriptionHandler {
         history_to_retain: usize,
         strategy_mode: StrategyMode,
         fill_forward: bool
-    ) -> Result<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>, String> {
+    ) -> Result<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>, DataSubscriptionEvent> {
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
-            return Err("Symbol handler does not handle Fundamental subcsriptions".to_string());
+            return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription, "Symbol handler does not handle Fundamental subcsriptions".to_string()));
         }
 
         if let Some(subscription) = self.primary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
             if *subscription.value() == new_subscription {
-                return Err(format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name))
+                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
             }
         }
         if let Some(subscriptions) = self.secondary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
             if let Some(_subscription) = subscriptions.get(&new_subscription) {
-                return Err(format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name))
+                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
             }
         }
         let is_warmed_up =   is_warmup_complete();
 
         let mut returned_windows = AHashMap::new();
-        let load_data_closure = |closure_subscription: &DataSubscription| -> Result<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>, String>{
+        let load_data_closure = |closure_subscription: &DataSubscription| -> Result<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>, DataSubscriptionEvent>{
             if is_warmed_up {
                 let from_time = match closure_subscription.resolution == Resolution::Instant {
                     true => {
-                        let subtract_duration: Duration = Duration::seconds(2) * history_to_retain as i32;
+                        let subtract_duration: Duration = Duration::seconds(1) * history_to_retain as i32;
                         warm_up_to_time - subtract_duration - Duration::days(5)
                     }
                     false => {
                         let subtract_duration: Duration = closure_subscription.resolution.as_duration() * history_to_retain as i32;
-                        warm_up_to_time - subtract_duration - Duration::days(2)
+                        warm_up_to_time - subtract_duration - Duration::days(5)
                     }
                 };
                 let primary_history = block_on(range_data(from_time, warm_up_to_time, closure_subscription.clone()));
@@ -739,7 +745,7 @@ impl SymbolSubscriptionHandler {
 
         // we need to determine if the data vendor has this kind of primary data
         let is_primary_capable = self.vendor_primary_resolutions.contains(&new_subscription.subscription_resolution_type());
-        if is_primary_capable && strategy_mode == StrategyMode::Backtest  {
+        if is_primary_capable && strategy_mode == StrategyMode::Backtest  { //todo, we should also check here that we don't have a subscription of a lower resolution we can use, its pointless to use serialized bars in this case, might as well consolidate to get more accuracy
             //In backtest mode we can just use the historical data so no need to reconsolidate
             self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
             return load_data_closure(&new_subscription)
@@ -750,7 +756,7 @@ impl SymbolSubscriptionHandler {
         match new_subscription.base_data_type {
             BaseDataType::Ticks => {
                 if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
-                        Err( format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription))
+                         return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
                 } else {
                     if !self.primary_subscriptions.contains_key(&sub_res_type) {
                         self.primary_subscriptions.insert(sub_res_type.clone(), new_subscription.clone());
@@ -763,7 +769,7 @@ impl SymbolSubscriptionHandler {
             }
             BaseDataType::Quotes => {
                 if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) {
-                    Err( format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription))
+                    Err( DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
                 } else {
                     if !self.primary_subscriptions.contains_key(&sub_res_type) {
                         self.primary_subscriptions.insert(sub_res_type.clone(), new_subscription.clone());
@@ -778,37 +784,39 @@ impl SymbolSubscriptionHandler {
                 let ideal_subscription = match new_subscription.base_data_type {
                     BaseDataType::QuoteBars => {
                         if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::QuoteBars) {
-                            return Err( format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription))
+                            return Err( DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
                         }
                         SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
                     }
                     BaseDataType::Candles => {
                         if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) && !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::Candles) {
-                            return Err(format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription))
+                            return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
                         }
-                        if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
-                            SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
-                        } else {
-                            if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)) && new_subscription.resolution >= Resolution::Seconds(1) {
-                                SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
-                            } else {
-                                SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
-                            }
-                        }
+                        SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
                     }
                     _ => panic!("This cant happen")
                 };
 
-                //if we don't have quotes we subscribe to the lowest possible resolution
+                //if we don't have quotes we subscribe to the lowest possible resolution of the same data type
                 if !self.vendor_primary_resolutions.contains(&ideal_subscription) {
-                    //if we haven't subscribe to quotebars to consolidate from we will need to
                     let mut has_lower_resolution = false;
                     let mut lowest_res = new_subscription.resolution;
                     for kind in &self.vendor_primary_resolutions {
-                        if kind.resolution < new_subscription.resolution && kind.base_data_type == BaseDataType::QuoteBars {
+                        if kind.resolution < new_subscription.resolution && kind.base_data_type == new_subscription.base_data_type {
                             has_lower_resolution = true;
                             if kind.resolution < lowest_res {
                                 lowest_res = kind.resolution.clone()
+                            }
+                        }
+                    }
+                    // if we are try to build candles we can check we have quote bars to consolidate from as a last resort
+                    if !has_lower_resolution {
+                        for kind in &self.vendor_primary_resolutions {
+                            if kind.resolution < new_subscription.resolution && (kind.base_data_type == BaseDataType::QuoteBars && new_subscription.base_data_type == BaseDataType::Candles) {
+                                has_lower_resolution = true;
+                                if kind.resolution < lowest_res {
+                                    lowest_res = kind.resolution.clone()
+                                }
                             }
                         }
                     }
@@ -819,7 +827,7 @@ impl SymbolSubscriptionHandler {
                                 return load_data_closure(&new_subscription)
                             }
                             false => {
-                                return Err(format!("{}: Does not have low enough resolution data to consolidate: {}", new_subscription.symbol.data_vendor, new_subscription))
+                                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not have low enough resolution data to consolidate: {}", new_subscription.symbol.data_vendor, new_subscription)))
                             }
                         }
                     }

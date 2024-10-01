@@ -249,6 +249,7 @@ async fn warmup(
     indicator
 }
 
+//todo make this spawn a task for live warm up... or alternatively live warm up should be done by server and it should return 100% accuracy of latest couple of ticks
 async fn warmup_async(
     to_time: DateTime<Utc>,
     strategy_mode: StrategyMode,

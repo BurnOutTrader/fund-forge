@@ -18,7 +18,7 @@ use ff_standard_lib::standardized_types::strategy_events::{
     StrategyEventBuffer, StrategyInteractionMode,
 };
 use ff_standard_lib::standardized_types::subscription_handler::SubscriptionHandler;
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::standardized_types::{Price, Volume};
 use ff_standard_lib::timed_events_handler::{TimedEvent, TimedEventHandler};
@@ -515,7 +515,13 @@ impl FundForgeStrategy {
         let subscriptions = self.subscriptions().await;
         if !subscriptions.contains(&indicator.subscription()) {
             match auto_subscribe {
-                true => self.subscribe(indicator.subscription(), (indicator.data_required_warmup() + 1) as usize, false).await,
+                true => {
+                    let result = self.subscribe(indicator.subscription(), (indicator.data_required_warmup() + 1) as usize, false).await;
+                    match result {
+                        Ok(sub_result) => println!("{}", sub_result),
+                        Err(sub_result) =>  eprintln!("{}", sub_result),
+                    }
+                }
                 false => panic!("You have no subscription: {}, for the indicator subscription {} and AutoSubscribe is not enabled", indicator.subscription(), indicator.name())
             }
         }
@@ -606,17 +612,22 @@ impl FundForgeStrategy {
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
-    pub async fn subscribe(&self, subscription: DataSubscription, history_to_retain: usize, fill_forward: bool) {
-        self
-            .subscription_handler
+    pub async fn subscribe(&self, subscription: DataSubscription, history_to_retain: usize, fill_forward: bool) -> Result<DataSubscriptionEvent, DataSubscriptionEvent> {
+        let result = self.subscription_handler
             .subscribe(subscription.clone(), self.time_utc(), fill_forward, history_to_retain, true)
-            .await
+            .await;
+
+        match &result {
+            Ok(sub_result) => println!("{}", sub_result),
+            Err(sub_result) =>  eprintln!("{}", sub_result),
+        }
+
+        result
     }
 
     /// Unsubscribes from a subscription.
     pub async fn unsubscribe(&self,subscription: DataSubscription) {
-        self
-            .subscription_handler
+        self.subscription_handler
             .unsubscribe(self.time_utc(), subscription.clone(), true)
             .await;
 

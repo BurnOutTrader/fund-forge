@@ -151,7 +151,6 @@ impl StrategyEvent {
     pub fn get_type(&self) -> StrategyEventType {
         match self {
             StrategyEvent::OrderEvents(_) => StrategyEventType::OrderEvents,
-            StrategyEvent::DataSubscriptionEvent(_) => StrategyEventType::DataSubscriptionEvents,
             StrategyEvent::StrategyControls(_) => StrategyEventType::StrategyControls,
             StrategyEvent::DrawingToolEvents(_) => StrategyEventType::DrawingToolEvents,
             StrategyEvent::TimeSlice(_) => StrategyEventType::TimeSlice,
@@ -159,6 +158,7 @@ impl StrategyEvent {
             StrategyEvent::WarmUpComplete => StrategyEventType::WarmUpComplete,
             StrategyEvent::IndicatorEvent(_) => StrategyEventType::IndicatorEvent,
             StrategyEvent::PositionEvents(_) => StrategyEventType::PositionEvents,
+            StrategyEvent::DataSubscriptionEvent(_) => StrategyEventType::DataSubscriptionEvents
         }
     }
 

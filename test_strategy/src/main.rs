@@ -7,7 +7,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, Resolution, StrategyMode};
 use ff_standard_lib::standardized_types::strategy_events::{StrategyEventBuffer, StrategyControls, StrategyEvent, StrategyInteractionMode};
-use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::{mpsc};
@@ -162,6 +162,30 @@ pub async fn on_data_received(
                                     if is_short {
                                         bars_since_entry_2 += 1;
                                     }
+
+                                    if count == 100 {
+                                        let heikin_1_hour = DataSubscription::new_custom(
+                                            SymbolName::from("AUD-CAD"),
+                                            DataVendor::Test,
+                                            Resolution::Hours(1),
+                                            MarketType::Forex,
+                                            CandleType::HeikinAshi
+                                        );
+
+                                        // subscribing to data subscriptions returns a result, the result is a DataSubscription event, Ok(FailedToSubscribe) or Err(Subscribed)
+                                        // In live or live paper, we could have 2 failures, 1 here on client side, and another event that comes from server side, if it fails on the api for any reason.
+                                        // The subscription handler should catch problems before the server, but there is always a possibility that a server side failure to subscribe occurs.
+                                        match strategy.subscribe(heikin_1_hour, 3, true).await {
+                                            Ok(ok) => {
+                                                let msg = format!("{}", ok.to_string());
+                                                println!("{}", msg.as_str().bright_magenta())
+                                            }
+                                            Err(e) =>  {
+                                                let msg = format!("{}", e.to_string());
+                                                println!("{}", msg.as_str().on_bright_white())
+                                            }
+                                        }
+                                    }
                                 }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
@@ -223,14 +247,6 @@ pub async fn on_data_received(
                                         // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
                                         // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
                                         strategy.subscribe_indicator(heikin_atr3_5min, true).await;
-                                      /*  let subscription =  DataSubscription::new(
-                                            SymbolName::from("EUR-USD"),
-                                            DataVendor::Test,
-                                            Resolution::Minutes(5),
-                                            BaseDataType::QuoteBars,
-                                            MarketType::Forex,
-                                        );
-                                        strategy.subscribe(subscription, 5, false).await;*/
                                     }
                                 }
                                 //do something with the current open bar
