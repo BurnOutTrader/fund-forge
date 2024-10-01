@@ -1,3 +1,10 @@
+## Building Apis
+See the [server_features](src/server_features) mod
+Any mod inside this mod will be visible only to crates which enabled the 'server' feature flag for the 'ff_standard_lib'.
+This helps to prevent direct api calls for `Brokerage` and `DataVednor` implementations on the client/strategy side.
+
+
+
 ## Using rkyv crate
 rkyv implements total zero-copy deserialization, 
 which guarantees that no data is copied during deserialization and no work is done to deserialize data. 
