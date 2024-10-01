@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::communicators::communications_async::ExternalSender;
-use crate::communicators::init_clients::create_async_api_client;
-use crate::communicators::settings::client_settings::{initialise_settings, ConnectionSettings};
+use crate::client_features::init_clients::create_async_api_client;
+use crate::client_features::settings::client_settings::{initialise_settings, ConnectionSettings};
 use crate::standardized_types::data_server_messaging::{DataServerRequest, DataServerResponse, StreamRequest};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};

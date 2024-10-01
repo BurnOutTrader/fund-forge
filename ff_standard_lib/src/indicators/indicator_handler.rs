@@ -3,12 +3,12 @@ use std::sync::Arc;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::strategy_events::StrategyEvent;
-use crate::standardized_types::subscriptions::{DataSubscription};
+use crate::standardized_types::subscriptions::DataSubscription;
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Utc};
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use dashmap::DashMap;
 use crate::consolidators::consolidator_enum::ConsolidatorEnum;
+use crate::indicators::events::IndicatorEvents;
 use crate::indicators::indicator_enum::IndicatorEnum;
 use crate::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::indicators::values::IndicatorValues;
@@ -16,18 +16,6 @@ use crate::server_connections::{add_buffer, is_warmup_complete, SUBSCRIPTION_HAN
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
-
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
-pub enum IndicatorEvents {
-    IndicatorAdded(IndicatorName),
-    IndicatorRemoved(IndicatorName),
-    IndicatorTimeSlice(Vec<IndicatorValues>),
-    Replaced(IndicatorName),
-}
-
-pub enum IndicatorRequest {}
 
 pub struct IndicatorHandler {
     indicators: Arc<DashMap<DataSubscription, DashMap<IndicatorName, IndicatorEnum>>>,

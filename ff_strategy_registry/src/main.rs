@@ -15,7 +15,7 @@ use tokio::sync::Mutex;
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_rustls::TlsAcceptor;
-use ff_standard_lib::registry_messages::RegistrationRequest;
+use ff_standard_lib::messages::registry_messages::RegistrationRequest;
 use ff_standard_lib::traits::bytes::Bytes;
 
 pub mod handle_gui;
