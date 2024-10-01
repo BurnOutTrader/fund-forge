@@ -1018,7 +1018,6 @@ dependencies = [
  "log",
  "once_cell",
  "prost",
- "prost-build",
  "rayon",
  "reqwest",
  "rkyv 0.7.45",

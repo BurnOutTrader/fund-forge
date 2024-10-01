@@ -4,9 +4,6 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Kevin Monaghan"]
 
-[build-dependencies]
-prost-build = "*"
-
 [dependencies]
 ff_rithmic_api = "0.1.6"
 chrono = "*"
