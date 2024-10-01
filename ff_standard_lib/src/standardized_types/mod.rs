@@ -13,5 +13,6 @@ pub mod datavendor_enum;
 pub mod broker_enum;
 pub mod drawing_objects;
 pub mod resolution;
+pub mod traits;
 
 

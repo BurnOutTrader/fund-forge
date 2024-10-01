@@ -43,9 +43,9 @@ impl FromStr for DataVendor {
 
 pub mod client_side_data_vendors {
     use tokio::sync::oneshot;
-    use crate::client_features::connections::ConnectionType;
+    use crate::client_features::connection_types::ConnectionType;
     use crate::standardized_types::datavendor_enum::DataVendor;
-    use crate::server_connections::{send_request, StrategyRequest};
+    use crate::client_features::server_connections::{send_request, StrategyRequest};
     use crate::standardized_types::base_data::base_data_type::BaseDataType;
     use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
     use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};

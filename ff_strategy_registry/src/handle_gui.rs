@@ -2,7 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use ff_standard_lib::communicators::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
 use ff_standard_lib::messages::registry_messages::guis::{GuiRequest, RegistryGuiResponse};
-use ff_standard_lib::traits::bytes::Bytes;
+use ff_standard_lib::standardized_types::traits::bytes::Bytes;
 use crate::handle_strategies::{get_backtest_connected_strategies, get_events_buffer, get_live_connected_strategies, get_live_paper_connected_strategies, send_subscriber, subscribe, unsubscribe};
 
 pub async fn handle_gui(

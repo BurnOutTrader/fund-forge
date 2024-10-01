@@ -1,5 +1,5 @@
 use crate::server_features::api_modes::Mode;
-use crate::client_features::connections::ConnectionType;
+use crate::client_features::connection_types::ConnectionType;
 use crate::messages::data_server_messaging::ApiKey;
 
 pub struct ApiSettings {

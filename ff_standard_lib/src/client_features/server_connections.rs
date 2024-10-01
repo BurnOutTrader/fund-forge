@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::communicators::communications_async::ExternalSender;
 use crate::client_features::init_clients::create_async_api_client;
-use crate::client_features::settings::client_settings::{initialise_settings, ConnectionSettings};
+use crate::client_features::connection_settings::client_settings::{initialise_settings, ConnectionSettings};
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, StreamRequest};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
@@ -18,10 +18,10 @@ use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::{sleep_until, Instant};
 use tokio_rustls::TlsStream;
-use crate::client_features::connections::ConnectionType;
+use crate::client_features::connection_types::ConnectionType;
 use crate::strategies::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::indicators::indicator_handler::IndicatorHandler;
-use crate::strategies::market_handler::market_handlers::MarketMessageEnum;
+use crate::strategies::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::StrategyMode;
@@ -29,8 +29,8 @@ use crate::standardized_types::strategy_events::{StrategyEvent, StrategyEventBuf
 use crate::strategies::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::timed_events_handler::TimedEventHandler;
-use crate::traits::bytes::Bytes;
+use crate::strategies::timed_events_handler::TimedEventHandler;
+use crate::standardized_types::traits::bytes::Bytes;
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);

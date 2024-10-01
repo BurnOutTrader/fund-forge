@@ -5,7 +5,7 @@ use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::messages::data_server_messaging::{BaseDataPayload, FundForgeError, DataServerRequest, DataServerResponse, StreamRequest};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
-use ff_standard_lib::traits::bytes::Bytes;
+use ff_standard_lib::standardized_types::traits::bytes::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use dashmap::DashMap;

@@ -1,5 +1,5 @@
 use crate::messages::data_server_messaging::FundForgeError;
-use crate::traits::bytes::Bytes;
+use crate::standardized_types::traits::bytes::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]

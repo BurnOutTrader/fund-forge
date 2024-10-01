@@ -204,7 +204,7 @@ pub(crate) mod historical_position {
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use crate::helpers::decimal_calculators::round_to_tick_size;
-    use crate::server_connections::add_buffer;
+    use crate::client_features::server_connections::add_buffer;
     use crate::standardized_types::accounts::ledgers::calculate_historical_pnl;
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
