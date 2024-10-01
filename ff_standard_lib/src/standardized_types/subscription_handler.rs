@@ -194,6 +194,7 @@ impl SubscriptionHandler {
                         }
                     }
                 }
+                // this causes a dead-lock
                 //add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription))).await;
             }
             Err(e) => {

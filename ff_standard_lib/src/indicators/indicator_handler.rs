@@ -60,9 +60,9 @@ impl IndicatorHandler {
         };
 
         if !self.subscription_map.contains_key(&name) {
-            add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorAdded(name.clone()))).await;
+            //add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorAdded(name.clone()))).await;
         } else {
-            add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::Replaced(name.clone()))).await;
+           // add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::Replaced(name.clone()))).await;
         }
         if let Some(map) = self.indicators.get(&subscription) {
             map.insert(indicator.name(), indicator);
