@@ -615,6 +615,7 @@ The fist option is the most performant, but if you want to create and test a num
 Once you have tested and are happy with the performance of your custom indicator, you can then hardcode it into the IndicatorEnum.
 You don't actually need to do any of this if you want to manually handle your Indicators in the `fn on_data_received()` function, but if you wrap in the `IndicatorEnum::Custom(Box<dyn Indicators>)` variant, 
 you will be able to handle it in the Indicator handler, which will automatically update the indicators for you and return enums `IndicatorEvents` to the `fn on_data_received()`.
+3. Creating indicators for fund-forge is easy, see [Indicators readme](indicators/INDICATORS_README.md)
 
 #### Using Indicators
 If we pass the indicator to `strategy.indicator_subscribe(indicator: IndicatorEnum).await;` the handler will automatically handle, history, warmup and deletion of the indicator when we unsubscribe a symbol.
