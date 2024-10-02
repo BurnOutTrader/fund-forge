@@ -14,6 +14,7 @@ use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators}
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::standardized_types::base_data::traits::BaseData;
 
+#[derive(Clone, Debug)]
 pub struct AverageTrueRange {
     name: IndicatorName,
     subscription: DataSubscription,

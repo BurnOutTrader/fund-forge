@@ -7,8 +7,8 @@ use crate::strategies::indicators::indicator_values::IndicatorValues;
 
 /// An enum for all indicators
 /// Custom(Box<dyn Indicators + Send + Sync>) is for custom indicators which we want to handle automatically in the engine
+#[derive(Clone, Debug)]
 pub enum IndicatorEnum {
-    Custom(Box<dyn Indicators + Send + Sync>), //if we use this then we cant use rkyv serialization
     AverageTrueRange(AverageTrueRange),
 }
 
@@ -16,13 +16,11 @@ impl Indicators for IndicatorEnum {
     fn name(&self) -> IndicatorName {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.name(),
-            IndicatorEnum::Custom(indicator) => indicator.name(),
         }
     }
 
     fn history_to_retain(&self) -> usize {
         match self {
-            IndicatorEnum::Custom(indicator) => indicator.history_to_retain(),
             IndicatorEnum::AverageTrueRange(indicator) => indicator.history_to_retain(),
         }
     }
@@ -31,35 +29,30 @@ impl Indicators for IndicatorEnum {
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.update_base_data(base_data),
-            IndicatorEnum::Custom(indicator) => indicator.update_base_data(base_data),
         }
     }
 
     fn subscription(&self) -> DataSubscription {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.subscription(),
-            IndicatorEnum::Custom(indicator) => indicator.subscription(),
         }
     }
 
     fn reset(&mut self) {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.reset(),
-            IndicatorEnum::Custom(indicator) => indicator.reset(),
         }
     }
 
     fn index(&self, index: usize) -> Option<IndicatorValues> {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.index(index),
-            IndicatorEnum::Custom(indicator) => indicator.index(index),
         }
     }
 
     fn current(&self) -> Option<IndicatorValues> {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.current(),
-            IndicatorEnum::Custom(indicator) => indicator.current(),
         }
     }
 
@@ -82,28 +75,24 @@ impl Indicators for IndicatorEnum {
     fn plots(&self) -> RollingWindow<IndicatorValues> {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.plots(),
-            IndicatorEnum::Custom(indicator) => indicator.plots(),
         }
     }
 
     fn is_ready(&self) -> bool {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.is_ready(),
-            IndicatorEnum::Custom(indicator) => indicator.is_ready(),
         }
     }
 
     fn history(&self) -> RollingWindow<IndicatorValues> {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.history(),
-            IndicatorEnum::Custom(indicator) => indicator.history(),
         }
     }
 
     fn data_required_warmup(&self) -> u64 {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.data_required_warmup(),
-            IndicatorEnum::Custom(indicator) => indicator.data_required_warmup(),
         }
     }
 }

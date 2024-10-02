@@ -78,7 +78,6 @@ impl Indicators for YOUR_NEW_VARIANT {
 Create a new [IndicatorEnum Variant](indicator_enum.rs)
 ```rust
 pub enum IndicatorEnum {
-    Custom(Box<dyn Indicators + Send + Sync>), //if we use this then we cant use rkyv serialization
     AverageTrueRange(AverageTrueRange),
     YOUR_NEW_VARIANT(YOUR_NEW_VARIANT)
 }
@@ -93,7 +92,6 @@ impl Indicators for IndicatorEnum {
     fn name(&self) -> IndicatorName {
         match self {
             IndicatorEnum::AverageTrueRange(atr) => atr.name(),
-            IndicatorEnum::Custom(indicator) => indicator.name(),
             IndicatorEnum::YOUR_NEW_VARIANT(new_indicator) => new_indicator.name()
         }
     }
