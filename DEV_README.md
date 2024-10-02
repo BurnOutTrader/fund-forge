@@ -184,6 +184,10 @@ if you expect a streaming response, handle the response in the [live handlers](f
 If you sent a `StrategyRequest::CallBack`, then you just wait until the response arrives and proceed with handling the new data.
 
 
+## Indicators
+See [Indicators readme](ff_standard_lib/src/strategies/indicators)
+
+
 
 
 

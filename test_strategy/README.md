@@ -4,3 +4,6 @@
 **When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.**
 
 ![strategyrunconfig.png](../misc/strategyrunconfig.png)
+
+for making indicators
+See [Indicators readme](ff_standard_lib/src/strategies/indicators)
