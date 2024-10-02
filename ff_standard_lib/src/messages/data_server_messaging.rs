@@ -281,7 +281,7 @@ DataServerResponse {
 
     PrimarySubscriptionFor{callback_id: u64, primary_subscription: DataSubscription},
 
-    OrderUpdates(OrderUpdateEvent)
+    OrderUpdates(OrderUpdateEvent),
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {

@@ -139,6 +139,10 @@ impl BrokerApiResponse for TestApiClient {
     async fn accounts_response(&self, _mode: StrategyMode,_stream_name: StreamName, callback_id: u64) -> DataServerResponse {
        DataServerResponse::Accounts {callback_id, accounts: vec!["TestAccount1".to_string(), "TestAccount2".to_string()]}
     }
+
+    async fn logout_command(&self, _stream_name: StreamName) {
+
+    }
 }
 
 #[async_trait]
@@ -259,5 +263,9 @@ impl VendorApiResponse for TestApiClient {
             callback_id,
             base_data_types: vec![BaseDataType::Quotes],
         }
+    }
+
+    async fn logout_command(&self, _stream_name: StreamName) {
+
     }
 }

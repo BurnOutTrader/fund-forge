@@ -37,28 +37,11 @@ lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
 }
 
-pub fn get_rithmic_client(data_vendor: &DataVendor) -> Option<Arc<RithmicClient>> {
-    match data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                return Some(client.value().clone())
-            }
-            None
-        }
-        DataVendor::Test => panic!("Incorrect vendor for this fn")
+pub fn get_rithmic_client(rithmic_system: &RithmicSystem) -> Option<Arc<RithmicClient>> {
+    if let Some(client) = RITHMIC_CLIENTS.get(&rithmic_system) {
+        return Some(client.value().clone())
     }
-}
-
-pub fn get_rithmic_client_brokers(brokerage: &Brokerage) -> Option<Arc<RithmicClient>> {
-    match brokerage {
-        Brokerage::Rithmic(system) => {
-            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                return Some(client.value().clone())
-            }
-            None
-        }
-        Brokerage::Test => panic!("Incorrect vendor for this fn")
-    }
+    None
 }
 
 pub struct RithmicClient {
@@ -272,6 +255,10 @@ impl BrokerApiResponse for RithmicClient {
     async fn accounts_response(&self, _mode: StrategyMode, _stream_name: StreamName, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
+
+    async fn logout_command(&self, _stream_name: StreamName) {
+        todo!()
+    }
 }
 #[allow(dead_code)]
 #[async_trait]
@@ -409,6 +396,10 @@ impl VendorApiResponse for RithmicClient {
     }
 
     async fn base_data_types_response(&self, _mode: StrategyMode, _stream_name: StreamName, _callback_id: u64) -> DataServerResponse {
+        todo!()
+    }
+
+    async fn logout_command(&self, _stream_name: StreamName) {
         todo!()
     }
 }
