@@ -647,8 +647,8 @@ pub fn export_trades(directory: &str) {
     }
 }
 
-pub fn print_ledger(brokerage: Brokerage, account_id: &AccountId) -> Option<String>  {
-    if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
+pub fn print_ledger(brokerage: &Brokerage, account_id: &AccountId) -> Option<String>  {
+    if let Some(broker_map) = BACKTEST_LEDGERS.get(brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return Some(account_map.value().print())
         }

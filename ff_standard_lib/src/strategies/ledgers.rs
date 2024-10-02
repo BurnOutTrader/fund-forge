@@ -478,7 +478,11 @@ pub(crate) mod historical_ledgers {
                      self.positions_closed.insert(symbol_name.clone(), vec![]);
                  }
 
-                 let event = PositionUpdateEvent::PositionOpened(id);
+                 let event = PositionUpdateEvent::PositionOpened{
+                     position_id: id,
+                     account_id: self.account_id.clone(),
+                     brokerage: self.brokerage.clone()
+                 };
                  self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
                  Ok(event)
             }
