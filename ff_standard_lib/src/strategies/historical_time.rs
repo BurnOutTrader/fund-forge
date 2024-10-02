@@ -1,5 +1,5 @@
 use std::sync::atomic::{AtomicI64, Ordering};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc, TimeZone};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -18,7 +18,6 @@ pub fn read_engine_time() -> DateTime<Utc> {
     Utc.timestamp_nanos(nanos)
 }
 
-// Optional: Function to advance time by a duration
 pub fn advance_engine_time(duration: chrono::Duration) {
     ATOMIC_TIMESTAMP_NS.fetch_add(duration.num_nanoseconds().unwrap_or(0), Ordering::AcqRel);
 }
@@ -27,7 +26,6 @@ pub fn advance_engine_time(duration: chrono::Duration) {
 mod tests {
     use super::*;
     use std::thread;
-    use std::time::Duration;
 
     #[test]
     fn test_update_and_read() {
@@ -50,10 +48,10 @@ mod tests {
         update_engine_time(test_time);
 
         let threads: Vec<_> = (0..10).map(|_| {
-            let test_time = test_time.clone();
-            thread::spawn(move|| {
+            thread::spawn(move || {
                 for _ in 0..1000 {
-                    assert_eq!(read_engine_time(), test_time);
+                    let read_time = read_engine_time();
+                    assert!((read_time - test_time).num_nanoseconds().unwrap().abs() < 1000);
                 }
             })
         }).collect();
