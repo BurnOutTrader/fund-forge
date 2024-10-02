@@ -81,24 +81,28 @@ fn example() {
 }
 ```
 
-
-
 #### Blocking Requests
 We create a one shot and send the Callback message with the one shot attached.
-- Notice that this enum variant has a callback_id field, you will need the same field.
+- Notice that this enum variant has a callback_id field, you will need the same field if you are expecting a callback.
+- The callback_id value will not be set in your function, but you need the field, just set the callback_id to 0 in your function.
 ```rust
-let request = DataServerRequest::TickSize {
-            callback_id: 0,
-            data_vendor: self.data_vendor.clone(),
-            symbol_name: self.name.clone(),
-        };
+fn example() {
+    let request = DataServerRequest::TickSize {
+        callback_id: 0,
+        data_vendor: self.data_vendor.clone(),
+        symbol_name: self.name.clone(),
+    };
+    let (sender, receiver) = oneshot::channel();
+    let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request, sender);
+    send_request(msg).await;
+}
+
 ```
 - You will need to add a matching statement to the `DataServerRequest` and `DataServerResponse`. implementations of `fn callback_id()` this allows the engine determine if the requests and response are callbacks.
 The functions are found in the [data_server_messaging file](../messages/data_server_messaging.rs)
 
 to send our DataServerRequest we create a oneshot sender and receiver and wrap them in `StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), DataServerRequest, sender);`
 
-- The callback_id will not be set in your function, but you need the field, just set the callback_id to 0 in your function.
 After we send the request we wait for the response on the receiver and handle it however we need.
 You won't need to do anything with the client handlers, since it will return the data to your oneshot receiver as soon as it arrives.
 ```rust
