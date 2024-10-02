@@ -535,17 +535,17 @@ impl FundForgeStrategy {
     }
 
     /// see the indicator_enum.rs for more details
-    pub async fn indicator_index(
+    pub fn indicator_index(
         &self,
         name: &IndicatorName,
         index: usize,
     ) -> Option<IndicatorValues> {
-        self.indicator_handler.index(name, index).await
+        self.indicator_handler.index(name, index)
     }
 
     /// see the indicator_enum.rs for more details
-    pub async fn indicator_current(&self, name: &IndicatorName) -> Option<IndicatorValues> {
-        self.indicator_handler.current(name).await
+    pub fn indicator_current(&self, name: &IndicatorName) -> Option<IndicatorValues> {
+        self.indicator_handler.current(name)
     }
 
     /// see the indicator_enum.rs for more details

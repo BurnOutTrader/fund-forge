@@ -17,11 +17,11 @@ pub type PlotName = String;
 pub struct IndicatorPlot {
     pub name: PlotName,
     pub value: Price,
-    pub color: Option<Color>,
+    pub color: Color,
 }
 
 impl IndicatorPlot {
-    pub fn new(plot_name: PlotName, value: Price, color: Option<Color>) -> Self {
+    pub fn new(plot_name: PlotName, value: Price, color: Color) -> Self {
         Self {
             name: plot_name,
             value,

@@ -142,7 +142,7 @@ impl IndicatorHandler {
         None
     }
 
-    pub async fn current(&self, name: &IndicatorName) -> Option<IndicatorValues> {
+    pub fn current(&self, name: &IndicatorName) -> Option<IndicatorValues> {
         let subscription = match self.subscription_map.get(name) {
             Some(sub) => sub.clone(),
             None => return None,
@@ -157,7 +157,7 @@ impl IndicatorHandler {
         None
     }
 
-    pub async fn index(&self, name: &IndicatorName, index: usize) -> Option<IndicatorValues> {
+    pub fn index(&self, name: &IndicatorName, index: usize) -> Option<IndicatorValues> {
         let subscription = match self.subscription_map.get(name) {
             Some(sub) => sub.clone(),
             None => return None,

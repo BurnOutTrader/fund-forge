@@ -15,7 +15,7 @@ use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
-use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
+use ff_standard_lib::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
@@ -74,7 +74,7 @@ async fn main() {
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading and backtesting.
         //ToDo: Test Un-Buffered engines == (None) vs Buffered engines == Some(Duration)
-        Some(core::time::Duration::from_millis(50)),
+        Some(core::time::Duration::from_millis(100)),
         //None,
 
         GUI_DISABLED
@@ -88,8 +88,8 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
-    let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
-        AverageTrueRange::new(IndicatorName::from("heikin_atr_5"),
+    let heikin_3m_atr_5 = IndicatorEnum::AverageTrueRange(
+        AverageTrueRange::new(IndicatorName::from("heikin_3m_atr_5"),
               DataSubscription::new(
                   SymbolName::from("EUR-USD"),
                   DataVendor::Test,
@@ -99,11 +99,11 @@ pub async fn on_data_received(
               ),
             100,
             5,
-            Some(Color::new(50,50,50))
+            Color::new (128, 0, 128)
         ).await,
     );
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
-    strategy.subscribe_indicator(heikin_atr_5, true).await;
+    strategy.subscribe_indicator(heikin_3m_atr_5, true).await;
     let mut count = 0;
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
@@ -130,8 +130,8 @@ pub async fn on_data_received(
                                         println!("{}", msg.as_str().blue())
                                     } else {
                                         match candle.close > candle.open {
-                                            true => println!("{}", msg.as_str().green()),
-                                            false => println!("{}", msg.as_str().red()),
+                                            true => println!("{}", msg.as_str().bright_green()),
+                                            false => println!("{}", msg.as_str().bright_red()),
                                         }
                                     }
 
@@ -165,13 +165,14 @@ pub async fn on_data_received(
                                         }
                                     }
 
+                                    /// We can subscribe to new DataSubscriptions at run time
                                     if count == 20 {
                                         let msg = "Subscribing to new Candle Resolution and warming subscription, this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
-                                        println!("{}",msg.as_str().purple());
-                                        let heikin_20_min = DataSubscription::new_custom(
+                                        println!("{}",msg.as_str().to_uppercase().purple());
+                                        let minute_60_ha_candles = DataSubscription::new_custom(
                                             SymbolName::from("AUD-CAD"),
                                             DataVendor::Test,
-                                            Resolution::Minutes(20),
+                                            Resolution::Minutes(60),
                                             MarketType::Forex,
                                             CandleType::HeikinAshi
                                         );
@@ -179,7 +180,7 @@ pub async fn on_data_received(
                                         // subscribing to data subscriptions returns a result, the result is a DataSubscription event, Ok(FailedToSubscribe) or Err(Subscribed)
                                         // In live or live paper, we could have 2 failures, 1 here on client side, and another event that comes from server side, if it fails on the api for any reason.
                                         // The subscription handler should catch problems before the server, but there is always a possibility that a server side failure to subscribe occurs.
-                                        match strategy.subscribe(heikin_20_min, 3, true).await {
+                                        match strategy.subscribe(minute_60_ha_candles, 48, false).await {
                                             Ok(ok) => {
                                                 let msg = format!("{}", ok.to_string());
                                                 println!("{}", msg.as_str().bright_magenta())
@@ -200,8 +201,8 @@ pub async fn on_data_received(
                                         println!("{}", msg.as_str().blue())
                                     } else {
                                         match quotebar.bid_close > quotebar.bid_open {
-                                            true => println!("{}", msg.as_str().green()),
-                                            false => println!("{}", msg.as_str().red()),
+                                            true => println!("{}", msg.as_str().bright_green()),
+                                            false => println!("{}", msg.as_str().bright_red()),
                                         }
                                     }
 
@@ -213,7 +214,14 @@ pub async fn on_data_received(
                                         let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
                                         let is_long: bool = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
 
-                                        if quotebar.bid_close > last_bar.bid_high
+                                        // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
+                                        // we can use the name we assigned to get the indicator.
+                                        let heikin_3m_atr_5_current_values = strategy.indicator_index(&"heikin_3m_atr_5".to_string(), 0).unwrap();
+
+                                        // We want to check the current value for the "atr" plot
+                                        let heikin_3m_atr_5 = heikin_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
+
+                                        if quotebar.bid_close > last_bar.bid_high && heikin_3m_atr_5 >= dec!( 0.00016)
                                             && !is_long {
                                             let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
@@ -232,13 +240,14 @@ pub async fn on_data_received(
 
                                     count += 1;
 
+                                    /// We can subscribe to new indicators at run time
                                     if count == 50 {
                                         let msg = "Subscribing to new indicator heikin_atr3_5min and warming up subscriptions".to_string();
                                         println!("{}",msg.as_str().purple());
                                         // this will test both our auto warm up for indicators and data subscriptions
-                                        let heikin_atr3_15min = IndicatorEnum::AverageTrueRange(
+                                        let heikin_atr10_15min = IndicatorEnum::AverageTrueRange(
                                             AverageTrueRange::new(
-                                                IndicatorName::from("heikin_atr3_15min"),
+                                                IndicatorName::from("heikin_atr10_15min"),
                                                 DataSubscription::new(
                                                     SymbolName::from("EUR-USD"),
                                                     DataVendor::Test,
@@ -247,13 +256,13 @@ pub async fn on_data_received(
                                                     MarketType::Forex,
                                                 ),
                                                 5,
-                                                3,
-                                                Some(Color::new(30,30,50))
+                                                10,
+                                                Color::new(255, 165, 0)
                                             ).await,
                                         );
                                         // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
                                         // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
-                                        let event = strategy.subscribe_indicator(heikin_atr3_15min, true).await;
+                                        let event = strategy.subscribe_indicator(heikin_atr10_15min, true).await;
                                         let msg = format!("{}", event);
                                         println!("{}", msg.as_str().bright_purple());
                                     }
@@ -329,8 +338,17 @@ pub async fn on_data_received(
                         IndicatorEvents::IndicatorTimeSlice(slice_event) => {
                             // we can see our auto manged indicator values for here.
                             for indicator_values in slice_event {
-                                let msg = format!("{}", indicator_values);
-                                println!("{}", msg.as_str().bright_cyan());
+                                //we could access the exact plot we want using its name, Average True Range only has 1 plot but MACD would have multiple
+                                let plot = indicator_values.get_plot(&"atr".to_string());
+
+                                //or we can access all values as a single collection
+                                let indicator_values = format!("{}", indicator_values);
+
+                                //if the plot has a color we will print in the color
+                                if let Some(plot) = plot {
+                                    // the plot color is in rgb, so we can convert to any gui styled coloring and we will print all the values in this color
+                                    println!("{}", indicator_values.as_str().truecolor(plot.color.red, plot.color.green, plot.color.blue));
+                                }
                             }
                         }
                         IndicatorEvents::Replaced(replace_event) => {

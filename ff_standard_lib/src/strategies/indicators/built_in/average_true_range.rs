@@ -21,7 +21,7 @@ pub struct AverageTrueRange {
     base_data_history: RollingWindow<BaseDataEnum>,
     is_ready: bool,
     tick_size: Price,
-    plot_color: Option<Color>,
+    plot_color: Color,
     period: u64
 }
 
@@ -41,7 +41,7 @@ impl AverageTrueRange {
         subscription: DataSubscription,
         history_to_retain: usize,
         period: u64,
-        plot_color: Option<Color>,
+        plot_color: Color,
     ) -> Self {
         let tick_size = subscription
             .symbol
