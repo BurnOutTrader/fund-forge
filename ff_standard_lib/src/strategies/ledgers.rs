@@ -242,8 +242,12 @@ pub(crate) mod historical_ledgers {
             };
 
             // Calculate risk-reward ratio
-            let risk_reward = if avg_loss_pnl < dec!(0.0) && avg_win_pnl > dec!(0.0) {
-                avg_win_pnl / -avg_loss_pnl // negate loss_pnl for correct calculation
+            let risk_reward = if losses == 0 && wins > 0 {
+                dec!(f64::INFINITY) // No losses, so risk/reward is considered infinite
+            } else if wins == 0 && losses > 0 {
+                dec!(0.0) // No wins, risk/reward is zero
+            } else if avg_loss_pnl < dec!(0.0) && avg_win_pnl > dec!(0.0) {
+                avg_win_pnl / -avg_loss_pnl // Negate loss_pnl for correct calculation
             } else {
                 dec!(0.0)
             };
