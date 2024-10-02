@@ -62,6 +62,16 @@ If you want to add a new DataVendor or Brokerage feature, like `get_example_data
 You will need to create a new `DataServerRequest` and `DataServerResponse`.
 You will need to know if your request is blocking (requesting an object you need to continue a function) or non-blocking (like requesting a data stream to start)
 
+#### Connection Type 
+```rust
+pub enum ConnectionType {
+    Vendor(DataVendor),
+    Broker(Brokerage),
+}
+ ```
+The Connection type is just a wrapper for your DataVendor or Brokerage enum, to help the request handler find the correct address for the server.
+Remember by default all ConnectionTypes use ConnectionType::Default by default, so you dont need to worry about this, however you should pass in you actual ConncectionType based on if it is a brokerage or data vendor implementation.
+
 #### Blocking
 We create a one shot and send the Callback message with the one shot attached.
 - Notice that this enum variant has a callback_id field, you will need the same field.
@@ -74,6 +84,8 @@ let request = DataServerRequest::TickSize {
 ```
 - You will need to add a matching statement to the `DataServerRequest` and `DataServerResponse`. implementations of `fn callback_id()` this allows the engine determine if the requests and response are callbacks.
 The functions are found in the [data_server_messaging file](../messages/data_server_messaging.rs)
+
+to send our DataServerRequest we create a oneshot sender and receiver and wrap them in `StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), DataServerRequest, sender);`
 
 - The callback_id will not be set in your function, but you need the field, just set the callback_id to 0 in your function.
 After we send the request we wait for the response on the receiver and handle it however we need.
