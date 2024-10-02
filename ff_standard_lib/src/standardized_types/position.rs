@@ -207,7 +207,7 @@ pub(crate) mod historical_position {
     use crate::strategies::ledgers::calculate_historical_pnl;
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
-    use crate::strategies::position::{Position, PositionUpdateEvent};
+    use crate::standardized_types::position::{Position, PositionUpdateEvent};
     use crate::standardized_types::new_types::{Price, Volume};
 
     impl Position {

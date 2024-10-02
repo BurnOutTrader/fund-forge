@@ -9,7 +9,7 @@ use csv::Writer;
 use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::strategies::position::Position;
+use crate::standardized_types::position::Position;
 use crate::standardized_types::symbol_info::SymbolInfo;
 use serde_derive::{Deserialize, Serialize};
 use crate::standardized_types::new_types::{Price, Volume};
@@ -186,7 +186,7 @@ pub(crate) mod historical_ledgers {
     use crate::strategies::ledgers::{AccountId, Currency, Ledger};
     use crate::messages::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
-    use crate::strategies::position::{Position, PositionId, PositionUpdateEvent};
+    use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::base_data::traits::BaseData;
     use crate::standardized_types::new_types::{Price, Volume};
