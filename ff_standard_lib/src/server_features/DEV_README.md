@@ -6,6 +6,16 @@ Knowing the code base I can generally implement a new Request and Response in ha
 
 There are still a lot of Request and Response types to be implemented as I am currently implementing Rithmic Api.
 
+Any Data transferred in a `DataServerResponse` enum and `DataServerRequest` enum must implement the rkyv traits.
+rkyv is used for fast ser/de of data from bytes to types.
+Some complex data is more difficult to serialize this way, but just remember you can always serialize or desrialize as strings or an array of bytes itself, native data types are no problem.
+```rust
+use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+#[derive(Serialize_rkyv, Deserialize_rkyv, Archive)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+```
+
 ### Api's
 `DataVendor` or `Brokerage` Api:
 1. To create a new brokerage or data vendor we need to create an api object that:

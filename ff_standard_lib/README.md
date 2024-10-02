@@ -22,7 +22,7 @@ Deserialize 121241 candles took: `3.690916ms` using rkyv format. \
 Load as bytes 121241 candles took: `530.667µs` using rkyv format. \
 File size: 8729360 bytes.
 
-For an example of saving and loading types as .rkyv files and creating bytes from types see candles.rs and candle_tests.rs \
+For ser/de bytes from bytes just implement [Bytes](src/standardized_types/bytes_trait.rs) \
 \
 Data streamed from the historical_server and api_implementations will be in the form of `Vec<u8>` bytes that will be deserialized into the required type on the client side.
 
