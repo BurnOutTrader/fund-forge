@@ -3,4 +3,4 @@
 
 **When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.**
 
-![strategyrunconfig.png](strategyrunconfig.png)
+![strategyrunconfig.png](../misc/strategyrunconfig.png)
