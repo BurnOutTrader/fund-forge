@@ -1,5 +1,6 @@
 # Development Guide
-##A guide to adding new features to fund forge
+## A guide for adding new features to fund forge
+
 ### Api's
 `DataVendor` or `Brokerage` Api:
 1. To create a new brokerage or data vendor we need to create an api object that:
@@ -54,14 +55,18 @@ You don't need to touch the client side implementations when implementing new Da
 If you want to add a new DataVendor or Brokerage feature, like `get_example_data()`.
 
 You will need to create a new `DataServerRequest` and `DataServerResponse`.
+You will need to know if your request is blocking (requesting an object you need to continue a function) or non-blocking (like requesting a data stream to start)
 
+#### Blocking
 We create a one shot and send the Callback message with the one shot attached.
 - Notice that this enum variant has a callback_id field, you will need the same field.
 - You will need to add a matching statement to the `DataServerRequest` and `DataServerResponse`. implementations of `fn callback_id()` this allows the engine determine if the requests and response are callbacks.
 
-The callback_id will not be set in your function, but you need the field, just set the callback_id to 0 in your function.
-
+- The callback_id will not be set in your function, but you need the field, just set the callback_id to 0 in your function.
 After we send the request we wait for the response on the receiver and handle however we need.
+You won't need to do anything with the client handlers, since it will return the data to your oneshot receiver as soon as it arrives.
+
+However, you will then need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
 ```rust
 impl Symbol {
     pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
@@ -88,7 +93,20 @@ impl Symbol {
 ```
 See [data server messages](../messages/data_server_messaging.rs).
 
-on the client side our `DataServerRequest` enum will be wrapped as either StrategyRequest::OneWay() or StrategyRequest::CallBack(), depending if we need to await the data on a blocking function.
+#### Non Blocking
+For non-blocking messages like streams or orders first we send the request by wrapping it in a strategy request enum variant.
+
+`let register_request = StrategyRequest::OneWay(connection_type.clone(), DataServerRequest::Register(mode.clone()));`
+
+`send_request(StrategyRequest).await;`
+
+this is a public fn that can be called from anywhere in our code. It will add your message to the buffer for the outgoing TLS stream.
+
+Then we need to handle the response in both the client sides buffered and unbuffered response handlers below:
+see the [live handlers](../strategies/client_features/server_connections.rs).
+(at the time of writing I am considering simplifying into a single handler)
+
+You will then need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
 
 #### Long Option A
 If you want all implementations to return this kind of response then you will then need to add a new `VendorApiResponse` or `BrokerApiResponse` to the trait.
@@ -133,17 +151,7 @@ impl Symbol {
 }
 ```
 
-For non-blocking messages like streams or orders first we send the request:
-`let register_request = StrategyRequest::OneWay(connection_type.clone(), DataServerRequest::Register(mode.clone()));`
 
-this is a public fn that can be called from anywhere in our code. It will add your message to the buffer for the outgoing TLS stream.
-`send_request(StrategyRequest).await;`
-
-Then we need to handle the response in both the buffered and unbuffered response handlers below: 
-see the [live handlers](../strategies/client_features/server_connections.rs).
-(at the time of writing I am considering simplifying into a single handler)
-
-You will then need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
 
 
 
