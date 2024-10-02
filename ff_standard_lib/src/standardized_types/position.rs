@@ -68,12 +68,6 @@ pub enum PositionUpdateEvent {
         account_id: AccountId,
         brokerage: Brokerage
     },
-    PositionUpdateSnapShot {
-        position_id: PositionId,
-        position: Position,
-        account_id: AccountId,
-        brokerage: Brokerage
-    },
 }
 
 impl PositionUpdateEvent {
@@ -83,7 +77,6 @@ impl PositionUpdateEvent {
             PositionUpdateEvent::Increased{brokerage,..} => brokerage,
             PositionUpdateEvent::PositionReduced {brokerage,..} => brokerage,
             PositionUpdateEvent::PositionClosed {brokerage,..} => brokerage,
-            PositionUpdateEvent::PositionUpdateSnapShot {brokerage,..} => brokerage,
         }
     }
 
@@ -93,7 +86,6 @@ impl PositionUpdateEvent {
             PositionUpdateEvent::Increased{account_id,..} => account_id,
             PositionUpdateEvent::PositionReduced {account_id,..} => account_id,
             PositionUpdateEvent::PositionClosed {account_id,..} => account_id,
-            PositionUpdateEvent::PositionUpdateSnapShot {account_id,..} => account_id,
         }
     }
 }
@@ -154,18 +146,6 @@ impl fmt::Display for PositionUpdateEvent {
                         Some(price) => price.to_string(),
                         None => "None".to_string(),
                     }
-                )
-            }
-            PositionUpdateEvent::PositionUpdateSnapShot {
-                position_id,
-                position,
-                account_id,
-                brokerage
-            } => {
-                write!(
-                    f,
-                    "PositionUpdateSnapShot: Position ID = {}, Brokerage: {}, Account: {}, Position Details = {:?}",
-                    position_id, brokerage, account_id, position
                 )
             }
         }
