@@ -348,7 +348,7 @@ pub async fn on_data_received(
                                 //or we can access all values as a single collection
                                 let indicator_values = format!("{}", indicator_values);
 
-                                //if the plot has a color we will print in the color
+                                //if we have a plot named atr we will print it
                                 if let Some(plot) = plot {
                                     // the plot color is in rgb, so we can convert to any gui styled coloring and we will print all the values in this color
                                     println!("{}", indicator_values.as_str().truecolor(plot.color.red, plot.color.green, plot.color.blue));
