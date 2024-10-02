@@ -561,6 +561,8 @@ Indicators can be handled automatically by the strategy Indicator handler, or we
 We can implement the `Indicators trait` for our custom indicators.
 If building a custom indicator be sure to add it to the IndicatorEnum and complete the matching statements, so that the Indicator handler can handle it if needed.
 
+If you want to help development, creating common indicators for fund-forge is easy, see [Indicators readme](indicators/INDICATORS_README.md)
+
 ### Indicator Values
 ```rust
 fn example() {
