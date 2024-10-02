@@ -144,14 +144,13 @@ pub async fn on_data_received(
                                   /*  let candle_10_ago = strategy.candle_index(&base_data.subscription(), 10).unwrap();
                                     let msg = format!("{} {} 10 Candles Ago Close: {}, {}", candle_10_ago.symbol.name, candle_10_ago.resolution, candle_10_ago.close, candle_10_ago.time_closed_local(strategy.time_zone()));
                                     println!("{}", msg.as_str().on_bright_black());*/
-                                    if candle.resolution == Resolution::Minutes(60) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
+                                    if candle.resolution == Resolution::Minutes(15) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let other_account_is_long_euro = strategy.is_long(&brokerage, &account_2, &"EUR-USD".to_string());
 
-                                        // buy below the low of prior bar and our other account is long on EUR
-                                        if candle.close < last_candle.low && other_account_is_long_euro
-                                            && !is_long {
+                                        // keep buying above prior highs if prior bar and our other account is long on EUR
+                                        if candle.close > last_candle.high && other_account_is_long_euro {
                                             let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
@@ -160,7 +159,7 @@ pub async fn on_data_received(
                                             bars_since_entry_2 += 1;
                                         }
 
-                                        if bars_since_entry_2 > 2
+                                        if bars_since_entry_2 > 4
                                             && is_long {
                                             let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Short")).await;
                                             bars_since_entry_2 = 0;
@@ -172,10 +171,10 @@ pub async fn on_data_received(
                                         let msg = "Subscribing to new AUD-CAD HeikinAshi Candle at 60 Minute Resolution and warming subscription to have 48 bars of memory,
                                         this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
                                         println!("{}",msg.as_str().to_uppercase().purple());
-                                        let minute_60_ha_candles = DataSubscription::new_custom(
+                                        let minute_15_ha_candles = DataSubscription::new_custom(
                                             SymbolName::from("AUD-CAD"),
                                             DataVendor::Test,
-                                            Resolution::Minutes(60),
+                                            Resolution::Minutes(15),
                                             MarketType::Forex,
                                             CandleType::HeikinAshi
                                         );
@@ -183,7 +182,7 @@ pub async fn on_data_received(
                                         // subscribing to data subscriptions returns a result, the result is a DataSubscription event, Ok(FailedToSubscribe) or Err(Subscribed)
                                         // In live or live paper, we could have 2 failures, 1 here on client side, and another event that comes from server side, if it fails on the api for any reason.
                                         // The subscription handler should catch problems before the server, but there is always a possibility that a server side failure to subscribe occurs.
-                                        match strategy.subscribe(minute_60_ha_candles, 48, false).await {
+                                        match strategy.subscribe(minute_15_ha_candles, 48, false).await {
                                             Ok(ok) => {
                                                 let msg = format!("{}", ok.to_string());
                                                 println!("{}", msg.as_str().bright_magenta())
@@ -366,7 +365,7 @@ pub async fn on_data_received(
                 StrategyEvent::PositionEvents(event) => {
                     let msg = format!("{}", event);
                     println!("{}", msg.as_str().yellow());
-                    strategy.print_ledgers();
+                    strategy.print_ledger(event.brokerage(), event.account_id());
                 }
             }
         }
