@@ -65,13 +65,19 @@ You will need to know if your request is blocking (requesting an object you need
 #### Blocking
 We create a one shot and send the Callback message with the one shot attached.
 - Notice that this enum variant has a callback_id field, you will need the same field.
+```rust
+let request = DataServerRequest::TickSize {
+            callback_id: 0,
+            data_vendor: self.data_vendor.clone(),
+            symbol_name: self.name.clone(),
+        };
+```
 - You will need to add a matching statement to the `DataServerRequest` and `DataServerResponse`. implementations of `fn callback_id()` this allows the engine determine if the requests and response are callbacks.
+The functions are found in the [data_server_messaging file](../messages/data_server_messaging.rs)
 
 - The callback_id will not be set in your function, but you need the field, just set the callback_id to 0 in your function.
-After we send the request we wait for the response on the receiver and handle however we need.
+After we send the request we wait for the response on the receiver and handle it however we need.
 You won't need to do anything with the client handlers, since it will return the data to your oneshot receiver as soon as it arrives.
-
-However, you will then need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
 ```rust
 impl Symbol {
     pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
@@ -96,7 +102,8 @@ impl Symbol {
     }
 }
 ```
-See [data server messages](../messages/data_server_messaging.rs).
+You will then need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
+[manage_async_requests()](../../../ff_data_server/src/request_handlers.rs)
 
 #### Non Blocking
 For non-blocking messages like streams or orders first we send the request by wrapping it in a strategy request enum variant.
