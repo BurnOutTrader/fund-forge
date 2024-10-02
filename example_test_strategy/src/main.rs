@@ -143,24 +143,23 @@ pub async fn on_data_received(
                                   /*  let candle_10_ago = strategy.candle_index(&base_data.subscription(), 10).unwrap();
                                     let msg = format!("{} {} 10 Candles Ago Close: {}, {}", candle_10_ago.symbol.name, candle_10_ago.resolution, candle_10_ago.close, candle_10_ago.time_closed_local(strategy.time_zone()));
                                     println!("{}", msg.as_str().on_bright_black());*/
-
-                                    if candle.resolution == Resolution::Minutes(20) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
+                                    if candle.resolution == Resolution::Minutes(60) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
-                                        let is_short = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
+                                        let is_long = strategy.is_long(&brokerage, &account_name, &candle.symbol.name);
 
-                                        if candle.close < last_candle.low
-                                            && !is_short {
-                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Short")).await;
+                                        if candle.close > last_candle.high
+                                            && !is_long {
+                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_name, &brokerage, dec!(30), String::from("Enter Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
 
-                                        if is_short {
+                                        if is_long {
                                             bars_since_entry_2 += 1;
                                         }
 
-                                        if bars_since_entry_2 > 10
-                                            && is_short {
-                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_name, &brokerage, dec!(10), String::from("Exit Short")).await;
+                                        if bars_since_entry_2 > 2
+                                            && is_long {
+                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_name, &brokerage, dec!(30), String::from("Exit Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
                                     }
@@ -216,15 +215,15 @@ pub async fn on_data_received(
                                         let is_long: bool = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
 
                                         // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
-                                        // we can use the name we assigned to get the indicator.
+                                        // we can use the name we assigned to get the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
                                         let heikin_3m_atr_5_current_values = strategy.indicator_index(&"heikin_3m_atr_5".to_string(), 0).unwrap();
 
-                                        // We want to check the current value for the "atr" plot
+                                        // We want to check the current value for the "atr" plot of the atr indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
                                         let heikin_3m_atr_5 = heikin_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
 
-                                        if quotebar.bid_close > last_bar.bid_high && heikin_3m_atr_5 >= dec!( 0.00012)
+                                        if quotebar.bid_close > last_bar.bid_high && heikin_3m_atr_5 >= dec!( 0.00016)
                                             && !is_long {
-                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
+                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
                                         }
 
@@ -234,7 +233,7 @@ pub async fn on_data_received(
 
                                         if bars_since_entry_1 > 10
                                             && is_long {
-                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Exit Long")).await;
+                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(30), String::from("Exit Long")).await;
                                             bars_since_entry_1 = 0;
                                         }
                                     }
@@ -286,7 +285,6 @@ pub async fn on_data_received(
 
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(event) => {
-                    strategy.print_ledgers();
                     let msg = format!("{}, Strategy: Order Event: {}", strategy.time_utc(), event);
                     println!("{}", msg.as_str().bright_yellow());
                 }
@@ -362,6 +360,7 @@ pub async fn on_data_received(
                 StrategyEvent::PositionEvents(event) => {
                     let msg = format!("{}", event);
                     println!("{}", msg.as_str().yellow());
+                    strategy.print_ledgers();
                 }
             }
         }
