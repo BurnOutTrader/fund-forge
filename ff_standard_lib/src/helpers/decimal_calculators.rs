@@ -1,6 +1,36 @@
+use chrono::{DateTime, Utc};
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive, Zero};
 use rust_decimal::Decimal;
-use crate::standardized_types::new_types::Price;
+use crate::standardized_types::enums::PositionSide;
+use crate::standardized_types::new_types::{Price, Volume};
+use crate::strategies::ledgers::Currency;
+
+pub fn calculate_historical_pnl(
+    side: PositionSide,
+    entry_price: Price,
+    market_price: Price,
+    tick_size: Price,
+    value_per_tick: Price,
+    quantity: Volume,
+    _pnl_currency: Currency,
+    _account_currency: Currency,
+    _time: DateTime<Utc>,
+) -> Price {
+    // Calculate the price difference based on position side
+    let raw_ticks = match side {
+        PositionSide::Long => ((market_price - entry_price) / tick_size).round(),   // Profit if market price > entry price
+        PositionSide::Short => ((entry_price - market_price) / tick_size).round(), // Profit if entry price > market price
+    };
+
+    /*   if pnl_currency != account_currency && time > *EARLIEST_CURRENCY_CONVERSIONS {
+           //todo historical currency conversion using time
+           // return pnl in account currency
+       }*/
+
+    // Calculate PnL by multiplying with value per tick and quantity
+    let pnl = raw_ticks * value_per_tick * quantity;
+    pnl
+}
 
 /// Safely divides two f64 values using Decimal for precision.
 /// Panics if the divisor is zero or if conversion fails.

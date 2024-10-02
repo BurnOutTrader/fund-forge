@@ -1,7 +1,7 @@
 use std::fs::create_dir_all;
 use std::path::Path;
 use chrono::{DateTime, TimeZone, Utc};
-use crate::standardized_types::enums::{PositionSide, StrategyMode};
+use crate::standardized_types::enums::{StrategyMode};
 use crate::standardized_types::subscriptions::SymbolName;
 use dashmap::DashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -44,34 +44,6 @@ impl Currency {
             _ => panic!("No currency matching string, please implement")
         }
     }
-}
-
-
-pub(crate) fn calculate_historical_pnl(
-    side: PositionSide,
-    entry_price: Price,
-    market_price: Price,
-    tick_size: Price,
-    value_per_tick: Price,
-    quantity: Volume,
-    _pnl_currency: Currency,
-    _account_currency: Currency,
-    _time: DateTime<Utc>,
-) -> Price {
-    // Calculate the price difference based on position side
-    let raw_ticks = match side {
-        PositionSide::Long => ((market_price - entry_price) / tick_size).round(),   // Profit if market price > entry price
-        PositionSide::Short => ((entry_price - market_price) / tick_size).round(), // Profit if entry price > market price
-    };
-
- /*   if pnl_currency != account_currency && time > *EARLIEST_CURRENCY_CONVERSIONS {
-        //todo historical currency conversion using time
-        // return pnl in account currency
-    }*/
-
-    // Calculate PnL by multiplying with value per tick and quantity
-    let pnl = raw_ticks * value_per_tick * quantity;
-    pnl
 }
 
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
