@@ -213,6 +213,7 @@ pub(crate) mod historical_ledgers {
             let mut win_pnl = dec!(0.0);
             let mut loss_pnl = dec!(0.0);
             let mut pnl = dec!(0.0);
+
             for trades in self.positions_closed.iter() {
                 total_trades += trades.value().len();
                 for position in trades.value() {
@@ -220,12 +221,32 @@ pub(crate) mod historical_ledgers {
                         wins += 1;
                         win_pnl += position.booked_pnl;
                     } else if position.booked_pnl < dec!(0.0) {
-                        loss_pnl += position.booked_pnl;
                         losses += 1;
+                        loss_pnl += position.booked_pnl;
                     }
                     pnl += position.booked_pnl;
                 }
             }
+
+            // Calculate average win and average loss
+            let avg_win_pnl = if wins > 0 {
+                win_pnl / dec!(wins as i32) // Convert to Decimal type
+            } else {
+                dec!(0.0)
+            };
+
+            let avg_loss_pnl = if losses > 0 {
+                loss_pnl / dec!(losses as i32) // Convert to Decimal type
+            } else {
+                dec!(0.0)
+            };
+
+            // Calculate risk-reward ratio
+            let risk_reward = if avg_loss_pnl < dec!(0.0) && avg_win_pnl > dec!(0.0) {
+                avg_win_pnl / -avg_loss_pnl // negate loss_pnl for correct calculation
+            } else {
+                dec!(0.0)
+            };
 
             let profit_factor = if loss_pnl != dec!(0.0) {
                 win_pnl / -loss_pnl
@@ -242,8 +263,8 @@ pub(crate) mod historical_ledgers {
             };
 
             let break_even = total_trades - wins - losses;
-            format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Cash Used: {}, Cash Available: {}",
-                    self.brokerage, self.account_id, self.cash_value, win_rate, profit_factor, pnl, wins, losses, break_even, total_trades, self.cash_used, self.cash_available)
+            format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Cash Used: {}, Cash Available: {}",
+                    self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, profit_factor, pnl, wins, losses, break_even, total_trades, self.cash_used, self.cash_available)
         }
 
         pub fn paper_account_init(
