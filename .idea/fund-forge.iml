@@ -10,7 +10,6 @@
       <sourceFolder url="file://$MODULE_DIR$/ff_strategies/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_strategies/tests" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/test_strategy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_strategy_registry/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test_data_parser/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_lightweight_charts/src" isTestSource="false" />
@@ -18,6 +17,7 @@
       <sourceFolder url="file://$MODULE_DIR$/ff_multi_machine_data/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_api_rithmic/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_brokerage/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/example_test_strategy/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ff-data-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff-registry-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_application/target" />

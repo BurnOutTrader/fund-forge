@@ -12,7 +12,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 1. get the testing data (instructions below)
 2. cargo buid in the fund forge directory
 3. navigate to [ff_data_server](./ff_data_server) directory and `cargo run`
-4. navigate to [test_strategy](./example_test_strategy) directory and `cargo run`
+4. navigate to [example_test_strategy](./example_test_strategy) directory and `cargo run`
 
 *When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](example_test_strategy/README.md)
 
