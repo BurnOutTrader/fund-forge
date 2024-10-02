@@ -44,19 +44,16 @@ pub struct IndicatorValues {
 impl Display for IndicatorValues {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut values_string = String::new();
-        values_string.push_str(&format!("{}[ \n", self.name));
 
-        // Use an iterator to track the last element
-        let mut iter = self.plots.iter().peekable();
-        while let Some((plot_name, plot)) = iter.next() {
-            values_string.push_str(&format!("{}: {}", plot_name, plot.value));
+        // Append each plot name and value in a single line separated by commas
+        let plot_values: Vec<String> = self.plots
+            .iter()
+            .map(|(plot_name, plot)| format!("{}: {}", plot_name, plot.value))
+            .collect();
 
-            // Only add a newline if there's another element in the iterator
-            if iter.peek().is_some() {
-                values_string.push_str("\n");
-            }
-        }
-        values_string.push_str(&format!("]"));
+        values_string.push_str(&format!("{} [{}]", self.name, plot_values.join(", ")));
+
+        // Format the final output as "name, subscription, values"
         write!(f, "{}, {}, {}", self.name, self.subscription, values_string)
     }
 }
