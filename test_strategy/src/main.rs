@@ -341,8 +341,6 @@ pub async fn on_data_received(
                             println!("{}", msg.as_str().yellow());
                         }
                     }
-
-                    // we could also get the automanaged indicator values from teh strategy at any time.
                 }
 
                 StrategyEvent::PositionEvents(event) => {
