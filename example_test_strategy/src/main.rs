@@ -21,7 +21,7 @@ use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::strategies::client_features::connection_types::GUI_DISABLED;
-use ff_standard_lib::standardized_types::orders::OrderId;
+use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 
 // to launch on separate machine
@@ -144,13 +144,13 @@ pub async fn on_data_received(
                                   /*  let candle_10_ago = strategy.candle_index(&base_data.subscription(), 10).unwrap();
                                     let msg = format!("{} {} 10 Candles Ago Close: {}, {}", candle_10_ago.symbol.name, candle_10_ago.resolution, candle_10_ago.close, candle_10_ago.time_closed_local(strategy.time_zone()));
                                     println!("{}", msg.as_str().on_bright_black());*/
-                                    if candle.resolution == Resolution::Minutes(15) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
+                                    if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let other_account_is_long_euro = strategy.is_long(&brokerage, &account_2, &"EUR-USD".to_string());
 
-                                        // keep buying above prior highs if prior bar and our other account is long on EUR
-                                        if candle.close > last_candle.high && other_account_is_long_euro {
+                                        // keep buying green HA candles if our other account is long on EUR
+                                        if candle.close > candle.open && other_account_is_long_euro {
                                             let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
@@ -291,7 +291,11 @@ pub async fn on_data_received(
                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
                 StrategyEvent::OrderEvents(event) => {
                     let msg = format!("{}, Strategy: Order Event: {}", strategy.time_utc(), event);
-                    println!("{}", msg.as_str().bright_yellow());
+                    
+                    match event {
+                        OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => println!("{}", msg.as_str().on_bright_magenta().on_bright_red()),
+                        _ =>  println!("{}", msg.as_str().bright_yellow())
+                    }
                 }
 
                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
