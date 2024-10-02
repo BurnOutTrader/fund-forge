@@ -73,7 +73,7 @@ lazy_static! {
     pub static ref STREAM_CALLBACK_SENDERS: DashMap<u16 , Sender<DataServerResponse>> = DashMap::new();
 }
 
-pub async fn data_server_manage_async_requests(
+pub async fn manage_async_requests(
     strategy_mode: StrategyMode,
     stream: TlsStream<TcpStream>
 ) {

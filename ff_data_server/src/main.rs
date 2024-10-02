@@ -16,7 +16,7 @@ use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor};
 use ff_standard_lib::messages::data_server_messaging::DataServerRequest;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use crate::request_handlers::data_server_manage_async_requests;
+use crate::request_handlers::manage_async_requests;
 
 pub mod request_handlers;
 mod tests;
@@ -155,7 +155,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr, _data_f
             }
             println!("TLS connection established with {:?}", peer_addr);
 
-            data_server_manage_async_requests(
+            manage_async_requests(
                 mode,
                 tls_stream
             )

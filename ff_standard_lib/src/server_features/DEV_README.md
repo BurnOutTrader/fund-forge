@@ -1,5 +1,8 @@
 # Development Guide
+
 ## A guide for adding new features to fund forge
+At a glance it might seem complicated, but because of the use of traits and enums you can basically just implement a new enum and/or trait and attempt to compile and you will see all the tasks you need to complete.
+Knowing the code base I can generally implement a new Request and Response in half an hour. Using rust rover IDE is advantageous as it takes you directly to each new task when compilation fails.
 
 ### Api's
 `DataVendor` or `Brokerage` Api:
@@ -119,7 +122,8 @@ you will then need to provide matching statements for all existing api objects f
 
 you might also need to provide [client side implementations](../strategies/client_features/client_side_impl.rs).
 depending on how you want to access the data in your strategies.
-You will then need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
+You will then need to complete a matching statement for the server logic in `ff_data_server` function [manage_async_requests()](../../../ff_data_server/src/request_handlers.rs) function so the server knows what to do with the request type.
+This is quite easy as it is just another mathcing statement.
 
 #### Short Option B
 If you don't want other variants to return this response you can just move onto sending the response and receiving the message.
