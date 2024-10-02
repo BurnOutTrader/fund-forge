@@ -189,13 +189,13 @@ pub(crate) mod historical_ledgers {
                 }
             }
         }
-        pub async fn subtract_margin_used(&mut self, symbol_name: &SymbolName, quantity: Volume) {
+        pub async fn release_margin_used(&mut self, symbol_name: &SymbolName, quantity: Volume) {
             let margin = self.brokerage.margin_required(symbol_name.clone(), quantity).await.unwrap();
             self.cash_available += margin;
             self.cash_used -= margin;
         }
 
-        pub async fn add_margin_used(&mut self, symbol_name: &SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
+        pub async fn commit_margin_used(&mut self, symbol_name: &SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
             let margin = self.brokerage.margin_required(symbol_name.clone(), quantity).await?;
             // Check if the available cash is sufficient to cover the margin
             if self.cash_available < margin {
@@ -402,7 +402,7 @@ pub(crate) mod historical_ledgers {
 
                 if is_reducing {
                     let event= existing_position.reduce_paper_position_size(market_price, quantity, time).await;
-                    self.subtract_margin_used(&symbol_name, quantity).await;
+                    self.release_margin_used(&symbol_name, quantity).await;
                     self.cash_value = self.cash_used + self.cash_available;
                     match &event {
                         PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
@@ -422,7 +422,7 @@ pub(crate) mod historical_ledgers {
                     }
                     return Ok(event)
                 } else {
-                    match self.add_margin_used(&symbol_name, quantity).await {
+                    match self.commit_margin_used(&symbol_name, quantity).await {
                         Ok(_) => {}
                         Err(e) => {
                             return Err(OrderUpdateEvent::OrderRejected {
@@ -439,7 +439,7 @@ pub(crate) mod historical_ledgers {
                 }
             }
              else {
-                 match self.add_margin_used(&symbol_name, quantity).await {
+                 match self.commit_margin_used(&symbol_name, quantity).await {
                      Ok(_) => {}
                      Err(e) => {
                          return Err(OrderUpdateEvent::OrderRejected {
@@ -522,7 +522,7 @@ pub(crate) mod historical_ledgers {
                     }
                     _ => panic!("this shouldn't happen")
                 }
-                self.subtract_margin_used(&symbol_name, existing_position.quantity_open).await;
+                self.release_margin_used(&symbol_name, existing_position.quantity_open).await;
                 self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
                 // Add the closed position to the positions_closed DashMap
                 self.positions_closed
