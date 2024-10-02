@@ -10,7 +10,7 @@ pub trait Indicators {
     fn name(&self) -> IndicatorName;
 
     /// Returns the name of the indicator with the symbol and data vendor, resolution, base data type and candle type where applicable.
-    /// example: "Average True Range EUR-USD Test QuoteBar 1D Candle Stick"
+    /// example: "Average True Range EUR-USD Test QuoteBar 1H Candle Stick"
     fn long_name(&self) -> IndicatorLongName {
         let subscription = self.subscription();
         match &subscription.candle_type {
