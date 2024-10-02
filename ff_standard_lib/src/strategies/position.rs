@@ -204,17 +204,16 @@ pub(crate) mod historical_position {
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use crate::helpers::decimal_calculators::round_to_tick_size;
-    use crate::client_features::server_connections::add_buffer;
     use crate::strategies::ledgers::calculate_historical_pnl;
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
     use crate::strategies::position::{Position, PositionUpdateEvent};
     use crate::standardized_types::new_types::{Price, Volume};
-    use crate::strategies::strategy_events::StrategyEvent;
 
     impl Position {
 
-        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) -> Price {
+        /// Reduces paper position size a position event, this event will include a booked_pnl property
+        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) -> PositionUpdateEvent {
             // Ensure quantity does not exceed the open quantity
             let quantity = if quantity > self.quantity_open {
                 self.quantity_open
@@ -257,17 +256,16 @@ pub(crate) mod historical_position {
             // Reset open PnL if position is closed
             if self.is_closed {
                 self.open_pnl = dec!(0.0);
-                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionClosed {
+                PositionUpdateEvent::PositionClosed {
                     position_id: self.position_id.clone(),
                     total_quantity_open: self.quantity_open,
                     total_quantity_closed: self.quantity_closed,
                     average_price: self.average_price,
                     booked_pnl: self.booked_pnl,
                     average_exit_price: self.average_exit_price,
-                });
-                add_buffer(time, event).await;
+                }
             } else {
-                let event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionReduced {
+                PositionUpdateEvent::PositionReduced {
                     position_id: self.position_id.clone(),
                     total_quantity_open: self.quantity_open,
                     total_quantity_closed: self.quantity_closed,
@@ -275,13 +273,12 @@ pub(crate) mod historical_position {
                     open_pnl: self.open_pnl,
                     booked_pnl: self.booked_pnl,
                     average_exit_price: self.average_exit_price.unwrap(),
-                });
-                add_buffer(time, event).await;
+                }
             }
-            booked_pnl
         }
 
-        pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) {
+        /// Adds to the paper position
+        pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) -> PositionUpdateEvent {
             // Correct the average price calculation with proper parentheses
             if self.quantity_open + quantity != Decimal::ZERO {
                 self.average_price = round_to_tick_size(
@@ -311,18 +308,16 @@ pub(crate) mod historical_position {
                 time,
             );
 
-            let event = StrategyEvent::PositionEvents(PositionUpdateEvent::Increased {
+            PositionUpdateEvent::Increased {
                 position_id: self.position_id.clone(),
                 total_quantity_open: self.quantity_open,
                 average_price: self.average_price,
                 open_pnl: self.open_pnl,
                 booked_pnl: self.booked_pnl,
-            });
-
-            add_buffer(time, event).await;
+            }
         }
 
-        //todo, this needs to be ddone by passing in the position, so we can use the market price, it should return what kind of order was triggered
+        /// Returns the open pnl for the paper position
         pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: DateTime<Utc>) -> Decimal {
             if self.is_closed {
                 return dec!(0)

@@ -71,7 +71,16 @@ lazy_static! {
 
 #[inline(always)]
 pub async fn add_buffer(time: DateTime<Utc>, event: StrategyEvent) {
-    EVENT_BUFFER.lock().await.add_event(time, event);
+    let mut buffer = EVENT_BUFFER.lock().await;
+    buffer.add_event(time, event);
+}
+
+#[inline(always)]
+pub async fn add_buffers(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
+    let mut buffer =  EVENT_BUFFER.lock().await;
+    for event in events {
+        buffer.add_event(time, event);
+    }
 }
 
 // could potentially make a buffer using a receiver, this can reduce the handlers to 1

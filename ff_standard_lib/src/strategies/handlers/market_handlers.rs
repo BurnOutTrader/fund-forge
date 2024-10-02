@@ -11,7 +11,7 @@ use lazy_static::lazy_static;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::client_features::server_connections::{add_buffer, forward_buffer, get_backtest_time, is_warmup_complete, send_request, StrategyRequest};
+use crate::client_features::server_connections::{add_buffer, add_buffers, forward_buffer, get_backtest_time, is_warmup_complete, send_request, StrategyRequest};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::time_slices::TimeSlice;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -551,13 +551,14 @@ async fn fill_order(
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                 match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_ordered, order.side.clone(), time, market_price).await {
-                    Ok(_) => {
+                    Ok(event) => {
                         order.time_filled_utc = Some(time.to_string());
                         order.state = OrderState::Filled;
                         order.average_fill_price = Some(market_price);
                         order.quantity_filled = order.quantity_ordered;
                         order.time_filled_utc = Some(time.to_string());
-                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
+                        add_buffers(time, vec![StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() }) ,StrategyEvent::PositionEvents(event)]).await;
+
                     }
                     Err(e) => {
                         match &e {
@@ -565,14 +566,13 @@ async fn fill_order(
                                 order.state = OrderState::Rejected(reason.clone());
                                 let event = StrategyEvent::OrderEvents(e);
                                 add_buffer(time, event).await;
-                                if !is_buffered {
-                                    forward_buffer().await;
-                                }
                             }
                             _ => {}
                         }
-
                     }
+                }
+                if !is_buffered {
+                    forward_buffer().await;
                 }
             }
         }
