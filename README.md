@@ -49,7 +49,7 @@ After creating the strategy instance using `FundForgeStrategy::initialize();` we
 The `StrategyEventBuffer` is an Iterable object with a collection of all `StrategyEvent`s that occurred within a buffer period.
 
 We also have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
-Take a more in depth look at [strategy features here](ff_standard_lib/src/strategies/README.md).
+Take a more in depth look at [strategy features here](ff_standard_lib/src/strategies/STRATEGIES_README).
 ```rust
 //let strategy = FundForgeStrategy::initialize(); //parameters excluded for brevity
 pub async fn on_data_received(
@@ -231,7 +231,7 @@ This only has an impact on backtesting fills, duplicate SymbolName subscriptions
 For a full look at strategies see
 [test_strategy](./test_strategy/src/main.rs)
 and
-[strategies readme](ff_standard_lib/src/strategies/README.md)
+[strategies readme](ff_standard_lib/src/strategies/STRATEGIES_README)
 
 I intend to build a full glossary and video tutorial series when live trading features are completed.
 I will walk through the entire code base during the video tutorial to assist people creating new Brokerage or DataVendor implementations.
@@ -367,7 +367,7 @@ To use rithmic API's you will need to request a dev kit for RProtocol (Proto Buf
 You will need to have a unique app name in your rithmic_credentials.toml files.
 
 ## Strategies
-Once you have followed the setup instructions above, you can play with a test strategy by reviewing [Strategies Guide](ff_standard_lib/src/strategies/README.md)
+Once you have followed the setup instructions above, you can play with a test strategy by reviewing [Strategies Guide](ff_standard_lib/src/strategies/STRATEGIES_README)
 
 ## Gui
 Decoupled.
