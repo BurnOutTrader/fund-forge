@@ -1,4 +1,4 @@
-use crate::standardized_types::drawing_objects::drawing_tool_enum::DrawingTool;
+use crate::gui_types::drawing_objects::drawing_tool_enum::DrawingTool;
 use crate::standardized_types::subscriptions::DataSubscription;
 use ahash::AHashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};

@@ -210,7 +210,7 @@ pub(crate) mod historical_position {
     use crate::standardized_types::enums::PositionSide;
     use crate::standardized_types::accounts::position::{Position, PositionUpdateEvent};
     use crate::standardized_types::new_types::{Price, Volume};
-    use crate::standardized_types::strategy_events::StrategyEvent;
+    use crate::strategies::strategy_events::StrategyEvent;
 
     impl Position {
 

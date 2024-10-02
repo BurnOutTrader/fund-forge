@@ -3,8 +3,7 @@ use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
 use crate::standardized_types::enums::{OrderSide, StrategyMode};
-use crate::standardized_types::orders::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType};
-use crate::standardized_types::strategy_events::StrategyEvent;
+use crate::strategies::strategy_events::StrategyEvent;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use std::sync::Arc;
 use dashmap::DashMap;
@@ -24,6 +23,7 @@ use crate::client_features::connection_settings::client_settings::initialise_set
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::messages::data_server_messaging::{DataServerRequest, FundForgeError};
 use crate::standardized_types::new_types::{Price, Volume};
+use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]

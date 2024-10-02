@@ -5,3 +5,4 @@ pub mod market_handlers;
 pub mod timed_events_handler;
 pub mod historical_time;
 pub mod consolidators;
+pub mod strategy_events;

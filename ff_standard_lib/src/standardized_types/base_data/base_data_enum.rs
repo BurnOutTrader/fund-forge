@@ -9,7 +9,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::standardized_types::traits::bytes::Bytes;
+use crate::standardized_types::bytes_trait::Bytes;
 use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::ser::serializers::AllocSerializer;

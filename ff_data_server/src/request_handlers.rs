@@ -5,7 +5,7 @@ use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::messages::data_server_messaging::{BaseDataPayload, FundForgeError, DataServerRequest, DataServerResponse, StreamRequest};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
-use ff_standard_lib::standardized_types::traits::bytes::Bytes;
+use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use dashmap::DashMap;
@@ -22,7 +22,7 @@ use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::server_features::StreamName;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::orders::orders::OrderRequest;
+use ff_standard_lib::standardized_types::orders::OrderRequest;
 
 /// Retrieves the base data from the file system or the vendor and sends it back to the client via a NetworkMessage using the response function
 pub async fn base_data_response(

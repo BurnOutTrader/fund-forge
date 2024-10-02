@@ -25,12 +25,12 @@ use crate::strategies::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::StrategyMode;
-use crate::standardized_types::strategy_events::{StrategyEvent, StrategyEventBuffer};
+use crate::strategies::strategy_events::{StrategyEvent, StrategyEventBuffer};
 use crate::strategies::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::timed_events_handler::TimedEventHandler;
-use crate::standardized_types::traits::bytes::Bytes;
+use crate::standardized_types::bytes_trait::Bytes;
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);

@@ -26,7 +26,7 @@ use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::resolution::Resolution;
-use crate::standardized_types::strategy_events::StrategyEvent;
+use crate::strategies::strategy_events::StrategyEvent;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {

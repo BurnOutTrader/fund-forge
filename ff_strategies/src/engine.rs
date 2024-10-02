@@ -5,7 +5,7 @@ use ff_standard_lib::standardized_types::base_data::history::{
 };
 use ff_standard_lib::messages::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::strategy_events::{StrategyEvent};
+use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use std::collections::BTreeMap;
 use std::thread;

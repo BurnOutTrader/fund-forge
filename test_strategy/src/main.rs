@@ -6,7 +6,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
-use ff_standard_lib::standardized_types::strategy_events::{StrategyControls, StrategyEvent, StrategyEventBuffer};
+use ff_standard_lib::strategies::strategy_events::{StrategyControls, StrategyEvent, StrategyEventBuffer};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
@@ -21,7 +21,7 @@ use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::client_features::connection_types::GUI_DISABLED;
-use ff_standard_lib::standardized_types::orders::orders::OrderId;
+use ff_standard_lib::standardized_types::orders::OrderId;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 
 // to launch on separate machine

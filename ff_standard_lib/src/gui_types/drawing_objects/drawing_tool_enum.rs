@@ -2,7 +2,7 @@ use std::fmt::Error;
 
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 
-use crate::standardized_types::drawing_objects::lines::{HorizontalLine, VerticleLine};
+use crate::gui_types::drawing_objects::lines::{HorizontalLine, VerticleLine};
 use crate::standardized_types::subscriptions::DataSubscription;
 
 //ToDo make drawing tool trait so we can implement depending on if strategy is using or if gui is using... or convert from strategy to gui type tool.

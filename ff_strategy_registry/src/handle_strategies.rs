@@ -1,9 +1,9 @@
 use ff_standard_lib::communicators::communications_async::{SecondaryDataReceiver, SecondaryDataSender};
-use ff_standard_lib::standardized_types::strategy_events::StrategyEventBuffer;
+use ff_standard_lib::strategies::strategy_events::StrategyEventBuffer;
 use ff_standard_lib::messages::registry_messages::guis::RegistryGuiResponse;
 use ff_standard_lib::messages::registry_messages::strategies::{StrategyRegistryForward, StrategyResponse};
 use ff_standard_lib::messages::registry_messages::RegistrationResponse;
-use ff_standard_lib::standardized_types::traits::bytes::Bytes;
+use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use structopt::lazy_static::lazy_static;

@@ -1,5 +1,5 @@
 use crate::messages::data_server_messaging::FundForgeError;
-use crate::standardized_types::traits::bytes::Bytes;
+use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::subscriptions::DataSubscription;

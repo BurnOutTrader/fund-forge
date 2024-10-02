@@ -1,7 +1,7 @@
 use crate::standardized_types::accounts::ledgers::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
-use crate::standardized_types::traits::bytes::Bytes;
+use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use std::fmt::{Debug, Display};
@@ -11,7 +11,7 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price, Volume};
-use crate::standardized_types::orders::orders::{OrderRequest, OrderUpdateEvent};
+use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
 

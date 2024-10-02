@@ -187,12 +187,12 @@ pub(crate) mod historical_ledgers {
     use crate::standardized_types::accounts::ledgers::{AccountId, Currency, Ledger};
     use crate::messages::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
-    use crate::standardized_types::orders::orders::{OrderId, OrderUpdateEvent};
     use crate::standardized_types::accounts::position::{Position, PositionId, PositionUpdateEvent};
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::base_data::traits::BaseData;
     use crate::standardized_types::new_types::{Price, Volume};
-    use crate::standardized_types::strategy_events::StrategyEvent;
+    use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
+    use crate::strategies::strategy_events::StrategyEvent;
     use crate::standardized_types::subscriptions::SymbolName;
     use crate::standardized_types::symbol_info::SymbolInfo;
     use crate::standardized_types::time_slices::TimeSlice;
