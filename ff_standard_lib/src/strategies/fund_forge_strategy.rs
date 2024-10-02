@@ -25,7 +25,7 @@ use tokio::sync::{mpsc, RwLock};
 use tokio::sync::mpsc::Sender;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::strategies::handlers::market_handlers::{export_trades, get_market_fill_price_estimate, get_market_price, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
-use crate::client_features::server_connections::{get_backtest_time, init_connections, init_sub_handler, initialize_static, live_subscription_handler, update_historical_timestamp};
+use crate::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
@@ -34,6 +34,7 @@ use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderUpdateType, TimeInForce};
 use crate::strategies::historical_engine::HistoricalEngine;
+use crate::strategies::historical_time::{get_backtest_time, update_backtest_time};
 use crate::strategies::indicators::events::IndicatorEvents;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
@@ -111,7 +112,7 @@ impl FundForgeStrategy {
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
         let warm_up_start_time = start_time - warmup_duration;
-        update_historical_timestamp(warm_up_start_time.clone());
+        update_backtest_time(warm_up_start_time.clone());
         let is_buffered = match buffering_duration {
             None => false,
             Some(_) => true

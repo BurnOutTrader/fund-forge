@@ -1,5 +1,5 @@
 use chrono::{DateTime, Datelike, Utc,  Duration as ChronoDuration};
-use crate::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, unsubscribe_primary_subscription_updates, add_buffer, forward_buffer, get_backtest_time, update_historical_timestamp};
+use crate::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, unsubscribe_primary_subscription_updates, add_buffer, forward_buffer};
 use crate::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
@@ -15,7 +15,7 @@ use tokio::sync::{mpsc};
 use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
-
+use crate::strategies::historical_time::{get_backtest_time, update_backtest_time};
 //Possibly more accurate engine
 /*todo Use this for saving and loading data, it will make smaller file sizes and be less handling for consolidator, we can then just update historical data once per week on sunday and load last week from broker.
   use Create a date (you can use DateTime<Utc>, Local, or NaiveDate)
@@ -169,7 +169,7 @@ impl HistoricalEngine {
                             println!("Un-Buffered Engine: Start Backtest");
                         }
                     }
-                    update_historical_timestamp(time.clone());
+                    update_backtest_time(time.clone());
                     self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
                     let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
@@ -283,7 +283,7 @@ impl HistoricalEngine {
                         break 'month_loop;
                     }
 
-                    update_historical_timestamp(time.clone());
+                    update_backtest_time(time.clone());
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
                     match self.primary_subscription_updates.try_recv() {
                         Ok(updates) => {

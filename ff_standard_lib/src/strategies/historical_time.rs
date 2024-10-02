@@ -7,13 +7,13 @@ lazy_static! {
 }
 
 #[inline(always)]
-pub fn update_engine_time(dt: DateTime<Utc>) {
+pub fn update_backtest_time(dt: DateTime<Utc>) {
     let nanos = dt.timestamp_nanos_opt().unwrap();
     ATOMIC_TIMESTAMP_NS.store(nanos, Ordering::Release);
 }
 
 #[inline(always)]
-pub fn read_engine_time() -> DateTime<Utc> {
+pub fn get_backtest_time() -> DateTime<Utc> {
     let nanos = ATOMIC_TIMESTAMP_NS.load(Ordering::Acquire);
     Utc.timestamp_nanos(nanos)
 }
@@ -30,27 +30,27 @@ mod tests {
     #[test]
     fn test_update_and_read() {
         let test_time = Utc::now();
-        update_engine_time(test_time);
-        assert_eq!(read_engine_time(), test_time);
+        update_backtest_time(test_time);
+        assert_eq!(get_backtest_time(), test_time);
     }
 
     #[test]
     fn test_advance_time() {
         let initial_time = Utc::now();
-        update_engine_time(initial_time);
+        update_backtest_time(initial_time);
         advance_engine_time(chrono::Duration::seconds(5));
-        assert_eq!(read_engine_time(), initial_time + chrono::Duration::seconds(5));
+        assert_eq!(get_backtest_time(), initial_time + chrono::Duration::seconds(5));
     }
 
     #[test]
     fn test_concurrent_reads() {
         let test_time = Utc::now();
-        update_engine_time(test_time);
+        update_backtest_time(test_time);
 
         let threads: Vec<_> = (0..10).map(|_| {
             thread::spawn(move || {
                 for _ in 0..1000 {
-                    let read_time = read_engine_time();
+                    let read_time = get_backtest_time();
                     assert!((read_time - test_time).num_nanoseconds().unwrap().abs() < 1000);
                 }
             })

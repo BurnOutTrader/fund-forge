@@ -4,10 +4,10 @@ use crate::client_features::init_clients::create_async_api_client;
 use crate::client_features::connection_settings::client_settings::{initialise_settings, ConnectionSettings};
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, StreamRequest};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::io;
@@ -42,26 +42,6 @@ pub fn set_warmup_complete() {
 #[inline(always)]
 pub fn is_warmup_complete() -> bool {
     WARM_UP_COMPLETE.load(Ordering::SeqCst)
-}
-
-lazy_static! {
-    static ref ATOMIC_TIMESTAMP_NS: AtomicI64 = AtomicI64::new(0);
-}
-
-#[inline(always)]
-pub fn update_historical_timestamp(dt: DateTime<Utc>) {
-    ATOMIC_TIMESTAMP_NS.store(dt.timestamp_nanos_opt().unwrap(), Ordering::Release);
-}
-
-#[inline(always)]
-pub fn read_historical_timestamp_ns() -> i64 {
-    ATOMIC_TIMESTAMP_NS.load(Ordering::Acquire)
-}
-
-#[inline(always)]
-pub fn get_backtest_time() -> DateTime<Utc> {
-    let timestamp_ns = ATOMIC_TIMESTAMP_NS.load(Ordering::Acquire);
-    Utc.timestamp_nanos(timestamp_ns)
 }
 
 
