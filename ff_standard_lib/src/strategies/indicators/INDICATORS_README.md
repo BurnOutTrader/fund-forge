@@ -1,7 +1,7 @@
-# Creating Indicators
-I chose to use enums and matching statements over dynamic dispatch for increased performance at the cost of simply completeing a matching statement.
+# Creating Your Own Indicators
+I have chosen to use enums and matching statements over dynamic dispatch for increased performance at the cost of simply completeing a matching statement.
 
-*I will add another enum type and trait for multi symbol indicators in teh future.*
+*I will add another enum type and trait for multi symbol indicators in the future.*
 
 ## Step 1
 1. Create a new Indicator object that implements the [Indicators](indicators_trait.rs) trait
