@@ -30,7 +30,7 @@ async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
-        //ToDo: You can Test Live paper using the simulated data feed. Live paper might panic subscribing in event loop due to live warm up not being complete and accessing history to early.
+        //ToDo: You can Test Live paper using the simulated data feed which simulates quote stream from the server side at 10 ms per quote.
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
@@ -72,7 +72,7 @@ async fn main() {
         strategy_event_sender, // the sender for the strategy events
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading and backtesting.
-        //ToDo: Test Un-Buffered engines (None) vs Buffered Some(Duration)
+        //ToDo: Test Un-Buffered engines == (None) vs Buffered engines == Some(Duration)
         Some(core::time::Duration::from_millis(50)),
         //None,
 
@@ -114,9 +114,7 @@ pub async fn on_data_received(
         for (_time, strategy_event) in event_slice.iter() {
             match strategy_event {
                 // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
-                StrategyEvent::DrawingToolEvents(event) => {
-                    println!("Strategy: Drawing Tool Event: {:?}", event);
-                }
+                StrategyEvent::DrawingToolEvents(_event) => {}
 
                 StrategyEvent::TimeSlice(time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
