@@ -44,7 +44,7 @@ pub struct IndicatorValues {
 impl Display for IndicatorValues {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut values_string = String::new();
-        values_string.push_str(&format!("{} \n", self.name));
+        values_string.push_str(&format!("{}[ \n", self.name));
 
         // Use an iterator to track the last element
         let mut iter = self.plots.iter().peekable();
@@ -56,7 +56,7 @@ impl Display for IndicatorValues {
                 values_string.push_str("\n");
             }
         }
-
+        values_string.push_str(&format!("]"));
         write!(f, "{}, {}, {}", self.name, self.subscription, values_string)
     }
 }
