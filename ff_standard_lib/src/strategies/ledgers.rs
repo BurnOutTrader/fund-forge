@@ -403,7 +403,7 @@ pub(crate) mod historical_ledgers {
                 if is_reducing {
                     let event= existing_position.reduce_paper_position_size(market_price, quantity, time).await;
                     self.release_margin_used(&symbol_name, quantity).await;
-                    self.cash_value = self.cash_used + self.cash_available;
+
                     match &event {
                         PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                             self.positions.insert(symbol_name, existing_position);
@@ -420,6 +420,7 @@ pub(crate) mod historical_ledgers {
                         }
                         _ => panic!("This shouldn't happen")
                     }
+                    self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
                     return Ok(event)
                 } else {
                     match self.commit_margin_used(&symbol_name, quantity).await {

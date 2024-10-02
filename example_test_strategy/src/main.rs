@@ -17,7 +17,6 @@ use ff_standard_lib::strategies::indicators::built_in::average_true_range::Avera
 use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::strategies::indicators::indicators_trait::{IndicatorName};
 use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
-use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::strategies::client_features::connection_types::GUI_DISABLED;
@@ -225,8 +224,8 @@ pub async fn on_data_received(
                                         let current_heikin_3m_atr_5 = heikin_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
                                         let last_heikin_3m_atr_5 = heikin_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
-                                        // buy above the high of prior bar when atr is high and atr is increasing
-                                        if quotebar.bid_close > last_bar.bid_high && current_heikin_3m_atr_5 >= dec!(0.00012) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
+                                        // buy above the close of prior bar when atr is high and atr is increasing
+                                        if quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00012) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
                                             && !is_long {
                                             let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
