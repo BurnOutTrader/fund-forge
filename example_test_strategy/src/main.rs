@@ -152,7 +152,7 @@ pub async fn on_data_received(
 
                                         // keep buying AUD-CAD if consecutive green HA candles if our other account is long on EUR
                                         if candle.close > candle.open && last_candle.close > last_candle.open && other_account_is_long_euro {
-                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
+                                            let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
 
@@ -162,7 +162,7 @@ pub async fn on_data_received(
 
                                         if bars_since_entry_2 > 4
                                             && is_long {
-                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Short")).await;
+                                            let _exit_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
                                     }
