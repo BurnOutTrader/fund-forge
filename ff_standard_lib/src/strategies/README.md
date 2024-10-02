@@ -81,12 +81,10 @@ If None we will use the unbuffered versions. The backtesting versions will try t
 
 The buffer takes effect in both back-testing and live trading.
 A lower buffer resolution will result in a slower backtest, don't go to low unless necessary, 30 to 100ms is fine for most cases.
-Any input <= 0 will default the buffer to 1ms.
+If buffer is None we will use the unbuffered engine and push events to the strategy receiver as soon as they are available.
 
-The buffering resolution of the strategy. If we are back testing, any data of a lower granularity will be consolidated into a single time slice.
-If our base data source is tick data, but we are trading only on 15min bars, then we can just set this to any Duration < 15 minutes and consolidate the tick data to ignore it in on_data_received().
-
-In live trading our strategy will capture the tick stream in a buffer and pass it to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn.
+If Some(Duration)
+Our handlers will capture the data streams in a buffer and pass them to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn.
 In live: If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events of a higher than instant resolution.
 
 This helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
