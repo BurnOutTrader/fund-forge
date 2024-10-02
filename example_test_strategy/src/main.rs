@@ -147,9 +147,10 @@ pub async fn on_data_received(
                                     if candle.resolution == Resolution::Minutes(60) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
+                                        let other_account_is_long_euro = strategy.is_long(&brokerage, &account_2, &"EUR-USD".to_string());
 
-                                        // buy below the low of prior bar
-                                        if candle.close < last_candle.low
+                                        // buy below the low of prior bar and our other account is long on EUR
+                                        if candle.close < last_candle.low && other_account_is_long_euro
                                             && !is_long {
                                             let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
                                             bars_since_entry_2 = 0;
@@ -219,7 +220,7 @@ pub async fn on_data_received(
                                         // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
                                         // we can use the name we assigned to get the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
                                         let heikin_3m_atr_5_current_values = strategy.indicator_index(&"heikin_3m_atr_5".to_string(), 0).unwrap();
-                                        let heikin_3m_atr_5_last_values = strategy.indicator_index(&"heikin_3m_atr_5".to_string(), 0).unwrap();
+                                        let heikin_3m_atr_5_last_values = strategy.indicator_index(&"heikin_3m_atr_5".to_string(), 1).unwrap();
 
                                         // We want to check the current value for the "atr" plot of the atr indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
                                         let current_heikin_3m_atr_5 = heikin_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
