@@ -4,7 +4,7 @@ use chrono_tz::Tz;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::gui_types::drawing_objects::drawing_tool_enum::DrawingTool;
 use crate::strategies::indicators::indicator_enum::IndicatorEnum;
-use crate::strategies::indicators::indicator_handler::IndicatorHandler;
+use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::values::IndicatorValues;
 use crate::strategies::ledgers::{AccountId, Currency};
