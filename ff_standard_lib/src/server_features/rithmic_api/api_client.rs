@@ -71,35 +71,18 @@ pub struct RithmicClient {
 }
 
 impl RithmicClient {
-    async fn run_start_up(&self) {
-     /*   let accounts = RequestAccountList {
-            template_id: 302,
-            user_msg: vec![],
-            fcm_id: self.fcm_id.clone(),
-            ib_id: self.ib_id.clone(),
-            user_type: self.user_type.clone()
-        };
-        self.client.send_message(SysInfraType::OrderPlant, accounts).await.unwrap();*/
-        let rms_req = RequestAccountRmsInfo {
-            template_id: 304,
-            user_msg: vec![],
-            fcm_id: self.fcm_id.clone(),
-            ib_id: self.ib_id.clone(),
-            user_type: self.user_type.clone(),
-        };
-        self.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();
-    }
-
     pub async fn new(
         system: RithmicSystem,
         app_name: String,
         app_version: String,
         aggregated_quotes: bool,
         server_domains_toml: String,
-    ) -> Self {
+        connect_data_plants: bool,
+        connect_account_plants: bool
+    ) -> Result<Self, FundForgeError> {
         let brokerage = Brokerage::Rithmic(system.clone());
         let data_vendor = DataVendor::Rithmic(system.clone());
-        let credentials = RithmicClient::rithmic_credentials(&brokerage).unwrap();
+        let credentials = RithmicClient::rithmic_credentials(&brokerage)?;
         let client = RithmicApiClient::new(credentials.clone(), app_name, app_version, aggregated_quotes, server_domains_toml).unwrap();
         let client = Self {
             brokerage,
@@ -117,48 +100,70 @@ impl RithmicClient {
             account_rms_info: Default::default(),
             products: Default::default(),
         };
-        let _ticker_receiver = match client.client.connect_and_login(SysInfraType::TickerPlant).await {
-            Ok(r) => client.readers.insert(SysInfraType::TickerPlant, Arc::new(Mutex::new(r))),
-            Err(_e) => {
-                let _ = client.client.shutdown_all().await;
-                return client
-            }
-        };
-        let _history_receiver = match client.client.connect_and_login(SysInfraType::HistoryPlant).await {
-            Ok(r) =>  client.readers.insert(SysInfraType::HistoryPlant, Arc::new(Mutex::new(r))),
-            Err(_e) => {
-                let _ = client.client.shutdown_all().await;
-                return client
-            }
-        };
-        let _order_receiver = match client.client.connect_and_login(SysInfraType::OrderPlant).await {
-            Ok(r) =>  client.readers.insert(SysInfraType::OrderPlant, Arc::new(Mutex::new(r))),
-            Err(_e) => {
-                let _ = client.client.shutdown_all().await;
-                return client
-            }
-        };
-        let _pnl_receiver = match client.client.connect_and_login(SysInfraType::PnlPlant).await {
-            Ok(r) =>  client.readers.insert(SysInfraType::PnlPlant, Arc::new(Mutex::new(r))),
-            Err(_e) => {
-                let _ = client.client.shutdown_all().await;
-                return client
-            }
-        };
+        if connect_data_plants {
+            client.connect_to_data_plants().await?
+        }
+        if connect_account_plants {
+            client.connect_to_accounts().await?
+        }
         client.run_start_up().await;
-        client
+        Ok(client)
     }
 
-    pub fn is_long(&self, _account_id: AccountId, _symbol_name: SymbolName) -> bool {
-        todo!()
+    pub async fn connect_to_data_plants(&self) -> Result<(), FundForgeError> {
+        let _ticker_receiver = match self.client.connect_and_login(SysInfraType::TickerPlant).await {
+            Ok(r) => self.readers.insert(SysInfraType::TickerPlant, Arc::new(Mutex::new(r))),
+            Err(e) => {
+                return Err(FundForgeError::ServerErrorDebug(e.to_string()))
+            }
+        };
+        //todo start ticker handler
+        let _pnl_receiver = match self.client.connect_and_login(SysInfraType::HistoryPlant).await {
+            Ok(r) => self.readers.insert(SysInfraType::HistoryPlant, Arc::new(Mutex::new(r))),
+            Err(e) => {
+                return Err(FundForgeError::ServerErrorDebug(e.to_string()))
+            }
+        };
+        //todo start history handler
+        Ok(())
     }
 
-    pub fn is_short(&self, _account_id: AccountId, _symbol_name: SymbolName) -> bool {
-        todo!()
+    pub async fn connect_to_accounts(&self) -> Result<(), FundForgeError> {
+        let _order_receiver = match self.client.connect_and_login(SysInfraType::OrderPlant).await {
+            Ok(r) => self.readers.insert(SysInfraType::OrderPlant, Arc::new(Mutex::new(r))),
+            Err(e) => {
+                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
+            }
+        };
+        //todo start order handler
+        let _pnl_receiver = match self.client.connect_and_login(SysInfraType::PnlPlant).await {
+            Ok(r) => self.readers.insert(SysInfraType::PnlPlant, Arc::new(Mutex::new(r))),
+            Err(e) => {
+                return Err(FundForgeError::ServerErrorDebug(e.to_string()))
+            }
+        };
+        //todo start pnl handler
+        Ok(())
     }
 
-    pub fn is_flat(&self, _account_id: AccountId, _symbol_name: SymbolName) -> bool {
-        todo!()
+    //todo run start up... we might need to connect to all plants for this..
+    async fn run_start_up(&self) {
+        /*   let accounts = RequestAccountList {
+               template_id: 302,
+               user_msg: vec![],
+               fcm_id: self.fcm_id.clone(),
+               ib_id: self.ib_id.clone(),
+               user_type: self.user_type.clone()
+           };
+           self.client.send_message(SysInfraType::OrderPlant, accounts).await.unwrap();*/
+        let rms_req = RequestAccountRmsInfo {
+            template_id: 304,
+            user_msg: vec![],
+            fcm_id: self.fcm_id.clone(),
+            ib_id: self.ib_id.clone(),
+            user_type: self.user_type.clone(),
+        };
+        self.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();
     }
 
     pub fn available_subscriptions(&self) -> Vec<DataSubscription> {
