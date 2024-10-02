@@ -263,7 +263,7 @@ pub(crate) mod historical_ledgers {
             };
 
             let break_even = total_trades - wins - losses;
-            format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Cash Used: {}, Cash Available: {}",
+            format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Average Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Cash Used: {}, Cash Available: {}",
                     self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, profit_factor, pnl, wins, losses, break_even, total_trades, self.cash_used, self.cash_available)
         }
 
