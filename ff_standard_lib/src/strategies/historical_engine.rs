@@ -12,7 +12,7 @@ use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{mpsc};
-use crate::strategies::market_handlers::MarketMessageEnum;
+use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
 

@@ -15,7 +15,7 @@ use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
-use crate::strategies::market_handlers::MarketMessageEnum;
+use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::client_features::server_connections::{add_buffer, is_warmup_complete};
 use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::base_data::candle::Candle;

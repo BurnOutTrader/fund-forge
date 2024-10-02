@@ -19,17 +19,17 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::{sleep_until, Instant};
 use tokio_rustls::TlsStream;
 use crate::client_features::connection_types::ConnectionType;
-use crate::strategies::drawing_object_handler::DrawingObjectHandler;
+use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::indicators::indicator_handler::IndicatorHandler;
-use crate::strategies::market_handlers::MarketMessageEnum;
+use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent, StrategyEventBuffer};
-use crate::strategies::subscription_handler::SubscriptionHandler;
+use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent};
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::strategies::timed_events_handler::TimedEventHandler;
+use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
 
 lazy_static! {

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use chrono::{DateTime, Utc};
-use crate::strategies::drawing_object_handler::DrawingToolEvent;
+use crate::strategies::handlers::drawing_object_handler::DrawingToolEvent;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::subscriptions::{DataSubscriptionEvent};
 use crate::standardized_types::time_slices::TimeSlice;
@@ -11,7 +11,7 @@ use rkyv::validation::CheckTypeError;
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::vec::ArchivedVec;
 use crate::strategies::indicators::events::IndicatorEvents;
-use crate::strategies::accounts::position::PositionUpdateEvent;
+use crate::strategies::position::PositionUpdateEvent;
 use crate::standardized_types::orders::OrderUpdateEvent;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Copy, Ord, PartialOrd, Eq)]

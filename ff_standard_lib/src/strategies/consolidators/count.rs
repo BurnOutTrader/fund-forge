@@ -1,7 +1,7 @@
 use rust_decimal::prelude::FromPrimitive;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::strategies::market_handlers::SYMBOL_INFO;
+use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;

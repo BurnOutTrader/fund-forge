@@ -44,7 +44,7 @@ pub mod client_side_brokerage {
     use crate::client_features::server_connections::{send_request, StrategyRequest};
     use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
     use crate::standardized_types::subscriptions::SymbolName;
-    use crate::strategies::accounts::ledgers::AccountId;
+    use crate::strategies::ledgers::AccountId;
     use crate::standardized_types::new_types::{Price, Volume};
     use crate::standardized_types::symbol_info::SymbolInfo;
     impl Brokerage {

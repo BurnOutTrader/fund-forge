@@ -1,5 +1,5 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use crate::strategies::accounts::ledgers::Currency;
+use crate::strategies::ledgers::Currency;
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::SymbolName;
 use serde_derive::{Deserialize, Serialize};
