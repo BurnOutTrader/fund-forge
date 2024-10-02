@@ -227,18 +227,12 @@ pub(crate) mod historical_ledgers {
                 }
             }
 
-            let risk_reward = if losses > 0 {
-                win_pnl / -loss_pnl // negate loss_pnl for correct calculation
-            } else {
-                dec!(0.0)
-            };
-
             let profit_factor = if loss_pnl != dec!(0.0) {
                 win_pnl / -loss_pnl
             } else if win_pnl > dec!(0.0) {
                 dec!(1000) // or use a defined constant for infinity
             } else {
-                dec!(1.0) // when both win_pnl and loss_pnl are zero
+                dec!(0.0) // when both win_pnl and loss_pnl are zero
             };
 
             let win_rate = if total_trades > 0 {
@@ -248,8 +242,8 @@ pub(crate) mod historical_ledgers {
             };
 
             let break_even = total_trades - wins - losses;
-            format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Cash Used: {}, Cash Available: {}",
-                    self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, profit_factor, pnl, wins, losses, break_even, total_trades, self.cash_used, self.cash_available)
+            format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Cash Used: {}, Cash Available: {}",
+                    self.brokerage, self.account_id, self.cash_value, win_rate, profit_factor, pnl, wins, losses, break_even, total_trades, self.cash_used, self.cash_available)
         }
 
         pub fn paper_account_init(
