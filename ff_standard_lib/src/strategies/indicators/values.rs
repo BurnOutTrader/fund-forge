@@ -45,9 +45,18 @@ impl Display for IndicatorValues {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut values_string = String::new();
         values_string.push_str(&format!("{} \n", self.name));
-        for (plot_name, plot) in &self.plots {
-            values_string.push_str(&format!("{}: {}\n", plot_name, plot.value));
+
+        // Use an iterator to track the last element
+        let mut iter = self.plots.iter().peekable();
+        while let Some((plot_name, plot)) = iter.next() {
+            values_string.push_str(&format!("{}: {}", plot_name, plot.value));
+
+            // Only add a newline if there's another element in the iterator
+            if iter.peek().is_some() {
+                values_string.push_str("\n");
+            }
         }
+
         write!(f, "{}, {}, {}", self.name, self.subscription, values_string)
     }
 }
