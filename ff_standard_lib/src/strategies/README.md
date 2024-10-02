@@ -88,10 +88,6 @@ Our handlers will capture the data streams in a buffer and pass them to the stra
 In live: If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events of a higher than instant resolution.
 
 This helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
-
-***Note: Since the buffered backtest engine runs based on the buffer duration and not just historical data, you will see periods of no data during backtesting where the println stops outputting over weekends or market close, it will shortly resume.
-This can be overridden using fill_forward, but be aware you will then capture flat bars in your history***
-
 ```rust
 use std::time::Duration;
 
