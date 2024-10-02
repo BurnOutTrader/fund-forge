@@ -15,7 +15,7 @@ use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
 use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
-use ff_standard_lib::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
+use ff_standard_lib::strategies::indicators::indicators_trait::{IndicatorName};
 use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
@@ -165,7 +165,7 @@ pub async fn on_data_received(
                                         }
                                     }
 
-                                    /// We can subscribe to new DataSubscriptions at run time
+                                    // We can subscribe to new DataSubscriptions at run time
                                     if count == 20 {
                                         let msg = "Subscribing to new AUD-CAD HeikinAshi Candle at 60 Minute Resolution and warming subscription to have 48 bars of memory,
                                         this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
@@ -241,7 +241,7 @@ pub async fn on_data_received(
 
                                     count += 1;
 
-                                    /// We can subscribe to new indicators at run time
+                                    // We can subscribe to new indicators at run time
                                     if count == 50 {
                                         let msg = "Subscribing to new indicator heikin_atr10_15min and warming up subscriptions".to_string();
                                         println!("{}",msg.as_str().purple());
