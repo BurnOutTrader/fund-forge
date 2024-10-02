@@ -70,9 +70,20 @@ pub enum ConnectionType {
 }
  ```
 The Connection type is just a wrapper for your DataVendor or Brokerage enum, to help the request handler find the correct address for the server.
-Remember by default all ConnectionTypes use ConnectionType::Default by default, so you dont need to worry about this, however you should pass in you actual ConncectionType based on if it is a brokerage or data vendor implementation.
+Remember by default all connections use a single default server, so you don't need to worry about much regarding this.
+however you should pass in your actual ConnectionType based on if it is a brokerage or data vendor implementation including wrapping you new enum variant.
 
-#### Blocking
+There are only 2 request types, and to send a request we need to have the correct ConnectionType enum for your implementation.
+```rust
+fn example() {
+  let broker = Brokerage::Test;
+  let connection_type = ConnectionType::Broker(broker);
+}
+```
+
+
+
+#### Blocking Requests
 We create a one shot and send the Callback message with the one shot attached.
 - Notice that this enum variant has a callback_id field, you will need the same field.
 ```rust
@@ -117,7 +128,7 @@ impl Symbol {
 You will then need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
 [manage_async_requests()](../../../ff_data_server/src/request_handlers.rs)
 
-#### Non Blocking
+#### Non Blocking Requests
 For non-blocking messages like streams or orders first we send the request by wrapping it in a strategy request enum variant.
 
 `let register_request = StrategyRequest::OneWay(connection_type.clone(), DataServerRequest::Register(mode.clone()));`
