@@ -6,4 +6,4 @@
 ![strategyrunconfig.png](../misc/strategyrunconfig.png)
 
 for making indicators
-See [Indicators readme](ff_standard_lib/src/strategies/indicators)
+See [Indicators readme](/ff_standard_lib/src/strategies/indicators/INDICATORS_README.md)

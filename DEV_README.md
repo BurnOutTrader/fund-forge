@@ -185,7 +185,7 @@ If you sent a `StrategyRequest::CallBack`, then you just wait until the response
 
 
 ## Indicators
-See [Indicators readme](ff_standard_lib/src/strategies/indicators)
+See [Indicators readme](ff_standard_lib/src/strategies/indicators/INDICATORS_README.md)
 
 
 
