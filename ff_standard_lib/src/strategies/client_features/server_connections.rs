@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::communicators::communications_async::ExternalSender;
-use crate::client_features::init_clients::create_async_api_client;
-use crate::client_features::connection_settings::client_settings::{initialise_settings, ConnectionSettings};
+use crate::strategies::client_features::init_clients::create_async_api_client;
+use crate::strategies::client_features::connection_settings::client_settings::{initialise_settings, ConnectionSettings};
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, StreamRequest};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,7 +18,7 @@ use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::{sleep_until, Instant};
 use tokio_rustls::TlsStream;
-use crate::client_features::connection_types::ConnectionType;
+use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::market_handlers::MarketMessageEnum;

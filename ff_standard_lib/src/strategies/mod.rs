@@ -8,3 +8,4 @@ pub mod ledgers;
 pub mod position;
 pub mod handlers;
 pub mod statistics;
+pub mod client_features;

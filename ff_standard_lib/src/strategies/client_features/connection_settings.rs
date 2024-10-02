@@ -1,6 +1,6 @@
 pub mod client_settings {
     use crate::helpers::{get_resources, get_toml_file_path};
-    use crate::client_features::connection_types::ConnectionType;
+    use crate::strategies::client_features::connection_types::ConnectionType;
     use crate::messages::data_server_messaging::FundForgeError;
     use serde_derive::{Deserialize, Serialize};
     use std::collections::HashMap;

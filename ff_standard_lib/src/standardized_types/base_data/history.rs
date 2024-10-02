@@ -11,11 +11,11 @@ use crate::standardized_types::time_slices::UnstructuredSlice;
 use chrono::{DateTime, Utc};
 use std::collections::{BTreeMap, Bound, HashMap};
 use tokio::sync::oneshot;
-use crate::client_features::server_connections::{send_request, StrategyRequest};
+use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
 use dashmap::DashMap;
 use rayon::prelude::*;
 use futures::stream::{FuturesUnordered, StreamExt};
-use crate::client_features::connection_types::ConnectionType;
+use crate::strategies::client_features::connection_types::ConnectionType;
 
 /// Method responsible for structuring raw historical data into combined time slices, where all data points a combined into BTreeMap<DateTime<Utc>, TimeSlice> where data.time_created() is key and value is TimeSlice.
 ///

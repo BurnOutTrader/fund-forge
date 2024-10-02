@@ -32,8 +32,8 @@ impl Symbol {
 
 pub mod client_side_symbol {
     use tokio::sync::oneshot;
-    use crate::client_features::connection_types::ConnectionType;
-    use crate::client_features::server_connections::{send_request, StrategyRequest};
+    use crate::strategies::client_features::connection_types::ConnectionType;
+    use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
     use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
     use crate::standardized_types::new_types::Price;
     use crate::standardized_types::subscriptions::Symbol;
