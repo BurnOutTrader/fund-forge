@@ -161,7 +161,7 @@ pub async fn on_data_received(
 
                                         if bars_since_entry_2 > 4
                                             && is_long {
-                                            let _exit_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Short")).await;
+                                            let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
                                     }
