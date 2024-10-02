@@ -222,7 +222,7 @@ pub async fn on_data_received(
                                         // We want to check the current value for the "atr" plot
                                         let heikin_3m_atr_5 = heikin_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
 
-                                        if quotebar.bid_close > last_bar.bid_high && heikin_3m_atr_5 >= dec!( 0.00016)
+                                        if quotebar.bid_close > last_bar.bid_high && heikin_3m_atr_5 >= dec!( 0.00012)
                                             && !is_long {
                                             let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(10), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
