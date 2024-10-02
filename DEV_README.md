@@ -1,4 +1,4 @@
-# Development Guide
+# Development guide for adding to fund-forge
 
 ## A guide for adding new features to fund forge
 At a glance it might seem complicated, but because of the use of traits and enums you can basically just implement a new enum and/or trait and attempt to compile and you will see all the tasks you need to complete.
@@ -19,20 +19,20 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 ### Api's
 `DataVendor` or `Brokerage` Api:
 1. To create a new brokerage or data vendor we need to create an api object that:
-- To place orders and manage accounts we need an api object that implements the trait [BrokerApiResponse](server_side_brokerage.rs).
-- To subscribe to data feeds, download historical data etc we need an api object that implements the trait [VendorApiResponse](server_side_datavendor.rs).
+- To place orders and manage accounts we need an api object that implements the trait [BrokerApiResponse](ff_standard_lib/src/server_features/server_side_brokerage.rs).
+- To subscribe to data feeds, download historical data etc we need an api object that implements the trait [VendorApiResponse](ff_standard_lib/src/server_features/server_side_datavendor.rs).
 - *A brokerage could implement both if you want to use data from the brokerage, if you only want to place orders, you only need to implement the `BrokerApiResponse`.*
 
 2. Create a new enum variant
-- If you are implementing a DataVendor create a new [DataVendor](../standardized_types/datavendor_enum.rs) variant 
+- If you are implementing a DataVendor create a new [DataVendor](ff_standard_lib/src/standardized_types/datavendor_enum.rs) variant 
 - If you are implementing a Brokerage
-  1. create a new [Brokerage](../standardized_types/broker_enum.rs) variant. and/or
-  2. create a [DataVendor](../standardized_types/datavendor_enum.rs)
+  1. create a new [Brokerage](ff_standard_lib/src/standardized_types/broker_enum.rs) variant. and/or
+  2. create a [DataVendor](ff_standard_lib/src/standardized_types/datavendor_enum.rs)
   
 
 3. You will need to complete the matching statements for the new enum variant on the server side:
-- for server side [Brokerage](../server_features/server_side_brokerage.rs)
-- for server side [DataVendor](../server_features/server_side_datavendor.rs)
+- for server side [Brokerage](ff_standard_lib/src/server_features/server_side_brokerage.rs)
+- for server side [DataVendor](ff_standard_lib/src/server_features/server_side_datavendor.rs)
 
 4. Since your object implements a trait of the same name as the server side implementation, 
 you only need to be able to get your api object and you can directly return the required values when your new enum variant is called.
@@ -109,7 +109,7 @@ fn example() {
 ```
 
 - You will need to add a matching statement to the `DataServerRequest` and `DataServerResponse`. implementations of `fn callback_id()` this allows the engine determine if the requests and response are callbacks.
-The functions are found in the [data_server_messaging file](../messages/data_server_messaging.rs)
+The functions are found in the [data_server_messaging file](ff_standard_lib/src/messages/data_server_messaging.rs)
 
 to send our DataServerRequest we create a oneshot sender and receiver and wrap them in `StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), DataServerRequest, sender);`
 
@@ -140,7 +140,7 @@ impl Symbol {
 }
 ```
 You will then need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
-[manage_async_requests()](../../../ff_data_server/src/request_handlers.rs)
+[manage_async_requests()](ff_data_server/src/request_handlers.rs)
 
 #### Non Blocking Requests
 For non-blocking messages like streams or orders first we send the request by wrapping it in a strategy request enum variant.
@@ -152,23 +152,23 @@ For non-blocking messages like streams or orders first we send the request by wr
 this is a public fn that can be called from anywhere in our code. It will add your message to the buffer for the outgoing TLS stream.
 
 Then we need to handle the response in both the client sides buffered and unbuffered response handlers below:
-see the [live handlers](../strategies/client_features/server_connections.rs).
+see the [live handlers](ff_standard_lib/src/strategies/client_features/server_connections.rs).
 (at the time of writing I am considering simplifying into a single handler)
 
 You will then need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
 
 #### Long Option A
 If you want all implementations to return this kind of response then you will then need to add a new `VendorApiResponse` or `BrokerApiResponse` to the trait.
-- trait [BrokerApiResponse](server_side_brokerage.rs).
-- trait [VendorApiResponse](server_side_datavendor.rs).
+- trait [BrokerApiResponse](ff_standard_lib/src/server_features/server_side_brokerage.rs).
+- trait [VendorApiResponse](ff_standard_lib/src/server_features/server_side_datavendor.rs).
 
 you will then need to provide matching statements for all existing api objects for the enum type on the server side.
-- for server side [Brokerage](../server_features/server_side_brokerage.rs)
-- for server side [DataVendor](../server_features/server_side_datavendor.rs)
+- for server side [Brokerage](ff_standard_lib/src/server_features/server_side_brokerage.rs)
+- for server side [DataVendor](ff_standard_lib/src/server_features/server_side_datavendor.rs)
 
-you might also need to provide [client side implementations](../strategies/client_features/client_side_impl.rs).
+you might also need to provide [client side implementations](ff_standard_lib/src/strategies/client_features/client_side_impl.rs).
 depending on how you want to access the data in your strategies.
-You will then need to complete a matching statement for the server logic in `ff_data_server` function [manage_async_requests()](../../../ff_data_server/src/request_handlers.rs) function so the server knows what to do with the request type.
+You will then need to complete a matching statement for the server logic in `ff_data_server` function [manage_async_requests()](ff_data_server/src/request_handlers.rs) function so the server knows what to do with the request type.
 This is quite easy as it is just another mathcing statement.
 
 #### Short Option B
@@ -177,7 +177,7 @@ You will need to complete a matching statement for the server logic in ff_data_s
 Then we need to send the request to the data server, via the public function `send_request(StrategyRequest).await;`
 
 if You sent a `StrategyRequest::OneWay` message the server will handle the request and you can move on. 
-if you expect a streaming response, handle the response in the [live handlers](../strategies/client_features/server_connections.rs).
+if you expect a streaming response, handle the response in the [live handlers](ff_standard_lib/src/strategies/client_features/server_connections.rs).
 
 If you sent a `StrategyRequest::CallBack`, then you just wait until the response arrives and proceed with handling the new data.
 
