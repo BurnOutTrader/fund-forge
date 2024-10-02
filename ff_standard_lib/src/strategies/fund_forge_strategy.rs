@@ -6,7 +6,7 @@ use crate::gui_types::drawing_objects::drawing_tool_enum::DrawingTool;
 use crate::strategies::indicators::indicator_enum::IndicatorEnum;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
-use crate::standardized_types::indicator_values::IndicatorValues;
+use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::strategies::ledgers::{AccountId, Currency};
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{OrderSide, StrategyMode};
@@ -35,7 +35,7 @@ use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderUpdateType, TimeInForce};
 use crate::strategies::historical_engine::HistoricalEngine;
 use crate::strategies::historical_time::{get_backtest_time, update_backtest_time};
-use crate::standardized_types::indicator_events::IndicatorEvents;
+use crate::strategies::indicators::indicator_events::IndicatorEvents;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///

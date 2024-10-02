@@ -1,4 +1,4 @@
-use crate::standardized_types::indicator_values::IndicatorValues;
+use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;

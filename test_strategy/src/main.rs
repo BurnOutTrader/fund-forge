@@ -1,7 +1,7 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
-use ff_standard_lib::standardized_types::indicator_events::IndicatorEvents;
+use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;

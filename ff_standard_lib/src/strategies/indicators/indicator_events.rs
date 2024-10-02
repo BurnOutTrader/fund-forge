@@ -1,6 +1,6 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::strategies::indicators::indicators_trait::IndicatorName;
-use crate::standardized_types::indicator_values::IndicatorValues;
+use crate::strategies::indicators::indicator_values::IndicatorValues;
 use std::fmt;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]

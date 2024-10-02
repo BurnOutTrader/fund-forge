@@ -10,7 +10,7 @@ use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Se
 use rkyv::validation::CheckTypeError;
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::vec::ArchivedVec;
-use crate::standardized_types::indicator_events::IndicatorEvents;
+use crate::strategies::indicators::indicator_events::IndicatorEvents;
 use crate::standardized_types::position::PositionUpdateEvent;
 use crate::standardized_types::orders::OrderUpdateEvent;
 

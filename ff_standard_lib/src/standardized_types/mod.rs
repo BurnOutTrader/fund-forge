@@ -11,5 +11,3 @@ pub mod subscriptions;
 pub mod symbol_info;
 pub mod time_slices;
 pub mod position;
-pub mod indicator_events;
-pub mod indicator_values;
