@@ -147,7 +147,7 @@ pub async fn on_data_received(
                                         let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
                                         let is_long = strategy.is_long(&brokerage, &account_name, &candle.symbol.name);
 
-                                        if candle.close > last_candle.high
+                                        if candle.close < last_candle.low
                                             && !is_long {
                                             let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_name, &brokerage, dec!(30), String::from("Enter Short")).await;
                                             bars_since_entry_2 = 0;

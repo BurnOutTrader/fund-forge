@@ -230,20 +230,20 @@ pub(crate) mod historical_ledgers {
 
             // Calculate average win and average loss
             let avg_win_pnl = if wins > 0 {
-                win_pnl / dec!(wins as i32) // Convert to Decimal type
+                win_pnl / Decimal::from(wins) // Convert to Decimal type
             } else {
                 dec!(0.0)
             };
 
             let avg_loss_pnl = if losses > 0 {
-                loss_pnl / dec!(losses as i32) // Convert to Decimal type
+                loss_pnl / Decimal::from(losses) // Convert to Decimal type
             } else {
                 dec!(0.0)
             };
 
             // Calculate risk-reward ratio
             let risk_reward = if losses == 0 && wins > 0 {
-                dec!(f64::INFINITY) // No losses, so risk/reward is considered infinite
+                Decimal::from(avg_win_pnl) // No losses, so risk/reward is considered infinite
             } else if wins == 0 && losses > 0 {
                 dec!(0.0) // No wins, risk/reward is zero
             } else if avg_loss_pnl < dec!(0.0) && avg_win_pnl > dec!(0.0) {
