@@ -690,7 +690,7 @@ impl FundForgeStrategy {
         }
     }
 
-    pub fn print_ledger(&self, brokerage: Brokerage, account_id: &AccountId) {
+    pub fn print_ledger(&self, brokerage: &Brokerage, account_id: &AccountId) {
         if let Some(ledger_string) = print_ledger(brokerage, account_id) {
             println!("{}", ledger_string);
         }
