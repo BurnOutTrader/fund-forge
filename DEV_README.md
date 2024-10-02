@@ -9,6 +9,8 @@ There are still a lot of Request and Response types to be implemented as I am cu
 Any Data transferred in a `DataServerResponse` enum and `DataServerRequest` enum must implement the rkyv traits.
 rkyv is used for fast ser/de of data from bytes to types.
 Some complex data is more difficult to serialize this way, but just remember you can always serialize or desrialize as strings or an array of bytes itself, native data types are no problem.
+The only problem I have had was with DateTime object, which was easily overcome by using time strings or time stamps, rkyv now supports many more types, but I have not yet updated.
+Most of our trading related data is of the native types and so I don't see any major issues moving forward as rkyv develops.
 ```rust
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 #[derive(Serialize_rkyv, Deserialize_rkyv, Archive)]
