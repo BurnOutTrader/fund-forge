@@ -4,6 +4,8 @@
 At a glance it might seem complicated, but because of the use of traits and enums you can basically just implement a new enum and/or trait and attempt to compile and you will see all the tasks you need to complete.
 Knowing the code base I can generally implement a new Request and Response in half an hour. Using rust rover IDE is advantageous as it takes you directly to each new task when compilation fails.
 
+There are still a lot of Request and Response types to be implemented as I am currently implementing Rithmic Api.
+
 ### Api's
 `DataVendor` or `Brokerage` Api:
 1. To create a new brokerage or data vendor we need to create an api object that:
