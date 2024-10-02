@@ -1,11 +1,20 @@
 # Creating Indicators
 I chose to use enums and matching statements over dynamic dispatch for increased performance at the cost of simply completeing a matching statement.
 
+*I will add another enum type and trait for multi symbol indicators in teh future.*
+
 ## Step 1
 1. Create a new Indicator object that implements the [Indicators](indicators_trait.rs) trait
+also see [AverageTrueRange](built_in/average_true_range.rs) for a working example.
 ```rust
 pub struct YOUR_NEW_VARIANT {
+    history: RollingWindow<IndicatorValues>, //keep a history of indicator values
+
+    //if your indicator needs to keep some data just use this
+    base_data_history: RollingWindow<BaseDataEnum>, 
     
+    // the subscriptions or subscription your indicator uses for primary data
+    subscriptions: DataSubsciption
 }
 
 impl YOUR_NEW_VARIANT {
