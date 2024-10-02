@@ -109,7 +109,8 @@ pub async fn on_data_received(
     let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
     let mut bars_since_entry_2 = 0;
-    let account_name = AccountId::from("TestAccount");
+    let account_1 = AccountId::from("Test_Account_1");
+    let account_2 = AccountId::from("Test_Account_2");
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for (_time, strategy_event) in event_slice.iter() {
@@ -145,11 +146,12 @@ pub async fn on_data_received(
                                     println!("{}", msg.as_str().on_bright_black());*/
                                     if candle.resolution == Resolution::Minutes(60) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
-                                        let is_long = strategy.is_long(&brokerage, &account_name, &candle.symbol.name);
+                                        let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
 
+                                        // buy below the low of prior bar
                                         if candle.close < last_candle.low
                                             && !is_long {
-                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_name, &brokerage, dec!(30), String::from("Enter Short")).await;
+                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
 
@@ -159,7 +161,7 @@ pub async fn on_data_received(
 
                                         if bars_since_entry_2 > 2
                                             && is_long {
-                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_name, &brokerage, dec!(30), String::from("Exit Short")).await;
+                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
                                     }
@@ -212,18 +214,21 @@ pub async fn on_data_received(
 
                                     if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "EUR-USD" && quotebar.symbol.data_vendor == DataVendor::Test {
                                         let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
-                                        let is_long: bool = strategy.is_long(&brokerage, &account_name, &quotebar.symbol.name);
+                                        let is_long: bool = strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name);
 
                                         // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
                                         // we can use the name we assigned to get the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
                                         let heikin_3m_atr_5_current_values = strategy.indicator_index(&"heikin_3m_atr_5".to_string(), 0).unwrap();
+                                        let heikin_3m_atr_5_last_values = strategy.indicator_index(&"heikin_3m_atr_5".to_string(), 0).unwrap();
 
                                         // We want to check the current value for the "atr" plot of the atr indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
-                                        let heikin_3m_atr_5 = heikin_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
+                                        let current_heikin_3m_atr_5 = heikin_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
+                                        let last_heikin_3m_atr_5 = heikin_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
-                                        if quotebar.bid_close > last_bar.bid_high && heikin_3m_atr_5 >= dec!( 0.00016)
+                                        // buy above the high of prior bar when atr is high and atr is increasing
+                                        if quotebar.bid_close > last_bar.bid_high && current_heikin_3m_atr_5 >= dec!( 0.00012) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
                                             && !is_long {
-                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(30), String::from("Enter Long")).await;
+                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
                                         }
 
@@ -231,9 +236,9 @@ pub async fn on_data_received(
                                             bars_since_entry_1 += 1;
                                         }
 
-                                        if bars_since_entry_1 > 10
+                                        if bars_since_entry_1 > 4
                                             && is_long {
-                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_name, &brokerage, dec!(30), String::from("Exit Long")).await;
+                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Exit Long")).await;
                                             bars_since_entry_1 = 0;
                                         }
                                     }
