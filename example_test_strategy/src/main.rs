@@ -53,6 +53,7 @@ async fn main() {
                 BaseDataType::Quotes,
                 MarketType::Forex,
             ),*/
+            // Since we only have quote level test data, the next 2 subscriptions will be created by the consolidators.
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,

@@ -12,11 +12,11 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 1. get the testing data (instructions below)
 2. cargo buid in the fund forge directory
 3. navigate to [ff_data_server](./ff_data_server) directory and `cargo run`
-4. navigate to [test_strategy](./test_strategy) directory and `cargo run`
+4. navigate to [test_strategy](./example_test_strategy) directory and `cargo run`
 
-*When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](./test_strategy/README.md)
+*When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](example_test_strategy/README.md)
 
-*When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](./test_strategy/README.md)
+*When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](example_test_strategy/README.md)
 
 
 
@@ -230,7 +230,7 @@ fn example() {
 This only has an impact on backtesting fills, duplicate SymbolName subscriptions from different `DataVendors` will still flow into the strategy event receiver and can be handled as unique feeds using the `BaseDataEnum.symbol()`
 
 For a full look at strategies see
-[test_strategy](./test_strategy/src/main.rs)
+[test_strategy](example_test_strategy/src/main.rs)
 and
 [strategies readme](ff_standard_lib/src/strategies/STRATEGIES_README)
 
@@ -368,7 +368,9 @@ To use rithmic API's you will need to request a dev kit for RProtocol (Proto Buf
 You will need to have a unique app name in your rithmic_credentials.toml files.
 
 ## Strategies
-Once you have followed the setup instructions above, you can play with a test strategy by reviewing [Strategies Guide](ff_standard_lib/src/strategies/STRATEGIES_README.md)
+Once you have followed the setup instructions above, you can play with a test strategy by reviewing [Strategies Guide](ff_standard_lib/src/strategies/STRATEGIES_README.md).
+
+Run the test strategy [example_test_strategy](example_test_strategy/src/main.rs) 
 
 ## Gui
 Decoupled.

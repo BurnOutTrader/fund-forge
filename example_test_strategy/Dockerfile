@@ -5,7 +5,7 @@ WORKDIR /usr/src/myapp
 ENV RUST_LOG=info
 
 # Adjust the COPY commands to correctly reference the relative paths
-# Assuming Docker build context is fund_forge/strategies/test_strategy/
+# Assuming Docker build context is fund_forge/strategies/example_test_strategy/
 # You might need to adjust these paths based on where you run docker build from
 
 # First, copy the ff_common_library
@@ -14,7 +14,7 @@ COPY /ff_strategies  /usr/src/myapp/ff_strategies/
 COPY /resources  /usr/src/myapp/resources/
 
 # Then, copy the current strategy including the Dockerfile
-COPY /test_strategy  /usr/src/myapp/test_strategy/
+COPY /example_test_strategy  /usr/src/myapp/test_strategy/
 
 # Finally, if needed, copy ff_strategy (assuming it's required and part of your structure)
 # COPY ../../ff_strategy ./ff_strategy
