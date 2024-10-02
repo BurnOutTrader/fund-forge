@@ -145,13 +145,12 @@ pub async fn on_data_received(
                                   /*  let candle_10_ago = strategy.candle_index(&base_data.subscription(), 10).unwrap();
                                     let msg = format!("{} {} 10 Candles Ago Close: {}, {}", candle_10_ago.symbol.name, candle_10_ago.resolution, candle_10_ago.close, candle_10_ago.time_closed_local(strategy.time_zone()));
                                     println!("{}", msg.as_str().on_bright_black());*/
-                                    if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
-                                        let last_candle: Candle = strategy.candle_index(&base_data.subscription(), 1).unwrap();
+                                    if candle.resolution == Resolution::Minutes(15) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let other_account_is_long_euro = strategy.is_long(&brokerage, &account_2, &"EUR-USD".to_string());
 
                                         // keep buying AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                        if candle.close > candle.open && last_candle.close > last_candle.open && other_account_is_long_euro {
+                                        if candle.close > candle.open && other_account_is_long_euro {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
                                             bars_since_entry_2 = 0;
                                         }
@@ -227,7 +226,7 @@ pub async fn on_data_received(
                                         let last_heikin_3m_atr_5 = heikin_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
                                         // buy above the high of prior bar when atr is high and atr is increasing
-                                        if quotebar.bid_close > last_bar.bid_high && current_heikin_3m_atr_5 >= dec!( 0.00012) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
+                                        if quotebar.bid_close > last_bar.bid_high && current_heikin_3m_atr_5 >= dec!(0.00012) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
                                             && !is_long {
                                             let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
@@ -237,7 +236,7 @@ pub async fn on_data_received(
                                             bars_since_entry_1 += 1;
                                         }
 
-                                        if bars_since_entry_1 > 4
+                                        if bars_since_entry_1 > 20
                                             && is_long {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Exit Long")).await;
                                             bars_since_entry_1 = 0;
