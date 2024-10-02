@@ -96,8 +96,8 @@ fn example() {
     let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request, sender);
     send_request(msg).await;
 }
-
 ```
+
 - You will need to add a matching statement to the `DataServerRequest` and `DataServerResponse`. implementations of `fn callback_id()` this allows the engine determine if the requests and response are callbacks.
 The functions are found in the [data_server_messaging file](../messages/data_server_messaging.rs)
 
