@@ -7,7 +7,6 @@ authors = ["Kevin Monaghan"]
 
 [dependencies]
 ff_standard_lib = { path = "../ff_standard_lib" }
-ff_strategies = { path = "../ff_strategies" }
 chrono = "*"
 tokio = { version = "*", features = ["full"] }
 futures = "*"

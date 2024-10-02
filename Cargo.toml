@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "ff_standard_lib",
-    "ff_strategies",
     "ff_data_server",
     "ff_data_server",
     "test_strategy",

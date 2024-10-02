@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
-use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::strategies::strategy_events::{StrategyEventBuffer};
-use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
+use crate::standardized_types::enums::StrategyMode;
+use crate::strategies::strategy_events::{StrategyEventBuffer};
+use crate::standardized_types::subscriptions::DataSubscription;
 #[allow(unused_variables)]
 pub struct RegistryHandler {}
 

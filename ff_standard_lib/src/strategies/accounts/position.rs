@@ -5,7 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::SymbolName;
-use crate::standardized_types::accounts::ledgers::{AccountId, Currency};
+use crate::strategies::accounts::ledgers::{AccountId, Currency};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
@@ -205,10 +205,10 @@ pub(crate) mod historical_position {
     use rust_decimal_macros::dec;
     use crate::helpers::decimal_calculators::round_to_tick_size;
     use crate::client_features::server_connections::add_buffer;
-    use crate::standardized_types::accounts::ledgers::calculate_historical_pnl;
+    use crate::strategies::accounts::ledgers::calculate_historical_pnl;
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
-    use crate::standardized_types::accounts::position::{Position, PositionUpdateEvent};
+    use crate::strategies::accounts::position::{Position, PositionUpdateEvent};
     use crate::standardized_types::new_types::{Price, Volume};
     use crate::strategies::strategy_events::StrategyEvent;
 

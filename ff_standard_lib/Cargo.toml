@@ -26,7 +26,7 @@ strum ="*"
 reqwest = { version = "*", features = ["stream"] }
 urlencoding = "*"
 toml = "*"
-chrono-tz = "0.10.0"
+chrono-tz = { version = "0.10.0", features = ["default", "std"] }
 serde_derive = "*"
 env_logger = "*"
 futures = "*"

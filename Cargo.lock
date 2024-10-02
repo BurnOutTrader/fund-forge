@@ -1041,29 +1041,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "ff_strategies"
-version = "0.1.0"
-dependencies = [
- "ahash 0.8.11",
- "chrono",
- "chrono-tz",
- "dashmap",
- "ff_standard_lib",
- "rkyv 0.8.8",
- "rust_decimal",
- "rust_decimal_macros",
- "serde",
- "tokio",
-]
-
-[[package]]
 name = "ff_strategy_registry"
 version = "0.1.0"
 dependencies = [
  "chrono",
  "env_logger",
  "ff_standard_lib",
- "ff_strategies",
  "futures",
  "once_cell",
  "rkyv 0.8.8",
@@ -2898,7 +2881,6 @@ dependencies = [
  "chrono-tz",
  "colored",
  "ff_standard_lib",
- "ff_strategies",
  "rkyv 0.8.8",
  "rust_decimal",
  "rust_decimal_macros",

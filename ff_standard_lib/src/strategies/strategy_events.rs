@@ -11,7 +11,7 @@ use rkyv::validation::CheckTypeError;
 use rkyv::validation::validators::DefaultValidator;
 use rkyv::vec::ArchivedVec;
 use crate::strategies::indicators::events::IndicatorEvents;
-use crate::standardized_types::accounts::position::PositionUpdateEvent;
+use crate::strategies::accounts::position::PositionUpdateEvent;
 use crate::standardized_types::orders::OrderUpdateEvent;
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Copy, Ord, PartialOrd, Eq)]

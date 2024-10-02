@@ -1,4 +1,4 @@
-use crate::standardized_types::accounts::ledgers::AccountId;
+use crate::strategies::accounts::ledgers::AccountId;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::enums::{MarketType, StrategyMode};
