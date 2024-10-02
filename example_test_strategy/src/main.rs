@@ -167,7 +167,7 @@ pub async fn on_data_received(
 
                                     /// We can subscribe to new DataSubscriptions at run time
                                     if count == 20 {
-                                        let msg = "Subscribing to new Candle Resolution and warming subscription, this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
+                                        let msg = "Subscribing to new AUD-CAD  HeikinAshi Candle 60 Minute Resolution and warming subscription to have 48 bars of memory, this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
                                         println!("{}",msg.as_str().to_uppercase().purple());
                                         let minute_60_ha_candles = DataSubscription::new_custom(
                                             SymbolName::from("AUD-CAD"),
@@ -242,7 +242,7 @@ pub async fn on_data_received(
 
                                     /// We can subscribe to new indicators at run time
                                     if count == 50 {
-                                        let msg = "Subscribing to new indicator heikin_atr3_5min and warming up subscriptions".to_string();
+                                        let msg = "Subscribing to new indicator heikin_atr10_15min and warming up subscriptions".to_string();
                                         println!("{}",msg.as_str().purple());
                                         // this will test both our auto warm up for indicators and data subscriptions
                                         let heikin_atr10_15min = IndicatorEnum::AverageTrueRange(
