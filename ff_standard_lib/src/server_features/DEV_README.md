@@ -123,33 +123,13 @@ You will then need to complete a matching statement for the server logic in ff_d
 
 #### Short Option B
 If you don't want other variants to return this response you can just move onto sending the response and receiving the message.
+You will need to complete a matching statement for the server logic in ff_data_server handle_client function so the server knows what to do with the request type.
+Then we need to send the request to the data server, via the public function `send_request(StrategyRequest).await;`
 
-first we need to send the request to the data server, 
-For blocking messages, where we expect a response before we can proceed see the example for `symbol.tick_size();`
-```rust
-impl Symbol {
-    pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
-        let request = DataServerRequest::TickSize {
-            callback_id: 0,
-            data_vendor: self.data_vendor.clone(),
-            symbol_name: self.name.clone(),
-        };
-        let (sender, receiver) = oneshot::channel();
-        let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request, sender);
-        send_request(msg).await;
-        match receiver.await {
-            Ok(response) => {
-                match response {
-                    DataServerResponse::TickSize { tick_size, .. } => Ok(tick_size),
-                    DataServerResponse::Error { error, .. } => Err(error),
-                    _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                }
-            },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
-        }
-    }
-}
-```
+if You sent a `StrategyRequest::OneWay` message the server will handle the request and you can move on. 
+if you expect a streaming response, handle the response in the [live handlers](../strategies/client_features/server_connections.rs).
+
+If you sent a `StrategyRequest::CallBack`, then you just wait until the response arrives and proceed with handling the new data.
 
 
 
