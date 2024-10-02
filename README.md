@@ -155,6 +155,7 @@ It is easy to create and add indicators or custom candlestick types. Below we su
 Indicators can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history.
 
 Indicators will warm themselves up on creation if the strategy is already warmed up, so we can subscribe and unsubscribe at any time.
+See [Indicators readme](ff_standard_lib/src/strategies/indicators/INDICATORS_README.md)
 ```rust
 fn example() {
   // Here we create a 5 period ATR using a Heikin Ashi data subscription, and we specify to retain the last 100 bars in memory.
