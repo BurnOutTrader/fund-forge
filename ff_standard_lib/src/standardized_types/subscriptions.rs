@@ -6,12 +6,7 @@ use rkyv::ser::Serializer;
 use rkyv::{AlignedVec, Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::fmt;
 use std::fmt::{Debug, Display, Error, Formatter};
-use tokio::sync::oneshot;
-use crate::client_features::connection_types::ConnectionType;
 use crate::standardized_types::datavendor_enum::DataVendor;
-use crate::client_features::server_connections::{send_request, StrategyRequest};
-use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
-use crate::standardized_types::new_types::Price;
 use crate::standardized_types::resolution::Resolution;
 
 pub type SymbolName = String;
@@ -33,25 +28,36 @@ impl Symbol {
             data_vendor,
         }
     }
+}
 
-    pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
-        let request = DataServerRequest::TickSize {
-            callback_id: 0,
-            data_vendor: self.data_vendor.clone(),
-            symbol_name: self.name.clone(),
-        };
-        let (sender, receiver) = oneshot::channel();
-        let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request,sender);
-        send_request(msg).await;
-        match receiver.await {
-            Ok(response) => {
-                match response {
-                    DataServerResponse::TickSize { tick_size, .. } => Ok(tick_size),
-                    DataServerResponse::Error {error,..} => Err(error),
-                    _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                }
-            },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+pub mod client_side_symbol {
+    use tokio::sync::oneshot;
+    use crate::client_features::connection_types::ConnectionType;
+    use crate::client_features::server_connections::{send_request, StrategyRequest};
+    use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
+    use crate::standardized_types::new_types::Price;
+    use crate::standardized_types::subscriptions::Symbol;
+
+    impl Symbol {
+        pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
+            let request = DataServerRequest::TickSize {
+                callback_id: 0,
+                data_vendor: self.data_vendor.clone(),
+                symbol_name: self.name.clone(),
+            };
+            let (sender, receiver) = oneshot::channel();
+            let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request, sender);
+            send_request(msg).await;
+            match receiver.await {
+                Ok(response) => {
+                    match response {
+                        DataServerResponse::TickSize { tick_size, .. } => Ok(tick_size),
+                        DataServerResponse::Error { error, .. } => Err(error),
+                        _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
+                    }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            }
         }
     }
 }

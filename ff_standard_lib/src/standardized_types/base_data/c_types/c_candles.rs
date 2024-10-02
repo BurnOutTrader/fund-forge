@@ -13,12 +13,6 @@ pub struct CandleC {
     resolution: i32,   // Assuming Resolution is also represented as an integer
 }
 
-#[repr(C)]
-pub enum CandleCalculationTypeC {
-    HeikenAshi = 0,
-    Candle = 1,
-}
-
 impl From<Candle> for CandleC {
     fn from(candle: Candle) -> Self {
         CandleC {
