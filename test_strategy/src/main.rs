@@ -169,7 +169,7 @@ pub async fn on_data_received(
                                     if count == 20 {
                                         let msg = "Subscribing to new Candle Resolution and warming subscription, this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
                                         println!("{}",msg.as_str().purple());
-                                        let heikin_1_hour = DataSubscription::new_custom(
+                                        let heikin_20_min = DataSubscription::new_custom(
                                             SymbolName::from("AUD-CAD"),
                                             DataVendor::Test,
                                             Resolution::Minutes(20),
@@ -180,7 +180,7 @@ pub async fn on_data_received(
                                         // subscribing to data subscriptions returns a result, the result is a DataSubscription event, Ok(FailedToSubscribe) or Err(Subscribed)
                                         // In live or live paper, we could have 2 failures, 1 here on client side, and another event that comes from server side, if it fails on the api for any reason.
                                         // The subscription handler should catch problems before the server, but there is always a possibility that a server side failure to subscribe occurs.
-                                        match strategy.subscribe(heikin_1_hour, 3, true).await {
+                                        match strategy.subscribe(heikin_20_min, 3, true).await {
                                             Ok(ok) => {
                                                 let msg = format!("{}", ok.to_string());
                                                 println!("{}", msg.as_str().bright_magenta())
@@ -254,7 +254,9 @@ pub async fn on_data_received(
                                         );
                                         // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
                                         // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
-                                        strategy.subscribe_indicator(heikin_atr3_15min, true).await;
+                                        let event = strategy.subscribe_indicator(heikin_atr3_15min, true).await;
+                                        let msg = format!("{}", event);
+                                        println!("{}", msg.as_str().bright_purple());
                                     }
                                 }
                                 //do something with the current open bar

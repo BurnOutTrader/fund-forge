@@ -33,7 +33,7 @@ impl IndicatorHandler {
         handler
     }
 
-    pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) { //todo, just return a result directly, no  add buffer
+    pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) -> IndicatorEvents {
         let subscription = indicator.subscription();
 
         if !self.indicators.contains_key(&subscription) {
@@ -47,28 +47,30 @@ impl IndicatorHandler {
             false => indicator,
         };
 
-        if !self.subscription_map.contains_key(&name) {
-            //add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorAdded(name.clone()))).await;
+        let event = if !self.subscription_map.contains_key(&name) {
+            IndicatorEvents::IndicatorAdded(name.clone())
         } else {
-           // add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::Replaced(name.clone()))).await;
-        }
+           IndicatorEvents::Replaced(name.clone())
+        };
+
         if let Some(map) = self.indicators.get(&subscription) {
             map.insert(indicator.name(), indicator);
         }
         self.subscription_map.insert(name.clone(), subscription.clone());
+
+        event
     }
 
-    pub async fn remove_indicator(&self, time: DateTime<Utc>,indicator: &IndicatorName)  { //todo, just return a result directly, no  add buffer
-        if let Some(map) =
-            self.indicators.get_mut(&self.subscription_map.get(indicator).unwrap())
-        {
-            if map.remove(indicator).is_some() {
-                //todo if unsubscribe indicator causes problem we need to remove this
-                add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorRemoved(indicator.clone()))).await;
-                self.subscription_map.remove(indicator);
+    pub async fn remove_indicator(&self, indicator_name: &IndicatorName) -> Option<IndicatorEvents>  {
+        if let Some(subscription) = self.subscription_map.get(indicator_name) {
+            if let Some(map) = self.indicators.get(&subscription.value()) {
+                map.remove(indicator_name);
             }
         }
-        self.subscription_map.remove(indicator);
+        match self.subscription_map.remove(indicator_name) {
+            None => None,
+            Some(_) => Some(IndicatorEvents::IndicatorRemoved(indicator_name.clone()))
+        }
     }
 
     pub async fn indicators_unsubscribe_subscription(&self, subscription: &DataSubscription) {

@@ -34,6 +34,7 @@ use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderUpdateType, TimeInForce};
 use crate::strategies::historical_engine::HistoricalEngine;
+use crate::strategies::indicators::events::IndicatorEvents;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 ///
@@ -501,7 +502,7 @@ impl FundForgeStrategy {
 
     /// see the indicator_enum.rs for more details
     /// If we subscribe to an indicator and we do not have the appropriate data subscription, we will also subscribe to the data subscription.
-    pub async fn subscribe_indicator(&self, indicator: IndicatorEnum, auto_subscribe: bool) {
+    pub async fn subscribe_indicator(&self, indicator: IndicatorEnum, auto_subscribe: bool) -> IndicatorEvents {
         let subscriptions = self.subscriptions().await;
         if !subscriptions.contains(&indicator.subscription()) {
             match auto_subscribe {
@@ -521,8 +522,8 @@ impl FundForgeStrategy {
     }
 
     /// see the indicator_enum.rs for more details
-    pub async fn indicator_unsubscribe(&self, name: &IndicatorName) {
-        self.indicator_handler.remove_indicator(self.time_utc(),name).await
+    pub async fn indicator_unsubscribe(&self, name: &IndicatorName) -> Option<IndicatorEvents> {
+        self.indicator_handler.remove_indicator(name).await
     }
 
     /// see the indicator_enum.rs for more details
