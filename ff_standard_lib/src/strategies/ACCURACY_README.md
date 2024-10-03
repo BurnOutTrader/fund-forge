@@ -47,8 +47,6 @@
 
 ## Conclusion
 
-With the additional information about the starting balance, we can now confirm that the final balance and cash available figures are correct. Here's an updated analysis:
-
 1. All trade counts (wins, losses, break-even, and total) match exactly.
 2. The total profit/loss, win rate, and final balance are all correct.
 3. The cash available matches the final balance, which is consistent with the provided information.
@@ -58,6 +56,4 @@ With the additional information about the starting balance, we can now confirm t
 
 These differences likely stem from variations in calculation methods or potential rounding issues. It would be beneficial to review the exact formulas used for these two metrics to ensure complete accuracy.
 
-5. The cash used figure of 0 couldn't be directly verified from the raw data, but it's consistent with the other information provided.
-
-Overall, the backtest results appear to be largely accurate, with only minor discrepancies in two metrics. The addition of the starting balance information has allowed us to verify more of the provided statistics, further confirming the overall accuracy of the results.
+Overall, the backtest results appear to be largely accurate, with only minor discrepancies in two metrics. 
