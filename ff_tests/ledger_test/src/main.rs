@@ -12,6 +12,7 @@ use rust_decimal_macros::dec;
 use tokio::sync::{mpsc};
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
+use ff_standard_lib::standardized_types::orders::OrderUpdateEvent;
 use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
 use ff_standard_lib::strategies::client_features::connection_types::GUI_DISABLED;
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
@@ -90,6 +91,7 @@ pub async fn on_data_received(
                                         // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
                                         if is_flat && candle.close > candle.open {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
+                                            println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                         }
 
                                         // ADD LONG
@@ -98,13 +100,16 @@ pub async fn on_data_received(
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
                                         if is_long && long_pnl > dec!(150.0) && long_pnl < dec!(400.0) && position_size < dec!(90)  {
                                             let _add_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Add Long")).await;
+                                            println!("Strategy: Add Long, Time {}", strategy.time_local());
                                         }
 
                                         // LONG SL+TP
                                         if is_long && long_pnl > dec!(500.0) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
+                                            println!("Strategy: Add Short, Time {}", strategy.time_local());
                                         } else if is_long && long_pnl <= dec!(-500.0) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Loss")).await;
+                                            println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
                                         }
                                     }
 
@@ -116,6 +121,7 @@ pub async fn on_data_received(
                                         // test short ledger
                                         if is_flat && candle.close < candle.open {
                                             let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
+                                            println!("Strategy: Enter Short, Time {}", strategy.time_local());
                                         }
 
                                         // ADD SHORT
@@ -124,14 +130,17 @@ pub async fn on_data_received(
                                         let position_size_short: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
                                         if is_short && short_pnl > dec!(150.0) && short_pnl < dec!(400.0) && position_size_short < dec!(90) {
                                             let _add_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Add Short")).await;
+                                            println!("Strategy: Add Short, Time {}", strategy.time_local());
                                         }
 
                                         // SHORT SL+TP
                                         let position_size_short: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
                                         if is_short && short_pnl > dec!(500.0) {
                                             let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage, position_size_short, String::from("Exit Short Take Profit")).await;
+                                            println!("Strategy: Exit Short Take Profit, Time {}", strategy.time_local());
                                         } else if is_short && short_pnl < dec!(-500.0) {
                                             let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage, position_size_short, String::from("Exit Short Take Loss")).await;
+                                            println!("Strategy: Exit Short Take Loss, Time {}", strategy.time_local());
                                         }
                                     }
                                 }
@@ -140,7 +149,6 @@ pub async fn on_data_received(
                         }
                     }
                 }
-
                 StrategyEvent::ShutdownEvent(event) => {
                     strategy.flatten_all_for(brokerage, &account_1).await;
                     let msg = format!("{}",event);
@@ -165,9 +173,16 @@ pub async fn on_data_received(
                         PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                     }
                     let quantity = strategy.position_size(&brokerage, &account_1, &"EUR-USD".to_string());
-                    let msg = format!("{}", event);
+                    let msg = format!("{}, Time: {}", event, strategy.time_local());
                     println!("{}", msg.as_str().purple());
-                    println!("Strategy Print Line Open Quantity: {}", quantity);
+                    println!("Strategy: Open Quantity: {}", quantity);
+                }
+                StrategyEvent::OrderEvents(event) => {
+                    let msg = format!("Strategy: Order Event: {}, Time: {}", event, strategy.time_local());
+                    match event {
+                        OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => println!("{}", msg.as_str().on_bright_magenta().on_bright_red()),
+                        _ =>  println!("{}", msg.as_str().bright_yellow())
+                    }
                 }
                 _ => {}
             }
