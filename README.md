@@ -326,8 +326,10 @@ If you manage to begin live trading before me, then you will need to test proper
 
 ## Back Test Accuracy
 This was tested using only market orders, enter long, enter short, exit long enter short, however all other orders follow the same logic and should work accurately.
+
 Any slight differences in expected values will be due to rounding, I round profit to tick size and calulate by number of ticks, then round to 2 decimal places. 
-I do this for each position opened or closed.
+
+I do this for each position opened or closed before stats are calulated.
 [Results of testing here](ledger_test/BACK_TEST_ACCURACY_README.md)
 
 
