@@ -223,10 +223,8 @@ pub async fn on_data_received(
                                         let current_heikin_3m_atr_5 = quotebar_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
                                         let last_heikin_3m_atr_5 = quotebar_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
-                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
-
                                         // buy above the close of prior bar when atr is high and atr is increasing
-                                        if strategy.is_flat(&brokerage, &account_2, &quotebar.symbol.name)
+                                        if entry_order_id_1.is_none()
                                             && quotebar.bid_close > last_bar.bid_close
                                             && current_heikin_3m_atr_5 >= dec!(0.00030)
                                             && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
@@ -241,9 +239,8 @@ pub async fn on_data_received(
                                         let in_profit = strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
 
-                                        let mut triggered_exit = false;
                                         // take profit conditions
-                                        if let Some(entry_order_id) = &entry_order_id_1 {
+                                        if let Some(_entry_order) = &entry_order_id_1 {
                                             if bars_since_entry_2 > 5
                                                 && in_profit
                                             {
@@ -256,20 +253,19 @@ pub async fn on_data_received(
                                         //stop loss conditions
                                         let in_drawdown = strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name);
 
-                                        if let Some(entry_order_id) = &entry_order_id_1 {
+                                        if let Some(_entry_order) = &entry_order_id_1 {
                                             if bars_since_entry_2 >= 10
                                                 && in_drawdown
                                             {
                                                 let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
                                                 bars_since_entry_2 = 0;
-                                                let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
                                                 entry_order_id_1 = None;
                                             }
                                         }
 
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
                                         // Add to our winners when atr is increasing and we get a new signal
-                                        if let Some(entry_order_id) = &entry_order_id_1 {
+                                        if let Some(_entry_order) = &entry_order_id_1 {
                                             if  in_profit
                                                 && position_size <= dec!(150)
                                                 && bars_since_entry_2 == 3
