@@ -158,11 +158,11 @@ pub async fn on_data_received(
                                             bars_since_entry_1 += 1;
                                         }
 
-                                        if is_long && bars_since_entry_1 > 2 && strategy.in_profit(&brokerage, &account_1, &candle.symbol.name) {
+                                        if is_long && bars_since_entry_1 > 3 && strategy.in_profit(&brokerage, &account_1, &candle.symbol.name) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Long Take Profit")).await;
                                             bars_since_entry_1 = 0;
                                         }
-                                        else if is_long && bars_since_entry_1 > 20 && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name) {
+                                        else if is_long && bars_since_entry_1 >= 10 && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_1 = 0;
                                         }
@@ -228,7 +228,7 @@ pub async fn on_data_received(
                                         let last_heikin_3m_atr_5 = heikin_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
                                         // buy above the close of prior bar when atr is high and atr is increasing
-                                        if quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00012) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
+                                        if quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00030) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
                                             && !is_long {
                                             let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_2 = 0;
@@ -238,11 +238,11 @@ pub async fn on_data_received(
                                             bars_since_entry_2 += 1;
                                         }
 
-                                        if is_long && bars_since_entry_2 > 4 && strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name) {
+                                        if is_long && bars_since_entry_2 > 3 && strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name) {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Exit Take Profit")).await;
                                             bars_since_entry_2 = 0;
                                         }
-                                        else if is_long && bars_since_entry_2 > 20 && strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name) {
+                                        else if is_long && bars_since_entry_2 >= 10 && strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name) {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_2 = 0;
                                         }
