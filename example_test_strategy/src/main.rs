@@ -222,14 +222,12 @@ pub async fn on_data_received(
                                         if strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name) && bars_since_entry_2 > 15 && in_profit {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Take Profit")).await;
                                             bars_since_entry_2 = 0;
-                                            is_long = false;
                                         }
 
                                         //stop loss conditions
                                         if strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name) && !in_profit && bars_since_entry_2 >= 10 && strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name) {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_2 = 0;
-                                            is_long = false;
                                         }
 
                                         // Add to our winners when atr is increasing and we get a new signal
