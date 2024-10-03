@@ -162,6 +162,9 @@ pub async fn on_data_received(
                                             && is_long {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Long")).await;
                                             bars_since_entry_2 = 0;
+                                        } else if bars_since_entry_2 > 20 && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name)  && is_long {
+                                            let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Long")).await;
+                                            bars_since_entry_2 = 0;
                                         }
                                     }
 
