@@ -142,12 +142,11 @@ pub async fn on_data_received(
                                     }
 
                                     if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
-                                        let mut is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
-                                        let other_account_is_long_euro = strategy.is_long(&brokerage, &account_2, &"EUR-USD".to_string());
+                                        let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let last_candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
 
                                         // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                        if !is_long && candle.close > candle.open && candle.close > last_candle.high && other_account_is_long_euro {
+                                        if !is_long && candle.close > candle.open && candle.close > last_candle.high  {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
                                         }
@@ -155,28 +154,20 @@ pub async fn on_data_received(
                                         if is_long {
                                             bars_since_entry_1 += 1;
                                         }
+
                                         let in_profit = strategy.in_profit(&brokerage, &account_1, &candle.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
 
                                         // take profit conditions
-                                        if is_long && bars_since_entry_1 >= 10 && in_profit {
+                                        if is_long && bars_since_entry_1 >= 3 && in_profit {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
                                             bars_since_entry_1 = 0;
-                                            is_long = false;
                                         }
 
                                         //stop loss conditions
-                                        if is_long && bars_since_entry_1 >= 10 && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name) {
+                                        if is_long && bars_since_entry_1 >= 10 && !in_profit && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name ) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_1 = 0;
-                                            is_long = false;
-                                        }
-
-                                        // add to our winners
-                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
-
-                                        if is_long && in_profit && position_size < dec!(120) && bars_since_entry_2 > 2 && candle.close > candle.open && other_account_is_long_euro {
-                                            let _add_order_id: OrderId = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Add Long")).await;
                                         }
                                     }
 
@@ -231,22 +222,21 @@ pub async fn on_data_received(
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
 
                                         // take profit conditions
-                                        if is_long && bars_since_entry_2 > 10 && in_profit {
+                                        if is_long && bars_since_entry_2 > 4 && in_profit {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Take Profit")).await;
                                             bars_since_entry_2 = 0;
                                             is_long = false;
                                         }
 
                                         //stop loss conditions
-                                        if is_long && bars_since_entry_2 >= 20 && strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name) {
+                                        if is_long && !in_profit && bars_since_entry_2 >= 10 && strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name) {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_2 = 0;
                                             is_long = false;
                                         }
 
                                         // Add to our winners when atr is increasing and we get a new signal
-
-                                        if is_long && position_size < dec!(150) && bars_since_entry_2 > 5 &&  quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00050) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5 {
+                                        if is_long && in_profit && position_size < dec!(150) && bars_since_entry_2 > 2 &&  quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5 && current_heikin_3m_atr_5 > last_heikin_3m_atr_5 {
                                             let _add_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await;
                                         }
                                     }
@@ -305,6 +295,8 @@ pub async fn on_data_received(
                 }
 
                 StrategyEvent::ShutdownEvent(event) => {
+                    strategy.flatten_all_for(Brokerage::Test, &account_1).await;
+                    strategy.flatten_all_for(Brokerage::Test, &account_2).await;
                     let msg = format!("{}",event);
                     println!("{}", msg.as_str().bright_magenta());
                     strategy.export_trades(&String::from("./trades exports"));
