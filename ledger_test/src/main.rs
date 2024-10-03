@@ -118,7 +118,7 @@ pub async fn on_data_received(
                                         let pnl_2 = strategy.pnl(&brokerage, &account_2, &candle.symbol.name);
                                         let position_size_2: Decimal = strategy.position_size(&brokerage, &account_2, &candle.symbol.name);
                                         // take profit conditions
-                                        if is_short && pnl_2 < dec!(100.0) && trade_placed_2 {
+                                        if is_short && pnl_2 > dec!(100.0) && trade_placed_2 {
                                             let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_2, &brokerage, position_size_2, String::from("Exit Short Take Loss")).await;
                                         }
                                     }

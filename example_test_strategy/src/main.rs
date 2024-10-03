@@ -110,8 +110,6 @@ pub async fn on_data_received(
     let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
     let mut bars_since_entry_2 = 0;
-    let account_1 = AccountId::from("Test_Account_1");
-    let account_2 = AccountId::from("Test_Account_2");
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for (_time, strategy_event) in event_slice.iter() {
@@ -140,7 +138,7 @@ pub async fn on_data_received(
                                     if !warmup_complete {
                                         continue;
                                     }
-
+                                    let account_1 = AccountId::from("Test_Account_1");
                                     if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let last_candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
@@ -159,13 +157,13 @@ pub async fn on_data_received(
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
 
                                         // take profit conditions
-                                        if is_long && bars_since_entry_1 >= 3 && in_profit {
+                                        if strategy.is_long(&brokerage, &account_1, &candle.symbol.name) && bars_since_entry_1 >= 3 && in_profit {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
                                             bars_since_entry_1 = 0;
                                         }
 
                                         //stop loss conditions
-                                        if is_long && bars_since_entry_1 >= 10 && !in_profit && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name ) {
+                                        if strategy.is_long(&brokerage, &account_1, &candle.symbol.name) && bars_since_entry_1 >= 10 && !in_profit && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name ) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_1 = 0;
                                         }
@@ -179,6 +177,7 @@ pub async fn on_data_received(
                                 }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
+                                let account_2 = AccountId::from("Test_Account_2");
                                 // Place trades based on the EUR-USD QuoteBars
                                 if quotebar.is_closed == true {
                                     let msg = format!("{} {} QuoteBar Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.time_closed_local(strategy.time_zone()));
