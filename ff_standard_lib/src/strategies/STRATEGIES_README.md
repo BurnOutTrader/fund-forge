@@ -740,6 +740,12 @@ fn example(brokerage: Brokerage, account_name: AccountName, candle: Candle, ) {
 
     // to find out if the broker and account is flat on the symbol, returns true as default if no position
     let is_flat: bool = strategy.is_flat(&brokerage, &account_1, &candle.symbol.name);
+
+    // returns the open pnl for the current position, returns 0.0 if there is no position
+    let open_profit: Decimal = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
+
+    // returns the booked pnl for the current position, returns 0.0 if there is no position
+    let booked_profit: Decimal = strategy.booked_pnl(&brokerage, &account_1, &candle.symbol.name);
 }
 ```
 
