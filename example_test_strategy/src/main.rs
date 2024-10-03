@@ -266,7 +266,6 @@ pub async fn on_data_received(
                                             }
                                         }
 
-
                                         // Add to our winners when atr is increasing and we get a new signal
                                         if let Some(_entry_order) = &entry_order_id_2 {
                                             let in_profit = strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name);
@@ -297,7 +296,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Tick(_tick) => {}
                             BaseDataEnum::Quote(quote) => {
                                 //primary data feed won't show up in event loop unless specifically subscribed by the strategy
-                                let msg = format!("{} Quote: {}, Local Time {}", quote.symbol.name, base_data.time_closed_utc(), quote.time_local(strategy.time_zone()));
+                                let msg = format!("{} Quote: bid: {} ,ask {}, Local Time {}", quote.symbol.name, quote.bid, quote.ask, quote.time_local(strategy.time_zone()));
                                 println!("{}", msg.as_str().purple());
                             }
                             BaseDataEnum::Fundamental(_fundamental) => {}
@@ -339,8 +338,6 @@ pub async fn on_data_received(
                     strategy.flatten_all_for(Brokerage::Test, &AccountId::from("Test_Account_2")).await;
                     let msg = format!("{}",event);
                     println!("{}", msg.as_str().bright_magenta());
-                    strategy.export_trades(&String::from("./trades exports"));
-                    strategy.print_ledgers();
                     //we should handle shutdown gracefully by first ending the strategy loop.
                     break 'strategy_loop
                 },
@@ -398,6 +395,8 @@ pub async fn on_data_received(
             }
         }
     }
+    strategy.export_trades(&String::from("./trades exports"));
+    strategy.print_ledgers();
     event_receiver.close();
     println!("Strategy: Event Loop Ended");
 }

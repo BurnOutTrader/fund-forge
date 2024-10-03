@@ -1,4 +1,5 @@
 use std::fmt;
+use chrono::{DateTime, Utc};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
@@ -12,6 +13,7 @@ use crate::standardized_types::symbol_info::SymbolInfo;
 pub type PositionId = String;
 #[derive(Serialize)]
 pub(crate) struct PositionExport {
+    entry_time: String,
     symbol_name: String,
     side: String,
     quantity: Volume,
@@ -20,6 +22,7 @@ pub(crate) struct PositionExport {
     booked_pnl: Price,
     highest_recoded_price: Price,
     lowest_recoded_price: Price,
+    exit_time: String,
 }
 
 #[derive(
@@ -33,7 +36,7 @@ pub(crate) struct PositionExport {
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum PositionUpdateEvent {
-    PositionOpened{
+    PositionOpened {
         position_id: PositionId,
         account_id: AccountId,
         brokerage: Brokerage,
@@ -168,8 +171,10 @@ pub struct Position {
     pub brokerage: Brokerage,
     pub account_id: AccountId,
     pub side: PositionSide,
+    pub open_time: String,
     pub quantity_open: Volume,
     pub quantity_closed: Volume,
+    pub close_time: Option<String>,
     pub average_price: Price,
     pub open_pnl: Price,
     pub booked_pnl: Price,
@@ -195,15 +200,18 @@ impl Position {
         id: PositionId,
         symbol_info: SymbolInfo,
         account_currency: Currency,
-        tag: String
+        tag: String,
+        time: DateTime<Utc>
     ) -> Self {
         Self {
             symbol_name,
             brokerage,
             account_id,
             side,
+            open_time: time.to_string(),
             quantity_open: quantity,
             quantity_closed: dec!(0.0),
+            close_time: None,
             average_price,
             open_pnl: dec!(0.0),
             booked_pnl: dec!(0.0),
@@ -219,6 +227,10 @@ impl Position {
     }
 
     pub(crate) fn to_export(&self) -> PositionExport {
+        let exit_time = match &self.close_time {
+            None => "None".to_string(),
+            Some(time) => time.to_string()
+        };
         PositionExport {
             symbol_name: self.symbol_name.to_string(),
             side: self.side.to_string(),
@@ -228,6 +240,8 @@ impl Position {
             booked_pnl: self.booked_pnl,
             highest_recoded_price: self.highest_recoded_price,
             lowest_recoded_price: self.lowest_recoded_price,
+            exit_time,
+            entry_time: self.open_time.to_string(),
         }
     }
 }
