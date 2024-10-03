@@ -141,10 +141,6 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    //index 0 is the same candle we are currently unwrapping in the base data enum, since closed candles are added to history before we get them
-                                  /*  let candle_10_ago = strategy.candle_index(&base_data.subscription(), 10).unwrap();
-                                    let msg = format!("{} {} 10 Candles Ago Close: {}, {}", candle_10_ago.symbol.name, candle_10_ago.resolution, candle_10_ago.close, candle_10_ago.time_closed_local(strategy.time_zone()));
-                                    println!("{}", msg.as_str().on_bright_black());*/
                                     if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let other_account_is_long_euro = strategy.is_long(&brokerage, &account_2, &"EUR-USD".to_string());
