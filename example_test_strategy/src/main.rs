@@ -88,7 +88,7 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
-    let heikin_3m_atr_5 = IndicatorEnum::AverageTrueRange(
+    let quotebar_3m_atr_5 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("heikin_3m_atr_5"),
               DataSubscription::new(
                   SymbolName::from("EUR-USD"),
@@ -103,7 +103,7 @@ pub async fn on_data_received(
         ).await,
     );
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
-    strategy.subscribe_indicator(heikin_3m_atr_5, true).await;
+    strategy.subscribe_indicator(quotebar_3m_atr_5, true).await;
     let mut count = 0;
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
@@ -220,12 +220,12 @@ pub async fn on_data_received(
 
                                         // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
                                         // we can use the name we assigned to get the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
-                                        let heikin_3m_atr_5_current_values = strategy.indicator_index(&"heikin_3m_atr_5".to_string(), 0).unwrap();
-                                        let heikin_3m_atr_5_last_values = strategy.indicator_index(&"heikin_3m_atr_5".to_string(), 1).unwrap();
+                                        let quotebar_3m_atr_5_current_values = strategy.indicator_index(&"quotebar_3m_atr_5".to_string(), 0).unwrap();
+                                        let quotebar_3m_atr_5_last_values = strategy.indicator_index(&"quotebar_3m_atr_5".to_string(), 1).unwrap();
 
                                         // We want to check the current value for the "atr" plot of the atr indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
-                                        let current_heikin_3m_atr_5 = heikin_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
-                                        let last_heikin_3m_atr_5 = heikin_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
+                                        let current_heikin_3m_atr_5 = quotebar_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
+                                        let last_heikin_3m_atr_5 = quotebar_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
                                         // buy above the close of prior bar when atr is high and atr is increasing
                                         if quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00030) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
