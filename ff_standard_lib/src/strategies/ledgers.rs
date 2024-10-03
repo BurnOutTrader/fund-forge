@@ -476,6 +476,7 @@ pub(crate) mod historical_ledgers {
                                 account_id: self.account_id.clone(),
                                 order_id,
                                 reason: e.to_string(),
+                                tag
                             })
                         }
                     }
@@ -494,6 +495,7 @@ pub(crate) mod historical_ledgers {
                             account_id: self.account_id.clone(),
                             order_id,
                             reason: e.to_string(),
+                            tag
                         })
                     }
                 }

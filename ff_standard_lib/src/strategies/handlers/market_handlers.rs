@@ -223,14 +223,14 @@ pub async fn simulated_order_matching(
         OrderRequest::Cancel{brokerage, order_id, account_id } => {
             let existing_order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
             if let Some((existing_order_id, order)) = existing_order {
-                let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage, account_id: order.account_id.clone(), order_id: existing_order_id});
+                let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage, account_id: order.account_id.clone(), order_id: existing_order_id, tag: order.tag.clone()});
                 add_buffer(time, cancel_event).await;
                 if !is_buffered {
                     forward_buffer().await;
                 }
                 BACKTEST_CLOSED_ORDER_CACHE.insert(order_id, order);
             } else {
-                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found") });
+                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found")});
                 add_buffer(time, fail_event).await;
                 if !is_buffered {
                     forward_buffer().await;
@@ -260,7 +260,7 @@ pub async fn simulated_order_matching(
                         order.tag = tag;
                     }
                 }
-                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone(), order: order.clone()});
+                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone(), order: order.clone(), tag: order.tag.clone()});
                 BACKTEST_OPEN_ORDER_CACHE.insert(order_id, order);
                 add_buffer(time, update_event).await;
                 if !is_buffered {
@@ -284,7 +284,7 @@ pub async fn simulated_order_matching(
             for order_id in remove {
                 let order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
                 if let Some((order_id, order)) = order {
-                    let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order_id: order.id.clone() });
+                    let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order_id: order.id.clone(), tag: order.tag.clone()});
                     add_buffer(time.clone(), cancel_event).await;
                     if !is_buffered {
                         forward_buffer().await;
@@ -474,7 +474,7 @@ async fn fill_order(
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
-                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_open, order.side.clone(), time, market_price, order.tag).await {
+                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_open, order.side.clone(), time, market_price, order.tag.clone()).await {
                     Ok(events) => {
                         order.time_filled_utc = Some(time.to_string());
                         order.state = OrderState::Filled;
@@ -485,7 +485,7 @@ async fn fill_order(
                         for event in events {
                             add_buffer(time, StrategyEvent::PositionEvents(event)).await;
                         }
-                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone(), tag: order.tag.clone() })).await;
                     }
                     Err(e) => {
                         match &e {
@@ -527,7 +527,7 @@ async fn partially_fill_order(
                         for event in events {
                             add_buffer(time, StrategyEvent::PositionEvents(event)).await;
                         }
-                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderPartiallyFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderPartiallyFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone(), tag: order.tag.clone() })).await;
                     }
                     Err(e) => {
                         match &e {
@@ -565,6 +565,7 @@ async fn reject_order(
                 brokerage: order.brokerage,
                 account_id: order.account_id.clone(),
                 reason,
+                tag: order.tag.clone()
             }),
         ).await;
         if !is_buffered {
@@ -589,6 +590,7 @@ async fn accept_order(
                 order_id: order.id.clone(),
                 brokerage: order.brokerage.clone(),
                 account_id: order.account_id.clone(),
+                tag: order.tag.clone()
             }),
         ).await;
         if !is_buffered {
@@ -761,10 +763,10 @@ pub(crate) async fn get_market_price (
 
 pub async fn live_order_update(order_upate_event: OrderUpdateEvent, is_buffered: bool) {
     match order_upate_event {
-        OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id } => {
+        OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id ,tag} => {
             if let Some(mut order) = LIVE_ORDER_CACHE.get_mut(&order_id) {
                 order.value_mut().state = OrderState::Accepted;
-                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {order_id, account_id: account_id.clone(), brokerage});
+                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {order_id, account_id: account_id.clone(), brokerage, tag});
                 add_buffer(Utc::now(), event).await;
                 if !is_buffered {
                     forward_buffer().await;
@@ -776,10 +778,10 @@ pub async fn live_order_update(order_upate_event: OrderUpdateEvent, is_buffered:
                 }
             }
         }
-        OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id } => {
+        OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id ,tag} => {
             if let Some((order_id,mut order)) = LIVE_ORDER_CACHE.remove(&order_id) {
                 order.state = OrderState::Filled;
-                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id: order_id.clone(), account_id: account_id.clone(), brokerage});
+                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id: order_id.clone(), account_id: account_id.clone(), brokerage, tag});
                 add_buffer(Utc::now(), event).await;
                 if !is_buffered {
                     forward_buffer().await;
@@ -792,10 +794,10 @@ pub async fn live_order_update(order_upate_event: OrderUpdateEvent, is_buffered:
                 LIVE_CLOSED_ORDER_CACHE.insert(order_id.clone(), order);
             }
         }
-        OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id } => {
+        OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id,tag } => {
             if let Some(mut order) = LIVE_ORDER_CACHE.get_mut(&order_id) {
                 order.value_mut().state = OrderState::PartiallyFilled;
-                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id, account_id: account_id.clone(), brokerage});
+                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id, account_id: account_id.clone(), brokerage, tag});
                 add_buffer(Utc::now(), event).await;
                 if !is_buffered {
                     forward_buffer().await;
@@ -807,10 +809,10 @@ pub async fn live_order_update(order_upate_event: OrderUpdateEvent, is_buffered:
                 }
             }
         }
-        OrderUpdateEvent::OrderCancelled { brokerage, account_id, order_id } => {
+        OrderUpdateEvent::OrderCancelled { brokerage, account_id, order_id,tag } => {
             if let Some((order_id, mut order)) = LIVE_ORDER_CACHE.remove(&order_id) {
                 order.state = OrderState::Cancelled;
-                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {order_id: order_id.clone(), account_id: account_id.clone(), brokerage});
+                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {order_id: order_id.clone(), account_id: account_id.clone(), brokerage, tag});
                 add_buffer(Utc::now(), event).await;
                 if !is_buffered {
                     forward_buffer().await;
@@ -818,10 +820,10 @@ pub async fn live_order_update(order_upate_event: OrderUpdateEvent, is_buffered:
                 LIVE_CLOSED_ORDER_CACHE.insert(order_id.clone(), order);
             }
         }
-        OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason } => {
+        OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason ,tag} => {
             if let Some((order_id, mut order)) = LIVE_ORDER_CACHE.remove(&order_id) {
                 order.state = OrderState::Rejected(reason.clone());
-                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {order_id: order_id.clone(), account_id, brokerage, reason });
+                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {order_id: order_id.clone(), account_id, brokerage, reason , tag});
                 add_buffer(Utc::now(), event).await;
                 if !is_buffered {
                     forward_buffer().await;
@@ -829,9 +831,9 @@ pub async fn live_order_update(order_upate_event: OrderUpdateEvent, is_buffered:
                 LIVE_CLOSED_ORDER_CACHE.insert(order_id.clone(), order);
             }
         }
-        OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, order} => {
+        OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, order,tag} => {
             LIVE_ORDER_CACHE.insert(order_id.clone(), order.clone());
-            let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated {order_id, account_id, brokerage, order});
+            let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated {order_id, account_id, brokerage, order, tag});
             add_buffer(Utc::now(), event).await;
             if !is_buffered {
                 forward_buffer().await;
