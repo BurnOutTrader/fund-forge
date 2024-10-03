@@ -164,7 +164,7 @@ pub async fn on_data_received(
                 _ => {}
             }
         }
-        notify.notify_one();
+        notify.notify_waiters();
     }
     event_receiver.close();
     println!("Strategy: Event Loop Ended");

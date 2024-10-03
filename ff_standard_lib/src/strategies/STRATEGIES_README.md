@@ -169,6 +169,7 @@ Similarly, when we `iter()` a `TimeSlice` we receive the `BaseDataEnum`'s in the
 ```rust
 #[tokio::main]
 async fn main() {
+    let notify = Arc::new(Notify::new());
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
@@ -204,7 +205,8 @@ async fn main() {
         5,
         strategy_event_sender, // the sender for the strategy events
         None,
-        GUI_DISABLED
+        GUI_DISABLED,
+        notify.clone()
     ).await;
 
     on_data_received(strategy, notify, strategy_event_receiver).await;

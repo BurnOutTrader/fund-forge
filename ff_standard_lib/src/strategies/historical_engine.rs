@@ -211,9 +211,9 @@ impl HistoricalEngine {
                         // add the strategy time slice to the new events.
                         let slice_event = StrategyEvent::TimeSlice(strategy_time_slice);
                         add_buffer(time, slice_event).await;
+                        forward_buffer().await;
+                        //self.notify.notified().await;
                     }
-                    forward_buffer().await;
-                    self.notify.notified().await;
                 }
                 if end_month {
                     break 'month_loop;
@@ -338,12 +338,11 @@ impl HistoricalEngine {
                             strategy_time_slice,
                         );
                         add_buffer(time, slice_event).await;
+                        forward_buffer().await;
+                        //self.notify.notified().await;
                     }
-
-                    // send the buffered strategy events to the strategy
-                    forward_buffer().await;
                     last_time = time.clone();
-                    self.notify.notified().await;
+
                 }
                 if end_month {
                     break 'month_loop;

@@ -111,6 +111,7 @@ impl FundForgeStrategy {
         gui_enabled: bool,
         notify: Arc<Notify>
     ) -> FundForgeStrategy {
+        notify.notify_one();
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
         let warm_up_start_time = start_time - warmup_duration;
