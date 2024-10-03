@@ -98,6 +98,7 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
+    let notify = Arc::new(Notify::new());
     // we create a channel for the receiving strategy events
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
 
@@ -146,7 +147,10 @@ async fn main() {
         //If None we will use the unbuffered versions of backtest engine or handlers. The backtesting versions will try to simulate the event flow of their respective live handlers.
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading.
         // In live trading we can set this to None to skip buffering and send the data directly to the strategy or we can use a buffer to keep live consistency with backtesting.
-        Some(Duration::from_millis(100))
+        Some(Duration::from_millis(100)),
+        
+        
+        notify.clone()
     ).await;
 }
 ```
