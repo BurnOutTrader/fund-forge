@@ -745,6 +745,7 @@ fn example(brokerage: Brokerage, account_name: AccountName, candle: Candle, ) {
     let open_profit: Decimal = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
 
     // returns the booked pnl for the current position, returns 0.0 if there is no position
+    // does not return the total pnl for all closed positions on the symbol, just the current open one.
     let booked_profit: Decimal = strategy.booked_pnl(&brokerage, &account_1, &candle.symbol.name);
 }
 ```

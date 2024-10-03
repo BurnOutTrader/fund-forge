@@ -726,6 +726,8 @@ impl FundForgeStrategy {
         range_data(start_date, self.time_utc(), subscription.clone()).await
     }
 
+    //todo update history to use consolidators if no data available
+    /// Currently returns only primary data that is available, needs to be updated to be able to return all subscriptions via consolidated data
     pub async fn historical_range_from_local_time(
         &self,
         from_time: NaiveDateTime,
@@ -744,6 +746,7 @@ impl FundForgeStrategy {
         range_data(start_date.to_utc(), end_date, subscription.clone()).await
     }
 
+    /// Currently returns only primary data that is available, needs to be updated to be able to return all subscriptions via consolidated data
     pub async fn historical_range_from_utc_time(
         &self,
         from_time: NaiveDateTime,
@@ -761,8 +764,9 @@ impl FundForgeStrategy {
         range_data(start_date, end_date, subscription.clone()).await
     }
 
-    /// Returns true of the account is in profit on this symbol
-    /// Returns false if no position
+    /// Returns true of the account is in profit on this symbol.
+    ///
+    /// Returns false if no position.
     pub fn in_profit(&self,brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> bool {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => in_profit_paper(symbol_name, brokerage, account_id),
@@ -770,8 +774,9 @@ impl FundForgeStrategy {
         }
     }
 
-    /// Returns true of the account is in drawdown on this symbol
-    /// Returns false if no position
+    /// Returns true of the account is in drawdown on this symbol.
+    ///
+    /// Returns false if no position.
     pub fn in_drawdown(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> bool {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => in_drawdown_paper(symbol_name, brokerage, account_id),
@@ -779,7 +784,8 @@ impl FundForgeStrategy {
         }
     }
 
-    /// Returns the open pnl for the current position
+    /// Returns the open pnl for the current position.
+    ///
     /// Returns 0.0 if no position open
     pub fn pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> Decimal {
         match self.mode {
@@ -788,8 +794,11 @@ impl FundForgeStrategy {
         }
     }
 
-    /// Returns the booked pnl for the current position (not all positions we have booked profit on)
-    /// Returns 0.0 if no position open
+    /// Returns the booked pnl for the current position (not all positions we have booked profit on).
+    ///
+    /// Returns 0.0 if no position open.
+    ///
+    /// does not return the total pnl for all closed positions on the symbol, just the current open one.
     pub fn booked_pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> Decimal {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => booked_pnl_paper(symbol_name, brokerage, account_id),

@@ -158,11 +158,11 @@ pub async fn on_data_received(
                                             bars_since_entry_1 += 1;
                                         }
 
-                                        if is_long && bars_since_entry_1 > 3 && strategy.in_profit(&brokerage, &account_1, &candle.symbol.name) {
+                                        if is_long && bars_since_entry_1 >= 10 && strategy.in_profit(&brokerage, &account_1, &candle.symbol.name) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Long Take Profit")).await;
                                             bars_since_entry_1 = 0;
                                         }
-                                        else if is_long && bars_since_entry_1 >= 10 && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name) {
+                                        else if is_long && bars_since_entry_1 >= 3 && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_1 = 0;
                                         }
