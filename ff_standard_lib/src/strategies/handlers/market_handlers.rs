@@ -325,9 +325,16 @@ pub async fn backtest_matching_engine(
                     OrderSide::Buy => market_price <= order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.limit_price.unwrap()
                 };
+                let (market_price, volume_filled) = match get_market_stop_limit_fill_price_estimate(order.side, &order.symbol_name, order.quantity_open, order.brokerage, order.limit_price.unwrap()).await {
+                    Ok(price_volume) => price_volume,
+                    Err(_) => continue
+                };
                 if is_fill_triggered {
-                    filled.push((order.id.clone(), order.limit_price.unwrap().clone()));
-                }  else if order.state == OrderState::Created {
+                    match volume_filled == order.quantity_open {
+                        true => filled.push((order.id.clone(),  market_price)),
+                        false => partially_filled.push((order.id.clone(),  market_price, volume_filled))
+                    }
+                } else if order.state == OrderState::Created {
                     accepted.push((order.id.clone(), time, is_buffered))
                 }
             }
