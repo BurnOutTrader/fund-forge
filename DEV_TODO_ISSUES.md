@@ -9,3 +9,12 @@ using data time as key will correctly align the stream with the history availabl
 - Test live subscription warm up
 - Test live indicator warm up
 
+
+## Positions and Statistics
+Currently fund forge only implements 1 of the 3 intended position types that I intend to implement.
+1. Cumulative, when a position is opened, it any additional entries in the same direction will be counted as part of the same position. (Implemented)
+2. First in First Out: When a position is opened any order in the opposite direction will create a trade object based on the entry price and exit price (Not yet implemented)
+3. First in Last Out: Recent entries are prioritized for closing, leaving the older entries as the last to be closed.
+
+This will be done by passing in a set of 3 functions to the ledger in its initialization.
+

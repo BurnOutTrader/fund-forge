@@ -312,6 +312,14 @@ Order book levels should only be imported if they have volume, otherwise we shou
 Order books should be updated by best bid, best offer for index(0) and order book snapshots should provide all visible levels.
 If a level has no volume then the backtest will assume there are no more levels.
 
+### Positions and Statistics
+Currently, fund forge only implements 1 of the 3 intended position types that I intend to implement.
+1. Cumulative, when a position is opened, it any additional entries in any direction will be counted as part of the same position, changing only the average entry an average exit price. This position will stay active until the ledger is flat or reversed. (Implemented)
+2. First in First Out: When a position is opened any order in the opposite direction will create a trade object based on the entry price and exit price (Not yet implemented)
+3. First in Last Out: Recent entries are prioritized for closing, leaving the older entries as the last to be closed.
+
+This will be done by passing in a set of 3 functions to the ledger in its initialization.
+
 ## Current Status
 
 Fund Forge is not ready for live trading. It currently uses a faux `DataevVndor::Test` and `Brokerage::Test` API implementation to help build standardized models, which will aid future API integrations.
