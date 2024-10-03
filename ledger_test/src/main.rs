@@ -50,18 +50,18 @@ async fn main() {
         notify.clone()
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver).await;
+    on_data_received(strategy, strategy_event_receiver, notify).await;
 }
 
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
-    notify: Arc::new(Notify::new())
+    notify: Arc<Notify>
 ) {
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
     let account_1 = AccountId::from("Test_Account_1");
-    let account_2 = AccountId::from("Test_Account_2");
+    let _account_2 = AccountId::from("Test_Account_2");
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for (_time, strategy_event) in event_slice.iter() {
@@ -99,19 +99,23 @@ pub async fn on_data_received(
                                         if is_flat && candle.close > candle.open {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                         }
-                                        // take profit conditions
 
-                                        let pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
+                                        let pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
-                                        if is_long && pnl > dec!(100.0) {
+                                        if is_long && pnl > dec!(200.0) && position_size < dec!(60) {
+                                            let _exit_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Add Long")).await;
+                                        }
+
+                                        // take profit conditions
+                                        if is_long && pnl > dec!(500.0) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
                                         } else if is_long && pnl < dec!(100.0) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Loss")).await;
                                         }
                                     }
 
-                                    //short test
+                              /*      //short test
                                     {
                                         let is_flat = strategy.is_short(&brokerage, &account_2, &candle.symbol.name);
                                         // test short ledger
@@ -128,7 +132,7 @@ pub async fn on_data_received(
                                         } else  if is_short && pnl_2 < dec!(100.0) {
                                             let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_2, &brokerage, position_size_2, String::from("Exit Short Take Loss")).await;
                                         }
-                                    }
+                                    }*/
                                 }
                             }
                             _ => {}
@@ -164,7 +168,7 @@ pub async fn on_data_received(
                 _ => {}
             }
         }
-        notify.notify_waiters();
+        notify.notify_one();
     }
     event_receiver.close();
     println!("Strategy: Event Loop Ended");
