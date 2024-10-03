@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Test ledgers::tests" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="test --package ff_standard_lib --lib strategies::ledgers::tests" />
+  <configuration default="false" name="Test historical_time::tests" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="test --package ff_standard_lib --lib strategies::historical_time::tests" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="true" />
