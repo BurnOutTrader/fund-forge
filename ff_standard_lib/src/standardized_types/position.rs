@@ -320,9 +320,7 @@ pub(crate) mod historical_position {
                     self.symbol_info.tick_size,
                 );
             } else {
-                // Handle the case where total quantity would be zero
-                // This could be setting to zero, logging an error, or another appropriate action
-                self.average_price = Decimal::ZERO;
+                panic!("Average price should not be 0");
             }
 
             // Update the total quantity

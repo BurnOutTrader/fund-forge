@@ -94,7 +94,7 @@ impl Ledger {
 
     pub fn in_profit(&self, symbol_name: &SymbolName) -> bool {
         if let Some(position) = self.positions.get(symbol_name) {
-            if position.open_pnl > dec!(0.0) {
+            if position.value().open_pnl > dec!(0.0) {
                 return true
             }
         }
@@ -103,7 +103,7 @@ impl Ledger {
 
     pub fn in_drawdown(&self, symbol_name: &SymbolName) -> bool {
         if let Some(position) = self.positions.get(symbol_name) {
-            if position.open_pnl < dec!(0.0) {
+            if position.value().open_pnl < dec!(0.0) {
                 return true
             }
         }
@@ -112,21 +112,21 @@ impl Ledger {
 
     pub fn pnl(&self, symbol_name: &SymbolName) -> Decimal {
         if let Some(position) = self.positions.get(symbol_name) {
-            return position.open_pnl.clone()
+            return position.value().open_pnl.clone()
         }
         dec!(0)
     }
 
     pub fn position_size(&self, symbol_name: &SymbolName) -> Decimal {
         if let Some(position) = self.positions.get(symbol_name) {
-            return position.quantity_open.clone()
+            return position.value().quantity_open.clone()
         }
         dec!(0)
     }
 
     pub fn booked_pnl(&self, symbol_name: &SymbolName) -> Decimal {
         if let Some(position) = self.positions.get(symbol_name) {
-            return position.booked_pnl.clone()
+            return position.value().booked_pnl.clone()
         }
         dec!(0)
     }
@@ -440,6 +440,7 @@ pub(crate) mod historical_ledgers {
             // Check if there's an existing position for the given symbol
             let mut remaining_quantity = quantity;
             if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
+
                 let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell)
                     || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 

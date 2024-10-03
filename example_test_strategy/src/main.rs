@@ -110,6 +110,7 @@ pub async fn on_data_received(
     let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
     let mut bars_since_entry_2 = 0;
+    let mut entry_order_id_1 = None;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for (_time, strategy_event) in event_slice.iter() {
@@ -183,7 +184,7 @@ pub async fn on_data_received(
                                     // We can subscribe to new DataSubscriptions at run time
                                     // We can use a strategy reference and still use strategy functions in the receiving functions.
                                     if count == 20 {
-                                        subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        //subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                             }
@@ -222,48 +223,60 @@ pub async fn on_data_received(
                                         let current_heikin_3m_atr_5 = quotebar_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
                                         let last_heikin_3m_atr_5 = quotebar_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
+                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
+
                                         // buy above the close of prior bar when atr is high and atr is increasing
                                         if strategy.is_flat(&brokerage, &account_2, &quotebar.symbol.name)
                                             && quotebar.bid_close > last_bar.bid_close
                                             && current_heikin_3m_atr_5 >= dec!(0.00030)
                                             && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
+                                            && entry_order_id_1.is_none()
                                         {
-                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await;
+                                            entry_order_id_1 = Some(strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await);
                                             bars_since_entry_2 = 0;
+                                            // Note the position size will not immediately change, it will take until the next buffer.
+                                            // The market handler will process the position and the ledger will
                                         }
 
                                         let in_profit = strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
 
+                                        let mut triggered_exit = false;
                                         // take profit conditions
-                                        if strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name)
-                                            && bars_since_entry_2 > 4
-                                            && in_profit
-                                        {
-                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Take Profit")).await;
-                                            bars_since_entry_2 = 0;
+                                        if let Some(entry_order_id) = &entry_order_id_1 {
+                                            if bars_since_entry_2 > 5
+                                                && in_profit
+                                            {
+                                                let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Take Profit")).await;
+                                                bars_since_entry_2 = 0;
+                                                entry_order_id_1 = None;
+                                            }
                                         }
 
                                         //stop loss conditions
                                         let in_drawdown = strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name);
 
-                                        if strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name)
-                                            && !in_profit && bars_since_entry_2 >= 10
-                                            && in_drawdown
-                                        {
-                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
-                                            bars_since_entry_2 = 0;
+                                        if let Some(entry_order_id) = &entry_order_id_1 {
+                                            if bars_since_entry_2 >= 10
+                                                && in_drawdown
+                                            {
+                                                let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
+                                                bars_since_entry_2 = 0;
+                                                let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
+                                                entry_order_id_1 = None;
+                                            }
                                         }
 
+                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
                                         // Add to our winners when atr is increasing and we get a new signal
-                                        if strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name)
-                                            && in_profit
-                                            && position_size < dec!(150)
-                                            && bars_since_entry_2 > 2
-                                            &&  quotebar.bid_close > last_bar.bid_close
-                                            && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
-                                        {
-                                            let _add_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await;
+                                        if let Some(entry_order_id) = &entry_order_id_1 {
+                                            if  in_profit
+                                                && position_size <= dec!(150)
+                                                && bars_since_entry_2 == 3
+                                                && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
+                                            {
+                                                let _add_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await;
+                                            }
                                         }
                                     }
 
@@ -272,7 +285,7 @@ pub async fn on_data_received(
                                     // We can subscribe to new indicators at run time
                                     // we can pass in our strategy reference and it will maintain its functionality
                                     if count == 50 {
-                                        subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        //subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                                 //do something with the current open bar
@@ -282,7 +295,7 @@ pub async fn on_data_received(
                             }
                             BaseDataEnum::Tick(_tick) => {}
                             BaseDataEnum::Quote(quote) => {
-                                // primary data feed won't show up in event loop unless specifically subscribed by the strategy
+                                //primary data feed won't show up in event loop unless specifically subscribed by the strategy
                                 let msg = format!("{} Quote: {}, Local Time {}", quote.symbol.name, base_data.time_closed_utc(), quote.time_local(strategy.time_zone()));
                                 println!("{}", msg.as_str().purple());
                             }
@@ -372,7 +385,6 @@ pub async fn on_data_received(
                 }
 
                 StrategyEvent::PositionEvents(event) => {
-                    //todo, fix position events, currently they cause a lock on buffer, need a direct to strategy function.
                     let msg = format!("{}", event);
                     println!("{}", msg.as_str().yellow());
                     match event {
