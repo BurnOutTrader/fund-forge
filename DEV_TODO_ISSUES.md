@@ -4,3 +4,8 @@
 - Live warm up will have to proceed while also collecting live bars in a buffer from the data server to get accurate warm up, BTreeMap<DateTime<Utc>, Data> 
 using data time as key will correctly align the stream with the history available.
 
+
+## Build Tests
+- Test live subscription warm up
+- Test live indicator warm up
+
