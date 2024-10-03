@@ -100,7 +100,7 @@ pub async fn on_data_received(
                                     }
 
                                     // take profit conditions
-                                    if is_long && pnl > dec!(100.0) && trade_placed_1 {
+                                    if is_long && (pnl > dec!(100.0) || pnl < dec!(100.0)) && trade_placed_1 {
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
                                     }
 
@@ -116,7 +116,7 @@ pub async fn on_data_received(
                                     }
 
                                     // take profit conditions
-                                    if is_short && pnl > dec!(100.0) && trade_placed_2 {
+                                    if is_short && (pnl > dec!(100.0) || pnl < dec!(100.0)) && trade_placed_2 {
                                         let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Short Take Profit")).await;
                                     }
                                 }
@@ -148,6 +148,8 @@ pub async fn on_data_received(
                         PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                         PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                     }
+                    let msg = format!("{}", event);
+                    println!("{}", msg.as_str().purple())
                 }
                 _ => {}
             }

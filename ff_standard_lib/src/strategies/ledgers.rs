@@ -401,7 +401,7 @@ pub(crate) mod historical_ledgers {
                     }
                 }
             }
-            self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
+            self.cash_value = self.cash_used + self.cash_available;
         }
 
         pub fn on_base_data_update(&mut self, base_data_enum: BaseDataEnum, time: DateTime<Utc>) {
@@ -413,7 +413,7 @@ pub(crate) mod historical_ledgers {
                 //returns booked pnl if exit on brackets
                 position.backtest_update_base_data(&base_data_enum, time);
                     self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
-                self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
+                self.cash_value = self.cash_used + self.cash_available;
                 if position.is_closed {
                     // Move the position to the closed positions map
                     let (symbol_name, position) = self.positions.remove(data_symbol_name).unwrap();
@@ -466,7 +466,7 @@ pub(crate) mod historical_ledgers {
                         _ => panic!("This shouldn't happen")
                     }
 
-                    self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
+                    self.cash_value = self.cash_used + self.cash_available;
                     updates.push(event);
                 } else {
                     match self.commit_margin(&symbol_name, quantity).await {
@@ -481,7 +481,7 @@ pub(crate) mod historical_ledgers {
                         }
                     }
                     let event = existing_position.add_to_position(market_price, quantity, time).await;
-                    self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
+                    self.cash_value = self.cash_used + self.cash_available;
                     updates.push(event);
                     remaining_quantity = dec!(0.0);
                 }
@@ -533,7 +533,7 @@ pub(crate) mod historical_ledgers {
                     brokerage: self.brokerage.clone(),
                     tag
                 };
-                self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
+                self.cash_value = self.cash_used + self.cash_available;
                 updates.push(event);
             }
             Ok(updates)
@@ -574,7 +574,7 @@ pub(crate) mod historical_ledgers {
                     _ => panic!("this shouldn't happen")
                 }
                 self.release_margin_used(&symbol_name, existing_position.quantity_open).await;
-                self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
+                self.cash_value = self.cash_used + self.cash_available;
                 // Add the closed position to the positions_closed DashMap
                 self.positions_closed
                     .entry(symbol_name.clone())                  // Access the entry for the symbol name
