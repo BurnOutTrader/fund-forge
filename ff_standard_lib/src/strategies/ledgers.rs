@@ -235,7 +235,7 @@ pub(crate) mod historical_ledgers {
             self.cash_used -= margin;
         }
 
-        pub async fn commit_margin_used(&mut self, symbol_name: &SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
+        pub async fn commit_margin(&mut self, symbol_name: &SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
             let margin = self.brokerage.margin_required(symbol_name.clone(), quantity).await?;
             // Check if the available cash is sufficient to cover the margin
             if self.cash_available < margin {
@@ -426,6 +426,7 @@ pub(crate) mod historical_ledgers {
         }
 
         /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
+        /// todo Need to handle creating a new opposing position when
         pub async fn update_or_create_paper_position(
             &mut self,
             symbol_name: &SymbolName,
@@ -434,13 +435,16 @@ pub(crate) mod historical_ledgers {
             side: OrderSide,
             time: DateTime<Utc>,
             market_price: Price // we use the passed in price because we dont know what sort of order was filled, limit or market
-        ) -> Result<PositionUpdateEvent, OrderUpdateEvent> {
+        ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
+            let mut updates = vec![];
             // Check if there's an existing position for the given symbol
+            let mut remaining_quantity = quantity;
             if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
                 let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell)
                     || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 
                 if is_reducing {
+                    remaining_quantity -= existing_position.quantity_open;
                     let event= existing_position.reduce_paper_position_size(market_price, quantity, time).await;
                     self.release_margin_used(&symbol_name, quantity).await;
 
@@ -460,10 +464,11 @@ pub(crate) mod historical_ledgers {
                         }
                         _ => panic!("This shouldn't happen")
                     }
+
                     self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
-                    return Ok(event)
+                    updates.push(event);
                 } else {
-                    match self.commit_margin_used(&symbol_name, quantity).await {
+                    match self.commit_margin(&symbol_name, quantity).await {
                         Ok(_) => {}
                         Err(e) => {
                             return Err(OrderUpdateEvent::OrderRejected {
@@ -476,21 +481,22 @@ pub(crate) mod historical_ledgers {
                     }
                     let event = existing_position.add_to_position(market_price, quantity, time).await;
                     self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
-                    return Ok(event)
+                    updates.push(event);
+                    remaining_quantity = dec!(0.0);
                 }
             }
-             else {
-                 match self.commit_margin_used(&symbol_name, quantity).await {
-                     Ok(_) => {}
-                     Err(e) => {
-                         return Err(OrderUpdateEvent::OrderRejected {
-                             brokerage: self.brokerage,
-                             account_id: self.account_id.clone(),
-                             order_id,
-                             reason: e.to_string(),
-                         })
-                     }
-                 }
+            if remaining_quantity > dec!(0.0) {
+                match self.commit_margin(&symbol_name, quantity).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            brokerage: self.brokerage,
+                            account_id: self.account_id.clone(),
+                            order_id,
+                            reason: e.to_string(),
+                        })
+                    }
+                }
 
                 // Determine the side of the position based on the order side
                 let position_side = match side {
@@ -506,7 +512,7 @@ pub(crate) mod historical_ledgers {
                     self.brokerage.clone(),
                     self.account_id.clone(),
                     position_side,
-                    quantity,
+                    remaining_quantity,
                     market_price,
                     id.clone(),
                     info.clone(),
@@ -515,18 +521,19 @@ pub(crate) mod historical_ledgers {
 
                 // Insert the new position into the positions map
                 self.positions.insert(symbol_name.clone(), position);
-                 if !self.positions_closed.contains_key(symbol_name) {
-                     self.positions_closed.insert(symbol_name.clone(), vec![]);
-                 }
+                if !self.positions_closed.contains_key(symbol_name) {
+                    self.positions_closed.insert(symbol_name.clone(), vec![]);
+                }
 
-                 let event = PositionUpdateEvent::PositionOpened{
-                     position_id: id,
-                     account_id: self.account_id.clone(),
-                     brokerage: self.brokerage.clone()
-                 };
-                 self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
-                 Ok(event)
+                let event = PositionUpdateEvent::PositionOpened{
+                    position_id: id,
+                    account_id: self.account_id.clone(),
+                    brokerage: self.brokerage.clone()
+                };
+                self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
+                updates.push(event);
             }
+            Ok(updates)
         }
 
         pub fn generate_id(
