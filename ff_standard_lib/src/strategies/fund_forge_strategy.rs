@@ -372,8 +372,8 @@ impl FundForgeStrategy {
 
     pub async fn buy_market(
         &self,
-        account_id: &AccountId,
         symbol_name: &SymbolName,
+        account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
         tag: String,
@@ -408,8 +408,8 @@ impl FundForgeStrategy {
 
     pub async fn sell_market(
         &self,
-        account_id: &AccountId,
         symbol_name: &SymbolName,
+        account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
         tag: String,
@@ -444,8 +444,8 @@ impl FundForgeStrategy {
 
     pub async fn limit_order(
         &self,
-        account_id: &AccountId,
         symbol_name: &SymbolName,
+        account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
         side: OrderSide,
@@ -474,8 +474,8 @@ impl FundForgeStrategy {
 
     pub async fn market_if_touched (
         &self,
-        account_id: &AccountId,
         symbol_name: &SymbolName,
+        account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
         side: OrderSide,
@@ -504,8 +504,8 @@ impl FundForgeStrategy {
 
     pub async fn stop_order (
         &self,
-        account_id: &AccountId,
         symbol_name: &SymbolName,
+        account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
         side: OrderSide,
@@ -534,8 +534,8 @@ impl FundForgeStrategy {
 
     pub async fn stop_limit (
         &self,
-        account_id: &AccountId,
         symbol_name: &SymbolName,
+        account_id: &AccountId,
         brokerage: &Brokerage,
         quantity: Volume,
         side: OrderSide,
