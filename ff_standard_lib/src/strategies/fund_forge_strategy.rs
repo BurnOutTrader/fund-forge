@@ -248,13 +248,14 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let market_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let market_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(market_request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: market_request});
                 send_request(request).await;
@@ -282,13 +283,14 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
                 send_request(request).await;
@@ -316,13 +318,14 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
                 send_request(request).await;
@@ -350,13 +353,14 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
                 send_request(request).await;
@@ -385,13 +389,14 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
                 send_request(request).await;
@@ -420,13 +425,14 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
                 send_request(request).await;
@@ -449,13 +455,14 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Limit", side)).await;
         let order = Order::limit_order(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(), limit_price, tif);
-        let order_request =OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(order_request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
                 send_request(request).await;
@@ -478,13 +485,14 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(&symbol_name, account_id, brokerage, &format!("{} MIT", side)).await;
         let order = Order::market_if_touched(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(order_request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
                 send_request(request).await;
@@ -507,13 +515,14 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop", side)).await;
         let order = Order::stop(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(order_request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
                 send_request(request).await;
@@ -537,13 +546,14 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop Limit", side)).await;
         let order = Order::stop_limit(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),limit_price, trigger_price, tif);
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 self.market_event_sender.send(MarketMessageEnum::OrderRequest(request)).await.unwrap();
                 self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
             }
             StrategyMode::Live => {
+                LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;

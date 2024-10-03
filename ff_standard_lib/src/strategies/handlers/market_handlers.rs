@@ -11,17 +11,15 @@ use lazy_static::lazy_static;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::strategies::client_features::server_connections::{add_buffer, forward_buffer, is_warmup_complete, send_request, StrategyRequest};
+use crate::strategies::client_features::server_connections::{add_buffer, forward_buffer, is_warmup_complete};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::time_slices::TimeSlice;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::strategies::client_features::connection_settings::client_settings::initialise_settings;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::messages::data_server_messaging::{DataServerRequest, FundForgeError};
+use crate::messages::data_server_messaging::{FundForgeError};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -98,7 +96,6 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
     let (sender, receiver) = mpsc::channel(1000);
     let mut receiver = receiver;
     tokio::task::spawn(async move{
-        let settings_map = Arc::new(initialise_settings().unwrap());
         while let Some(message) = receiver.recv().await {
             let time = match mode {
                 StrategyMode::Backtest => get_backtest_time(),
@@ -141,21 +138,7 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                     }
                     match mode {
                         StrategyMode::Live => {
-                            let connection_type = ConnectionType::Broker(order_request.brokerage());
-                            let connection_type = match settings_map.contains_key(&connection_type) {
-                                true => connection_type,
-                                false => ConnectionType::Default
-                            };
-                            let datat_server_request = DataServerRequest::OrderRequest {
-                                request: order_request.clone()
-                            };
-                            send_request(StrategyRequest::OneWay(connection_type, datat_server_request)).await;
-                            match order_request {
-                                OrderRequest::Create { order, .. } => {
-                                    LIVE_ORDER_CACHE.insert(order.id.clone(), order);
-                                }
-                                _ => {}
-                            }
+                            panic!("Live orders do not get sent via market handler");
                         }
                         StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
                             simulated_order_matching(mode, order_request, starting_balances, account_currency, is_buffered, time).await;
