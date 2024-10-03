@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive, Zero};
 use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::strategies::ledgers::Currency;
@@ -18,8 +19,20 @@ pub fn calculate_historical_pnl(
 ) -> Price {
     // Calculate the price difference based on position side
     let raw_ticks = match side {
-        PositionSide::Long => ((market_price - entry_price) / tick_size).round(),   // Profit if market price > entry price
-        PositionSide::Short => ((entry_price - market_price) / tick_size).round(), // Profit if entry price > market price
+        PositionSide::Long => {
+            let ticks =  market_price - entry_price;
+            if ticks == dec!(0.0) {
+                return dec!(0.0)
+            }
+            (ticks/ tick_size).round()
+        },   // Profit if market price > entry price
+        PositionSide::Short => {
+            let ticks = entry_price - market_price;
+            if ticks == dec!(0.0) {
+                return dec!(0.0)
+            }
+            (ticks / tick_size).round()
+        }, // Profit if entry price > market price
     };
 
     /*   if pnl_currency != account_currency && time > *EARLIEST_CURRENCY_CONVERSIONS {

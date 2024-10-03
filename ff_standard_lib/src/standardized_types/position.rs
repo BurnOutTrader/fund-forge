@@ -260,7 +260,7 @@ pub(crate) mod historical_position {
     impl Position {
 
         /// Reduces paper position size a position event, this event will include a booked_pnl property
-        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
+        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, _account_currency: Currency) -> PositionUpdateEvent {
             if quantity > self.quantity_open {
                 panic!("Something wrong with logic, ledger should know this not to be possible")
             }
@@ -279,6 +279,7 @@ pub(crate) mod historical_position {
 
             // Update position
             self.booked_pnl += booked_pnl;
+            self.open_pnl -= booked_pnl;
             self.average_exit_price = match self.average_exit_price {
                 Some(existing_exit_price) => {
                     let exited_quantity = Decimal::from(self.quantity_closed);
@@ -311,13 +312,12 @@ pub(crate) mod historical_position {
                     originating_order_tag: tag
                 }
             } else {
-                self.open_pnl = calculate_historical_pnl(self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity_open, self.pnl_currency, account_currency, time);
                 PositionUpdateEvent::PositionReduced {
                     position_id: self.position_id.clone(),
                     total_quantity_open: self.quantity_open,
                     total_quantity_closed: self.quantity_closed,
                     average_price: self.average_price,
-                    open_pnl: self.open_pnl.clone(),
+                    open_pnl: self.open_pnl,
                     booked_pnl: self.booked_pnl,
                     average_exit_price: self.average_exit_price.unwrap(),
                     account_id: self.account_id.clone(),
