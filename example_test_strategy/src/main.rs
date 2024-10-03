@@ -149,7 +149,7 @@ pub async fn on_data_received(
                                         let other_account_is_long_euro = strategy.is_long(&brokerage, &account_2, &"EUR-USD".to_string());
 
                                         // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                        if candle.close > candle.open && other_account_is_long_euro {
+                                        if !is_long && candle.close > candle.open && other_account_is_long_euro {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
                                         }
@@ -230,7 +230,7 @@ pub async fn on_data_received(
                                         // buy above the close of prior bar when atr is high and atr is increasing
                                         if quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00030) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
                                             && !is_long {
-                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await;
+                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(10), String::from("Enter Long")).await;
                                             bars_since_entry_2 = 0;
                                         }
 
