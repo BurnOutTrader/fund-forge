@@ -448,7 +448,7 @@ pub(crate) mod historical_ledgers {
 
                 if is_reducing {
                     remaining_quantity -= existing_position.quantity_open;
-                    let event= existing_position.reduce_paper_position_size(market_price, quantity, time, tag.clone()).await;
+                    let event= existing_position.reduce_paper_position_size(market_price, quantity, time, tag.clone(), self.currency).await;
                     self.release_margin_used(&symbol_name, quantity).await;
 
                     match &event {
@@ -483,7 +483,7 @@ pub(crate) mod historical_ledgers {
                             })
                         }
                     }
-                    let event = existing_position.add_to_position(market_price, quantity, time, tag.clone()).await;
+                    let event = existing_position.add_to_position(market_price, quantity, time, tag.clone(), self.currency).await;
                     self.cash_value = self.cash_used + self.cash_available;
                     updates.push(event);
                     remaining_quantity = dec!(0.0);
@@ -572,7 +572,7 @@ pub(crate) mod historical_ledgers {
 
                 // Calculate booked profit by reducing the position size
                 self.release_margin_used(&symbol_name, existing_position.quantity_open).await;
-                let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time, tag).await;
+                let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
                 match &event {
                     PositionUpdateEvent::PositionClosed { booked_pnl,.. } => {
                         self.booked_pnl += booked_pnl;
