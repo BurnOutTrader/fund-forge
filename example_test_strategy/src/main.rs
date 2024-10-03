@@ -291,8 +291,8 @@ pub async fn on_data_received(
                 }
 
                 StrategyEvent::ShutdownEvent(event) => {
-                    strategy.flatten_all_for(Brokerage::Test, &account_1).await;
-                    strategy.flatten_all_for(Brokerage::Test, &account_2).await;
+                    strategy.flatten_all_for(Brokerage::Test, &AccountId::from("Test_Account_1")).await;
+                    strategy.flatten_all_for(Brokerage::Test, &AccountId::from("Test_Account_2")).await;
                     let msg = format!("{}",event);
                     println!("{}", msg.as_str().bright_magenta());
                     strategy.export_trades(&String::from("./trades exports"));
