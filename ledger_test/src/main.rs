@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
@@ -10,7 +9,7 @@ use ff_standard_lib::strategies::strategy_events::{StrategyEvent, StrategyEventB
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
-use tokio::sync::{mpsc, Notify};
+use tokio::sync::{mpsc};
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
@@ -21,7 +20,6 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 // to launch on separate machine
 #[tokio::main]
 async fn main() {
-    let notify = Arc::new(Notify::new());
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Backtest,
@@ -47,16 +45,14 @@ async fn main() {
         //None,
 
         GUI_DISABLED,
-        notify.clone()
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver, notify).await;
+    on_data_received(strategy, strategy_event_receiver).await;
 }
 
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
-    notify: Arc<Notify>
 ) {
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
@@ -170,7 +166,6 @@ pub async fn on_data_received(
                 _ => {}
             }
         }
-        notify.notify_one();
     }
     event_receiver.close();
     println!("Strategy: Event Loop Ended");

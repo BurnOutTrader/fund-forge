@@ -98,7 +98,6 @@ use std::time::Duration;
 
 #[tokio::main]
 async fn main() {
-    let notify = Arc::new(Notify::new());
     // we create a channel for the receiving strategy events
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
 
@@ -148,9 +147,6 @@ async fn main() {
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading.
         // In live trading we can set this to None to skip buffering and send the data directly to the strategy or we can use a buffer to keep live consistency with backtesting.
         Some(Duration::from_millis(100)),
-        
-        
-        notify.clone()
     ).await;
 }
 ```
@@ -169,7 +165,6 @@ Similarly, when we `iter()` a `TimeSlice` we receive the `BaseDataEnum`'s in the
 ```rust
 #[tokio::main]
 async fn main() {
-    let notify = Arc::new(Notify::new());
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
@@ -206,7 +201,6 @@ async fn main() {
         strategy_event_sender, // the sender for the strategy events
         None,
         GUI_DISABLED,
-        notify.clone()
     ).await;
 
     on_data_received(strategy, notify, strategy_event_receiver).await;
@@ -434,7 +428,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
         // This is assuming we have the historical data serialized on the data server or available in the data vendor.
         let aud_usd_12m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(12), BaseDataType::HeikinAshi, MarketType::Forex);
         strategy.subscribe(aud_usd_12m.clone(), 50).await;
-        notify.notify_one();
     }
 }
 ```
@@ -562,7 +555,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 }
             }
         }
-        notify.notify_one();
     }
 }
 ```
@@ -728,7 +720,6 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
                 _ => {}
             }
         }
-        notify.notify_one();
     }
 }
 ```

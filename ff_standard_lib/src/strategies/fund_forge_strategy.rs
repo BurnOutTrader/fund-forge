@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
 use rust_decimal::Decimal;
-use tokio::sync::{mpsc, Notify, RwLock};
+use tokio::sync::{mpsc, RwLock};
 use tokio::sync::mpsc::Sender;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::strategies::handlers::market_handlers::{booked_pnl_live, booked_pnl_paper, export_trades, get_market_fill_price_estimate, get_market_price, in_drawdown_live, in_drawdown_paper, in_profit_live, in_profit_paper, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, pnl_live, pnl_paper, position_size_live, position_size_paper, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
@@ -109,9 +109,7 @@ impl FundForgeStrategy {
         strategy_event_sender: mpsc::Sender<StrategyEventBuffer>,
         buffering_duration: Option<Duration>,
         gui_enabled: bool,
-        notify: Arc<Notify>
     ) -> FundForgeStrategy {
-        notify.notify_one();
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
         let warm_up_start_time = start_time - warmup_duration;
@@ -157,7 +155,7 @@ impl FundForgeStrategy {
 
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_duration.clone(), gui_enabled.clone(), market_event_sender, notify).await;
+                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_duration.clone(), gui_enabled.clone(), market_event_sender).await;
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
