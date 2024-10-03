@@ -146,7 +146,7 @@ pub async fn on_data_received(
                                             bars_since_entry_1 += 1;
                                         }
 
-                                        let other_account_is_long_euro = strategy.is_long(&brokerage, &AccountId::from("Test_Account_2"), &candle.symbol.name);
+                                        let other_account_is_long_euro = strategy.is_long(&brokerage, &AccountId::from("Test_Account_2"), &SymbolName::from("EUR-USD"));
 
                                         let last_candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
                                         // buy AUD-CAD if higher close HA candle and if our other account is long on EUR
