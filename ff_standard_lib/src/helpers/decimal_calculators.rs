@@ -20,19 +20,19 @@ pub fn calculate_historical_pnl(
     // Calculate the price difference based on position side
     let raw_ticks = match side {
         PositionSide::Long => {
-            let ticks =  market_price - entry_price;
+            let ticks =  ((market_price - entry_price) / tick_size).round();
             if ticks == dec!(0.0) {
                 return dec!(0.0)
             }
-            (ticks/ tick_size).round()
+            ticks
         },   // Profit if market price > entry price
         PositionSide::Short => {
-            let ticks = entry_price - market_price;
+            let ticks = ((entry_price - market_price) / tick_size).round();
             if ticks == dec!(0.0) {
                 return dec!(0.0)
             }
-            (ticks / tick_size).round()
-        }, // Profit if entry price > market price
+            ticks
+        },
     };
 
     /*   if pnl_currency != account_currency && time > *EARLIEST_CURRENCY_CONVERSIONS {
