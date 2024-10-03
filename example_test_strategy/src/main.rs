@@ -208,7 +208,7 @@ pub async fn on_data_received(
 
                                     if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "EUR-USD" && quotebar.symbol.data_vendor == DataVendor::Test {
 
-                                        if strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name) {
+                                        if entry_order_id_1.is_some() {
                                             bars_since_entry_2 += 1;
                                         }
 
@@ -236,11 +236,11 @@ pub async fn on_data_received(
                                             // The market handler will process the position and the ledger will
                                         }
 
-                                        let in_profit = strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
 
                                         // take profit conditions
                                         if let Some(_entry_order) = &entry_order_id_1 {
+                                            let in_profit = strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name);
                                             if bars_since_entry_2 > 5
                                                 && in_profit
                                             {
@@ -251,9 +251,8 @@ pub async fn on_data_received(
                                         }
 
                                         //stop loss conditions
-                                        let in_drawdown = strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name);
-
                                         if let Some(_entry_order) = &entry_order_id_1 {
+                                            let in_drawdown = strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name);
                                             if bars_since_entry_2 >= 10
                                                 && in_drawdown
                                             {
@@ -263,9 +262,11 @@ pub async fn on_data_received(
                                             }
                                         }
 
-                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
+
                                         // Add to our winners when atr is increasing and we get a new signal
                                         if let Some(_entry_order) = &entry_order_id_1 {
+                                            let in_profit = strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name);
+                                            let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
                                             if  in_profit
                                                 && position_size <= dec!(150)
                                                 && bars_since_entry_2 == 3
