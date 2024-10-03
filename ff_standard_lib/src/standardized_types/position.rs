@@ -184,7 +184,7 @@ pub struct Position {
     pub is_closed: bool,
     pub position_id: PositionId,
     pub symbol_info: SymbolInfo,
-    pub account_currency: Currency,
+    pub pnl_currency: Currency,
     pub tag: String
 }
 
@@ -221,7 +221,7 @@ impl Position {
             is_closed: false,
             position_id: id,
             symbol_info,
-            account_currency,
+            pnl_currency: account_currency,
             tag,
         }
     }
@@ -255,11 +255,12 @@ pub(crate) mod historical_position {
     use crate::standardized_types::enums::PositionSide;
     use crate::standardized_types::position::{Position, PositionUpdateEvent};
     use crate::standardized_types::new_types::{Price, Volume};
+    use crate::strategies::ledgers::Currency;
 
     impl Position {
 
         /// Reduces paper position size a position event, this event will include a booked_pnl property
-        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
+        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
             if quantity > self.quantity_open {
                 panic!("Something wrong with logic, ledger should know this not to be possible")
             }
@@ -272,7 +273,7 @@ pub(crate) mod historical_position {
                 self.symbol_info.value_per_tick,
                 quantity,
                 self.symbol_info.pnl_currency,
-                self.account_currency,
+                self.pnl_currency,
                 time,
             );
 
@@ -297,7 +298,7 @@ pub(crate) mod historical_position {
 
             // Reset open PnL if position is closed
             if self.is_closed {
-                self.open_pnl = dec!(0.0);
+                self.open_pnl = dec!(0);
                 PositionUpdateEvent::PositionClosed {
                     position_id: self.position_id.clone(),
                     total_quantity_open: self.quantity_open,
@@ -310,12 +311,13 @@ pub(crate) mod historical_position {
                     originating_order_tag: tag
                 }
             } else {
+                self.open_pnl = calculate_historical_pnl(self.side, self.average_price, market_price, self.symbol_info.tick_size, self.symbol_info.value_per_tick, self.quantity_open, self.pnl_currency, account_currency, time);
                 PositionUpdateEvent::PositionReduced {
                     position_id: self.position_id.clone(),
                     total_quantity_open: self.quantity_open,
                     total_quantity_closed: self.quantity_closed,
                     average_price: self.average_price,
-                    open_pnl: self.open_pnl,
+                    open_pnl: self.open_pnl.clone(),
                     booked_pnl: self.booked_pnl,
                     average_exit_price: self.average_exit_price.unwrap(),
                     account_id: self.account_id.clone(),
@@ -326,7 +328,7 @@ pub(crate) mod historical_position {
         }
 
         /// Adds to the paper position
-        pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
+        pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
             // Correct the average price calculation with proper parentheses
             if self.quantity_open + quantity != Decimal::ZERO {
                 self.average_price = round_to_tick_size(
@@ -350,7 +352,7 @@ pub(crate) mod historical_position {
                 self.symbol_info.value_per_tick,
                 self.quantity_open,
                 self.symbol_info.pnl_currency,
-                self.account_currency,
+                account_currency,
                 time,
             );
 
@@ -400,7 +402,7 @@ pub(crate) mod historical_position {
                 self.symbol_info.value_per_tick,
                 self.quantity_open,
                 self.symbol_info.pnl_currency,
-                self.account_currency,
+                self.pnl_currency,
                 time,
             );
 
