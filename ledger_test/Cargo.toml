@@ -9,7 +9,6 @@ edition = "2021"
 chrono-tz = "0.10.0"
 tokio = "1.36.0"
 chrono = "*"
-rkyv = "*"
 rust_decimal = { version = "1.36.0", features = ["rkyv", "rkyv-safe"] }
 rust_decimal_macros ="1.36.0"
 ff_standard_lib = { path = "../ff_standard_lib" }

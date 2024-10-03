@@ -32,7 +32,6 @@ lazy_static! {
     pub static ref TEST_CLIENT: Arc<TestApiClient> = Arc::new(TestApiClient::new());
 }
 
-
 pub struct TestApiClient {
     data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<DataServerResponse>>>>
 }
