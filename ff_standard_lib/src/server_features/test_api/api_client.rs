@@ -127,7 +127,7 @@ impl BrokerApiResponse for TestApiClient {
 
         // Assuming 100:1 leverage, calculate margin required
         // You may want to factor in symbol-specific prices if available
-        let margin_required = round_to_decimals((quantity * dec!(100.0)), 2);
+        let margin_required = round_to_decimals(quantity * dec!(100.0), 2);
 
         DataServerResponse::MarginRequired {
             callback_id,
