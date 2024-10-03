@@ -148,9 +148,10 @@ pub async fn on_data_received(
                                     if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let other_account_is_long_euro = strategy.is_long(&brokerage, &account_2, &"EUR-USD".to_string());
+                                        let last_candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
 
                                         // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                        if !is_long && candle.close > candle.open && other_account_is_long_euro {
+                                        if !is_long && candle.close > candle.open && candle.close > last_candle.high && other_account_is_long_euro {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
                                         }
@@ -180,7 +181,7 @@ pub async fn on_data_received(
                                     // We can subscribe to new DataSubscriptions at run time
                                     // We can use a strategy reference and still use strategy functions in the receiving functions.
                                     if count == 20 {
-                                        subscribe_to_new_candles(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                             }
@@ -386,15 +387,13 @@ pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
     );
     // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
     // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
-    let event = strategy.subscribe_indicator(heikin_atr10_15min, true).await;
-    let msg = format!("{}", event);
-    println!("{}", msg.as_str().bright_purple());
+    strategy.subscribe_indicator(heikin_atr10_15min, true).await;
 }
 
 
 // We can subscribe to new data feeds at run time
 // We can use a strategy reference for strategy functions.
-pub async fn subscribe_to_new_candles(strategy: &FundForgeStrategy) {
+pub async fn subscribe_to_new_candles_example(strategy: &FundForgeStrategy) {
     let msg = "Subscribing to new AUD-CAD HeikinAshi Candle at 15 Minute Resolution and warming subscription to have 48 bars of memory,
                                         this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
     println!("{}",msg.as_str().to_uppercase().purple());
@@ -409,14 +408,6 @@ pub async fn subscribe_to_new_candles(strategy: &FundForgeStrategy) {
     // subscribing to data subscriptions returns a result, the result is a DataSubscription event, Ok(FailedToSubscribe) or Err(Subscribed)
     // In live or live paper, we could have 2 failures, 1 here on client side, and another event that comes from server side, if it fails on the api for any reason.
     // The subscription handler should catch problems before the server, but there is always a possibility that a server side failure to subscribe occurs.
-    match strategy.subscribe(minute_15_ha_candles, 48, false).await {
-        Ok(ok) => {
-            let msg = format!("{}", ok.to_string());
-            println!("{}", msg.as_str().bright_magenta())
-        }
-        Err(e) =>  {
-            let msg = format!("{}", e.to_string());
-            println!("{}", msg.as_str().on_bright_white())
-        }
-    }
+    // In live we start a background task for this (untested)
+     strategy.subscribe(minute_15_ha_candles, 48, false).await;
 }
