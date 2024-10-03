@@ -99,7 +99,7 @@ pub async fn on_data_received(
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
-                                        if is_long && pnl > dec!(250.0) && position_size < dec!(60) {
+                                        if is_long && pnl > dec!(250.0) && position_size < dec!(240) {
                                             let _add_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Add Long")).await;
                                         }
 
