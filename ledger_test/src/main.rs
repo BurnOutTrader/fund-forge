@@ -62,9 +62,6 @@ pub async fn on_data_received(
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for (_time, strategy_event) in event_slice.iter() {
             match strategy_event {
-                // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
-                StrategyEvent::DrawingToolEvents(_event) => {}
-
                 StrategyEvent::TimeSlice(time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
                     for base_data in time_slice.iter() {

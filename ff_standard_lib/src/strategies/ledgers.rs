@@ -487,6 +487,7 @@ pub(crate) mod historical_ledgers {
                     self.cash_value = self.cash_used + self.cash_available;
                     updates.push(event);
                     remaining_quantity = dec!(0.0);
+                    self.positions.insert(existing_position.symbol_name.clone(), existing_position);
                 }
             }
             if remaining_quantity > dec!(0.0) {
