@@ -32,9 +32,6 @@ pub async fn base_data_response(
 ) -> DataServerResponse {
     let data_folder = PathBuf::from(get_data_folder());
     let time: DateTime<Utc> = time.parse().unwrap();
-    //todo if to_time == the last 24 hours or some live time, we need to make sure we pull the latest bars from the vendor to make up for any missing bars
-    // we can use BaseDataEnum::last time for this or we simply start update task on this call
-    // now we can load the data from the file system
 
     let file = BaseDataEnum::file_path(&data_folder, &subscription, &time).unwrap();
     //println!("file path: {:?}", file);
@@ -53,16 +50,6 @@ pub async fn base_data_response(
         Some(payload) => DataServerResponse::HistoricalBaseData{callback_id, payload}
     }
 }
-/*todo
-    1. The request comes in from strategy
-    2. we send request to callback fn
-    3. callback calls broker/vendor fn
-    4. broker/vendor api sends a outgoing request message and books a oneshot with connection_name and callback_id into its callbacks map, while callback fn awaits
-    5. incoming broker/vendor message is parsed and converted to fund forge response
-    6. using the connection_name and callback_id the broker/vendor read half finds the oneshot for the callback fn
-    6. broker vendor fn receivers back a message on its oneshot
- */
-
 
 async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
     let tcp_stream = stream.get_ref();
