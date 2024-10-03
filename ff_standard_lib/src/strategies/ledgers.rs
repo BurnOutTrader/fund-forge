@@ -115,6 +115,13 @@ impl Ledger {
         dec!(0)
     }
 
+    pub fn position_size(&self, symbol_name: &SymbolName) -> Decimal {
+        if let Some(position) = self.positions.get(symbol_name) {
+            return position.quantity_open.clone()
+        }
+        dec!(0)
+    }
+
     pub fn booked_pnl(&self, symbol_name: &SymbolName) -> Decimal {
         if let Some(position) = self.positions.get(symbol_name) {
             return position.booked_pnl.clone()

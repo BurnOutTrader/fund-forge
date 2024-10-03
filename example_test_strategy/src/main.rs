@@ -1,6 +1,7 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
+use rust_decimal::Decimal;
 use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -170,7 +171,8 @@ pub async fn on_data_received(
 
                                         // add to our winners
                                         let in_profit = strategy.in_profit(&brokerage, &account_1, &candle.symbol.name);
-                                        if is_long && bars_since_entry_2 > 4 && candle.close > candle.open && other_account_is_long_euro {
+                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
+                                        if is_long && in_profit && position_size < dec!(120) && bars_since_entry_2 > 2 && candle.close > candle.open && other_account_is_long_euro {
                                             let _entry_order_id: OrderId = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                         }
                                     }
@@ -257,17 +259,17 @@ pub async fn on_data_received(
                                         }
 
                                         // Add to our winners when atr is increasing and we get a new signal
-                                        if is_long && bars_since_entry_2 > 3 &&  quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00050) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5 {
-                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await;
+                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
+                                        if is_long && position_size < dec!(150) && bars_since_entry_2 > 2 &&  quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00050) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5 {
+                                            let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Enter Long")).await;
                                         }
-
                                     }
 
                                     count += 1;
 
                                     // We can subscribe to new indicators at run time
                                     if count == 50 {
-                                        let msg = "Subscribing to new indicator heikin_atr10_15min and warming up subscriptions".to_string();
+                                        let msg = "Subscribing to new indicator heikin_atr10_15min and warming up subscriptions, this will also take time if we don't have enough history to warm up".to_uppercase().to_string();
                                         println!("{}",msg.as_str().purple());
                                         // this will test both our auto warm up for indicators and data subscriptions
                                         let heikin_atr10_15min = IndicatorEnum::AverageTrueRange(

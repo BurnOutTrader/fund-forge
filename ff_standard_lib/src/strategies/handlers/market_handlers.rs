@@ -728,6 +728,24 @@ pub fn booked_pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_
     dec!(0.0)
 }
 
+pub fn position_size_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
+    if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().position_size(symbol_name)
+        }
+    }
+    dec!(0.0)
+}
+
+pub fn position_size_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
+    if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().position_size(symbol_name)
+        }
+    }
+    dec!(0.0)
+}
+
 
 pub fn is_long_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {

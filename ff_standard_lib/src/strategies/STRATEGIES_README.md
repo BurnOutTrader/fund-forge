@@ -747,6 +747,10 @@ fn example(strategy: &FundForgeStrategy, brokerage: Brokerage, account_name: Acc
     // returns the booked pnl for the current position, returns 0.0 if there is no position
     // does not return the total pnl for all closed positions on the symbol, just the current open one.
     let booked_profit: Decimal = strategy.booked_pnl(&brokerage, &account_name, &candle.symbol.name);
+
+    // returns the open quantity / size of our open position
+    // if no position it returns dec!(0)
+    let position_size: Decimal = strategy.position_size(&brokerage, &account_name, &candle.symbol.name);
 }
 ```
 
