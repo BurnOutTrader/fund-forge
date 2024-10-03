@@ -276,15 +276,22 @@ fn main() {
 ```
 After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
 
-## Back Test Accuracy
-This was tested using only market orders, enter long, enter short, exit long, exit short, however all other orders follow the same logic and should work accurately.
-The only thing not built into backtest order matching is TimeInForce, this will be done later.
+## Backtest Accuracy
+Market orders will attempt to use the order book to fill, assuming we get to soak up 100% volume per level, if the book only has 1 level then it will just fill according to order side assuming that we only have best bid or best offer.
 
-Any slight differences in expected values will be due to rounding, I round profit to tick size and calulate by number of ticks, quantity and value per tick, then round to 2 decimal places.
+Limit orders will partially fill if we have order books with volume, else they will fully fill at the best bid or offer depending on order side.
 
-I do this for each position when the position closes or changes open value, not when the stats are calulated.
+If no order book or quote data is available we will fill all orders at the last price.
+
+Accuracy was tested using only market orders, enter long, enter short, exit long, exit short, however all other orders follow the same logic and should work accurately and I will build a test in the future.
+
+Any slight differences in expected statistical values will be due to rounding, I round profit to tick size and calulate by number of ticks, quantity and value per tick, then round to 2 decimal places.
+
+I do this for each position when the position closes or changes open value, not when the stats are calculated.
+
+The alternative would be rounding pnl after we have the total, but this would be less realistic than the current method.
+
 [Results of testing here](ledger_test/BACK_TEST_ACCURACY_README.md)
-
 
 | Metric | Calculated | Provided | Match? |
 |--------|------------|----------|--------|
@@ -299,6 +306,11 @@ I do this for each position when the position closes or changes open value, not 
 | Total Trades | 269 | 269 | ✅ |
 | Cash Used | N/A | 0 | N/A |
 | Cash Available | 97,870.00 | 97,870.00 | ✅ |
+
+### Fill and Order Book Notes
+Order book levels should only be imported if they have volume, otherwise we should just skip the useless level.
+Order books should be updated by best bid, best offer for index(0) and order book snapshots should provide all visible levels.
+If a level has no volume then the backtest will assume there are no more levels.
 
 ## Current Status
 
