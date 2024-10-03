@@ -59,26 +59,26 @@ pub enum MarketMessageEnum {
 }
 
 lazy_static!(
-    pub static ref BID_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>>= Arc::new(DashMap::new());
-    pub static ref ASK_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>> = Arc::new(DashMap::new());
+    pub(crate) static ref BID_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>>= Arc::new(DashMap::new());
+    pub(crate) static ref ASK_BOOKS: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>> = Arc::new(DashMap::new());
     static ref HAS_QUOTES: DashMap<SymbolName, bool> = DashMap::new();
-    pub static ref LAST_PRICE: Arc<DashMap<SymbolName, Price>> = Arc::new(DashMap::new());
-    pub static ref SYMBOL_INFO: Arc<DashMap<SymbolName, SymbolInfo>> = Arc::new(DashMap::new());
+    pub(crate) static ref LAST_PRICE: Arc<DashMap<SymbolName, Price>> = Arc::new(DashMap::new());
+    pub(crate) static ref SYMBOL_INFO: Arc<DashMap<SymbolName, SymbolInfo>> = Arc::new(DashMap::new());
     //static ref LAST_PRICE_MOMENTUM: Arc<DashMap<Symbol, BTreeMap<u8, > = Arc::new(DashMap::new()); we could use this to record last tick was up or down for x periods
     //ToDO implement a 4th strategy mode variant to trade live and paper in parallel
 
     //LIVE STATICS
-    pub static ref LIVE_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
-    pub static ref LIVE_CLOSED_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
-    pub static ref LIVE_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
+    pub(crate) static ref LIVE_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
+    pub(crate) static ref LIVE_CLOSED_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
+    pub(crate) static ref LIVE_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
 
     //BACKTEST STATICS
-    pub static ref BACKTEST_OPEN_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
-    pub static ref BACKTEST_CLOSED_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
-    pub static ref BACKTEST_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
+    pub(crate) static ref BACKTEST_OPEN_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
+    pub(crate) static ref BACKTEST_CLOSED_ORDER_CACHE: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
+    pub(crate) static ref BACKTEST_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
 );
 
-pub fn historical_time_slice_ledger_updates(time_slice: TimeSlice, time: DateTime<Utc>) {
+fn historical_time_slice_ledger_updates(time_slice: TimeSlice, time: DateTime<Utc>) {
     for broker_map in BACKTEST_LEDGERS.iter() {
         for mut account_map in broker_map.iter_mut() {
             account_map.value_mut().on_historical_timeslice_update(time_slice.clone(), time);
@@ -86,7 +86,7 @@ pub fn historical_time_slice_ledger_updates(time_slice: TimeSlice, time: DateTim
     }
 }
 
-pub fn historical_base_data_updates(base_data_enum: BaseDataEnum, time: DateTime<Utc>) {
+fn historical_base_data_updates(base_data_enum: BaseDataEnum, time: DateTime<Utc>) {
     for broker_map in BACKTEST_LEDGERS.iter() {
         if let Some(mut account_map) = broker_map.get_mut(&base_data_enum.symbol().name) {
             account_map.value_mut().on_base_data_update(base_data_enum.clone(), time);
@@ -94,7 +94,7 @@ pub fn historical_base_data_updates(base_data_enum: BaseDataEnum, time: DateTime
     }
 }
 
-pub async fn market_handler(mode: StrategyMode, starting_balances: Decimal, account_currency: Currency, is_buffered: bool) -> Sender<MarketMessageEnum> {
+pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decimal, account_currency: Currency, is_buffered: bool) -> Sender<MarketMessageEnum> {
     let (sender, receiver) = mpsc::channel(1000);
     let mut receiver = receiver;
     tokio::task::spawn(async move{
@@ -629,7 +629,7 @@ async fn accept_order(
     }
 }
 
-pub fn process_ledgers() -> Vec<String> {
+pub(crate) fn process_ledgers() -> Vec<String> {
     let mut return_strings = vec![];
     for broker_map in BACKTEST_LEDGERS.iter() {
         for account_map in broker_map.iter_mut() {
@@ -639,7 +639,7 @@ pub fn process_ledgers() -> Vec<String> {
     return_strings
 }
 
-pub fn export_trades(directory: &str) {
+pub(crate) fn export_trades(directory: &str) {
     for broker_map in BACKTEST_LEDGERS.iter() {
         for account_map in broker_map.iter_mut() {
             account_map.export_positions_to_csv(directory);
@@ -647,7 +647,7 @@ pub fn export_trades(directory: &str) {
     }
 }
 
-pub fn print_ledger(brokerage: &Brokerage, account_id: &AccountId) -> Option<String>  {
+pub(crate) fn print_ledger(brokerage: &Brokerage, account_id: &AccountId) -> Option<String>  {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return Some(account_map.value().print())
@@ -656,7 +656,7 @@ pub fn print_ledger(brokerage: &Brokerage, account_id: &AccountId) -> Option<Str
     None
 }
 
-pub fn in_profit_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
+pub(crate) fn in_profit_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().in_profit(symbol_name)
@@ -665,7 +665,7 @@ pub fn in_profit_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_
     false
 }
 
-pub fn in_profit_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
+pub(crate) fn in_profit_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().in_profit(symbol_name)
@@ -674,7 +674,7 @@ pub fn in_profit_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_i
     false
 }
 
-pub fn in_drawdown_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
+pub(crate) fn in_drawdown_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().in_drawdown(symbol_name)
@@ -683,7 +683,7 @@ pub fn in_drawdown_paper(symbol_name: &SymbolName, brokerage: &Brokerage, accoun
     false
 }
 
-pub fn in_drawdown_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
+pub(crate) fn in_drawdown_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().in_drawdown(symbol_name)
@@ -692,7 +692,7 @@ pub fn in_drawdown_live(symbol_name: &SymbolName, brokerage: &Brokerage, account
     false
 }
 
-pub fn pnl_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
+pub(crate) fn pnl_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().pnl(symbol_name)
@@ -701,7 +701,7 @@ pub fn pnl_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &A
     dec!(0.0)
 }
 
-pub fn booked_pnl_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
+pub(crate) fn booked_pnl_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().booked_pnl(symbol_name)
@@ -710,7 +710,7 @@ pub fn booked_pnl_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account
     dec!(0.0)
 }
 
-pub fn pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
+pub(crate) fn pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().pnl(symbol_name)
@@ -719,7 +719,7 @@ pub fn pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &Ac
     dec!(0.0)
 }
 
-pub fn booked_pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
+pub(crate) fn booked_pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().booked_pnl(symbol_name)
@@ -728,7 +728,7 @@ pub fn booked_pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_
     dec!(0.0)
 }
 
-pub fn position_size_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
+pub(crate) fn position_size_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().position_size(symbol_name)
@@ -737,7 +737,7 @@ pub fn position_size_live(symbol_name: &SymbolName, brokerage: &Brokerage, accou
     dec!(0.0)
 }
 
-pub fn position_size_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
+pub(crate) fn position_size_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().position_size(symbol_name)
@@ -747,7 +747,7 @@ pub fn position_size_paper(symbol_name: &SymbolName, brokerage: &Brokerage, acco
 }
 
 
-pub fn is_long_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+pub(crate) fn is_long_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().is_long(symbol_name)
@@ -756,7 +756,7 @@ pub fn is_long_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: 
     false
 }
 
-pub fn is_short_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+pub(crate) fn is_short_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().is_short(symbol_name)
@@ -765,7 +765,7 @@ pub fn is_short_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name:
     false
 }
 
-pub fn is_flat_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+pub(crate) fn is_flat_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().is_flat(symbol_name)
@@ -774,7 +774,7 @@ pub fn is_flat_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: 
     true
 }
 
-pub fn is_long_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+pub(crate) fn is_long_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().is_long(symbol_name)
@@ -783,7 +783,7 @@ pub fn is_long_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name:
     false
 }
 
-pub fn is_short_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+pub(crate) fn is_short_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().is_short(symbol_name)
@@ -792,7 +792,7 @@ pub fn is_short_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name
     false
 }
 
-pub fn is_flat_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
+pub(crate) fn is_flat_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return account_map.value().is_flat(symbol_name)
@@ -801,7 +801,7 @@ pub fn is_flat_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name:
     true
 }
 
-pub async fn get_market_fill_price_estimate (
+pub(crate) async fn get_market_fill_price_estimate (
     order_side: OrderSide,
     symbol_name: &SymbolName,
     volume: Volume,
@@ -866,7 +866,7 @@ pub async fn get_market_fill_price_estimate (
     Err(FundForgeError::ClientSideErrorDebug(String::from("No market price found for symbol")))
 }
 
-pub async fn get_market_price (
+pub(crate) async fn get_market_price (
     order_side: OrderSide,
     symbol_name: &SymbolName,
 ) -> Result<Price, FundForgeError> {
