@@ -254,7 +254,7 @@ pub async fn simulated_order_matching(
                         order.time_in_force = tif;
                     }
                     OrderUpdateType::Quantity(quantity) => {
-                        order.quantity_ordered = quantity;
+                        order.quantity_open = quantity;
                     }
                     OrderUpdateType::Tag(tag) => {
                         order.tag = tag;
@@ -312,6 +312,7 @@ pub async fn backtest_matching_engine(
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
     let mut filled = Vec::new();
+    let mut partially_filled = Vec::new();
     for order in BACKTEST_OPEN_ORDER_CACHE.iter() {
         //3. respond with an order event
         match &order.order_type {
@@ -338,7 +339,7 @@ pub async fn backtest_matching_engine(
                 filled.push((order.id.clone(), market_price));
             },
             OrderType::MarketIfTouched | OrderType::StopMarket => {
-                let market_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_filled, order.brokerage).await {
+                let market_price = match get_market_price(order.side, &order.symbol_name).await {
                     Ok(price) => price,
                     Err(_) => continue
                 };
@@ -346,8 +347,12 @@ pub async fn backtest_matching_engine(
                     OrderSide::Buy => market_price <= order.trigger_price.unwrap(),
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap()
                 };
+                let market_fill_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_filled, order.brokerage).await {
+                    Ok(price) => price,
+                    Err(_) => continue
+                };
                 if is_fill_triggered {
-                    filled.push((order.id.clone(), market_price));
+                    filled.push((order.id.clone(), market_fill_price));
                 } else if order.state == OrderState::Created {
                     accepted.push((order.id.clone(), time, is_buffered))
                 }
@@ -361,9 +366,15 @@ pub async fn backtest_matching_engine(
                     OrderSide::Buy => market_price <= order.trigger_price.unwrap() && market_price > order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap() && market_price < order.limit_price.unwrap()
                 };
+                let (market_price, volume_filled) = match get_market_stop_limit_fill_price_estimate(order.side, &order.symbol_name, order.quantity_open, order.brokerage, order.limit_price.unwrap()).await {
+                    Ok(price_volume) => price_volume,
+                    Err(_) => continue
+                };
                 if is_fill_triggered {
-                    //todo need a better way to simulate stop limits, use custom market price fn to
-                    filled.push((order.id.clone(),  order.limit_price.unwrap().clone()));
+                    match volume_filled == order.quantity_open {
+                        true => filled.push((order.id.clone(),  market_price)),
+                        false => partially_filled.push((order.id.clone(),  market_price, volume_filled))
+                    }
                 } else if order.state == OrderState::Created {
                     accepted.push((order.id.clone(), time, is_buffered))
                 }
@@ -432,6 +443,9 @@ pub async fn backtest_matching_engine(
     for (order_id, price) in filled {
         fill_order(&order_id, time, price, is_buffered).await;
     }
+    for (order_id, price, volume) in partially_filled {
+        partially_fill_order(&order_id, time, price, volume,  is_buffered).await;
+    }
 }
 
 async fn fill_order(
@@ -444,17 +458,60 @@ async fn fill_order(
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
-                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_ordered, order.side.clone(), time, market_price, order.tag).await {
+                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_open, order.side.clone(), time, market_price, order.tag).await {
                     Ok(events) => {
                         order.time_filled_utc = Some(time.to_string());
                         order.state = OrderState::Filled;
                         order.average_fill_price = Some(market_price);
-                        order.quantity_filled = order.quantity_ordered;
+                        order.quantity_filled = order.quantity_open;
+                        order.quantity_open = dec!(0.0);
                         order.time_filled_utc = Some(time.to_string());
                         for event in events {
                             add_buffer(time, StrategyEvent::PositionEvents(event)).await;
                         }
                         add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
+                    }
+                    Err(e) => {
+                        match &e {
+                            OrderUpdateEvent::OrderRejected { reason, .. } => {
+                                order.state = OrderState::Rejected(reason.clone());
+                                let event = StrategyEvent::OrderEvents(e);
+                                add_buffer(time, event).await;
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                if !is_buffered {
+                    forward_buffer().await;
+                }
+            }
+        }
+    }
+}
+
+async fn partially_fill_order(
+    order_id: &OrderId,
+    time: DateTime<Utc>,
+    fill_price: Price,
+    fill_volume: Volume,
+    is_buffered: bool,
+) {
+    if let Some(mut order) = BACKTEST_OPEN_ORDER_CACHE.get_mut(order_id) {
+        if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
+            if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
+                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
+                    Ok(events) => {
+                        order.time_filled_utc = Some(time.to_string());
+                        order.state = OrderState::PartiallyFilled;
+                        order.average_fill_price = Some(fill_price);
+                        order.quantity_filled = fill_volume;
+                        order.quantity_open -= fill_volume;
+                        order.time_filled_utc = Some(time.to_string());
+                        for event in events {
+                            add_buffer(time, StrategyEvent::PositionEvents(event)).await;
+                        }
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderPartiallyFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone() })).await;
                     }
                     Err(e) => {
                         match &e {
@@ -781,6 +838,80 @@ pub(crate) async fn get_market_fill_price_estimate (
     // If we couldn't get a price from the order book, fall back to the last price
     if let Some(last_price) = LAST_PRICE.get(symbol_name) {
         return Ok(last_price.value().clone());
+    }
+
+    Err(FundForgeError::ClientSideErrorDebug(String::from("No market price found for symbol")))
+}
+
+pub(crate) async fn get_market_stop_limit_fill_price_estimate (
+    order_side: OrderSide,
+    symbol_name: &SymbolName,
+    volume: Volume,
+    brokerage: Brokerage,
+    limit: Price,
+) -> Result<(Price, Volume), FundForgeError> {
+    let order_book = match order_side {
+        OrderSide::Buy => ASK_BOOKS.get(symbol_name),
+        OrderSide::Sell => BID_BOOKS.get(symbol_name)
+    };
+
+    let tick_size = match SYMBOL_INFO.get(symbol_name) {
+        None => {
+            let info = brokerage.symbol_info(symbol_name.clone()).await.unwrap();
+            let tick_size = info.tick_size.clone();
+            SYMBOL_INFO.insert(symbol_name.clone(), info);
+            tick_size
+        }
+        Some(info) => info.value().tick_size
+    };
+
+    if let Some(book_price_volume_map) = order_book {
+        let mut total_price_volume = dec!(0.0);
+        let mut total_volume_filled = dec!(0.0);
+        let mut remaining_volume = volume;
+        for level in 0.. {
+            if let Some(bool_level) = book_price_volume_map.value().get(&level) {
+                if bool_level.volume == dec!(0.0) && total_volume_filled == dec!(0.0) && level == 0 {
+                    return Ok((bool_level.price.clone(), volume))
+                }
+                if bool_level.volume == dec!(0.0) {
+                    continue;
+                }
+                match order_side {
+                    OrderSide::Buy => {
+                        if bool_level.price > limit {
+                            break;
+                        }
+                    }
+                    OrderSide::Sell => {
+                        if bool_level.price < limit {
+                            break;
+                        }
+                    }
+                }
+                let volume_to_use = remaining_volume.min(bool_level.volume);
+                total_price_volume += bool_level.price * volume_to_use;
+                total_volume_filled += volume_to_use;
+                remaining_volume -= volume_to_use;
+
+                if remaining_volume == dec!(0.0) {
+                    // We've filled the entire requested volume
+                    let fill_price = round_to_tick_size(total_price_volume / total_volume_filled, tick_size);
+                    return Ok((fill_price, total_volume_filled));
+                }
+            } else {
+                break;
+            }
+        }
+
+        if total_volume_filled > dec!(0.0) {
+            return Ok((round_to_tick_size(total_price_volume / total_volume_filled, tick_size), total_volume_filled));
+        }
+    }
+
+    // If we couldn't get a price from the order book, fall back to the last price
+    if let Some(last_price) = LAST_PRICE.get(symbol_name) {
+        return Ok((last_price.value().clone(), volume));
     }
 
     Err(FundForgeError::ClientSideErrorDebug(String::from("No market price found for symbol")))
