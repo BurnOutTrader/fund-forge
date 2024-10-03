@@ -21,7 +21,7 @@ use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::handlers::market_handlers::MarketMessageEnum;
+use crate::strategies::handlers::market_handlers::{live_order_update, MarketMessageEnum};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::StrategyMode;
@@ -395,8 +395,7 @@ pub async fn response_handler_unbuffered(
                                         forward_buffer().await;
                                     }
                                     DataServerResponse::OrderUpdates(event) => {
-                                        let event = MarketMessageEnum::LiveOrderUpdate(event);
-                                        market_update_sender.send(event).await.unwrap();
+                                        live_order_update(event, false).await;
                                     }
                                     _ => panic!("Incorrect response here: {:?}", response)
                                 }
@@ -600,8 +599,7 @@ pub async fn response_handler_buffered(
                                         }
                                     }
                                     DataServerResponse::OrderUpdates(event) => {
-                                        let event = MarketMessageEnum::LiveOrderUpdate(event);
-                                        market_update_sender.send(event).await.unwrap();
+                                        live_order_update(event, true).await;
                                     }
                                     _ => panic!("Incorrect response here: {:?}", response)
                                 }
