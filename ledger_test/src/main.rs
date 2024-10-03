@@ -90,7 +90,6 @@ pub async fn on_data_received(
                                     }
 
                                     let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
-                                    let is_short = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                     let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
                                     let pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
 
@@ -106,6 +105,10 @@ pub async fn on_data_received(
                                     }
 
 
+
+                                    let is_short = strategy.is_long(&brokerage, &account_2, &candle.symbol.name);
+                                    let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &candle.symbol.name);
+                                    let pnl = strategy.pnl(&brokerage, &account_2, &candle.symbol.name);
                                     // test short ledger
                                     if !is_short && candle.close < candle.open && !trade_placed_2 {
                                         let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Short")).await;
@@ -124,7 +127,6 @@ pub async fn on_data_received(
                 }
 
                 StrategyEvent::ShutdownEvent(event) => {
-                    strategy.flatten_all_for(Brokerage::Test, &account_1).await;
                     let msg = format!("{}",event);
                     println!("{}", msg.as_str().bright_magenta());
                     strategy.export_trades(&String::from("./trades exports"));
