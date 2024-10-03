@@ -403,7 +403,7 @@ pub async fn backtest_matching_engine(
                 if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
                     if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                         if account_map.value().is_short(&order.symbol_name) {
-                            account_map.value_mut().exit_position_paper(&order.symbol_name, time, market_price).await;
+                            account_map.value_mut().exit_position_paper(&order.symbol_name, time, market_price, String::from("Reverse Position")).await;
                         }
                     }
                 }
@@ -417,7 +417,7 @@ pub async fn backtest_matching_engine(
                 if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
                     if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                         if account_map.value().is_long(&order.symbol_name) {
-                            account_map.value_mut().exit_position_paper(&order.symbol_name, time, market_price).await;
+                            account_map.value_mut().exit_position_paper(&order.symbol_name, time, market_price, String::from("Reverse Position")).await;
                         }
                     }
                 }
@@ -476,7 +476,6 @@ async fn fill_order(
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                 match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_open, order.side.clone(), time, market_price, order.tag.clone()).await {
                     Ok(events) => {
-                        order.time_filled_utc = Some(time.to_string());
                         order.state = OrderState::Filled;
                         order.average_fill_price = Some(market_price);
                         order.quantity_filled = order.quantity_open;
@@ -1042,7 +1041,7 @@ async fn flatten_all_paper_for(brokerage: &Brokerage, account_id: &AccountId, ti
                     PositionSide::Short => OrderSide::Buy
                 };
                 let market_price = get_market_fill_price_estimate(side, &symbol_name, position.quantity_open, position.brokerage).await.unwrap();
-                if let Some(event) = account_map.exit_position_paper(&symbol_name, time, market_price).await {
+                if let Some(event) = account_map.exit_position_paper(&symbol_name, time, market_price, String::from("Flatten Account")).await {
                     add_buffer(time, StrategyEvent::PositionEvents(event)).await;
                 }
             }

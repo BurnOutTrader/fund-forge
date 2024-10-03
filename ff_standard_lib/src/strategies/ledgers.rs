@@ -448,7 +448,7 @@ pub(crate) mod historical_ledgers {
 
                 if is_reducing {
                     remaining_quantity -= existing_position.quantity_open;
-                    let event= existing_position.reduce_paper_position_size(market_price, quantity, time).await;
+                    let event= existing_position.reduce_paper_position_size(market_price, quantity, time, tag.clone()).await;
                     self.release_margin_used(&symbol_name, quantity).await;
 
                     match &event {
@@ -483,7 +483,7 @@ pub(crate) mod historical_ledgers {
                             })
                         }
                     }
-                    let event = existing_position.add_to_position(market_price, quantity, time).await;
+                    let event = existing_position.add_to_position(market_price, quantity, time, tag.clone()).await;
                     self.cash_value = self.cash_used + self.cash_available;
                     updates.push(event);
                     remaining_quantity = dec!(0.0);
@@ -498,7 +498,7 @@ pub(crate) mod historical_ledgers {
                             account_id: self.account_id.clone(),
                             order_id,
                             reason: e.to_string(),
-                            tag
+                            tag: tag
                         })
                     }
                 }
@@ -563,6 +563,7 @@ pub(crate) mod historical_ledgers {
             symbol_name: &SymbolName,
             time: DateTime<Utc>,
             market_price: Price,
+            tag: String
         ) -> Option<PositionUpdateEvent>  {
             if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
                 // Mark the position as closed
@@ -570,7 +571,7 @@ pub(crate) mod historical_ledgers {
 
                 // Calculate booked profit by reducing the position size
                 self.release_margin_used(&symbol_name, existing_position.quantity_open).await;
-                let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time).await;
+                let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time, tag).await;
                 match &event {
                     PositionUpdateEvent::PositionClosed { booked_pnl,.. } => {
                         self.booked_pnl += booked_pnl;

@@ -259,7 +259,7 @@ pub(crate) mod historical_position {
     impl Position {
 
         /// Reduces paper position size a position event, this event will include a booked_pnl property
-        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) -> PositionUpdateEvent {
+        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
             if quantity > self.quantity_open {
                 panic!("Something wrong with logic, ledger should know this not to be possible")
             }
@@ -307,7 +307,7 @@ pub(crate) mod historical_position {
                     average_exit_price: self.average_exit_price,
                     account_id: self.account_id.clone(),
                     brokerage: self.brokerage.clone(),
-                    originating_order_tag: self.tag.clone()
+                    originating_order_tag: tag
                 }
             } else {
                 PositionUpdateEvent::PositionReduced {
@@ -320,13 +320,13 @@ pub(crate) mod historical_position {
                     average_exit_price: self.average_exit_price.unwrap(),
                     account_id: self.account_id.clone(),
                     brokerage: self.brokerage.clone(),
-                    originating_order_tag: self.tag.clone()
+                    originating_order_tag: tag
                 }
             }
         }
 
         /// Adds to the paper position
-        pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>) -> PositionUpdateEvent {
+        pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
             // Correct the average price calculation with proper parentheses
             if self.quantity_open + quantity != Decimal::ZERO {
                 self.average_price = round_to_tick_size(
@@ -362,7 +362,7 @@ pub(crate) mod historical_position {
                 booked_pnl: self.booked_pnl,
                 account_id: self.account_id.clone(),
                 brokerage: self.brokerage.clone(),
-                originating_order_tag: self.tag.clone()
+                originating_order_tag: tag
             }
         }
 

@@ -99,14 +99,14 @@ pub async fn on_data_received(
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
-                                        if is_long && pnl > dec!(250.0) && position_size < dec!(240) {
+                                        if is_long && pnl > dec!(100.0) && position_size < dec!(240) {
                                             let _add_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Add Long")).await;
                                         }
 
                                         // take profit conditions
-                                        if is_long && pnl > dec!(500.0) {
+                                        if is_long && pnl > dec!(1000.0) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
-                                        } else if is_long && pnl < dec!(500.0) {
+                                        } else if is_long && pnl < dec!(1000.0) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Loss")).await;
                                         }
                                     }
