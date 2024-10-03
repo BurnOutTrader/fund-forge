@@ -722,6 +722,27 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 }
 ```
 
+## Account Positions
+```rust
+fn example(brokerage: Brokerage, account_name: AccountName, candle: Candle, ) {
+    
+    // to find out if the broker and account is in profit on the symbol, returns false as default if no position
+    let in_profit: bool = strategy.in_profit(&brokerage, &account_1, &candle.symbol.name);
+
+    // to find out if the broker and account is in draw down on the symbol, returns false as default if no position
+    let in_drawdown: bool = strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name);
+
+    // to find out if the broker and account is long on the symbol, returns false as default if no position
+    let is_long: bool = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
+
+    // to find out if the broker and account is short on the symbol, returns false as default if no position
+    let is_short: bool = strategy.is_short(&brokerage, &account_1, &candle.symbol.name);
+
+    // to find out if the broker and account is flat on the symbol, returns true as default if no position
+    let is_flat: bool = strategy.is_flat(&brokerage, &account_1, &candle.symbol.name);
+}
+```
+
 ## TimedEvents 
 TimedEvents are a way to schedule events to occur at a specific time, they are useful for scheduling events like closing orders at a specific time, or sending notifications.
 We can also specify whether the event should fire during warm up.
