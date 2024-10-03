@@ -1,0 +1,9 @@
+[settings.StrategyRegistry]
+ssl_auth_folder = "./resources/keys"
+server_name = "fundforge"
+address = "127.0.0.1:8083"
+
+[settings.Default]
+ssl_auth_folder = "./resources/keys"
+server_name = "fundforge"
+address = "127.0.0.1:8081"

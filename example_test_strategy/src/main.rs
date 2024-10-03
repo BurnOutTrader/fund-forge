@@ -222,7 +222,7 @@ pub async fn on_data_received(
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
 
                                         // take profit conditions
-                                        if is_long && bars_since_entry_2 > 4 && in_profit {
+                                        if is_long && bars_since_entry_2 > 15 && in_profit {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Take Profit")).await;
                                             bars_since_entry_2 = 0;
                                             is_long = false;
