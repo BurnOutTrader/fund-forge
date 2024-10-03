@@ -656,6 +656,43 @@ pub fn print_ledger(brokerage: &Brokerage, account_id: &AccountId) -> Option<Str
     None
 }
 
+pub fn in_profit_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
+    if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().in_profit(symbol_name)
+        }
+    }
+    false
+}
+
+pub fn in_profit_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
+    if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().in_profit(symbol_name)
+        }
+    }
+    false
+}
+
+pub fn in_drawdown_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
+    if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().in_drawdown(symbol_name)
+        }
+    }
+    false
+}
+
+pub fn in_drawdown_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> bool {
+    if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return account_map.value().in_drawdown(symbol_name)
+        }
+    }
+    false
+}
+
+
 pub fn is_long_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {

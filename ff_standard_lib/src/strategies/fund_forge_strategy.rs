@@ -24,7 +24,7 @@ use rust_decimal::Decimal;
 use tokio::sync::{mpsc, RwLock};
 use tokio::sync::mpsc::Sender;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::strategies::handlers::market_handlers::{export_trades, get_market_fill_price_estimate, get_market_price, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
+use crate::strategies::handlers::market_handlers::{export_trades, get_market_fill_price_estimate, get_market_price, in_drawdown_live, in_drawdown_paper, in_profit_live, in_profit_paper, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
 use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
@@ -759,5 +759,19 @@ impl FundForgeStrategy {
         };
 
         range_data(start_date, end_date, subscription.clone()).await
+    }
+
+    pub fn in_profit(&self,brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> bool {
+        match self.mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => in_profit_paper(symbol_name, brokerage, account_id),
+            StrategyMode::Live => in_profit_live(symbol_name, brokerage, account_id)
+        }
+    }
+
+    pub fn in_drawdown(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> bool {
+        match self.mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => in_drawdown_paper(symbol_name, brokerage, account_id),
+            StrategyMode::Live => in_drawdown_live(symbol_name, brokerage, account_id)
+        }
     }
 }

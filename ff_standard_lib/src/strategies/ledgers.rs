@@ -89,6 +89,24 @@ impl Ledger {
         ledger
     }
 
+    pub fn in_profit(&self, symbol_name: &SymbolName) -> bool {
+        if let Some(position) = self.positions.get(symbol_name) {
+            if position.open_pnl > dec!(0.0) {
+                return true
+            }
+        }
+        false
+    }
+
+    pub fn in_drawdown(&self, symbol_name: &SymbolName) -> bool {
+        if let Some(position) = self.positions.get(symbol_name) {
+            if position.open_pnl < dec!(0.0) {
+                return true
+            }
+        }
+        false
+    }
+
     // Function to export closed positions to CSV
     pub fn export_positions_to_csv(&self, folder: &str) {
         // Create the folder if it does not exist

@@ -148,7 +148,7 @@ pub async fn on_data_received(
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let other_account_is_long_euro = strategy.is_long(&brokerage, &account_2, &"EUR-USD".to_string());
 
-                                        // keep buying AUD-CAD if consecutive green HA candles if our other account is long on EUR
+                                        // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
                                         if candle.close > candle.open && other_account_is_long_euro {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_2 = 0;
@@ -158,7 +158,7 @@ pub async fn on_data_received(
                                             bars_since_entry_2 += 1;
                                         }
 
-                                        if bars_since_entry_2 > 4
+                                        if bars_since_entry_2 > 2 && strategy.in_profit(&brokerage, &account_1, &candle.symbol.name)
                                             && is_long {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Long")).await;
                                             bars_since_entry_2 = 0;
