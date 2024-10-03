@@ -103,7 +103,7 @@ pub async fn on_data_received(
                                         // take profit conditions
                                         if is_long && pnl > dec!(1000.0) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
-                                        } else if is_long && pnl < dec!(1000.0) {
+                                        } else if is_long && pnl <= dec!(-1000.0) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Loss")).await;
                                         }
                                     }
