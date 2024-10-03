@@ -237,6 +237,7 @@ pub async fn on_data_received(
                                         // Add to our winners when atr is increasing and we get a new signal
                                         if is_long && in_profit && position_size < dec!(150) && bars_since_entry_2 > 2 &&  quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5 && current_heikin_3m_atr_5 > last_heikin_3m_atr_5 {
                                             let _add_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await;
+                                            bars_since_entry_2 = 0;
                                         }
                                     }
 
