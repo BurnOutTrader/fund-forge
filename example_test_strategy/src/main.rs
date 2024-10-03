@@ -89,7 +89,7 @@ pub async fn on_data_received(
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
     let quotebar_3m_atr_5 = IndicatorEnum::AverageTrueRange(
-        AverageTrueRange::new(IndicatorName::from("heikin_3m_atr_5"),
+        AverageTrueRange::new(IndicatorName::from("quotebar_3m_atr_5"),
               DataSubscription::new(
                   SymbolName::from("EUR-USD"),
                   DataVendor::Test,
