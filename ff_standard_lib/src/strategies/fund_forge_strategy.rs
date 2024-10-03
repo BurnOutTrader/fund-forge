@@ -24,7 +24,7 @@ use rust_decimal::Decimal;
 use tokio::sync::{mpsc, RwLock};
 use tokio::sync::mpsc::Sender;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::strategies::handlers::market_handlers::{export_trades, get_market_fill_price_estimate, get_market_price, in_drawdown_live, in_drawdown_paper, in_profit_live, in_profit_paper, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
+use crate::strategies::handlers::market_handlers::{booked_pnl_live, booked_pnl_paper, export_trades, get_market_fill_price_estimate, get_market_price, in_drawdown_live, in_drawdown_paper, in_profit_live, in_profit_paper, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, pnl_live, pnl_paper, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
 use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
@@ -761,6 +761,8 @@ impl FundForgeStrategy {
         range_data(start_date, end_date, subscription.clone()).await
     }
 
+    /// Returns true of the account is in profit on this symbol
+    /// Returns false if no position
     pub fn in_profit(&self,brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> bool {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => in_profit_paper(symbol_name, brokerage, account_id),
@@ -768,10 +770,30 @@ impl FundForgeStrategy {
         }
     }
 
+    /// Returns true of the account is in drawdown on this symbol
+    /// Returns false if no position
     pub fn in_drawdown(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> bool {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => in_drawdown_paper(symbol_name, brokerage, account_id),
             StrategyMode::Live => in_drawdown_live(symbol_name, brokerage, account_id)
+        }
+    }
+
+    /// Returns the open pnl for the current position
+    /// Returns 0.0 if no position open
+    pub fn pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> Decimal {
+        match self.mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => pnl_paper(symbol_name, brokerage, account_id),
+            StrategyMode::Live => pnl_live(symbol_name, brokerage, account_id)
+        }
+    }
+
+    /// Returns the booked pnl for the current position (not all positions we have booked profit on)
+    /// Returns 0.0 if no position open
+    pub fn booked_pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> Decimal {
+        match self.mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => booked_pnl_paper(symbol_name, brokerage, account_id),
+            StrategyMode::Live => booked_pnl_live(symbol_name, brokerage, account_id)
         }
     }
 }
