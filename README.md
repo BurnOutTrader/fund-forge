@@ -330,7 +330,7 @@ The only thing not built into backtest order matching is TimeInForce, this will 
 
 Any slight differences in expected values will be due to rounding, I round profit to tick size and calulate by number of ticks, then round to 2 decimal places. 
 
-I do this for each position opened or closed before stats are calulated.
+I do this for each position when the position closes or changes open value, not when the stats are calulated.
 [Results of testing here](ledger_test/BACK_TEST_ACCURACY_README.md)
 
 
