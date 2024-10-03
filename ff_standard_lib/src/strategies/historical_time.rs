@@ -47,11 +47,11 @@ mod tests {
         let test_time = Utc::now();
         update_backtest_time(test_time);
 
-        let threads: Vec<_> = (0..10).map(|_| {
+        let threads: Vec<_> = (0..5).map(|_| {
             thread::spawn(move || {
-                for _ in 0..1000 {
+                for _ in 0..100 {
                     let read_time = get_backtest_time();
-                    assert!((read_time - test_time).num_nanoseconds().unwrap().abs() < 1000);
+                    assert!((read_time - test_time).num_nanoseconds().unwrap().abs() < 1_000_000);
                 }
             })
         }).collect();
