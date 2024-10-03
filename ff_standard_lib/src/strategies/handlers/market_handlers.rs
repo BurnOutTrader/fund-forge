@@ -255,7 +255,6 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                             if !is_buffered {
                                 forward_buffer().await;
                             }
-
                         }
                     }
                 }
@@ -404,14 +403,7 @@ pub async fn simulated_order_matching(
             }
         }
         OrderRequest::FlattenAllFor { brokerage, account_id } => {
-            match mode {
-                StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                    flatten_all_paper_for(&brokerage, &account_id, time).await;
-                }
-                StrategyMode::Live => {
-                    todo!()
-                }
-            }
+             flatten_all_paper_for(&brokerage, &account_id, time).await;
         }
     }
 }
