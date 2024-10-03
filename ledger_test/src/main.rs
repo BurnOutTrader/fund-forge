@@ -57,7 +57,9 @@ pub async fn on_data_received(
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
     let account_1 = AccountId::from("Test_Account_1");
-    let mut trade_placed = false;
+    let account_2 = AccountId::from("Test_Account_2");
+    let mut trade_placed_1 = false;
+    let mut trade_placed_2 = false;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for (_time, strategy_event) in event_slice.iter() {
@@ -88,19 +90,31 @@ pub async fn on_data_received(
                                     }
 
                                     let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
-
-                                    // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                    if !is_long && candle.close > candle.open && !trade_placed  {
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
-                                        trade_placed = true;
-                                    }
-
+                                    let is_short = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                     let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
                                     let pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
 
+                                    // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
+                                    if !is_long && candle.close > candle.open && !trade_placed_1 {
+                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
+                                        trade_placed_1 = true;
+                                    }
+
                                     // take profit conditions
-                                    if is_long && pnl > dec!(100.0) {
+                                    if is_long && pnl > dec!(100.0) && trade_placed_1 {
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
+                                    }
+
+
+                                    // test short ledger
+                                    if !is_short && candle.close < candle.open && !trade_placed_2 {
+                                        let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Short")).await;
+                                        trade_placed_2 = true;
+                                    }
+
+                                    // take profit conditions
+                                    if is_short && pnl > dec!(100.0) && trade_placed_2 {
+                                        let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Short Take Profit")).await;
                                     }
                                 }
                             }
