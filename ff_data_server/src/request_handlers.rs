@@ -335,5 +335,6 @@ async fn order_response(request: OrderRequest) {
         OrderRequest::Cancel { .. } => {}
         OrderRequest::Update { .. } => {}
         OrderRequest::CancelAll { .. } => {}
+        OrderRequest::FlattenAllFor { .. } => {}
     }
 }
