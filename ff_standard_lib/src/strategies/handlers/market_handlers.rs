@@ -21,7 +21,7 @@ use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::messages::data_server_messaging::{FundForgeError};
 use crate::standardized_types::new_types::{Price, Volume};
-use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType};
+use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::strategies::historical_time::get_backtest_time;
 
@@ -314,6 +314,15 @@ pub async fn backtest_matching_engine(
     let mut filled = Vec::new();
     let mut partially_filled = Vec::new();
     for order in BACKTEST_OPEN_ORDER_CACHE.iter() {
+        match order.time_in_force {
+            TimeInForce::Day => {
+                if time.date_naive() != order.time_created_utc().date_naive() {
+                    let reason = "Time In Force Expired".to_string();
+                    rejected.push((order.id.clone(), reason))
+                }
+            }
+            _ => {}
+        }
         //3. respond with an order event
         match &order.order_type {
             OrderType::Limit => {
@@ -325,7 +334,7 @@ pub async fn backtest_matching_engine(
                     OrderSide::Buy => market_price <= order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.limit_price.unwrap()
                 };
-                let (market_price, volume_filled) = match get_market_stop_limit_fill_price_estimate(order.side, &order.symbol_name, order.quantity_open, order.brokerage, order.limit_price.unwrap()).await {
+                let (market_price, volume_filled) = match get_market_limit_fill_price_estimate(order.side, &order.symbol_name, order.quantity_open, order.brokerage, order.limit_price.unwrap()).await {
                     Ok(price_volume) => price_volume,
                     Err(_) => continue
                 };
@@ -373,7 +382,7 @@ pub async fn backtest_matching_engine(
                     OrderSide::Buy => market_price <= order.trigger_price.unwrap() && market_price > order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap() && market_price < order.limit_price.unwrap()
                 };
-                let (market_price, volume_filled) = match get_market_stop_limit_fill_price_estimate(order.side, &order.symbol_name, order.quantity_open, order.brokerage, order.limit_price.unwrap()).await {
+                let (market_price, volume_filled) = match get_market_limit_fill_price_estimate(order.side, &order.symbol_name, order.quantity_open, order.brokerage, order.limit_price.unwrap()).await {
                     Ok(price_volume) => price_volume,
                     Err(_) => continue
                 };
@@ -850,7 +859,7 @@ pub(crate) async fn get_market_fill_price_estimate (
     Err(FundForgeError::ClientSideErrorDebug(String::from("No market price found for symbol")))
 }
 
-pub(crate) async fn get_market_stop_limit_fill_price_estimate (
+pub(crate) async fn get_market_limit_fill_price_estimate(
     order_side: OrderSide,
     symbol_name: &SymbolName,
     volume: Volume,
