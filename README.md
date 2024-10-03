@@ -273,6 +273,30 @@ fn main() {
 ```
 After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
 
+## Back Test Accuracy
+This was tested using only market orders, enter long, enter short, exit long, exit short, however all other orders follow the same logic and should work accurately.
+The only thing not built into backtest order matching is TimeInForce, this will be done later.
+
+Any slight differences in expected values will be due to rounding, I round profit to tick size and calulate by number of ticks, then round to 2 decimal places.
+
+I do this for each position when the position closes or changes open value, not when the stats are calulated.
+[Results of testing here](ledger_test/BACK_TEST_ACCURACY_README.md)
+
+
+| Metric | Calculated | Provided | Match? |
+|--------|------------|----------|--------|
+| Balance | 97,870.00 | 97,870.00 | ✅ |
+| Win Rate | 19.70% | 19.70% | ✅ |
+| Average Risk Reward | 0.93 | 1.03 | ❌ |
+| Profit Factor | 0.51 | 0.56 | ❌ |
+| Total Profit | -2130.00 | -2130.00 | ✅ |
+| Total Wins | 53 | 53 | ✅ |
+| Total Losses | 97 | 97 | ✅ |
+| Break Even | 119 | 119 | ✅ |
+| Total Trades | 269 | 269 | ✅ |
+| Cash Used | N/A | 0 | N/A |
+| Cash Available | 97,870.00 | 97,870.00 | ✅ |
+
 ## Current Status
 
 Fund Forge is not ready for live trading. It currently uses a faux `DataevVndor::Test` and `Brokerage::Test` API implementation to help build standardized models, which will aid future API integrations.
@@ -323,32 +347,6 @@ Please do not launch your data server on a public address, despite using Tls it 
 I am not a professional software developer and many security concerns have not yet been finalised, the tls keys are a part of the public repo, so they are not a reliable security measure.
 
 If you manage to begin live trading before me, then you will need to test properly, there will be bugs.
-
-## Back Test Accuracy
-This was tested using only market orders, enter long, enter short, exit long, exit short, however all other orders follow the same logic and should work accurately.
-The only thing not built into backtest order matching is TimeInForce, this will be done later.
-
-Any slight differences in expected values will be due to rounding, I round profit to tick size and calulate by number of ticks, then round to 2 decimal places. 
-
-I do this for each position when the position closes or changes open value, not when the stats are calulated.
-[Results of testing here](ledger_test/BACK_TEST_ACCURACY_README.md)
-
-
-| Metric | Calculated | Provided | Match? |
-|--------|------------|----------|--------|
-| Balance | 97,870.00 | 97,870.00 | ✅ |
-| Win Rate | 19.70% | 19.70% | ✅ |
-| Average Risk Reward | 0.93 | 1.03 | ❌ |
-| Profit Factor | 0.51 | 0.56 | ❌ |
-| Total Profit | -2130.00 | -2130.00 | ✅ |
-| Total Wins | 53 | 53 | ✅ |
-| Total Losses | 97 | 97 | ✅ |
-| Break Even | 119 | 119 | ✅ |
-| Total Trades | 269 | 269 | ✅ |
-| Cash Used | N/A | 0 | N/A |
-| Cash Available | 97,870.00 | 97,870.00 | ✅ |
-
-
 
 ## Incomplete: current state
 - Daily, Weekly or Monthly resolution subscriptions will have custom consolidators based upon symbol market hours, this is because data vendors have an inconsistent definition of daily bars.
