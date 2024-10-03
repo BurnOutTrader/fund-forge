@@ -264,7 +264,6 @@ pub async fn on_data_received(
                                             && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
                                         {
                                             let _add_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await;
-                                            bars_since_entry_2 = 0;
                                         }
                                     }
 
