@@ -91,7 +91,7 @@ This helps us get consistent results between back testing and live trading and a
 
 ##### `let notify: Arc::new(Notify::new());`
 Notify can be used to control the message flow in backtesting, it is not currently implemented in live handlers.
-It is used to sync the historical engine with the strategy event loop. It might not be needed by the end of development but it helps to debug issues.
+It is used to sync the historical engine with the strategy event loop when developing. It doesn't seem to be needed at the moment and It might not be needed by the end of development but it helps to debug issues.
 
 ```rust
 use std::time::Duration;
