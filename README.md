@@ -277,7 +277,7 @@ After running the parsing program copy-paste the generated 'TEST' folder into ff
 This was tested using only market orders, enter long, enter short, exit long, exit short, however all other orders follow the same logic and should work accurately.
 The only thing not built into backtest order matching is TimeInForce, this will be done later.
 
-Any slight differences in expected values will be due to rounding, I round profit to tick size and calulate by number of ticks, then round to 2 decimal places.
+Any slight differences in expected values will be due to rounding, I round profit to tick size and calulate by number of ticks, quantity and value per tick, then round to 2 decimal places.
 
 I do this for each position when the position closes or changes open value, not when the stats are calulated.
 [Results of testing here](ledger_test/BACK_TEST_ACCURACY_README.md)
