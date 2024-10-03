@@ -188,7 +188,6 @@ pub struct Position {
     pub tag: String
 }
 
-//todo make it so stop loss and take profit can be attached to positions, then instead of updating in the market handler, those orders update in the position and auto cancel themselves when position closes
 impl Position {
     pub fn new (
         symbol_name: SymbolName,
