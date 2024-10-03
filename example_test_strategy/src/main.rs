@@ -187,6 +187,10 @@ pub async fn on_data_received(
                                         //subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
+                                //do something with the current open bar
+                                if !candle.is_closed {
+                                    //println!("Open candle closing time: {}", candle.time_closed())
+                                }
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 let account_2 = AccountId::from("Test_Account_2");
@@ -272,7 +276,7 @@ pub async fn on_data_received(
                                                 && bars_since_entry_2 == 3
                                                 && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
                                             {
-                                                let _add_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await;
+                                                let _add_order_id: OrderId = strategy.buy_market(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await;
                                             }
                                         }
                                     }
@@ -287,7 +291,7 @@ pub async fn on_data_received(
                                 }
                                 //do something with the current open bar
                                 if !quotebar.is_closed {
-                                    //println!("Open bar time: {}", time)
+                                    //println!("Open bar closing time: {}", quotebar.time_closed())
                                 }
                             }
                             BaseDataEnum::Tick(_tick) => {}
