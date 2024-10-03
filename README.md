@@ -324,6 +324,29 @@ I am not a professional software developer and many security concerns have not y
 
 If you manage to begin live trading before me, then you will need to test properly, there will be bugs.
 
+## Back Test Accuracy
+This was tested using only market orders, enter long, enter short, exit long enter short, however all other orders follow the same logic and should work accurately.
+Any slight differences in expected values will be due to rounding, I round profit to tick size and calulate by number of ticks, then round to 2 decimal places. 
+I do this for each position opened or closed.
+[Results of testing here](ledger_test/BACK_TEST_ACCURACY_README.md)
+
+
+| Metric | Calculated | Provided | Match? |
+|--------|------------|----------|--------|
+| Balance | 97,870.00 | 97,870.00 | ✅ |
+| Win Rate | 19.70% | 19.70% | ✅ |
+| Average Risk Reward | 0.93 | 1.03 | ❌ |
+| Profit Factor | 0.51 | 0.56 | ❌ |
+| Total Profit | -2130.00 | -2130.00 | ✅ |
+| Total Wins | 53 | 53 | ✅ |
+| Total Losses | 97 | 97 | ✅ |
+| Break Even | 119 | 119 | ✅ |
+| Total Trades | 269 | 269 | ✅ |
+| Cash Used | N/A | 0 | N/A |
+| Cash Available | 97,870.00 | 97,870.00 | ✅ |
+
+
+
 ## Incomplete: current state
 - Daily, Weekly or Monthly resolution subscriptions will have custom consolidators based upon symbol market hours, this is because data vendors have an inconsistent definition of daily bars.
   I will build custom consolidators for these types of resolutions in the future.

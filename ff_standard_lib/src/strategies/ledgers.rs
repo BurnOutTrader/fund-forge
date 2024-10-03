@@ -563,7 +563,6 @@ pub(crate) mod historical_ledgers {
                 existing_position.is_closed = true;
 
                 // Calculate booked profit by reducing the position size
-                //todo make a chance for this to fail when market is closed
                 self.release_margin_used(&symbol_name, existing_position.quantity_open).await;
                 let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time).await;
                 match &event {

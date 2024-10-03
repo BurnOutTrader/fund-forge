@@ -18,6 +18,7 @@
       <sourceFolder url="file://$MODULE_DIR$/ff_api_rithmic/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_brokerage/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/example_test_strategy/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ledger_test/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ff-data-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff-registry-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_application/target" />
