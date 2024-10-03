@@ -139,7 +139,6 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-
                                     if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let account_1 = AccountId::from("Test_Account_1");
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name) {
