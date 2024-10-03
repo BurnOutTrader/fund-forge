@@ -325,7 +325,8 @@ I am not a professional software developer and many security concerns have not y
 If you manage to begin live trading before me, then you will need to test properly, there will be bugs.
 
 ## Back Test Accuracy
-This was tested using only market orders, enter long, enter short, exit long enter short, however all other orders follow the same logic and should work accurately.
+This was tested using only market orders, enter long, enter short, exit long, exit short, however all other orders follow the same logic and should work accurately.
+The only thing not built into backtest order matching is TimeInForce, this will be done later.
 
 Any slight differences in expected values will be due to rounding, I round profit to tick size and calulate by number of ticks, then round to 2 decimal places. 
 
