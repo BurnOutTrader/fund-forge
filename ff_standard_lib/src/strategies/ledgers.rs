@@ -8,6 +8,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use csv::Writer;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::Position;
@@ -242,13 +243,76 @@ impl Ledger {
             true
         }
     }
+
+    pub fn print(&self) -> String {
+        let mut total_trades: usize = 0;
+        let mut losses: usize = 0;
+        let mut wins: usize = 0;
+        let mut win_pnl = dec!(0.0);
+        let mut loss_pnl = dec!(0.0);
+        let mut pnl = dec!(0.0);
+
+        for trades in self.positions_closed.iter() {
+            total_trades += trades.value().len();
+            for position in trades.value() {
+                if position.booked_pnl > dec!(0.0) {
+                    wins += 1;
+                    win_pnl += position.booked_pnl;
+                } else if position.booked_pnl < dec!(0.0) {
+                    losses += 1;
+                    loss_pnl += position.booked_pnl;
+                }
+                pnl += position.booked_pnl;
+            }
+        }
+
+        // Calculate average win and average loss
+        let avg_win_pnl = if wins > 0 {
+            win_pnl / Decimal::from(wins) // Convert to Decimal type
+        } else {
+            dec!(0.0)
+        };
+
+        let avg_loss_pnl = if losses > 0 {
+            loss_pnl / Decimal::from(losses) // Convert to Decimal type
+        } else {
+            dec!(0.0)
+        };
+
+        // Calculate risk-reward ratio
+        let risk_reward = if losses == 0 && wins > 0 {
+            Decimal::from(avg_win_pnl) // No losses, so risk/reward is considered infinite
+        } else if wins == 0 && losses > 0 {
+            dec!(0.0) // No wins, risk/reward is zero
+        } else if avg_loss_pnl < dec!(0.0) && avg_win_pnl > dec!(0.0) {
+            avg_win_pnl / -avg_loss_pnl // Negate loss_pnl for correct calculation
+        } else {
+            dec!(0.0)
+        };
+
+        let profit_factor = if loss_pnl != dec!(0.0) {
+            win_pnl / -loss_pnl
+        } else if win_pnl > dec!(0.0) {
+            dec!(1000) // or use a defined constant for infinity
+        } else {
+            dec!(0.0) // when both win_pnl and loss_pnl are zero
+        };
+
+        let win_rate = if total_trades > 0 {
+            (Decimal::from_usize(wins).unwrap() / Decimal::from_usize(total_trades).unwrap()) * dec!(100.0)
+        } else {
+            dec!(0.0)
+        };
+
+        let break_even = total_trades - wins - losses;
+        format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Average Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Cash Used: {}, Cash Available: {}",
+                self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, profit_factor, pnl, wins, losses, break_even, total_trades, self.cash_used, self.cash_available)
+    }
 }
 
 pub(crate) mod historical_ledgers {
     use chrono::{DateTime, Utc};
     use dashmap::DashMap;
-    use rust_decimal::Decimal;
-    use rust_decimal::prelude::FromPrimitive;
     use rust_decimal_macros::dec;
     use crate::standardized_types::broker_enum::Brokerage;
     use crate::strategies::ledgers::{AccountId, Currency, Ledger};
@@ -278,71 +342,6 @@ pub(crate) mod historical_ledgers {
             self.cash_available -= margin;
             self.cash_used += margin;
             Ok(())
-        }
-
-        pub fn print(&self) -> String {
-            let mut total_trades: usize = 0;
-            let mut losses: usize = 0;
-            let mut wins: usize = 0;
-            let mut win_pnl = dec!(0.0);
-            let mut loss_pnl = dec!(0.0);
-            let mut pnl = dec!(0.0);
-
-            for trades in self.positions_closed.iter() {
-                total_trades += trades.value().len();
-                for position in trades.value() {
-                    if position.booked_pnl > dec!(0.0) {
-                        wins += 1;
-                        win_pnl += position.booked_pnl;
-                    } else if position.booked_pnl < dec!(0.0) {
-                        losses += 1;
-                        loss_pnl += position.booked_pnl;
-                    }
-                    pnl += position.booked_pnl;
-                }
-            }
-
-            // Calculate average win and average loss
-            let avg_win_pnl = if wins > 0 {
-                win_pnl / Decimal::from(wins) // Convert to Decimal type
-            } else {
-                dec!(0.0)
-            };
-
-            let avg_loss_pnl = if losses > 0 {
-                loss_pnl / Decimal::from(losses) // Convert to Decimal type
-            } else {
-                dec!(0.0)
-            };
-
-            // Calculate risk-reward ratio
-            let risk_reward = if losses == 0 && wins > 0 {
-                Decimal::from(avg_win_pnl) // No losses, so risk/reward is considered infinite
-            } else if wins == 0 && losses > 0 {
-                dec!(0.0) // No wins, risk/reward is zero
-            } else if avg_loss_pnl < dec!(0.0) && avg_win_pnl > dec!(0.0) {
-                avg_win_pnl / -avg_loss_pnl // Negate loss_pnl for correct calculation
-            } else {
-                dec!(0.0)
-            };
-
-            let profit_factor = if loss_pnl != dec!(0.0) {
-                win_pnl / -loss_pnl
-            } else if win_pnl > dec!(0.0) {
-                dec!(1000) // or use a defined constant for infinity
-            } else {
-                dec!(0.0) // when both win_pnl and loss_pnl are zero
-            };
-
-            let win_rate = if total_trades > 0 {
-                (Decimal::from_usize(wins).unwrap() / Decimal::from_usize(total_trades).unwrap()) * dec!(100.0)
-            } else {
-                dec!(0.0)
-            };
-
-            let break_even = total_trades - wins - losses;
-            format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Average Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Cash Used: {}, Cash Available: {}",
-                    self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, profit_factor, pnl, wins, losses, break_even, total_trades, self.cash_used, self.cash_available)
         }
 
         pub fn paper_account_init(
@@ -565,6 +564,7 @@ pub(crate) mod historical_ledgers {
 
                 // Calculate booked profit by reducing the position size
                 //todo make a chance for this to fail when market is closed
+                self.release_margin_used(&symbol_name, existing_position.quantity_open).await;
                 let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time).await;
                 match &event {
                     PositionUpdateEvent::PositionClosed { booked_pnl,.. } => {
@@ -573,7 +573,7 @@ pub(crate) mod historical_ledgers {
                     }
                     _ => panic!("this shouldn't happen")
                 }
-                self.release_margin_used(&symbol_name, existing_position.quantity_open).await;
+
                 self.cash_value = self.cash_used + self.cash_available;
                 // Add the closed position to the positions_closed DashMap
                 self.positions_closed
