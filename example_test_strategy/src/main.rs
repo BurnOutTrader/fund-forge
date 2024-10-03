@@ -170,7 +170,7 @@ pub async fn on_data_received(
 
                                     // We can subscribe to new DataSubscriptions at run time
                                     if count == 20 {
-                                        let msg = "Subscribing to new AUD-CAD HeikinAshi Candle at 60 Minute Resolution and warming subscription to have 48 bars of memory,
+                                        let msg = "Subscribing to new AUD-CAD HeikinAshi Candle at 15 Minute Resolution and warming subscription to have 48 bars of memory,
                                         this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
                                         println!("{}",msg.as_str().to_uppercase().purple());
                                         let minute_15_ha_candles = DataSubscription::new_custom(
