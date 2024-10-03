@@ -374,6 +374,7 @@ pub async fn on_data_received(
                 }
 
                 StrategyEvent::PositionEvents(event) => {
+                    //todo, fix position events, currently they cause a lock on buffer, need a direct to strategy function.
                     let msg = format!("{}", event);
                     println!("{}", msg.as_str().yellow());
                     match event {
