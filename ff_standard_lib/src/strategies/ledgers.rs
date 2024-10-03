@@ -1,7 +1,7 @@
 use std::fs::create_dir_all;
 use std::path::Path;
 use chrono::{DateTime, TimeZone, Utc};
-use crate::standardized_types::enums::{StrategyMode};
+use crate::standardized_types::enums::{PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::SymbolName;
 use dashmap::DashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -14,6 +14,7 @@ use crate::standardized_types::position::Position;
 use crate::standardized_types::symbol_info::SymbolInfo;
 use serde_derive::{Deserialize, Serialize};
 use crate::standardized_types::new_types::{Price, Volume};
+use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
 
 lazy_static! {
     //todo get low res historical data and build currency conversion api
@@ -185,6 +186,62 @@ impl Ledger {
             }
         }
     }
+
+    pub async fn symbol_info(&self, symbol_name: &SymbolName) -> SymbolInfo {
+        match self.symbol_info.get(symbol_name) {
+            None => {
+                match SYMBOL_INFO.get(symbol_name) {
+                    None => {
+                        let info =self.brokerage.symbol_info(symbol_name.clone()).await.unwrap();
+                        self.symbol_info.insert(symbol_name.clone(), info.clone());
+                        SYMBOL_INFO.insert(symbol_name.clone(), info.clone());
+                        info
+                    }
+                    Some(info) => {
+                        self.symbol_info.insert(symbol_name.clone(), info.clone());
+                        info.value().clone()
+                    }
+                }
+            }
+            Some(info) => {
+                info.value().clone()
+            }
+        }
+    }
+
+    pub fn get_open_pnl(&self) -> Price {
+        let mut pnl = dec!(0);
+        for price in self.open_pnl.iter() {
+            pnl += price.value().clone()
+        }
+        pnl
+    }
+
+    pub fn is_long(&self, symbol_name: &SymbolName) -> bool {
+        if let Some(position) = self.positions.get(symbol_name) {
+            if position.value().side == PositionSide::Long {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn is_short(&self, symbol_name: &SymbolName) -> bool {
+        if let Some(position) = self.positions.get(symbol_name) {
+            if position.value().side == PositionSide::Short {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub fn is_flat(&self, symbol_name: &SymbolName) -> bool {
+        if let Some(_) = self.positions.get(symbol_name) {
+            false
+        } else {
+            true
+        }
+    }
 }
 
 pub(crate) mod historical_ledgers {
@@ -194,7 +251,6 @@ pub(crate) mod historical_ledgers {
     use rust_decimal::prelude::FromPrimitive;
     use rust_decimal_macros::dec;
     use crate::standardized_types::broker_enum::Brokerage;
-    use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
     use crate::strategies::ledgers::{AccountId, Currency, Ledger};
     use crate::messages::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
@@ -204,31 +260,9 @@ pub(crate) mod historical_ledgers {
     use crate::standardized_types::new_types::{Price, Volume};
     use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
     use crate::standardized_types::subscriptions::SymbolName;
-    use crate::standardized_types::symbol_info::SymbolInfo;
     use crate::standardized_types::time_slices::TimeSlice;
 
     impl Ledger {
-        pub async fn symbol_info(&self, symbol_name: &SymbolName) -> SymbolInfo {
-            match self.symbol_info.get(symbol_name) {
-                None => {
-                    match SYMBOL_INFO.get(symbol_name) {
-                        None => {
-                            let info =self.brokerage.symbol_info(symbol_name.clone()).await.unwrap();
-                            self.symbol_info.insert(symbol_name.clone(), info.clone());
-                            SYMBOL_INFO.insert(symbol_name.clone(), info.clone());
-                            info
-                        }
-                        Some(info) => {
-                            self.symbol_info.insert(symbol_name.clone(), info.clone());
-                            info.value().clone()
-                        }
-                    }
-                }
-                Some(info) => {
-                    info.value().clone()
-                }
-            }
-        }
         pub async fn release_margin_used(&mut self, symbol_name: &SymbolName, quantity: Volume) {
             let margin = self.brokerage.margin_required(symbol_name.clone(), quantity).await.unwrap();
             self.cash_available += margin;
@@ -346,32 +380,6 @@ pub(crate) mod historical_ledgers {
             }
         }
 
-        pub fn is_long(&self, symbol_name: &SymbolName) -> bool {
-            if let Some(position) = self.positions.get(symbol_name) {
-                if position.value().side == PositionSide::Long {
-                    return true;
-                }
-            }
-            false
-        }
-
-        pub fn is_short(&self, symbol_name: &SymbolName) -> bool {
-            if let Some(position) = self.positions.get(symbol_name) {
-                if position.value().side == PositionSide::Short {
-                    return true;
-                }
-            }
-            false
-        }
-
-        pub fn is_flat(&self, symbol_name: &SymbolName) -> bool {
-            if let Some(_) = self.positions.get(symbol_name) {
-                false
-            } else {
-                true
-            }
-        }
-
         pub fn on_historical_timeslice_update(&mut self, time_slice: TimeSlice, time: DateTime<Utc>) {
             for base_data_enum in time_slice.iter() {
                 let data_symbol_name = &base_data_enum.symbol().name;
@@ -417,14 +425,6 @@ pub(crate) mod historical_ledgers {
             }
         }
 
-        pub fn get_open_pnl(&self) -> Price {
-            let mut pnl = dec!(0);
-            for price in self.open_pnl.iter() {
-                pnl += price.value().clone()
-            }
-            pnl
-        }
-
         /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
         /// todo Need to handle creating a new opposing position when
         pub async fn update_or_create_paper_position(
@@ -434,7 +434,8 @@ pub(crate) mod historical_ledgers {
             quantity: Volume,
             side: OrderSide,
             time: DateTime<Utc>,
-            market_price: Price // we use the passed in price because we dont know what sort of order was filled, limit or market
+            market_price: Price, // we use the passed in price because we dont know what sort of order was filled, limit or market
+            tag: String
         ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
             let mut updates = vec![];
             // Check if there's an existing position for the given symbol
@@ -517,6 +518,7 @@ pub(crate) mod historical_ledgers {
                     id.clone(),
                     info.clone(),
                     info.pnl_currency,
+                    tag.clone()
                 );
 
                 // Insert the new position into the positions map
@@ -528,7 +530,8 @@ pub(crate) mod historical_ledgers {
                 let event = PositionUpdateEvent::PositionOpened{
                     position_id: id,
                     account_id: self.account_id.clone(),
-                    brokerage: self.brokerage.clone()
+                    brokerage: self.brokerage.clone(),
+                    tag
                 };
                 self.cash_value = self.cash_used + self.cash_available + self.get_open_pnl();
                 updates.push(event);

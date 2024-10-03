@@ -877,4 +877,9 @@ impl FundForgeStrategy {
             StrategyMode::Live => position_size_live(symbol_name, brokerage, account_id)
         }
     }
+
+    pub async fn flatten_all_for(&self, brokerage: Brokerage, account_id: &AccountId) {
+        let order = MarketMessageEnum::OrderRequest(OrderRequest::FlattenAllFor {brokerage, account_id: account_id.clone()});
+        self.market_event_sender.send(order).await.unwrap();
+    }
 }

@@ -20,7 +20,8 @@ pub enum OrderRequest {
     Create{brokerage: Brokerage, order: Order},
     Cancel{brokerage: Brokerage, order_id: OrderId, account_id: AccountId},
     Update{brokerage: Brokerage, order_id: OrderId, account_id: AccountId, update: OrderUpdateType },
-    CancelAll{brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName}
+    CancelAll{brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName},
+    FlattenAllFor{brokerage: Brokerage, account_id: AccountId},
 }
 
 impl OrderRequest {
@@ -30,6 +31,7 @@ impl OrderRequest {
             OrderRequest::Cancel { brokerage, .. } => brokerage.clone(),
             OrderRequest::Update { brokerage,.. } => brokerage.clone(),
             OrderRequest::CancelAll { brokerage,.. } => brokerage.clone(),
+            OrderRequest::FlattenAllFor { brokerage,.. } => brokerage.clone(),
         }
     }
 }

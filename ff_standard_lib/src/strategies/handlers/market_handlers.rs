@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use crate::strategies::ledgers::{AccountId, Currency, Ledger};
-use crate::standardized_types::enums::{OrderSide, StrategyMode};
+use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use std::sync::Arc;
@@ -403,6 +403,16 @@ pub async fn simulated_order_matching(
                 }
             }
         }
+        OrderRequest::FlattenAllFor { brokerage, account_id } => {
+            match mode {
+                StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
+                    flatten_all_paper_for(&brokerage, &account_id, time).await;
+                }
+                StrategyMode::Live => {
+                    todo!()
+                }
+            }
+        }
     }
 }
 
@@ -551,7 +561,7 @@ async fn fill_order(
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
-                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_ordered, order.side.clone(), time, market_price).await {
+                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_ordered, order.side.clone(), time, market_price, order.tag).await {
                     Ok(events) => {
                         order.time_filled_utc = Some(time.to_string());
                         order.state = OrderState::Filled;
@@ -801,6 +811,31 @@ pub(crate) fn is_flat_paper(brokerage: &Brokerage, account_id: &AccountId, symbo
         }
     }
     true
+}
+
+/*async fn flatten_all_paper(time: DateTime<Utc>) {
+    for broker_map in BACKTEST_LEDGERS.iter() {
+        for account in broker_map.iter() {
+            flatten_all_paper_for(broker_map.key(), account.key(), time).await;
+        }
+    }
+}*/
+
+async fn flatten_all_paper_for(brokerage: &Brokerage, account_id: &AccountId, time: DateTime<Utc>) {
+    if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
+        if let Some(mut account_map) = broker_map.get_mut(account_id) {
+            for (symbol_name, position) in account_map.positions.clone() {
+                let side = match position.side {
+                    PositionSide::Long => OrderSide::Sell,
+                    PositionSide::Short => OrderSide::Buy
+                };
+                let market_price = get_market_fill_price_estimate(side, &symbol_name, position.quantity_open, position.brokerage).await.unwrap();
+                if let Some(event) = account_map.exit_position_paper(&symbol_name, time, market_price).await {
+                    add_buffer(time, StrategyEvent::PositionEvents(event)).await;
+                }
+            }
+        }
+    }
 }
 
 pub(crate) async fn get_market_fill_price_estimate (

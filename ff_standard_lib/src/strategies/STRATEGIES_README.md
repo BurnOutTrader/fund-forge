@@ -723,6 +723,15 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 ```
 
 ## Account Positions
+Live strategies will not differentiate between positions they opened or other account positions.
+They will treat any position on the account as if they opened it, unless you have your own logic for identifying positions.
+You could use the Order "tag" property.
+
+Positions are created managed and closed automatically when you place orders, they will update as the account/ledger position updates.
+each position has a String 'tag' property: `position.tag` this tag will be the same as the 'order.tag' which resulted in the position being created.
+
+This can provide hints to bugs in your strategy, for example if you have a position with the tag "Exit Long", you know you have over filled you exit order, 
+because an exit order should not create a position, it should close one.
 ```rust
 fn example(strategy: &FundForgeStrategy, brokerage: Brokerage, account_name: AccountName, candle: Candle) {
     
@@ -751,6 +760,9 @@ fn example(strategy: &FundForgeStrategy, brokerage: Brokerage, account_name: Acc
     // returns the open quantity / size of our open position
     // if no position it returns dec!(0)
     let position_size: Decimal = strategy.position_size(&brokerage, &account_name, &candle.symbol.name);
+
+    // to flatten an account, in live this will flatten all psotions, not just strategy positions.
+    strategy.flatten_all_for(&self, brokerage.clone(), &account_id).await;
 }
 ```
 
