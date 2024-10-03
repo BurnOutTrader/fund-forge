@@ -9,7 +9,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 ### Current Method To Run Test Strategy
 
-First install [rust language compiler and resources](https://www.rust-lang.org/tools/install)
+First install [rust tool chain](https://www.rust-lang.org/tools/install)
 
 **You can not run the test strategy from the main fund forge directory**
 1. get the testing data (instructions below)
