@@ -7,6 +7,7 @@ use dashmap::DashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use csv::Writer;
 use lazy_static::lazy_static;
+use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::Position;
@@ -105,6 +106,20 @@ impl Ledger {
             }
         }
         false
+    }
+
+    pub fn pnl(&self, symbol_name: &SymbolName) -> Decimal {
+        if let Some(position) = self.positions.get(symbol_name) {
+            return position.open_pnl.clone()
+        }
+        dec!(0)
+    }
+
+    pub fn booked_pnl(&self, symbol_name: &SymbolName) -> Decimal {
+        if let Some(position) = self.positions.get(symbol_name) {
+            return position.booked_pnl.clone()
+        }
+        dec!(0)
     }
 
     // Function to export closed positions to CSV
