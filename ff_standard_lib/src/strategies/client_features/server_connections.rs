@@ -124,7 +124,8 @@ static DATA_SERVER_SENDER: OnceCell<Arc<Mutex<Sender<StrategyRequest>>>> = OnceC
 
 #[inline(always)]
 pub(crate) async fn send_request(req: StrategyRequest) {
-    DATA_SERVER_SENDER.get().unwrap().lock().await.send(req).await.unwrap(); // Return a clone of the Arc to avoid moving the value out of the OnceCell
+    let sender = DATA_SERVER_SENDER.get().unwrap().lock().await;
+    sender.send(req).await.unwrap(); // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
 static STRATEGY_SENDER: OnceCell<Sender<StrategyEventBuffer>> = OnceCell::new();

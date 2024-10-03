@@ -14,8 +14,8 @@ use tokio::sync::oneshot;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
 use dashmap::DashMap;
 use rayon::prelude::*;
-use futures::stream::{FuturesUnordered, StreamExt};
 use crate::strategies::client_features::connection_types::ConnectionType;
+use futures::future::join_all;
 
 /// Method responsible for structuring raw historical data into combined time slices, where all data points a combined into BTreeMap<DateTime<Utc>, TimeSlice> where data.time_created() is key and value is TimeSlice.
 ///
@@ -86,43 +86,52 @@ async fn structured_que_builder(
 }
 
 
+
 pub async fn get_historical_data(
     subscriptions: Vec<DataSubscription>,
     time: DateTime<Utc>,
 ) -> Result<BTreeMap<DateTime<Utc>, TimeSlice>, FundForgeError> {
 
-    // Lock the sender only once and clone for each async task
-    // FuturesUnordered allows concurrent requests to be handled and results to be processed as they complete
-    let mut futures = FuturesUnordered::new();
+    // Store the receivers of the futures for later concurrent awaiting
+    let mut receivers = Vec::new();
+
+    // Send requests one by one (sequentially)
     for sub in subscriptions {
         let sub = sub.clone();
-        futures.push(async move {
-            let (tx, rx) = oneshot::channel();
-            let request = StrategyRequest::CallBack(
-                ConnectionType::Vendor(sub.symbol.data_vendor.clone()),
-                DataServerRequest::HistoricalBaseData {
-                    callback_id: 0,
-                    subscription: sub.clone(),
-                    time: time.to_string(),
-                },
-                tx,
-            );
 
-            // Handle potential errors while sending the request
-            send_request(request).await;
+        // Create the oneshot channel for response
+        let (tx, rx) = oneshot::channel();
 
-            // Await the response and handle different response types
-            match rx.await {
-                Ok(DataServerResponse::HistoricalBaseData { payload, .. }) => Ok(payload),
-                Ok(DataServerResponse::Error { error, .. }) => Err(FundForgeError::ClientSideErrorDebug(format!("Error: {}", error))),
-                Ok(_) | Err(_) => Err(FundForgeError::ClientSideErrorDebug("Incorrect or failed callback response".to_string())),
-            }
-        });
+        let request = StrategyRequest::CallBack(
+            ConnectionType::Vendor(sub.symbol.data_vendor.clone()),
+            DataServerRequest::HistoricalBaseData {
+                callback_id: 0,
+                subscription: sub.clone(),
+                time: time.to_string(),
+            },
+            tx,
+        );
+
+        // Send request sequentially
+        send_request(request).await;
+
+        // Collect the receiver (rx) for concurrent awaiting later
+        receivers.push(rx);
     }
 
-    // Collect results as they come in
+    // Await all responses concurrently
     let mut payloads: Vec<BaseDataPayload> = Vec::new();
-    while let Some(result) = futures.next().await {
+    let responses = join_all(receivers.into_iter().map(|rx| async {
+        match rx.await {
+            Ok(DataServerResponse::HistoricalBaseData { payload, .. }) => Ok(payload),
+            Ok(DataServerResponse::Error { error, .. }) => Err(FundForgeError::ClientSideErrorDebug(format!("Error: {}", error))),
+            Ok(_) | Err(_) => Err(FundForgeError::ClientSideErrorDebug("Incorrect or failed callback response".to_string())),
+        }
+    }))
+        .await;
+
+    // Process each response
+    for result in responses {
         match result {
             Ok(data) => payloads.push(data),
             Err(e) => eprintln!("Engine: Failed to get data: {:?}", e),
