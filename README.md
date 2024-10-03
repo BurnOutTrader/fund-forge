@@ -8,7 +8,9 @@ Focused on backtesting, charting, live trading. With an emphasis for semi-automa
 fund-forge is built to allow simple abstractions for common strategy functionality: trade multiple symbols, with multiple indicators and data streams.
 
 ### Current Method To Run Test Strategy
+
 First install [rust language compiler and resources](https://www.rust-lang.org/tools/install)
+
 **You can not run the test strategy from the main fund forge directory**
 1. get the testing data (instructions below)
 2. cargo buid in the fund forge directory
