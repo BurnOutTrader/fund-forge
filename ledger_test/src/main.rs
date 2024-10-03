@@ -89,6 +89,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
+                                    //long test
                                     {
                                         let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
@@ -105,9 +106,9 @@ pub async fn on_data_received(
                                         }
                                     }
 
+                                    //short test
                                     {
                                         let is_short = strategy.is_short(&brokerage, &account_2, &candle.symbol.name);
-
                                         // test short ledger
                                         if !is_short && candle.close < candle.open && !trade_placed_2 {
                                             let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Short")).await;
