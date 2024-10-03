@@ -536,7 +536,7 @@ pub(crate) mod historical_ledgers {
                     position_id: id,
                     account_id: self.account_id.clone(),
                     brokerage: self.brokerage.clone(),
-                    tag
+                    originating_order_tag: tag
                 };
                 self.cash_value = self.cash_used + self.cash_available;
                 updates.push(event);

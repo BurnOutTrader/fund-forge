@@ -40,7 +40,7 @@ pub enum PositionUpdateEvent {
         position_id: PositionId,
         account_id: AccountId,
         brokerage: Brokerage,
-        tag: String,
+        originating_order_tag: String,
     },
     Increased {
         position_id: PositionId,
@@ -50,7 +50,7 @@ pub enum PositionUpdateEvent {
         booked_pnl: Price,
         account_id: AccountId,
         brokerage: Brokerage,
-        tag: String,
+        originating_order_tag: String,
     },
     PositionReduced {
         position_id: PositionId,
@@ -62,7 +62,7 @@ pub enum PositionUpdateEvent {
         average_exit_price: Price,
         account_id: AccountId,
         brokerage: Brokerage,
-        tag: String,
+        originating_order_tag: String,
     },
     PositionClosed {
         position_id: PositionId,
@@ -73,7 +73,7 @@ pub enum PositionUpdateEvent {
         average_exit_price: Option<Price>,
         account_id: AccountId,
         brokerage: Brokerage,
-        tag: String,
+        originating_order_tag: String,
     },
 }
 
@@ -100,8 +100,8 @@ impl PositionUpdateEvent {
 impl fmt::Display for PositionUpdateEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PositionUpdateEvent::PositionOpened{position_id, brokerage, account_id,tag} => {
-                write!(f, "PositionOpened: Position ID = {}, Brokerage: {}, Account: {}, Tag: {}", position_id, brokerage, account_id, tag)
+            PositionUpdateEvent::PositionOpened{position_id, brokerage, account_id, originating_order_tag: tag } => {
+                write!(f, "PositionOpened: Position ID = {}, Brokerage: {}, Account: {}, Originating Order Tag: {}", position_id, brokerage, account_id, tag)
             }
             PositionUpdateEvent::Increased {
                 position_id,
@@ -111,11 +111,11 @@ impl fmt::Display for PositionUpdateEvent {
                 booked_pnl,
                 account_id,
                 brokerage,
-                tag
+                originating_order_tag: tag
             } => {
                 write!(
                     f,
-                    "PositionIncreased: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Tag: {}",
+                    "PositionIncreased: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Originating Order Tag: {}",
                     position_id, brokerage, account_id, total_quantity_open, average_price, open_pnl, booked_pnl, tag
                 )
             }
@@ -129,11 +129,11 @@ impl fmt::Display for PositionUpdateEvent {
                 average_exit_price,
                 account_id,
                 brokerage,
-                tag
+                originating_order_tag: tag
             } => {
                 write!(
                     f,
-                    "PositionReduced: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Average Exit Price = {}, Tag: {}",
+                    "PositionReduced: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Average Exit Price = {}, Originating Order Tag: {}",
                     position_id, brokerage, account_id, total_quantity_open, total_quantity_closed, average_price, open_pnl, booked_pnl, average_exit_price, tag
                 )
             }
@@ -146,11 +146,11 @@ impl fmt::Display for PositionUpdateEvent {
                 average_exit_price,
                 account_id,
                 brokerage,
-                tag
+                originating_order_tag: tag
             } => {
                 write!(
                     f,
-                    "PositionClosed: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Booked PnL = {}, Average Exit Price = {}, Tag: {}",
+                    "PositionClosed: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Booked PnL = {}, Average Exit Price = {}, Originating Order Tag: {}",
                     position_id, brokerage, account_id, total_quantity_open, total_quantity_closed, average_price, booked_pnl,
                     match average_exit_price {
                         Some(price) => price.to_string(),
@@ -307,7 +307,7 @@ pub(crate) mod historical_position {
                     average_exit_price: self.average_exit_price,
                     account_id: self.account_id.clone(),
                     brokerage: self.brokerage.clone(),
-                    tag: self.tag.clone()
+                    originating_order_tag: self.tag.clone()
                 }
             } else {
                 PositionUpdateEvent::PositionReduced {
@@ -320,7 +320,7 @@ pub(crate) mod historical_position {
                     average_exit_price: self.average_exit_price.unwrap(),
                     account_id: self.account_id.clone(),
                     brokerage: self.brokerage.clone(),
-                    tag: self.tag.clone()
+                    originating_order_tag: self.tag.clone()
                 }
             }
         }
@@ -362,7 +362,7 @@ pub(crate) mod historical_position {
                 booked_pnl: self.booked_pnl,
                 account_id: self.account_id.clone(),
                 brokerage: self.brokerage.clone(),
-                tag: self.tag.clone()
+                originating_order_tag: self.tag.clone()
             }
         }
 

@@ -163,7 +163,8 @@ pub async fn on_data_received(
                         PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                         PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                     }
-                    let msg = format!("{}", event);
+                    let quantity = strategy.position_size(&brokerage, &account_1, &"EUR-USD".to_string());
+                    let msg = format!("{}, Strategy Print Line Open Quantity: {}", event, quantity);
                     println!("{}", msg.as_str().purple())
                 }
                 _ => {}
