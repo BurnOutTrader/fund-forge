@@ -113,7 +113,7 @@ impl fmt::Display for PositionUpdateEvent {
                 write!(
                     f,
                     "PositionIncreased: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Tag: {}",
-                    position_id, brokerage, account_id, total_quantity_open, average_price, open_pnl, booked_pnl,tag
+                    position_id, brokerage, account_id, total_quantity_open, average_price, open_pnl, booked_pnl, tag
                 )
             }
             PositionUpdateEvent::PositionReduced {
@@ -148,11 +148,12 @@ impl fmt::Display for PositionUpdateEvent {
                 write!(
                     f,
                     "PositionClosed: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Booked PnL = {}, Average Exit Price = {}, Tag: {}",
-                    position_id, brokerage, account_id, total_quantity_open, total_quantity_closed, average_price, booked_pnl, tag,
+                    position_id, brokerage, account_id, total_quantity_open, total_quantity_closed, average_price, booked_pnl,
                     match average_exit_price {
                         Some(price) => price.to_string(),
                         None => "None".to_string(),
-                    }
+                    },
+                    tag
                 )
             }
         }

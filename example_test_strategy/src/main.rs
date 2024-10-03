@@ -272,11 +272,11 @@ pub async fn on_data_received(
                                             let in_profit = strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name);
                                             let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
                                             if  in_profit
-                                                && position_size <= dec!(150)
+                                                && position_size <= dec!(90)
                                                 && bars_since_entry_2 == 3
                                                 && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
                                             {
-                                                let _add_order_id: OrderId = strategy.buy_market(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await;
+                                                let _add_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await;
                                             }
                                         }
                                     }
