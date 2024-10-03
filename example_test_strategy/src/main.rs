@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
@@ -11,7 +12,7 @@ use ff_standard_lib::strategies::strategy_events::{StrategyControls, StrategyEve
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
@@ -29,6 +30,7 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
+    let notify = Arc::new(Notify::new());
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         //ToDo: You can Test Live paper using the simulated data feed which simulates quote stream from the server side at 10 ms per quote.
@@ -78,16 +80,18 @@ async fn main() {
         Some(core::time::Duration::from_millis(100)),
         //None,
 
-        GUI_DISABLED
+        GUI_DISABLED,
+        notify.clone()
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver).await;
+    on_data_received(strategy, strategy_event_receiver, notify).await;
 }
 
 /// Here we listen for incoming data and build our custom strategy logic. this is where the magic happens.
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
+    notify: Arc<Notify>
 ) {
     let quotebar_3m_atr_5 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("quotebar_3m_atr_5"),
@@ -394,6 +398,7 @@ pub async fn on_data_received(
                 }
             }
         }
+        notify.notify_one();
     }
     strategy.export_trades(&String::from("./trades exports"));
     strategy.print_ledgers();

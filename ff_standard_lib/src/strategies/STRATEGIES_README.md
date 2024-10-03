@@ -88,6 +88,11 @@ Our handlers will capture the data streams in a buffer and pass them to the stra
 In live: If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events of a higher than instant resolution.
 
 This helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
+
+##### `let notify: Arc::new(Notify::new());`
+Notify can be used to control the message flow in backtesting, it is not currently implemented in live handlers.
+It is used to sync the historical engine with the strategy event loop. It might not be needed by the end of development but it helps to debug issues.
+
 ```rust
 use std::time::Duration;
 

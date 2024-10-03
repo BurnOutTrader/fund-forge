@@ -8,10 +8,11 @@ use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent};
 use crate::standardized_types::time_slices::TimeSlice;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{mpsc};
+use tokio::sync::{mpsc, Notify};
 use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
@@ -37,6 +38,7 @@ pub struct HistoricalEngine {
     gui_enabled: bool,
     primary_subscription_updates: Receiver<Vec<DataSubscription>>,
     market_event_sender: Sender<MarketMessageEnum>,
+    notify: Arc<Notify>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -49,6 +51,7 @@ impl HistoricalEngine {
         buffer_resolution: Option<Duration>,
         gui_enabled: bool,
         market_event_sender: Sender<MarketMessageEnum>,
+        notify: Arc<Notify>
     ) -> Self {
         let (tx, rx) = mpsc::channel(10);
         subscribe_primary_subscription_updates("Historical Engine".to_string(), tx);
@@ -60,7 +63,8 @@ impl HistoricalEngine {
             buffer_resolution,
             gui_enabled,
             primary_subscription_updates: rx,
-            market_event_sender
+            market_event_sender,
+            notify
         };
         engine
     }
@@ -209,6 +213,7 @@ impl HistoricalEngine {
                         add_buffer(time, slice_event).await;
                     }
                     forward_buffer().await;
+                    self.notify.notified().await;
                 }
                 if end_month {
                     break 'month_loop;
@@ -338,6 +343,7 @@ impl HistoricalEngine {
                     // send the buffered strategy events to the strategy
                     forward_buffer().await;
                     last_time = time.clone();
+                    self.notify.notified().await;
                 }
                 if end_month {
                     break 'month_loop;
