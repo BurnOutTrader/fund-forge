@@ -140,16 +140,15 @@ pub async fn on_data_received(
                                     }
                                     let account_1 = AccountId::from("Test_Account_1");
                                     if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
-                                        let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
                                         let last_candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
 
                                         // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                        if !is_long && candle.close > candle.open && candle.close > last_candle.high  {
+                                        if !strategy.is_long(&brokerage, &account_1, &candle.symbol.name) && candle.close > candle.open && candle.close > last_candle.high  {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
                                         }
 
-                                        if is_long {
+                                        if strategy.is_long(&brokerage, &account_1, &candle.symbol.name) {
                                             bars_since_entry_1 += 1;
                                         }
 
@@ -196,7 +195,6 @@ pub async fn on_data_received(
 
                                     if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "EUR-USD" && quotebar.symbol.data_vendor == DataVendor::Test {
                                         let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
-                                        let mut is_long: bool = strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name);
 
                                         // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
                                         // we can use the name we assigned to get the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
@@ -208,12 +206,12 @@ pub async fn on_data_received(
                                         let last_heikin_3m_atr_5 = quotebar_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
                                         // buy above the close of prior bar when atr is high and atr is increasing
-                                        if !is_long && quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00030) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5 {
+                                        if !strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name) && quotebar.bid_close > last_bar.bid_close && current_heikin_3m_atr_5 >= dec!(0.00030) && current_heikin_3m_atr_5 > last_heikin_3m_atr_5 {
                                             let _entry_order_id: OrderId = strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_2 = 0;
                                         }
 
-                                        if is_long {
+                                        if strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name) {
                                             bars_since_entry_2 += 1;
                                         }
 
