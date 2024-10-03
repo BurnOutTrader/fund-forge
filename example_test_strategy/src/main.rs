@@ -158,11 +158,11 @@ pub async fn on_data_received(
                                             bars_since_entry_2 += 1;
                                         }
 
-                                        if bars_since_entry_2 > 2 && strategy.in_profit(&brokerage, &account_1, &candle.symbol.name) && is_long {
+                                        if is_long && bars_since_entry_2 > 2 && strategy.in_profit(&brokerage, &account_1, &candle.symbol.name) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Long Take Profit")).await;
                                             bars_since_entry_2 = 0;
                                         }
-                                        else if bars_since_entry_2 > 20 && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name)  && is_long {
+                                        else if is_long && bars_since_entry_2 > 20 && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name) {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_2 = 0;
                                         }
@@ -238,11 +238,11 @@ pub async fn on_data_received(
                                             bars_since_entry_1 += 1;
                                         }
 
-                                        if bars_since_entry_1 > 4 && strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name) && is_long {
+                                        if is_long && bars_since_entry_1 > 4 && strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name) {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Exit Take Profit")).await;
                                             bars_since_entry_1 = 0;
                                         }
-                                        else if bars_since_entry_1 > 20 && strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name) && is_long{
+                                        else if is_long && bars_since_entry_1 > 20 && strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name) {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_1 = 0;
                                         }
