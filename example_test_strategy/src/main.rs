@@ -139,19 +139,20 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    let account_1 = AccountId::from("Test_Account_1");
-                                    if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
 
+                                    if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
+                                        let account_1 = AccountId::from("Test_Account_1");
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name) {
                                             bars_since_entry_1 += 1;
                                         }
 
-                                        let last_candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
+                                        let other_account_is_long_euro = strategy.is_long(&brokerage, &AccountId::from("Test_Account_2"), &candle.symbol.name);
 
-                                        // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                        if !strategy.is_long(&brokerage, &account_1, &candle.symbol.name)
-                                            && candle.close > candle.open
-                                            && candle.close > last_candle.high
+                                        let last_candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
+                                        // buy AUD-CAD if higher close HA candle and if our other account is long on EUR
+                                        if strategy.is_flat(&brokerage, &account_1, &candle.symbol.name)
+                                            && candle.close > last_candle.close
+                                            && other_account_is_long_euro
                                         {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
@@ -169,11 +170,11 @@ pub async fn on_data_received(
                                             bars_since_entry_1 = 0;
                                         }
 
+                                        let in_drawdown = strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name);
                                         //stop loss conditions
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name)
                                             && bars_since_entry_1 >= 10
-                                            && !in_profit
-                                            && strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name )
+                                            && in_drawdown
                                         {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_1 = 0;
@@ -223,7 +224,7 @@ pub async fn on_data_received(
                                         let last_heikin_3m_atr_5 = quotebar_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
                                         // buy above the close of prior bar when atr is high and atr is increasing
-                                        if !strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name)
+                                        if strategy.is_flat(&brokerage, &account_2, &quotebar.symbol.name)
                                             && quotebar.bid_close > last_bar.bid_close
                                             && current_heikin_3m_atr_5 >= dec!(0.00030)
                                             && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
@@ -237,7 +238,7 @@ pub async fn on_data_received(
 
                                         // take profit conditions
                                         if strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name)
-                                            && bars_since_entry_2 > 15
+                                            && bars_since_entry_2 > 4
                                             && in_profit
                                         {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Take Profit")).await;
@@ -245,9 +246,11 @@ pub async fn on_data_received(
                                         }
 
                                         //stop loss conditions
+                                        let in_drawdown = strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name);
+
                                         if strategy.is_long(&brokerage, &account_2, &quotebar.symbol.name)
                                             && !in_profit && bars_since_entry_2 >= 10
-                                            && strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name)
+                                            && in_drawdown
                                         {
                                             let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_2 = 0;
