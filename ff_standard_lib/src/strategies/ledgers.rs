@@ -49,6 +49,14 @@ impl Currency {
     }
 }
 
+/*todo,
+   Make ledger take functions as params, create_order_reduce_position, increase_position, reduce_position, we will pass these in based on the type of positions we want.
+   1. we can have a cumulative model, like we have now, for position building.
+   2. FIFO: Each time we open an opposing order, the first position is cancelled out and returned as closed
+   3. FILO: Each time we open a position, it is kept until we are flat or reversed and each counter order closes the order entry directly before.
+   To achieve this ledgers will need to be able to hold multiple sub position details or positions themselves generate 'trade' objects
+ */
+
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
 #[derive(Debug)]
 pub struct Ledger {
