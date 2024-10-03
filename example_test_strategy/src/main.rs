@@ -423,6 +423,7 @@ pub async fn subscribe_to_new_candles_example(strategy: &FundForgeStrategy) {
     let msg = "Subscribing to new AUD-CAD HeikinAshi Candle at 15 Minute Resolution and warming subscription to have 48 bars of memory,
                                         this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
     println!("{}",msg.as_str().to_uppercase().purple());
+
     let minute_15_ha_candles = DataSubscription::new_custom(
         SymbolName::from("AUD-CAD"),
         DataVendor::Test,
@@ -431,9 +432,6 @@ pub async fn subscribe_to_new_candles_example(strategy: &FundForgeStrategy) {
         CandleType::HeikinAshi
     );
 
-    // subscribing to data subscriptions returns a result, the result is a DataSubscription event, Ok(FailedToSubscribe) or Err(Subscribed)
-    // In live or live paper, we could have 2 failures, 1 here on client side, and another event that comes from server side, if it fails on the api for any reason.
-    // The subscription handler should catch problems before the server, but there is always a possibility that a server side failure to subscribe occurs.
     // In live we start a background task for this (untested)
      strategy.subscribe(minute_15_ha_candles, 48, false).await;
 }
