@@ -110,7 +110,7 @@ pub async fn on_data_received(
                                     let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &candle.symbol.name);
                                     let pnl = strategy.pnl(&brokerage, &account_2, &candle.symbol.name);
                                     // test short ledger
-                                    if !is_short && !is_long && candle.close < candle.open && !trade_placed_2 {
+                                    if !is_short && candle.close < candle.open && !trade_placed_2 {
                                         let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Short")).await;
                                         trade_placed_2 = true;
                                     }
