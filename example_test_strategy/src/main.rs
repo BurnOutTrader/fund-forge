@@ -178,31 +178,9 @@ pub async fn on_data_received(
                                     }
 
                                     // We can subscribe to new DataSubscriptions at run time
+                                    // We can use a strategy reference and still use strategy functions in the receiving functions.
                                     if count == 20 {
-                                        let msg = "Subscribing to new AUD-CAD HeikinAshi Candle at 15 Minute Resolution and warming subscription to have 48 bars of memory,
-                                        this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
-                                        println!("{}",msg.as_str().to_uppercase().purple());
-                                        let minute_15_ha_candles = DataSubscription::new_custom(
-                                            SymbolName::from("AUD-CAD"),
-                                            DataVendor::Test,
-                                            Resolution::Minutes(15),
-                                            MarketType::Forex,
-                                            CandleType::HeikinAshi
-                                        );
-
-                                        // subscribing to data subscriptions returns a result, the result is a DataSubscription event, Ok(FailedToSubscribe) or Err(Subscribed)
-                                        // In live or live paper, we could have 2 failures, 1 here on client side, and another event that comes from server side, if it fails on the api for any reason.
-                                        // The subscription handler should catch problems before the server, but there is always a possibility that a server side failure to subscribe occurs.
-                                        match strategy.subscribe(minute_15_ha_candles, 48, false).await {
-                                            Ok(ok) => {
-                                                let msg = format!("{}", ok.to_string());
-                                                println!("{}", msg.as_str().bright_magenta())
-                                            }
-                                            Err(e) =>  {
-                                                let msg = format!("{}", e.to_string());
-                                                println!("{}", msg.as_str().on_bright_white())
-                                            }
-                                        }
+                                        subscribe_to_new_candles(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                             }
@@ -268,30 +246,9 @@ pub async fn on_data_received(
                                     count += 1;
 
                                     // We can subscribe to new indicators at run time
+                                    // we can pass in our strategy reference and it will maintain its functionality
                                     if count == 50 {
-                                        let msg = "Subscribing to new indicator heikin_atr10_15min and warming up subscriptions, this will also take time if we don't have enough history to warm up".to_uppercase().to_string();
-                                        println!("{}",msg.as_str().purple());
-                                        // this will test both our auto warm up for indicators and data subscriptions
-                                        let heikin_atr10_15min = IndicatorEnum::AverageTrueRange(
-                                            AverageTrueRange::new(
-                                                IndicatorName::from("heikin_atr10_15min"),
-                                                DataSubscription::new(
-                                                    SymbolName::from("EUR-USD"),
-                                                    DataVendor::Test,
-                                                    Resolution::Minutes(15),
-                                                    BaseDataType::QuoteBars,
-                                                    MarketType::Forex,
-                                                ),
-                                                5,
-                                                10,
-                                                Color::new(255, 165, 0)
-                                            ).await,
-                                        );
-                                        // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
-                                        // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
-                                        let event = strategy.subscribe_indicator(heikin_atr10_15min, true).await;
-                                        let msg = format!("{}", event);
-                                        println!("{}", msg.as_str().bright_purple());
+                                        subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                                 //do something with the current open bar
@@ -404,4 +361,62 @@ pub async fn on_data_received(
     }
     event_receiver.close();
     println!("Strategy: Event Loop Ended");
+}
+
+// We can subscribe to new indicators at run time
+// We can use a strategy reference for strategy functions.
+pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
+    let msg = "Subscribing to new indicator heikin_atr10_15min and warming up subscriptions, this will also take time if we don't have enough history to warm up".to_uppercase().to_string();
+    println!("{}",msg.as_str().purple());
+    // this will test both our auto warm up for indicators and data subscriptions
+    let heikin_atr10_15min = IndicatorEnum::AverageTrueRange(
+        AverageTrueRange::new(
+            IndicatorName::from("heikin_atr10_15min"),
+            DataSubscription::new(
+                SymbolName::from("EUR-USD"),
+                DataVendor::Test,
+                Resolution::Minutes(15),
+                BaseDataType::QuoteBars,
+                MarketType::Forex,
+            ),
+            5,
+            10,
+            Color::new(255, 165, 0)
+        ).await,
+    );
+    // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
+    // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
+    let event = strategy.subscribe_indicator(heikin_atr10_15min, true).await;
+    let msg = format!("{}", event);
+    println!("{}", msg.as_str().bright_purple());
+}
+
+
+// We can subscribe to new data feeds at run time
+// We can use a strategy reference for strategy functions.
+pub async fn subscribe_to_new_candles(strategy: &FundForgeStrategy) {
+    let msg = "Subscribing to new AUD-CAD HeikinAshi Candle at 15 Minute Resolution and warming subscription to have 48 bars of memory,
+                                        this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
+    println!("{}",msg.as_str().to_uppercase().purple());
+    let minute_15_ha_candles = DataSubscription::new_custom(
+        SymbolName::from("AUD-CAD"),
+        DataVendor::Test,
+        Resolution::Minutes(15),
+        MarketType::Forex,
+        CandleType::HeikinAshi
+    );
+
+    // subscribing to data subscriptions returns a result, the result is a DataSubscription event, Ok(FailedToSubscribe) or Err(Subscribed)
+    // In live or live paper, we could have 2 failures, 1 here on client side, and another event that comes from server side, if it fails on the api for any reason.
+    // The subscription handler should catch problems before the server, but there is always a possibility that a server side failure to subscribe occurs.
+    match strategy.subscribe(minute_15_ha_candles, 48, false).await {
+        Ok(ok) => {
+            let msg = format!("{}", ok.to_string());
+            println!("{}", msg.as_str().bright_magenta())
+        }
+        Err(e) =>  {
+            let msg = format!("{}", e.to_string());
+            println!("{}", msg.as_str().on_bright_white())
+        }
+    }
 }
