@@ -727,26 +727,26 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 fn example(brokerage: Brokerage, account_name: AccountName, candle: Candle, ) {
     
     // to find out if the broker and account is in profit on the symbol, returns false as default if no position
-    let in_profit: bool = strategy.in_profit(&brokerage, &account_1, &candle.symbol.name);
+    let in_profit: bool = strategy.in_profit(&brokerage, &account_name, &candle.symbol.name);
 
     // to find out if the broker and account is in draw down on the symbol, returns false as default if no position
-    let in_drawdown: bool = strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name);
+    let in_drawdown: bool = strategy.in_drawdown(&brokerage, &account_name, &candle.symbol.name);
 
     // to find out if the broker and account is long on the symbol, returns false as default if no position
-    let is_long: bool = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
+    let is_long: bool = strategy.is_long(&brokerage, &account_name, &candle.symbol.name);
 
     // to find out if the broker and account is short on the symbol, returns false as default if no position
-    let is_short: bool = strategy.is_short(&brokerage, &account_1, &candle.symbol.name);
+    let is_short: bool = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
 
     // to find out if the broker and account is flat on the symbol, returns true as default if no position
-    let is_flat: bool = strategy.is_flat(&brokerage, &account_1, &candle.symbol.name);
+    let is_flat: bool = strategy.is_flat(&brokerage, &account_name, &candle.symbol.name);
 
     // returns the open pnl for the current position, returns 0.0 if there is no position
-    let open_profit: Decimal = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
+    let open_profit: Decimal = strategy.pnl(&brokerage, &account_name, &candle.symbol.name);
 
     // returns the booked pnl for the current position, returns 0.0 if there is no position
     // does not return the total pnl for all closed positions on the symbol, just the current open one.
-    let booked_profit: Decimal = strategy.booked_pnl(&brokerage, &account_1, &candle.symbol.name);
+    let booked_profit: Decimal = strategy.booked_pnl(&brokerage, &account_name, &candle.symbol.name);
 }
 ```
 
