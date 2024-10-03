@@ -89,33 +89,37 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
-                                    let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
-                                    let pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
+                                    {
+                                        let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
+                                        // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
+                                        if !is_long && candle.close > candle.open && !trade_placed_1 {
+                                            let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
+                                            trade_placed_1 = true;
+                                        }
+                                        // take profit conditions
 
-                                    // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                    if !is_long && candle.close > candle.open && !trade_placed_1 {
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
-                                        trade_placed_1 = true;
+                                        let pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
+                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
+                                        if is_long && pnl > dec!(100.0) && trade_placed_1 {
+                                            let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
+                                        }
                                     }
 
-                                    // take profit conditions
-                                    if is_long && pnl > dec!(100.0) && trade_placed_1 {
-                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
-                                    }
+                                    {
+                                        let is_short = strategy.is_short(&brokerage, &account_2, &candle.symbol.name);
 
-                                    let is_short = strategy.is_long(&brokerage, &account_2, &candle.symbol.name);
-                                    let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &candle.symbol.name);
-                                    let pnl = strategy.pnl(&brokerage, &account_2, &candle.symbol.name);
-                                    // test short ledger
-                                    if !is_short && candle.close < candle.open && !trade_placed_2 {
-                                        let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Short")).await;
-                                        trade_placed_2 = true;
-                                    }
+                                        // test short ledger
+                                        if !is_short && candle.close < candle.open && !trade_placed_2 {
+                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Short")).await;
+                                            trade_placed_2 = true;
+                                        }
 
-                                    // take profit conditions
-                                    if is_short && pnl < dec!(100.0) && trade_placed_2 {
-                                        let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Short Take Loss")).await;
+                                        let pnl_2 = strategy.pnl(&brokerage, &account_2, &candle.symbol.name);
+                                        let position_size_2: Decimal = strategy.position_size(&brokerage, &account_2, &candle.symbol.name);
+                                        // take profit conditions
+                                        if is_short && pnl_2 < dec!(1000.0) && trade_placed_2 {
+                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_2, &brokerage, position_size_2, String::from("Exit Short Take Loss")).await;
+                                        }
                                     }
                                 }
                             }
