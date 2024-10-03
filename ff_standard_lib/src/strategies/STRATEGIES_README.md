@@ -724,7 +724,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
 ## Account Positions
 ```rust
-fn example(brokerage: Brokerage, account_name: AccountName, candle: Candle, ) {
+fn example(strategy: &FundForgeStrategy, brokerage: Brokerage, account_name: AccountName, candle: Candle, ) {
     
     // to find out if the broker and account is in profit on the symbol, returns false as default if no position
     let in_profit: bool = strategy.in_profit(&brokerage, &account_name, &candle.symbol.name);
