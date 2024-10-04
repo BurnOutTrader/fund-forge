@@ -287,7 +287,7 @@ If no order book or quote data is available we will fill all orders at the last 
 Accuracy was tested using only market orders, enter long, enter short, exit long, exit short, however all other orders follow the same logic and should work accurately and I will build a test in the future.
 
 Any slight differences in expected statistical values will be due to rounding. 
-- The ledger rounds average prices to the symbols decimal_accuracy each time a position increases or decreases in size.
+- The ledger rounds average prices to the symbols decimal_accuracy each time a position increases or decreases in size using the weighted average prices.
 - it then determines the number of ticks based on the symbol tick_size and
 - multiplies the number of ticks by position quantity and value per tick.
 
