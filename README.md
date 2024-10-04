@@ -289,7 +289,7 @@ Accuracy was tested using only market orders, enter long, enter short, exit long
 Any slight differences in expected statistical values will be due to rounding. 
 - The ledger rounds average prices to the symbols decimal_accuracy each time a position increases or decreases in size using the weighted average prices.
 - it then determines the number of ticks based on the symbol tick_size and
-- multiplies the number of ticks by position quantity and value per tick.
+- multiplies the number of ticks(or pips) by position quantity and value per tick.
 
 I do this for each position when the position closes or changes open value, not when the stats are calculated.
 
