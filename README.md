@@ -419,6 +419,8 @@ Once you have followed the setup instructions above, you can play with a test st
 
 Run the test strategy [example_test_strategy](example_test_strategy/src/main.rs) 
 
+Or see mode [test strategies](ff_tests)
+
 ## Gui
 Decoupled.
 Basic charting functionality was tested months ago. The code base has since been refactored and charting now supports live streams. A local gui is in production using rust iced.
