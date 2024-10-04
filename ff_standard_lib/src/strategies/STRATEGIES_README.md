@@ -1154,4 +1154,7 @@ You have a method to add to a short position, you have the order tag: "Add Short
 A long position will be opened with the tag "Add Short". \
 You will see this in your exported positions `.csv`.
 
+The `tag` property of `PositionUpdateEvents` that are fed to the strategy, will use the order 'tag' that triggered the event.
+In this way we can see in real time the effect of orders on a position.
+
 Uploading your exported trades to an Ai model like claude or GPT will quickly spot the mistake.
