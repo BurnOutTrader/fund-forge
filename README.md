@@ -52,6 +52,7 @@ After creating the strategy instance using `FundForgeStrategy::initialize();` we
 The `StrategyEventBuffer` is an Iterable object with a collection of all `StrategyEvent`s that occurred within a buffer period.
 
 We also have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
+
 Take a more in depth look at [strategy features here](ff_standard_lib/src/strategies/STRATEGIES_README.md).
 ```rust
 //let strategy = FundForgeStrategy::initialize(); //parameters excluded for brevity
