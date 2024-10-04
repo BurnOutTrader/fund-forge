@@ -1126,3 +1126,29 @@ async fn example() {
     }
 }
 ```
+
+# Debugging Strategies
+You can export positions and print ledgers at run time using.
+Exported positions include the a tag == the tag of the order that created the position.
+```rust
+fn example(strategy: &FundForgeStrategy) {
+    strategy.export_trades(&String::from("./trades exports"));
+    strategy.print_ledgers();
+}
+```
+When a strategy places an order, the order 'tag' property is returned with the order event.
+
+When a new position is created the position 'tag' property will be the tag of the order that resulted in the position.
+
+This has multiple debug benefits:
+
+Scenarios:
+1. If you over-fill an order: You are long 100, and you sell at market 200, with you order tag as "Take Profit Long". \
+A short position will be opened with the tag: "Take Profit Long", when reviewing positions you will see this tag as entering a short position. \
+You will see this in you exported positions .csv.
+
+
+2. You accidentally enter long instead of short. \
+You have a method to add to a short position, you have the order tag: "Add Short", but you accidentally use `strategy.enter_long()` instead of `strategy.enter_short()`. \
+A long position will be opened with the tag "Add Short". \
+You will see this in you exported positions .csv.
