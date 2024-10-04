@@ -18,7 +18,8 @@ pub type PositionId = String;
 pub(crate) struct PositionExport {
     entry_time: String,
     symbol_name: String,
-    side: String,
+    position_side: String,
+    tag: String,
     quantity: Volume,
     average_price: Price,
     exit_price: Price,
@@ -28,7 +29,6 @@ pub(crate) struct PositionExport {
     lowest_recoded_price: Price,
     exit_time: String,
     hold_duration: String,
-    tag: String
 }
 
 #[derive(Clone, rkyv::Serialize, rkyv::Deserialize, Archive, Debug, PartialEq)]
@@ -252,7 +252,7 @@ impl Position {
         };
         PositionExport {
             symbol_name: self.symbol_name.to_string(),
-            side: self.side.to_string(),
+            position_side: self.side.to_string(),
             quantity: self.quantity_closed,
             average_price: self.average_price,
             exit_price: self.average_exit_price.unwrap(),
