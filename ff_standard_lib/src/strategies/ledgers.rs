@@ -487,7 +487,8 @@ pub(crate) mod historical_ledgers {
                                 account_id: self.account_id.clone(),
                                 order_id,
                                 reason: e.to_string(),
-                                tag
+                                tag,
+                                time: time.to_string()
                             })
                         }
                     }
@@ -507,7 +508,8 @@ pub(crate) mod historical_ledgers {
                             account_id: self.account_id.clone(),
                             order_id,
                             reason: e.to_string(),
-                            tag: tag
+                            tag: tag,
+                            time: time.to_string()
                         })
                     }
                 }
@@ -545,7 +547,8 @@ pub(crate) mod historical_ledgers {
                     position_id: id,
                     account_id: self.account_id.clone(),
                     brokerage: self.brokerage.clone(),
-                    originating_order_tag: tag
+                    originating_order_tag: tag,
+                    time: time.to_string()
                 };
                 self.cash_value = self.cash_used + self.cash_available;
                 updates.push(event);

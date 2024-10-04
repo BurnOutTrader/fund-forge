@@ -1,5 +1,7 @@
 use std::fmt;
-use chrono::{DateTime, Utc};
+use std::str::FromStr;
+use chrono::{DateTime, TimeZone, Utc};
+use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
@@ -41,6 +43,7 @@ pub enum PositionUpdateEvent {
         account_id: AccountId,
         brokerage: Brokerage,
         originating_order_tag: String,
+        time: String
     },
     Increased {
         position_id: PositionId,
@@ -51,6 +54,7 @@ pub enum PositionUpdateEvent {
         account_id: AccountId,
         brokerage: Brokerage,
         originating_order_tag: String,
+        time: String
     },
     PositionReduced {
         position_id: PositionId,
@@ -63,6 +67,7 @@ pub enum PositionUpdateEvent {
         account_id: AccountId,
         brokerage: Brokerage,
         originating_order_tag: String,
+        time: String
     },
     PositionClosed {
         position_id: PositionId,
@@ -74,6 +79,7 @@ pub enum PositionUpdateEvent {
         account_id: AccountId,
         brokerage: Brokerage,
         originating_order_tag: String,
+        time: String
     },
 }
 
@@ -95,12 +101,26 @@ impl PositionUpdateEvent {
             PositionUpdateEvent::PositionClosed {account_id,..} => account_id,
         }
     }
+
+    pub fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        let utc_time: DateTime<Utc> = self.time_utc();
+        time_zone.from_utc_datetime(&utc_time.naive_utc())
+    }
+
+    pub fn time_utc(&self) -> DateTime<Utc> {
+        match self {
+            PositionUpdateEvent::PositionOpened{time,..} => DateTime::from_str(time).unwrap(),
+            PositionUpdateEvent::Increased{time,..} =>  DateTime::from_str(time).unwrap(),
+            PositionUpdateEvent::PositionReduced {time,..} =>  DateTime::from_str(time).unwrap(),
+            PositionUpdateEvent::PositionClosed {time,..} =>  DateTime::from_str(time).unwrap(),
+        }
+    }
 }
 
 impl fmt::Display for PositionUpdateEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PositionUpdateEvent::PositionOpened{position_id, brokerage, account_id, originating_order_tag: tag } => {
+            PositionUpdateEvent::PositionOpened{position_id, brokerage, account_id, originating_order_tag: tag,.. } => {
                 write!(f, "PositionOpened: Position ID = {}, Brokerage: {}, Account: {}, Originating Order Tag: {}", position_id, brokerage, account_id, tag)
             }
             PositionUpdateEvent::Increased {
@@ -111,7 +131,8 @@ impl fmt::Display for PositionUpdateEvent {
                 booked_pnl,
                 account_id,
                 brokerage,
-                originating_order_tag: tag
+                originating_order_tag: tag,
+                ..
             } => {
                 write!(
                     f,
@@ -129,7 +150,8 @@ impl fmt::Display for PositionUpdateEvent {
                 average_exit_price,
                 account_id,
                 brokerage,
-                originating_order_tag: tag
+                originating_order_tag: tag,
+                ..
             } => {
                 write!(
                     f,
@@ -146,7 +168,8 @@ impl fmt::Display for PositionUpdateEvent {
                 average_exit_price,
                 account_id,
                 brokerage,
-                originating_order_tag: tag
+                originating_order_tag: tag,
+                ..
             } => {
                 write!(
                     f,
@@ -308,7 +331,8 @@ pub(crate) mod historical_position {
                     average_exit_price: self.average_exit_price,
                     account_id: self.account_id.clone(),
                     brokerage: self.brokerage.clone(),
-                    originating_order_tag: tag
+                    originating_order_tag: tag,
+                    time: time.to_string()
                 }
             } else {
                 PositionUpdateEvent::PositionReduced {
@@ -321,7 +345,8 @@ pub(crate) mod historical_position {
                     average_exit_price: self.average_exit_price.unwrap(),
                     account_id: self.account_id.clone(),
                     brokerage: self.brokerage.clone(),
-                    originating_order_tag: tag
+                    originating_order_tag: tag,
+                    time: time.to_string()
                 }
             }
         }
@@ -363,7 +388,8 @@ pub(crate) mod historical_position {
                 booked_pnl: self.booked_pnl,
                 account_id: self.account_id.clone(),
                 brokerage: self.brokerage.clone(),
-                originating_order_tag: tag
+                originating_order_tag: tag,
+                time: time.to_string()
             }
         }
 

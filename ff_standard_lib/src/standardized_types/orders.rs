@@ -505,42 +505,61 @@ pub enum OrderUpdateType {
 ///
 /// This enum is used to communicate changes in order status between the trading strategy, the user interface, and the brokerage connection. Each variant represents a specific type of update or state change that an order can experience.
 pub enum OrderUpdateEvent {
-    OrderAccepted {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String},
+    OrderAccepted {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
 
-    OrderFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String},
+    OrderFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
 
-    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String},
+    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
 
-    OrderCancelled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String},
+    OrderCancelled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
 
-    OrderRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String, tag: String},
+    OrderRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String, tag: String, time: String},
 
-    OrderUpdated {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, order: Order, tag: String},
+    OrderUpdated {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, order: Order, tag: String, time: String},
 
-    OrderUpdateRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String},
+    OrderUpdateRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String, time: String},
+}
+
+impl OrderUpdateEvent {
+    pub fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
+        let utc_time: DateTime<Utc> = self.time_utc();
+        time_zone.from_utc_datetime(&utc_time.naive_utc())
+    }
+
+    pub fn time_utc(&self) -> DateTime<Utc> {
+        match self {
+            OrderUpdateEvent::OrderAccepted { time, .. } => DateTime::from_str(time).unwrap(),
+            OrderUpdateEvent::OrderFilled { time, .. } => DateTime::from_str(time).unwrap(),
+            OrderUpdateEvent::OrderPartiallyFilled { time, .. } => DateTime::from_str(time).unwrap(),
+            OrderUpdateEvent::OrderCancelled { time, .. } => DateTime::from_str(time).unwrap(),
+            OrderUpdateEvent::OrderRejected { time, .. } => DateTime::from_str(time).unwrap(),
+            OrderUpdateEvent::OrderUpdated { time, .. } => DateTime::from_str(time).unwrap(),
+            OrderUpdateEvent::OrderUpdateRejected { time, .. } => DateTime::from_str(time).unwrap(),
+        }
+    }
 }
 impl fmt::Display for OrderUpdateEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id,tag } => {
+            OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id,tag,.. } => {
                 write!(f, "Order Accepted: Brokerage: {}, Account ID: {}, Order ID: {}, Tag: {}", brokerage, account_id, order_id, tag)
             }
-            OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id,tag } => {
+            OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id,tag,.. } => {
                 write!(f, "Order Filled: Brokerage: {}, Account ID: {}, Order ID: {}, Tag: {}", brokerage, account_id, order_id, tag)
             }
-            OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id,tag } => {
+            OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id,tag,.. } => {
                 write!(f, "Order Partially Filled: Brokerage: {}, Account ID: {}, Order ID: {}, Tag: {}", brokerage, account_id, order_id, tag)
             }
-            OrderUpdateEvent::OrderCancelled { brokerage, account_id, order_id,tag } => {
+            OrderUpdateEvent::OrderCancelled { brokerage, account_id, order_id,tag,.. } => {
                 write!(f, "Order Cancelled: Brokerage: {}, Account ID: {}, Order ID: {}, Tag: {}", brokerage, account_id, order_id, tag)
             }
-            OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason,tag } => {
+            OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason,tag,.. } => {
                 write!(f, "Order Rejected: Brokerage: {}, Account ID: {}, Order ID: {}. Reason: {}, Tag: {}", brokerage, account_id, order_id, reason, tag)
             }
             OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id,tag, .. } => {
                 write!(f, "Order Updated: Brokerage: {}, Account ID: {}, Order ID: {}, Tag: {}", brokerage, account_id, order_id, tag)
             }
-            OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason } => {
+            OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason,.. } => {
                 write!(f, "Order Update Rejected: Brokerage: {}, Account ID: {}, Order ID: {}. Reason: {}", brokerage, account_id, order_id, reason)
             }
         }
