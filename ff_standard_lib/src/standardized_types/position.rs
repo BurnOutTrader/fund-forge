@@ -25,6 +25,7 @@ pub(crate) struct PositionExport {
     highest_recoded_price: Price,
     lowest_recoded_price: Price,
     exit_time: String,
+    tag: String
 }
 
 #[derive(Clone, rkyv::Serialize, rkyv::Deserialize, Archive, Debug, PartialEq)]
@@ -257,6 +258,7 @@ impl Position {
             lowest_recoded_price: self.lowest_recoded_price,
             exit_time,
             entry_time: self.open_time.to_string(),
+            tag: self.tag.clone()
         }
     }
 }
