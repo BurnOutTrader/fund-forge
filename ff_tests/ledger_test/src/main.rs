@@ -140,7 +140,7 @@ pub async fn on_data_received(
                                     //SHORT CONDITIONS
                                     {
                                         // ENTER SHORT
-                                        let is_flat = strategy.is_short(&brokerage, &account_1, &candle.symbol.name);
+                                        let is_flat = strategy.is_flat(&brokerage, &account_1, &candle.symbol.name);
                                         // test short ledger
                                         if is_flat
                                             && candle.close < candle.open
