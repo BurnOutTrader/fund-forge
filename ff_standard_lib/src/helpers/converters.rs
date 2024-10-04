@@ -1,14 +1,12 @@
 use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::DataSubscription;
-use chrono::{
-    DateTime, Datelike, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc,
-};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use std::fmt::Error;
 use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
-
+use std::fmt::Write;
 
 /// Convert a NaiveDateTime to the exact same Date and time Tz DateTime object
 ///
@@ -188,4 +186,32 @@ pub fn open_time(subscription: &DataSubscription, time: DateTime<Utc>) -> DateTi
         }
         _ => time, // Handle other resolutions if necessary
     }
+}
+
+
+pub fn format_duration(duration: Duration) -> String {
+    let total_seconds = duration.num_seconds();
+    let nanos = duration.subsec_nanos();
+
+    let days = total_seconds / 86400; // 86400 seconds in a day
+    let hours = (total_seconds % 86400) / 3600; // 3600 seconds in an hour
+    let minutes = (total_seconds % 3600) / 60;
+    let seconds = total_seconds % 60;
+
+    let mut result = String::new();
+    if days > 0 {
+        write!(result, "{}d ", days).unwrap();
+    }
+    if hours > 0 || !result.is_empty() {
+        write!(result, "{}h ", hours).unwrap();
+    }
+    if minutes > 0 || !result.is_empty() {
+        write!(result, "{}m ", minutes).unwrap();
+    }
+    if seconds > 0 || !result.is_empty() {
+        write!(result, "{}s ", seconds).unwrap();
+    }
+    write!(result, "{}ns", nanos).unwrap();
+
+    result.trim().to_string()
 }

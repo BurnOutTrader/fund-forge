@@ -5,6 +5,7 @@ use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
+use crate::helpers::converters::format_duration;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::SymbolName;
@@ -26,7 +27,7 @@ pub(crate) struct PositionExport {
     highest_recoded_price: Price,
     lowest_recoded_price: Price,
     exit_time: String,
-    hold_duration_minutes: String,
+    hold_duration: String,
     tag: String
 }
 
@@ -247,7 +248,7 @@ impl Position {
     pub(crate) fn to_export(&self) -> PositionExport {
         let (exit_time, hold_duration) = match &self.close_time {
             None => ("None".to_string(), "N/A".to_string()),
-            Some(time) => (time.to_string(), (DateTime::<Utc>::from_str(time).unwrap() - DateTime::<Utc>::from_str(&self.open_time).unwrap()).num_minutes().to_string())
+            Some(time) => (time.to_string(), format_duration(DateTime::<Utc>::from_str(time).unwrap() - DateTime::<Utc>::from_str(&self.open_time).unwrap()))
         };
         PositionExport {
             symbol_name: self.symbol_name.to_string(),
@@ -261,7 +262,7 @@ impl Position {
             lowest_recoded_price: self.lowest_recoded_price,
             exit_time,
             entry_time: self.open_time.to_string(),
-            hold_duration_minutes: hold_duration,
+            hold_duration,
             tag: self.tag.clone()
         }
     }
