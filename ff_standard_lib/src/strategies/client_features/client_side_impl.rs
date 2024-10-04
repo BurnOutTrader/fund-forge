@@ -117,7 +117,7 @@ impl DataVendor {
         }
     }
 
-    pub async fn decimal_accuracy(&self, symbol_name: SymbolName) -> Result<u8, FundForgeError> {
+    pub async fn decimal_accuracy(&self, symbol_name: SymbolName) -> Result<u32, FundForgeError> {
         let request = DataServerRequest::DecimalAccuracy {
             callback_id: 0,
             data_vendor: self.clone(),

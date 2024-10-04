@@ -234,7 +234,7 @@ DataServerResponse {
 
     DecimalAccuracy{
         callback_id: u64,
-        accuracy: u8
+        accuracy: u32
     },
 
     ValuePerTick{

@@ -380,7 +380,7 @@ pub(crate) mod historical_ledgers {
                         continue
                     }
                     //returns booked pnl if exit on brackets
-                    position.backtest_update_base_data(&base_data_enum, time);
+                    position.backtest_update_base_data(&base_data_enum, time, self.currency);
                     self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
 
                     if position.is_closed {
@@ -403,7 +403,7 @@ pub(crate) mod historical_ledgers {
                     return
                 }
                 //returns booked pnl if exit on brackets
-                position.backtest_update_base_data(&base_data_enum, time);
+                position.backtest_update_base_data(&base_data_enum, time, self.currency);
                     self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
                 self.cash_value = self.cash_used + self.cash_available;
                 if position.is_closed {

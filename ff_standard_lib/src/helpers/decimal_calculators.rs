@@ -4,30 +4,29 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::new_types::{Price, Volume};
+use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::strategies::ledgers::Currency;
 
 pub fn calculate_historical_pnl(
     side: PositionSide,
     entry_price: Price,
     market_price: Price,
-    tick_size: Decimal,
-    value_per_tick: Decimal,
     quantity: Volume,
-    _pnl_currency: Currency,
     _account_currency: Currency,
     _time: DateTime<Utc>,
+    symbol_info: &SymbolInfo
 ) -> Price {
     // Calculate the price difference based on position side
     let raw_ticks = match side {
         PositionSide::Long => {
-            let ticks =  ((market_price - entry_price) / tick_size).round();
+            let ticks =  ((market_price - entry_price) / symbol_info.tick_size).round();
             if ticks == dec!(0.0) {
                 return dec!(0.0)
             }
             ticks
         },   // Profit if market price > entry price
         PositionSide::Short => {
-            let ticks = ((entry_price - market_price) / tick_size).round();
+            let ticks = ((entry_price - market_price) / symbol_info.tick_size).round();
             if ticks == dec!(0.0) {
                 return dec!(0.0)
             }
@@ -41,7 +40,7 @@ pub fn calculate_historical_pnl(
        }*/
 
     // Calculate PnL by multiplying with value per tick and quantity
-    let pnl = raw_ticks * value_per_tick * quantity;
+    let pnl = raw_ticks * symbol_info.value_per_tick * quantity;
     pnl
 }
 

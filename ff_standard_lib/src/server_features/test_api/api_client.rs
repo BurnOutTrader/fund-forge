@@ -99,6 +99,7 @@ impl BrokerApiResponse for TestApiClient {
             pnl_currency,
             value_per_tick,
             tick_size,
+            decimal_accuracy: 5,
         };
 
         DataServerResponse::SymbolInfo {
