@@ -295,7 +295,7 @@ I do this for each position when the position closes or changes open value, not 
 
 The alternative would be rounding pnl after we have the total, but this would be less realistic than the current method.
 
-[Results of testing here](ff_standard_lib/src/strategies/ACCURACY_README)
+[Results of testing here](ff_standard_lib/src/strategies/ACCURACY_README.md)
 
 1. **Ending Balance**:
   - Starting Balance + Total Profit = $100,000 - $11,370 = $88,630
