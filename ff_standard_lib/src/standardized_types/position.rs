@@ -26,7 +26,7 @@ pub(crate) struct PositionExport {
     highest_recoded_price: Price,
     lowest_recoded_price: Price,
     exit_time: String,
-    hold_duration_seconds: String,
+    hold_duration_minutes: String,
     tag: String
 }
 
@@ -247,7 +247,7 @@ impl Position {
     pub(crate) fn to_export(&self) -> PositionExport {
         let (exit_time, hold_duration) = match &self.close_time {
             None => ("None".to_string(), "N/A".to_string()),
-            Some(time) => (time.to_string(), (DateTime::<Utc>::from_str(time).unwrap() - DateTime::<Utc>::from_str(&self.open_time).unwrap()).num_seconds().to_string())
+            Some(time) => (time.to_string(), (DateTime::<Utc>::from_str(time).unwrap() - DateTime::<Utc>::from_str(&self.open_time).unwrap()).num_minutes().to_string())
         };
         PositionExport {
             symbol_name: self.symbol_name.to_string(),
@@ -261,7 +261,7 @@ impl Position {
             lowest_recoded_price: self.lowest_recoded_price,
             exit_time,
             entry_time: self.open_time.to_string(),
-            hold_duration_seconds: hold_duration,
+            hold_duration_minutes: hold_duration,
             tag: self.tag.clone()
         }
     }
