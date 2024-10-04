@@ -419,7 +419,7 @@ Once you have followed the setup instructions above, you can play with a test st
 
 Run the test strategy [example_test_strategy](example_test_strategy/src/main.rs) 
 
-Or see mode [test strategies](ff_tests)
+Or see more [test strategies](ff_tests)
 
 ## Gui
 Decoupled.
