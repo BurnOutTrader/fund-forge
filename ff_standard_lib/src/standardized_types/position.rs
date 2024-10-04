@@ -16,7 +16,6 @@ use crate::standardized_types::symbol_info::SymbolInfo;
 pub type PositionId = String;
 #[derive(Serialize)]
 pub(crate) struct PositionExport {
-    entry_time: String,
     symbol_name: String,
     position_side: String,
     tag: String,
@@ -27,6 +26,7 @@ pub(crate) struct PositionExport {
     open_pnl: Price,
     highest_recoded_price: Price,
     lowest_recoded_price: Price,
+    entry_time: String,
     exit_time: String,
     hold_duration: String,
 }
