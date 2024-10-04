@@ -159,7 +159,7 @@ pub async fn on_data_received(
                                             && short_pnl < dec!(300.0)
                                             && position_size_short < dec!(90)
                                         {
-                                            let _add_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Add Short")).await;
+                                            let _add_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Add Short")).await;
                                             println!("Strategy: Add Short, Time {}", strategy.time_local());
                                         }
 
