@@ -1,4 +1,4 @@
-use chrono::{Duration, NaiveDate, TimeZone};
+use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
 use rust_decimal::Decimal;
@@ -61,7 +61,7 @@ pub async fn on_data_received(
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
-        for (time, strategy_event) in event_slice.iter() {
+        for (_time, strategy_event) in event_slice.iter() {
             //println!("Strategy: Buffer Event Time: {}", strategy.time_zone().from_utc_datetime(&time.naive_utc()));
             match strategy_event {
                 StrategyEvent::TimeSlice(time_slice) => {
