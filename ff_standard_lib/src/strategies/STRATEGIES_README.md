@@ -1128,8 +1128,9 @@ async fn example() {
 ```
 
 # Debugging Strategies
-You can export positions and print ledgers at run time using.
 Exported positions include their tag property, which always == the tag of the order that created the position.
+
+You can export positions and print ledgers at run time using:
 ```rust
 fn example(strategy: &FundForgeStrategy) {
     strategy.export_trades(&String::from("./trades exports"));
