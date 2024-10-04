@@ -52,21 +52,23 @@ lazy_static! {
 }
 
 #[inline(always)]
-pub async fn add_buffer(time: DateTime<Utc>, event: StrategyEvent) {
+pub(crate) async fn add_buffer(time: DateTime<Utc>, event: StrategyEvent) {
     let mut buffer = EVENT_BUFFER.lock().await;
     buffer.add_event(time, event);
 }
 
+#[allow(dead_code)]
 #[inline(always)]
-pub async fn add_buffers(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
+pub(crate) async fn add_buffers(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
     let mut buffer =  EVENT_BUFFER.lock().await;
     for event in events {
         buffer.add_event(time, event);
     }
 }
 
+#[allow(dead_code)]
 // could potentially make a buffer using a receiver, this can reduce the handlers to 1
-pub async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_duration: Duration, start_time: DateTime<Utc>) {
+pub(crate) async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_duration: Duration, start_time: DateTime<Utc>) {
     let mut receiver = receiver;
     tokio::task::spawn(async move {
 
@@ -86,9 +88,9 @@ pub async fn buffer(receiver: Receiver<(DateTime<Utc>, StrategyEvent)>, buffer_d
     // have another receiver for time slices
 }
 
-
+#[allow(dead_code)]
 #[inline(always)]
-pub async fn extend_buffer(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
+pub(crate) async fn extend_buffer(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
     let mut buffer = EVENT_BUFFER.lock().await;
     for event in events {
         buffer.add_event(time, event);
@@ -96,7 +98,7 @@ pub async fn extend_buffer(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
 }
 
 #[inline(always)]
-pub async fn forward_buffer(time: DateTime<Utc>) {
+pub(crate) async fn forward_buffer(time: DateTime<Utc>) {
     update_backtest_time(time);
     let mut buffer = EVENT_BUFFER.lock().await;
     if !buffer.is_empty() {
@@ -107,15 +109,15 @@ pub async fn forward_buffer(time: DateTime<Utc>) {
 }
 
 
-pub static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
-pub fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
+pub(crate) static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
+pub(crate) fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
     SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender) // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
-pub fn unsubscribe_primary_subscription_updates(stream_name: &str) {
+pub(crate) fn unsubscribe_primary_subscription_updates(stream_name: &str) {
     SUBSCRIPTION_HANDLER.get().unwrap().unsubscribe_primary_subscription_updates(stream_name) // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
-pub static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
+pub(crate) static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
 static TIMED_EVENT_HANDLER: OnceCell<Arc<TimedEventHandler>> = OnceCell::new();
 static DRAWING_OBJECTS_HANDLER: OnceCell<Arc<DrawingObjectHandler>> = OnceCell::new();
 
@@ -134,11 +136,11 @@ pub(crate) async fn send_request(req: StrategyRequest) {
 static STRATEGY_SENDER: OnceCell<Sender<StrategyEventBuffer>> = OnceCell::new();
 
 #[inline(always)]
-pub async fn send_strategy_event_slice(slice: StrategyEventBuffer) {
+pub(crate) async fn send_strategy_event_slice(slice: StrategyEventBuffer) {
     STRATEGY_SENDER.get().unwrap().send(slice).await.unwrap();
 }
 
-pub async fn live_subscription_handler(
+pub(crate) async fn live_subscription_handler(
     mode: StrategyMode,
 ) {
     if mode == StrategyMode::Backtest {
@@ -272,7 +274,7 @@ async fn request_handler(
 
 
 
-pub async fn response_handler_unbuffered(
+async fn response_handler_unbuffered(
     mode: StrategyMode,
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
