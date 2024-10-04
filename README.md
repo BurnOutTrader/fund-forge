@@ -349,7 +349,7 @@ If a level has no volume then the backtest will assume there are no more levels 
 ### Positions and Statistics
 Currently, fund forge only implements 1 of the 3 intended position types that I intend to implement.
 1. Cumulative, when a position is opened, any additional entries in either direction will be counted as part of the same position, changing only the average entry and average exit price. This position will stay active until the ledger is flat or reversed. (Implemented)
-2. First in First Out: When a position is opened any order in the opposite direction will create a trade object based on the entry price and exit price (Not yet implemented)
+2. First in First Out: When using the FIFO rule, the first position (or set of shares/contracts) that is opened is also the first one that must be closed. This principle is common in certain financial markets or brokerage accounts, particularly in the U.S. under specific regulations like th (Not yet implemented)
 3. First in Last Out: Recent entries are prioritized for closing, leaving the older entries as the last to be closed. (Not yet implemented)
 
 There is an option for ledgers to be hedging or non-hedging, where hedging ledgers can hold multiple positions per symbol in opposing directions.
