@@ -158,23 +158,6 @@ impl Ledger {
         let file_path = Path::new(&file_name);
         match Writer::from_path(file_path) {
             Ok(mut wtr) => {
-                // Write headers once
-                if let Err(e) = wtr.write_record(&[
-                    "Symbol Name",
-                    "Side",
-                    "Quantity",
-                    "Average Price",
-                    "Exit Price",
-                    "Booked PnL",
-                    "Highest Recorded Price",
-                    "Lowest Recorded Price",
-                    "Time Opened",
-                    "Final Closed"
-                ]) {
-                    eprintln!("Failed to write headers to {}: {}", file_path.display(), e);
-                    return;
-                }
-
                 // Iterate over all closed positions and write their data
                 for entry in self.positions_closed.iter() {
                     for position in entry.value() {
