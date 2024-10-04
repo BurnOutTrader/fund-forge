@@ -490,7 +490,7 @@ What the above function actually does is:
 
 ## Time handling
 
-#### Accuracy
+### Accuracy
 Backtesting in the Un-Buffered engine, has a minimum accuracy of 1 nanosecond, but will depend on the granularity of your data.
 Live trading in the Un-Buffered engine will have no minimum accuracy.
 
