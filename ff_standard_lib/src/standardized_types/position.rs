@@ -322,6 +322,7 @@ pub(crate) mod historical_position {
             // Reset open PnL if position is closed
             if self.is_closed {
                 self.open_pnl = dec!(0);
+                self.close_time = Some(time.to_string());
                 PositionUpdateEvent::PositionClosed {
                     position_id: self.position_id.clone(),
                     total_quantity_open: self.quantity_open,
