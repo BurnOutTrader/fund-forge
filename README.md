@@ -348,7 +348,7 @@ If a level has no volume then the backtest will assume there are no more levels 
 
 ### Positions and Statistics
 Currently, fund forge only implements 1 of the 3 intended position types that I intend to implement.
-1. Cumulative, when a position is opened, it any additional entries in any direction will be counted as part of the same position, changing only the average entry an average exit price. This position will stay active until the ledger is flat or reversed. (Implemented)
+1. Cumulative, when a position is opened, any additional entries in either direction will be counted as part of the same position, changing only the average entry and average exit price. This position will stay active until the ledger is flat or reversed. (Implemented)
 2. First in First Out: When a position is opened any order in the opposite direction will create a trade object based on the entry price and exit price (Not yet implemented)
 3. First in Last Out: Recent entries are prioritized for closing, leaving the older entries as the last to be closed. (Not yet implemented)
 
