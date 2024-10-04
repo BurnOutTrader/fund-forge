@@ -494,8 +494,7 @@ What the above function actually does is:
 Backtesting in the Un-Buffered engine, has a minimum accuracy of 1 nanosecond, but will depend on the granularity of your data.
 Live trading in the Un-Buffered engine will have no minimum accuracy.
 
-Backtesting in the Buffered engine, has a minimum accuracy of your `buffer_duration: Option<Duration>` parameter, and will never depend on the granularity of your data.
-Live trading in the Buffered engine, has a minimum accuracy of your `buffer_duration: Option<Duration>` parameter, and will never depend on the granularity of your data feed.
+Both Live trading and Backtesting in the Buffered engine, has a minimum accuracy of your `buffer_duration: Option<Duration>` parameter, and will never depend on the granularity of your data.
 
 ### Parsing Data Time
 All data should be saved as 1 file per month and all times for data should be Utc time, use the time parsing functions in `ff_standard_lib::helpers::converters` [here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_standard_lib/src/helpers/converters.rs) to parse time from your time zone, 
