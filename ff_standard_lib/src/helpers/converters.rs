@@ -10,14 +10,36 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 
-/// Convert a NaiveDateTime to the exact same Date and time Utc DateTime object
-pub fn naive_date_time_to_utc(naive_date_time: NaiveDateTime) -> DateTime<Utc> {
-    Utc.from_local_datetime(&naive_date_time).unwrap().to_utc()
-}
-
 /// Convert a NaiveDateTime to the exact same Date and time Tz DateTime object
+///
+/// Note this function does not adjust the hour or date, this just creates a DateTime<Tz> object and assumes you know the correct time zone
+///
+/// # Instructions For Parsing to Utc from a Random TimeZone (Tz)
+/// 1. Convert time to a TZ aware object based on the data time zone using `let data_time_local = naive_date_time_to_tz(naive_date_time: NaiveDateTime, time_zone: Tz);`
+/// 2. Convert to utc time by using `let data_time_utc = data_time_local.to_utc();`
+/// 3. Convert to a string by using `data_time_utc.to_string();`  for `BaseDataEnum` variants
+///
+///  # Instructions For Parsing to Utc from a Utc String
+/// 1. If your data is already in UTC time you can just use `let data_time_utc = naive_date_time_to_utc(naive_date_time: NaiveDateTime);`
+/// 2. Convert to a string by using `data_time_utc.to_string();` for `BaseDataEnum` variants
 pub fn naive_date_time_to_tz(naive_date_time: NaiveDateTime, time_zone: Tz) -> DateTime<Tz> {
     time_zone.from_local_datetime(&naive_date_time).unwrap()
+}
+
+/// Convert a NaiveDateTime to the exact same Date and time Utc DateTime object
+///
+/// Note this function does not adjust the hour or date, this just creates a DateTime<Utc> object and assumes you know the correct time zone
+///
+/// # Instructions For Parsing to Utc from a Random TimeZone (Tz)
+/// 1. Convert time to a TZ aware object based on the data time zone using `let data_time_local = naive_date_time_to_tz(naive_date_time: NaiveDateTime, time_zone: Tz);`
+/// 2. Convert to utc time by using `let data_time_utc = data_time_local.to_utc();`
+/// 3. Convert to a string by using `data_time_utc.to_string();`  for `BaseDataEnum` variants
+///
+///  # Instructions For Parsing to Utc from a Utc String
+/// 1. If your data is already in UTC time you can just use `let data_time_utc = naive_date_time_to_utc(naive_date_time: NaiveDateTime);`
+/// 2. Convert to a string by using `data_time_utc.to_string();` for `BaseDataEnum` variants
+pub fn naive_date_time_to_utc(naive_date_time: NaiveDateTime) -> DateTime<Utc> {
+    Utc.from_local_datetime(&naive_date_time).unwrap().to_utc()
 }
 
 /// Convert utc time string to local time, adjusting the actual hour
