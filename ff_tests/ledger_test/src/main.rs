@@ -136,7 +136,6 @@ pub async fn on_data_received(
                                         }
                                     }
 
-
                                     //SHORT CONDITIONS
                                     {
                                         // ENTER SHORT
