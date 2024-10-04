@@ -60,7 +60,9 @@ pub async fn on_data_received(
     let account_1 = AccountId::from("Test_Account_1");
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        for (_time, strategy_event) in event_slice.iter() {
+        println!("Strategy: Buffer Received Time: {}", strategy.time_local());
+        for (time, strategy_event) in event_slice.iter() {
+            println!("Strategy: Buffer Event Time: {}", time);
             match strategy_event {
                 StrategyEvent::TimeSlice(time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
