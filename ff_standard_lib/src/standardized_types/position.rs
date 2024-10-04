@@ -295,6 +295,7 @@ pub(crate) mod historical_position {
             // Update position
             self.booked_pnl += booked_pnl;
             self.open_pnl -= booked_pnl;
+
             self.average_exit_price = match self.average_exit_price {
                 Some(existing_exit_price) => {
                     let exited_quantity = Decimal::from(self.quantity_closed);
@@ -308,6 +309,7 @@ pub(crate) mod historical_position {
                 }
                 None => Some(market_price)
             };
+
             self.quantity_open -= quantity;
             self.quantity_closed += quantity;
             self.is_closed = self.quantity_open <= dec!(0.0);
