@@ -81,6 +81,25 @@ async fn main() {
         GUI_DISABLED,
     ).await;
 
+    // we can subscribe to indicators here or in our event loop at run time.
+    let quotebar_3m_atr_5 = IndicatorEnum::AverageTrueRange(
+        AverageTrueRange::new(IndicatorName::from("quotebar_3m_atr_5"),
+                              DataSubscription::new(
+                                  SymbolName::from("EUR-USD"),
+                                  DataVendor::Test,
+                                  Resolution::Minutes(3),
+                                  BaseDataType::QuoteBars,
+                                  MarketType::Forex,
+                              ),
+                              100,
+                              5,
+                              Color::new (128, 0, 128)
+        ).await,
+    );
+
+    //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
+    strategy.subscribe_indicator(quotebar_3m_atr_5, true).await;
+
     on_data_received(strategy, strategy_event_receiver).await;
 }
 
@@ -89,22 +108,6 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
-    let quotebar_3m_atr_5 = IndicatorEnum::AverageTrueRange(
-        AverageTrueRange::new(IndicatorName::from("quotebar_3m_atr_5"),
-              DataSubscription::new(
-                  SymbolName::from("EUR-USD"),
-                  DataVendor::Test,
-                  Resolution::Minutes(3),
-                  BaseDataType::QuoteBars,
-                  MarketType::Forex,
-              ),
-            100,
-            5,
-            Color::new (128, 0, 128)
-        ).await,
-    );
-    //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
-    strategy.subscribe_indicator(quotebar_3m_atr_5, true).await;
     let mut count = 0;
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
@@ -212,6 +215,7 @@ pub async fn on_data_received(
 
                                     if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "EUR-USD" && quotebar.symbol.data_vendor == DataVendor::Test {
 
+                                        // Using Option<OrderId> for entry order as an alternative to is_long()
                                         if entry_order_id_2.is_some() {
                                             bars_since_entry_2 += 1;
                                         }
@@ -285,7 +289,7 @@ pub async fn on_data_received(
                                     // We can subscribe to new indicators at run time
                                     // we can pass in our strategy reference and it will maintain its functionality
                                     if count == 50 {
-                                        //subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                                 //do something with the current open bar
