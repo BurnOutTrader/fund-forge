@@ -15,7 +15,6 @@ use tokio::sync::{mpsc};
 use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
-use crate::strategies::historical_time::{get_backtest_time, update_backtest_time};
 //Possibly more accurate engine
 /*todo Use this for saving and loading data, it will make smaller file sizes and be less handling for consolidator, we can then just update historical data once per week on sunday and load last week from broker.
   use Create a date (you can use DateTime<Utc>, Local, or NaiveDate)
@@ -93,7 +92,7 @@ impl HistoricalEngine {
                 match self.mode {
                     StrategyMode::Backtest => {
                         add_buffer(end_time, StrategyEvent::ShutdownEvent("Backtest Complete".to_string()) ).await;
-                        forward_buffer().await;
+                        forward_buffer(warm_up_start_time).await;
                     }
                     StrategyMode::Live => {}
                     StrategyMode::LivePaperTrading => {}
@@ -161,8 +160,8 @@ impl HistoricalEngine {
                         if time >= self.start_time {
                             warm_up_complete = true;
                             set_warmup_complete();
-                            add_buffer(get_backtest_time(), StrategyEvent::WarmUpComplete).await;
-                            forward_buffer().await;
+                            add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
+                            forward_buffer(time).await;
                             if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
                                 unsubscribe_primary_subscription_updates("Historical Engine");
                                 break 'main_loop
@@ -170,7 +169,6 @@ impl HistoricalEngine {
                             println!("Un-Buffered Engine: Start Backtest");
                         }
                     }
-                    update_backtest_time(time.clone());
                     self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
                     let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
@@ -208,8 +206,8 @@ impl HistoricalEngine {
                         // add the strategy time slice to the new events.
                         let slice_event = StrategyEvent::TimeSlice(strategy_time_slice);
                         add_buffer(time, slice_event).await;
-                        forward_buffer().await;
                     }
+                    forward_buffer(time).await;
                 }
                 if end_month {
                     break 'month_loop;
@@ -270,8 +268,8 @@ impl HistoricalEngine {
                         if time >= self.start_time {
                             warm_up_complete = true;
                             set_warmup_complete();
-                            add_buffer(get_backtest_time(), StrategyEvent::WarmUpComplete).await;
-                            forward_buffer().await;
+                            add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
+                            forward_buffer(time).await;
                             if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
                                 unsubscribe_primary_subscription_updates("Historical Engine");
                                 break 'main_loop
@@ -285,7 +283,6 @@ impl HistoricalEngine {
                         break 'month_loop;
                     }
 
-                    update_backtest_time(time.clone());
                     // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
                     match self.primary_subscription_updates.try_recv() {
                         Ok(updates) => {
@@ -335,8 +332,8 @@ impl HistoricalEngine {
                             strategy_time_slice,
                         );
                         add_buffer(time, slice_event).await;
-                        forward_buffer().await;
                     }
+                    forward_buffer(time).await;
                     last_time = time.clone();
                 }
                 if end_month {

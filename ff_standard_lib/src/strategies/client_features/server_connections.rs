@@ -31,10 +31,12 @@ use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptio
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
+use crate::strategies::historical_time::update_backtest_time;
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
 }
+
 #[inline(always)]
 pub fn set_warmup_complete() {
     WARM_UP_COMPLETE.store(true, Ordering::SeqCst);
@@ -94,7 +96,8 @@ pub async fn extend_buffer(time: DateTime<Utc>, events: Vec<StrategyEvent>) {
 }
 
 #[inline(always)]
-pub async fn forward_buffer() {
+pub async fn forward_buffer(time: DateTime<Utc>) {
+    update_backtest_time(time);
     let mut buffer = EVENT_BUFFER.lock().await;
     if !buffer.is_empty() {
         let last_buffer = buffer.clone();
@@ -325,13 +328,13 @@ pub async fn response_handler_unbuffered(
                                                 let event = DataSubscriptionEvent::Subscribed(subscription.clone());
                                                 let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                                 add_buffer(Utc::now(), event_slice).await;
-                                                forward_buffer().await;
+                                                forward_buffer(Utc::now()).await;
                                             }
                                             false => {
                                                 let event = DataSubscriptionEvent::FailedToSubscribe(subscription.clone(), reason.unwrap());
                                                 let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                                 add_buffer(Utc::now(), event_slice).await;
-                                                forward_buffer().await;
+                                                forward_buffer(Utc::now()).await;
                                             }
                                         }
                                     }
@@ -340,7 +343,7 @@ pub async fn response_handler_unbuffered(
                                             true => {
                                                 let event_slice = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription));
                                                 add_buffer(Utc::now(), event_slice).await;
-                                                forward_buffer().await;
+                                                forward_buffer(Utc::now()).await;
                                             }
                                             false => {
                                                 let mut buffer = StrategyEventBuffer::new();
@@ -369,7 +372,7 @@ pub async fn response_handler_unbuffered(
                                         }
                                         indicator_handler.as_ref().update_time_slice(time.clone(), &strategy_time_slice).await;
                                         add_buffer(time.clone(), StrategyEvent::TimeSlice(strategy_time_slice)).await;
-                                        forward_buffer().await;
+                                        forward_buffer(Utc::now()).await;
                                     }
                                     DataServerResponse::BaseDataUpdates(base_data) => {
                                         let time = Utc::now();
@@ -392,7 +395,7 @@ pub async fn response_handler_unbuffered(
                                         indicator_handler.as_ref().update_time_slice(Utc::now(), &strategy_time_slice).await;
 
                                         add_buffer(time, StrategyEvent::TimeSlice(strategy_time_slice)).await;
-                                        forward_buffer().await;
+                                        forward_buffer(Utc::now()).await;
                                     }
                                     DataServerResponse::OrderUpdates(event) => {
                                         live_order_update(event, false).await;
@@ -454,7 +457,7 @@ pub async fn response_handler_buffered(
                     add_buffer(Utc::now(), slice).await;
                     time_slice.clear();
 
-                    forward_buffer().await;
+                    forward_buffer(Utc::now()).await;
                     instant = Instant::now() + buffer_duration;
                 }
             }

@@ -35,7 +35,7 @@ use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderUpdateType, TimeInForce};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::historical_engine::HistoricalEngine;
-use crate::strategies::historical_time::{get_backtest_time, update_backtest_time};
+use crate::strategies::historical_time::{get_backtest_time};
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
@@ -113,7 +113,6 @@ impl FundForgeStrategy {
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
         let warm_up_start_time = start_time - warmup_duration;
-        update_backtest_time(warm_up_start_time.clone());
         let is_buffered = match buffering_duration {
             None => false,
             Some(_) => true
