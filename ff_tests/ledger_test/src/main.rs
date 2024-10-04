@@ -45,7 +45,6 @@ async fn main() {
         strategy_event_sender,
         //Some(core::time::Duration::from_millis(100)),
         None,
-
         GUI_DISABLED,
     ).await;
 
@@ -104,7 +103,7 @@ pub async fn on_data_received(
                                             && candle.close > candle.open
                                             && last_side != LastSide::Long
                                         {
-                                            let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
+                                            let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(7), String::from("Enter Long")).await;
                                             println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                             last_side = LastSide::Long;
                                         }
@@ -116,9 +115,9 @@ pub async fn on_data_received(
                                         if is_long
                                             && long_pnl > dec!(150.0)
                                             && long_pnl < dec!(300.0)
-                                            && position_size < dec!(90)
+                                            && position_size < dec!(21)
                                         {
-                                            let _add_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Add Long")).await;
+                                            let _add_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!( 7), String::from("Add Long")).await;
                                             println!("Strategy: Add Long, Time {}", strategy.time_local());
                                         }
 
@@ -145,7 +144,7 @@ pub async fn on_data_received(
                                             && candle.close < candle.open
                                             && last_side != LastSide::Short
                                         {
-                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
+                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(7), String::from("Enter Short")).await;
                                             println!("Strategy: Enter Short, Time {}", strategy.time_local());
                                             last_side = LastSide::Short;
                                         }
@@ -157,9 +156,9 @@ pub async fn on_data_received(
                                         if is_short
                                             && short_pnl > dec!(150.0)
                                             && short_pnl < dec!(300.0)
-                                            && position_size_short < dec!(90)
+                                            && position_size_short < dec!(21)
                                         {
-                                            let _add_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Add Short")).await;
+                                            let _add_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(7), String::from("Add Short")).await;
                                             println!("Strategy: Add Short, Time {}", strategy.time_local());
                                         }
 

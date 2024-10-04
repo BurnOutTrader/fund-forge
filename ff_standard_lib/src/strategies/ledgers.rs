@@ -286,7 +286,7 @@ impl Ledger {
         let profit_factor = if loss_pnl != dec!(0.0) {
             win_pnl / -loss_pnl
         } else if win_pnl > dec!(0.0) {
-            dec!(1000) // or use a defined constant for infinity
+            dec!(1000.0) // or use a defined constant for infinity
         } else {
             dec!(0.0) // when both win_pnl and loss_pnl are zero
         };
@@ -298,8 +298,8 @@ impl Ledger {
         };
 
         let break_even = total_trades - wins - losses;
-        format!("Brokerage: {}, Account: {}, Balance: {:.2}, Win Rate: {:.2}%, Average Risk Reward: {:.2}, Profit Factor {:.2}, Total profit: {:.2}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}",
-                self.brokerage, self.account_id, self.cash_value, win_rate, risk_reward, profit_factor, pnl, wins, losses, break_even, total_trades, self.positions.len(), self.cash_used, self.cash_available)
+        format!("Brokerage: {}, Account: {}, Balance: {}, Win Rate: {}%, Average Risk Reward: {}, Profit Factor {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}",
+                self.brokerage, self.account_id, self.cash_value.round_dp(2), win_rate.round_dp(2), risk_reward.round_dp(2), profit_factor.round_dp(2), pnl.round_dp(2), wins, losses, break_even, total_trades, self.positions.len(), self.cash_used.round_dp(2), self.cash_available.round_dp(2))
     }
 }
 

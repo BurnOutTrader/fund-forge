@@ -22,6 +22,7 @@ pub(crate) struct PositionExport {
     average_price: Price,
     exit_price: Price,
     booked_pnl: Price,
+    open_pnl: Price,
     highest_recoded_price: Price,
     lowest_recoded_price: Price,
     exit_time: String,
@@ -253,7 +254,8 @@ impl Position {
             quantity: self.quantity_closed,
             average_price: self.average_price,
             exit_price: self.average_exit_price.unwrap(),
-            booked_pnl: self.booked_pnl,
+            booked_pnl: self.booked_pnl.round_dp(2),
+            open_pnl: self.open_pnl.round_dp(2),
             highest_recoded_price: self.highest_recoded_price,
             lowest_recoded_price: self.lowest_recoded_price,
             exit_time,
@@ -267,7 +269,7 @@ pub(crate) mod historical_position {
     use chrono::{DateTime, Utc};
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
-    use crate::helpers::decimal_calculators::{calculate_historical_pnl, round_to_decimals};
+    use crate::helpers::decimal_calculators::{calculate_historical_pnl};
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
     use crate::standardized_types::position::{Position, PositionUpdateEvent};
@@ -351,10 +353,7 @@ pub(crate) mod historical_position {
         pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
             // Correct the average price calculation with proper parentheses
             if self.quantity_open + quantity != Decimal::ZERO {
-                self.average_price = (
-                    ((self.quantity_open * self.average_price + quantity * market_price)
-                        / (self.quantity_open + quantity)).round_dp(self.symbol_info.decimal_accuracy)
-                );
+                self.average_price = ((self.quantity_open * self.average_price + quantity * market_price) / (self.quantity_open + quantity)).round_dp(self.symbol_info.decimal_accuracy);
             } else {
                 panic!("Average price should not be 0");
             }
