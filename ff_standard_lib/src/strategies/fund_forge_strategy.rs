@@ -8,13 +8,12 @@ use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::strategies::ledgers::{AccountId, Currency};
-use crate::standardized_types::base_data::history::range_data;
+use crate::standardized_types::base_data::history::{range_history_data};
 use crate::standardized_types::enums::{OrderSide, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::strategies::strategy_events::{StrategyEventBuffer};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
-use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -23,6 +22,7 @@ use dashmap::DashMap;
 use rust_decimal::Decimal;
 use tokio::sync::{mpsc, RwLock};
 use tokio::sync::mpsc::Sender;
+use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::strategies::handlers::market_handlers::{booked_pnl_live, booked_pnl_paper, export_trades, get_market_fill_price_estimate, get_market_price, in_drawdown_live, in_drawdown_paper, in_profit_live, in_profit_paper, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, pnl_live, pnl_paper, position_size_live, position_size_paper, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
 use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, send_request, StrategyRequest};
@@ -31,6 +31,7 @@ use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
 use crate::messages::data_server_messaging::{DataServerRequest, FundForgeError};
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderUpdateType, TimeInForce};
 use crate::strategies::client_features::connection_types::ConnectionType;
@@ -924,43 +925,47 @@ impl FundForgeStrategy {
         export_trades(directory);
     }
 
+    /// Returns a BTreeMap of BaseDataEnum where data.time_closed_utc() is key and data is value.
+    /// From the time, to the current strategy time
     pub async fn history_from_local_time(
         &self,
         from_time: NaiveDateTime,
         time_zone: Tz,
         subscription: &DataSubscription,
-    ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
-        let start_date = time_zone.from_utc_datetime(&from_time);
-        range_data(start_date.to_utc(), self.time_utc(), subscription.clone()).await
+    ) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
+        let start_date = naive_date_time_to_tz(from_time, time_zone);
+        range_history_data(start_date.to_utc(), self.time_utc(), subscription.clone(), self.mode).await
     }
 
+    /// Returns a BTreeMap of BaseDataEnum where data.time_closed_utc() is key and data is value.
+    /// From the time, to the current strategy time
     pub async fn history_from_utc_time(
         &self,
         from_time: NaiveDateTime,
         subscription: &DataSubscription,
-    ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
-        let start_date = DateTime::<Utc>::from_naive_utc_and_offset(from_time, Utc);
-        range_data(start_date, self.time_utc(), subscription.clone()).await
+    ) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
+        let start_date = naive_date_time_to_utc(from_time);
+        range_history_data(start_date.to_utc(), self.time_utc(), subscription.clone(), self.mode).await
     }
 
-    //todo update history to use consolidators if no data available
-    /// Currently returns only primary data that is available, needs to be updated to be able to return all subscriptions via consolidated data
+    /// Returns a BTreeMap of BaseDataEnum where data.time_closed_utc() is key and data is value.
+    /// If to time > strategy.time then to time will be changed to strategy.time to avoid lookahead bias
     pub async fn historical_range_from_local_time(
         &self,
         from_time: NaiveDateTime,
         to_time: NaiveDateTime,
         time_zone: Tz,
         subscription: &DataSubscription,
-    ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
-        let start_date = time_zone.from_utc_datetime(&from_time);
-        let end_date =time_zone.from_utc_datetime(&to_time);
+    ) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
+        let start_date = naive_date_time_to_tz(from_time, time_zone);
+        let end_date =  naive_date_time_to_tz(to_time, time_zone).to_utc();
 
         let end_date = match end_date > self.time_utc() {
             true => self.time_utc(),
             false => end_date.to_utc(),
         };
 
-        range_data(start_date.to_utc(), end_date, subscription.clone()).await
+        range_history_data(start_date.to_utc(), end_date, subscription.clone(), self.mode).await
     }
 
     /// Currently returns only primary data that is available, needs to be updated to be able to return all subscriptions via consolidated data
@@ -969,7 +974,7 @@ impl FundForgeStrategy {
         from_time: NaiveDateTime,
         to_time: NaiveDateTime,
         subscription: &DataSubscription,
-    ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
+    ) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
         let start_date = DateTime::<Utc>::from_naive_utc_and_offset(from_time, Utc);
         let end_date = DateTime::<Utc>::from_naive_utc_and_offset(to_time, Utc);
 
@@ -978,7 +983,7 @@ impl FundForgeStrategy {
             false => end_date,
         };
 
-        range_data(start_date, end_date, subscription.clone()).await
+        range_history_data(start_date.to_utc(), end_date, subscription.clone(), self.mode).await
     }
 
     /// Returns true of the account is in profit on this symbol.

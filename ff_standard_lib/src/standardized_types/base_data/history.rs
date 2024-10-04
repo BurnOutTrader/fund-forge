@@ -8,7 +8,7 @@ use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::time_slices::UnstructuredSlice;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use std::collections::{BTreeMap, Bound, HashMap};
 use tokio::sync::oneshot;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
@@ -16,6 +16,8 @@ use dashmap::DashMap;
 use rayon::prelude::*;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use futures::future::join_all;
+use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
+use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 
 /// Method responsible for structuring raw historical data into combined time slices, where all data points a combined into BTreeMap<DateTime<Utc>, TimeSlice> where data.time_created() is key and value is TimeSlice.
 ///
@@ -175,12 +177,11 @@ pub fn get_lowest_resolution(
 pub async fn range_data(
     from_time: DateTime<Utc>,
     to_time: DateTime<Utc>,
-    subscription: DataSubscription,
+    subscription: DataSubscription
 ) -> BTreeMap<DateTime<Utc>, TimeSlice> {
     if from_time > to_time {
         panic!("From time cannot be greater than to time");
     }
-
     let month_years = generate_file_dates(from_time.clone(), to_time.clone());
 
     let mut data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
@@ -205,6 +206,74 @@ pub async fn range_data(
         );
     }
     data
+}
+
+pub async fn range_history_data(
+    from_time: DateTime<Utc>,
+    to_time: DateTime<Utc>,
+    subscription: DataSubscription,
+    mode: StrategyMode
+) -> BTreeMap<DateTime<Utc>, BaseDataEnum> {
+    if from_time > to_time {
+        panic!("From time cannot be greater than to time");
+    }
+    let sub_res_type = SubscriptionResolutionType::new(subscription.resolution, subscription.base_data_type);
+    let resolutions = subscription.symbol.data_vendor.resolutions(subscription.symbol.market_type).await.unwrap();
+    if resolutions.contains(&sub_res_type) {
+        let month_years = generate_file_dates(from_time.clone(), to_time.clone());
+
+        let mut data: BTreeMap<DateTime<Utc>, TimeSlice> = BTreeMap::new();
+        for (_, month_year) in month_years {
+            //start time already utc
+            //println!("Getting historical data for: {:?}", month_year);
+            // Get the historical data for all subscriptions from the server, parse it into TimeSlices.
+            let time_slices = match get_historical_data(vec![subscription.clone()], month_year).await {
+                Ok(time_slices) => time_slices,
+                Err(_e) => continue,
+            };
+
+            if time_slices.len() == 0 {
+                continue;
+            }
+
+            let range = (Bound::Included(from_time), Bound::Included(to_time));
+            data.extend(
+                time_slices
+                    .range(range)
+                    .map(|(k, v)| (k.clone(), v.clone())),
+            );
+        }
+        let mut map:BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
+        for (_, slice) in data {
+
+            for base_data in slice.iter() {
+                let data_time = base_data.time_closed_utc();
+                if  data_time < from_time || data_time > to_time {
+                    continue
+                }
+                if base_data.subscription() == subscription {}
+                map.insert(base_data.time_utc(), base_data.clone());
+            }
+        }
+        map
+    } else {
+        let duration = to_time - from_time - Duration::days(3);
+        let duration_ns = duration.num_nanoseconds().unwrap();  // Total nanoseconds in `duration`
+        let resolution_ns = subscription.resolution.as_duration().num_nanoseconds().unwrap(); // Total nanoseconds in `resolution`
+
+        let history_to_retain = duration_ns / resolution_ns;
+        let consolidator = ConsolidatorEnum::create_consolidator(subscription, false, sub_res_type).await;
+        let (_, window) = ConsolidatorEnum::warmup(consolidator, to_time, history_to_retain as i32, mode).await;
+        let mut map:BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
+        for base_data in window.history() {
+            let data_time = base_data.time_closed_utc();
+            if  data_time < from_time || data_time > to_time {
+                continue
+            }
+            map.insert(data_time, base_data.clone());
+        }
+        map
+    }
 }
 
 pub fn generate_file_dates(
