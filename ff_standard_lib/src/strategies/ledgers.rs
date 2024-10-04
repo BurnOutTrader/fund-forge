@@ -476,10 +476,10 @@ pub(crate) mod historical_ledgers {
                         }
                     }
                     let event = existing_position.add_to_position(market_price, quantity, time, tag.clone(), self.currency).await;
+                    self.positions.insert(existing_position.symbol_name.clone(), existing_position);
                     self.cash_value = self.cash_used + self.cash_available;
                     updates.push(event);
                     remaining_quantity = dec!(0.0);
-                    self.positions.insert(existing_position.symbol_name.clone(), existing_position);
                 }
             }
             if remaining_quantity > dec!(0.0) {
