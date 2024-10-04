@@ -1145,10 +1145,10 @@ This has multiple debug benefits:
 Scenarios:
 1. If you over-fill an order: You are long 100, and you sell at market 200, with you order tag as "Take Profit Long". \
 A short position will be opened with the tag: "Take Profit Long", when reviewing positions you will see this tag as entering a short position. \
-You will see this in you exported positions .csv.
+You will see this in your exported positions `.csv`.
 
 
 2. You accidentally enter long instead of short. \
 You have a method to add to a short position, you have the order tag: "Add Short", but you accidentally use `strategy.enter_long()` instead of `strategy.enter_short()`. \
 A long position will be opened with the tag "Add Short". \
-You will see this in you exported positions .csv.
+You will see this in your exported positions `.csv`.
