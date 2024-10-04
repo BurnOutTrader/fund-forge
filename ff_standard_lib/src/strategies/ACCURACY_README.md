@@ -67,6 +67,37 @@ All provided statistics are accurate based on the trade data in the CSV file.
 Certainly. Let's analyze the `reduce_paper_position_size`, `add_to_position`, and `backtest_update_base_data` functions in the context of the `calculate_historical_pnl` function we reviewed earlier. I'll evaluate if the PnL calculations and related operations appear correct.
 
 
+Analyze these functions in relation to the `calculate_historical_pnl` function:
+
+1. `reduce_paper_position_size`:
+   - The booked PnL calculation looks correct. It uses `calculate_historical_pnl` with the correct parameters.
+   - The update of `booked_pnl` and `open_pnl` is correct: booked PnL is added to the total, and open PnL is reduced by the same amount.
+   - The average exit price calculation is correct, using a weighted average approach.
+   - The quantity adjustments and closure checks are correct.
+
+2. `add_to_position`:
+   - The average price calculation is correct, using a weighted average approach.
+   - The quantity update is correct.
+   - The open PnL recalculation using `calculate_historical_pnl` is correct and uses the updated average price and quantity.
+
+3. `backtest_update_base_data`:
+   - The market price extraction based on different data types is correct and considers the position side for quote-based data.
+   - The highest and lowest recorded price updates are correct.
+   - The open PnL calculation using `calculate_historical_pnl` is correct and uses the current market price and open quantity.
+
+Overall, the PnL calculations and related operations in these functions appear to be correct and consistent with the `calculate_historical_pnl` function.
+The code handles different scenarios (reducing position, adding to position, and updating based on new data) appropriately.
+
+A few observations:
+
+1. The code consistently uses the `calculate_historical_pnl` function for PnL calculations, which is good for consistency.
+2. The handling of decimal precision (using `round_dp`) is consistent throughout the code.
+3. The code properly handles different types of market data (candles, ticks, quote bars, quotes) in the `backtest_update_base_data` function.
+4. The average price and average exit price calculations use weighted averages, which is the correct approach.
+
+In conclusion, the PnL calculations and position management logic appear to be implemented correctly and consistently across these functions.
+
+## Functions for Historical PnL
 
 ```rust
 pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
@@ -174,6 +205,8 @@ pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Vo
     }
 }
 
+
+// Only used to calculate estimated open pnl, never booked pnl, booked pnl comes from the order book or market handler logic
 pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: DateTime<Utc>, account_currency: Currency) -> Decimal {
     if self.is_closed {
         return dec!(0)
@@ -212,34 +245,41 @@ pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, tim
     self.open_pnl.clone()
 }
 
+pub fn calculate_historical_pnl(
+   side: PositionSide,
+   entry_price: Price,
+   market_price: Price,
+   quantity: Volume,
+   _account_currency: Currency,
+   _time: DateTime<Utc>,
+   symbol_info: &SymbolInfo
+) -> Price {
+   // Calculate the price difference based on position side
+   let raw_ticks = match side {
+      PositionSide::Long => {
+         let ticks =  ((market_price - entry_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
+         if ticks == dec!(0.0) {
+            return dec!(0.0)
+         }
+         ticks
+      },   // Profit if market price > entry price
+      PositionSide::Short => {
+         let ticks = ((entry_price - market_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
+         if ticks == dec!(0.0) {
+            return dec!(0.0)
+         }
+         ticks
+      },
+   };
+
+   /*   if pnl_currency != account_currency && time > *EARLIEST_CURRENCY_CONVERSIONS {
+          //todo historical currency conversion using time
+          // return pnl in account currency
+      }*/
+
+   // Calculate PnL by multiplying with value per tick and quantity
+   let pnl = raw_ticks * symbol_info.value_per_tick * quantity;
+   pnl
+}
+
 ```
-
-Analyze these functions in relation to the `calculate_historical_pnl` function:
-
-1. `reduce_paper_position_size`:
-   - The booked PnL calculation looks correct. It uses `calculate_historical_pnl` with the correct parameters.
-   - The update of `booked_pnl` and `open_pnl` is correct: booked PnL is added to the total, and open PnL is reduced by the same amount.
-   - The average exit price calculation is correct, using a weighted average approach.
-   - The quantity adjustments and closure checks are correct.
-
-2. `add_to_position`:
-   - The average price calculation is correct, using a weighted average approach.
-   - The quantity update is correct.
-   - The open PnL recalculation using `calculate_historical_pnl` is correct and uses the updated average price and quantity.
-
-3. `backtest_update_base_data`:
-   - The market price extraction based on different data types is correct and considers the position side for quote-based data.
-   - The highest and lowest recorded price updates are correct.
-   - The open PnL calculation using `calculate_historical_pnl` is correct and uses the current market price and open quantity.
-
-Overall, the PnL calculations and related operations in these functions appear to be correct and consistent with the `calculate_historical_pnl` function. 
-The code handles different scenarios (reducing position, adding to position, and updating based on new data) appropriately.
-
-A few observations:
-
-1. The code consistently uses the `calculate_historical_pnl` function for PnL calculations, which is good for consistency.
-2. The handling of decimal precision (using `round_dp`) is consistent throughout the code.
-3. The code properly handles different types of market data (candles, ticks, quote bars, quotes) in the `backtest_update_base_data` function.
-4. The average price and average exit price calculations use weighted averages, which is the correct approach.
-
-In conclusion, the PnL calculations and position management logic appear to be implemented correctly and consistently across these functions.
