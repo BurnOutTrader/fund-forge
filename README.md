@@ -286,7 +286,10 @@ If no order book or quote data is available we will fill all orders at the last 
 
 Accuracy was tested using only market orders, enter long, enter short, exit long, exit short, however all other orders follow the same logic and should work accurately and I will build a test in the future.
 
-Any slight differences in expected statistical values will be due to rounding, I round profit to tick size and calulate by number of ticks, quantity and value per tick, then round to 2 decimal places.
+Any slight differences in expected statistical values will be due to rounding. 
+- The ledger rounds average prices to the symbols decimal_accuracy each time a position increases or decreases in size.
+- it then determines the number of ticks based on the symbol tick_size and
+- multiplies the number of ticks by position quantity and value per tick.
 
 I do this for each position when the position closes or changes open value, not when the stats are calculated.
 
