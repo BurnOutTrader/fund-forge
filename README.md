@@ -488,7 +488,16 @@ What the above function actually does is:
 2. The engine sends a request for the symbols which also contains the enum variant to the data server.
 3. The server requests the correct api using a matching statement for each variant and retrieves the symbols from the correct api implementation returning them in fund forge format as `Vec<Symbol>`.
 
-## Parsing Data and Time handling
+## Time handling
+
+#### Accuracy
+Backtesting in the Un-Buffered engine, has a minimum accuracy of 1 nanosecond, but will depend on the granularity of your data.
+Live trading in the Un-Buffered engine will have no minimum accuracy.
+
+Backtesting in the Buffered engine, has a minimum accuracy of your `buffer_duration: Option<Duration>` parameter, and will never depend on the granularity of your data.
+Live trading in the Buffered engine, has a minimum accuracy of your `buffer_duration: Option<Duration>` parameter, and will never depend on the granularity of your data feed.
+
+### Parsing Data Time
 All data should be saved as 1 file per month and all times for data should be Utc time, use the time parsing functions in `ff_standard_lib::helpers::converters` [here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_standard_lib/src/helpers/converters.rs) to parse time from your time zone, 
 these functions use `chrono-tz` and will automatically handle historical time zone conversions such as daylight savings times. All Base data time properties are serialized as Strings, these strings are auto parsed into `DateTime<Utc>` using `base_data.time_utc()` or. `DateTime<Tz>` using `base_data.time_local(Tz)` the reason for parsing to string is simply for easier `ser/de` using `rkyv` until DateTime is better supported.
 

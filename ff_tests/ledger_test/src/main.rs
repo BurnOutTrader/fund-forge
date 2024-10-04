@@ -42,8 +42,8 @@ async fn main() {
         false,
         100,
         strategy_event_sender,
-        Some(core::time::Duration::from_millis(100)),
-        //None,
+        //Some(core::time::Duration::from_millis(100)),
+        None,
 
         GUI_DISABLED,
     ).await;
