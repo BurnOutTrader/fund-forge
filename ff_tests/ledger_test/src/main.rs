@@ -1,3 +1,4 @@
+use std::cmp::PartialEq;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
@@ -51,6 +52,13 @@ async fn main() {
     on_data_received(strategy, strategy_event_receiver).await;
 }
 
+#[derive(Clone, PartialEq, Debug)]
+enum LastSide {
+    Long,
+    Flat,
+    Short
+}
+
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
@@ -58,6 +66,7 @@ pub async fn on_data_received(
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
     let account_1 = AccountId::from("Test_Account_1");
+    let mut last_side = LastSide::Flat;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -93,9 +102,11 @@ pub async fn on_data_received(
                                         // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
                                         if is_flat
                                             && candle.close > candle.open
+                                            && last_side != LastSide::Long
                                         {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             println!("Strategy: Enter Long, Time {}", strategy.time_local());
+                                            last_side = LastSide::Long;
                                         }
 
                                         // ADD LONG
@@ -133,9 +144,11 @@ pub async fn on_data_received(
                                         // test short ledger
                                         if is_flat
                                             && candle.close < candle.open
+                                            && last_side != LastSide::Short
                                         {
                                             let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Short")).await;
                                             println!("Strategy: Enter Short, Time {}", strategy.time_local());
+                                            last_side = LastSide::Short;
                                         }
 
                                         // ADD SHORT
