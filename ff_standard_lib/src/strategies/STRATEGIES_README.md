@@ -1153,3 +1153,5 @@ You will see this in your exported positions `.csv`.
 You have a method to add to a short position, you have the order tag: "Add Short", but you accidentally use `strategy.enter_long()` instead of `strategy.enter_short()`. \
 A long position will be opened with the tag "Add Short". \
 You will see this in your exported positions `.csv`.
+
+Uploading your exported trades to an Ai model like claude or GPT will quickly spot the mistake.
