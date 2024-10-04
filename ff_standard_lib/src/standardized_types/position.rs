@@ -27,14 +27,7 @@ pub(crate) struct PositionExport {
     exit_time: String,
 }
 
-#[derive(
-    Clone,
-    rkyv::Serialize,
-    rkyv::Deserialize,
-    Archive,
-    Debug,
-    PartialEq,
-)]
+#[derive(Clone, rkyv::Serialize, rkyv::Deserialize, Archive, Debug, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum PositionUpdateEvent {
