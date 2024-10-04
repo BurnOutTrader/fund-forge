@@ -175,6 +175,7 @@ impl FundForgeStrategy {
         get_market_fill_price_estimate(order_side, symbol_name, volume, brokerage).await
     }
 
+    ///
     pub async fn get_market_price (
         order_side: OrderSide,
         symbol_name: &SymbolName,
@@ -182,6 +183,7 @@ impl FundForgeStrategy {
         get_market_price(order_side, symbol_name).await
     }
 
+    /// true if long, false if flat or short.
     pub fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         match self.mode {
             StrategyMode::Backtest| StrategyMode::LivePaperTrading => is_long_paper(brokerage, account_id, symbol_name),
@@ -189,6 +191,7 @@ impl FundForgeStrategy {
         }
     }
 
+    /// true if no position opened for account and symbol
     pub fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         match self.mode {
             StrategyMode::Backtest| StrategyMode::LivePaperTrading => is_flat_paper(brokerage, account_id, symbol_name),
@@ -196,6 +199,7 @@ impl FundForgeStrategy {
         }
     }
 
+    /// true if short, false if flat or long
     pub fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         match self.mode {
             StrategyMode::Backtest| StrategyMode::LivePaperTrading => is_short_paper(brokerage, account_id, symbol_name),
@@ -203,7 +207,7 @@ impl FundForgeStrategy {
         }
     }
 
-    pub async fn order_id(
+    async fn order_id(
         &self,
         symbol_name: &SymbolName,
         account_id: &AccountId,
@@ -230,6 +234,7 @@ impl FundForgeStrategy {
         )
     }
 
+    /// Enters a long position and closes any short positions open for the account and symbol
     pub async fn enter_long(
         &self,
         symbol_name: &SymbolName,
@@ -265,6 +270,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Enters a short position and closes any long positions open for the account and symbol
     pub async fn enter_short(
         &self,
         symbol_name: &SymbolName,
@@ -300,6 +306,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Exits a long position or does nothing if no long position
     pub async fn exit_long(
         &self,
         symbol_name: &SymbolName,
@@ -335,6 +342,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Exits a short position or does nothing if no short position
     pub async fn exit_short(
         &self,
         symbol_name: &SymbolName,
@@ -370,6 +378,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Buys the market and effects any open positions, or creates a new one
     pub async fn buy_market(
         &self,
         symbol_name: &SymbolName,
@@ -406,6 +415,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Sells the market and effects any open positions, or creates a new one
     pub async fn sell_market(
         &self,
         symbol_name: &SymbolName,
@@ -442,6 +452,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Will wait for limit price to be hit to fill, if TIF == TimeInForce::Day, it will be cancelled in backtests when the day is over.
     pub async fn limit_order(
         &self,
         symbol_name: &SymbolName,
@@ -472,6 +483,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Will trigger if trigger price is hit and buy or sell at market price.
     pub async fn market_if_touched (
         &self,
         symbol_name: &SymbolName,
@@ -502,6 +514,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Will buy or sell market price if trigger is hit
     pub async fn stop_order (
         &self,
         symbol_name: &SymbolName,
@@ -532,6 +545,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Will trigger on trigger price but fill only when price is on the correct side of limit price, will partially fill in backtest if we have order book data present.
     pub async fn stop_limit (
         &self,
         symbol_name: &SymbolName,
@@ -562,6 +576,7 @@ impl FundForgeStrategy {
         order_id
     }
 
+    /// Cancels the order if it is not filled, cancelled or rejected.
     pub async fn cancel_order(&self, order_id: OrderId) {
         if let Some((brokerage, account_id)) = self.orders.read().await.get(&order_id) {
             let order_request = OrderRequest::Cancel { order_id, brokerage: brokerage.clone(), account_id: account_id.clone() };
@@ -579,6 +594,7 @@ impl FundForgeStrategy {
         }
     }
 
+    /// Updates the order if it is not filled, cancelled or rejected.
     pub async fn update_order(&self, order_id: OrderId, order_update_type: OrderUpdateType) {
         if let Some((brokerage, account_id)) = self.orders.read().await.get(&order_id) {
             let order_request = OrderRequest::Update {
@@ -601,6 +617,7 @@ impl FundForgeStrategy {
         }
     }
 
+    /// Cancel all pending orders on the account for the symbol_name
     pub async fn cancel_orders(&self, brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName) {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
@@ -615,6 +632,7 @@ impl FundForgeStrategy {
         }
     }
 
+    /// Flatten all positions on the account.
     pub async fn flatten_all_for(&self, brokerage: Brokerage, account_id: &AccountId) {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
@@ -629,6 +647,7 @@ impl FundForgeStrategy {
         }
     }
 
+    /// get the last price for the symbol name
     pub async fn last_price(&self, symbol_name: &SymbolName) -> Option<Price> {
         match LAST_PRICE.get(symbol_name) {
             None => None,
@@ -636,14 +655,15 @@ impl FundForgeStrategy {
         }
     }
 
+    /// ALl pending orders on the account.
     pub async fn orders_pending(&self) -> Arc<DashMap<OrderId, Order>> {
-        //todo make read only ref
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => BACKTEST_OPEN_ORDER_CACHE.clone(),
             StrategyMode::Live => LIVE_ORDER_CACHE.clone()
         }
     }
 
+    /// Adds a timed event which will trigger a time message to the receiver at the time (or after time updates again if time has passed in backtest)
     /// see the timed_event_handler.rs for more details
     pub async fn add_timed_event(&self, timed_event: TimedEvent) {
         self.timed_event_handler.add_event(timed_event).await;
@@ -864,26 +884,32 @@ impl FundForgeStrategy {
 
     }
 
+    /// Returns currently open `QuoteBar` for the subscription
     pub fn open_bar(&self, subscription: &DataSubscription) -> Option<QuoteBar> {
         self.subscription_handler.open_bar(subscription)
     }
 
+    /// Returns currently open candle for the subscription
     pub fn open_candle(&self, subscription: &DataSubscription) -> Option<Candle> {
         self.subscription_handler.open_candle(subscription)
     }
 
+    /// Returns `Candle` at the specified index, where 0 is current closed `Candle` and 1 is last closed and 10 closed 10 candles ago.
     pub fn candle_index(&self, subscription: &DataSubscription, index: usize) -> Option<Candle> {
         self.subscription_handler.candle_index(subscription, index)
     }
 
+    /// Returns `QuoteBar` at the specified index, where 0 is current closed `QuoteBar` and 1 is last closed and 10 closed 10 `QuoteBar`s ago.
     pub fn bar_index(&self, subscription: &DataSubscription, index: usize) -> Option<QuoteBar> {
         self.subscription_handler.bar_index(subscription, index)
     }
 
+    /// Returns `Tick` at the specified index, where 0 is last `Tick` and 1 is 2nd last `Tick` and 10 is 10 `Ticks`s ago.
     pub fn tick_index(&self, subscription: &DataSubscription, index: usize) -> Option<Tick> {
         self.subscription_handler.tick_index(subscription, index)
     }
 
+    /// Returns `Quote` at the specified index, where 0 is last `Quote` and 1 is 2nd last `Quote` and 10 is 10 `Quote`s ago.
     pub fn quote_index(&self, subscription: &DataSubscription, index: usize) -> Option<Quote> {
         self.subscription_handler.quote_index(subscription, index)
     }
