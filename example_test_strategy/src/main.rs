@@ -65,7 +65,7 @@ async fn main() {
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Minutes(3),
+                 Resolution::Minutes(15),
                  MarketType::Forex,
                  CandleType::HeikinAshi
              ),],
@@ -127,6 +127,7 @@ pub async fn on_data_received(
                     for base_data in time_slice.iter() {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
+                            // Market Order Strategy
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
@@ -144,7 +145,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
+                                    if candle.resolution == Resolution::Minutes(15) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let account_1 = AccountId::from("Test_Account_1");
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name) {
                                             bars_since_entry_1 += 1;
@@ -167,7 +168,7 @@ pub async fn on_data_received(
 
                                         // take profit conditions
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name)
-                                            && bars_since_entry_1 >= 10
+                                            && bars_since_entry_1 >= 3
                                             && in_profit
                                         {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
@@ -177,7 +178,7 @@ pub async fn on_data_received(
                                         let in_drawdown = strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name);
                                         //stop loss conditions
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name)
-                                            && bars_since_entry_1 >= 20
+                                            && bars_since_entry_1 >= 3
                                             && in_drawdown
                                         {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
@@ -196,6 +197,8 @@ pub async fn on_data_received(
                                     //println!("Open candle closing time: {}", candle.time_closed())
                                 }
                             }
+
+                            // Limit Order Strategy
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 let account_2 = AccountId::from("Test_Account_2");
                                 // Place trades based on the EUR-USD QuoteBars
