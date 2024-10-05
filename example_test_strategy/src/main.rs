@@ -34,7 +34,7 @@ async fn main() {
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         //ToDo: You can Test Live paper using the simulated data feed which simulates quote stream from the server side at 10 ms per quote.
-        StrategyMode::Backtest, // Backtest, Live, LivePaper
+        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 19).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
@@ -60,14 +60,14 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Minutes(3),
+                Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Minutes(3),
+                 Resolution::Seconds(1),
                  MarketType::Forex,
                  CandleType::HeikinAshi
              ),],
@@ -77,8 +77,8 @@ async fn main() {
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading and backtesting.
         //ToDo: Test Un-Buffered engines == (None) vs Buffered engines == Some(Duration)
-        Some(core::time::Duration::from_millis(100)),
-        //None,
+        //Some(core::time::Duration::from_millis(100)),
+        None,
 
         GUI_DISABLED,
     ).await;
@@ -89,7 +89,7 @@ async fn main() {
                               DataSubscription::new(
                                   SymbolName::from("EUR-USD"),
                                   DataVendor::Test,
-                                  Resolution::Minutes(3),
+                                  Resolution::Seconds(1),
                                   BaseDataType::QuoteBars,
                                   MarketType::Forex,
                               ),
