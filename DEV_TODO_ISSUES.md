@@ -1,4 +1,3 @@
-
 ## Subscription handling
 Need a new function for warming up new live subscriptions.
 - Live subscription in symbol subscription handler could be simplified by just allowing the data server to determine the correct primary resolution.

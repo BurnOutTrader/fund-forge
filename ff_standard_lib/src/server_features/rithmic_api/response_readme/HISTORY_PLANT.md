@@ -1,4 +1,3 @@
-
 # Live Candle Subscriptions
 ## Time Bars
 ```rust

@@ -1,4 +1,21 @@
 # Trade Analysis Results
+Market orders will attempt to use the order book to fill, assuming we get to soak up 100% volume per level, if the book only has 1 level then it will just fill according to order side assuming that we only have best bid or best offer.
+
+Limit orders will partially fill if we have order books with volume, else they will fully fill at the best bid or offer depending on order side.
+
+If no order book or quote data is available we will fill all orders at the last price.
+
+Accuracy was tested using only market orders, enter long, enter short, exit long, exit short, however all other orders follow the same logic and should work accurately and I will build a test in the future.
+
+Any slight differences in expected statistical values will be due to rounding.
+- The ledger rounds average prices to the symbols decimal_accuracy each time a position increases or decreases in size using the weighted average prices.
+
+When a position reduces size:
+Fund Forge determines the number of ticks based on the symbol tick_size and Multiplies the number of ticks(or pips) by position quantity and value per tick.
+
+This is done for each position when the position closes or changes open value, not when the stats are calculated.
+
+The alternative would be rounding pnl after we have the total, but this would be less realistic than the current method.
 
 ## Given Statistics:
 - Starting Account Balance: $100,000
