@@ -17,15 +17,8 @@ use tokio_rustls::{TlsAcceptor};
 use ff_standard_lib::messages::data_server_messaging::DataServerRequest;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use crate::request_handlers::manage_async_requests;
-
 pub mod request_handlers;
 mod tests;
-
-#[derive(Debug)]
-pub enum StartUpMode {
-    Toml,
-    CmdLine,
-}
 
 #[derive(Debug, StructOpt)]
 struct ServerLaunchOptions {
