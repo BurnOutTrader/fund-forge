@@ -9,6 +9,8 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
+- [Example Strategy](example_test_strategy/src/main.rs)
+- [More Example Strategies](ff_tests)
 - [Indicators](ff_standard_lib/src/strategies/indicators/INDICATORS_README.md)
 - [Rithmic Setup](ff_standard_lib/src/server_features/rithmic_api/RITHMIC_SETUP.md)
 - [Back Test Accuracy](ff_standard_lib/src/strategies/ACCURACY_README.md)
