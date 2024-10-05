@@ -145,7 +145,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
+                                    if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test && candle.candle_type == CandleType::HeikinAshi {
                                         let account_1 = AccountId::from("Test_Account_1");
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name) {
                                             bars_since_entry_1 += 1;
