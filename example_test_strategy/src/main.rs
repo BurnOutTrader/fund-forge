@@ -20,10 +20,13 @@ use ff_standard_lib::strategies::indicators::indicators_trait::{IndicatorName};
 use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::gui_types::settings::Color;
+use ff_standard_lib::standardized_types::base_data::candle::Candle;
+use ff_standard_lib::standardized_types::new_types::Price;
 use ff_standard_lib::strategies::client_features::connection_types::GUI_DISABLED;
 use ff_standard_lib::standardized_types::orders::{OrderId, OrderState, OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
+use ff_standard_lib::strategies::indicators::indicator_values::IndicatorValues;
 
 // to launch on separate machine
 #[tokio::main]
@@ -113,7 +116,7 @@ pub async fn on_data_received(
     let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
     let mut bars_since_entry_2 = 0;
-    let mut entry_order_id_2 = None;
+    let mut entry_order_id_2: Option<OrderId> = None;
     let mut entry_2_order_state = OrderState::Created;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -146,14 +149,14 @@ pub async fn on_data_received(
                                     }
 
                                     if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test && candle.candle_type == CandleType::HeikinAshi {
-                                        let account_1 = AccountId::from("Test_Account_1");
+                                        let account_1: AccountId = AccountId::from("Test_Account_1");
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name) {
                                             bars_since_entry_1 += 1;
                                         }
 
-                                        let other_account_is_long_euro_and_in_profit = strategy.is_long(&brokerage, &AccountId::from("Test_Account_2"), &SymbolName::from("EUR-USD")) && strategy.in_profit(&brokerage, &AccountId::from("Test_Account_2"), &SymbolName::from("EUR-USD"));
+                                        let other_account_is_long_euro_and_in_profit: bool = strategy.is_long(&brokerage, &AccountId::from("Test_Account_2"), &SymbolName::from("EUR-USD")) && strategy.in_profit(&brokerage, &AccountId::from("Test_Account_2"), &SymbolName::from("EUR-USD"));
 
-                                        let last_candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
+                                        let last_candle: Candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
                                         // buy AUD-CAD if higher close HA candle and if our other account is long on EUR
                                         if strategy.is_flat(&brokerage, &account_1, &candle.symbol.name)
                                             && candle.close > last_candle.close
@@ -163,7 +166,7 @@ pub async fn on_data_received(
                                             bars_since_entry_1 = 0;
                                         }
 
-                                        let in_profit = strategy.in_profit(&brokerage, &account_1, &candle.symbol.name);
+                                        let in_profit: bool = strategy.in_profit(&brokerage, &account_1, &candle.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
 
                                         // take profit conditions
@@ -171,7 +174,7 @@ pub async fn on_data_received(
                                             && bars_since_entry_1 >= 3
                                             && in_profit
                                         {
-                                            let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
+                                            let _exit_order_id: OrderId = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
                                             bars_since_entry_1 = 0;
                                         }
 
@@ -181,7 +184,7 @@ pub async fn on_data_received(
                                             && bars_since_entry_1 >= 3
                                             && in_drawdown
                                         {
-                                            let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
+                                            let _exit_order_id: OrderId = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_1 = 0;
                                         }
                                     }
@@ -229,12 +232,12 @@ pub async fn on_data_received(
 
                                         // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
                                         // we can use the name we assigned to get the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
-                                        let quotebar_3m_atr_5_current_values = strategy.indicator_index(&"quotebar_3m_atr_5".to_string(), 0).unwrap();
-                                        let quotebar_3m_atr_5_last_values = strategy.indicator_index(&"quotebar_3m_atr_5".to_string(), 1).unwrap();
+                                        let quotebar_3m_atr_5_current_values: IndicatorValues = strategy.indicator_index(&"quotebar_3m_atr_5".to_string(), 0).unwrap();
+                                        let quotebar_3m_atr_5_last_values: IndicatorValues = strategy.indicator_index(&"quotebar_3m_atr_5".to_string(), 1).unwrap();
 
                                         // We want to check the current value for the "atr" plot of the atr indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
-                                        let current_heikin_3m_atr_5 = quotebar_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
-                                        let last_heikin_3m_atr_5 = quotebar_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
+                                        let current_heikin_3m_atr_5: Decimal = quotebar_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
+                                        let last_heikin_3m_atr_5: Decimal = quotebar_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
                                         // buy below the low of prior bar when atr is high and atr is increasing and the bars are closing higher, we are using a limit order which will cancel out at the end of the day
                                         if entry_order_id_2.is_none()
