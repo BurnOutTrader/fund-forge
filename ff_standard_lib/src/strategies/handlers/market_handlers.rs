@@ -18,7 +18,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use crate::helpers::converters::time_convert_utc_to_local;
+use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_str};
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::messages::data_server_messaging::{FundForgeError};
@@ -317,22 +317,37 @@ pub async fn backtest_matching_engine(
     let mut partially_filled = Vec::new();
     for order in BACKTEST_OPEN_ORDER_CACHE.iter() {
         match &order.time_in_force {
+            TimeInForce::GTC => {},
             TimeInForce::Day(time_zone_string) => {
                 let tz: Tz = time_zone_string.parse().unwrap();
                 let order_time = time_convert_utc_to_local(&tz, order.time_created_utc());
                 let local_time = time_convert_utc_to_local(&tz, time);
                 if local_time.date_naive() != order_time.date_naive() {
-                    let reason = "Time In Force Expired".to_string();
+                    let reason = "Time In Force Expired: TimeInForce::Day".to_string();
                     rejected.push((order.id.clone(), reason));
                 }
             }
-            TimeInForce::IOC | TimeInForce::FOK => {
+            TimeInForce::IOC=> {
                 if time > order.time_created_utc() {
-                    let reason = "Time In Force Expired".to_string();
+                    let reason = "Time In Force Expired: TimeInForce::IOC".to_string();
                     rejected.push((order.id.clone(), reason));
                 }
             }
-            TimeInForce::GTC => {}
+            TimeInForce::FOK => {
+                if time > order.time_created_utc() {
+                    let reason = "Time In Force Expired: TimeInForce::FOK".to_string();
+                    rejected.push((order.id.clone(), reason));
+                }
+            }
+            TimeInForce::Time(cancel_time, time_zone_string) => {
+                let tz: Tz = time_zone_string.parse().unwrap();
+                let local_time = time_convert_utc_to_local(&tz, time);
+                let cancel_time = time_local_from_utc_str(&tz, cancel_time);
+                if local_time >= cancel_time {
+                    let reason = "Time In Force Expired: TimeInForce::Time".to_string();
+                    rejected.push((order.id.clone(), reason));
+                }
+            }
         }
         //3. respond with an order event
         match &order.order_type {

@@ -9,7 +9,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use rust_decimal_macros::dec;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::new_types::{Price, TzString, Volume};
+use crate::standardized_types::new_types::{Price, TimeString, TzString, Volume};
 
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
@@ -62,6 +62,7 @@ pub enum TimeInForce {
     IOC,
     FOK,
     Day(TzString),
+    Time(TimeString, TzString)
 }
 
 #[derive(Archive, Clone, rkyv::Serialize, rkyv::Deserialize, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]

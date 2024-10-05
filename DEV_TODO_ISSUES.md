@@ -17,3 +17,13 @@ Currently, fund forge only implements 1 of the 3 intended position types that I 
 
 This will be done by passing in a set of 3 functions to the ledger in its initialization.
 
+## TIF
+Need a way to handle custom TIF timezones for 
+1. TimeInForce::Day(TzString) 
+2. TimeInForce::(TimeString, TzString)
+
+This can be achieved by either: 
+- Converting the time to market time, depending on the Brokerage used. Or
+- Manually sending cancel order to the Brokerage at the specified time.
+
+
