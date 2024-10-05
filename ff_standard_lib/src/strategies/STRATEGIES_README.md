@@ -1,4 +1,25 @@
-## Launching a strategy
+# Strategies
+## Glossary 
+- [Initializing Strategies](#initializing-strategies)
+- [Running Strategies](#running-strategies)
+- [Time](#time)
+- [Accessing Retained History](#retained-history)
+- [Subscriptions](#subscriptions)
+- [Alternative On Data Function](#alternative-to-iterating-the-buffer)
+- [Alternative TimeSlice Handling](#alternative-to-iterating-a-timeslice)
+- [BaseDataEnum](#basedataenum) 
+- [Indicators](#indicators) or [Full indicators readme](indicators/INDICATORS_README.md)
+- [Accounts](#accounts)
+- [Timed Events](#timed-events)
+- [Requesting History](#history-requests)
+- [Drawing Tools](#drawing-tools)
+- [Order Books](#order-books-)
+- [Estimate Fills Before Placing an Order](#estimate-fill-price)
+- [Placing Orders](#placing-orders)
+- [Debugging Strategies](#debugging-strategies)
+
+
+## Initializing Strategies
 The test strategy might appear to be frozen during warm up, this is because we are sorting a large amount quote of data into accurate time slices for 2 symbols. 
 
 Get the test data from the instructions provided in the main readme and complete the setup. 
@@ -89,10 +110,6 @@ In live: If we don't need to make strategy decisions on every tick, we can just 
 
 This helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
 
-##### `let notify: Arc::new(Notify::new());`
-Notify can be used to control the message flow in backtesting, it is not currently implemented in live handlers.
-It is used to sync the historical engine with the strategy event loop when developing. It doesn't seem to be needed at the moment and It might not be needed by the end of development but it helps to debug issues.
-
 ```rust
 use std::time::Duration;
 
@@ -148,10 +165,13 @@ async fn main() {
         // In live trading we can set this to None to skip buffering and send the data directly to the strategy or we can use a buffer to keep live consistency with backtesting.
         Some(Duration::from_millis(100)),
     ).await;
+
+    // We start receiving data in our on data fn
+    on_data_received(strategy, strategy_event_receiver).await;
 }
 ```
 
-### Running the strategy and receiving events
+## Running Strategies
 Simply Initialize the strategy using the parameters above and pass it to our `fn on_data_received()` function.
 The engine will automatically be created and started in the background, and we will receive events in our `fn on_data_received()` function.
 
@@ -163,49 +183,6 @@ When we `iter()` the buffer we receive the events in the exact order they were c
 Similarly, when we `iter()` a `TimeSlice` we receive the `BaseDataEnum`'s in the exact order they were created.
 
 ```rust
-#[tokio::main]
-async fn main() {
-    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
-    // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
-    let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Backtest,                 // Backtest, Live, LivePaper
-        dec!(100000.0), //starting cash per account
-        Currency::USD,//backtest account currency
-        NaiveDate::from_ymd_opt(2024, 7, 23)
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 07, 30)
-            .unwrap()
-            .and_hms_opt(0, 0, 0)
-            .unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
-        Australia::Sydney,                      // the strategy time zone
-        Duration::days(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
-        vec![
-            DataSubscription::new(
-                SymbolName::from("EUR-USD"),
-                DataVendor::Test,
-                Resolution::Seconds(5),
-                BaseDataType::QuoteBars,
-                MarketType::Forex,
-            ),
-            DataSubscription::new_custom(
-                SymbolName::from("AUD-CAD"),
-                DataVendor::Test,
-                Resolution::Minutes(5),
-                MarketType::Forex,
-                CandleType::HeikinAshi,
-            ),],
-        true,
-        5,
-        strategy_event_sender, // the sender for the strategy events
-        None,
-        GUI_DISABLED,
-    ).await;
-
-    on_data_received(strategy, notify, strategy_event_receiver).await;
-}
-
 pub async fn on_data_received(strategy: FundForgeStrategy, mut event_receiver: mpsc::Receiver<StrategyEventBuffer>)  {
     let mut warmup_complete = false;
     
@@ -261,7 +238,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, mut event_receiver: m
     println!("Strategy Event Loop Ended");
 }
 ```
-#### Alternative To Iterating The Buffer
+## Alternative To Iterating The Buffer
 We don't have to iterate the event objects in the order they were buffered, we can separate the objects based on their event type and receive back and iterator of those objects.
 ```rust
 fn example() {
@@ -286,29 +263,10 @@ fn example() {
     // This fn does not remove the events but instead clones them.
     // If you are using this fn to move certain events to another function, be careful that you do not double handle events, ie react to the same event twice
     let order_events_owned: Vec<(DateTime<Utc>, StrategyEvent)> = event_buffer.get_owned_events_by_type(StrategyEventType::OrderEvents);
-```
 
-#### Alternative To Iterating a TimeSlice
-Similarly, for TimeSlices we can retrieve an iterator for a specific type, allowing us to handle without iterating the entire time slice.
-```rust
-fn example() {
-    pub enum BaseDataType {
-        Ticks = 0,
-        Quotes = 1,
-        QuoteBars = 2,
-        Candles = 3,
-        Fundamentals = 4,
+    for order_event in order_events {
+        println!("{}", event);
     }
-    
-    let time_slice: TimeSlice = TimeSlice::new();
-    
-    // this will give us an owned iterator of all base data enums of the required type in the slice, so we can pass it to another function etc.
-    let owned_iter: Iterator<Item = BaseDataEnum> = time_slice.get_by_type(BaseDataType::Candles);
-    // we could pass to a fn that only handles candles.
-    handle_candles(owned_iter);
-
-    // this will give us a reference to an iterator of all objects of the required type
-    let borrowed_iter: Iterator<Item = &BaseDataEnum> = time_slice.get_by_type_borrowed(data_type: BaseDataType);
 }
 ```
 
@@ -521,8 +479,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 }
 ```
 
-
-## Handling BaseDataEnum
+## BaseDataEnum
 ```rust
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -556,6 +513,30 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
             }
         }
     }
+}
+```
+
+### Alternative To Iterating a TimeSlice
+Similarly, for TimeSlices we can retrieve an iterator for a specific type, allowing us to handle without iterating the entire time slice.
+```rust
+fn example() {
+    pub enum BaseDataType {
+        Ticks = 0,
+        Quotes = 1,
+        QuoteBars = 2,
+        Candles = 3,
+        Fundamentals = 4,
+    }
+    
+    let time_slice: TimeSlice = TimeSlice::new();
+    
+    // this will give us an owned iterator of all base data enums of the required type in the slice, so we can pass it to another function etc.
+    let owned_iter: Iterator<Item = BaseDataEnum> = time_slice.get_by_type(BaseDataType::Candles);
+    // we could pass to a fn that only handles candles.
+    handle_candles(owned_iter);
+
+    // this will give us a reference to an iterator of all objects of the required type
+    let borrowed_iter: Iterator<Item = &BaseDataEnum> = time_slice.get_by_type_borrowed(data_type: BaseDataType);
 }
 ```
 
@@ -724,7 +705,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 }
 ```
 
-## Account Positions
+## Accounts
 Live strategies will not differentiate between positions they opened or other account positions.
 They will treat any position on the account as if they opened it, unless you have your own logic for identifying positions.
 You could use the Order "tag" property.
@@ -768,7 +749,7 @@ fn example(strategy: &FundForgeStrategy, brokerage: Brokerage, account_name: Acc
 }
 ```
 
-## TimedEvents 
+## Timed Events 
 TimedEvents are a way to schedule events to occur at a specific time, they are useful for scheduling events like closing orders at a specific time, or sending notifications.
 We can also specify whether the event should fire during warm up.
 ```rust
@@ -855,7 +836,7 @@ fn example() {
 }
 ```
 
-## HistoryRequest
+## History Requests
 We can request history for a subscription in the event loop, this is costly if we are requesting a history not provided by the DataVendor as it will need to be consolidated.
 This function will avoid look ahead bias, it will never return data.time_utc() > strategy.time_utc()
 ```rust
@@ -902,8 +883,8 @@ async fn example() {
 }
 ```
 
-## OrderBooks 
-THIS IS BEING OVERHAULED CURRENTLY
+## Order Books 
+THIS IS NOT FINALIZED
 ***Things to consider***
 - The engine updates best bid, best offer, order book levels and last prices using `SymbolName` if we have more than 1 data feed per SymbolName, those streams will be combined into the same maps.
 - The best bid and best offer will always replace and == order book level 0
@@ -1127,7 +1108,7 @@ async fn example() {
 }
 ```
 
-# Debugging Strategies
+## Debugging Strategies
 Exported positions include their tag property, which always == the tag of the order that created the position.
 
 You can export positions and print ledgers at run time using:

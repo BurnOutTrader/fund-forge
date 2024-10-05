@@ -7,8 +7,16 @@ Focused on backtesting, charting, live trading. With an emphasis for semi-automa
 
 fund-forge is built to allow simple abstractions for common strategy functionality: trade multiple symbols, with multiple indicators and data streams.
 
-### Current Method To Run Test Strategy
+## Full Glossary
+- [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
+- [Indicators](ff_standard_lib/src/strategies/indicators/INDICATORS_README.md)
+- [Rithmic Setup](ff_standard_lib/src/server_features/rithmic_api/RITHMIC_SETUP.md)
+- [Back Test Accuracy](ff_standard_lib/src/strategies/ACCURACY_README.md)
+- [Developing Engine](DEV_README.md)
+- [Current Items I Am Workgin On](DEV_TODO_ISSUES.md)
+- [Licence](LICENCE.md)
 
+### Initial Setup
 First install [rust tool chain](https://www.rust-lang.org/tools/install)
 
 **You can not run the test strategy from the main fund forge directory**
@@ -20,8 +28,6 @@ First install [rust tool chain](https://www.rust-lang.org/tools/install)
 *When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](example_test_strategy/README.md)
 
 *When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](example_test_strategy/README.md)
-
-
 
 The engine is designed to provide simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators,
 or managing orders, brokers and data streams. 

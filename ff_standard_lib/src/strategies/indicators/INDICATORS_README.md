@@ -1,9 +1,45 @@
-# Creating Your Own Indicators
+## Using Indicators
+It is easy to create and add indicators or custom candlestick types. Below we subscribe to an ATR indicator using Heikin Ashi candles.
+
+Indicators can also be set to keep a history, so you can call the last .index(0) objects without having to manually retain the history.
+
+Indicators will warm themselves up on creation if the strategy is already warmed up, so we can subscribe and unsubscribe at any time.
+See [Indicators readme](ff_standard_lib/src/strategies/indicators/INDICATORS_README.md)
+```rust
+fn example() {
+  // Here we create a 5 period ATR using a Heikin Ashi data subscription, and we specify to retain the last 100 bars in memory.
+  let heikin_atr_5 = IndicatorEnum::AverageTrueRange(
+    AverageTrueRange::new(
+      IndicatorName::from("heikin_atr_5"),
+      DataSubscription::new_custom(
+        SymbolName::from("EUR-USD"),
+        DataVendor::Test,
+        Resolution::Seconds(5),
+        MarketType::Forex,
+        CandleType::HeikinAshi,
+      ),
+      100, //retain 100 last values
+      5, // atr period
+      Some(Color::new(50,50,50)) //plot color rgb for charting 
+    ).await,
+  );
+  
+  // auto subscribe will subscribe the strategy to the indicators required data feed if it is not already, 
+  // if this is false and you don't have the subscription, the strategy will panic instead.
+  // if true then the new data subscription will also show up in the strategy event loop
+  let auto_subscribe: bool = false;
+  
+  //subscribe the strategy to auto manage the indicator
+  strategy.subscribe_indicator(heikin_atr_5, auto_subscribe).await;
+}
+```
+
+## Creating Your Own Indicators
 I have chosen to use enums and matching statements over dynamic dispatch for increased performance at the cost of simply completeing a matching statement.
 
 *I will add another enum type and trait for multi symbol indicators in the future.*
 
-## Step 1
+### Step 1
 1. Create a new Indicator object that implements the [Indicators](indicators_trait.rs) trait
 also see [AverageTrueRange](built_in/average_true_range.rs) for a working example.
 ```rust
@@ -74,7 +110,7 @@ impl Indicators for YOUR_NEW_VARIANT {
     }
 }
 ```
-## Step 2
+### Step 2
 Create a new [IndicatorEnum Variant](indicator_enum.rs)
 ```rust
 pub enum IndicatorEnum {
@@ -84,7 +120,7 @@ pub enum IndicatorEnum {
 
 ```
 
-## Step 3
+### Step 3
 Complete the matching statements for your new variant in indicator enum impl.
 This is easy since you implement the exact same trait as the IndicatorEnum.
 ```rust
@@ -98,6 +134,6 @@ impl Indicators for IndicatorEnum {
 }
 ```
 
-## Step 4
+### Step 4
 Your indicator can now be auto managed by using strategy.subscribe_indicator(), including auto warm up and other automatic features.
 You don't need to do anything else other than test it.
