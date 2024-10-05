@@ -208,10 +208,12 @@ pub async fn on_data_received(
                                         }
                                     }
 
+                                    count += 1;
                                     // We can subscribe to new DataSubscriptions at run time
                                     // We can use a strategy reference and still use strategy functions in the receiving functions.
                                     if count == 20 {
                                         //subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        //subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                                 //do something with the current open bar
@@ -314,12 +316,6 @@ pub async fn on_data_received(
                                     }
 
                                     count += 1;
-
-                                    // We can subscribe to new indicators at run time
-                                    // we can pass in our strategy reference and it will maintain its functionality
-                                    if count == 50 {
-                                        //subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
-                                    }
                                 }
                                 //do something with the current open bar
                                 if !quotebar.is_closed {
@@ -446,12 +442,12 @@ pub async fn on_data_received(
 // We can subscribe to new indicators at run time
 // We can use a strategy reference for strategy functions.
 pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
-    let msg = "Subscribing to new indicator heikin_atr10_15min and warming up subscriptions, this will also take time if we don't have enough history to warm up".to_uppercase().to_string();
+    let msg = format!("{} Subscribing to new indicator heikin_atr10_15min and warming up subscriptions, this will also take time if we don't have enough history to warm up", strategy.time_local());
     println!("{}",msg.as_str().purple());
     // this will test both our auto warm up for indicators and data subscriptions
-    let heikin_atr10_15min = IndicatorEnum::AverageTrueRange(
+    let quote_bar_atr10_15min = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(
-            IndicatorName::from("heikin_atr10_15min"),
+            IndicatorName::from("quote_bar_atr10_15min"),
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
@@ -466,15 +462,15 @@ pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
     );
     // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.
     // the indicator would still warm up if this was false, but if we  don't have the data subscription already subscribed the strategy will deliberately panic
-    strategy.subscribe_indicator(heikin_atr10_15min, true).await;
+    strategy.subscribe_indicator(quote_bar_atr10_15min, true).await;
 }
 
 
 // We can subscribe to new data feeds at run time
 // We can use a strategy reference for strategy functions.
 pub async fn subscribe_to_new_candles_example(strategy: &FundForgeStrategy) {
-    let msg = "Subscribing to new AUD-CAD HeikinAshi Candle at 15 Minute Resolution and warming subscription to have 48 bars of memory,
-                                        this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task".to_string();
+    let msg = format!("{} Subscribing to new AUD-CAD HeikinAshi Candle at 15 Minute Resolution and warming subscription to have 48 bars of memory,
+                                        this will take time as we don't have warm up data in memory, in backtesting we have to pause, in live we will do this as a background task", strategy.time_local());
     println!("{}",msg.as_str().to_uppercase().purple());
 
     let minute_15_ha_candles = DataSubscription::new_custom(
