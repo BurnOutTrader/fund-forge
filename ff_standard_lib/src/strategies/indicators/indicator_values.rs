@@ -1,11 +1,11 @@
 use crate::standardized_types::subscriptions::DataSubscription;
-use crate::standardized_types::new_types::Price;
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+use rust_decimal::Decimal;
 use crate::gui_types::settings::Color;
 use crate::strategies::indicators::indicators_trait::IndicatorName;
 
@@ -16,12 +16,12 @@ pub type PlotName = String;
 #[archive_attr(derive(Debug))]
 pub struct IndicatorPlot {
     pub name: PlotName,
-    pub value: Price,
+    pub value: Decimal,
     pub color: Color,
 }
 
 impl IndicatorPlot {
-    pub fn new(plot_name: PlotName, value: Price, color: Color) -> Self {
+    pub fn new(plot_name: PlotName, value: Decimal, color: Color) -> Self {
         Self {
             name: plot_name,
             value,

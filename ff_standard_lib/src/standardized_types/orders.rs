@@ -9,7 +9,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use rust_decimal_macros::dec;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::new_types::{Price, Volume};
+use crate::standardized_types::new_types::{Price, TimeString, TzString, Volume};
 
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
@@ -61,7 +61,8 @@ pub enum TimeInForce {
     GTC,
     IOC,
     FOK,
-    Day,
+    Day(TzString),
+    Time(TimeString, TzString)
 }
 
 #[derive(Archive, Clone, rkyv::Serialize, rkyv::Deserialize, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
@@ -535,6 +536,32 @@ impl OrderUpdateEvent {
             OrderUpdateEvent::OrderRejected { time, .. } => DateTime::from_str(time).unwrap(),
             OrderUpdateEvent::OrderUpdated { time, .. } => DateTime::from_str(time).unwrap(),
             OrderUpdateEvent::OrderUpdateRejected { time, .. } => DateTime::from_str(time).unwrap(),
+        }
+    }
+
+    pub fn order_id(&self) -> &OrderId {
+        match self {
+            OrderUpdateEvent::OrderAccepted { order_id, .. } => order_id,
+            OrderUpdateEvent::OrderFilled { order_id, .. } => order_id,
+            OrderUpdateEvent::OrderPartiallyFilled { order_id, .. } => order_id,
+            OrderUpdateEvent::OrderCancelled { order_id, .. } => order_id,
+            OrderUpdateEvent::OrderRejected { order_id, .. } => order_id,
+            OrderUpdateEvent::OrderUpdated { order_id, .. } => order_id,
+            OrderUpdateEvent::OrderUpdateRejected { order_id, .. } => order_id,
+        }
+    }
+
+    /// If the event had changed the order state this will return Some(OrderState)
+    /// Order Updates and Update Rejections do not change the orders state, they simply change the order, so they return None here
+    pub fn state_change(&self) -> Option<OrderState> {
+        match self {
+            OrderUpdateEvent::OrderAccepted {  .. } => Some(OrderState::Accepted),
+            OrderUpdateEvent::OrderFilled {  .. } =>  Some(OrderState::Filled),
+            OrderUpdateEvent::OrderPartiallyFilled {  .. } => Some(OrderState::PartiallyFilled),
+            OrderUpdateEvent::OrderCancelled {  .. } => Some(OrderState::Cancelled),
+            OrderUpdateEvent::OrderRejected {  reason, .. } => Some(OrderState::Rejected(reason.clone())),
+            OrderUpdateEvent::OrderUpdated {  .. } => None,
+            OrderUpdateEvent::OrderUpdateRejected {  .. } => None,
         }
     }
 }

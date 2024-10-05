@@ -298,7 +298,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
+                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;
             }
         }
@@ -407,7 +407,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
+                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;
             }
         }
@@ -802,8 +802,14 @@ impl FundForgeStrategy {
             .await;
     }
 
-    pub async fn subscriptions(&self) -> Vec<DataSubscription> {
+    /// Returns all the subscriptions including primary and consolidators
+    pub async fn subscriptions_all(&self) -> Vec<DataSubscription> {
         self.subscription_handler.subscriptions().await
+    }
+
+    /// Returns subscriptions that the strategy subscribed to, ignoring primary subscriptions used by consolidators if they were not implicitly subscribed by the strategy.
+    pub async fn subscriptions(&self) -> Vec<DataSubscription> {
+        self.subscription_handler.strategy_subscriptions().await
     }
 
     /// Subscribes to a new subscription, we can only subscribe to a subscription once.
@@ -856,7 +862,7 @@ impl FundForgeStrategy {
     }
 
     /// Sets the subscriptions for the strategy using the subscriptions_closure.
-    /// This method is called when the strategy is initialized and can be called at any time to update the subscriptions based on the provided user logic within the closure.
+    /// This method will unsubscribe any subscriptions not included and set the new subscriptions to those that are passed in.
     pub async fn subscriptions_update(
         &self,
         subscriptions: Vec<DataSubscription>,
@@ -934,12 +940,14 @@ impl FundForgeStrategy {
         }
     }
 
+    /// Prints the ledger statistics
     pub fn print_ledger(&self, brokerage: &Brokerage, account_id: &AccountId) {
         if let Some(ledger_string) = print_ledger(brokerage, account_id) {
             println!("{}", ledger_string);
         }
     }
 
+    /// Prints all ledgers statistics
     pub fn print_ledgers(&self) {
         let strings = process_ledgers();
         for string in strings {
