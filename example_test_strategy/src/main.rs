@@ -6,7 +6,7 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{MarketType, OrderSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyControls, StrategyEvent, StrategyEventBuffer};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -21,7 +21,7 @@ use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::strategies::client_features::connection_types::GUI_DISABLED;
-use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{OrderId, OrderState, OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 
@@ -114,6 +114,7 @@ pub async fn on_data_received(
     let mut bars_since_entry_1 = 0;
     let mut bars_since_entry_2 = 0;
     let mut entry_order_id_2 = None;
+    let mut entry_2_order_state = OrderState::Created;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         for (_time, strategy_event) in event_slice.iter() {
@@ -215,6 +216,7 @@ pub async fn on_data_received(
 
                                     if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "EUR-USD" && quotebar.symbol.data_vendor == DataVendor::Test {
 
+                                        // We are using a limit order to enter here, so we will manage our order differently. there are a number of ways to do this, this is probably not the best way.
                                         // Using Option<OrderId> for entry order as an alternative to is_long()
                                         if entry_order_id_2.is_some() {
                                             bars_since_entry_2 += 1;
@@ -231,17 +233,24 @@ pub async fn on_data_received(
                                         let current_heikin_3m_atr_5 = quotebar_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
                                         let last_heikin_3m_atr_5 = quotebar_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
-                                        // buy above the close of prior bar when atr is high and atr is increasing
+                                        // buy below the low of prior bar when atr is high and atr is increasing and the bars are closing higher, we are using a limit order which will cancel out at the end of the day
                                         if entry_order_id_2.is_none()
                                             && quotebar.bid_close > last_bar.bid_close
                                             && current_heikin_3m_atr_5 >= dec!(0.00030)
                                             && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
                                             && entry_order_id_2.is_none()
                                         {
-                                            entry_order_id_2 = Some(strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), String::from("Enter Long")).await);
+                                            let limit_price = last_bar.ask_low;
+                                            // we will set the time in force to Day, based on the strategy Tz of Australia::Sydney, I am not sure how this will work in live trading, TIF might be handled by sending cancel order on data server.
+                                            let time_in_force = TimeInForce::Day(strategy.time_zone().to_string());
+                                            entry_order_id_2 = Some(strategy.limit_order(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
                                             bars_since_entry_2 = 0;
                                             // Note the position size will not immediately change, it will take until the next buffer.
                                             // The market handler will process the position and the ledger will
+                                        }
+
+                                        if entry_2_order_state != OrderState::Filled && entry_2_order_state != OrderState::PartiallyFilled {
+                                            continue;
                                         }
 
                                         let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
@@ -255,11 +264,10 @@ pub async fn on_data_received(
                                                 let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Take Profit")).await;
                                                 bars_since_entry_2 = 0;
                                                 entry_order_id_2 = None;
+                                                entry_2_order_state = OrderState::Cancelled;
                                             }
-                                        }
 
                                         //stop loss conditions
-                                        if let Some(_entry_order) = &entry_order_id_2 {
                                             let in_drawdown = strategy.in_drawdown(&brokerage, &account_2, &quotebar.symbol.name);
                                             if bars_since_entry_2 >= 10
                                                 && in_drawdown
@@ -267,11 +275,10 @@ pub async fn on_data_received(
                                                 let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
                                                 bars_since_entry_2 = 0;
                                                 entry_order_id_2 = None;
+                                                entry_2_order_state = OrderState::Cancelled;
                                             }
-                                        }
 
                                         // Add to our winners when atr is increasing and we get a new signal
-                                        if let Some(_entry_order) = &entry_order_id_2 {
                                             let in_profit = strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name);
                                             let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
                                             if  in_profit
@@ -289,7 +296,7 @@ pub async fn on_data_received(
                                     // We can subscribe to new indicators at run time
                                     // we can pass in our strategy reference and it will maintain its functionality
                                     if count == 50 {
-                                        subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        //subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                                 //do something with the current open bar
@@ -315,6 +322,15 @@ pub async fn on_data_received(
                     match event {
                         OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => println!("{}", msg.as_str().on_bright_magenta().on_bright_red()),
                         _ =>  println!("{}", msg.as_str().bright_yellow())
+                    }
+
+                    // See if our limit order has changed state, we could match each individual event here and handle manually. or we can just use the assumed change based on the event enum.
+                    if let Some(entry_order_id_2) = &entry_order_id_2 {
+                        if event.order_id() == entry_order_id_2 {
+                            if let Some(state_change) = event.state_change() {
+                                entry_2_order_state = state_change
+                            }
+                        }
                     }
                 }
 
