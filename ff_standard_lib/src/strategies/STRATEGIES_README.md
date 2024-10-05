@@ -348,6 +348,16 @@ pub enum Resolution {
     Minutes(u64),
     Hours(u64),
 }
+
+// useful resolution functions
+fn example(resolution: Resolution) {
+    // Resolution::Instant will return 0 value not null.
+    let duration: Duration = resolution.as_duration();
+    let seconds: i64 = resolution.as_seconds();
+    let nanos: i64 = resolution.as_nanos();
+    let millis: i128 = resolution.as_millis();
+    let number_of: u64 = resolution.number_of();
+}
 ```
 ```rust
 pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, mut event_receiver: mpsc::Receiver<EventTimeSlice>) {
