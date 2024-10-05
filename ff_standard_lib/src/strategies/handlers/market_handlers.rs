@@ -356,6 +356,32 @@ pub async fn backtest_matching_engine(
                     Ok(price) => price,
                     Err(_) => continue
                 };
+                let limit_price = order.limit_price.unwrap();
+                match order.side {
+                    // Buy Stop Limit logic
+                    OrderSide::Buy => {
+                        if limit_price > market_price {// todo double check this logic
+                            rejected.push((
+                                String::from("Invalid Price: Buy Limit Price Must Be At or Below Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        }
+                        // No need to compare market price vs limit price before triggering, only after the stop is triggered
+                    }
+
+                    // Sell Stop Limit logic
+                    OrderSide::Sell => {
+                        if limit_price < market_price {
+                            rejected.push((
+                                String::from("Invalid Price: Sell Limit Price Must Be At or Above Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        }
+                        // No need to compare market price vs limit price before triggering, only after the stop is triggered
+                    }
+                }
                 let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price <= order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.limit_price.unwrap()
@@ -380,23 +406,99 @@ pub async fn backtest_matching_engine(
                 };
                 filled.push((order.id.clone(), market_price));
             },
-            OrderType::MarketIfTouched | OrderType::StopMarket => {
+            // Handle OrderType::StopMarket separately
+            OrderType::StopMarket => {
                 let market_price = match get_market_price(order.side, &order.symbol_name).await {
                     Ok(price) => price,
-                    Err(_) => continue
+                    Err(_) => continue,
                 };
+                let trigger_price = order.trigger_price.unwrap();
+
+                match order.side {
+                    OrderSide::Buy => {// todo double check this logic
+                        // Buy Stop Market: trigger price must be ABOVE market price to avoid instant fill
+                        if trigger_price <= market_price {
+                            rejected.push((
+                                String::from("Invalid Price: Buy Stop Price Must Be Above Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        }
+                    }
+                    OrderSide::Sell => {
+                        // Sell Stop Market: trigger price must be BELOW market price to avoid instant fill
+                        if trigger_price >= market_price {
+                            rejected.push((
+                                String::from("Invalid Price: Sell Stop Price Must Be Below Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        }
+                    }
+                }
+
                 let is_fill_triggered = match order.side {
-                    OrderSide::Buy => market_price <= order.trigger_price.unwrap(),
-                    OrderSide::Sell => market_price >= order.trigger_price.unwrap()
+                    OrderSide::Buy => market_price >= trigger_price,
+                    OrderSide::Sell => market_price <= trigger_price,
                 };
+
                 let market_fill_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_filled, order.brokerage).await {
                     Ok(price) => price,
-                    Err(_) => continue
+                    Err(_) => continue,
                 };
+
                 if is_fill_triggered {
                     filled.push((order.id.clone(), market_fill_price));
                 } else if order.state == OrderState::Created {
-                    accepted.push((order.id.clone(), time, is_buffered))
+                    accepted.push((order.id.clone(), time, is_buffered));
+                }
+            }
+
+            // Handle OrderType::MarketIfTouched separately
+            OrderType::MarketIfTouched => {
+                let market_price = match get_market_price(order.side, &order.symbol_name).await {
+                    Ok(price) => price,
+                    Err(_) => continue,
+                };
+                let trigger_price = order.trigger_price.unwrap();
+
+                match order.side {
+                    OrderSide::Buy => {// todo double check this logic
+                        // Buy MIT: trigger price must be BELOW market price to wait for favorable dip
+                        if trigger_price >= market_price {
+                            rejected.push((
+                                String::from("Invalid Price: Buy MIT Price Must Be Below Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        }
+                    }
+                    OrderSide::Sell => {
+                        // Sell MIT: trigger price must be ABOVE market price to wait for favorable rise
+                        if trigger_price <= market_price {
+                            rejected.push((
+                                String::from("Invalid Price: Sell MIT Price Must Be Above Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        }
+                    }
+                }
+
+                let is_fill_triggered = match order.side {
+                    OrderSide::Buy => market_price <= trigger_price,
+                    OrderSide::Sell => market_price >= trigger_price,
+                };
+
+                let market_fill_price = match get_market_fill_price_estimate(order.side, &order.symbol_name, order.quantity_filled, order.brokerage).await {
+                    Ok(price) => price,
+                    Err(_) => continue,
+                };
+
+                if is_fill_triggered {
+                    filled.push((order.id.clone(), market_fill_price));
+                } else if order.state == OrderState::Created {
+                    accepted.push((order.id.clone(), time, is_buffered));
                 }
             }
             OrderType::StopLimit => {
@@ -404,6 +506,59 @@ pub async fn backtest_matching_engine(
                     Ok(price) => price,
                     Err(_) => continue
                 };
+                let trigger_price = order.trigger_price.unwrap();
+                let limit_price = order.limit_price.unwrap();
+
+                match order.side { // todo double check this logic
+                    // Buy Stop Limit logic
+                    OrderSide::Buy => {
+                        if market_price >= trigger_price {
+                            rejected.push((
+                                String::from("Invalid Price: Buy Stop Price Must Be Above Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        } else if limit_price < trigger_price {
+                            rejected.push((
+                                String::from("Invalid Price: Buy Limit Price Must Be At or Above Trigger Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        } else if limit_price > market_price {
+                            rejected.push((
+                                String::from("Invalid Price: Buy Limit Price Must Be At or Below Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        }
+                    }
+
+                    // Sell Stop Limit logic todo double check this logic
+                    OrderSide::Sell => {
+                        // Would result in immediate trigger
+                        if market_price <= trigger_price {
+                            rejected.push((
+                                String::from("Invalid Price: Sell Stop Price Must Be Below Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                            // Would not make sense as limiting positive slippage
+                        } else if limit_price > trigger_price {
+                            rejected.push((
+                                String::from("Invalid Price: Sell Limit Price Must Be At or Below Trigger Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                            // would immediatly fill as a market order
+                        } else if limit_price < market_price {
+                            rejected.push((
+                                String::from("Invalid Price: Sell Limit Price Must Be At or Above Market Price"),
+                                order.id.clone(),
+                            ));
+                            continue;
+                        }
+                    }
+                }
                 let is_fill_triggered = match order.side {
                     OrderSide::Buy => market_price <= order.trigger_price.unwrap() && market_price > order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap() && market_price < order.limit_price.unwrap()
