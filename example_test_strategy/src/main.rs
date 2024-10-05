@@ -129,6 +129,7 @@ pub async fn on_data_received(
                     for base_data in time_slice.iter() {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
+
                             // Market Order Strategy
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
@@ -220,7 +221,6 @@ pub async fn on_data_received(
                                     }
 
                                     if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "EUR-USD" && quotebar.symbol.data_vendor == DataVendor::Test {
-
                                         // We are using a limit order to enter here, so we will manage our order differently. there are a number of ways to do this, this is probably not the best way.
                                         // Using Option<OrderId> for entry order as an alternative to is_long()
                                         if entry_order_id_2.is_some() {
