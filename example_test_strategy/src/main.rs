@@ -150,13 +150,13 @@ pub async fn on_data_received(
                                             bars_since_entry_1 += 1;
                                         }
 
-                                        let other_account_is_long_euro = strategy.is_long(&brokerage, &AccountId::from("Test_Account_2"), &SymbolName::from("EUR-USD"));
+                                        let other_account_is_long_euro_and_in_profit = strategy.is_long(&brokerage, &AccountId::from("Test_Account_2"), &SymbolName::from("EUR-USD")) && strategy.in_profit(&brokerage, &AccountId::from("Test_Account_2"), &SymbolName::from("EUR-USD"));
 
                                         let last_candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
                                         // buy AUD-CAD if higher close HA candle and if our other account is long on EUR
                                         if strategy.is_flat(&brokerage, &account_1, &candle.symbol.name)
                                             && candle.close > last_candle.close
-                                            && other_account_is_long_euro
+                                            && other_account_is_long_euro_and_in_profit
                                         {
                                             let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
@@ -167,7 +167,7 @@ pub async fn on_data_received(
 
                                         // take profit conditions
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name)
-                                            && bars_since_entry_1 >= 3
+                                            && bars_since_entry_1 >= 10
                                             && in_profit
                                         {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
@@ -177,7 +177,7 @@ pub async fn on_data_received(
                                         let in_drawdown = strategy.in_drawdown(&brokerage, &account_1, &candle.symbol.name);
                                         //stop loss conditions
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name)
-                                            && bars_since_entry_1 >= 10
+                                            && bars_since_entry_1 >= 20
                                             && in_drawdown
                                         {
                                             let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Stop Loss")).await;
@@ -243,7 +243,7 @@ pub async fn on_data_received(
                                             let limit_price = last_bar.ask_low;
                                             // we will set the time in force to Day, based on the strategy Tz of Australia::Sydney, I am not sure how this will work in live trading, TIF might be handled by sending cancel order on data server.
                                             let time_in_force = TimeInForce::Day(strategy.time_zone().to_string());
-                                            entry_order_id_2 = Some(strategy.limit_order(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
+                                            entry_order_id_2 = Some(strategy.limit_order(&quotebar.symbol.name, &account_2, &brokerage, dec!(200), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
                                             bars_since_entry_2 = 0;
                                         }
 
@@ -280,11 +280,11 @@ pub async fn on_data_received(
                                             let in_profit = strategy.in_profit(&brokerage, &account_2, &quotebar.symbol.name);
                                             let position_size: Decimal = strategy.position_size(&brokerage, &account_2, &quotebar.symbol.name);
                                             if  in_profit
-                                                && position_size <= dec!(90)
+                                                && position_size < dec!(400)
                                                 && bars_since_entry_2 == 3
                                                 && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
                                             {
-                                                entry_order_id_2 = Some(strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(60), String::from("Add Long")).await);
+                                                entry_order_id_2 = Some(strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, dec!(200), String::from("Add Long")).await);
                                             }
                                         }
                                     }

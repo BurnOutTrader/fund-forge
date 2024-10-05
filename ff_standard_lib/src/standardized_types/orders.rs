@@ -551,6 +551,7 @@ impl OrderUpdateEvent {
     }
 
     /// If the event had changed the order state this will return Some(OrderState)
+    /// Order Updates and Rejections do not change the orders state, they simply change the order, so they return None here
     pub fn state_change(&self) -> Option<OrderState> {
         match self {
             OrderUpdateEvent::OrderAccepted {  .. } => Some(OrderState::Accepted),
