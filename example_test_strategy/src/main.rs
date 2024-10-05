@@ -73,15 +73,24 @@ async fn main() {
                  MarketType::Forex,
                  CandleType::HeikinAshi
              ),],
+
+        //fill forward
         false,
+
+        // history to retain for our initial subscriptions
         100,
-        strategy_event_sender, // the sender for the strategy events
+
+        // the sender for the strategy events
+        strategy_event_sender,
+
+        // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading and backtesting.
         //ToDo: Test Un-Buffered engines == (None) vs Buffered engines == Some(Duration)
         Some(core::time::Duration::from_millis(100)),
         //None,
 
+        // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
         GUI_DISABLED,
     ).await;
 
