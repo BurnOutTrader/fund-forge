@@ -96,7 +96,8 @@ async fn main() {
 
     // we can subscribe to indicators here or in our event loop at run time.
     let quotebar_3m_atr_5 = IndicatorEnum::AverageTrueRange(
-        AverageTrueRange::new(IndicatorName::from("quotebar_3m_atr_5"),
+        AverageTrueRange::new(
+            IndicatorName::from("quotebar_3m_atr_5"),
                               // The subscription for the indicator
                               DataSubscription::new(
                                   SymbolName::from("EUR-USD"),
