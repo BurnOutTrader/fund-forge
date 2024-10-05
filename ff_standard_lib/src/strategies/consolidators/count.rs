@@ -1,4 +1,5 @@
 use rust_decimal::prelude::FromPrimitive;
+use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
@@ -39,10 +40,10 @@ impl CountConsolidator {
         let current_data = match subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(
                 subscription.symbol.clone(),
-                Price::from_f64(0.0).unwrap(),
-                Volume::from_f64(0.0).unwrap(),
-                Volume::from_f64(0.0).unwrap(),
-                Volume::from_f64(0.0).unwrap(),
+                dec!(0.0),
+                dec!(0.0),
+                dec!(0.0),
+                dec!(0.0),
                 "".to_string(),
                 Resolution::Ticks(number),
                 subscription.candle_type.clone().unwrap(),
@@ -103,10 +104,10 @@ impl CountConsolidator {
                     self.current_data = match self.subscription.base_data_type {
                         BaseDataType::Ticks => Candle::new(
                             self.subscription.symbol.clone(),
-                            Price::from_f64(0.0).unwrap(),
-                            Volume::from_f64(0.0).unwrap(),
-                            Volume::from_f64(0.0).unwrap(),
-                            Volume::from_f64(0.0).unwrap(),
+                            dec!(0.0),
+                            dec!(0.0),
+                            dec!(0.0),
+                            dec!(0.0),
                             base_data.time_utc().to_string(),
                             Resolution::Ticks(self.number),
                             self.subscription.candle_type.clone().unwrap(),
