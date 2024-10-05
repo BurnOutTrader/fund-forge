@@ -65,7 +65,7 @@ async fn main() {
             DataSubscription::new_custom(
                  SymbolName::from("AUD-CAD"),
                  DataVendor::Test,
-                 Resolution::Minutes(15),
+                 Resolution::Minutes(3),
                  MarketType::Forex,
                  CandleType::HeikinAshi
              ),],
@@ -145,7 +145,7 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    if candle.resolution == Resolution::Minutes(15) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
+                                    if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test {
                                         let account_1 = AccountId::from("Test_Account_1");
                                         if strategy.is_long(&brokerage, &account_1, &candle.symbol.name) {
                                             bars_since_entry_1 += 1;
