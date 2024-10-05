@@ -323,12 +323,16 @@ pub async fn backtest_matching_engine(
                 let local_time = time_convert_utc_to_local(&tz, time);
                 if local_time.date_naive() != order_time.date_naive() {
                     let reason = "Time In Force Expired".to_string();
-                    rejected.push((order.id.clone(), reason))
+                    rejected.push((order.id.clone(), reason));
+                }
+            }
+            TimeInForce::IOC | TimeInForce::FOK => {
+                if time > order.time_created_utc() {
+                    let reason = "Time In Force Expired".to_string();
+                    rejected.push((order.id.clone(), reason));
                 }
             }
             TimeInForce::GTC => {}
-            TimeInForce::IOC => {}
-            TimeInForce::FOK => {}
         }
         //3. respond with an order event
         match &order.order_type {
