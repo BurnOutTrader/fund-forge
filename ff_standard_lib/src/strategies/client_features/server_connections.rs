@@ -263,7 +263,9 @@ async fn fwd_data(time_slice: Arc<RwLock<TimeSlice>>, open_bars: Arc<DashMap<Dat
         }
     }
     if let Some(remaining_time_slice) = subscription_handler.update_consolidators_time(Utc::now()).await {
-        indicator_handler.as_ref().update_time_slice(Utc::now(), &remaining_time_slice).await;
+        let mut indicator_slice = time_slice.clone();
+        indicator_slice.extend(remaining_time_slice.clone());
+        indicator_handler.as_ref().update_time_slice(Utc::now(), &indicator_slice).await;
         time_slice.extend(remaining_time_slice);
     }
 
@@ -286,7 +288,7 @@ pub async fn response_handler(
 
     let open_bars: Arc<DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>>> = Arc::new(DashMap::new());
     let time_slice = Arc::new(RwLock::new(TimeSlice::new()));
-    if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading && is_buffered {
+    if is_buffered && (mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading) {
         let buffer_duration = buffer_duration.unwrap();
         let time_slice = time_slice.clone();
         let open_bars = open_bars.clone();
@@ -299,7 +301,7 @@ pub async fn response_handler(
                 let now = Utc::now();
                 // Calculate the duration until the next time
                 let sleep_duration = if next_time > now {
-                    (next_time - now).to_std().unwrap() // Convert to `std::time::Duration`
+                    (next_time - now).to_std().unwrap() // Convert to `std::time::Duration` //todo, just use std Duration as strategy param.
                 } else {
                     Duration::from_secs(0) // If we missed the time, no sleep
                 };
@@ -324,7 +326,6 @@ pub async fn response_handler(
             let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
             let time_slice = time_slice.clone();
             let open_bars = open_bars.clone();
-            let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
             let market_update_sender = market_update_sender.clone();
             tokio::task::spawn(async move {
                 let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
@@ -352,7 +353,6 @@ pub async fn response_handler(
                     let subscription_handler = subscription_handler.clone();
                     let time_slice = time_slice.clone();
                     let open_bars = open_bars.clone();
-                    let indicator_handler = indicator_handler.clone();
                     let market_update_sender = market_update_sender.clone();
                     tokio::task::spawn(async move {
                         let response = DataServerResponse::from_bytes(&message_body).unwrap();
@@ -419,8 +419,6 @@ pub async fn response_handler(
                                             return;
                                         }
 
-                                        indicator_handler.as_ref().update_time_slice(Utc::now(), &strategy_time_slice).await;
-
                                         for data in strategy_time_slice.iter() {
                                             let subscription = data.subscription();
                                             if data.is_closed() {
@@ -452,16 +450,14 @@ pub async fn response_handler(
                                             return;
                                         }
 
-                                        indicator_handler.as_ref().update_time_slice(Utc::now(), &strategy_time_slice).await;
-
                                         for data in strategy_time_slice.iter() {
                                             let subscription = data.subscription();
                                             if data.is_closed() {
                                                 time_slice.write().await.add(data.clone());
                                             } else {
-                                                let mut bar_map = AHashMap::new();
-                                                bar_map.insert(data.time_utc(), data.clone());
-                                                open_bars.insert(subscription.clone(), bar_map);
+                                                let mut open_bar_map = AHashMap::new();
+                                                open_bar_map.insert(data.time_utc(), data.clone());
+                                                open_bars.insert(subscription.clone(), open_bar_map);
                                             }
                                         }
                                         if !is_buffered {
