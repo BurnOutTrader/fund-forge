@@ -216,7 +216,7 @@ pub async fn manage_async_requests(
                     DataServerRequest::StreamRequest {
                         request
                     } => {
-                        if mode == StrategyMode::Backtest {
+                        if mode != StrategyMode::Live && mode != StrategyMode::LivePaperTrading {
                             eprintln!("Incorrect strategy mode for stream: {:?}", strategy_mode);
                             return
                         }
@@ -229,7 +229,7 @@ pub async fn manage_async_requests(
                     DataServerRequest::OrderRequest {
                         request
                     } => {
-                        if mode == StrategyMode::Backtest {
+                        if mode != StrategyMode::Live {
                             eprintln!("Incorrect strategy mode for orders: {:?}", strategy_mode);
                             return;
                         }
