@@ -11,7 +11,7 @@ Any slight differences in expected statistical values will be due to rounding.
 - The ledger rounds average prices to the symbols decimal_accuracy each time a position increases or decreases in size using the weighted average prices.
 
 When a position reduces size:
-Fund Forge determines the number of ticks based on the symbol tick_size and Multiplies the number of ticks(or pips) by position quantity and value per tick.
+Fund Forge determines the number of ticks based on the symbol tick_size and Multiplies the number of ticks(or pips) by exiting order quantity filled and value per tick.
 
 This is done for each position when the position closes or changes open value, not when the stats are calculated.
 
