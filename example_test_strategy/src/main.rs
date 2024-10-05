@@ -27,10 +27,12 @@ use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::strategies::indicators::indicator_values::IndicatorValues;
 
-// to launch on separate machine
 #[tokio::main]
 async fn main() {
+
+    // We create the sender and receiver for receiving the strategy event buffers
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
+
     // we initialize our strategy as a new strategy, meaning we are not loading drawing tools or existing data from previous runs.
     let strategy = FundForgeStrategy::initialize(
         //ToDo: You can Test Live paper using the simulated data feed which simulates quote stream from the server side at 10 ms per quote.
