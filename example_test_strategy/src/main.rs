@@ -97,6 +97,7 @@ async fn main() {
     // we can subscribe to indicators here or in our event loop at run time.
     let quotebar_3m_atr_5 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(IndicatorName::from("quotebar_3m_atr_5"),
+                              // The subscription for the indicator
                               DataSubscription::new(
                                   SymbolName::from("EUR-USD"),
                                   DataVendor::Test,
@@ -104,8 +105,14 @@ async fn main() {
                                   BaseDataType::QuoteBars,
                                   MarketType::Forex,
                               ),
+
+                              // history to retain
                               100,
+
+                              // atr period
                               5,
+
+                              // Plot color for GUI or println!()
                               Color::new (128, 0, 128)
         ).await,
     );
@@ -113,6 +120,7 @@ async fn main() {
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
     strategy.subscribe_indicator(quotebar_3m_atr_5, true).await;
 
+    // Start receiving the buffers
     on_data_received(strategy, strategy_event_receiver).await;
 }
 
