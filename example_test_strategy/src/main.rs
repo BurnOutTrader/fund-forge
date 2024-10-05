@@ -245,8 +245,6 @@ pub async fn on_data_received(
                                             let time_in_force = TimeInForce::Day(strategy.time_zone().to_string());
                                             entry_order_id_2 = Some(strategy.limit_order(&quotebar.symbol.name, &account_2, &brokerage, dec!(30), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
                                             bars_since_entry_2 = 0;
-                                            // Note the position size will not immediately change, it will take until the next buffer.
-                                            // The market handler will process the position and the ledger will
                                         }
 
                                         if entry_2_order_state != OrderState::Filled && entry_2_order_state != OrderState::PartiallyFilled {
