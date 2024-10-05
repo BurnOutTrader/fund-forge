@@ -1,13 +1,12 @@
 
 ## Subscription handling
+Need a new function for warming up new live subscriptions.
 - Live subscription in symbol subscription handler could be simplified by just allowing the data server to determine the correct primary resolution.
 - Live history requests will require the server to manage updating from the last serialized data point to fill forward until Utc::now().
-
 
 ## Build Tests
 - Test live subscription warm up
 - Test live indicator warm up
-
 
 ## Positions and Statistics
 Currently, fund forge only implements 1 of the 3 intended position types that I intend to implement.
