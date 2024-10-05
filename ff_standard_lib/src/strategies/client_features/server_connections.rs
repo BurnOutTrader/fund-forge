@@ -16,7 +16,7 @@ use tokio::io::{AsyncReadExt, ReadHalf};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::sync::mpsc::{Sender};
-use tokio::time::{sleep_until, Instant};
+use tokio::time::{sleep};
 use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
@@ -291,12 +291,24 @@ pub async fn response_handler(
         let time_slice = time_slice.clone();
         let open_bars = open_bars.clone();
         tokio::task::spawn(async move {
-            let mut instant = Instant::now() + buffer_duration;
+            // new fn using time, first we align to the nearest whole second before starting the buffer. to keep consistency with backtesting.
+            let mut next_time = Utc::now() + buffer_duration;
+            next_time = next_time - Duration::from_nanos(next_time.timestamp_subsec_nanos() as u64);
+            next_time += buffer_duration;
             loop {
-                sleep_until(instant).await;
-                { //we use a block here so if we await notified the buffer can keep filling up as we will drop locks
+                let now = Utc::now();
+                // Calculate the duration until the next time
+                let sleep_duration = if next_time > now {
+                    (next_time - now).to_std().unwrap() // Convert to `std::time::Duration`
+                } else {
+                    Duration::from_secs(0) // If we missed the time, no sleep
+                };
+                // Sleep until the next buffer duration elapses
+                sleep(sleep_duration).await;
+                {
                     fwd_data(time_slice.clone(), open_bars.clone()).await;
-                    instant = Instant::now() + buffer_duration;
+                    // Update `next_time` for the next iteration
+                    next_time += buffer_duration;
                 }
             }
         });
