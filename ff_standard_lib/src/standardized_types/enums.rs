@@ -2,14 +2,16 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use rust_decimal::Decimal;
 use strum_macros::Display;
+use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::resolution::Resolution;
 
 // Enum for exchanges
 #[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
-pub enum Exchange {
+pub enum FuturesExchange {
     CBOT,
     CME,
     COMEX,
@@ -25,11 +27,25 @@ pub enum Exchange {
 pub enum MarketType {
     Forex,
     CFD,
-    Futures(Exchange),
+    Futures(FuturesExchange),
     Equities,
     Crypto,
     ETF,
     Fundamentals,
+}
+
+impl MarketType {
+    pub fn round_price(&self, value: Decimal, tick_size: Decimal, decimal_accuracy: u32) -> Decimal {
+        match self {
+            MarketType::Forex => value.round_dp(decimal_accuracy),
+            MarketType::CFD => value.round_dp(decimal_accuracy),
+            MarketType::Futures(_) => round_to_tick_size(value, tick_size),
+            MarketType::Equities => value.round_dp(decimal_accuracy),
+            MarketType::Crypto => value.round_dp(decimal_accuracy),
+            MarketType::ETF => value.round_dp(decimal_accuracy),
+            MarketType::Fundamentals => value.round_dp(decimal_accuracy),
+        }
+    }
 }
 
 // Bias

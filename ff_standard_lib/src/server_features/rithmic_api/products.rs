@@ -64,65 +64,65 @@ pub fn futures_code_to_name() -> AHashMap<&'static str, &'static str> {
 }
 
 use std::collections::HashMap;
-use crate::standardized_types::enums::Exchange;
+use crate::standardized_types::enums::FuturesExchange;
 
 // Function to map contract code to an exchange using the Exchange enum
-pub fn get_code_to_exchange_map() -> HashMap<&'static str, Exchange> {
+pub fn get_code_to_exchange_map() -> HashMap<&'static str, FuturesExchange> {
     let mut code_to_exchange_map = HashMap::new();
     // CBOT contracts
-    code_to_exchange_map.insert("XC", Exchange::CBOT);
-    code_to_exchange_map.insert("XK", Exchange::CBOT);
-    code_to_exchange_map.insert("XW", Exchange::CBOT);
-    code_to_exchange_map.insert("YM", Exchange::CBOT);
-    code_to_exchange_map.insert("ZB", Exchange::CBOT);
-    code_to_exchange_map.insert("ZC", Exchange::CBOT);
-    code_to_exchange_map.insert("ZF", Exchange::CBOT);
-    code_to_exchange_map.insert("ZL", Exchange::CBOT);
-    code_to_exchange_map.insert("ZM", Exchange::CBOT);
-    code_to_exchange_map.insert("ZN", Exchange::CBOT);
-    code_to_exchange_map.insert("ZO", Exchange::CBOT);
-    code_to_exchange_map.insert("ZR", Exchange::CBOT);
-    code_to_exchange_map.insert("ZS", Exchange::CBOT);
-    code_to_exchange_map.insert("ZT", Exchange::CBOT);
-    code_to_exchange_map.insert("ZW", Exchange::CBOT);
+    code_to_exchange_map.insert("XC", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("XK", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("XW", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("YM", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZB", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZC", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZF", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZL", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZM", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZN", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZO", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZR", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZS", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZT", FuturesExchange::CBOT);
+    code_to_exchange_map.insert("ZW", FuturesExchange::CBOT);
 
     // CME contracts
-    code_to_exchange_map.insert("6A", Exchange::CME);
-    code_to_exchange_map.insert("6B", Exchange::CME);
-    code_to_exchange_map.insert("6C", Exchange::CME);
-    code_to_exchange_map.insert("6E", Exchange::CME);
-    code_to_exchange_map.insert("6J", Exchange::CME);
-    code_to_exchange_map.insert("6M", Exchange::CME);
-    code_to_exchange_map.insert("6N", Exchange::CME);
-    code_to_exchange_map.insert("6S", Exchange::CME);
-    code_to_exchange_map.insert("E7", Exchange::CME);
-    code_to_exchange_map.insert("EMD", Exchange::CME);
-    code_to_exchange_map.insert("ES", Exchange::CME);
-    code_to_exchange_map.insert("GE", Exchange::CME);
-    code_to_exchange_map.insert("GF", Exchange::CME);
-    code_to_exchange_map.insert("HE", Exchange::CME);
-    code_to_exchange_map.insert("J7", Exchange::CME);
-    code_to_exchange_map.insert("LE", Exchange::CME);
-    code_to_exchange_map.insert("NQ", Exchange::CME);
-    code_to_exchange_map.insert("RF", Exchange::CME);
-    code_to_exchange_map.insert("SP", Exchange::CME);
+    code_to_exchange_map.insert("6A", FuturesExchange::CME);
+    code_to_exchange_map.insert("6B", FuturesExchange::CME);
+    code_to_exchange_map.insert("6C", FuturesExchange::CME);
+    code_to_exchange_map.insert("6E", FuturesExchange::CME);
+    code_to_exchange_map.insert("6J", FuturesExchange::CME);
+    code_to_exchange_map.insert("6M", FuturesExchange::CME);
+    code_to_exchange_map.insert("6N", FuturesExchange::CME);
+    code_to_exchange_map.insert("6S", FuturesExchange::CME);
+    code_to_exchange_map.insert("E7", FuturesExchange::CME);
+    code_to_exchange_map.insert("EMD", FuturesExchange::CME);
+    code_to_exchange_map.insert("ES", FuturesExchange::CME);
+    code_to_exchange_map.insert("GE", FuturesExchange::CME);
+    code_to_exchange_map.insert("GF", FuturesExchange::CME);
+    code_to_exchange_map.insert("HE", FuturesExchange::CME);
+    code_to_exchange_map.insert("J7", FuturesExchange::CME);
+    code_to_exchange_map.insert("LE", FuturesExchange::CME);
+    code_to_exchange_map.insert("NQ", FuturesExchange::CME);
+    code_to_exchange_map.insert("RF", FuturesExchange::CME);
+    code_to_exchange_map.insert("SP", FuturesExchange::CME);
 
     // COMEX contracts
-    code_to_exchange_map.insert("GC", Exchange::COMEX);
-    code_to_exchange_map.insert("HG", Exchange::COMEX);
-    code_to_exchange_map.insert("QI", Exchange::COMEX);
-    code_to_exchange_map.insert("QQ", Exchange::COMEX);
-    code_to_exchange_map.insert("SI", Exchange::COMEX);
+    code_to_exchange_map.insert("GC", FuturesExchange::COMEX);
+    code_to_exchange_map.insert("HG", FuturesExchange::COMEX);
+    code_to_exchange_map.insert("QI", FuturesExchange::COMEX);
+    code_to_exchange_map.insert("QQ", FuturesExchange::COMEX);
+    code_to_exchange_map.insert("SI", FuturesExchange::COMEX);
 
     // NYMEX contracts
-    code_to_exchange_map.insert("CL", Exchange::NYMEX);
-    code_to_exchange_map.insert("HO", Exchange::NYMEX);
-    code_to_exchange_map.insert("NG", Exchange::NYMEX);
-    code_to_exchange_map.insert("PA", Exchange::NYMEX);
-    code_to_exchange_map.insert("PL", Exchange::NYMEX);
-    code_to_exchange_map.insert("QG", Exchange::NYMEX);
-    code_to_exchange_map.insert("QM", Exchange::NYMEX);
-    code_to_exchange_map.insert("RB", Exchange::NYMEX);
+    code_to_exchange_map.insert("CL", FuturesExchange::NYMEX);
+    code_to_exchange_map.insert("HO", FuturesExchange::NYMEX);
+    code_to_exchange_map.insert("NG", FuturesExchange::NYMEX);
+    code_to_exchange_map.insert("PA", FuturesExchange::NYMEX);
+    code_to_exchange_map.insert("PL", FuturesExchange::NYMEX);
+    code_to_exchange_map.insert("QG", FuturesExchange::NYMEX);
+    code_to_exchange_map.insert("QM", FuturesExchange::NYMEX);
+    code_to_exchange_map.insert("RB", FuturesExchange::NYMEX);
 
     // Add more mappings as necessary...
 
@@ -131,7 +131,7 @@ pub fn get_code_to_exchange_map() -> HashMap<&'static str, Exchange> {
 
 #[allow(dead_code)]
 // Function to input contract code and get the exchange
-pub fn get_exchange_by_code(code: &str) -> Option<Exchange> {
+pub fn get_exchange_by_code(code: &str) -> Option<FuturesExchange> {
     let code_to_exchange_map = get_code_to_exchange_map();
     code_to_exchange_map.get(code).cloned()
 }

@@ -26,7 +26,7 @@ use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
 use crate::strategies::ledgers::{AccountId, AccountInfo};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use crate::standardized_types::enums::{Exchange, MarketType, StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use tokio::sync::oneshot;
@@ -167,7 +167,7 @@ impl RithmicClient {
     }
 
     pub fn available_subscriptions(&self) -> Vec<DataSubscription> {
-        vec![DataSubscription::new(SymbolName::from("NQ"), self.data_vendor.clone(), Resolution::Instant, BaseDataType::Ticks, MarketType::Futures(Exchange::CME))]
+        vec![DataSubscription::new(SymbolName::from("NQ"), self.data_vendor.clone(), Resolution::Instant, BaseDataType::Ticks, MarketType::Futures(FuturesExchange::CME))]
     }
 
     pub async fn send_callback(&self, stream_name: StreamName, callback_id: u64, response: DataServerResponse) {

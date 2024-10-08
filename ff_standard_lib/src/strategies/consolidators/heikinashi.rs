@@ -5,11 +5,12 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
+use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
 use crate::messages::data_server_messaging::FundForgeError;
-use crate::standardized_types::enums::{OrderSide, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, OrderSide, SubscriptionResolutionType};
 use crate::standardized_types::new_types::{Price, Volume};
 
 pub struct HeikinAshiConsolidator {
@@ -18,7 +19,9 @@ pub struct HeikinAshiConsolidator {
     previous_ha_close: Price,
     previous_ha_open: Price,
     decimal_accuracy: u32, //todo, we might need to use tick size to round futures and decimal accuracy to round other products
+    tick_size: Decimal,
     fill_forward: bool,
+    market_type: MarketType,
     subscription_resolution_type: SubscriptionResolutionType
 }
 
@@ -60,8 +63,8 @@ impl HeikinAshiConsolidator {
                     self.previous_ha_close = candle.close;
                     self.previous_ha_open = candle.open;
                 }
-                let ha_close = ((candle.open + candle.high + candle.low + candle.close) / dec!(4.0)).round_dp(self.decimal_accuracy);
-                let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
+                let ha_close =  self.market_type.round_price((candle.open + candle.high + candle.low + candle.close) / dec!(4.0), self.tick_size, self.decimal_accuracy);
+                let ha_open = self.market_type.round_price((self.previous_ha_open + self.previous_ha_close) / dec!(2.0), self.tick_size, self.decimal_accuracy);
                 let ha_high = candle.high.max(ha_open).max(ha_close);
                 let ha_low = candle.low.min(ha_open).min(ha_close);
 
@@ -88,8 +91,8 @@ impl HeikinAshiConsolidator {
                     self.previous_ha_close = bar.bid_close;
                     self.previous_ha_open = bar.bid_close;
                 }
-                let ha_close = bar.bid_close;
-                let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
+                let ha_close = self.market_type.round_price((bar.bid_open + bar.bid_high + bar.bid_low + bar.bid_close) / dec!(4.0), self.tick_size, self.decimal_accuracy);
+                let ha_open = self.market_type.round_price((self.previous_ha_open + self.previous_ha_close) / dec!(2.0), self.tick_size, self.decimal_accuracy);
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -117,7 +120,7 @@ impl HeikinAshiConsolidator {
                     self.previous_ha_open = tick.price;
                 }
                 let ha_close = tick.price;
-                let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
+                let ha_open = self.market_type.round_price((self.previous_ha_open + self.previous_ha_close) / dec!(2.0), self.tick_size, self.decimal_accuracy);
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -150,7 +153,7 @@ impl HeikinAshiConsolidator {
                     self.previous_ha_open = quote.bid;
                 }
                 let ha_close = quote.bid;
-                let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
+                let ha_open = self.market_type.round_price((self.previous_ha_open + self.previous_ha_close) / dec!(2.0), self.tick_size, self.decimal_accuracy);
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -207,13 +210,23 @@ impl HeikinAshiConsolidator {
             subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap()
         };
 
+        let tick_size = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
+            info.tick_size
+        } else {
+            subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await.unwrap()
+        };
+
+        let market_type = subscription.symbol.market_type.clone();
+
         Ok(HeikinAshiConsolidator {
+            market_type,
             subscription_resolution_type,
             current_data: None,
             subscription,
             previous_ha_close: dec!(0.0),
             previous_ha_open: dec!(0.0),
             decimal_accuracy,
+            tick_size,
             fill_forward,
         })
     }
@@ -221,7 +234,7 @@ impl HeikinAshiConsolidator {
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
         //todo add fill forward option for this
         if self.fill_forward && self.current_data == None  {
-            let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
+            let ha_open =  self.market_type.round_price((self.previous_ha_open + self.previous_ha_close) / dec!(2.0), self.tick_size, self.decimal_accuracy);
             let time = open_time(&self.subscription, time);
             self.current_data = Some(BaseDataEnum::Candle(Candle {
                 symbol: self.subscription.symbol.clone(),
@@ -273,33 +286,33 @@ impl HeikinAshiConsolidator {
                         BaseDataEnum::Tick(tick) => {
                             candle.high = tick.price.max(candle.high);
                             candle.low = tick.price.min(candle.low);
-                            candle.close = tick.price;
-                            candle.range = (candle.high - candle.low).round_dp(self.decimal_accuracy.clone());
+                            candle.range = self.market_type.round_price(candle.high - candle.low, self.tick_size, self.decimal_accuracy);
                             candle.volume += tick.volume;
                             match tick.side {
                                 OrderSide::Buy => candle.bid_volume += tick.volume,
                                 OrderSide::Sell => candle.ask_volume += tick.volume
                             };
+                            candle.close = self.market_type.round_price((candle.open + candle.high + candle.low + candle.close) / dec!(4.0), self.tick_size, self.decimal_accuracy);
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
                         BaseDataEnum::Candle(new_candle) => {
                             candle.high = new_candle.high.max(candle.high);
                             candle.low = new_candle.low.min(candle.low);
-                            candle.close = new_candle.close;
-                            candle.range = (candle.high - candle.low).round_dp(self.decimal_accuracy.clone());
+                            candle.range = self.market_type.round_price(candle.high - candle.low, self.tick_size, self.decimal_accuracy);
                             candle.volume += new_candle.volume;
                             candle.ask_volume += new_candle.ask_volume;
                             candle.bid_volume += new_candle.bid_volume;
+                            candle.close = self.market_type.round_price((candle.open + candle.high + candle.low + candle.close) / dec!(4.0), self.tick_size, self.decimal_accuracy);
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
                         BaseDataEnum::QuoteBar(bar) => {
                             candle.high = bar.bid_high.max(candle.high);
                             candle.low = bar.bid_low.min(candle.low);
-                            candle.close = bar.bid_close;
-                            candle.range = (candle.high - candle.low).round_dp(self.decimal_accuracy.clone());
+                            candle.range = self.market_type.round_price(candle.high - candle.low, self.tick_size, self.decimal_accuracy);
                             candle.volume += bar.volume;
                             candle.bid_volume += bar.bid_volume;
                             candle.ask_volume += bar.ask_volume;
+                            candle.close = self.market_type.round_price((candle.open + candle.high + candle.low + candle.close) / dec!(4.0), self.tick_size, self.decimal_accuracy);
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
                         BaseDataEnum::Quote(quote) => {
@@ -308,9 +321,8 @@ impl HeikinAshiConsolidator {
                             candle.ask_volume += quote.ask_volume;
                             candle.bid_volume += quote.bid_volume;
                             candle.volume += quote.bid_volume + quote.ask_volume;
-                            candle.close = quote.bid;
-                            candle.range =
-                                (candle.high - candle.low).round_dp(self.decimal_accuracy.clone());
+                            candle.range = self.market_type.round_price(candle.high - candle.low, self.tick_size, self.decimal_accuracy);
+                            candle.close = self.market_type.round_price((candle.open + candle.high + candle.low + candle.close) / dec!(4.0), self.tick_size, self.decimal_accuracy);
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
                         _ => panic!(
