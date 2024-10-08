@@ -1,7 +1,6 @@
 use crate::strategies::consolidators::candlesticks::CandleStickConsolidator;
 use crate::strategies::consolidators::count::CountConsolidator;
 use crate::strategies::consolidators::heikinashi::HeikinAshiConsolidator;
-use crate::strategies::consolidators::renko::RenkoConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
@@ -14,7 +13,7 @@ pub enum ConsolidatorEnum {
     Count(CountConsolidator),
     CandleStickConsolidator(CandleStickConsolidator),
     HeikinAshi(HeikinAshiConsolidator),
-    Renko(RenkoConsolidator),
+    //Renko(RenkoConsolidator), //todo make special subscription type for renko, renko is always consolidated never primary.
 }
 
 impl ConsolidatorEnum {
@@ -22,7 +21,7 @@ impl ConsolidatorEnum {
     pub async fn create_consolidator(
         subscription: DataSubscription,
         fill_forward: bool,
-        subscription_resolution_type: SubscriptionResolutionType
+        subscription_resolution_type: SubscriptionResolutionType,
     ) -> ConsolidatorEnum {
         //todo handle errors here gracefully
         let is_tick = match subscription.resolution {
@@ -40,11 +39,11 @@ impl ConsolidatorEnum {
 
         let consolidator = match &subscription.candle_type {
             Some(candle_type) => match candle_type {
-                CandleType::Renko => ConsolidatorEnum::Renko(
-                    RenkoConsolidator::new(subscription.clone(), subscription_resolution_type)
+              /*  CandleType::RenkoRange => ConsolidatorEnum::Renko(
+                    RenkoConsolidator::new(subscription.clone(), subscription_resolution_type, renko_range)
                         .await
                         .unwrap(),
-                ),
+                ),*/
                 CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(
                     HeikinAshiConsolidator::new(subscription.clone(), fill_forward, subscription_resolution_type)
                         .await
@@ -55,6 +54,7 @@ impl ConsolidatorEnum {
                         .await
                         .unwrap(),
                 ),
+                CandleType::RenkoRange => panic!("Renko candle types not handled here.")
             },
             _ => panic!("Candle type is required for CandleStickConsolidator"),
         };
@@ -72,7 +72,7 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 heikin_ashi_consolidator.update(base_data)
             }
-            ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.update(base_data),
+            //ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.update(base_data),
         }
     }
 
@@ -86,7 +86,7 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 &heikin_ashi_consolidator.subscription
             }
-            ConsolidatorEnum::Renko(renko_consolidator) => &renko_consolidator.subscription,
+           // ConsolidatorEnum::Renko(renko_consolidator) => &renko_consolidator.subscription,
         }
     }
 
@@ -102,9 +102,9 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 &heikin_ashi_consolidator.subscription.resolution
             }
-            ConsolidatorEnum::Renko(renko_consolidator) => {
+            /*ConsolidatorEnum::Renko(renko_consolidator) => {
                 &renko_consolidator.subscription.resolution
-            }
+            }*/
         }
     }
 
@@ -118,7 +118,7 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 heikin_ashi_consolidator.update_time(time)
             }
-            ConsolidatorEnum::Renko(_) => None,
+            //ConsolidatorEnum::Renko(_) => None,
         }
     }
 
