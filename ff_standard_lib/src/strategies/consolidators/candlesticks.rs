@@ -1,5 +1,4 @@
 use crate::helpers::converters;
-use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
@@ -19,7 +18,7 @@ use crate::standardized_types::resolution::Resolution;
 pub struct CandleStickConsolidator {
     current_data: Option<BaseDataEnum>,
     pub(crate) subscription: DataSubscription,
-    tick_size: Price,
+    decimal_accuracy: u32, //todo, we might need to use tick size to round futures and decimal accuracy to round other products
     last_close: Option<Price>,
     last_ask_close: Option<Price>,
     last_bid_close: Option<Price>,
@@ -34,7 +33,7 @@ impl CandleStickConsolidator {
                 BaseDataType::QuoteBars => {
                     if let (Some(last_bid_close), Some(last_ask_close)) = (self.last_bid_close, self.last_ask_close) {
                         let time = open_time(&self.subscription, time);
-                        let spread = round_to_tick_size(last_ask_close - last_bid_close, self.tick_size);
+                        let spread = (last_ask_close - last_bid_close).round_dp(self.decimal_accuracy);
 
                         self.current_data = Some(BaseDataEnum::QuoteBar(QuoteBar {
                             symbol: self.subscription.symbol.clone(),
@@ -122,7 +121,7 @@ impl CandleStickConsolidator {
                         candle.high = candle.high.max(tick.price);
                         candle.low = candle.low.min(tick.price);
                         candle.close = tick.price;
-                        candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size);
+                        candle.range = (candle.high - candle.low).round_dp(self.decimal_accuracy);
                         candle.volume += tick.volume;
                         match tick.side {
                             OrderSide::Buy => candle.bid_volume += tick.volume,
@@ -133,7 +132,7 @@ impl CandleStickConsolidator {
                     BaseDataEnum::Candle(new_candle) => {
                         candle.high = candle.high.max(new_candle.high);
                         candle.low = candle.low.min(new_candle.low);
-                        candle.range = round_to_tick_size(candle.high - candle.low, self.tick_size);
+                        candle.range = (candle.high - candle.low).round_dp(self.decimal_accuracy);
                         candle.close = new_candle.close;
                         candle.volume += new_candle.volume;
                         candle.ask_volume += new_candle.ask_volume;
@@ -219,14 +218,11 @@ impl CandleStickConsolidator {
                             quote_bar.volume += quote.ask_volume + quote.bid_volume;
                             quote_bar.bid_volume += quote.bid_volume;
                             quote_bar.ask_volume += quote.ask_volume;
-                            quote_bar.range = round_to_tick_size(
-                                quote_bar.ask_high - quote_bar.bid_low,
-                                self.tick_size,
+                            quote_bar.range = (
+                                quote_bar.ask_high - quote_bar.bid_low).round_dp(
+                                self.decimal_accuracy
                             );
-                            quote_bar.spread = round_to_tick_size(
-                                quote_bar.ask_close - quote_bar.bid_close,
-                                self.tick_size,
-                            );
+                            quote_bar.spread = (quote_bar.ask_close - quote_bar.bid_close).round_dp(self.decimal_accuracy);
                             return ConsolidatedData::with_open(BaseDataEnum::QuoteBar(quote_bar.clone()))
                         }
                         BaseDataEnum::QuoteBar(bar) => {
@@ -239,14 +235,8 @@ impl CandleStickConsolidator {
                             quote_bar.volume += bar.volume;
                             quote_bar.bid_volume += bar.bid_volume;
                             quote_bar.ask_volume += bar.ask_volume;
-                            quote_bar.range = round_to_tick_size(
-                                quote_bar.ask_high - quote_bar.bid_low,
-                                self.tick_size,
-                            );
-                            quote_bar.spread = round_to_tick_size(
-                                quote_bar.ask_close - quote_bar.bid_close,
-                                self.tick_size,
-                            );
+                            quote_bar.range = (quote_bar.ask_high - quote_bar.bid_low).round_dp(self.decimal_accuracy);
+                            quote_bar.spread = (quote_bar.ask_close - quote_bar.bid_close).round_dp(self.decimal_accuracy);
                             return ConsolidatedData::with_open(BaseDataEnum::QuoteBar(quote_bar.clone()))
                         }
                         _ => panic!(
@@ -317,20 +307,16 @@ impl CandleStickConsolidator {
             );
         }
 
-        let tick_size = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
-            info.tick_size
+        let decimal_accuracy = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
+            info.decimal_accuracy
         } else {
-            let tick_size = match subscription.symbol.tick_size().await {
-                Ok(size) => size,
-                Err(e) => return Err(e)
-            };
-            tick_size
+            subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap()
         };
 
         Ok(CandleStickConsolidator {
             current_data: None,
             subscription,
-            tick_size,
+            decimal_accuracy,
             last_close: None,
             last_ask_close: None,
             last_bid_close: None,

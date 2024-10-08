@@ -40,7 +40,7 @@ async fn main() {
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 19).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 06, 21).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2024, 06, 25).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
         Duration::days(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
@@ -315,8 +315,6 @@ pub async fn on_data_received(
                                             }
                                         }
                                     }
-
-                                    count += 1;
                                 }
                                 //do something with the current open bar
                                 if !quotebar.is_closed {

@@ -1,7 +1,5 @@
-use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
-use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -9,7 +7,6 @@ use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::enums::SubscriptionResolutionType;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::messages::data_server_messaging::FundForgeError;
-use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::DataSubscription;
 
@@ -21,7 +18,7 @@ pub struct CountConsolidator {
     counter: u64,
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
-    tick_size: Price, //need to add this
+    decimal_accuracy: u32, //need to add this
     subscription_resolution_type: SubscriptionResolutionType
 }
 
@@ -53,14 +50,10 @@ impl CountConsolidator {
             }
         };
 
-        let tick_size = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
-            info.tick_size
+        let decimal_accuracy = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
+            info.decimal_accuracy
         } else {
-            let tick_size = match subscription.symbol.tick_size().await {
-                Ok(size) => size,
-                Err(e) => return Err(e)
-            };
-            tick_size
+            subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap()
         };
 
         Ok(CountConsolidator {
@@ -68,7 +61,7 @@ impl CountConsolidator {
             counter: 0,
             current_data,
             subscription,
-            tick_size,
+            decimal_accuracy,
             subscription_resolution_type
         })
     }
@@ -91,10 +84,7 @@ impl CountConsolidator {
                 self.counter += 1;
                 self.current_data.high = self.current_data.high.max(tick.price);
                 self.current_data.low = self.current_data.low.min(tick.price);
-                self.current_data.range = round_to_tick_size(
-                    self.current_data.high - self.current_data.low,
-                    self.tick_size,
-                );
+                self.current_data.range = (self.current_data.high - self.current_data.low).round_dp(self.decimal_accuracy);
                 self.current_data.close = tick.price;
                 self.current_data.volume += tick.volume;
                 if self.counter == self.number {

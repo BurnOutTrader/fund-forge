@@ -1,13 +1,10 @@
 use crate::helpers::converters::open_time;
-use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
-use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
@@ -20,7 +17,7 @@ pub struct HeikinAshiConsolidator {
     pub(crate) subscription: DataSubscription,
     previous_ha_close: Price,
     previous_ha_open: Price,
-    tick_size: Price,
+    decimal_accuracy: u32, //todo, we might need to use tick size to round futures and decimal accuracy to round other products
     fill_forward: bool,
     subscription_resolution_type: SubscriptionResolutionType
 }
@@ -63,14 +60,8 @@ impl HeikinAshiConsolidator {
                     self.previous_ha_close = candle.close;
                     self.previous_ha_open = candle.open;
                 }
-                let ha_close = round_to_tick_size(
-                    (candle.open + candle.high + candle.low + candle.close) / dec!(4.0),
-                    self.tick_size,
-                );
-                let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
-                    self.tick_size,
-                );
+                let ha_close = ((candle.open + candle.high + candle.low + candle.close) / dec!(4.0)).round_dp(self.decimal_accuracy);
+                let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
                 let ha_high = candle.high.max(ha_open).max(ha_close);
                 let ha_low = candle.low.min(ha_open).min(ha_close);
 
@@ -98,10 +89,7 @@ impl HeikinAshiConsolidator {
                     self.previous_ha_open = bar.bid_close;
                 }
                 let ha_close = bar.bid_close;
-                let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
-                    self.tick_size,
-                );
+                let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -129,10 +117,7 @@ impl HeikinAshiConsolidator {
                     self.previous_ha_open = tick.price;
                 }
                 let ha_close = tick.price;
-                let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / Decimal::from_f64(2.0).unwrap(),
-                    self.tick_size,
-                );
+                let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -165,10 +150,7 @@ impl HeikinAshiConsolidator {
                     self.previous_ha_open = quote.bid;
                 }
                 let ha_close = quote.bid;
-                let ha_open = round_to_tick_size(
-                    (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
-                    self.tick_size,
-                );
+                let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
                 let ha_high = ha_close.max(ha_open);
                 let ha_low = ha_close.min(ha_open);
 
@@ -219,14 +201,10 @@ impl HeikinAshiConsolidator {
             }
         }
 
-        let tick_size = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
-            info.tick_size
+        let decimal_accuracy = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
+            info.decimal_accuracy
         } else {
-            let tick_size = match subscription.symbol.tick_size().await {
-                Ok(size) => size,
-                Err(e) => return Err(e)
-            };
-            tick_size
+            subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap()
         };
 
         Ok(HeikinAshiConsolidator {
@@ -235,7 +213,7 @@ impl HeikinAshiConsolidator {
             subscription,
             previous_ha_close: dec!(0.0),
             previous_ha_open: dec!(0.0),
-            tick_size,
+            decimal_accuracy,
             fill_forward,
         })
     }
@@ -243,10 +221,7 @@ impl HeikinAshiConsolidator {
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
         //todo add fill forward option for this
         if self.fill_forward && self.current_data == None  {
-            let ha_open = round_to_tick_size(
-                (self.previous_ha_open + self.previous_ha_close) / dec!(2.0),
-                self.tick_size,
-            );
+            let ha_open = ((self.previous_ha_open + self.previous_ha_close) / dec!(2.0)).round_dp(self.decimal_accuracy);
             let time = open_time(&self.subscription, time);
             self.current_data = Some(BaseDataEnum::Candle(Candle {
                 symbol: self.subscription.symbol.clone(),
@@ -299,8 +274,7 @@ impl HeikinAshiConsolidator {
                             candle.high = tick.price.max(candle.high);
                             candle.low = tick.price.min(candle.low);
                             candle.close = tick.price;
-                            candle.range =
-                                round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                            candle.range = (candle.high - candle.low).round_dp(self.decimal_accuracy.clone());
                             candle.volume += tick.volume;
                             match tick.side {
                                 OrderSide::Buy => candle.bid_volume += tick.volume,
@@ -312,8 +286,7 @@ impl HeikinAshiConsolidator {
                             candle.high = new_candle.high.max(candle.high);
                             candle.low = new_candle.low.min(candle.low);
                             candle.close = new_candle.close;
-                            candle.range =
-                                round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                            candle.range = (candle.high - candle.low).round_dp(self.decimal_accuracy.clone());
                             candle.volume += new_candle.volume;
                             candle.ask_volume += new_candle.ask_volume;
                             candle.bid_volume += new_candle.bid_volume;
@@ -323,8 +296,7 @@ impl HeikinAshiConsolidator {
                             candle.high = bar.bid_high.max(candle.high);
                             candle.low = bar.bid_low.min(candle.low);
                             candle.close = bar.bid_close;
-                            candle.range =
-                                round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                            candle.range = (candle.high - candle.low).round_dp(self.decimal_accuracy.clone());
                             candle.volume += bar.volume;
                             candle.bid_volume += bar.bid_volume;
                             candle.ask_volume += bar.ask_volume;
@@ -338,7 +310,7 @@ impl HeikinAshiConsolidator {
                             candle.volume += quote.bid_volume + quote.ask_volume;
                             candle.close = quote.bid;
                             candle.range =
-                                round_to_tick_size(candle.high - candle.low, self.tick_size.clone());
+                                (candle.high - candle.low).round_dp(self.decimal_accuracy.clone());
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }
                         _ => panic!(
