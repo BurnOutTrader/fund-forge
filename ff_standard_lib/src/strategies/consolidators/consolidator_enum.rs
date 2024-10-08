@@ -54,7 +54,7 @@ impl ConsolidatorEnum {
                         .await
                         .unwrap(),
                 ),
-                CandleType::RenkoRange => panic!("Renko candle types not handled here.")
+                CandleType::Renko => panic!("Renko candle types not handled here.")
             },
             _ => panic!("Candle type is required for CandleStickConsolidator"),
         };
