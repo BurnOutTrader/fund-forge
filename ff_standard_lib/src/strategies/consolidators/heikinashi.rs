@@ -204,17 +204,8 @@ impl HeikinAshiConsolidator {
             }
         }
 
-        let decimal_accuracy = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
-            info.decimal_accuracy
-        } else {
-            subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap()
-        };
-
-        let tick_size = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
-            info.tick_size
-        } else {
-            subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await.unwrap()
-        };
+        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await?;
+        let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await?;
 
         let market_type = subscription.symbol.market_type.clone();
 
