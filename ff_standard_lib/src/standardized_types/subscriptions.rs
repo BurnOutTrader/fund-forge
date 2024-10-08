@@ -43,7 +43,6 @@ impl CandleType {
         match string_ref.to_lowercase().as_str() {
             "HeikinAshi" => Ok(CandleType::HeikinAshi),
             "CandleStick" => Ok(CandleType::CandleStick),
-            // "order books" => Ok(BaseDataType::OrderBooks),
             _ => Err(format!("Unknown BaseDataType: {}", string_ref)),
         }
     }
