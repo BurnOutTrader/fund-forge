@@ -8,7 +8,6 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
-use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::{MarketType, OrderSide, SubscriptionResolutionType};
 use crate::standardized_types::new_types::{Price, Volume};

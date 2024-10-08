@@ -13,7 +13,6 @@ pub enum ConsolidatorEnum {
     Count(CountConsolidator),
     CandleStickConsolidator(CandleStickConsolidator),
     HeikinAshi(HeikinAshiConsolidator),
-    //Renko(RenkoConsolidator), //todo make special subscription type for renko, renko is always consolidated never primary.
 }
 
 impl ConsolidatorEnum {
@@ -39,11 +38,6 @@ impl ConsolidatorEnum {
 
         let consolidator = match &subscription.candle_type {
             Some(candle_type) => match candle_type {
-              /*  CandleType::RenkoRange => ConsolidatorEnum::Renko(
-                    RenkoConsolidator::new(subscription.clone(), subscription_resolution_type, renko_range)
-                        .await
-                        .unwrap(),
-                ),*/
                 CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(
                     HeikinAshiConsolidator::new(subscription.clone(), fill_forward, subscription_resolution_type)
                         .await
@@ -54,7 +48,6 @@ impl ConsolidatorEnum {
                         .await
                         .unwrap(),
                 ),
-                CandleType::Renko => panic!("Renko candle types not handled here.")
             },
             _ => panic!("Candle type is required for CandleStickConsolidator"),
         };
@@ -72,7 +65,6 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 heikin_ashi_consolidator.update(base_data)
             }
-            //ConsolidatorEnum::Renko(renko_consolidator) => renko_consolidator.update(base_data),
         }
     }
 
@@ -86,7 +78,6 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 &heikin_ashi_consolidator.subscription
             }
-           // ConsolidatorEnum::Renko(renko_consolidator) => &renko_consolidator.subscription,
         }
     }
 
@@ -102,9 +93,6 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 &heikin_ashi_consolidator.subscription.resolution
             }
-            /*ConsolidatorEnum::Renko(renko_consolidator) => {
-                &renko_consolidator.subscription.resolution
-            }*/
         }
     }
 
@@ -118,7 +106,6 @@ impl ConsolidatorEnum {
             ConsolidatorEnum::HeikinAshi(heikin_ashi_consolidator) => {
                 heikin_ashi_consolidator.update_time(time)
             }
-            //ConsolidatorEnum::Renko(_) => None,
         }
     }
 

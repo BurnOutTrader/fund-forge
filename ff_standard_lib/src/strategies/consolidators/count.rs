@@ -1,7 +1,6 @@
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
-use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;

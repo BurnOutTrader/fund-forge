@@ -11,7 +11,6 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::converters::open_time;
-use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::resolution::Resolution;

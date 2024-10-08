@@ -6,28 +6,29 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::enums::SubscriptionResolutionType;
 use crate::standardized_types::resolution::Resolution;
-use crate::standardized_types::subscriptions::DataSubscription;
-use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
+use crate::standardized_types::subscriptions::{DataSubscription};
 
 //renko parameters will have to be strings so we can implement hash etc
 //todo, just have different kinds of renko consolidators for the different kinds of renko
-/// A consolidator that produces a new piece of data after a certain number of data points have been added.
-/// Supports Ticks only.
+/// It is better to use RenkoType::PriceMovementValue to pass in a fixed value for atr size at run time.
+/// You  can still pass in the atr range using the PriceMovementValue, if you use the ATR function, the Consolidator will need to first warm up the ATR indicator to get the ATR value.
+/// If you have an ATR indicator already warmed up, it will be faster to use this instead.
 #[allow(dead_code)]
-pub struct RenkoConsolidator {
+pub struct Renko {
     current_data: Candle,
     pub(crate) subscription: DataSubscription,
     subscription_resolution_type: SubscriptionResolutionType,
-    range: Decimal,
-    decimal_accuracy: u32 //todo, might need to use a dual calculation option, for futures use tick size, for fx use decimal accuracy.
+    renko_range: Decimal,
+    decimal_accuracy: u32,
+    tick_size: Decimal
 }
 
-impl RenkoConsolidator {
+impl Renko {
     #[allow(dead_code)]
     pub(crate) async fn new(
         subscription: DataSubscription,
         subscription_resolution_type: SubscriptionResolutionType,
-        range: Decimal
+        renko_range: Option<Decimal>,
     ) -> Result<Self, String> {
         let current_data = match &subscription.base_data_type {
             BaseDataType::Ticks => Candle::new(
@@ -50,18 +51,16 @@ impl RenkoConsolidator {
         };
 
 
-        let decimal_accuracy = if let Some(info) = SYMBOL_INFO.get(&subscription.symbol.name) {
-            info.decimal_accuracy
-        } else {
-            subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap()
-        };
+        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap();
+        let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await.unwrap();
 
-        Ok(RenkoConsolidator {
+        Ok(Renko {
             subscription_resolution_type,
             current_data,
             subscription,
             decimal_accuracy,
-            range
+            renko_range: renko_range.unwrap(),
+            tick_size,
         })
     }
 
