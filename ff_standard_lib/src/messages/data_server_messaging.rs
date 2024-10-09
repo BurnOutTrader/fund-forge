@@ -75,11 +75,6 @@ pub enum DataServerRequest {
         callback_id: u64,
         data_vendor: DataVendor
     },
-    SymbolsBroker {
-        callback_id: u64,
-        brokerage: Brokerage,
-        market_type: MarketType
-    },
     /// Requests a list of resolutions available with the `DataVendor` from the server
     Resolutions {
         callback_id: u64,
@@ -127,6 +122,8 @@ pub enum DataServerRequest {
         subscription: DataSubscription
     },
     Accounts{callback_id: u64, brokerage: Brokerage},
+    SymbolNames{callback_id: u64},
+
 }
 
 impl DataServerRequest {
@@ -146,7 +143,6 @@ impl DataServerRequest {
         match self {
             DataServerRequest::HistoricalBaseData { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolsVendor { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::SymbolsBroker { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Resolutions {callback_id, .. } => {*callback_id = id}
             DataServerRequest::AccountInfo { callback_id, .. } => {*callback_id = id}
             DataServerRequest::BaseDataTypes { callback_id, .. } => {*callback_id = id}
@@ -160,6 +156,7 @@ impl DataServerRequest {
             DataServerRequest::MarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Accounts { callback_id, .. } => {*callback_id = id}
             DataServerRequest::PrimarySubscriptionFor { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -270,6 +267,9 @@ DataServerResponse {
         subscription: DataSubscription,
         reason: Option<String>
     },
+
+    SymbolNames{callback_id: u64, symbol_names: Vec<SymbolName>},
+
 /*    AccountState(Brokerage, AccountId, AccountState),
     OrderUpdates(OrderUpdateEvent),
     PositionUpdates(PositionUpdateEvent),*/
@@ -282,6 +282,8 @@ DataServerResponse {
     PrimarySubscriptionFor{callback_id: u64, primary_subscription: DataSubscription},
 
     OrderUpdates(OrderUpdateEvent),
+
+
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -324,6 +326,7 @@ impl DataServerResponse {
             DataServerResponse::BaseDataUpdates(_) => None,
             DataServerResponse::OrderUpdates(_) => None,
             DataServerResponse::PrimarySubscriptionFor {callback_id, ..} => Some(callback_id.clone()),
+            DataServerResponse::SymbolNames {callback_id, ..} => Some(callback_id.clone()),
         }
     }
 }

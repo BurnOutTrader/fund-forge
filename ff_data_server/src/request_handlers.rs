@@ -146,15 +146,6 @@ pub async fn manage_async_requests(
                         sender.clone()
                     ).await,
 
-                    DataServerRequest::SymbolsBroker {
-                        brokerage,
-                        callback_id,
-                        market_type,
-                    } => handle_callback(
-                        || brokerage.symbols_response(mode,stream_name, market_type, callback_id),
-                        sender.clone()
-                    ).await,
-
                     DataServerRequest::Resolutions {
                         callback_id,
                         data_vendor,
@@ -222,7 +213,7 @@ pub async fn manage_async_requests(
                         }
                         println!("{:?}", request);
                         handle_callback(
-                            || stream_response(mode, stream_name, request, sender.clone()),
+                            || stream_response(stream_name, request, sender.clone()),
                             sender.clone()).await
                     },
 
@@ -240,7 +231,7 @@ pub async fn manage_async_requests(
                     DataServerRequest::PrimarySubscriptionFor { .. } => {
                         todo!()
                     }
-                };
+                DataServerRequest::SymbolNames{ .. } => {}};
             });
         }
         stream_handle.abort();
@@ -298,7 +289,7 @@ async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: WriteHal
     })
 }
 
-async fn stream_response(mode: StrategyMode, stream_name: StreamName, request: StreamRequest, sender: Sender<DataServerResponse>) -> DataServerResponse {
+async fn stream_response(stream_name: StreamName, request: StreamRequest, sender: Sender<DataServerResponse>) -> DataServerResponse {
     match request {
         StreamRequest::AccountUpdates(_, _) => {
             panic!()
@@ -306,7 +297,7 @@ async fn stream_response(mode: StrategyMode, stream_name: StreamName, request: S
         StreamRequest::Subscribe(subscription) => {
             match &subscription.symbol.data_vendor {
                 DataVendor::Test => {
-                    subscription.symbol.data_vendor.data_feed_subscribe(mode, stream_name, subscription.clone(), sender).await
+                    subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
                 }
                 DataVendor::Rithmic(_system) => {
                     panic!()

@@ -11,7 +11,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::position::Position;
+use crate::standardized_types::position::{Position, PositionId};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use serde_derive::{Deserialize, Serialize};
 use crate::standardized_types::new_types::{Price, Volume};
@@ -98,6 +98,19 @@ impl Ledger {
             mode: strategy_mode,
         };
         ledger
+    }
+
+    pub fn add_live_position(&self, mut position: Position) {
+        if let Some((symbol_name, mut existing_position)) = self.positions.remove(&position.symbol_name) {
+            existing_position.is_closed = true;
+            self.positions_closed
+                .entry(symbol_name)
+                .or_insert_with(Vec::new)
+                .push(existing_position);
+        }
+        let id = self.generate_id(&position.symbol_name, position.side);
+        position.position_id = id;
+        self.positions.insert(position.symbol_name.clone(), position);
     }
 
     pub fn in_profit(&self, symbol_name: &SymbolName) -> bool {
@@ -301,6 +314,20 @@ impl Ledger {
         format!("Brokerage: {}, Account: {}, Balance: {}, Win Rate: {}%, Average Risk Reward: {}, Profit Factor {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}",
                 self.brokerage, self.account_id, self.cash_value.round_dp(2), win_rate.round_dp(2), risk_reward.round_dp(2), profit_factor.round_dp(2), pnl.round_dp(2), wins, losses, break_even, total_trades, self.positions.len(), self.cash_used.round_dp(2), self.cash_available.round_dp(2))
     }
+
+    pub fn generate_id(
+        &self,
+        symbol_name: &SymbolName,
+        side: PositionSide
+    ) -> PositionId {
+        // Increment the counter for the symbol, or insert it if it doesn't exist
+        let counter = self.positions_counter.entry(symbol_name.clone())
+            .and_modify(|count| *count += 1)
+            .or_insert(1).value().clone();
+
+        // Return the generated position ID
+        format!("{}-{}-{}-{}-{}", self.brokerage, self.account_id, symbol_name, side, counter)
+    }
 }
 
 pub(crate) mod historical_ledgers {
@@ -311,7 +338,7 @@ pub(crate) mod historical_ledgers {
     use crate::strategies::ledgers::{AccountId, Currency, Ledger};
     use crate::messages::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
-    use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
+    use crate::standardized_types::position::{Position, PositionUpdateEvent};
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::base_data::traits::BaseData;
     use crate::standardized_types::new_types::{Price, Volume};
@@ -537,20 +564,6 @@ pub(crate) mod historical_ledgers {
                 updates.push(event);
             }
             Ok(updates)
-        }
-
-        pub fn generate_id(
-            &self,
-            symbol_name: &SymbolName,
-            side: PositionSide
-        ) -> PositionId {
-            // Increment the counter for the symbol, or insert it if it doesn't exist
-            let counter = self.positions_counter.entry(symbol_name.clone())
-                .and_modify(|count| *count += 1)
-                .or_insert(1).value().clone();
-
-            // Return the generated position ID
-            format!("{}-{}-{}-{}-{}", self.brokerage, self.account_id, symbol_name, side, counter)
         }
 
         pub async fn exit_position_paper(

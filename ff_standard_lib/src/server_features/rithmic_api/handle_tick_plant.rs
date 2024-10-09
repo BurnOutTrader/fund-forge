@@ -3,6 +3,7 @@ use std::sync::Arc;
 #[allow(unused_imports)]
 use std::time::Duration;
 use async_std::stream::StreamExt;
+use chrono::Utc;
 #[allow(unused_imports)]
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
@@ -10,16 +11,22 @@ use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 #[allow(unused_imports)]
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use prost::{Message as ProstMessage};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
 #[allow(unused_imports)]
 use tokio::time::sleep;
 use tungstenite::{Message};
+use crate::messages::data_server_messaging::DataServerResponse;
 #[allow(unused_imports)]
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::server_features::rithmic_api::api_client::RithmicClient;
 use crate::server_features::rithmic_api::handle_history_plant::handle_responses_from_history_plant;
 use crate::server_features::rithmic_api::handle_order_plant::handle_responses_from_order_plant;
 use crate::server_features::rithmic_api::handle_pnl_plant::handle_responses_from_pnl_plant;
-
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use crate::standardized_types::base_data::tick::Tick;
+use crate::standardized_types::enums::{FuturesExchange, MarketType, OrderSide};
+use crate::standardized_types::subscriptions::Symbol;
 
 pub async fn handle_received_responses(
     client: Arc<RithmicClient>,
@@ -195,6 +202,38 @@ pub async fn handle_responses_from_ticker_plant(
                                                 // Last Trade
                                                 // From Server
                                                 println!("Last Trade (Template ID: 150) from Server: {:?}", msg);
+                                                let exchange = match msg.exchange {
+                                                    None => return,
+                                                    Some(exchange) => {
+                                                        match FuturesExchange::from_string(&exchange) {
+                                                            Ok(ex) => ex,
+                                                            Err(_) => return
+                                                        }
+                                                    }
+                                                };
+                                                let volume = match msg.trade_size {
+                                                    None => return,
+                                                    Some(size) => Decimal::from_i32(size).unwrap()
+                                                };
+                                                let price = match msg.trade_price {
+                                                    None => return,
+                                                    Some(price) => Decimal::from_f64(price).unwrap()
+                                                };
+                                                let side = match msg.aggressor {
+                                                    None => return,
+                                                    Some(aggressor) => {
+                                                        match aggressor {
+                                                            1 => OrderSide::Buy,
+                                                            2 => OrderSide::Sell,
+                                                            _ => return,
+                                                        }
+                                                    }
+                                                };
+                                                let symbol = Symbol::new(msg.symbol.unwrap(), client.data_vendor.clone(), MarketType::Futures(exchange));
+                                                let tick = Tick::new(symbol, price, Utc::now().to_string(), volume, side);
+                                                if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
+                                                    broadcaster.broadcast(DataServerResponse::BaseDataUpdates(BaseDataEnum::Tick(tick))).await;
+                                                }
                                             }
                                         },
                                         151 => {

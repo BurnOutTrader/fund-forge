@@ -46,39 +46,17 @@ impl TestApiClient {
 
 #[async_trait]
 impl BrokerApiResponse for TestApiClient {
-    async fn symbols_response(&self, _mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse {
-        DataServerResponse::Symbols {
+    async fn symbol_names_response(&self, _mode: StrategyMode, _stream_name: StreamName,  callback_id: u64) -> DataServerResponse {
+        DataServerResponse::SymbolNames {
             callback_id,
-            symbols: vec![
-                Symbol::new("EUR-USD".to_string(), DataVendor::Test, MarketType::Forex),
-                Symbol::new("AUD-USD".to_string(), DataVendor::Test, MarketType::Forex),
-                Symbol::new("AUD-CAD".to_string(), DataVendor::Test, MarketType::Forex),
+            symbol_names: vec![
+                "EUR-USD".to_string(),
+                "AUD-USD".to_string(),
+                "AUD-CAD".to_string(),
             ],
-            market_type,
         }
     }
 
-    async fn account_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, account_id: AccountId, callback_id: u64) -> DataServerResponse {
-        let account_info = AccountInfo {
-            brokerage: Brokerage::Test,
-            cash_value: dec!(100000),
-            cash_available:dec!(100000),
-            currency: Currency::USD,
-            cash_used: dec!(0),
-            positions: vec![],
-            account_id,
-            is_hedging: false,
-            buy_limit: None,
-            sell_limit: None,
-            max_orders: None,
-            daily_max_loss: None,
-            daily_max_loss_reset_time: None,
-        };
-        DataServerResponse::AccountInfo {
-            callback_id,
-            account_info,
-        }
-    }
 
     async fn symbol_info_response(
         &self,
@@ -105,6 +83,28 @@ impl BrokerApiResponse for TestApiClient {
         DataServerResponse::SymbolInfo {
             callback_id,
             symbol_info,
+        }
+    }
+
+    async fn account_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, account_id: AccountId, callback_id: u64) -> DataServerResponse {
+        let account_info = AccountInfo {
+            brokerage: Brokerage::Test,
+            cash_value: dec!(100000),
+            cash_available:dec!(100000),
+            currency: Currency::USD,
+            cash_used: dec!(0),
+            positions: vec![],
+            account_id,
+            is_hedging: false,
+            buy_limit: None,
+            sell_limit: None,
+            max_orders: None,
+            daily_max_loss: None,
+            daily_max_loss_reset_time: None,
+        };
+        DataServerResponse::AccountInfo {
+            callback_id,
+            account_info,
         }
     }
 
@@ -194,7 +194,7 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn data_feed_subscribe(&self,  _mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
         let available_subscription_1 = DataSubscription::new(SymbolName::from("AUD-CAD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
         let available_subscription_2 = DataSubscription::new(SymbolName::from("EUR-USD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
         if subscription != available_subscription_1 && subscription != available_subscription_2 {

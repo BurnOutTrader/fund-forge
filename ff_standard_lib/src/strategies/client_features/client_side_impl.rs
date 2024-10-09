@@ -223,4 +223,23 @@ impl Brokerage {
             Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
         }
     }
+
+    pub async fn symbol_names(&self) -> Result<Vec<SymbolName>, FundForgeError> {
+        let request = DataServerRequest::SymbolNames {
+            callback_id: 0,
+        };
+        let (sender, receiver) = oneshot::channel();
+        let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
+        send_request(msg).await;
+        match receiver.await {
+            Ok(response) => {
+                match response {
+                    DataServerResponse::SymbolNames { symbol_names, .. } => Ok(symbol_names),
+                    DataServerResponse::Error { error, .. } => Err(error),
+                    _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
+                }
+            },
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+        }
+    }
 }

@@ -8,10 +8,12 @@ use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 #[allow(unused_imports)]
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, RequestLoginInfo, RequestPnLPositionSnapshot, RequestProductCodes, ResponseAccountRmsInfo};
+use ff_rithmic_api::rithmic_proto_objects::rti::RequestMarketDataUpdate;
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::stream::SplitStream;
 use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
+use rust_decimal_macros::dec;
 use tokio::net::TcpStream;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
@@ -23,14 +25,16 @@ use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::server_features::StreamName;
 use crate::helpers::get_data_folder;
 use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
-use crate::strategies::ledgers::{AccountId, Ledger};
+use crate::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use tokio::sync::oneshot;
+use crate::helpers::converters::fund_forge_formatted_symbol_name;
 use crate::standardized_types::new_types::Volume;
+use crate::standardized_types::orders::{Order, OrderId};
 use crate::standardized_types::resolution::Resolution;
 
 lazy_static! {
@@ -60,14 +64,16 @@ pub struct RithmicClient {
     pub readers: DashMap<SysInfraType, Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>>,
 
     // accounts
-    pub accounts: DashMap<AccountId, Ledger>,
-    pub account_rms_info: DashMap<AccountId, ResponseAccountRmsInfo>,
+    pub accounts: DashMap<AccountId, AccountInfo>,
+    pub orders_open: DashMap<OrderId, Order>,
 
     //products
     pub products: DashMap<MarketType, Vec<Symbol>>,
 
     //subscribers
-    data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<DataServerResponse>>>>,
+    pub tick_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<DataServerResponse>>>>,
+    pub quote_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<DataServerResponse>>>>,
+    pub candle_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<DataServerResponse>>>>,
 }
 
 impl RithmicClient {
@@ -96,10 +102,12 @@ impl RithmicClient {
             client: Arc::new(client),
             symbol_info: Default::default(),
             readers: DashMap::with_capacity(5),
-            data_feed_broadcasters: Default::default(),
+            tick_feed_broadcasters: Default::default(),
+            quote_feed_broadcasters: Default::default(),
             accounts: Default::default(),
-            account_rms_info: Default::default(),
+            orders_open: Default::default(),
             products: Default::default(),
+            candle_feed_broadcasters: Arc::new(Default::default()),
         };
         if connect_data_plants {
             client.connect_to_data_plants().await?
@@ -167,10 +175,6 @@ impl RithmicClient {
         self.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();
     }
 
-    pub fn available_subscriptions(&self) -> Vec<DataSubscription> {
-        vec![DataSubscription::new(SymbolName::from("NQ"), self.data_vendor.clone(), Resolution::Instant, BaseDataType::Ticks, MarketType::Futures(FuturesExchange::CME))]
-    }
-
     pub async fn send_callback(&self, stream_name: StreamName, callback_id: u64, response: DataServerResponse) {
         if let Some(mut stream_map) = self.callbacks.get_mut(&stream_name) {
             if let Some(sender) = stream_map.value_mut().remove(&callback_id) {
@@ -179,7 +183,13 @@ impl RithmicClient {
                     Err(e) => {
                         eprintln!("Callback error: {:?} Dumping subscriber: {}", e, stream_name);
                         self.callbacks.remove(&stream_name);
-                        for broadcaster in self.data_feed_broadcasters.iter() {
+                        for broadcaster in self.tick_feed_broadcasters.iter() {
+                            broadcaster.unsubscribe(&stream_name.to_string());
+                        }
+                        for broadcaster in self.quote_feed_broadcasters.iter() {
+                            broadcaster.unsubscribe(&stream_name.to_string());
+                        }
+                        for broadcaster in self.candle_feed_broadcasters.iter() {
                             broadcaster.unsubscribe(&stream_name.to_string());
                         }
                     }
@@ -242,29 +252,77 @@ impl RithmicClient {
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
-    async fn symbols_response(&self, _mode: StrategyMode, _stream_name: StreamName, _market_type: MarketType, _callback_id: u64) -> DataServerResponse {
-        todo!()
+    async fn symbol_names_response(&self, _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+        //todo get dynamically from server using stream name to fwd callback
+        DataServerResponse::SymbolNames {
+            callback_id,
+            symbol_names: vec!["M6E".to_string()],
+        }
     }
 
     async fn account_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, _account_id: AccountId, _callback_id: u64) -> DataServerResponse {
         todo!()
     }
 
-    async fn symbol_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
-        todo!()
+
+    async fn symbol_info_response(
+        &self,
+        _mode: StrategyMode,
+        _stream_name: StreamName,
+        symbol_name: SymbolName,
+        callback_id: u64
+    ) -> DataServerResponse {
+        //todo get dynamically from server using stream name to fwd callback
+        let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
+        let (pnl_currency, value_per_tick, tick_size) = match symbol_name.as_str() {
+            "M6E" => (Currency::USD, dec!(1.0), dec!(0.0001)), // EUR/USD with $1 per tick
+            _ => todo!()       // Default values
+        };
+
+        let symbol_info = SymbolInfo {
+            symbol_name,
+            pnl_currency,
+            value_per_tick,
+            tick_size,
+            decimal_accuracy: 4,
+        };
+
+        DataServerResponse::SymbolInfo {
+            callback_id,
+            symbol_info,
+        }
     }
 
-    async fn margin_required_response(&self,  _mode: StrategyMode, _stream_name: StreamName, _symbol_name: SymbolName, _quantity: Volume, _callback_id: u64) -> DataServerResponse {
-        todo!()
+    async fn margin_required_response(&self,  _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, _quantity: Volume, callback_id: u64) -> DataServerResponse {
+        //todo get dynamically from server using stream name to fwd callback
+        DataServerResponse::MarginRequired {
+            callback_id,
+            symbol_name,
+            price: dec!(0.0),
+        }
     }
 
-
-    async fn accounts_response(&self, _mode: StrategyMode, _stream_name: StreamName, _callback_id: u64) -> DataServerResponse {
-        todo!()
+    async fn accounts_response(&self, _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+        // The accounts are collected on initializing the client
+        let accounts = self.accounts.iter().map(|entry| entry.key().clone()).collect();
+        DataServerResponse::Accounts {
+            callback_id,
+            accounts,
+        }
     }
 
-    async fn logout_command(&self, _stream_name: StreamName) {
-        todo!()
+    async fn logout_command(&self, stream_name: StreamName) {
+        //todo handle dynamically from server using stream name to remove subscriptions and callbacks
+        self.callbacks.remove(&stream_name);
+        for broadcaster in self.tick_feed_broadcasters.iter() {
+            broadcaster.unsubscribe(&stream_name.to_string());
+        }
+        for broadcaster in self.quote_feed_broadcasters.iter() {
+            broadcaster.unsubscribe(&stream_name.to_string());
+        }
+        for broadcaster in self.candle_feed_broadcasters.iter() {
+            broadcaster.unsubscribe(&stream_name.to_string());
+        }
     }
 }
 #[allow(dead_code)]
@@ -304,7 +362,6 @@ impl VendorApiResponse for RithmicClient {
                     SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
                     SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
                     SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles),
-                    SubscriptionResolutionType::new(Resolution::Minutes(1), BaseDataType::Candles),
                 ]
             }
         };
@@ -315,28 +372,64 @@ impl VendorApiResponse for RithmicClient {
         }
     }
 
-    async fn markets_response(&self, _mode: StrategyMode, _stream_name: StreamName, _callback_id: u64) -> DataServerResponse {
-        todo!()
+    async fn markets_response(&self, _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+        DataServerResponse::Markets {
+            callback_id,
+            markets: vec![
+                MarketType::Futures(FuturesExchange::CME),
+                MarketType::Futures(FuturesExchange::CBOT),
+                MarketType::Futures(FuturesExchange::COMEX),
+                MarketType::Futures(FuturesExchange::NYBOT),
+                MarketType::Futures(FuturesExchange::NYMEX),
+                MarketType::Futures(FuturesExchange::MGEX)
+            ],
+        }
     }
 
-    async fn decimal_accuracy_response(&self, _mode: StrategyMode, _stream_name: StreamName, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
-        todo!()
+    async fn decimal_accuracy_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        //todo get dynamically from server using stream name to fwd callback
+        let accuracy = match symbol_name.as_str() {
+            "M6E" => 4,
+            _ => todo!(),
+        };
+        DataServerResponse::DecimalAccuracy {
+            callback_id,
+            accuracy,
+        }
     }
 
-    async fn tick_size_response(&self, _mode: StrategyMode, _stream_name: StreamName, _symbol_name: SymbolName, _callback_id: u64) -> DataServerResponse {
-        todo!()
+    async fn tick_size_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        //todo get dynamically from server using stream name to fwd callback
+        let tick_size = match symbol_name.as_str() {
+            "M6E" => dec!(0.0001),
+            _ => todo!(),
+        };
+        DataServerResponse::TickSize {
+            callback_id,
+            tick_size,
+        }
     }
 
-    async fn data_feed_subscribe(&self, _mode: StrategyMode,_stream_name: StreamName, _subscription: DataSubscription, _sender: Sender<DataServerResponse>) -> DataServerResponse {
-       /* let req = RequestMarketDataUpdate {
+    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
+        let exchange = match subscription.market_type {
+            MarketType::Futures(exchange) => {
+                exchange.to_string()
+            }
+            _ => todo!()
+        };
+        let req = RequestMarketDataUpdate {
             template_id: 100,
             user_msg: vec![],
-            symbol: Some("NQ".to_string()),
-            exchange: Some(Exchange::CME.to_string()),
-            request: Some(Request::Subscribe.into()),
-            update_bits: Some(2), 1 for ticks 2 for quotes
+            symbol: Some(subscription.symbol.name.to_string()),
+            exchange: Some(exchange),
+            request: Some(1), //1 subscribe 2 unsubscribe
+            update_bits: Some(1), //1 for ticks 2 for quotes
         };
-        let req = RequestTimeBarUpdate {
+
+        //todo dont send if already subscribed
+        self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
+
+ /*       let req = RequestTimeBarUpdate {
         template_id: 200,
         user_msg: vec![],
         symbol: Some("NQ".to_string()),
@@ -344,69 +437,119 @@ impl VendorApiResponse for RithmicClient {
         request: Some(Request::Subscribe.into()),
         bar_type: Some(1),
         bar_type_period: Some(5),
-    };
-    };
+    };*/
 
-
-        */
-
-        /*let available_subscriptions = self.available_subscriptions();
+        //todo if not working try resolution Instant
+        let available_subscriptions = vec![DataSubscription::new(SymbolName::from("M6E"), self.data_vendor.clone(), Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Futures(FuturesExchange::CME))];
         if available_subscriptions.contains(&subscription) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
         }
-        if !self.data_feed_broadcasters.contains_key(&subscription) {
-            self.data_feed_broadcasters.insert(subscription.clone(), Arc::new(StaticInternalBroadcaster::new()));
-            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name, sender).await;
-            println!("Subscribing: {}", subscription);
-        } else {
-            // If we already have a running task, we dont need a new one, we just subscribe to the broadcaster
-            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name, sender).await;
-            return DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
-        }
-        println!("data_feed_subscribe Starting loop");
-        let broadcasters = self.data_feed_broadcasters.clone();
-        let broadcaster = self.data_feed_broadcasters.get(&subscription).unwrap().value().clone();
-        tokio::task::spawn(async move {
-            let mut last_time = utc_dt_1;
-            'main_loop: while last_time < utc_dt_2 {
-                let data_folder = PathBuf::from(get_data_folder());
-                let file = BaseDataEnum::file_path(&data_folder, &subscription, &last_time).unwrap();
-                let data = load_as_bytes(file.clone()).unwrap();
-                let month_time_slices = BaseDataEnum::from_array_bytes(&data).unwrap();
 
-                for mut base_data in month_time_slices {
-                    last_time = base_data.time_created_utc();
-                    match base_data {
-                        BaseDataEnum::Quote(ref mut quote) => {
-                            if broadcaster.has_subscribers() {
-                                quote.time = Utc::now().to_string();
-                                let response = DataServerResponse::DataUpdates(vec![base_data.clone()]);
-                                broadcaster.broadcast(response).await;
-                                sleep(Duration::from_millis(20)).await;
-                            } else {
-                                println!("No subscribers");
-                                break 'main_loop;
-                            }
-                        }
-                        _ => {}
+        //todo have a unique function per base data type.
+        match subscription.base_data_type {
+            BaseDataType::Ticks => {
+                let broadcaster = self.tick_feed_broadcasters
+                    .entry(subscription.symbol.name.clone())
+                    .or_insert_with(|| {
+                        println!("Subscribing: {}", subscription);
+                        Arc::new(StaticInternalBroadcaster::new())
+                    });
+                broadcaster.value().subscribe(stream_name.to_string(), sender);
+            }
+            BaseDataType::Quotes => {
+                let broadcaster = self.quote_feed_broadcasters
+                    .entry(subscription.symbol.name.clone())
+                    .or_insert_with(|| {
+                        println!("Subscribing: {}", subscription);
+                        Arc::new(StaticInternalBroadcaster::new())
+                    });
+                broadcaster.value().subscribe(stream_name.to_string(), sender);
+            }
+            BaseDataType::Candles => {
+                let broadcaster = self.candle_feed_broadcasters
+                    .entry(subscription.symbol.name.clone())
+                    .or_insert_with(|| {
+                        println!("Subscribing: {}", subscription);
+                        Arc::new(StaticInternalBroadcaster::new())
+                    });
+                broadcaster.value().subscribe(stream_name.to_string(), sender);
+            }
+            _ => todo!("Handle gracefully by returning err")
+        }
+
+
+        DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
+    }
+
+    async fn data_feed_unsubscribe(&self, _mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+        match subscription.base_data_type {
+            BaseDataType::Ticks => {
+                if let Some(broadcaster) = self.tick_feed_broadcasters.get(&subscription.symbol.name) {
+                    broadcaster.value().unsubscribe(&stream_name.to_string());
+                    if !broadcaster.has_subscribers() {
+                        self.quote_feed_broadcasters.remove(&subscription.symbol.name);
+                    }
+                    return DataServerResponse::UnSubscribeResponse {
+                        success: true,
+                        subscription,
+                        reason: None,
                     }
                 }
             }
-            broadcasters.remove(&subscription_clone);
-        });
-        DataServerResponse::SubscribeResponse{ success: true, subscription: subscription_clone_2.clone(), reason: None}*/
-        todo!()
+            BaseDataType::Quotes => {
+                if let Some(broadcaster) = self.quote_feed_broadcasters.get(&subscription.symbol.name) {
+                    broadcaster.value().unsubscribe(&stream_name.to_string());
+                    if !broadcaster.has_subscribers() {
+                        self.quote_feed_broadcasters.remove(&subscription.symbol.name);
+                    }
+                    return DataServerResponse::UnSubscribeResponse {
+                        success: true,
+                        subscription,
+                        reason: None,
+                    }
+                }
+            }
+            BaseDataType::Candles => {
+                if let Some (broadcaster) = self.candle_feed_broadcasters.get(&subscription.symbol.name) {
+                    broadcaster.value().unsubscribe(&stream_name.to_string());
+                    if !broadcaster.has_subscribers() {
+                        self.quote_feed_broadcasters.remove(&subscription.symbol.name);
+                    }
+                    return DataServerResponse::UnSubscribeResponse {
+                        success: true,
+                        subscription,
+                        reason: None,
+                    }
+                }
+            }
+            _ => todo!("Handle gracefully by returning err")
+        }
+        DataServerResponse::UnSubscribeResponse {
+            success: false,
+            subscription,
+            reason: Some(String::from("Subscription Not Found or Incorrect type for Rithmic")),
+        }
     }
 
-    async fn data_feed_unsubscribe(&self, _mode: StrategyMode,_stream_name: StreamName, _subscription: DataSubscription) -> DataServerResponse {
-        todo!()
+    async fn base_data_types_response(&self, _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+        //todo get dynamically from server using stream name to fwd callback
+        DataServerResponse::BaseDataTypes {
+            callback_id,
+            base_data_types: vec![BaseDataType::Candles, BaseDataType::Ticks, BaseDataType::Quotes],
+        }
     }
 
-    async fn base_data_types_response(&self, _mode: StrategyMode, _stream_name: StreamName, _callback_id: u64) -> DataServerResponse {
-        todo!()
-    }
-
-    async fn logout_command(&self, _stream_name: StreamName) {
-        todo!()
+    async fn logout_command(&self, stream_name: StreamName) {
+        //todo handle dynamically from server using stream name to remove subscriptions and callbacks
+        self.callbacks.remove(&stream_name);
+        for broadcaster in self.tick_feed_broadcasters.iter() {
+            broadcaster.unsubscribe(&stream_name.to_string());
+        }
+        for broadcaster in self.quote_feed_broadcasters.iter() {
+            broadcaster.unsubscribe(&stream_name.to_string());
+        }
+        for broadcaster in self.candle_feed_broadcasters.iter() {
+            broadcaster.unsubscribe(&stream_name.to_string());
+        }
     }
 }

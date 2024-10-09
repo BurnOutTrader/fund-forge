@@ -1,7 +1,7 @@
 use crate::strategies::ledgers::AccountId;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::standardized_types::subscriptions::SymbolName;
-use crate::standardized_types::enums::{MarketType, StrategyMode};
+use crate::standardized_types::enums::{StrategyMode};
 use async_trait::async_trait;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::server_features::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
@@ -14,11 +14,10 @@ use crate::standardized_types::new_types::Volume;
 pub trait BrokerApiResponse: Sync + Send {
     /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`.
     /// server or client error depending on who caused this problem
-    async fn symbols_response(
+    async fn symbol_names_response(
         &self,
         mode: StrategyMode,
         stream_name: StreamName, // The stream name is just the u16 port number the strategy is connecting to
-        market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse;
 
@@ -78,20 +77,19 @@ pub trait BrokerApiResponse: Sync + Send {
 impl BrokerApiResponse for Brokerage {
     /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`.
     /// server or client error depending on who caused this problem
-    async fn symbols_response(
+    async fn symbol_names_response(
         &self,
         mode: StrategyMode,
         stream_name: StreamName,
-        market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse {
         match self {
             Brokerage::Rithmic(system) => {
                 if let Some(client) = RITHMIC_CLIENTS.get(system) {
-                    return client.symbols_response(mode, stream_name, market_type, callback_id).await
+                    return client.symbol_names_response(mode, stream_name, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.symbol_names_response(mode, stream_name, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -116,15 +114,7 @@ impl BrokerApiResponse for Brokerage {
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
 
-    /// return` DataServerResponse::SymbolInfo` or `DataServerResponse::Error(FundForgeError)`
-    /// server or client error depending on who caused this problem
-    async fn symbol_info_response(
-        &self,
-        mode: StrategyMode,
-        stream_name: StreamName,
-        symbol_name: SymbolName,
-        callback_id: u64
-    ) -> DataServerResponse {
+    async fn symbol_info_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         match self {
             Brokerage::Rithmic(system) => {
                 if let Some(client) = RITHMIC_CLIENTS.get(system) {

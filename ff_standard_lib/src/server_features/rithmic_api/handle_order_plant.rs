@@ -7,6 +7,7 @@ use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 #[allow(unused_imports)]
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestShowOrders, RequestSubscribeForOrderUpdates};
 use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
@@ -125,7 +126,6 @@ pub async fn handle_responses_from_order_plant(
                                                         account_info.daily_max_loss = Some(Decimal::from_u32(max_loss.clone() as u32).unwrap());
                                                     }
                                                     client.accounts.insert(id.clone(), account_info);
-                                                    client.account_rms_info.insert(id.clone(), msg.clone());
                                                     let req = RequestPnLPositionSnapshot {
                                                         template_id: 402,
                                                         user_msg: vec![],
@@ -134,6 +134,40 @@ pub async fn handle_responses_from_order_plant(
                                                         account_id: Some(id.clone()),
                                                     };
                                                     match client.send_message(SysInfraType::PnlPlant, req).await {
+                                                        Ok(_) => {}
+                                                        Err(_) => {}
+                                                    }
+                                                    let req = RequestPnLPositionUpdates {
+                                                        template_id: 400 ,
+                                                        user_msg: vec![],
+                                                        request: Some(1),
+                                                        fcm_id: client.fcm_id.clone(),
+                                                        ib_id: client.ib_id.clone(),
+                                                        account_id: Some(id.clone()),
+                                                    };
+                                                    match client.send_message(SysInfraType::PnlPlant, req).await {
+                                                        Ok(_) => {}
+                                                        Err(_) => {}
+                                                    }
+                                                    let req = RequestShowOrders {
+                                                        template_id: 320,
+                                                        user_msg: vec![],
+                                                        fcm_id: client.fcm_id.clone(),
+                                                        ib_id: client.ib_id.clone(),
+                                                        account_id: Some(id.clone()),
+                                                    };
+                                                    match client.send_message(SysInfraType::OrderPlant, req).await {
+                                                        Ok(_) => {}
+                                                        Err(_) => {}
+                                                    }
+                                                    let req = RequestSubscribeForOrderUpdates {
+                                                        template_id,
+                                                        user_msg: vec![],
+                                                        fcm_id: client.fcm_id.clone(),
+                                                        ib_id: client.ib_id.clone(),
+                                                        account_id: Some(id.clone()),
+                                                    };
+                                                    match client.send_message(SysInfraType::OrderPlant, req).await {
                                                         Ok(_) => {}
                                                         Err(_) => {}
                                                     }

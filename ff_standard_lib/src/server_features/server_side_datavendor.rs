@@ -70,7 +70,6 @@ pub trait VendorApiResponse: Sync + Send {
     /// The caller does not await this method, but it lets the strategy know if the subscription was successful.
     async fn data_feed_subscribe(
         &self,
-        mode: StrategyMode,
         stream_name: StreamName,
         subscription: DataSubscription,
         sender: Sender<DataServerResponse>
@@ -215,7 +214,6 @@ impl VendorApiResponse for DataVendor {
     /// The caller does not await this method, but it lets the strategy know if the subscription was successful.
     async fn data_feed_subscribe(
         &self,
-        mode: StrategyMode,
         stream_name: StreamName,
         subscription: DataSubscription,
         sender: Sender<DataServerResponse>
@@ -223,10 +221,10 @@ impl VendorApiResponse for DataVendor {
         match self {
             DataVendor::Rithmic(system) => {
                 if let Some(client) = get_rithmic_client(system) {
-                    return client.data_feed_subscribe(mode, stream_name, subscription, sender).await
+                    return client.data_feed_subscribe(stream_name, subscription, sender).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(mode, stream_name, subscription, sender).await
+            DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription, sender).await
         }
         DataServerResponse::SubscribeResponse{ success: false, subscription, reason: Some(format!("Unable to find api client instance for: {}", self))}
     }

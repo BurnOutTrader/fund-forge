@@ -20,6 +20,21 @@ pub enum FuturesExchange {
     NYBOT
     // Add other exchanges if necessary
 }
+
+impl FuturesExchange {
+    pub fn from_string(s: &str) -> Result<Self, String> {
+        match s.to_uppercase().as_str() {
+            "CBOT" => Ok(FuturesExchange::CBOT),
+            "CME" => Ok(FuturesExchange::CME),
+            "COMEX" => Ok(FuturesExchange::COMEX),
+            "NYMEX" => Ok(FuturesExchange::NYMEX),
+            "MGEX" => Ok(FuturesExchange::MGEX),
+            "NYBOT" => Ok(FuturesExchange::NYBOT),
+            _ => Err(format!("Unknown exchange: {}", s)),
+        }
+    }
+}
+
 /// Used for internal ff calulcations
 #[derive(Serialize, Deserialize, Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialOrd, Eq, Ord, PartialEq, Copy, Debug, Display, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
