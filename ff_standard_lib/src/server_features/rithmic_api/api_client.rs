@@ -33,6 +33,7 @@ use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolN
 use crate::standardized_types::symbol_info::SymbolInfo;
 use tokio::sync::oneshot;
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::new_types::Volume;
 use crate::standardized_types::orders::{Order, OrderId};
 use crate::standardized_types::resolution::Resolution;
@@ -72,9 +73,9 @@ pub struct RithmicClient {
     pub products: DashMap<MarketType, Vec<Symbol>>,
 
     //subscribers
-    pub tick_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<DataServerResponse>>>>,
-    pub quote_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<DataServerResponse>>>>,
-    pub candle_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<DataServerResponse>>>>,
+    pub tick_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
+    pub quote_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
+    pub candle_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
 }
 
 impl RithmicClient {
@@ -411,7 +412,7 @@ impl VendorApiResponse for RithmicClient {
         }
     }
 
-    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription, sender: Sender<BaseDataEnum>) -> DataServerResponse {
         let exchange = match subscription.market_type {
             MarketType::Futures(exchange) => {
                 exchange.to_string()

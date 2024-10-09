@@ -16,7 +16,6 @@ use rust_decimal::prelude::FromPrimitive;
 #[allow(unused_imports)]
 use tokio::time::sleep;
 use tungstenite::{Message};
-use crate::messages::data_server_messaging::DataServerResponse;
 #[allow(unused_imports)]
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::server_features::rithmic_api::api_client::RithmicClient;
@@ -232,7 +231,7 @@ pub async fn handle_responses_from_ticker_plant(
                                                 let symbol = Symbol::new(msg.symbol.unwrap(), client.data_vendor.clone(), MarketType::Futures(exchange));
                                                 let tick = Tick::new(symbol, price, Utc::now().to_string(), volume, side);
                                                 if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
-                                                    broadcaster.broadcast(DataServerResponse::BaseDataUpdates(BaseDataEnum::Tick(tick))).await;
+                                                    broadcaster.broadcast(BaseDataEnum::Tick(tick)).await;
                                                 }
                                             }
                                         },
