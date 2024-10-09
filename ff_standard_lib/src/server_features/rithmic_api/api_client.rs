@@ -23,7 +23,7 @@ use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::server_features::StreamName;
 use crate::helpers::get_data_folder;
 use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
-use crate::strategies::ledgers::{AccountId, AccountInfo};
+use crate::strategies::ledgers::{AccountId, Ledger};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode, SubscriptionResolutionType};
@@ -60,7 +60,7 @@ pub struct RithmicClient {
     pub readers: DashMap<SysInfraType, Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>>,
 
     // accounts
-    pub accounts: DashMap<AccountId, AccountInfo>,
+    pub accounts: DashMap<AccountId, Ledger>,
     pub account_rms_info: DashMap<AccountId, ResponseAccountRmsInfo>,
 
     //products
@@ -76,13 +76,14 @@ impl RithmicClient {
         app_name: String,
         app_version: String,
         aggregated_quotes: bool,
-        server_domains_toml: String,
         connect_data_plants: bool,
         connect_account_plants: bool
     ) -> Result<Self, FundForgeError> {
         let brokerage = Brokerage::Rithmic(system.clone());
         let data_vendor = DataVendor::Rithmic(system.clone());
         let credentials = RithmicClient::rithmic_credentials(&brokerage)?;
+        println!("{:?}", credentials);
+        let server_domains_toml= "./data/rithmic_credentials/servers.toml".to_string();
         let client = RithmicApiClient::new(credentials.clone(), app_name, app_version, aggregated_quotes, server_domains_toml).unwrap();
         let client = Self {
             brokerage,
@@ -207,6 +208,7 @@ impl RithmicClient {
                     None => String::from("Invalid UTF-8 sequence"), // Handle the error case as needed
                 };
                 let file_path = format!("{}/rithmic_credentials/{}", data_folder, file);
+                println!("{}", file_path);
                 match RithmicCredentials::load_credentials_from_file(&file_path) {
                     Ok(file) => Ok(file),
                     Err(_e) => Err(FundForgeError::ServerErrorDebug(format!("Failed to load credentials for: {}", broker)))
