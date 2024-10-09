@@ -24,7 +24,11 @@ this is because we are sorting a large amount of quote data into accurate time s
 Sometimes pre warm up, it will freeze for longer than 1 min, I am not sure why this is yet, It happens rarely.
 It is likely to do with running server locally and stopping and starting strategies during development.
 If the strategy doesn't start the data feed and is stuck for more than 1 min just after retrieving data, restart it.
-The feed should start 1 or 2 seconds after the engine print line `println!("{Date} Data Points Recovered from Server: {Number} for {Month Year}";`.
+The feed should start 1 or 2 seconds after the engine print line `2024-06-17 Data Points Recovered from Server: 3029551 for 2024-06-17";`.
+
+It is normal for a long pause after this line `Engine: Preparing TimeSlices For: June 2024` when the engine sorts the data from multiple symbols into a single feed.
+
+If the engine is frozen after this line `2024-06-17 Data Points Recovered from Server: 3029551 for 2024-06-17` It is likely frozen indefinitely.
 
 ## Setup Info
 Get the test data from the instructions provided in the main readme and complete the setup.
