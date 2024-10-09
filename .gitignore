@@ -6,7 +6,6 @@
 /.obsidian/core-plugins.json
 /.obsidian/core-plugins-migration.json
 /.obsidian/workspace.json
-/rithmic_development
 ff_data_server/data/rithmic_credentials//rithmic_credentials/rithmic_credentials.toml
 ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2024-06.rkyv
 ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2024-07.rkyv
