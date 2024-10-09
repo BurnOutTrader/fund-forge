@@ -18,29 +18,31 @@
 - [Placing Orders](#placing-orders)
 - [Debugging Strategies](#debugging-strategies)
 
+## Important Info
+The test strategies might appear to be frozen before warm up,
+this is because we are sorting a large amount of quote data into accurate time slices for 2 symbols.
+Sometimes pre warm up, it will freeze for longer than 1 min, I am not sure why this is yet, It happens rarely.
+It is likely to do with running server locally and stopping and starting strategies during development.
+If the strategy doesn't start the data feed and is stuck for more than 1 min just after retrieving data, restart it.
+The feed should start 1 or 2 seconds after the engine print line `println!("{} Data Points Recovered from Server: {} for {}", start.date_naive(), month_time_slices.len(), start.date_naive());`.
 
-## Initializing Strategies
-The test strategies might appear to be frozen before warm up, 
-this is because we are sorting a large amount of quote data into accurate time slices for 2 symbols. 
-Sometimes pre warm up, it will freeze for longer than 1 min, I am not sure why this is yet, It happens rarely. 
-It is likely to do with running server locally and stopping and starting strategies during development. 
-If the strategy doesn't start the data feed and is stuck for more than 1 min just after retrieving data, restart it. 
-The feed should start 1 or 2 seconds after the engine print line `println!("{} Data Points Recovered from Server: {} for {}", start.date_naive(), month_time_slices.len(), start.date_naive());`. 
 
-Get the test data from the instructions provided in the main readme and complete the setup. 
+## Setup Info
+Get the test data from the instructions provided in the main readme and complete the setup.
 To run a strategy.
 1. cargo build in the fund-forge directory
 2. complete setup from main directory by downloading the test data.
-3. In the ff_data_server folder open a terminal and `cargo run` 
+3. In the ff_data_server folder open a terminal and `cargo run`
 4. In the test_strategy folder open a terminal and `cargo run`, or run directly in IDE
-5. The initial strategy start up will take time, as we recover historical data from our local server instance and (more demandingly) sort the individual quote resolution symbol data into timeslices for perfect accuracy. 
-The downloading and sorting of data into time slices is concurrent, but since the test data consists of 3318839 data points per month (2 symbols) it can take some time initially.
-I have tested running the data server remotely, it only adds a few seconds to backtests even at low data resolutions, this means we will be able to have our data server running on a server and keep a permanent copy of historical data in the cloud, while still back testing locally.
+5. The initial strategy start up will take time, as we recover historical data from our local server instance and (more demandingly) sort the individual quote resolution symbol data into timeslices for perfect accuracy.
+   The downloading and sorting of data into time slices is concurrent, but since the test data consists of 3318839 data points per month (2 symbols) it can take some time initially.
+   I have tested running the data server remotely, it only adds a few seconds to backtests even at low data resolutions, this means we will be able to have our data server running on a server and keep a permanent copy of historical data in the cloud, while still back testing locally.
 
-Everything found here could be changed during development, you will have to consult your IDE for minor errors like changes to function inputs. 
+Everything found here could be changed during development, you will have to consult your IDE for minor errors like changes to function inputs.
 
 See the [Test strategy](https://github.com/BurnOutTrader/fund-forge/blob/main/test_strategy/src/main.rs) for the most up-to-date working strategy example.
 
+## Initializing Strategies
 - Strategies are launched by creating a new instance of the `FundForgeStrategy` struct using the `initialize()` function,
 this will automatically create the engine and start the strategy in the background.
 - Then we can receive `StrategyEventBuffer`s in our `fn on_data_received()` function.
