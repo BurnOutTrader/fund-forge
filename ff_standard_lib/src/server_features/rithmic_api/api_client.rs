@@ -41,6 +41,7 @@ lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
 }
 
+// We do not want to initialize here, that should be done at server launch, else a strategy could sign out the client of the correct server.
 pub fn get_rithmic_client(rithmic_system: &RithmicSystem) -> Option<Arc<RithmicClient>> {
     if let Some(client) = RITHMIC_CLIENTS.get(&rithmic_system) {
         return Some(client.value().clone())
@@ -482,12 +483,27 @@ impl VendorApiResponse for RithmicClient {
     }
 
     async fn data_feed_unsubscribe(&self, _mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+        let exchange = match subscription.market_type {
+            MarketType::Futures(exchange) => {
+                exchange.to_string()
+            }
+            _ => todo!()
+        };
+        let req = RequestMarketDataUpdate {
+            template_id: 100,
+            user_msg: vec![],
+            symbol: Some(subscription.symbol.name.to_string()),
+            exchange: Some(exchange),
+            request: Some(2), //1 subscribe 2 unsubscribe
+            update_bits: Some(1), //1 for ticks 2 for quotes
+        };
         match subscription.base_data_type {
             BaseDataType::Ticks => {
                 if let Some(broadcaster) = self.tick_feed_broadcasters.get(&subscription.symbol.name) {
                     broadcaster.value().unsubscribe(&stream_name.to_string());
                     if !broadcaster.has_subscribers() {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
+                        self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
                     }
                     return DataServerResponse::UnSubscribeResponse {
                         success: true,
@@ -501,6 +517,7 @@ impl VendorApiResponse for RithmicClient {
                     broadcaster.value().unsubscribe(&stream_name.to_string());
                     if !broadcaster.has_subscribers() {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
+                        self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
                     }
                     return DataServerResponse::UnSubscribeResponse {
                         success: true,
@@ -514,6 +531,7 @@ impl VendorApiResponse for RithmicClient {
                     broadcaster.value().unsubscribe(&stream_name.to_string());
                     if !broadcaster.has_subscribers() {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
+                        self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
                     }
                     return DataServerResponse::UnSubscribeResponse {
                         success: true,
