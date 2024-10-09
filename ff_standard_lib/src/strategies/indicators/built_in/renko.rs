@@ -81,10 +81,13 @@ impl Renko {
             let direction = if price_diff > dec!(0) { 1 } else { -1 };
 
             for i in 0..blocks_to_create.to_i64().unwrap() {
-                let new_price = self.market_type.round_price(open_price + (self.renko_range * Decimal::from(direction * (i + 1))), self.tick_size, self.decimal_accuracy);
-                let block = self.create_renko_block(open_price, new_price, self.open_time.unwrap());
-                blocks.push(block.clone());
-                self.history.add(block);
+                let new_price = self.market_type.round_price(
+                    open_price + (self.renko_range * Decimal::from(direction * (i + 1))),
+                    self.tick_size,
+                    self.decimal_accuracy
+                );
+                let block = self.create_renko_block(open_price, new_price, self.open_time?);
+                blocks.push(block);
 
                 self.open_price = Some(new_price);
                 self.open_time = Some(time);
@@ -93,6 +96,8 @@ impl Renko {
             self.is_ready = true;
             Some(blocks)
         } else {
+            // Update the open time if no new block is created
+            self.open_time = Some(time);
             None
         }
     }
