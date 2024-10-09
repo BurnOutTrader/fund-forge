@@ -33,6 +33,7 @@ pub struct Renko {
 }
 
 impl Renko {
+    #[allow(dead_code)]
     pub(crate) async fn new(
         name: IndicatorName,
         subscription: DataSubscription,
@@ -80,7 +81,7 @@ impl Renko {
             let direction = if price_diff > dec!(0) { 1 } else { -1 };
 
             for i in 0..blocks_to_create.to_i64().unwrap() {
-                let new_price = open_price + (self.renko_range * Decimal::from(direction * (i + 1)));
+                let new_price = self.market_type.round_price(open_price + (self.renko_range * Decimal::from(direction * (i + 1))), self.tick_size, self.decimal_accuracy);
                 let block = self.create_renko_block(open_price, new_price, self.open_time.unwrap());
                 blocks.push(block.clone());
                 self.history.add(block);

@@ -41,6 +41,7 @@ impl Display for AverageTrueRange {
 }
 
 impl AverageTrueRange {
+    #[allow(dead_code)]
     pub async fn new(
         name: IndicatorName,
         subscription: DataSubscription,
