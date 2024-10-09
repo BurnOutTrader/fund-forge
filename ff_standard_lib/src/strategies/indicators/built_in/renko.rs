@@ -14,7 +14,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
 
 /// Renko Indicator
-/// The Renko Indicator can output more than 1 value per update, multiple blocks may be returned in a single buffer.
+/// The Renko Indicator can output more than 1 "IndicatorValues" object per update, multiple blocks may be returned in a single buffer.
 /// `plots: "open", "close"`
 #[derive(Clone, Debug)]
 pub struct Renko {
