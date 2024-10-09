@@ -46,10 +46,10 @@ pub trait Indicators {
     /// if !base_data.is_closed() {
     ///     return None;
     ///  }
-    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues>;
+    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<Vec<IndicatorValues>>;
 
     /// Returns the subscription for the indicator.
-    fn subscription(&self) -> DataSubscription;
+    fn subscription(&self) -> &DataSubscription;
 
     /// Resets the indicator to its initial state.
     fn reset(&mut self);

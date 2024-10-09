@@ -34,7 +34,7 @@ impl IndicatorHandler {
     }
 
     pub async fn add_indicator(&self, indicator: IndicatorEnum, time: DateTime<Utc>) -> IndicatorEvents {
-        let subscription = indicator.subscription();
+        let subscription = indicator.subscription().clone();
 
         if !self.indicators.contains_key(&subscription) {
             self.indicators.insert(subscription.clone(), DashMap::new());
@@ -83,29 +83,30 @@ impl IndicatorHandler {
     }
 
     pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) {
-        let mut results: BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
+        let mut results: BTreeMap<IndicatorName, Vec<IndicatorValues>> = BTreeMap::new();
         let indicators = self.indicators.clone();
 
         for data in time_slice.iter() {
             let subscription = data.subscription();
             if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
                 for mut indicators_dash_map in indicators_by_sub.iter_mut() {
-                    let data = indicators_dash_map.value_mut().update_base_data(data);
-                    if let Some(indicator_data) = data {
-                        results.insert(indicators_dash_map.key().clone(), indicator_data);
+                    if let Some(indicator_data) = indicators_dash_map.value_mut().update_base_data(data) {
+                        results.entry(indicators_dash_map.key().clone())
+                            .or_insert_with(Vec::new)
+                            .extend(indicator_data);
                     }
                 }
             }
         }
 
-        let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
-        if !results_vec.is_empty() {
+        if !results.is_empty() {
+            let results_vec: Vec<IndicatorValues> = results.into_values().flatten().collect();
             add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await;
         }
     }
 
     pub async fn update_base_data(&self, time: DateTime<Utc>, base_data: &BaseDataEnum) {
-        let mut results: BTreeMap<IndicatorName, IndicatorValues> = BTreeMap::new();
+        let mut results: BTreeMap<IndicatorName, Vec<IndicatorValues>> = BTreeMap::new();
         let indicators = self.indicators.clone();
 
         let subscription = base_data.subscription();
@@ -113,14 +114,15 @@ impl IndicatorHandler {
             for mut indicators_dash_map in indicators_by_sub.iter_mut() {
                 let data = indicators_dash_map.value_mut().update_base_data(base_data);
                 if let Some(indicator_data) = data {
-                    results.insert(indicators_dash_map.key().clone(), indicator_data);
+                    results.entry(indicators_dash_map.key().clone())
+                        .or_insert_with(Vec::new)
+                        .extend(indicator_data);
                 }
             }
         }
 
-
-        let results_vec: Vec<IndicatorValues> = results.values().cloned().collect();
-        if !results_vec.is_empty() {
+        if !results.is_empty() {
+            let results_vec: Vec<IndicatorValues> = results.into_values().flatten().collect();
             add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await;
         }
     }

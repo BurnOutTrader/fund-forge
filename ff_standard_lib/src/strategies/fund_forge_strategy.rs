@@ -682,10 +682,10 @@ impl FundForgeStrategy {
         match self.mode {
             StrategyMode::Backtest => {
                 let subscriptions = self.subscriptions().await;
-                if !subscriptions.contains(&indicator.subscription()) {
+                if !subscriptions.contains(indicator.subscription()) {
                     match auto_subscribe {
                         true => {
-                            self.subscribe(indicator.subscription(), (indicator.data_required_warmup() + 1) as usize, false).await;
+                            self.subscribe(indicator.subscription().clone(), (indicator.data_required_warmup() + 1) as usize, false).await;
                         }
                         false => panic!("You have no subscription: {}, for the indicator subscription {} and AutoSubscribe is not enabled", indicator.subscription(), indicator.name())
                     }
@@ -703,7 +703,7 @@ impl FundForgeStrategy {
                     if !subscriptions.contains(&indicator.subscription()) {
                         match auto_subscribe {
                             true => {
-                                let result = handler.subscribe(indicator.subscription(), Utc::now(),false, (indicator.data_required_warmup() + 1) as usize, true).await;
+                                let result = handler.subscribe(indicator.subscription().clone(), Utc::now(),false, (indicator.data_required_warmup() + 1) as usize, true).await;
                                 match result {
                                     Ok(_) => {
                                        // add_buffer(Utc::now(), StrategyEvent::DataSubscriptionEvent(sub_result)).await;

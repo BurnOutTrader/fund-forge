@@ -1,4 +1,3 @@
-use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::DataSubscription;
@@ -13,6 +12,7 @@ use crate::gui_types::settings::Color;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::enums::MarketType;
 
 #[derive(Clone, Debug)]
 pub struct AverageTrueRange {
@@ -20,8 +20,10 @@ pub struct AverageTrueRange {
     subscription: DataSubscription,
     history: RollingWindow<IndicatorValues>,
     base_data_history: RollingWindow<BaseDataEnum>,
+    market_type: MarketType,
+    tick_size: Decimal,
+    decimal_accuracy: u32,
     is_ready: bool,
-    tick_size: Price,
     plot_color: Color,
     period: u64
 }
@@ -44,19 +46,19 @@ impl AverageTrueRange {
         period: u64,
         plot_color: Color,
     ) -> Self {
-        let tick_size = subscription
-            .symbol
-            .tick_size()
-            .await.unwrap();
+        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap();
+        let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await.unwrap();
         let atr = AverageTrueRange {
             name,
+            market_type: subscription.symbol.market_type.clone(),
             subscription,
             history: RollingWindow::new(history_to_retain),
             base_data_history: RollingWindow::new(period as usize),
             is_ready: false,
             tick_size,
             plot_color,
-            period
+            period,
+            decimal_accuracy,
         };
         atr
     }
@@ -89,10 +91,7 @@ impl AverageTrueRange {
             if sum == dec!(0.0) {
                 return dec!(0.0)
             }
-            round_to_tick_size(
-                 sum / Decimal::from_usize(true_ranges.len()).unwrap(),
-                self.tick_size.clone(),
-            )
+            self.market_type.round_price(sum / Decimal::from_usize(true_ranges.len()).unwrap(), self.tick_size, self.decimal_accuracy)
         } else {
             dec!(0.0)
         };
@@ -109,7 +108,7 @@ impl Indicators for AverageTrueRange {
         self.history.number.clone() as usize
     }
 
-    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<IndicatorValues> {
+    fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<Vec<IndicatorValues>> {
         if !base_data.is_closed() {
             return None;
         }
@@ -142,11 +141,11 @@ impl Indicators for AverageTrueRange {
         );
 
         self.history.add(values.clone());
-        Some(values)
+        Some(vec![values])
     }
 
-    fn subscription(&self) -> DataSubscription {
-        self.subscription.clone()
+    fn subscription(&self) -> &DataSubscription {
+        &self.subscription
     }
 
     fn reset(&mut self) {
