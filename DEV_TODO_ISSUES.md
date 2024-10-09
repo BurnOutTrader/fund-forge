@@ -2,6 +2,8 @@
 Possibly add a unique data server stream for base data, this will involve.
 1. adding a new address and port
 2. strategies will need some identifier other than port number for stream name on the server side, so that streams can be co-ordinated between ports.
+3. At registration strategies can be registered with a unique identifier, they will await this identifier from the server, when the server sends this identifier, Live and LivePaper
+strategies will then connect to the streaming port using the identifier.
 
 This isn't a huge amount of work but should result in better performance:
 1. Less blocking of the main stream, response wont have to compete with data stream to use the send half of the stream.
