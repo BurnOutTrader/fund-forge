@@ -13,13 +13,10 @@ use rust_decimal_macros::dec;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
 
-//renko parameters will have to be strings so we can implement hash etc
-//todo, just have different kinds of renko consolidators for the different kinds of renko
-/// It is better to use RenkoType::PriceMovementValue to pass in a fixed value for atr size at run time.
-/// You  can still pass in the atr range using the PriceMovementValue, if you use the ATR function, the Consolidator will need to first warm up the ATR indicator to get the ATR value.
-/// If you have an ATR indicator already warmed up, it will be faster to use this instead.
+/// Renko Indicator
+/// The Renko Indicator can output more than 1 value per update, multiple blocks may be returned in a single buffer.
+/// `plots: "open", "close"`
 #[derive(Clone, Debug)]
-#[allow(dead_code)]
 pub struct Renko {
     name: IndicatorName,
     pub(crate) subscription: DataSubscription,
@@ -36,7 +33,6 @@ pub struct Renko {
 }
 
 impl Renko {
-    #[allow(dead_code)]
     pub(crate) async fn new(
         name: IndicatorName,
         subscription: DataSubscription,

@@ -15,6 +15,8 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::MarketType;
 
 #[derive(Clone, Debug)]
+/// The Atr indicator only updates on closed data
+/// `plots: "atr"`
 pub struct AverageTrueRange {
     name: IndicatorName,
     subscription: DataSubscription,
