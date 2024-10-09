@@ -24,4 +24,8 @@ This can be achieved by either:
 - Converting the time to market time, depending on the Brokerage used. Or
 - Manually sending cancel order to the Brokerage at the specified time.
 
+## Indicators Not fully tested
+- Renko
+- ATR
+
 
