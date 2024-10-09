@@ -20,7 +20,12 @@
 
 
 ## Initializing Strategies
-The test strategy might appear to be frozen during warm up, this is because we are sorting a large amount quote of data into accurate time slices for 2 symbols. Sometimes pre warm up, it will freeze for longer than 1 min, I am not sure why this is yet, probably to do with running server locally and stopping and starting strategies during development. If the strategy doesn't start the data feed and is stuck for more than 1 min just after retrieving data, restart it, the feed should start immediately after the engine prints "Retrieved x number of data points from server". 
+The test strategies might appear to be frozen before warm up, 
+this is because we are sorting a large amount of quote data into accurate time slices for 2 symbols. 
+Sometimes pre warm up, it will freeze for longer than 1 min, I am not sure why this is yet, It happens rarely. 
+It is likely to do with running server locally and stopping and starting strategies during development. 
+If the strategy doesn't start the data feed and is stuck for more than 1 min just after retrieving data, restart it. 
+The feed should start 1 or 2 seconds after the engine print line `println!("{} Data Points Recovered from Server: {} for {}", start.date_naive(), month_time_slices.len(), start.date_naive());`. 
 
 Get the test data from the instructions provided in the main readme and complete the setup. 
 To run a strategy.
