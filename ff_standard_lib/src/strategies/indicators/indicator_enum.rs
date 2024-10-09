@@ -5,7 +5,10 @@ use crate::strategies::indicators::built_in::average_true_range::AverageTrueRang
 use crate::strategies::indicators::built_in::renko::Renko;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
-
+//todo Look at using generics instead for indicators instead of an enum.
+// the handler only needs to keep a map of indicators for updating, adding and removing,
+// it never needs to know an indicators concrete type and dynamic dispatch will not be needed.
+// we could use something like BTreeMap<IndicatorName, impl Indicators>
 /// An enum for all indicators
 /// Custom(Box<dyn Indicators + Send + Sync>) is for custom indicators which we want to handle automatically in the engine
 #[derive(Clone, Debug)]
