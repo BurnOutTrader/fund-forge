@@ -33,7 +33,7 @@ lazy_static! {
 }
 
 pub struct TestApiClient {
-    data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<DataServerResponse>>>>
+    data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>
 }
 
 impl TestApiClient {
@@ -194,7 +194,7 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription, sender: Sender<DataServerResponse>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription, sender: Sender<BaseDataEnum>) -> DataServerResponse {
         let available_subscription_1 = DataSubscription::new(SymbolName::from("AUD-CAD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
         let available_subscription_2 = DataSubscription::new(SymbolName::from("EUR-USD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
         if subscription != available_subscription_1 && subscription != available_subscription_2 {
@@ -234,7 +234,7 @@ impl VendorApiResponse for TestApiClient {
                         BaseDataEnum::Quote(ref mut quote) => {
                             if broadcaster.has_subscribers() {
                                 quote.time = Utc::now().to_string();
-                                broadcaster.broadcast(DataServerResponse::BaseDataUpdates(base_data)).await;
+                                broadcaster.broadcast(base_data).await;
                                 sleep(Duration::from_millis(20)).await;
                             } else {
                                 println!("No subscribers");

@@ -27,7 +27,7 @@ pub struct Tick {
     pub price: Price,
     pub time: TimeString,
     pub volume: Volume,
-    pub side: OrderSide
+    pub side: Option<OrderSide>
 }
 
 impl BaseData for Tick {
@@ -94,7 +94,7 @@ impl Tick {
     /// 4. `volume` - The volume of the trade.
     /// 5. `side` - The side of the trade `Side` enum variant.
     /// 6. `data_vendor` - The data vendor of the trade.
-    pub fn new(symbol: Symbol, price: Price, time: TimeString, volume: Volume, side: OrderSide) -> Self {
+    pub fn new(symbol: Symbol, price: Price, time: TimeString, volume: Volume, side: Option<OrderSide>) -> Self {
         Tick {
             symbol,
             price,
@@ -107,20 +107,28 @@ impl Tick {
 
 impl fmt::Display for Tick {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let side = match self.side {
+            None => "None".to_string(),
+            Some(side) => side.to_string()
+        };
         write!(
             f,
             "{:?},{},{},{},{}",
-            self.symbol, self.price, self.volume, self.side, self.time
+            self.symbol, self.price, self.volume, side, self.time
         )
     }
 }
 
 impl fmt::Debug for Tick {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let side = match self.side {
+            None => "None".to_string(),
+            Some(side) => side.to_string()
+        };
         write!(
             f,
             "Tick {{ symbol: {:?}, price: {}, volume: {}, side: {}, time: {}}}",
-            self.symbol, self.price, self.volume, self.side, self.time
+            self.symbol, self.price, self.volume, side, self.time
         )
     }
 }

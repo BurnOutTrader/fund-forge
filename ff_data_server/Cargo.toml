@@ -6,7 +6,7 @@ authors = ["Kevin Monaghan"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ff_rithmic_api = "0.1.6"
+ff_rithmic_api = "0.1.8"
 ff_standard_lib = { path = "../ff_standard_lib", features = ["server"]}
 chrono = "*"
 tokio = { version = "*", features = ["full"] }

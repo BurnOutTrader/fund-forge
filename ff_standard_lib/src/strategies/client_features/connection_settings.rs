@@ -36,7 +36,6 @@ pub mod client_settings {
     pub fn initialise_settings(
     ) -> Result<HashMap<ConnectionType, ConnectionSettings>, FundForgeError> {
         let toml_file_path = get_toml_file_path();
-
         if !toml_file_path.exists() {
             let default_settings = ConnectionSettings::default();
             let mut map: HashMap<ConnectionType, ConnectionSettings> = HashMap::new();
@@ -45,7 +44,8 @@ pub mod client_settings {
             let dafault_registry_settings = ConnectionSettings {
                 ssl_auth_folder: get_resources().join("keys"),
                 server_name: String::from("fundforge"),
-                address: SocketAddr::from_str("127.0.0.1:8082").unwrap(),
+                address: SocketAddr::from_str("127.0.0.1:8083").unwrap(),
+                stream_address: SocketAddr::from_str("127.0.0.1:8084").unwrap(),
             };
             map.insert(ConnectionType::StrategyRegistry, dafault_registry_settings);
 
@@ -89,6 +89,8 @@ pub mod client_settings {
         pub server_name: String,
         /// the listener for async streaming type communications
         pub address: SocketAddr,
+
+        pub stream_address: SocketAddr
     }
 
     impl Default for ConnectionSettings {
@@ -97,6 +99,7 @@ pub mod client_settings {
                 ssl_auth_folder: get_resources().join("keys"),
                 server_name: String::from("fundforge"),
                 address: SocketAddr::from_str("127.0.0.1:8081").unwrap(),
+                stream_address: SocketAddr::from_str("127.0.0.1:8082").unwrap(),
             }
         }
     }

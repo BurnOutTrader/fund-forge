@@ -50,11 +50,29 @@ pub fn example() {
         user: "Example trader".to_string(),
         server_name: RithmicServer::Chicago,
         system_name: RithmicSystem::TopStep,
-        password: "password".to_string()
+        app_name: "fufo:example".to_string(),
+        app_version: "1.0".to_string(),
+        password: "password".to_string(),
+        fcm_id: "TopstepTrader".to_string(),
+        ib_id: "TopstepTrader".to_string(),
+        user_type: 1
     };
     
     // Note that we use credentials.system_name.file_string() for the file name, so that the server knows where to find credentials.
     let save_path: String = format!("ff_data_server/rithmic_credentials/{}", credentials.file_name());
     credentials.save_credentials_to_file(&save_path);
 }
+```
+Rithmic Credentials toml file example
+user type 3 = Trader, this is important for prop firm connections.
+```toml
+user = ""  
+system_name = "TopstepTrader"  
+server_name = "Chicago"  
+app_name = ""  
+app_version = "1.0"  
+password = ""  
+fcm_id = "TopstepTrader"  
+ib_id = "TopstepTrader"  
+user_type = 3 
 ```

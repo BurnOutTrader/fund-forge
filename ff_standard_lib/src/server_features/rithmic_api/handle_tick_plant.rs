@@ -13,38 +13,25 @@ use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLP
 use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
+use tokio::task::JoinHandle;
 #[allow(unused_imports)]
 use tokio::time::sleep;
 use tungstenite::{Message};
-use crate::messages::data_server_messaging::DataServerResponse;
 #[allow(unused_imports)]
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::server_features::rithmic_api::api_client::RithmicClient;
-use crate::server_features::rithmic_api::handle_history_plant::handle_responses_from_history_plant;
-use crate::server_features::rithmic_api::handle_order_plant::handle_responses_from_order_plant;
-use crate::server_features::rithmic_api::handle_pnl_plant::handle_responses_from_pnl_plant;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::tick::Tick;
 use crate::standardized_types::enums::{FuturesExchange, MarketType, OrderSide};
 use crate::standardized_types::subscriptions::Symbol;
 
-pub async fn handle_received_responses(
-    client: Arc<RithmicClient>,
-) {
-    handle_responses_from_ticker_plant(client.clone()).await.unwrap();
-    handle_responses_from_order_plant(client.clone()).await.unwrap();
-    handle_responses_from_history_plant(client.clone()).await.unwrap();
-    handle_responses_from_pnl_plant(client.clone()).await.unwrap();
-    //handle_responses_from_repo_plant(client).await.unwrap();
-}
-
 #[allow(dead_code)]
 /// we use extract_template_id() to get the template id using the field_number 154467 without casting to any concrete type, then we map to the concrete type and handle that message.
 pub async fn handle_responses_from_ticker_plant(
     client: Arc<RithmicClient>,
-) -> Result<(), RithmicApiError> {
+) -> JoinHandle<()>{
     const PLANT: SysInfraType = SysInfraType::TickerPlant;
-    tokio::task::spawn(async move {
+    let handle = tokio::task::spawn(async move {
         let reader = client.readers.get(&PLANT).unwrap().value().clone();
         let mut reader = reader.lock().await;
         while let Some(message) = reader.next().await {
@@ -223,16 +210,16 @@ pub async fn handle_responses_from_ticker_plant(
                                                     None => return,
                                                     Some(aggressor) => {
                                                         match aggressor {
-                                                            1 => OrderSide::Buy,
-                                                            2 => OrderSide::Sell,
-                                                            _ => return,
+                                                            1 => Some(OrderSide::Buy),
+                                                            2 => Some(OrderSide::Sell),
+                                                            _ => None,
                                                         }
                                                     }
                                                 };
                                                 let symbol = Symbol::new(msg.symbol.unwrap(), client.data_vendor.clone(), MarketType::Futures(exchange));
                                                 let tick = Tick::new(symbol, price, Utc::now().to_string(), volume, side);
                                                 if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
-                                                    broadcaster.broadcast(DataServerResponse::BaseDataUpdates(BaseDataEnum::Tick(tick))).await;
+                                                    broadcaster.broadcast(BaseDataEnum::Tick(tick)).await;
                                                 }
                                             }
                                         },
@@ -360,5 +347,5 @@ pub async fn handle_responses_from_ticker_plant(
             }
         }
     });
-    Ok(())
+    handle
 }

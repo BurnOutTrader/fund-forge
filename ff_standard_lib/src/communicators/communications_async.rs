@@ -5,7 +5,6 @@ use tokio::sync::mpsc::Receiver;
 use tokio::sync::{mpsc, Mutex};
 use tokio_rustls::server::TlsStream as ServerTlsStream;
 use tokio_rustls::TlsStream;
-use crate::messages::data_server_messaging::FundForgeError;
 
 /// With an 8-byte (64-bit) length field, you can represent data sizes up to approximately 17179869184 GB, which is equivalent to 16777216 TB, or 16 exabytes (EB).
 const LENGTH: usize = 8;
@@ -89,27 +88,21 @@ impl ExternalSender {
             sender: Mutex::new(sender)
         }
     }
-    pub async fn send(&self, data: &Vec<u8>) -> Result<(), FundForgeError> {
+    pub async fn send(&self, data: &Vec<u8>) {
+        // Prepare the message with a 8-byte length header in big-endian format
+        let length = (data.len() as u64).to_be_bytes();
+        let mut prefixed_msg = Vec::new();
+        prefixed_msg.extend_from_slice(&length);
+        prefixed_msg.extend_from_slice(&data);
+
         // Lock the mutex to get mutable access
         let mut sender = self.sender.lock().await;
-
-        // Convert the length of the data to a u64, then to bytes
-        let len = data.len() as u64;
-        let len_bytes = len.to_be_bytes();
-
-        // Write the length header
         match sender
-            .write_all(&len_bytes)
+            .write_all(&prefixed_msg)
             .await {
-            Ok(_) => {}
-            Err(e) => return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to send lenght: {}", e)))
+            Ok(_) => { }
+            Err(_e) => {}
         }
-
-        // Write the actual data
-        sender
-            .write_all(&data)
-            .await
-            .map_err(|e| FundForgeError::ClientSideErrorDebug(e.to_string()))
     }
 }
 

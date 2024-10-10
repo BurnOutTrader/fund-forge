@@ -8,12 +8,10 @@ use std::fmt::{Debug, Display};
 use rust_decimal::Decimal;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::datavendor_enum::DataVendor;
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use crate::standardized_types::time_slices::TimeSlice;
 
 /// An Api key String
 pub type ApiKey = String;
@@ -123,7 +121,7 @@ pub enum DataServerRequest {
     },
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64},
-
+    RegisterStreamer(u16)
 }
 
 impl DataServerRequest {
@@ -157,6 +155,7 @@ impl DataServerRequest {
             DataServerRequest::Accounts { callback_id, .. } => {*callback_id = id}
             DataServerRequest::PrimarySubscriptionFor { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::RegisterStreamer(_) => {}
         }
     }
 }
@@ -270,20 +269,13 @@ DataServerResponse {
 
     SymbolNames{callback_id: u64, symbol_names: Vec<SymbolName>},
 
-/*    AccountState(Brokerage, AccountId, AccountState),
-    OrderUpdates(OrderUpdateEvent),
-    PositionUpdates(PositionUpdateEvent),*/
-    TimeSliceUpdates(TimeSlice),
-
-    BaseDataUpdates(BaseDataEnum),
-
     Accounts{callback_id: u64, accounts: Vec<AccountId>},
 
     PrimarySubscriptionFor{callback_id: u64, primary_subscription: DataSubscription},
 
     OrderUpdates(OrderUpdateEvent),
 
-
+    RegistrationResponse(u16)
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -321,12 +313,11 @@ impl DataServerResponse {
             DataServerResponse::BaseDataTypes { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SubscribeResponse { .. } => None,
             DataServerResponse::UnSubscribeResponse { .. } => None,
-            DataServerResponse::TimeSliceUpdates(_) => None,
             DataServerResponse::Accounts {callback_id, ..} => Some(callback_id.clone()),
-            DataServerResponse::BaseDataUpdates(_) => None,
             DataServerResponse::OrderUpdates(_) => None,
             DataServerResponse::PrimarySubscriptionFor {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::SymbolNames {callback_id, ..} => Some(callback_id.clone()),
+            DataServerResponse::RegistrationResponse(_) => None
         }
     }
 }

@@ -11,6 +11,7 @@ use ff_rithmic_api::rithmic_proto_objects::rti::{RequestShowOrders, RequestSubsc
 use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
+use tokio::task::JoinHandle;
 use tungstenite::{Message};
 #[allow(unused_imports)]
 use crate::standardized_types::broker_enum::Brokerage;
@@ -20,8 +21,8 @@ use crate::strategies::ledgers::{AccountInfo, Currency};
 #[allow(dead_code)]
 pub async fn handle_responses_from_order_plant(
     client: Arc<RithmicClient>,
-) -> Result<(), RithmicApiError> {
-    tokio::task::spawn(async move {
+)  -> JoinHandle<()> {
+    let handle = tokio::task::spawn(async move {
         const PLANT: SysInfraType = SysInfraType::OrderPlant;
         let reader = client.readers.get(&PLANT).unwrap().value().clone();
         let mut reader = reader.lock().await;
@@ -445,5 +446,5 @@ pub async fn handle_responses_from_order_plant(
             }
         }
     });
-    Ok(())
+    handle
 }

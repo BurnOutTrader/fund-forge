@@ -955,9 +955,9 @@ dependencies = [
 
 [[package]]
 name = "ff_rithmic_api"
-version = "0.1.6"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd1b2fee47b85bd9b17c49c91f47928259994c6513c9a2bab4eebb4d7b3764d6"
+checksum = "9df798cda709d49c653750c39c6e2302e139ed93a93bd5ff25e2bcd82723aba4"
 dependencies = [
  "dashmap",
  "futures-util",
@@ -2306,6 +2306,20 @@ dependencies = [
  "spin",
  "untrusted",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "rithmic_test"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "colored",
+ "ff_rithmic_api",
+ "ff_standard_lib",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "tokio",
 ]
 
 [[package]]

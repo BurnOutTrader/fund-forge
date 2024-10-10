@@ -5,6 +5,7 @@ use crate::server_features::rithmic_api::api_client::{get_rithmic_client};
 use crate::server_features::StreamName;
 use crate::server_features::test_api::api_client::TEST_CLIENT;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
 
@@ -72,7 +73,7 @@ pub trait VendorApiResponse: Sync + Send {
         &self,
         stream_name: StreamName,
         subscription: DataSubscription,
-        sender: Sender<DataServerResponse>
+        sender: Sender<BaseDataEnum>
     ) -> DataServerResponse;
 
     /// return `DataServerResponse::UnSubscribeResponse` or `DataServerResponse::Error(FundForgeError)`
@@ -216,7 +217,7 @@ impl VendorApiResponse for DataVendor {
         &self,
         stream_name: StreamName,
         subscription: DataSubscription,
-        sender: Sender<DataServerResponse>
+        sender: Sender<BaseDataEnum>
     ) -> DataServerResponse {
         match self {
             DataVendor::Rithmic(system) => {

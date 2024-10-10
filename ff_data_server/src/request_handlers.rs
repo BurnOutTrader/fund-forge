@@ -1,5 +1,4 @@
 use std::future::Future;
-use std::net::SocketAddr;
 use ff_standard_lib::helpers::converters::load_as_bytes;
 use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -54,30 +53,26 @@ pub async fn base_data_response(
     }
 }
 
-async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
-    let tcp_stream = stream.get_ref();
-    tcp_stream.0.peer_addr().unwrap()
-}
 
 lazy_static! {
-    pub static ref STREAM_CALLBACK_SENDERS: DashMap<u16 , Sender<DataServerResponse>> = DashMap::new();
+    pub static ref STREAM_CALLBACK_SENDERS: DashMap<u16 , Sender<BaseDataEnum>> = DashMap::new();
 }
 
 pub async fn manage_async_requests(
     strategy_mode: StrategyMode,
-    stream: TlsStream<TcpStream>
+    stream: TlsStream<TcpStream>,
+    stream_name: StreamName
 ) {
-    let stream_name = get_ip_addresses(&stream).await.port();
     println!("stream name: {}", stream_name);
     let (read_half, write_half) = io::split(stream);
     let strategy_mode = strategy_mode;
+    let (response_sender, request_receiver) = mpsc::channel(1000);
+    let response_handle = response_handler(request_receiver, write_half).await;
     tokio::spawn(async move {
         const LENGTH: usize = 8;
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
-        let (stream_sender, stream_receiver) = mpsc::channel(1000);
-        let stream_handle = stream_handler(stream_receiver, write_half).await;
-        STREAM_CALLBACK_SENDERS.insert(stream_name.clone(), stream_sender.clone());
+
         while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
             // Parse the length from the header
             let msg_length = u64::from_be_bytes(length_bytes) as usize;
@@ -102,8 +97,8 @@ pub async fn manage_async_requests(
             };
             println!("{:?}", request);
             let stream_name = stream_name.clone();
-            let sender = stream_sender.clone();
             let mode =strategy_mode.clone();
+            let sender = response_sender.clone();
             tokio::spawn(async move {
                 // Handle the request and generate a response
                 match request {
@@ -212,8 +207,15 @@ pub async fn manage_async_requests(
                             return
                         }
                         println!("{:?}", request);
+                        let stream_sender = match STREAM_CALLBACK_SENDERS.get(&stream_name) {
+                            None => {
+                                eprintln!("No Stream Sender found for: {}", stream_name);
+                                return;
+                            }
+                            Some(sender) => sender.value().clone()
+                        };
                         handle_callback(
-                            || stream_response(stream_name, request, sender.clone()),
+                            || stream_response(stream_name, request, stream_sender),
                             sender.clone()).await
                     },
 
@@ -231,38 +233,17 @@ pub async fn manage_async_requests(
                     DataServerRequest::PrimarySubscriptionFor { .. } => {
                         todo!()
                     }
-                DataServerRequest::SymbolNames{ .. } => {}};
+                DataServerRequest::SymbolNames{ .. } => {}
+                    DataServerRequest::RegisterStreamer(_) => {}
+                };
             });
         }
-        stream_handle.abort();
-        STREAM_CALLBACK_SENDERS.remove(&stream_name);
+        shutdown(stream_name.clone()).await;
+        response_handle.abort();
     });
 }
 
-async fn handle_callback<F, Fut>(
-    callback: F,
-    sender: tokio::sync::mpsc::Sender<DataServerResponse>
-)
-where
-    F: FnOnce() -> Fut,
-    Fut: Future<Output = DataServerResponse>,
-{
-    // Call the closure to get the future, then await the future to get the response
-    let response = callback().await;
-
-    // Send the response through the channel to the stream handler
-    match sender.send(response).await {
-        Err(e) => {
-            // Handle the error (log it or take some other action)
-            println!("Failed to send response to stream handler: {:?}", e);
-        }
-        Ok(_) => {
-            // Successfully sent the response
-        }
-    }
-}
-
-async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>) -> JoinHandle<()> {
+async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>) -> JoinHandle<()> {
     let mut receiver = receiver;
     let mut writer = writer;
     tokio::spawn(async move {
@@ -289,7 +270,65 @@ async fn stream_handler(receiver: Receiver<DataServerResponse>, writer: WriteHal
     })
 }
 
-async fn stream_response(stream_name: StreamName, request: StreamRequest, sender: Sender<DataServerResponse>) -> DataServerResponse {
+async fn handle_callback<F, Fut>(
+    callback: F,
+    sender: tokio::sync::mpsc::Sender<DataServerResponse>
+)
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = DataServerResponse>,
+{
+    // Call the closure to get the future, then await the future to get the response
+    let response = callback().await;
+
+    // Send the response through the channel to the stream handler
+    match sender.send(response).await {
+        Err(e) => {
+            // Handle the error (log it or take some other action)
+            println!("Failed to send response to stream handler: {:?}", e);
+        }
+        Ok(_) => {
+            // Successfully sent the response
+        }
+    }
+}
+
+pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamName) -> JoinHandle<()> {
+    let (stream_sender, stream_receiver) = mpsc::channel(1000);
+    STREAM_CALLBACK_SENDERS.insert(stream_name.clone(), stream_sender.clone());
+    let mut receiver = stream_receiver;
+    let mut stream = stream;
+    tokio::spawn(async move {
+        while let Some(response) = receiver.recv().await {
+            // Convert the response to bytes
+            let bytes = response.to_bytes();
+
+            // Prepare the message with a 4-byte length header in big-endian format
+            let length = (bytes.len() as u64).to_be_bytes();
+            let mut prefixed_msg = Vec::new();
+            prefixed_msg.extend_from_slice(&length);
+            prefixed_msg.extend_from_slice(&bytes);
+
+            // Write the response to the stream
+            match stream.write_all(&prefixed_msg).await {
+                Err(_e) => {
+                    // Handle the error (log it or take some other action)
+                }
+                Ok(_) => {
+                    // Successfully wrote the message
+                }
+            }
+        }
+        shutdown(stream_name.clone()).await;
+        STREAM_CALLBACK_SENDERS.remove(&stream_name);
+    })
+}
+
+async fn shutdown(_stream_name: StreamName) {
+    //todo alert api clients that we have shutdown this stream and to cancel all callbacks or streams
+}
+
+async fn stream_response(stream_name: StreamName, request: StreamRequest, sender: Sender<BaseDataEnum>) -> DataServerResponse {
     match request {
         StreamRequest::AccountUpdates(_, _) => {
             panic!()
@@ -299,8 +338,8 @@ async fn stream_response(stream_name: StreamName, request: StreamRequest, sender
                 DataVendor::Test => {
                     subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
                 }
-                DataVendor::Rithmic(_system) => {
-                    panic!()
+                DataVendor::Rithmic(_) => {
+                    subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
                 }
             }
         }
