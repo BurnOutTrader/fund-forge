@@ -99,18 +99,20 @@ async fn init_apis(options: ServerLaunchOptions) {
                 }
             }
 
-            for file in toml_files {
-                if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
-                    //todo add a bool option to credentials for is_data_feed
-                    let client = RithmicClient::new(system, false).await.unwrap();
-                    let client = Arc::new(client);
-                    match RithmicClient::run_start_up(client.clone(), true, true).await {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Fail to run rithmic client for: {}, reason: {}", system, e)
+            if !toml_files.is_empty() {
+                for file in toml_files {
+                    if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
+                        //todo add a bool option to credentials for is_data_feed
+                        let client = RithmicClient::new(system, false).await.unwrap();
+                        let client = Arc::new(client);
+                        match RithmicClient::run_start_up(client.clone(), true, true).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Fail to run rithmic client for: {}, reason: {}", system, e)
+                        }
+                        RITHMIC_CLIENTS.insert(system, client);
+                    } else {
+                        eprintln!("Error parsing rithmic system from: {}", file);
                     }
-                    RITHMIC_CLIENTS.insert(system, client);
-                } else {
-                    eprintln!("Error parsing rithmic system from: {}", file);
                 }
             }
         }
