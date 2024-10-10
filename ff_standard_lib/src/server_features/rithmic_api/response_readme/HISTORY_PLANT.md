@@ -62,3 +62,7 @@ fn example() {
 }
 ```
 
+
+# Reject
+Reject Response (Template ID: 11) from Server: Reject { template_id: 75, user_msg: [], rp_code: ["1034", "invalid operation before login."] }
+
