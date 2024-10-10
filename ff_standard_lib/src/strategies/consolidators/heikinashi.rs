@@ -129,8 +129,15 @@ impl HeikinAshiConsolidator {
                 let time = open_time(&self.subscription, new_data.time_utc());
 
                 let (ask_volume, bid_volume) = match tick.side {
-                    OrderSide::Buy => (dec!(0.0), tick.volume),
-                    OrderSide::Sell => (tick.volume, dec!(0.0))
+                    Some(side) => {
+                        match side {
+                            OrderSide::Buy => (dec!(0.0), tick.volume),
+                            OrderSide::Sell => (tick.volume, dec!(0.0))
+                        }
+                    }
+                    None => {
+                        (dec!(0.0), dec!(0.0))
+                    }
                 };
 
                 self.candle_from_base_data(
@@ -278,10 +285,12 @@ impl HeikinAshiConsolidator {
                             candle.low = tick.price.min(candle.low);
                             candle.range = self.market_type.round_price(candle.high - candle.low, self.tick_size, self.decimal_accuracy);
                             candle.volume += tick.volume;
-                            match tick.side {
-                                OrderSide::Buy => candle.bid_volume += tick.volume,
-                                OrderSide::Sell => candle.ask_volume += tick.volume
-                            };
+                            if let Some(side) = tick.side {
+                                match side {
+                                    OrderSide::Buy => candle.bid_volume += tick.volume,
+                                    OrderSide::Sell => candle.ask_volume += tick.volume
+                                };
+                            }
                             candle.close = self.market_type.round_price((candle.open + candle.high + candle.low + candle.close) / dec!(4.0), self.tick_size, self.decimal_accuracy);
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }

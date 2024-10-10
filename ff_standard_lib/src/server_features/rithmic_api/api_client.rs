@@ -12,6 +12,7 @@ use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, Reque
 use ff_rithmic_api::rithmic_proto_objects::rti::RequestMarketDataUpdate;
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::stream::SplitStream;
+use futures::StreamExt;
 use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
 use rust_decimal_macros::dec;
@@ -33,7 +34,12 @@ use crate::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use tokio::sync::oneshot;
+use tokio::task::JoinHandle;
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
+use crate::server_features::rithmic_api::handle_history_plant::handle_responses_from_history_plant;
+use crate::server_features::rithmic_api::handle_order_plant::handle_responses_from_order_plant;
+use crate::server_features::rithmic_api::handle_pnl_plant::handle_responses_from_pnl_plant;
+use crate::server_features::rithmic_api::handle_tick_plant::handle_responses_from_ticker_plant;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::new_types::Volume;
 use crate::standardized_types::orders::{Order, OrderId};
@@ -65,6 +71,7 @@ pub struct RithmicClient {
     pub client: Arc<RithmicApiClient>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
     pub readers: DashMap<SysInfraType, Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>>,
+    pub handlers: DashMap<SysInfraType, JoinHandle<()>>,
 
     // accounts
     pub accounts: DashMap<AccountId, AccountInfo>,
@@ -116,71 +123,96 @@ impl RithmicClient {
             orders_open: Default::default(),
             products: Default::default(),
             candle_feed_broadcasters: Arc::new(Default::default()),
+            handlers: DashMap::with_capacity(5),
         };
         if connect_data_plants {
-            client.connect_to_data_plants().await?
+            match client.connect_to_data_plants().await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
         if connect_account_plants {
-            client.connect_to_accounts().await?
+            match client.connect_to_accounts().await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
-        client.run_start_up().await;
         Ok(client)
     }
 
     pub async fn connect_to_data_plants(&self) -> Result<(), FundForgeError> {
-        let _ticker_receiver = match self.client.connect_and_login(SysInfraType::TickerPlant).await {
-            Ok(r) => self.readers.insert(SysInfraType::TickerPlant, Arc::new(Mutex::new(r))),
+        match self.client.connect_and_login(SysInfraType::TickerPlant).await {
+            Ok(r) => {
+                self.readers.insert(SysInfraType::TickerPlant, Arc::new(Mutex::new(r)))
+            },
             Err(e) => {
                 return Err(FundForgeError::ServerErrorDebug(e.to_string()))
             }
         };
-        //todo start ticker handler
-        let _pnl_receiver = match self.client.connect_and_login(SysInfraType::HistoryPlant).await {
+
+        match self.client.connect_and_login(SysInfraType::HistoryPlant).await {
             Ok(r) => self.readers.insert(SysInfraType::HistoryPlant, Arc::new(Mutex::new(r))),
             Err(e) => {
                 return Err(FundForgeError::ServerErrorDebug(e.to_string()))
             }
         };
-        //todo start history handler
         Ok(())
     }
 
     pub async fn connect_to_accounts(&self) -> Result<(), FundForgeError> {
-        let _order_receiver = match self.client.connect_and_login(SysInfraType::OrderPlant).await {
+        match self.client.connect_and_login(SysInfraType::OrderPlant).await {
             Ok(r) => self.readers.insert(SysInfraType::OrderPlant, Arc::new(Mutex::new(r))),
             Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
             }
         };
-        //todo start order handler
-        let _pnl_receiver = match self.client.connect_and_login(SysInfraType::PnlPlant).await {
+        match self.client.connect_and_login(SysInfraType::PnlPlant).await {
             Ok(r) => self.readers.insert(SysInfraType::PnlPlant, Arc::new(Mutex::new(r))),
             Err(e) => {
                 return Err(FundForgeError::ServerErrorDebug(e.to_string()))
             }
         };
-        //todo start pnl handler
         Ok(())
     }
 
     //todo run start up... we might need to connect to all plants for this..
-    async fn run_start_up(&self) {
-        /*   let accounts = RequestAccountList {
-               template_id: 302,
-               user_msg: vec![],
-               fcm_id: self.fcm_id.clone(),
-               ib_id: self.ib_id.clone(),
-               user_type: self.user_type.clone()
-           };
-           self.client.send_message(SysInfraType::OrderPlant, accounts).await.unwrap();*/
-        let rms_req = RequestAccountRmsInfo {
-            template_id: 304,
-            user_msg: vec![],
-            fcm_id: self.fcm_id.clone(),
-            ib_id: self.ib_id.clone(),
-            user_type: self.user_type.clone(),
-        };
-        self.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();
+    pub async fn run_start_up(client: Arc<Self>) {
+        let client = client;
+        tokio::task::spawn(async move {
+            for infra in &client.readers {
+                match infra.key() {
+                    SysInfraType::TickerPlant => {
+                        client.handlers.insert(SysInfraType::TickerPlant, handle_responses_from_ticker_plant(client.clone()).await);
+                    }
+                    SysInfraType::OrderPlant => {
+                        client.handlers.insert(SysInfraType::OrderPlant, handle_responses_from_order_plant(client.clone()).await);
+                    }
+                    SysInfraType::HistoryPlant => {
+                        client.handlers.insert(SysInfraType::HistoryPlant, handle_responses_from_history_plant(client.clone()).await);
+                    }
+                    SysInfraType::PnlPlant => {
+                        client.handlers.insert(SysInfraType::PnlPlant, handle_responses_from_pnl_plant(client.clone()).await);
+                    }
+                    SysInfraType::RepositoryPlant => {}
+                }
+            }
+         /*   let accounts = RequestAccountList {
+                template_id: 302,
+                user_msg: vec![],
+                fcm_id: client.fcm_id.clone(),
+                ib_id: client.ib_id.clone(),
+                user_type: client.user_type.clone()
+            };
+            client.client.send_message(SysInfraType::OrderPlant, accounts).await.unwrap();*/
+         /*   let rms_req = RequestAccountRmsInfo {
+                template_id: 304,
+                user_msg: vec![],
+                fcm_id: client.fcm_id.clone(),
+                ib_id: client.ib_id.clone(),
+                user_type: client.user_type.clone(),
+            };
+            client.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();*/
+        });
     }
 
     pub async fn send_callback(&self, stream_name: StreamName, callback_id: u64, response: DataServerResponse) {
@@ -330,6 +362,9 @@ impl BrokerApiResponse for RithmicClient {
         }
         for broadcaster in self.candle_feed_broadcasters.iter() {
             broadcaster.unsubscribe(&stream_name.to_string());
+        }
+        for handle in &self.handlers {
+            handle.abort();
         }
     }
 }
@@ -575,6 +610,10 @@ impl VendorApiResponse for RithmicClient {
         }
         for broadcaster in self.candle_feed_broadcasters.iter() {
             broadcaster.unsubscribe(&stream_name.to_string());
+        }
+
+        for handle in &self.handlers {
+            handle.abort();
         }
     }
 }

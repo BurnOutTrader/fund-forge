@@ -2309,6 +2309,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "rithmic_test"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "colored",
+ "ff_rithmic_api",
+ "ff_standard_lib",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "tokio",
+]
+
+[[package]]
 name = "rkyv"
 version = "0.7.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"

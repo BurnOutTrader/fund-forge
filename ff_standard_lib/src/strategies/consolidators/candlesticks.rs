@@ -124,11 +124,13 @@ impl CandleStickConsolidator {
                         candle.low = candle.low.min(tick.price);
                         candle.close = tick.price;
                         candle.range = self.market_type.round_price(candle.high - candle.low, self.tick_size, self.decimal_accuracy);
-                        candle.volume += tick.volume;
-                        match tick.side {
-                            OrderSide::Buy => candle.bid_volume += tick.volume,
-                            OrderSide::Sell => candle.ask_volume += tick.volume
+                        if let Some(side) = tick.side {
+                            match side {
+                                OrderSide::Buy => candle.bid_volume += tick.volume,
+                                OrderSide::Sell => candle.ask_volume += tick.volume
+                            }
                         }
+                        candle.volume += tick.volume;
                         return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                     }
                     BaseDataEnum::Candle(new_candle) => {
@@ -260,8 +262,15 @@ impl CandleStickConsolidator {
         match new_data {
             BaseDataEnum::Tick(tick) => {
                 let (ask_volume, bid_volume) = match tick.side {
-                    OrderSide::Buy => (dec!(0.0), tick.volume),
-                    OrderSide::Sell => (tick.volume, dec!(0.0))
+                    Some(side) => {
+                        match side {
+                            OrderSide::Buy => (dec!(0.0), tick.volume),
+                            OrderSide::Sell => (tick.volume, dec!(0.0))
+                        }
+                    }
+                    None => {
+                        (dec!(0.0), dec!(0.0))
+                    }
                 };
                 Candle::new(
                     self.subscription.symbol.clone(),
