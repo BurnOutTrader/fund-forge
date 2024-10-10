@@ -1,9 +1,10 @@
-use dashmap::DashMap;
+use ahash::AHashMap;
 use tokio::sync::mpsc::Sender;
+use tokio::sync::Mutex;
 
 /// Manages subscriptions to incoming data, any concurrent process that needs a copy of this objects  primary data source can become a `SecondaryDataSubscriber` and thus will receive a copy of the data stream.
 pub struct StaticInternalBroadcaster<T: Clone + Send> {
-    subscribers: DashMap<String, Sender<T>>,
+    subscribers: Mutex<AHashMap<String, Sender<T>>>,
 }
 
 impl<T: Clone + Send> StaticInternalBroadcaster<T> {
@@ -14,36 +15,41 @@ impl<T: Clone + Send> StaticInternalBroadcaster<T> {
     }
 
     /// Clear all subscribers to signal that the broadcaster will be shut down.
-    pub fn shut_down(&self) {
-        self.subscribers.clear();
+    pub async fn shut_down(&self) {
+        let mut subscribers = self.subscribers.lock().await;
+        subscribers.clear();
     }
 
     /// adds the subscriber to the subscriptions for this manager
-    pub fn subscribe(&self, name: String, subscriber: Sender<T>) {
-        self.subscribers.insert(name, subscriber);
+    pub async fn subscribe(&self, name: String, subscriber: Sender<T>) {
+        let mut subscribers = self.subscribers.lock().await;
+        subscribers.insert(name, subscriber);
     }
 
-    pub fn unsubscribe(&self, name: &str) {
-        self.subscribers.remove(name);
+    pub async fn unsubscribe(&self, name: &str) {
+        let mut subscribers = self.subscribers.lock().await;
+        subscribers.remove(name);
     }
 
-    pub fn has_subscribers(&self) -> bool {
-        !self.subscribers.is_empty()
+    pub async fn has_subscribers(&self) -> bool {
+        let subscribers = self.subscribers.lock().await;
+        !subscribers.is_empty()
     }
 
 
     /// Sequential broadcast: broadcasts the data to all subscribers sequentially without concurrency or creating new tasks.
     pub async fn broadcast(&self, source_data: T) {
+        let mut subscribers = self.subscribers.lock().await;
         let mut closed =vec![];
-        for subscriber in self.subscribers.iter() {
-            match subscriber.value().send(source_data.clone()).await {
+        for (name, subscriber) in subscribers.iter() {
+            match subscriber.send(source_data.clone()).await {
                 Ok(_) => {}
-                Err(_) => closed.push(subscriber.key().clone())
+                Err(_) => closed.push(name.clone())
             }
         }
         if !closed.is_empty() {
             for name in closed {
-                self.subscribers.remove(&name);
+                subscribers.remove(&name);
                 println!("Failed broadcast recipient: {}", name)
             }
         }

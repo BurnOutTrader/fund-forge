@@ -202,11 +202,11 @@ impl VendorApiResponse for TestApiClient {
         }
         if !self.data_feed_broadcasters.contains_key(&subscription) {
             self.data_feed_broadcasters.insert(subscription.clone(), Arc::new(StaticInternalBroadcaster::new()));
-            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name.to_string(), sender);
+            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name.to_string(), sender).await;
             println!("Subscribing: {}", subscription);
         } else {
             // If we already have a running task, we dont need a new one, we just subscribe to the broadcaster
-            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name.to_string(), sender);
+            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name.to_string(), sender).await;
             return DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
         }
         println!("data_feed_subscribe Starting loop");
@@ -232,7 +232,7 @@ impl VendorApiResponse for TestApiClient {
                     last_time = base_data.time_closed_utc();
                     match base_data {
                         BaseDataEnum::Quote(ref mut quote) => {
-                            if broadcaster.has_subscribers() {
+                            if broadcaster.has_subscribers().await {
                                 quote.time = Utc::now().to_string();
                                 broadcaster.broadcast(base_data).await;
                                 sleep(Duration::from_millis(20)).await;
@@ -252,7 +252,7 @@ impl VendorApiResponse for TestApiClient {
 
     async fn data_feed_unsubscribe(&self,  _mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         if let Some(broadcaster) = self.data_feed_broadcasters.get(&subscription) {
-            broadcaster.unsubscribe(&stream_name.to_string());
+            broadcaster.unsubscribe(&stream_name.to_string()).await;
             return DataServerResponse::UnSubscribeResponse{ success: true, subscription, reason: None}
         }
         DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("There is no active subscription for: {}", subscription))}
