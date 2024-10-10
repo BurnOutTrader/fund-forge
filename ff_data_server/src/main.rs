@@ -16,9 +16,9 @@ use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor};
 use tokio_rustls::server::TlsStream;
+use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::messages::data_server_messaging::{DataServerRequest, DataServerResponse};
 use ff_standard_lib::server_features::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
-use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use crate::request_handlers::{manage_async_requests, stream_handler};
@@ -81,7 +81,11 @@ struct ServerLaunchOptions {
 async fn init_apis(options: &ServerLaunchOptions) {
     if !options.disable_rithmic_server {
         let mut toml_files = Vec::new();
-        let dir = "./data/rithmic_credentials".to_string();
+        let dir = PathBuf::from(get_data_folder())
+            .join("rithmic_credentials")
+            .to_string_lossy()
+            .into_owned();
+
         for entry in fs::read_dir(dir).unwrap() {
             let entry = entry.unwrap();
             let path = entry.path();
@@ -105,6 +109,35 @@ async fn init_apis(options: &ServerLaunchOptions) {
     }
 }
 
+async fn logout_apis(options: &ServerLaunchOptions) {
+    if !options.disable_rithmic_server {
+        let mut toml_files = Vec::new();
+        let dir = PathBuf::from(get_data_folder())
+            .join("rithmic_credentials")
+            .to_string_lossy()
+            .into_owned();
+
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+                    toml_files.push(file_name.to_string());
+                }
+            }
+        }
+
+        for file in toml_files {
+            if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                    client.shutdown().await;
+                }
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let options = ServerLaunchOptions::from_args();
@@ -123,8 +156,8 @@ async fn main() -> io::Result<()> {
     init_apis(&options).await;
 
     let address = SocketAddr::new(options.listener_address, options.port);
-    let async_server_handle = async_server(config.clone().into(), address, options.data_folder).await;
-    let address = SocketAddr::new(options.stream_address, options.stream_port);
+    let async_server_handle = async_server(config.clone().into(), address, options.data_folder.clone()).await;
+    let address = SocketAddr::new(options.stream_address.clone(), options.stream_port.clone());
     let stream_server_handle = stream_server(config.into(), address).await;
 
     let async_result = async_server_handle.await;
@@ -138,6 +171,7 @@ async fn main() -> io::Result<()> {
         eprintln!("Stream server failed: {:?}", e);
     }
 
+    logout_apis(&options).await;
     Ok(())
 }
 

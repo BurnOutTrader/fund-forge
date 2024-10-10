@@ -7,7 +7,6 @@ use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
-use std::sync::Arc;
 use dashmap::DashMap;
 use structopt::lazy_static::lazy_static;
 use tokio::io;
@@ -17,7 +16,6 @@ use tokio::sync::{mpsc};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio_rustls::server::TlsStream;
-use ff_standard_lib::server_features::rithmic_api::api_client::{get_rithmic_client, RithmicClient};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
@@ -340,7 +338,7 @@ async fn stream_response(stream_name: StreamName, request: StreamRequest, sender
                 DataVendor::Test => {
                     subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
                 }
-                DataVendor::Rithmic(system) => {
+                DataVendor::Rithmic(_) => {
                     subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
                 }
             }
