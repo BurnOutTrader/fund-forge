@@ -20,6 +20,7 @@
       <sourceFolder url="file://$MODULE_DIR$/example_test_strategy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_tests/ledger_test/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_tests/rithmic_test/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ff_rithmic_api/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ff-data-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff-registry-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_application/target" />
@@ -27,6 +28,7 @@
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_lightweight_charts/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_gui/target" />
+      <excludeFolder url="file://$MODULE_DIR$/ff_rithmic_api/target" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
