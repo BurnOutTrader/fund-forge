@@ -1,0 +1,14 @@
+[package]
+name = "rithmic_test"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ff_rithmic_api = "0.1.8"
+chrono-tz = "0.10.0"
+tokio = "1.36.0"
+chrono = "*"
+rust_decimal = { version = "1.36.0", features = ["rkyv", "rkyv-safe"] }
+rust_decimal_macros ="1.36.0"
+ff_standard_lib = { path = "../../ff_standard_lib" }
+colored = "*"
