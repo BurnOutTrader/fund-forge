@@ -199,8 +199,7 @@ pub async fn handle_responses_from_ticker_plant(
                                                 Some(exchange) => {
                                                     match FuturesExchange::from_string(&exchange) {
                                                         Ok(ex) => ex,
-                                                        Err(e) => {
-                                                            eprintln!("Error deserializing Exchange");
+                                                        Err(_e) => {
                                                             continue
                                                         }
                                                     }

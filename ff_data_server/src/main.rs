@@ -12,8 +12,7 @@ use ff_rithmic_api::systems::RithmicSystem;
 use structopt::StructOpt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::{join, signal, task};
-use tokio::sync::oneshot;
+use tokio::{signal, task};
 use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor};
 use tokio_rustls::server::TlsStream;
@@ -78,6 +77,7 @@ struct ServerLaunchOptions {
     pub disable_rithmic_server: bool,
 }
 
+#[allow(dead_code)]
 async fn init_apis(options: ServerLaunchOptions) {
     let options = options.clone();
     tokio::task::spawn(async move {
@@ -135,7 +135,7 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-    init_apis(options.clone()).await;
+    //init_apis(options.clone()).await;
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 
