@@ -82,23 +82,7 @@ async fn init_apis(options: ServerLaunchOptions) {
     let options = options.clone();
     tokio::task::spawn(async move {
         if !options.disable_rithmic_server {
-            let mut toml_files = Vec::new();
-            let dir = PathBuf::from(get_data_folder())
-                .join("rithmic_credentials")
-                .to_string_lossy()
-                .into_owned();
-
-            for entry in fs::read_dir(dir).unwrap() {
-                let entry = entry.unwrap();
-                let path = entry.path();
-
-                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("toml") {
-                    if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
-                        toml_files.push(file_name.to_string());
-                    }
-                }
-            }
-
+            let toml_files = get_rithmic_tomls();
             if !toml_files.is_empty() {
                 for file in toml_files {
                     if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
@@ -119,29 +103,36 @@ async fn init_apis(options: ServerLaunchOptions) {
     });
 }
 
-async fn logout_apis(options: &ServerLaunchOptions) {
-    if !options.disable_rithmic_server {
-        let mut toml_files = Vec::new();
-        let dir = PathBuf::from(get_data_folder())
-            .join("rithmic_credentials")
-            .to_string_lossy()
-            .into_owned();
+fn get_rithmic_tomls() -> Vec<String> {
+    let mut toml_files = Vec::new();
+    let dir = PathBuf::from(get_data_folder())
+        .join("rithmic_credentials")
+        .to_string_lossy()
+        .into_owned();
 
-        for entry in fs::read_dir(dir).unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
+    for entry in fs::read_dir(dir).unwrap() {
+        let entry = entry.unwrap();
+        let path = entry.path();
 
-            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("toml") {
-                if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
-                    toml_files.push(file_name.to_string());
-                }
+        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("toml") {
+            if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+                toml_files.push(file_name.to_string());
             }
         }
+    }
 
-        for file in toml_files {
-            if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
-                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                    client.shutdown().await;
+    toml_files
+}
+
+async fn logout_apis(options: &ServerLaunchOptions) {
+    if !options.disable_rithmic_server {
+        let toml_files = get_rithmic_tomls();
+        if !toml_files.is_empty() {
+            for file in toml_files {
+                if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
+                    if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                        client.shutdown().await;
+                    }
                 }
             }
         }
