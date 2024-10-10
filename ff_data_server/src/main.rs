@@ -89,7 +89,11 @@ async fn init_apis(options: ServerLaunchOptions) {
                         //todo add a bool option to credentials for is_data_feed
                         let client = RithmicClient::new(system, true).await.unwrap();
                         let client = Arc::new(client);
-                        match RithmicClient::run_start_up(client.clone(), true, true).await {
+                        let use_data = match system {
+                            RithmicSystem::TopstepTrader => true,
+                            _ => false
+                        };
+                        match RithmicClient::run_start_up(client.clone(), true, use_data).await {
                             Ok(_) => {}
                             Err(e) => eprintln!("Fail to run rithmic client for: {}, reason: {}", system, e)
                         }
@@ -135,7 +139,7 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-    //init_apis(options.clone()).await;
+    init_apis(options.clone()).await;
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 
