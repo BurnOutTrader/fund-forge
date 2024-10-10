@@ -1,3 +1,4 @@
+use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use ahash::AHashMap;
@@ -117,6 +118,28 @@ impl RithmicClient {
             handlers: DashMap::with_capacity(5),
         };
         Ok(client)
+    }
+
+
+    pub fn get_rithmic_tomls() -> Vec<String> {
+        let mut toml_files = Vec::new();
+        let dir = PathBuf::from(get_data_folder())
+            .join("rithmic_credentials")
+            .to_string_lossy()
+            .into_owned();
+
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+                    toml_files.push(file_name.to_string());
+                }
+            }
+        }
+
+        toml_files
     }
 
     //todo run start up... we might need to connect to all plants for this..

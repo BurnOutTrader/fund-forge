@@ -3,7 +3,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
 use std::fs::File;
-use std::{fs, io};
+use std::{io};
 use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -16,7 +16,6 @@ use tokio::{join, task};
 use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor};
 use tokio_rustls::server::TlsStream;
-use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::messages::data_server_messaging::{DataServerRequest, DataServerResponse};
 use ff_standard_lib::server_features::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
@@ -82,7 +81,7 @@ async fn init_apis(options: ServerLaunchOptions) {
     let options = options.clone();
     tokio::task::spawn(async move {
         if !options.disable_rithmic_server {
-            let toml_files = get_rithmic_tomls();
+            let toml_files = RithmicClient::get_rithmic_tomls();
             if !toml_files.is_empty() {
                 for file in toml_files {
                     if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
@@ -103,30 +102,9 @@ async fn init_apis(options: ServerLaunchOptions) {
     });
 }
 
-fn get_rithmic_tomls() -> Vec<String> {
-    let mut toml_files = Vec::new();
-    let dir = PathBuf::from(get_data_folder())
-        .join("rithmic_credentials")
-        .to_string_lossy()
-        .into_owned();
-
-    for entry in fs::read_dir(dir).unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-
-        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("toml") {
-            if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
-                toml_files.push(file_name.to_string());
-            }
-        }
-    }
-
-    toml_files
-}
-
 async fn logout_apis(options: &ServerLaunchOptions) {
     if !options.disable_rithmic_server {
-        let toml_files = get_rithmic_tomls();
+        let toml_files = RithmicClient::get_rithmic_tomls();
         if !toml_files.is_empty() {
             for file in toml_files {
                 if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
