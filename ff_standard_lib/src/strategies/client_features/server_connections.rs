@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::io;
@@ -16,7 +16,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::net::TcpStream;
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio::sync::mpsc::{Sender};
-use tokio::time::{sleep};
+use tokio::time::{interval_at, sleep, Instant};
 use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
@@ -336,6 +336,7 @@ pub async fn response_handler(
                                             }
                                         }
                                         false => {
+                                            eprintln!("Failed to subscribe to {}, {:?}", subscription, reason);
                                             let event = DataSubscriptionEvent::FailedToSubscribe(subscription.clone(), reason.unwrap());
                                             let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                             add_buffer(Utc::now(), event_slice).await;
@@ -356,6 +357,7 @@ pub async fn response_handler(
                                             }
                                         }
                                         false => {
+                                            eprintln!("Failed to unsubscribe from {}, {:?}", subscription, reason);
                                             let event = DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap());
                                             let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                             add_buffer(Utc::now(), event_slice).await;
@@ -441,7 +443,47 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
             }
         });
     }
+
+    // Creates a tick for each second for our consolidators, so we can update on each new second if no other data is coming in.
+    let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
+    let open_bars_ref = open_bars.clone();
+    let time_slice_ref = time_slice.clone();
+    tokio::task::spawn(async move {
+        // Calculate the start of the next second
+        let now = Utc::now();
+        let next_second = now + chrono::Duration::seconds(1)
+            - chrono::Duration::nanoseconds(now.nanosecond() as i64);
+
+        // Convert the next_second to a Tokio Instant
+        let start = Instant::now() + Duration::from_millis(
+            (next_second - now).num_milliseconds() as u64
+        );
+
+        // Create a ticker that starts at the next whole second and fires every second after
+        let mut ticker = interval_at(start, Duration::from_secs(1));
+
+        loop {
+            // Wait for the next tick
+            ticker.tick().await;
+
+            let now = Utc::now();
+
+            // Update consolidators time
+            if let Some(consolidated) = subscription_handler.update_consolidators_time(now).await {
+                {
+                    let mut time_slice = time_slice_ref.write().await;
+                    time_slice.extend(consolidated);
+                }
+                if !is_buffered {
+                    fwd_data(time_slice_ref.clone(), open_bars_ref.clone()).await;
+                }
+            }
+        }
+    });
+
     let market_update_sender = market_update_sender.clone();
+    let time_slice = time_slice.clone();
+    let open_bars = open_bars.clone();
     tokio::task::spawn(async move {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
         const LENGTH: usize = 8;

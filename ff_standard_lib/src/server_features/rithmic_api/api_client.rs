@@ -296,7 +296,7 @@ impl BrokerApiResponse for RithmicClient {
         //todo get dynamically from server using stream name to fwd callback
         let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         let (pnl_currency, value_per_tick, tick_size) = match symbol_name.as_str() {
-            "M6E" => (Currency::USD, dec!(1.0), dec!(0.0001)), // EUR/USD with $1 per tick
+            "MNQ" => (Currency::USD, dec!(2.0), dec!(0.25)), // EUR/USD with $1 per tick
             _ => todo!()       // Default values
         };
 
@@ -413,7 +413,7 @@ impl VendorApiResponse for RithmicClient {
     async fn decimal_accuracy_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         //todo get dynamically from server using stream name to fwd callback
         let accuracy = match symbol_name.as_str() {
-            "M6E" => 4,
+            "MNQ" => 4,
             _ => todo!(),
         };
         DataServerResponse::DecimalAccuracy {
@@ -425,7 +425,7 @@ impl VendorApiResponse for RithmicClient {
     async fn tick_size_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         //todo get dynamically from server using stream name to fwd callback
         let tick_size = match symbol_name.as_str() {
-            "M6E" => dec!(0.0001),
+            "MNQ" => dec!(0.0001),
             _ => todo!(),
         };
         DataServerResponse::TickSize {
@@ -454,7 +454,7 @@ impl VendorApiResponse for RithmicClient {
     };*/
 
         //todo if not working try resolution Instant
-        let available_subscriptions = vec![DataSubscription::new(SymbolName::from("M6E"), self.data_vendor.clone(), Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Futures(FuturesExchange::CME))];
+        let available_subscriptions = vec![DataSubscription::new(SymbolName::from("MNQ"), self.data_vendor.clone(), Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Futures(FuturesExchange::CME))];
         if !available_subscriptions.contains(&subscription) {
             eprintln!("Rithmic Subscription Not Available: {:?}", subscription);
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}

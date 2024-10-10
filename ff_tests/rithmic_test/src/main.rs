@@ -35,17 +35,24 @@ async fn main() {
         Duration::hours(5),
         vec![
             DataSubscription::new(
-                SymbolName::from("M6E"),
+                SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Ticks(1),
                 BaseDataType::Ticks,
+                MarketType::Futures(FuturesExchange::CME)
+            ),
+            DataSubscription::new(
+                SymbolName::from("MNQ"),
+                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+                Resolution::Seconds(5),
+                BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
             ),
         ],
         false,
         100,
         strategy_event_sender,
-        //Some(core::time::Duration::from_millis(100)),
+        //Some(core::time::Duration::from_millis(50)),
         None,
         GUI_DISABLED,
     ).await;
