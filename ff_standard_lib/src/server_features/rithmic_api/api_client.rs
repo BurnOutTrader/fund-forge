@@ -10,7 +10,7 @@ use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 #[allow(unused_imports)]
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, RequestLoginInfo, RequestPnLPositionSnapshot, RequestProductCodes, ResponseAccountRmsInfo};
-use ff_rithmic_api::rithmic_proto_objects::rti::RequestMarketDataUpdate;
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates};
 use ff_rithmic_api::systems::RithmicSystem;
 use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
@@ -441,17 +441,7 @@ impl VendorApiResponse for RithmicClient {
             }
             _ => todo!()
         };
-        let req = RequestMarketDataUpdate {
-            template_id: 100,
-            user_msg: vec![],
-            symbol: Some(subscription.symbol.name.to_string()),
-            exchange: Some(exchange),
-            request: Some(1), //1 subscribe 2 unsubscribe
-            update_bits: Some(1), //1 for ticks 2 for quotes
-        };
 
-        //todo dont send if already subscribed
-        self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
 
  /*       let req = RequestTimeBarUpdate {
         template_id: 200,
@@ -465,10 +455,12 @@ impl VendorApiResponse for RithmicClient {
 
         //todo if not working try resolution Instant
         let available_subscriptions = vec![DataSubscription::new(SymbolName::from("M6E"), self.data_vendor.clone(), Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Futures(FuturesExchange::CME))];
-        if available_subscriptions.contains(&subscription) {
+        if !available_subscriptions.contains(&subscription) {
+            eprintln!("Rithmic Subscription Not Available: {:?}", subscription);
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
         }
 
+        let mut is_subscribed = true;
         //todo have a unique function per base data type.
         match subscription.base_data_type {
             BaseDataType::Ticks => {
@@ -476,6 +468,7 @@ impl VendorApiResponse for RithmicClient {
                     .entry(subscription.symbol.name.clone())
                     .or_insert_with(|| {
                         println!("Subscribing: {}", subscription);
+                        is_subscribed = false;
                         Arc::new(StaticInternalBroadcaster::new())
                     });
                 broadcaster.value().subscribe(stream_name.to_string(), sender).await;
@@ -485,6 +478,7 @@ impl VendorApiResponse for RithmicClient {
                     .entry(subscription.symbol.name.clone())
                     .or_insert_with(|| {
                         println!("Subscribing: {}", subscription);
+                        is_subscribed = false;
                         Arc::new(StaticInternalBroadcaster::new())
                     });
                 broadcaster.value().subscribe(stream_name.to_string(), sender).await;
@@ -494,6 +488,7 @@ impl VendorApiResponse for RithmicClient {
                     .entry(subscription.symbol.name.clone())
                     .or_insert_with(|| {
                         println!("Subscribing: {}", subscription);
+                        is_subscribed = false;
                         Arc::new(StaticInternalBroadcaster::new())
                     });
                 broadcaster.value().subscribe(stream_name.to_string(), sender).await;
@@ -501,6 +496,19 @@ impl VendorApiResponse for RithmicClient {
             _ => todo!("Handle gracefully by returning err")
         }
 
+        if !is_subscribed {
+            let req = RequestMarketDataUpdate {
+                template_id: 100,
+                user_msg: vec![],
+                symbol: Some(subscription.symbol.name.to_string()),
+                exchange: Some(exchange),
+                request: Some(1), //1 subscribe 2 unsubscribe
+                update_bits: Some(1), //1 for ticks 2 for quotes
+            };
+
+            //todo dont send if already subscribed
+            self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
+        }
 
         DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
     }

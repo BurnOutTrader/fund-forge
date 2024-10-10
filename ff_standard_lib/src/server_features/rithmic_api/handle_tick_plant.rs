@@ -186,28 +186,33 @@ pub async fn handle_responses_from_ticker_plant(
                                     },
                                     150 => {
                                         if let Ok(msg) = LastTrade::decode(&message_buf[..]) {
-                                            // Last Trade
-                                            // From Server
                                             println!("Last Trade (Template ID: 150) from Server: {:?}", msg);
+                                            // Last Trade
+                                            let volume = match msg.trade_size {
+                                                None => continue,
+                                                Some(size) => Decimal::from_i32(size).unwrap()
+                                            };
+                                            // From Server
+
                                             let exchange = match msg.exchange {
-                                                None => return,
+                                                None => continue,
                                                 Some(exchange) => {
                                                     match FuturesExchange::from_string(&exchange) {
                                                         Ok(ex) => ex,
-                                                        Err(_) => return
+                                                        Err(e) => {
+                                                            eprintln!("Error deserializing Exchange");
+                                                            continue
+                                                        }
                                                     }
                                                 }
                                             };
-                                            let volume = match msg.trade_size {
-                                                None => return,
-                                                Some(size) => Decimal::from_i32(size).unwrap()
-                                            };
+
                                             let price = match msg.trade_price {
-                                                None => return,
+                                                None => continue,
                                                 Some(price) => Decimal::from_f64(price).unwrap()
                                             };
                                             let side = match msg.aggressor {
-                                                None => return,
+                                                None => continue,
                                                 Some(aggressor) => {
                                                     match aggressor {
                                                         1 => Some(OrderSide::Buy),
@@ -216,10 +221,16 @@ pub async fn handle_responses_from_ticker_plant(
                                                     }
                                                 }
                                             };
-                                            let symbol = Symbol::new(msg.symbol.unwrap(), client.data_vendor.clone(), MarketType::Futures(exchange));
+                                            let symbol = match msg.symbol {
+                                                None => continue,
+                                                Some(symbol) => symbol
+                                            };
+                                            let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
                                             let tick = Tick::new(symbol, price, Utc::now().to_string(), volume, side);
+                                            println!("sending");
                                             if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
-                                                broadcaster.broadcast(BaseDataEnum::Tick(tick)).await;
+                                                broadcaster.value().broadcast(BaseDataEnum::Tick(tick)).await;
+                                                println!("sent");
                                             }
                                         }
                                     },
