@@ -640,15 +640,17 @@ pub enum ConnectionType {
 ```
 Example server_settings.toml
 ```toml
+[settings.StrategyRegistry]
+ssl_auth_folder = "./resources/keys"
+server_name = "fundforge"
+address = "127.0.0.1:8083"
+stream_address = "127.0.0.1:8084"
+
 [settings.Default]
 ssl_auth_folder = "./resources/keys"
 server_name = "fundforge"
 address = "127.0.0.1:8081"
-
-[settings.StrategyRegistry]
-ssl_auth_folder = "./resources/keys"
-server_name = "fundforge"
-address = "127.0.0.1:8082"
+stream_address = "127.0.0.1:8082"
 ```
 
 ## Creating SSL Cert
