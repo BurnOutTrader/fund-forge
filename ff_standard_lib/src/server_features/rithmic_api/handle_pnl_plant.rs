@@ -35,8 +35,8 @@ pub async fn handle_responses_from_pnl_plant(
                         }
                         Message::Binary(bytes) => {
                             // spawn a new task so that we can handle next message faster.
-                            let client = client.clone();
-                            tokio::task::spawn(async move {
+                           // let client = client.clone();
+                           // tokio::task::spawn(async move {
                                 //messages will be forwarded here
                                 let mut cursor = Cursor::new(bytes);
                                 // Read the 4-byte length header
@@ -123,7 +123,7 @@ pub async fn handle_responses_from_pnl_plant(
                                         _ => println!("No match for template_id: {}", template_id)
                                     }
                                 }
-                            });
+                           // });
                         }
                         Message::Ping(ping) => {
                             println!("{:?}", ping)
