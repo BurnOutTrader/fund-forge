@@ -140,6 +140,7 @@ pub(crate) async fn live_subscription_handler(
         }
         let mut current_subscriptions = SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await.clone();
         {
+            let mut subscribed = vec![];
             println!("Handler: {:?}", current_subscriptions);
             for subscription in &*current_subscriptions {
                 let request = DataServerRequest::StreamRequest {
@@ -150,8 +151,11 @@ pub(crate) async fn live_subscription_handler(
                     true => connection,
                     false => ConnectionType::Default
                 };
-                let register = StrategyRequest::OneWay(connection_type.clone(), DataServerRequest::Register(mode.clone()));
-                send_request(register).await;
+                if !subscribed.contains(&connection_type) {
+                    let register = StrategyRequest::OneWay(connection_type.clone(), DataServerRequest::Register(mode.clone()));
+                    send_request(register).await;
+                    subscribed.push(connection_type.clone());
+                }
                 let request = StrategyRequest::OneWay(connection_type, request);
                 send_request(request).await;
             }
