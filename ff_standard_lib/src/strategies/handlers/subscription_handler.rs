@@ -68,12 +68,12 @@ impl SubscriptionHandler {
         handler
     }
 
-    pub(crate) fn subscribe_primary_subscription_updates(&self, name: String, sender: Sender<Vec<DataSubscription>>) {
-        block_on(self.primary_subscriptions_broadcaster.subscribe(name, sender));
+    pub(crate) async fn subscribe_primary_subscription_updates(&self, name: String, sender: Sender<Vec<DataSubscription>>) {
+        self.primary_subscriptions_broadcaster.subscribe(name, sender).await;
     }
 
-    pub(crate) fn unsubscribe_primary_subscription_updates(&self, name: &str) {
-        block_on(self.primary_subscriptions_broadcaster.unsubscribe(name));
+    pub(crate) async fn unsubscribe_primary_subscription_updates(&self, name: &str) {
+        self.primary_subscriptions_broadcaster.unsubscribe(name).await;
     }
 
     pub async fn strategy_subscriptions(&self) -> Vec<DataSubscription> {
