@@ -12,7 +12,8 @@ use ff_rithmic_api::systems::RithmicSystem;
 use structopt::StructOpt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-use tokio::{join, task};
+use tokio::{join, signal, task};
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor};
 use tokio_rustls::server::TlsStream;
@@ -86,7 +87,7 @@ async fn init_apis(options: ServerLaunchOptions) {
                 for file in toml_files {
                     if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
                         //todo add a bool option to credentials for is_data_feed
-                        let client = RithmicClient::new(system, false).await.unwrap();
+                        let client = RithmicClient::new(system, true).await.unwrap();
                         let client = Arc::new(client);
                         match RithmicClient::run_start_up(client.clone(), true, true).await {
                             Ok(_) => {}
@@ -102,7 +103,8 @@ async fn init_apis(options: ServerLaunchOptions) {
     });
 }
 
-async fn logout_apis(options: &ServerLaunchOptions) {
+async fn logout_apis(options: ServerLaunchOptions) {
+    println!("Logging Out Apis Function Started");
     if !options.disable_rithmic_server {
         let toml_files = RithmicClient::get_rithmic_tomls();
         if !toml_files.is_empty() {
@@ -115,6 +117,7 @@ async fn logout_apis(options: &ServerLaunchOptions) {
             }
         }
     }
+    println!("Logging Out Apis Function Ended");
 }
 
 #[tokio::main]
@@ -134,23 +137,44 @@ async fn main() -> io::Result<()> {
 
     init_apis(options.clone()).await;
 
-    let address = SocketAddr::new(options.listener_address, options.port);
-    let async_server_handle = async_server(config.clone().into(), address, options.data_folder.clone()).await;
-    let address = SocketAddr::new(options.stream_address.clone(), options.stream_port.clone());
-    let stream_server_handle = stream_server(config.into(), address).await;
+    let (async_handle, stream_handle) = run_servers(config, options.clone());
 
-    let (stream_result, async_result) = join!(stream_server_handle, async_server_handle);
+    // Wait for Ctrl+C
+    signal::ctrl_c().await.expect("Failed to listen for ctrl-c");
+    println!("Ctrl+C received, logging out APIs...");
 
-    if let Err(e) = async_result {
-        eprintln!("Asynchronous server failed: {:?}", e);
-    }
+    // Perform logout
+    logout_apis(options).await;
 
-    if let Err(e) = stream_result {
-        eprintln!("Stream server failed: {:?}", e);
-    }
+    println!("Logout complete. Shutting down servers...");
 
-    logout_apis(&options).await;
+    // Abort server tasks
+    async_handle.abort();
+    stream_handle.abort();
+
+    // Wait for tasks to finish (they should finish immediately due to abortion)
+    let _ = tokio::join!(async_handle, stream_handle);
+
+    println!("Shutdown complete");
     Ok(())
+}
+
+fn run_servers(
+    config: rustls::ServerConfig,
+    options: ServerLaunchOptions,
+) -> (JoinHandle<tokio::task::JoinHandle<()>>, JoinHandle<tokio::task::JoinHandle<()>>) {
+    let async_handle = tokio::spawn(async_server(
+        config.clone(),
+        SocketAddr::new(options.listener_address, options.port),
+        options.data_folder.clone(),
+    ));
+
+    let stream_handle = tokio::spawn(stream_server(
+        config,
+        SocketAddr::new(options.stream_address, options.stream_port),
+    ));
+
+    (async_handle, stream_handle)
 }
 
 async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {

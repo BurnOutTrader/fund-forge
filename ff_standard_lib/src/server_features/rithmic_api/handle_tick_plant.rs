@@ -62,7 +62,7 @@ pub async fn handle_responses_from_ticker_plant(
                                 Err(e) => eprintln!("Failed to read_extract message: {}", e)
                             }
                             if let Some(template_id) = client.client.extract_template_id(&message_buf) {
-                                println!("Extracted template_id: {}", template_id);
+                                //println!("Extracted template_id: {}", template_id);
                                 // Now you can use the template_id to determine which type to decode into the concrete types
                                 match template_id {
                                     11 => {
@@ -186,7 +186,7 @@ pub async fn handle_responses_from_ticker_plant(
                                     },
                                     150 => {
                                         if let Ok(msg) = LastTrade::decode(&message_buf[..]) {
-                                            println!("Last Trade (Template ID: 150) from Server: {:?}", msg);
+                                            //println!("Last Trade (Template ID: 150) from Server: {:?}", msg);
                                             // Last Trade
                                             let volume = match msg.trade_size {
                                                 None => continue,
@@ -227,10 +227,8 @@ pub async fn handle_responses_from_ticker_plant(
                                             };
                                             let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
                                             let tick = Tick::new(symbol, price, Utc::now().to_string(), volume, side);
-                                            println!("sending");
                                             if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
                                                 broadcaster.value().broadcast(BaseDataEnum::Tick(tick)).await;
-                                                println!("sent");
                                             }
                                         }
                                     },
@@ -239,6 +237,45 @@ pub async fn handle_responses_from_ticker_plant(
                                             // Best Bid Offer
                                             // From Server
                                             println!("Best Bid Offer (Template ID: 151) from Server: {:?}", msg);
+
+                                           /* let volume = match msg.trade_size {
+                                                None => continue,
+                                                Some(size) => Decimal::from_i32(size).unwrap()
+                                            };
+                                            // From Server
+
+                                            let exchange = match msg.exchange {
+                                                None => continue,
+                                                Some(exchange) => {
+                                                    match FuturesExchange::from_string(&exchange) {
+                                                        Ok(ex) => ex,
+                                                        Err(e) => {
+                                                            eprintln!("Error deserializing Exchange");
+                                                            continue
+                                                        }
+                                                    }
+                                                }
+                                            };
+
+                                            let price = match msg.trade_price {
+                                                None => continue,
+                                                Some(price) => Decimal::from_f64(price).unwrap()
+                                            };
+                                            let side = match msg.aggressor {
+                                                None => continue,
+                                                Some(aggressor) => {
+                                                    match aggressor {
+                                                        1 => Some(OrderSide::Buy),
+                                                        2 => Some(OrderSide::Sell),
+                                                        _ => None,
+                                                    }
+                                                }
+                                            };
+                                            let symbol = match msg.symbol {
+                                                None => continue,
+                                                Some(symbol) => symbol
+                                            };
+                                            let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));*/
                                         }
                                     },
                                     152 => {

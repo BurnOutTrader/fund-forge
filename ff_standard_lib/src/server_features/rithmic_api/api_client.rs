@@ -454,7 +454,10 @@ impl VendorApiResponse for RithmicClient {
     };*/
 
         //todo if not working try resolution Instant
-        let available_subscriptions = vec![DataSubscription::new(SymbolName::from("MNQ"), self.data_vendor.clone(), Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Futures(FuturesExchange::CME))];
+        let available_subscriptions = vec![
+            DataSubscription::new(SymbolName::from("MNQ"), self.data_vendor.clone(), Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Futures(FuturesExchange::CME)),
+            DataSubscription::new(SymbolName::from("MNQ"), self.data_vendor.clone(), Resolution::Instant, BaseDataType::Quotes, MarketType::Futures(FuturesExchange::CME))
+        ];
         if !available_subscriptions.contains(&subscription) {
             eprintln!("Rithmic Subscription Not Available: {:?}", subscription);
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
@@ -497,13 +500,19 @@ impl VendorApiResponse for RithmicClient {
         }
 
         if !is_subscribed {
+            let bits = match subscription.base_data_type {
+                BaseDataType::Ticks => 1,
+                BaseDataType::Quotes => 2,
+                _ => return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
+                //BaseDataType::Candles => {}
+            };
             let req = RequestMarketDataUpdate {
                 template_id: 100,
                 user_msg: vec![],
                 symbol: Some(subscription.symbol.name.to_string()),
                 exchange: Some(exchange),
                 request: Some(1), //1 subscribe 2 unsubscribe
-                update_bits: Some(1), //1 for ticks 2 for quotes
+                update_bits: Some(bits), //1 for ticks 2 for quotes
             };
 
             //todo dont send if already subscribed
@@ -520,13 +529,19 @@ impl VendorApiResponse for RithmicClient {
             }
             _ => todo!()
         };
+        let bits = match subscription.base_data_type {
+            BaseDataType::Ticks => 1,
+            BaseDataType::Quotes => 2,
+            _ => return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
+            //BaseDataType::Candles => {}
+        };
         let req = RequestMarketDataUpdate {
             template_id: 100,
             user_msg: vec![],
             symbol: Some(subscription.symbol.name.to_string()),
             exchange: Some(exchange),
-            request: Some(2), //1 subscribe 2 unsubscribe
-            update_bits: Some(1), //1 for ticks 2 for quotes
+            request: Some(1), //1 subscribe 2 unsubscribe
+            update_bits: Some(bits), //1 for ticks 2 for quotes
         };
         match subscription.base_data_type {
             BaseDataType::Ticks => {

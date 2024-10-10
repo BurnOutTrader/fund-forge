@@ -44,6 +44,13 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+                Resolution::Instant,
+                BaseDataType::Quotes,
+                MarketType::Futures(FuturesExchange::CME)
+            ),
+            DataSubscription::new(
+                SymbolName::from("MNQ"),
+                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(5),
                 BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
@@ -88,7 +95,7 @@ pub async fn on_data_received(
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::Tick(tick) => {
-                                println!("{}", tick);
+                               // println!("{}", tick);
                             }
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
@@ -102,6 +109,7 @@ pub async fn on_data_received(
                                             false => println!("{}", msg.as_str().bright_red()),
                                         }
                                     }
+                                    /*
 
                                     if !warmup_complete {
                                         continue;
@@ -189,8 +197,15 @@ pub async fn on_data_received(
                                             let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage, position_size_short, String::from("Exit Short Take Loss")).await;
                                             println!("Strategy: Exit Short Take Loss, Time {}", strategy.time_local());
                                         }
+
+
                                     }
+
+                                     */
                                 }
+                            }
+                            BaseDataEnum::Quote(quote) => {
+                                println!("{}", quote);
                             }
                             _ => {}
                         }

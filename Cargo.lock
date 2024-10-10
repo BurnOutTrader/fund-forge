@@ -955,9 +955,9 @@ dependencies = [
 
 [[package]]
 name = "ff_rithmic_api"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9df798cda709d49c653750c39c6e2302e139ed93a93bd5ff25e2bcd82723aba4"
+checksum = "26c4319442012e8ff1c9c065c4b90cf98f620ce739a3ea00cd422dba3b0811cf"
 dependencies = [
  "dashmap",
  "futures-util",
