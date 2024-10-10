@@ -3,11 +3,12 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
 use std::fs::File;
-use std::io;
+use std::{fs, io};
 use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use ff_rithmic_api::systems::RithmicSystem;
 use structopt::StructOpt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -16,6 +17,8 @@ use tokio::task::JoinHandle;
 use tokio_rustls::{TlsAcceptor};
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::messages::data_server_messaging::{DataServerRequest, DataServerResponse};
+use ff_standard_lib::server_features::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
+use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use crate::request_handlers::{manage_async_requests, stream_handler};
@@ -67,6 +70,39 @@ struct ServerLaunchOptions {
         default_value = "8082"
     )]
     pub stream_port: u16,
+
+    #[structopt(
+        short = "r",
+        long = "rithmic",
+    )]
+    pub disable_rithmic_server: bool,
+}
+
+async fn init_apis(options: &ServerLaunchOptions) {
+    if !options.disable_rithmic_server {
+        let mut toml_files = Vec::new();
+        let dir = "./data/rithmic_credentials".to_string();
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+
+            if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("toml") {
+                if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+                    toml_files.push(file_name.to_string());
+                }
+            }
+        }
+
+        for file in toml_files {
+            if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
+                let client = RithmicClient::new(system, false, true, true).await.unwrap();
+                let client = Arc::new(client);
+                RITHMIC_CLIENTS.insert(system, client);
+            } else {
+                eprintln!("Error parsing rithmic system from: {}", file);
+            }
+        }
+    }
 }
 
 #[tokio::main]
@@ -83,9 +119,11 @@ async fn main() -> io::Result<()> {
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
+
+    init_apis(&options).await;
+
     let address = SocketAddr::new(options.listener_address, options.port);
     let async_server_handle = async_server(config.clone().into(), address, options.data_folder).await;
-
     let address = SocketAddr::new(options.stream_address, options.stream_port);
     let stream_server_handle = stream_server(config.into(), address).await;
 

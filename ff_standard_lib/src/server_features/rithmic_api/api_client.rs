@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 use ahash::AHashMap;
 use async_trait::async_trait;
@@ -81,8 +82,6 @@ pub struct RithmicClient {
 impl RithmicClient {
     pub async fn new(
         system: RithmicSystem,
-        app_name: String,
-        app_version: String,
         aggregated_quotes: bool,
         connect_data_plants: bool,
         connect_account_plants: bool
@@ -91,8 +90,15 @@ impl RithmicClient {
         let data_vendor = DataVendor::Rithmic(system.clone());
         let credentials = RithmicClient::rithmic_credentials(&brokerage)?;
         println!("{:?}", credentials);
-        let server_domains_toml= "./data/rithmic_credentials/servers.toml".to_string();
-        let client = RithmicApiClient::new(credentials.clone(), app_name, app_version, aggregated_quotes, server_domains_toml).unwrap();
+        let data_folder = get_data_folder();
+        let server_domains_toml = PathBuf::from(data_folder)
+            .join("rithmic_credentials")
+            .join("server_domains")
+            .join("servers.toml")
+            .to_string_lossy()
+            .into_owned();
+
+        let client = RithmicApiClient::new(credentials.clone(), aggregated_quotes, server_domains_toml).unwrap();
         let client = Self {
             brokerage,
             data_vendor,
