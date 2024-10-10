@@ -198,6 +198,12 @@ pub async fn manage_async_requests(
                         || brokerage.margin_required_response(mode, stream_name, symbol_name, quantity, callback_id),
                         sender.clone()).await,
 
+                    DataServerRequest::SymbolNames{ callback_id, brokerage } => {
+                        handle_callback(
+                            || brokerage.symbol_names_response(mode, stream_name, callback_id),
+                            sender.clone()).await
+                    }
+
 
                     DataServerRequest::StreamRequest {
                         request
@@ -233,8 +239,9 @@ pub async fn manage_async_requests(
                     DataServerRequest::PrimarySubscriptionFor { .. } => {
                         todo!()
                     }
-                DataServerRequest::SymbolNames{ .. } => {}
-                    DataServerRequest::RegisterStreamer(_) => {}
+                    DataServerRequest::RegisterStreamer(_) => {
+                        //no need to handle here
+                    }
                 };
             });
         }

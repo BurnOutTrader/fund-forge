@@ -224,9 +224,10 @@ impl Brokerage {
         }
     }
 
-    pub async fn symbol_names(&self) -> Result<Vec<SymbolName>, FundForgeError> {
+    pub async fn symbol_names(&self, callback_id: u64) -> Result<Vec<SymbolName>, FundForgeError> {
         let request = DataServerRequest::SymbolNames {
-            callback_id: 0,
+            callback_id,
+            brokerage: self.clone()
         };
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);

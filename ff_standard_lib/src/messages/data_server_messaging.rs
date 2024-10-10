@@ -120,7 +120,7 @@ pub enum DataServerRequest {
         subscription: DataSubscription
     },
     Accounts{callback_id: u64, brokerage: Brokerage},
-    SymbolNames{callback_id: u64},
+    SymbolNames{callback_id: u64, brokerage: Brokerage},
     RegisterStreamer(u16)
 }
 

@@ -11,15 +11,10 @@ use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, RequestLoginInfo, RequestPnLPositionSnapshot, RequestProductCodes, ResponseAccountRmsInfo};
 use ff_rithmic_api::rithmic_proto_objects::rti::RequestMarketDataUpdate;
 use ff_rithmic_api::systems::RithmicSystem;
-use futures::stream::SplitStream;
-use futures::StreamExt;
 use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
 use rust_decimal_macros::dec;
-use tokio::net::TcpStream;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::Mutex;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use crate::standardized_types::datavendor_enum::DataVendor;
@@ -70,7 +65,6 @@ pub struct RithmicClient {
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
-    pub readers: DashMap<SysInfraType, Arc<Mutex<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>>>>,
     pub handlers: DashMap<SysInfraType, JoinHandle<()>>,
 
     // accounts
@@ -90,8 +84,6 @@ impl RithmicClient {
     pub async fn new(
         system: RithmicSystem,
         aggregated_quotes: bool,
-        connect_data_plants: bool,
-        connect_account_plants: bool
     ) -> Result<Self, FundForgeError> {
         let brokerage = Brokerage::Rithmic(system.clone());
         let data_vendor = DataVendor::Rithmic(system.clone());
@@ -116,7 +108,6 @@ impl RithmicClient {
             callbacks: Default::default(),
             client: Arc::new(client),
             symbol_info: Default::default(),
-            readers: DashMap::with_capacity(5),
             tick_feed_broadcasters: Default::default(),
             quote_feed_broadcasters: Default::default(),
             accounts: Default::default(),
@@ -125,94 +116,61 @@ impl RithmicClient {
             candle_feed_broadcasters: Arc::new(Default::default()),
             handlers: DashMap::with_capacity(5),
         };
-        if connect_data_plants {
-            match client.connect_to_data_plants().await {
-                Ok(_) => {}
-                Err(_) => {}
-            }
-        }
-        if connect_account_plants {
-            match client.connect_to_accounts().await {
-                Ok(_) => {}
-                Err(_) => {}
-            }
-        }
         Ok(client)
     }
 
-    pub async fn connect_to_data_plants(&self) -> Result<(), FundForgeError> {
-        match self.client.connect_and_login(SysInfraType::TickerPlant).await {
-            Ok(r) => {
-                self.readers.insert(SysInfraType::TickerPlant, Arc::new(Mutex::new(r)))
-            },
-            Err(e) => {
-                return Err(FundForgeError::ServerErrorDebug(e.to_string()))
-            }
-        };
-
-        match self.client.connect_and_login(SysInfraType::HistoryPlant).await {
-            Ok(r) => self.readers.insert(SysInfraType::HistoryPlant, Arc::new(Mutex::new(r))),
-            Err(e) => {
-                return Err(FundForgeError::ServerErrorDebug(e.to_string()))
-            }
-        };
-        Ok(())
-    }
-
-    pub async fn connect_to_accounts(&self) -> Result<(), FundForgeError> {
-        match self.client.connect_and_login(SysInfraType::OrderPlant).await {
-            Ok(r) => self.readers.insert(SysInfraType::OrderPlant, Arc::new(Mutex::new(r))),
-            Err(e) => {
-                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
-            }
-        };
-        match self.client.connect_and_login(SysInfraType::PnlPlant).await {
-            Ok(r) => self.readers.insert(SysInfraType::PnlPlant, Arc::new(Mutex::new(r))),
-            Err(e) => {
-                return Err(FundForgeError::ServerErrorDebug(e.to_string()))
-            }
-        };
-        Ok(())
-    }
-
     //todo run start up... we might need to connect to all plants for this..
-    pub async fn run_start_up(client: Arc<Self>) {
-        let client = client;
-        tokio::task::spawn(async move {
-            for infra in &client.readers {
-                match infra.key() {
-                    SysInfraType::TickerPlant => {
-                        client.handlers.insert(SysInfraType::TickerPlant, handle_responses_from_ticker_plant(client.clone()).await);
-                    }
-                    SysInfraType::OrderPlant => {
-                        client.handlers.insert(SysInfraType::OrderPlant, handle_responses_from_order_plant(client.clone()).await);
-                    }
-                    SysInfraType::HistoryPlant => {
-                        client.handlers.insert(SysInfraType::HistoryPlant, handle_responses_from_history_plant(client.clone()).await);
-                    }
-                    SysInfraType::PnlPlant => {
-                        client.handlers.insert(SysInfraType::PnlPlant, handle_responses_from_pnl_plant(client.clone()).await);
-                    }
-                    SysInfraType::RepositoryPlant => {}
+    pub async fn run_start_up(client: Arc<Self>, connect_accounts: bool, connect_data: bool) -> Result<(), FundForgeError> {
+        if connect_data {
+            match client.client.connect_and_login(SysInfraType::TickerPlant).await {
+                Ok(r) => {
+                    client.handlers.insert(SysInfraType::TickerPlant, handle_responses_from_ticker_plant(client.clone(), r).await);
+                },
+                Err(e) => {
+                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
                 }
             }
-         /*   let accounts = RequestAccountList {
-                template_id: 302,
-                user_msg: vec![],
-                fcm_id: client.fcm_id.clone(),
-                ib_id: client.ib_id.clone(),
-                user_type: client.user_type.clone()
-            };
-            client.client.send_message(SysInfraType::OrderPlant, accounts).await.unwrap();*/
-         /*   let rms_req = RequestAccountRmsInfo {
-                template_id: 304,
-                user_msg: vec![],
-                fcm_id: client.fcm_id.clone(),
-                ib_id: client.ib_id.clone(),
-                user_type: client.user_type.clone(),
-            };
-            client.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();*/
-        });
+
+            match client.client.connect_and_login(SysInfraType::HistoryPlant).await {
+                Ok(r) => {
+                    client.handlers.insert(SysInfraType::HistoryPlant, handle_responses_from_history_plant(client.clone(), r).await);
+                },
+                Err(e) => {
+                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
+                }
+            }
+        }
+
+        if connect_accounts {
+            match client.client.connect_and_login(SysInfraType::OrderPlant).await {
+                Ok(r) => {
+                    client.handlers.insert(SysInfraType::OrderPlant, handle_responses_from_order_plant(client.clone(), r).await);
+                },
+                Err(e) => {
+                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
+                }
+            }
+
+            match client.client.connect_and_login(SysInfraType::PnlPlant).await {
+                Ok(r) => {
+                    client.handlers.insert(SysInfraType::PnlPlant, handle_responses_from_pnl_plant(client.clone(), r).await);
+                },
+                Err(e) => {
+                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
+                }
+            }
+        }
+
+        let rms_req = RequestAccountRmsInfo {
+            template_id: 304,
+            user_msg: vec![],
+            fcm_id: client.fcm_id.clone(),
+            ib_id: client.ib_id.clone(),
+            user_type: client.user_type.clone(),
+        };
+        client.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();
+
+        Ok(())
     }
 
     pub async fn send_callback(&self, stream_name: StreamName, callback_id: u64, response: DataServerResponse) {

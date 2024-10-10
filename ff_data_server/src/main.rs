@@ -102,9 +102,12 @@ async fn init_apis(options: ServerLaunchOptions) {
             for file in toml_files {
                 if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
                     //todo add a bool option to credentials for is_data_feed
-                    let client = RithmicClient::new(system, false, true, true).await.unwrap();
+                    let client = RithmicClient::new(system, false).await.unwrap();
                     let client = Arc::new(client);
-                    RithmicClient::run_start_up(client.clone()).await;
+                    match RithmicClient::run_start_up(client.clone(), true, true).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Fail to run rithmic client for: {}, reason: {}", system, e)
+                    }
                     RITHMIC_CLIENTS.insert(system, client);
                 } else {
                     eprintln!("Error parsing rithmic system from: {}", file);
@@ -299,7 +302,7 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) -> Joi
         };
         println!("Stream: Listening on: {}", addr);
 
-        loop {
+        'main_loop: loop {
             let (stream, peer_addr) = match listener.accept().await {
                 Ok((stream, peer_addr)) => (stream, peer_addr),
                 Err(e) => {
@@ -319,7 +322,7 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) -> Joi
             };
 
             let mut length_bytes = [0u8; LENGTH];
-            'registration_loop: while let Ok(_) = tls_stream.read_exact(&mut length_bytes).await {
+            while let Ok(_) = tls_stream.read_exact(&mut length_bytes).await {
                 // Parse the length from the header
                 let msg_length = u64::from_be_bytes(length_bytes) as usize;
                 let mut message_body = vec![0u8; msg_length];
@@ -347,7 +350,7 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) -> Joi
                  match request {
                     DataServerRequest::RegisterStreamer(port) => {
                         stream_handler(tls_stream, port).await;
-                        break 'registration_loop
+                        continue 'main_loop
                     },
                     _ => eprintln!("Stream: Strategy Did not register a Strategy mode")
                 }
