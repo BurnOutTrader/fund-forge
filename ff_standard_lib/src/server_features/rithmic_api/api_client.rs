@@ -69,7 +69,6 @@ pub struct RithmicClient {
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
-    pub handlers: DashMap<SysInfraType, JoinHandle<()>>,
 
     // accounts
     pub accounts: DashMap<AccountId, AccountInfo>,
@@ -121,7 +120,6 @@ impl RithmicClient {
             orders_open: Default::default(),
             products: Default::default(),
             candle_feed_broadcasters: Arc::new(Default::default()),
-            handlers: DashMap::with_capacity(5),
             ask_book: Arc::new(Default::default()),
         };
         Ok(client)
@@ -154,8 +152,7 @@ impl RithmicClient {
         if connect_data {
             match client.client.connect_and_login(SysInfraType::TickerPlant).await {
                 Ok(r) => {
-                    let handle = handle_responses_from_ticker_plant(client.clone(), r).await;
-                    client.handlers.insert(SysInfraType::TickerPlant, handle);
+                    handle_responses_from_ticker_plant(client.clone(), r).await;
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -164,8 +161,7 @@ impl RithmicClient {
 
             match client.client.connect_and_login(SysInfraType::HistoryPlant).await {
                 Ok(r) => {
-                    let handle = handle_responses_from_history_plant(client.clone(), r).await;
-                    client.handlers.insert(SysInfraType::HistoryPlant, handle);
+                    handle_responses_from_history_plant(client.clone(), r).await;
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -176,8 +172,7 @@ impl RithmicClient {
         if connect_accounts {
             match client.client.connect_and_login(SysInfraType::OrderPlant).await {
                 Ok(r) => {
-                    let handle =handle_responses_from_order_plant(client.clone(), r).await;
-                    client.handlers.insert(SysInfraType::OrderPlant, handle);
+                    handle_responses_from_order_plant(client.clone(), r).await;
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -186,8 +181,7 @@ impl RithmicClient {
 
             match client.client.connect_and_login(SysInfraType::PnlPlant).await {
                 Ok(r) => {
-                    let handle = handle_responses_from_pnl_plant(client.clone(), r).await;
-                    client.handlers.insert(SysInfraType::PnlPlant, handle);
+                    handle_responses_from_pnl_plant(client.clone(), r).await;
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -255,10 +249,6 @@ impl RithmicClient {
             Ok(_) => {}
             Err(e) => eprintln!("Rithmic Client shutdown error: {}", e)
         }
-        for task in self.handlers.iter() {
-            task.value().abort();
-        }
-        self.handlers.clear();
         RITHMIC_CLIENTS.remove(&self.system);
     }
 }
@@ -349,9 +339,6 @@ impl BrokerApiResponse for RithmicClient {
         }
         for broadcaster in self.candle_feed_broadcasters.iter() {
             broadcaster.unsubscribe(&stream_name.to_string());
-        }
-        for handle in &self.handlers {
-            handle.abort();
         }
     }
 }
@@ -660,10 +647,6 @@ impl VendorApiResponse for RithmicClient {
         }
         for broadcaster in self.candle_feed_broadcasters.iter() {
             broadcaster.unsubscribe(&stream_name.to_string());
-        }
-
-        for handle in &self.handlers {
-            handle.abort();
         }
     }
 }
