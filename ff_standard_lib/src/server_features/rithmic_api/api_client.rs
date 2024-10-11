@@ -259,7 +259,7 @@ impl BrokerApiResponse for RithmicClient {
         //todo get dynamically from server using stream name to fwd callback
         DataServerResponse::SymbolNames {
             callback_id,
-            symbol_names: vec!["M6E".to_string()],
+            symbol_names: vec!["MNQ".to_string()],
         }
     }
 
@@ -280,7 +280,6 @@ impl BrokerApiResponse for RithmicClient {
             }
         }
     }
-
 
     async fn symbol_info_response(
         &self,
