@@ -291,8 +291,8 @@ impl BrokerApiResponse for RithmicClient {
     ) -> DataServerResponse {
         //todo get dynamically from server using stream name to fwd callback
         let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
-        let (pnl_currency, value_per_tick, tick_size) = match symbol_name.as_str() {
-            "MNQ" => (Currency::USD, dec!(2.0), dec!(0.25)), // EUR/USD with $1 per tick
+        let (pnl_currency, value_per_tick, tick_size, decimal_accuracy) = match symbol_name.as_str() {
+            "MNQ" => (Currency::USD, dec!(2.0), dec!(0.25), 2), // MNQ in USD with $2 per tick at 0.25 tick size and decimal accuracy of 2
             _ => todo!()       // Default values
         };
 
@@ -301,7 +301,7 @@ impl BrokerApiResponse for RithmicClient {
             pnl_currency,
             value_per_tick,
             tick_size,
-            decimal_accuracy: 2,
+            decimal_accuracy,
         };
 
         DataServerResponse::SymbolInfo {
