@@ -235,7 +235,7 @@ impl VendorApiResponse for TestApiClient {
                             if broadcaster.has_subscribers() {
                                 quote.time = Utc::now().to_string();
                                 broadcaster.broadcast(base_data).await;
-                                sleep(Duration::from_millis(20)).await;
+                                sleep(Duration::from_millis(5)).await;
                             } else {
                                 println!("No subscribers");
                                 break 'main_loop;
