@@ -197,54 +197,7 @@ pub async fn handle_responses_from_ticker_plant(
                                     150 => {
                                         if let Ok(msg) = LastTrade::decode(&message_buf[..]) {
                                             //println!("Last Trade (Template ID: 150) from Server: {:?}", msg);
-                                            let volume = match msg.trade_size {
-                                                None => continue,
-                                                Some(size) => {
-                                                    match Decimal::from_i32(size) {
-                                                        None => return,
-                                                        Some(size) => size
-                                                    }
-                                                }
-                                            };
-
-                                            let exchange = match msg.exchange {
-                                                None => continue,
-                                                Some(exchange) => {
-                                                    match FuturesExchange::from_string(&exchange) {
-                                                        Ok(ex) => ex,
-                                                        Err(_e) => {
-                                                            continue
-                                                        }
-                                                    }
-                                                }
-                                            };
-
-                                            let price = match msg.trade_price {
-                                                None => continue,
-                                                Some(price) => match Decimal::from_f64(price) {
-                                                    None => continue,
-                                                    Some(price) => price
-                                                }
-                                            };
-                                            let side = match msg.aggressor {
-                                                None => None,
-                                                Some(aggressor) => {
-                                                    match aggressor {
-                                                        1 => Some(OrderSide::Buy),
-                                                        2 => Some(OrderSide::Sell),
-                                                        _ => None,
-                                                    }
-                                                }
-                                            };
-                                            let symbol = match msg.symbol {
-                                                None => continue,
-                                                Some(symbol) => symbol
-                                            };
-                                            let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
-                                            let tick = Tick::new(symbol, price, Utc::now().to_string(), volume, side);
-                                            if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
-                                                broadcaster.value().broadcast(BaseDataEnum::Tick(tick)).await;
-                                            }
+                                            tokio::spawn(handle_tick(client.clone(), msg));
                                         }
                                     },
                                     151 => {
@@ -252,81 +205,7 @@ pub async fn handle_responses_from_ticker_plant(
                                             // Best Bid Offer
                                             // From Server
                                             //println!("Best Bid Offer (Template ID: 151) from Server: {:?}", msg);
-                                            let symbol = match msg.symbol {
-                                                None => continue,
-                                                Some(symbol) => symbol
-                                            };
-
-                                            if let Some(price) = msg.ask_price {
-                                                let ask_price = match Decimal::from_f64(price) {
-                                                    None => continue,
-                                                    Some(ask_price) => ask_price
-                                                };
-                                                if let Some(volume) = msg.ask_size {
-                                                    let ask_volume = match Decimal::from_i32(volume) {
-                                                        None => continue,
-                                                        Some(volume) => volume
-                                                    };
-                                                    if let Some(mut ask_book) = client.ask_book.get_mut(&symbol) {
-                                                        let level = BookLevel::new(0, ask_price, ask_volume);
-                                                        ask_book.insert(0, level);
-                                                    }
-                                                }
-                                            }
-
-                                            if let Some(price) = msg.bid_price {
-                                                let bid_price = match Decimal::from_f64(price) {
-                                                    None => continue,
-                                                    Some(bid_price) => bid_price
-                                                };
-                                                if let Some(volume) = msg.bid_size {
-                                                    let bid_volume = match Decimal::from_i32(volume) {
-                                                        None => continue,
-                                                        Some(volume) => volume
-                                                    };
-                                                    if let Some(mut bid_book) = client.bid_book.get_mut(&symbol) {
-                                                        let level = BookLevel::new(0, bid_price, bid_volume);
-                                                        bid_book.insert(0, level);
-                                                    }
-                                                }
-                                            }
-                                            // From Server
-
-                                            let exchange = match msg.exchange {
-                                                None => continue,
-                                                Some(exchange) => {
-                                                    match FuturesExchange::from_string(&exchange) {
-                                                        Ok(ex) => ex,
-                                                        Err(_e) => {
-                                                            eprintln!("Error deserializing Exchange");
-                                                            continue
-                                                        }
-                                                    }
-                                                }
-                                            };
-
-                                            if let Some(broadcaster) = client.quote_feed_broadcasters.get(&symbol) {
-                                                if let Some(ask_book) = client.ask_book.get(&symbol) {
-                                                    if let Some(best_offer) = ask_book.value().get(&0) {
-                                                        if let Some(bid_book) = client.bid_book.get(&symbol) {
-                                                            if let Some(best_bid) = bid_book.value().get(&0) {
-                                                                let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
-                                                                let data = BaseDataEnum::Quote(
-                                                                    Quote {
-                                                                        symbol,
-                                                                        ask: best_offer.price,
-                                                                        bid: best_bid.price,
-                                                                        ask_volume: best_offer.volume,
-                                                                        bid_volume: best_bid.volume,
-                                                                        time: Utc::now().to_string(),
-                                                                    }
-                                                                );
-                                                                broadcaster.broadcast(data).await;
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                            tokio::spawn(handle_quote(client.clone(), msg));
                                         }
                                     },
                                     152 => {
@@ -446,4 +325,133 @@ pub async fn handle_responses_from_ticker_plant(
         }
         eprintln!("Tick Plant dropped");
     });
+}
+
+async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
+    let volume = match msg.trade_size {
+        None => return,
+        Some(size) => {
+            match Decimal::from_i32(size) {
+                None => return,
+                Some(size) => size
+            }
+        }
+    };
+
+    let exchange = match msg.exchange {
+        None => return,
+        Some(exchange) => {
+            match FuturesExchange::from_string(&exchange) {
+                Ok(ex) => ex,
+                Err(_e) => {
+                    return
+                }
+            }
+        }
+    };
+
+    let price = match msg.trade_price {
+        None => return,
+        Some(price) => match Decimal::from_f64(price) {
+            None => return,
+            Some(price) => price
+        }
+    };
+    let side = match msg.aggressor {
+        None => None,
+        Some(aggressor) => {
+            match aggressor {
+                1 => Some(OrderSide::Buy),
+                2 => Some(OrderSide::Sell),
+                _ => None,
+            }
+        }
+    };
+    let symbol = match msg.symbol {
+        None => return,
+        Some(symbol) => symbol
+    };
+    let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
+    let tick = Tick::new(symbol, price, Utc::now().to_string(), volume, side);
+    if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
+        broadcaster.value().broadcast(BaseDataEnum::Tick(tick)).await;
+    }
+}
+
+async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
+    let symbol = match msg.symbol {
+        None => return,
+        Some(symbol) => symbol
+    };
+
+    if let Some(price) = msg.ask_price {
+        let ask_price = match Decimal::from_f64(price) {
+            None => return,
+            Some(ask_price) => ask_price
+        };
+        if let Some(volume) = msg.ask_size {
+            let ask_volume = match Decimal::from_i32(volume) {
+                None => return,
+                Some(volume) => volume
+            };
+            if let Some(mut ask_book) = client.ask_book.get_mut(&symbol) {
+                let level = BookLevel::new(0, ask_price, ask_volume);
+                ask_book.insert(0, level);
+            }
+        }
+    }
+
+    if let Some(price) = msg.bid_price {
+        let bid_price = match Decimal::from_f64(price) {
+            None => return,
+            Some(bid_price) => bid_price
+        };
+        if let Some(volume) = msg.bid_size {
+            let bid_volume = match Decimal::from_i32(volume) {
+                None => return,
+                Some(volume) => volume
+            };
+            if let Some(mut bid_book) = client.bid_book.get_mut(&symbol) {
+                let level: BookLevel = BookLevel::new(0, bid_price, bid_volume);
+                bid_book.insert(0, level);
+            }
+        }
+    }
+    // From Server
+
+    let exchange = match msg.exchange {
+        None => return,
+        Some(exchange) => {
+            match FuturesExchange::from_string(&exchange) {
+                Ok(ex) => ex,
+                Err(_e) => {
+                    eprintln!("Error deserializing Exchange");
+                    return
+                }
+            }
+        }
+    };
+
+    if let Some(broadcaster) = client.quote_feed_broadcasters.get(&symbol) {
+        if let Some(ask_book) = client.ask_book.get(&symbol) {
+            if let Some(best_offer) = ask_book.value().get(&0) {
+                if let Some(bid_book) = client.bid_book.get(&symbol) {
+                    if let Some(best_bid) = bid_book.value().get(&0) {
+                        let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
+                        let data = BaseDataEnum::Quote(
+                            Quote {
+                                symbol,
+                                ask: best_offer.price,
+                                bid: best_bid.price,
+                                ask_volume: best_offer.volume,
+                                bid_volume: best_bid.volume,
+                                time: Utc::now().to_string(),
+                            }
+                        );
+                        broadcaster.broadcast(data).await;
+                    }
+                }
+            }
+        }
+    }
 }
