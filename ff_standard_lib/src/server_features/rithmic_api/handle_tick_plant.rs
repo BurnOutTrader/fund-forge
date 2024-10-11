@@ -200,7 +200,11 @@ pub async fn handle_responses_from_ticker_plant(
                                             // Last Trade
                                             let volume = match msg.trade_size {
                                                 None => continue,
-                                                Some(size) => Decimal::from_i32(size).unwrap()
+                                                Some(size) =>
+                                                    match Decimal::from_i32(size) {
+                                                        None => continue,
+                                                        Some(size) => size
+                                                    }
                                             };
                                             // From Server
 
@@ -218,7 +222,10 @@ pub async fn handle_responses_from_ticker_plant(
 
                                             let price = match msg.trade_price {
                                                 None => continue,
-                                                Some(price) => Decimal::from_f64(price).unwrap()
+                                                Some(price) => match Decimal::from_f64(price) {
+                                                    None => continue,
+                                                    Some(price) => price
+                                                }
                                             };
                                             let side = match msg.aggressor {
                                                 None => continue,
