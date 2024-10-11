@@ -32,7 +32,6 @@ impl<T: Clone + Send> StaticInternalBroadcaster<T> {
         self.subscribers.is_empty()
     }
 
-
     /// Sequential broadcast: broadcasts the data to all subscribers sequentially without concurrency or creating new tasks.
     pub async fn broadcast(&self, source_data: T) {
         let mut closed =vec![];
