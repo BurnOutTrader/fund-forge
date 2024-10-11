@@ -122,6 +122,9 @@ pub(crate) async fn live_subscription_handler(
         return;
     }
 
+    //todo! THIS HAS TO BE REMOVED ONCE LIVE WARM UP IS BUILT
+    set_warmup_complete();
+
     let (tx, rx) = mpsc::channel(100);
     subscribe_primary_subscription_updates("Live Subscription Updates".to_string(), tx).await;
 
@@ -380,6 +383,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let market_update_sender = market_update_sender.clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap();
+        let mut strategy_time_slice = TimeSlice::new();
         const LENGTH: usize = 4;
         //println!("{:?}: response handler start", incoming.key());
         let mut length_bytes = [0u8; LENGTH];
@@ -398,13 +402,24 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                     continue;
                 }
             }
+
             // these will be buffered eventually into an EventTimeSlice
             let time_slice = TimeSlice::from_bytes(&message_body).unwrap();
-            market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
-            let mut strategy_time_slice = TimeSlice::new();
-            if let Some(consolidated) = subscription_handler.update_time_slice(time_slice.clone()).await {
-                strategy_time_slice.extend(consolidated);
+
+            // catch the data feed in a buffer until warm up completes
+            if !is_warmup_complete() {
+                strategy_time_slice.extend(time_slice);
+                continue;
             }
+
+            if !time_slice.is_empty() {
+                market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
+
+                if let Some(consolidated) = subscription_handler.update_time_slice(time_slice.clone()).await {
+                    strategy_time_slice.extend(consolidated);
+                }
+            }
+
             if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
                 strategy_time_slice.extend(consolidated);
             }
@@ -413,6 +428,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
             indicator_handler.update_time_slice(Utc::now(), &strategy_time_slice).await;
 
             fwd_data(strategy_time_slice).await;
+            strategy_time_slice = TimeSlice::new();
         }
     });
 }
