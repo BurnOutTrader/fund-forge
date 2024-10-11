@@ -31,7 +31,6 @@ use crate::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use tokio::sync::oneshot;
-use tokio::task::JoinHandle;
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
 use crate::server_features::rithmic_api::handle_history_plant::handle_responses_from_history_plant;
 use crate::server_features::rithmic_api::handle_order_plant::handle_responses_from_order_plant;
@@ -80,9 +79,10 @@ pub struct RithmicClient {
     //subscribers
     pub tick_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
+    pub candle_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
+
     pub bid_book: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>>,
     pub ask_book: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>>,
-    pub candle_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
 }
 
 impl RithmicClient {
