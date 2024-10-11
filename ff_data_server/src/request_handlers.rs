@@ -320,19 +320,15 @@ pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamNam
                     prefixed_msg.extend_from_slice(&length);
                     prefixed_msg.extend_from_slice(&bytes);
                     // Write the response to the stream
-                    match stream.write_all(&prefixed_msg).await {
-                        Err(e) => {
-                            eprintln!("Shutting down stream handler {}", e);
-                            break;
-                        }
-                        Ok(_) => {}
+                    if let Err(e) = stream.write_all(&prefixed_msg).await {
+                        eprintln!("Error writing to stream: {}", e);
+                        break;
                     }
                     time_slice = TimeSlice::new();
                 }
                 Some(response) = receiver.recv() => {
                     time_slice.add(response);
                 }
-                else => break,
             }
         }
         STREAM_CALLBACK_SENDERS.remove(&stream_name);
