@@ -152,7 +152,7 @@ impl RithmicClient {
         if connect_data {
             match client.client.connect_and_login(SysInfraType::TickerPlant).await {
                 Ok(r) => {
-                    handle_responses_from_ticker_plant(client.clone(), r).await;
+                   tokio::spawn(handle_responses_from_ticker_plant(client.clone(), r));
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -161,7 +161,7 @@ impl RithmicClient {
 
             match client.client.connect_and_login(SysInfraType::HistoryPlant).await {
                 Ok(r) => {
-                    handle_responses_from_history_plant(client.clone(), r).await;
+                    tokio::spawn(handle_responses_from_history_plant(client.clone(), r));
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -172,7 +172,7 @@ impl RithmicClient {
         if connect_accounts {
             match client.client.connect_and_login(SysInfraType::OrderPlant).await {
                 Ok(r) => {
-                    handle_responses_from_order_plant(client.clone(), r).await;
+                    tokio::spawn(handle_responses_from_order_plant(client.clone(), r));
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -181,7 +181,7 @@ impl RithmicClient {
 
             match client.client.connect_and_login(SysInfraType::PnlPlant).await {
                 Ok(r) => {
-                    handle_responses_from_pnl_plant(client.clone(), r).await;
+                    tokio::spawn(handle_responses_from_pnl_plant(client.clone(), r));
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -406,7 +406,7 @@ impl VendorApiResponse for RithmicClient {
     async fn decimal_accuracy_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         //todo get dynamically from server using stream name to fwd callback
         let accuracy = match symbol_name.as_str() {
-            "MNQ" => 4,
+            "MNQ" => 2,
             _ => todo!(),
         };
         DataServerResponse::DecimalAccuracy {
@@ -418,7 +418,7 @@ impl VendorApiResponse for RithmicClient {
     async fn tick_size_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         //todo get dynamically from server using stream name to fwd callback
         let tick_size = match symbol_name.as_str() {
-            "MNQ" => dec!(0.0001),
+            "MNQ" => dec!(0.25),
             _ => todo!(),
         };
         DataServerResponse::TickSize {
@@ -506,10 +506,10 @@ impl VendorApiResponse for RithmicClient {
                 request: Some(1), //1 subscribe 2 unsubscribe
                 update_bits: Some(bits), //1 for ticks 2 for quotes
             };
-    /*        match self.client.switch_heartbeat_required(SysInfraType::TickerPlant, false).await {
+            match self.client.switch_heartbeat_required(SysInfraType::TickerPlant, false).await {
                 Ok(_) => {}
                 Err(_) => {}
-            }*/
+            }
             match self.send_message(SysInfraType::TickerPlant, req).await {
                 Ok(_) => {
                     println!("Subscribed to new ticker subscription");

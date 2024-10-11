@@ -34,7 +34,7 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(5),
         vec![
-         /*   DataSubscription::new(
+       /*     DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Ticks(1),
@@ -48,17 +48,17 @@ async fn main() {
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
-            DataSubscription::new(
+           DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(1),
                 BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
             ),
-           /* DataSubscription::new(
+       /*     DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(5),
+                Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
@@ -66,7 +66,7 @@ async fn main() {
         false,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(50),
+        core::time::Duration::from_millis(30),
         GUI_DISABLED,
     ).await;
 
