@@ -305,7 +305,6 @@ pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamNam
     STREAM_CALLBACK_SENDERS.insert(stream_name.clone(), stream_sender.clone());
     let mut receiver = stream_receiver;
     let mut stream = stream;
-
     tokio::spawn(async move {
         let mut time_slice = TimeSlice::new();
         let mut send_time: DateTime<Utc> = Utc::now() + buffer;
@@ -316,7 +315,7 @@ pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamNam
                 send_time = Utc::now() + buffer;
                 let bytes = time_slice.to_bytes();
                 // Prepare the message with a 4-byte length header in big-endian format
-                let length = (bytes.len() as u32).to_be_bytes();
+                let length: [u8; 4] = (bytes.len() as u32).to_be_bytes();
                 let mut prefixed_msg = Vec::new();
                 prefixed_msg.extend_from_slice(&length);
                 prefixed_msg.extend_from_slice(&bytes);
