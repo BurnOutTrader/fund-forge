@@ -132,7 +132,7 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-    init_apis(options.clone()).await;
+    //init_apis(options.clone()).await;
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 
