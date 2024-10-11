@@ -34,14 +34,14 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(5),
         vec![
-            /*DataSubscription::new(
+            DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Ticks(1),
                 BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::CME)
             ),
-            DataSubscription::new(
+            /*DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Instant,
@@ -66,8 +66,7 @@ async fn main() {
         false,
         100,
         strategy_event_sender,
-        //Some(core::time::Duration::from_millis(50)),
-        None,
+        core::time::Duration::from_millis(50),
         GUI_DISABLED,
     ).await;
 
@@ -101,8 +100,8 @@ pub async fn on_data_received(
                     for base_data in time_slice.iter() {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
-                            BaseDataEnum::Tick(_tick) => {
-                               // println!("{}", tick);
+                            BaseDataEnum::Tick(tick) => {
+                               println!("{}", tick);
                             }
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
@@ -215,7 +214,7 @@ pub async fn on_data_received(
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 if quotebar.is_closed == true {
-                                    let msg = format!("{} {} QuoteBar Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.time_closed_local(strategy.time_zone()));
+                                    let msg = format!("{} {} QuoteBar Bid Close: {}, Ask Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.ask_close, quotebar.time_closed_local(strategy.time_zone()));
                                     if quotebar.bid_close == quotebar.bid_open {
                                         println!("{}", msg.as_str().blue())
                                     } else {

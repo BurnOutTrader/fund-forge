@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{Utc};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::ServerConfig;
 use rustls_pemfile::{certs, private_key};
@@ -8,6 +8,7 @@ use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use ff_rithmic_api::systems::RithmicSystem;
 use structopt::StructOpt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -86,12 +87,12 @@ async fn init_apis(options: ServerLaunchOptions) {
             if !toml_files.is_empty() {
                 for file in toml_files {
                     if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
-                        //todo add a bool option to credentials for is_data_feed
                         let client = RithmicClient::new(system, ).await.unwrap();
                         let client = Arc::new(client);
+                        //todo remove this later
                         let use_data = match system {
                             RithmicSystem::TopstepTrader => true,
-                            _ => false
+                            _ => continue
                         };
                         match RithmicClient::run_start_up(client.clone(), true, use_data).await {
                             Ok(_) => {}
@@ -340,8 +341,8 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) -> Joi
 
                 // Handle the request and generate a response
                  match request {
-                    DataServerRequest::RegisterStreamer(port) => {
-                        stream_handler(tls_stream, port).await;
+                    DataServerRequest::RegisterStreamer{port, secs, subsec } => {
+                        stream_handler(tls_stream, port, Duration::new(secs, subsec)).await;
                         continue 'main_loop
                     },
                     _ => eprintln!("Stream: Strategy Did not register a Strategy mode")

@@ -47,13 +47,9 @@ By default all Api's will launch on a single server instance.
 It is easy to build and run strategies which can be deployed and communicate across multiple machines, docker containers or simply run everything locally.
 It is easy to build new indicators and add new brokers or data feeds, including fundamental data feeds.
 
-There are event driven handlers and an optional buffering system for maintaining speed and consistency from back testing to live trading.
+There are event driven handlers and a buffering mechanism for maintaining consistency from back testing to live trading.
 
-There is an Option for using a buffered or unbuffered engine in backtesting and live trading, the backtesting engines are designed to mimic the live trading engines,
-in the unbuffered version events are forwarded to the strategy receiver as soon as they occur. In the buffered version events are buffered for X Duration and forwarded as a `StrategyEventBuffer`.
-The strategy will choose which engine to use depending on the initializing parameter `buffering_duration: Option<Duration>`.
-
-The correct strategy engine will be started in the background depending on the StrategyMode. 
+The correct strategy engine  started in the background depending on the StrategyMode. 
 The strategy can be shared between threads as an `Arc<FundForgeStrategy>` and maintain full functionality, allowing the strategy logic to be delegated between custom user functions and async architectures.
 
 After creating the strategy instance using `FundForgeStrategy::initialize();` we will receive data and events as a `StrategyEventBuffer` in our event_receiver.

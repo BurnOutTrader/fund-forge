@@ -104,20 +104,8 @@ The number of bars to retain in memory for the strategy. This is useful for stra
 any additional subscriptions added later will be able to specify their own history requirements.
 
 ##### `buffering_duration: Option<core::time::Duration>` 
-Some(core::time::Duration::from_millis(100))
-
-if Some(buffer) we will use the buffered backtesting or buffered live trading engines / handlers.
-
-If None we will use the unbuffered versions. The backtesting versions will try to simulate the event flow of their respective live handlers.
-
-The buffer takes effect in both back-testing and live trading.
-A lower buffer resolution will result in a slower backtest, don't go to low unless necessary, 30 to 100ms is fine for most cases.
-If buffer is None we will use the unbuffered engine and push events to the strategy receiver as soon as they are available.
-
-If Some(Duration)
-Our handlers will capture the data streams in a buffer and pass them to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn.
-In live: If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events of a higher than instant resolution.
-
+core::time::Duration::from_millis(100),
+The historical engine or server will buffer data streams at this resolution.
 This helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
 
 ```rust
@@ -337,10 +325,7 @@ Subscriptions can be updated at any time, and the engine will handle the consoli
 The engine will also warm up indicators and consolidators after the initial warm up cycle, this may result in a momentary pause in the strategy runtime during back tests, while the data is fetched, consolidated etc.
 In live trading this will happen in the background as an async task, and the strategy will continue to execute as normal.
 
-Only data we specifically subscribe to will be returned to the event loop, if the data is building from ticks and we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
-
-The SubscriptionHandler will automatically build data from the highest suitable resolution, if you plan on using open bars and you want the best resolution current bar price, you should also subscribe to that resolution,
-This only needs to be done for DataVendors where more than 1 resolution is available as historical data, if the vendor only has tick data, then current consolidated candles etc will always have the most recent tick price included.
+The SubscriptionHandler will automatically build data from the lowest suitable resolution.
 
 The engine will automatically use any primary data available with the data vendor in historical mode, to speed up backtests and prevent using consolidators.
 

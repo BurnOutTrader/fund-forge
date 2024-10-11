@@ -525,7 +525,10 @@ impl VendorApiResponse for RithmicClient {
                 request: Some(1), //1 subscribe 2 unsubscribe
                 update_bits: Some(bits), //1 for ticks 2 for quotes
             };
-
+            match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,false).await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
             //todo dont send if already subscribed
             self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
         }
@@ -562,6 +565,12 @@ impl VendorApiResponse for RithmicClient {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
                     }
+                    if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
+                        match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,true).await {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
+                    }
                     return DataServerResponse::UnSubscribeResponse {
                         success: true,
                         subscription,
@@ -576,6 +585,12 @@ impl VendorApiResponse for RithmicClient {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
                     }
+                    if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
+                        match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,true).await {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
+                    }
                     return DataServerResponse::UnSubscribeResponse {
                         success: true,
                         subscription,
@@ -589,6 +604,12 @@ impl VendorApiResponse for RithmicClient {
                     if !broadcaster.has_subscribers().await {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
+                    }
+                    if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
+                        match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,true).await {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
                     }
                     return DataServerResponse::UnSubscribeResponse {
                         success: true,

@@ -105,7 +105,7 @@ fn historical_base_data_updates(base_data_enum: BaseDataEnum, time: DateTime<Utc
     }
 }
 
-pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decimal, account_currency: Currency, is_buffered: bool) -> Sender<MarketMessageEnum> {
+pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decimal, account_currency: Currency) -> Sender<MarketMessageEnum> {
     let (sender, receiver) = mpsc::channel(1000);
     let mut receiver = receiver;
     tokio::task::spawn(async move{
@@ -122,7 +122,7 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                 MarketMessageEnum::BaseDataUpdate(base_data ) => {
                     update_base_data(base_data.clone());
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
-                        backtest_matching_engine(time, is_buffered).await;
+                        backtest_matching_engine(time).await;
                     }
                     historical_base_data_updates(base_data, time);
                 }
@@ -132,7 +132,7 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                     }
                     historical_time_slice_ledger_updates(time_slice.clone(), time);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
-                        backtest_matching_engine(time, is_buffered).await;
+                        backtest_matching_engine(time).await;
                     }
                 }
                 MarketMessageEnum::OrderBookSnapShot{symbol , bid_book, ask_book } => {
@@ -142,7 +142,7 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                     BID_BOOKS.insert(symbol.name.clone(), bid_book);
                     ASK_BOOKS.insert(symbol.name.clone(), ask_book);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
-                        backtest_matching_engine(time, is_buffered).await;
+                        backtest_matching_engine(time).await;
                     }
                 }
                 MarketMessageEnum::OrderRequest(order_request) => {
@@ -154,7 +154,7 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                             panic!("Live orders do not get sent via market handler");
                         }
                         StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
-                            simulated_order_matching(mode, order_request, starting_balances, account_currency, is_buffered, time).await;
+                            simulated_order_matching(mode, order_request, starting_balances, account_currency, time).await;
                         }
                     }
                 }
@@ -217,7 +217,6 @@ pub async fn simulated_order_matching(
     order_request: OrderRequest,
     starting_balances: Decimal,
     account_currency: Currency,
-    is_buffered: bool,
     time: DateTime<Utc>
 ) {
     match order_request {
@@ -232,23 +231,17 @@ pub async fn simulated_order_matching(
                 BACKTEST_LEDGERS.get(&order.brokerage).unwrap().insert(order.account_id.clone(), ledger);
             }
             BACKTEST_OPEN_ORDER_CACHE.insert(order.id.clone(), order);
-            backtest_matching_engine(time.clone(), is_buffered).await;
+            backtest_matching_engine(time.clone()).await;
         }
         OrderRequest::Cancel{brokerage, order_id, account_id } => {
             let existing_order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
             if let Some((existing_order_id, order)) = existing_order {
                 let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage, account_id: order.account_id.clone(), order_id: existing_order_id, tag: order.tag.clone(), time: time.to_string()});
                 add_buffer(time, cancel_event).await;
-                if !is_buffered {
-                    forward_buffer(time).await;
-                }
                 BACKTEST_CLOSED_ORDER_CACHE.insert(order_id, order);
             } else {
                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found"), time: time.to_string()});
                 add_buffer(time, fail_event).await;
-                if !is_buffered {
-                    forward_buffer(time).await;
-                }
             }
         }
         OrderRequest::Update{ brokerage, order_id, account_id, update } => {
@@ -277,15 +270,9 @@ pub async fn simulated_order_matching(
                 let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone(), order: order.clone(), tag: order.tag.clone(), time: time.to_string()});
                 BACKTEST_OPEN_ORDER_CACHE.insert(order_id, order);
                 add_buffer(time, update_event).await;
-                if !is_buffered {
-                    forward_buffer(time).await;
-                }
             } else {
                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found"), time: time.to_string() });
                 add_buffer(time, fail_event).await;
-                if !is_buffered {
-                    forward_buffer(time).await;
-                }
             }
         }
         OrderRequest::CancelAll { brokerage, account_id, symbol_name } => {
@@ -300,9 +287,6 @@ pub async fn simulated_order_matching(
                 if let Some((order_id, order)) = order {
                     let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order_id: order.id.clone(), tag: order.tag.clone(), time: time.to_string()});
                     add_buffer(time.clone(), cancel_event).await;
-                    if !is_buffered {
-                        forward_buffer(time).await;
-                    }
                     BACKTEST_CLOSED_ORDER_CACHE.insert(order_id, order);
                 }
             }
@@ -315,7 +299,6 @@ pub async fn simulated_order_matching(
 
 pub async fn backtest_matching_engine(
     time: DateTime<Utc>,
-    is_buffered: bool
 ) {
     if BACKTEST_OPEN_ORDER_CACHE.len() == 0 {
         return;
@@ -408,7 +391,7 @@ pub async fn backtest_matching_engine(
                         false => partially_filled.push((order.id.clone(),  market_price, volume_filled))
                     }
                 } else if order.state == OrderState::Created {
-                    accepted.push((order.id.clone(), time, is_buffered))
+                    accepted.push((order.id.clone(), time))
                 }
             }
             OrderType::Market => {
@@ -462,7 +445,7 @@ pub async fn backtest_matching_engine(
                 if is_fill_triggered {
                     filled.push((order.id.clone(), market_fill_price));
                 } else if order.state == OrderState::Created {
-                    accepted.push((order.id.clone(), time, is_buffered));
+                    accepted.push((order.id.clone(), time));
                 }
             }
 
@@ -510,7 +493,7 @@ pub async fn backtest_matching_engine(
                 if is_fill_triggered {
                     filled.push((order.id.clone(), market_fill_price));
                 } else if order.state == OrderState::Created {
-                    accepted.push((order.id.clone(), time, is_buffered));
+                    accepted.push((order.id.clone(), time));
                 }
             }
             OrderType::StopLimit => {
@@ -585,7 +568,7 @@ pub async fn backtest_matching_engine(
                         false => partially_filled.push((order.id.clone(),  market_price, volume_filled))
                     }
                 } else if order.state == OrderState::Created {
-                    accepted.push((order.id.clone(), time, is_buffered))
+                    accepted.push((order.id.clone(), time))
                 }
             },
             OrderType::EnterLong => {
@@ -644,16 +627,16 @@ pub async fn backtest_matching_engine(
     }
 
     for (order_id, reason) in rejected {
-        reject_order(reason, &order_id, time, is_buffered).await
+        reject_order(reason, &order_id, time).await
     }
-    for (order_id , time, is_buffered)in accepted {
-        accept_order(&order_id, time, is_buffered).await;
+    for (order_id , time)in accepted {
+        accept_order(&order_id, time).await;
     }
     for (order_id, price) in filled {
-        fill_order(&order_id, time, price, is_buffered).await;
+        fill_order(&order_id, time, price).await;
     }
     for (order_id, price, volume) in partially_filled {
-        partially_fill_order(&order_id, time, price, volume,  is_buffered).await;
+        partially_fill_order(&order_id, time, price, volume).await;
     }
 }
 
@@ -661,7 +644,6 @@ async fn fill_order(
     order_id: &OrderId,
     time: DateTime<Utc>,
     market_price: Price,
-    is_buffered: bool
 ) {
     if let Some((_, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
@@ -690,9 +672,6 @@ async fn fill_order(
                         }
                     }
                 }
-                if !is_buffered {
-                    forward_buffer(time).await;
-                }
             }
         }
     }
@@ -703,7 +682,6 @@ async fn partially_fill_order(
     time: DateTime<Utc>,
     fill_price: Price,
     fill_volume: Volume,
-    is_buffered: bool,
 ) {
     if let Some(mut order) = BACKTEST_OPEN_ORDER_CACHE.get_mut(order_id) {
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
@@ -732,9 +710,6 @@ async fn partially_fill_order(
                         }
                     }
                 }
-                if !is_buffered {
-                    forward_buffer(time).await;
-                }
             }
         }
     }
@@ -744,7 +719,6 @@ async fn reject_order(
     reason: String,
     order_id: &OrderId,
     time: DateTime<Utc>,
-    is_buffered: bool
 ) {
     if let Some((_, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(order_id) {
         order.state = OrderState::Rejected(reason.clone());
@@ -761,9 +735,6 @@ async fn reject_order(
                 time: time.to_string()
             }),
         ).await;
-        if !is_buffered {
-            forward_buffer(time).await;
-        }
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
     }
 }
@@ -771,7 +742,6 @@ async fn reject_order(
 async fn accept_order(
     order_id: &OrderId,
     time: DateTime<Utc>,
-    is_buffered: bool
 ) {
     if let Some(mut order) = BACKTEST_OPEN_ORDER_CACHE.get_mut(order_id) {
         order.state = OrderState::Accepted;
@@ -787,9 +757,6 @@ async fn accept_order(
                 time: time.to_string()
             }),
         ).await;
-        if !is_buffered {
-            forward_buffer(time).await;
-        }
     }
 }
 

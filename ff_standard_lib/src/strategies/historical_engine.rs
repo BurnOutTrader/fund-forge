@@ -13,7 +13,6 @@ use std::time::Duration;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::{mpsc};
 use crate::strategies::handlers::market_handlers::MarketMessageEnum;
-use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::DataSubscription;
 //Possibly more accurate engine
 /*todo Use this for saving and loading data, it will make smaller file sizes and be less handling for consolidator, we can then just update historical data once per week on sunday and load last week from broker.
@@ -32,7 +31,7 @@ pub struct HistoricalEngine {
     start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
     warmup_duration: ChronoDuration,
-    buffer_resolution: Option<Duration>,
+    buffer_resolution: Duration,
     gui_enabled: bool,
     primary_subscription_updates: Receiver<Vec<DataSubscription>>,
     market_event_sender: Sender<MarketMessageEnum>,
@@ -45,7 +44,7 @@ impl HistoricalEngine {
         start_date: DateTime<Utc>,
         end_date: DateTime<Utc>,
         warmup_duration: ChronoDuration,
-        buffer_resolution: Option<Duration>,
+        buffer_resolution: Duration,
         gui_enabled: bool,
         market_event_sender: Sender<MarketMessageEnum>,
     ) -> Self {
@@ -84,10 +83,9 @@ impl HistoricalEngine {
                     end_time,
                 );
 
-                match self.buffer_resolution {
-                    None => self.historical_data_feed_unbuffered(month_years, warm_up_start_time, end_time, self.mode).await,
-                    Some(res) => self.historical_data_feed_buffered(month_years, warm_up_start_time, end_time, res, self.mode).await,
-                }
+
+                self.historical_data_feed(month_years, warm_up_start_time, end_time, self.buffer_resolution, self.mode).await;
+
 
                 match self.mode {
                     StrategyMode::Backtest => {
@@ -114,113 +112,9 @@ impl HistoricalEngine {
     }
 
     /// Feeds the historical data to the strategy, along with any events that were created.
-    /// Tries to simulate trading without the buffer, where events and data are forwarded directly to the engine
-    async fn historical_data_feed_unbuffered(
-        &mut self,
-        month_years: BTreeMap<i32, DateTime<Utc>>,
-        warm_up_start_time: DateTime<Utc>,
-        end_time: DateTime<Utc>,
-        mode: StrategyMode
-    ) {
-        println!("Un-Buffered Engine: Warming up the strategy...");
-        let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
-        let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
-        let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
-        for subscription in &primary_subscriptions {
-            println!("Un-Buffered Engine: Primary Subscription: {}", subscription);
-        }
-        let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-        for subscription in &strategy_subscriptions {
-            println!("Un-Buffered Engine: Strategy Subscription: {}", subscription);
-        }
-        let mut warm_up_complete = false;
-        // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
-        'main_loop: for (_, start) in &month_years {
-            'month_loop: loop {
-                println!("Un-Buffered Engine: Preparing TimeSlices For: {}", start.date_naive().format("%B %Y"));
-                let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
-                    Ok(time_slices) => time_slices,
-                    Err(e) => {
-                        eprintln!("Engine: Error getting historical data for: {:?}: {:?}", start, e);
-                        continue;
-                    }
-                };
-                println!("{} Data Points Recovered from Server: {} for {}", start.date_naive(), month_time_slices.len(), start.date_naive());
-                let mut end_month = true;
-                'time_instance_loop: for (time, time_slice) in month_time_slices {
-                    if time > end_time {
-                        println!("Un-Buffered Engine: End Time: {}", end_time);
-                        break 'main_loop;
-                    }
-                    if time < warm_up_start_time {
-                        continue
-                    }
-                    //self.notify.notified().await;
-                    if !warm_up_complete {
-                        if time >= self.start_time {
-                            warm_up_complete = true;
-                            set_warmup_complete();
-                            add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
-                            forward_buffer(time).await;
-                            if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
-                                unsubscribe_primary_subscription_updates("Historical Engine").await;
-                                break 'main_loop
-                            }
-                            println!("Un-Buffered Engine: Start Backtest");
-                        }
-                    }
-                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
-                    let mut strategy_time_slice: TimeSlice = TimeSlice::new();
-                    // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
-                    match self.primary_subscription_updates.try_recv() {
-                        Ok(updates) => {
-                            if updates != primary_subscriptions {
-                                primary_subscriptions = updates;
-                                end_month = false;
-                                break 'time_instance_loop
-                            }
-                        }
-                        Err(_) => {}
-                    }
-
-                    // update our consolidators and create the strategies time slice with any new data or just create empty slice.
-                    // Add only primary data which the strategy has subscribed to into the strategies time slice
-                    if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
-                        strategy_time_slice.extend(consolidated_data);
-                    }
-
-                    // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
-                    if let Some(consolidated_data) = subscription_handler.update_consolidators_time(time.clone()).await {
-                        strategy_time_slice.extend(consolidated_data);
-                    }
-
-                    for data in time_slice.iter() {
-                        if strategy_subscriptions.contains(&data.subscription()) {
-                            strategy_time_slice.add(data.clone());
-                        }
-                    }
-
-                    if !strategy_time_slice.is_empty() {
-                        // Update indicators and get any generated events.
-                        indicator_handler.update_time_slice(time, &strategy_time_slice).await;
-                        // add the strategy time slice to the new events.
-                        let slice_event = StrategyEvent::TimeSlice(strategy_time_slice);
-                        add_buffer(time, slice_event).await;
-                    }
-                    forward_buffer(time).await;
-                }
-                if end_month {
-                    break 'month_loop;
-                }
-            }
-        }
-    }
-
-
-    /// Feeds the historical data to the strategy, along with any events that were created.
     /// Simulates trading with a live buffer, where we catch events for x duration before forwarding to the strategy
     #[allow(unused_assignments)]
-    async fn historical_data_feed_buffered(
+    async fn historical_data_feed(
         &mut self,
         month_years: BTreeMap<i32, DateTime<Utc>>,
         warm_up_start_time: DateTime<Utc>,
@@ -228,18 +122,18 @@ impl HistoricalEngine {
         buffer_duration: Duration,
         mode: StrategyMode
     ) {
-        println!("Buffered Engine: Warming up the strategy...");
+        println!("Historical Engine: Warming up the strategy...");
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         let mut warm_up_complete = false;
         let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
         for subscription in &primary_subscriptions {
-            println!("Buffered Engine: Primary Subscription: {}", subscription);
+            println!("Historical Engine: Primary Subscription: {}", subscription);
         }
         let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
         for subscription in &strategy_subscriptions {
-            println!("Buffered Engine: Strategy Subscription: {}", subscription);
+            println!("Historical Engine: Strategy Subscription: {}", subscription);
         }
         'main_loop: for (_, start) in &month_years {
             let mut last_time = start.clone();
@@ -248,7 +142,7 @@ impl HistoricalEngine {
                 let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
-                        eprintln!("Buffered Engine: Error getting historical data for: {:?}: {:?}", start, e);
+                        eprintln!("Historical Engine: Error getting historical data for: {:?}: {:?}", start, e);
                         continue;
                     }
                 };
@@ -257,7 +151,7 @@ impl HistoricalEngine {
                 'time_instance_loop: loop {
                     let time = last_time + buffer_duration;
                     if time > end_time {
-                        println!("Buffered Engine: End Time: {}", end_time);
+                        println!("Historical Engine: End Time: {}", end_time);
                         break 'main_loop;
                     }
                     if time < warm_up_start_time {
@@ -274,7 +168,7 @@ impl HistoricalEngine {
                                 unsubscribe_primary_subscription_updates("Historical Engine").await;
                                 break 'main_loop
                             }
-                            println!("Buffered Engine: Start Backtest");
+                            println!("Historical Engine: Start Backtest");
                         }
                     }
 
@@ -311,11 +205,7 @@ impl HistoricalEngine {
                             strategy_time_slice.extend(consolidated_data);
                         }
 
-                        for base_data in time_slice.iter() {
-                            if strategy_subscriptions.contains(&base_data.subscription()) {
-                                strategy_time_slice.add(base_data.clone());
-                            }
-                        }
+                        strategy_time_slice.extend(time_slice);
                     }
 
                     // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.

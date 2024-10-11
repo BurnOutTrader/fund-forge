@@ -145,7 +145,7 @@ pub async fn handle_responses_from_order_plant(
                                                     };
                                                     match client.send_message(SysInfraType::PnlPlant, req).await {
                                                         Ok(_) => {}
-                                                        Err(_) => {}
+                                                        Err(e) => eprintln!("{}", e)
                                                     }
                                                     let req = RequestPnLPositionUpdates {
                                                         template_id: 400 ,
@@ -157,7 +157,7 @@ pub async fn handle_responses_from_order_plant(
                                                     };
                                                     match client.send_message(SysInfraType::PnlPlant, req).await {
                                                         Ok(_) => {}
-                                                        Err(_) => {}
+                                                        Err(e) => eprintln!("{}", e)
                                                     }
                                                     let req = RequestShowOrders {
                                                         template_id: 320,
@@ -168,7 +168,7 @@ pub async fn handle_responses_from_order_plant(
                                                     };
                                                     match client.send_message(SysInfraType::OrderPlant, req).await {
                                                         Ok(_) => {}
-                                                        Err(_) => {}
+                                                        Err(e) => eprintln!("{}", e)
                                                     }
                                                     let req = RequestSubscribeForOrderUpdates {
                                                         template_id,
@@ -179,7 +179,7 @@ pub async fn handle_responses_from_order_plant(
                                                     };
                                                     match client.send_message(SysInfraType::OrderPlant, req).await {
                                                         Ok(_) => {}
-                                                        Err(_) => {}
+                                                        Err(e) => eprintln!("{}", e)
                                                     }
                                                 }
                                             }

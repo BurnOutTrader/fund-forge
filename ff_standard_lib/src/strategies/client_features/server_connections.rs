@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap};
 use crate::communicators::communications_async::ExternalSender;
 use crate::strategies::client_features::init_clients::create_async_api_client;
 use crate::strategies::client_features::connection_settings::client_settings::{initialise_settings, ConnectionSettings};
@@ -7,23 +7,20 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, Timelike, Utc};
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::io;
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
+use tokio::sync::{mpsc, oneshot, Mutex};
 use tokio::sync::mpsc::{Sender};
-use tokio::time::{interval_at, sleep, Instant};
 use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::market_handlers::{live_order_update, MarketMessageEnum};
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent, StrategyEventBuffer};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
@@ -248,42 +245,15 @@ async fn request_handler(
     });
 }
 
-async fn fwd_data(time_slice: Arc<RwLock<TimeSlice>>, open_bars: Arc<DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>>>) {
-    let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
-    let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
-    let mut strategy_slice = TimeSlice::new();
-    let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
-    let mut time_slice = time_slice.write().await;
-    for data in time_slice.iter() {
-        if strategy_subscriptions.contains(&data.subscription()) {
-            strategy_slice.add(data.clone());
-        }
-    }
-    {
-        for mut map in open_bars.iter_mut() {
-            for (_, data) in &*map {
-                if strategy_subscriptions.contains(&data.subscription()) {
-                    strategy_slice.add(data.clone());
-                }
-            }
-            map.clear();
-        }
-    }
-    if let Some(remaining_time_slice) = subscription_handler.update_consolidators_time(Utc::now()).await {
-        strategy_slice.extend(remaining_time_slice);
-        indicator_handler.as_ref().update_time_slice(Utc::now(), &strategy_slice).await;
-    }
-
-    let slice = StrategyEvent::TimeSlice(strategy_slice);
+async fn fwd_data(time_slice: TimeSlice) {
+    let slice = StrategyEvent::TimeSlice(time_slice);
     add_buffer(Utc::now(), slice).await;
-    time_slice.clear();
     forward_buffer(Utc::now()).await;
 }
 
 pub async fn response_handler(
     mode: StrategyMode,
-    buffer_duration: Option<Duration>,
-    is_buffered: bool,
+    buffer_duration: Duration,
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
@@ -331,18 +301,12 @@ pub async fn response_handler(
                                             let event = DataSubscriptionEvent::Subscribed(subscription.clone());
                                             let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                             add_buffer(Utc::now(), event_slice).await;
-                                            if !is_buffered {
-                                                forward_buffer(Utc::now()).await;
-                                            }
                                         }
                                         false => {
                                             eprintln!("Failed to subscribe to {}, {:?}", subscription, reason);
                                             let event = DataSubscriptionEvent::FailedToSubscribe(subscription.clone(), reason.unwrap());
                                             let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                             add_buffer(Utc::now(), event_slice).await;
-                                            if !is_buffered {
-                                                forward_buffer(Utc::now()).await;
-                                            }
                                         }
                                     }
                                 }
@@ -352,18 +316,12 @@ pub async fn response_handler(
                                             let event = DataSubscriptionEvent::Unsubscribed(subscription);
                                             let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                             add_buffer(Utc::now(), event_slice).await;
-                                            if !is_buffered {
-                                                forward_buffer(Utc::now()).await;
-                                            }
                                         }
                                         false => {
                                             eprintln!("Failed to unsubscribe from {}, {:?}", subscription, reason);
                                             let event = DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap());
                                             let event_slice = StrategyEvent::DataSubscriptionEvent(event);
                                             add_buffer(Utc::now(), event_slice).await;
-                                            if !is_buffered {
-                                                forward_buffer(Utc::now()).await;
-                                            }
                                         }
                                     }
                                 }
@@ -371,7 +329,7 @@ pub async fn response_handler(
                                     live_order_update(event, true).await;
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
-                                    handle_live_data(settings.clone(), port, is_buffered, buffer_duration, mode, market_update_sender.clone()).await;
+                                    handle_live_data(settings.clone(), port, buffer_duration, mode, market_update_sender.clone()).await;
                                 }
                                 _ => panic!("Incorrect response here: {:?}", response)
                             }
@@ -389,7 +347,10 @@ pub async fn response_handler(
     }
 }
 
-pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, is_buffered: bool, buffer_duration: Option<Duration> ,mode: StrategyMode, market_update_sender: Sender<MarketMessageEnum>) {
+pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration , mode: StrategyMode, market_update_sender: Sender<MarketMessageEnum>) {
+    if mode == StrategyMode::Backtest {
+        panic!("Backtest should not start live handler")
+    }
     // set up async client
     let mut stream_client = match create_async_api_client(&connection_settings, true).await {
         Ok(client) => client,
@@ -400,7 +361,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
     };
 
     // Register with the servers streaming handler
-    let stream_registration = DataServerRequest::RegisterStreamer(stream_name.clone());
+    let stream_registration = DataServerRequest::RegisterStreamer{port: stream_name.clone(), secs: buffer_duration.as_secs(), subsec: buffer_duration.subsec_nanos() };
     let data = stream_registration.to_bytes();
     let length = (data.len() as u64).to_be_bytes();
     let mut prefixed_msg = Vec::new();
@@ -414,84 +375,17 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         Err(_e) => {}
     }
 
-    let open_bars: Arc<DashMap<DataSubscription, AHashMap<DateTime<Utc>, BaseDataEnum>>> = Arc::new(DashMap::new());
-    let time_slice = Arc::new(RwLock::new(TimeSlice::new()));
-    if is_buffered && (mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading) {
-        let buffer_duration = buffer_duration.unwrap();
-        let time_slice = time_slice.clone();
-        let open_bars = open_bars.clone();
-        tokio::task::spawn(async move {
-            // new fn using time, first we align to the nearest whole second before starting the buffer. to keep consistency with backtesting.
-            let mut next_time = Utc::now() + buffer_duration;
-            next_time = next_time - Duration::from_nanos(next_time.timestamp_subsec_nanos() as u64);
-            next_time += buffer_duration;
-            loop {
-                let now = Utc::now();
-                // Calculate the duration until the next time
-                let sleep_duration = if next_time > now {
-                    (next_time - now).to_std().unwrap() // Convert to `std::time::Duration` //todo, just use std Duration as strategy param.
-                } else {
-                    Duration::from_secs(0) // If we missed the time, no sleep
-                };
-                // Sleep until the next buffer duration elapses
-                sleep(sleep_duration).await;
-                {
-                    fwd_data(time_slice.clone(), open_bars.clone()).await;
-                    // Update `next_time` for the next iteration
-                    next_time += buffer_duration;
-                }
-            }
-        });
-    }
-
-    // Creates a tick for each second for our consolidators, so we can update on each new second if no other data is coming in.
-    let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
-    let open_bars_ref = open_bars.clone();
-    let time_slice_ref = time_slice.clone();
-    tokio::task::spawn(async move {
-        // Calculate the start of the next second
-        let now = Utc::now();
-        let next_second = now + chrono::Duration::seconds(1)
-            - chrono::Duration::nanoseconds(now.nanosecond() as i64);
-
-        // Convert the next_second to a Tokio Instant
-        let start = Instant::now() + Duration::from_millis(
-            (next_second - now).num_milliseconds() as u64
-        );
-
-        // Create a ticker that starts at the next whole second and fires every second after
-        let mut ticker = interval_at(start, Duration::from_secs(1));
-
-        loop {
-            // Wait for the next tick
-            ticker.tick().await;
-
-            let now = Utc::now();
-
-            // Update consolidators time
-            if let Some(consolidated) = subscription_handler.update_consolidators_time(now).await {
-                {
-                    let mut time_slice = time_slice_ref.write().await;
-                    time_slice.extend(consolidated);
-                }
-                if !is_buffered {
-                    fwd_data(time_slice_ref.clone(), open_bars_ref.clone()).await;
-                }
-            }
-        }
-    });
 
     let market_update_sender = market_update_sender.clone();
-    let time_slice = time_slice.clone();
-    let open_bars = open_bars.clone();
+    let indicator_handler = INDICATOR_HANDLER.get().unwrap();
     tokio::task::spawn(async move {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
-        const LENGTH: usize = 8;
+        const LENGTH: usize = 4;
         //println!("{:?}: response handler start", incoming.key());
         let mut length_bytes = [0u8; LENGTH];
         while let Ok(_) = stream_client.read_exact(&mut length_bytes).await {
             // Parse the length from the header
-            let msg_length = u64::from_be_bytes(length_bytes) as usize;
+            let msg_length = u32::from_be_bytes(length_bytes) as usize;
             let mut message_body = vec![0u8; msg_length];
 
             // Read the message body based on the length
@@ -506,39 +400,22 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
             }
             // these will be buffered eventually into an EventTimeSlice
             let subscription_handler = subscription_handler.clone();
-            let time_slice = time_slice.clone();
-            let open_bars = open_bars.clone();
             let market_update_sender = market_update_sender.clone();
             tokio::task::spawn(async move {
-                let base_data = BaseDataEnum::from_bytes(&message_body).unwrap();
-                market_update_sender.send(MarketMessageEnum::BaseDataUpdate(base_data.clone())).await.unwrap();
+                let time_slice = TimeSlice::from_bytes(&message_body).unwrap();
+                market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
                 let mut strategy_time_slice = TimeSlice::new();
-                if let Some(consolidated) = subscription_handler.update_base_data(base_data.clone()).await {
+                if let Some(consolidated) = subscription_handler.update_time_slice(time_slice.clone()).await {
                     strategy_time_slice.extend(consolidated);
                 }
                 if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
                     strategy_time_slice.extend(consolidated);
                 }
 
-                strategy_time_slice.add(base_data.clone());
+                strategy_time_slice.extend(time_slice);
+                indicator_handler.update_time_slice(Utc::now(), &strategy_time_slice).await;
 
-                if strategy_time_slice.is_empty() {
-                    return;
-                }
-
-                for data in strategy_time_slice.iter() {
-                    let subscription = data.subscription();
-                    if data.is_closed() {
-                        time_slice.write().await.add(data.clone());
-                    } else {
-                        let mut open_bar_map = AHashMap::new();
-                        open_bar_map.insert(data.time_utc(), data.clone());
-                        open_bars.insert(subscription.clone(), open_bar_map);
-                    }
-                }
-                if !is_buffered {
-                    fwd_data(time_slice.clone(), open_bars.clone()).await;
-                }
+                fwd_data(strategy_time_slice).await;
             });
         }
     });
@@ -571,7 +448,7 @@ pub async fn initialize_static(
     }).clone();
 }
 
-pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duration>, mode: StrategyMode, market_update_sender: Sender<MarketMessageEnum>) {
+pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode, market_update_sender: Sender<MarketMessageEnum>) {
     let settings_map = initialise_settings().unwrap();
     let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
     let server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());
@@ -601,8 +478,5 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Option<Duratio
 
     let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     request_handler(rx, settings_map.clone(), server_senders, callbacks.clone()).await;
-    match buffer_duration {
-        None => response_handler(mode, buffer_duration, false, settings_map, server_receivers, callbacks, market_update_sender).await,
-        Some(_) => response_handler(mode, buffer_duration, true, settings_map, server_receivers, callbacks, market_update_sender).await
-    }
+    response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, market_update_sender).await;
 }

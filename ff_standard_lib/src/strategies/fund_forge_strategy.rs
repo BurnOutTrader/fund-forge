@@ -55,7 +55,7 @@ pub struct FundForgeStrategy {
 
     time_zone: Tz,
 
-    buffer_resolution: Option<Duration>,
+    buffer_resolution: Duration,
 
     subscription_handler: Arc<SubscriptionHandler>,
 
@@ -108,17 +108,13 @@ impl FundForgeStrategy {
         fill_forward: bool,
         retain_history: usize,
         strategy_event_sender: mpsc::Sender<StrategyEventBuffer>,
-        buffering_duration: Option<Duration>,
+        buffering_duration: Duration,
         gui_enabled: bool,
     ) -> FundForgeStrategy {
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
         let warm_up_start_time = start_time - warmup_duration;
-        let is_buffered = match buffering_duration {
-            None => false,
-            Some(_) => true
-        };
-        let market_event_sender = market_handler(strategy_mode, backtest_accounts_starting_cash, backtest_account_currency, is_buffered).await;
+        let market_event_sender = market_handler(strategy_mode, backtest_accounts_starting_cash, backtest_account_currency).await;
         let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode, market_event_sender.clone()).await);
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
 
@@ -869,13 +865,6 @@ impl FundForgeStrategy {
         retain_to_history: usize,
         fill_forward: bool
     ) {
-        for subscription in &subscriptions {
-            if let Some(buffer) = self.buffer_resolution {
-                if subscription.resolution.as_nanos() < buffer.as_nanos() as i64 {
-                    panic!("Subscription Resolution: {}, Lower than strategy buffer resolution: {:?}", subscription.resolution, self.buffer_resolution)
-                }
-            }
-        }
         match self.mode {
             StrategyMode::Backtest => {
                 self.subscription_handler.set_subscriptions(subscriptions, retain_to_history, self.time_utc(), fill_forward, true).await;

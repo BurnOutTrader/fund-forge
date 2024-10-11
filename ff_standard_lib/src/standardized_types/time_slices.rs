@@ -4,6 +4,8 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::Symbol;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use crate::messages::data_server_messaging::FundForgeError;
+use crate::standardized_types::bytes_trait::Bytes;
 
 /// A `UnstructuredSlice` is an unordered slice of data that is not yet consolidated into a `TimeSlice`.
 #[derive(Clone)]
@@ -21,6 +23,22 @@ pub struct UnstructuredSlice {
 #[archive_attr(derive(Debug))]
 pub struct TimeSlice {
     data: Vec<BaseDataEnum>,  // Internal vector holding the data
+}
+
+impl Bytes<Self> for TimeSlice {
+    fn from_bytes(archived: &[u8]) -> Result<TimeSlice, FundForgeError> {
+        // If the archived bytes do not end with the delimiter, proceed as before
+        match rkyv::from_bytes::<TimeSlice>(archived) {
+            //Ignore this warning: Trait `Deserialize<ResponseType, SharedDeserializeMap>` is not implemented for `ArchivedRequestType` [E0277]
+            Ok(response) => Ok(response),
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(e.to_string())),
+        }
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        let vec = rkyv::to_bytes::<_, 1024>(self).unwrap();
+        vec.into()
+    }
 }
 
 

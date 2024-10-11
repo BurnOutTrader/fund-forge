@@ -121,7 +121,7 @@ pub enum DataServerRequest {
     },
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage},
-    RegisterStreamer(u16)
+    RegisterStreamer{port: u16, secs: u64, subsec: u32}
 }
 
 impl DataServerRequest {
@@ -155,7 +155,7 @@ impl DataServerRequest {
             DataServerRequest::Accounts { callback_id, .. } => {*callback_id = id}
             DataServerRequest::PrimarySubscriptionFor { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::RegisterStreamer(_) => {}
+            DataServerRequest::RegisterStreamer{..} => {}
         }
     }
 }

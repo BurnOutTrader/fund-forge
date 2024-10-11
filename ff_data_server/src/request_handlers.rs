@@ -7,6 +7,7 @@ use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
+use std::time::Duration;
 use dashmap::DashMap;
 use structopt::lazy_static::lazy_static;
 use tokio::io;
@@ -22,6 +23,7 @@ use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::server_features::StreamName;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::OrderRequest;
+use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 
 /// Retrieves the base data from the file system or the vendor and sends it back to the client via a NetworkMessage using the response function
 pub async fn base_data_response(
@@ -239,7 +241,7 @@ pub async fn manage_async_requests(
                     DataServerRequest::PrimarySubscriptionFor { .. } => {
                         todo!()
                     }
-                    DataServerRequest::RegisterStreamer(_) => {
+                    DataServerRequest::RegisterStreamer{..} => {
                         //no need to handle here
                     }
                 };
@@ -300,29 +302,33 @@ where
     }
 }
 
-pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamName) -> JoinHandle<()> {
+pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamName, buffer: Duration) -> JoinHandle<()> {
     let (stream_sender, stream_receiver) = mpsc::channel(1000);
     STREAM_CALLBACK_SENDERS.insert(stream_name.clone(), stream_sender.clone());
     let mut receiver = stream_receiver;
     let mut stream = stream;
+
     tokio::spawn(async move {
-        while let Some(response) = receiver.recv().await {
+        let mut time_slice = TimeSlice::new();
+        let mut send_time: DateTime<Utc> = Utc::now() + buffer;
+        'receiver_loop: while let Some(response) = receiver.recv().await {
             // Convert the response to bytes
-            let bytes = response.to_bytes();
+            time_slice.add(response);
+            if Utc::now() >= send_time {
+                send_time = Utc::now() + buffer;
+                let bytes = time_slice.to_bytes();
+                // Prepare the message with a 4-byte length header in big-endian format
+                let length = (bytes.len() as u32).to_be_bytes();
+                let mut prefixed_msg = Vec::new();
+                prefixed_msg.extend_from_slice(&length);
+                prefixed_msg.extend_from_slice(&bytes);
 
-            // Prepare the message with a 4-byte length header in big-endian format
-            let length = (bytes.len() as u64).to_be_bytes();
-            let mut prefixed_msg = Vec::new();
-            prefixed_msg.extend_from_slice(&length);
-            prefixed_msg.extend_from_slice(&bytes);
-
-            // Write the response to the stream
-            match stream.write_all(&prefixed_msg).await {
-                Err(_e) => {
-                    // Handle the error (log it or take some other action)
-                }
-                Ok(_) => {
-                    // Successfully wrote the message
+                // Write the response to the stream
+                match stream.write_all(&prefixed_msg).await {
+                    Err(_) => {
+                        break 'receiver_loop;
+                    }
+                    Ok(_) => {}
                 }
             }
         }

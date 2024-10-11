@@ -745,14 +745,6 @@ impl SymbolSubscriptionHandler {
             Ok(returned_windows)
         };
 
-        // we need to determine if the data vendor has this kind of primary data
-        let is_primary_capable = self.vendor_primary_resolutions.contains(&new_subscription.subscription_resolution_type());
-        if is_primary_capable && strategy_mode == StrategyMode::Backtest  { //todo, we should also check here that we don't have a subscription of a lower resolution we can use, its pointless to use serialized bars in this case, might as well consolidate to get more accuracy
-            //In backtest mode we can just use the historical data so no need to reconsolidate
-            self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-            return load_data_closure(&new_subscription)
-        }
-
         let sub_res_type = new_subscription.subscription_resolution_type();
         // if the vendor doesn't supply this data we need to determine if we can atleast consolidate it from some source they do supply
         match new_subscription.base_data_type {
