@@ -36,9 +36,6 @@ pub async fn base_data_response(
 ) -> DataServerResponse {
     let data_folder = PathBuf::from(get_data_folder());
     let time: DateTime<Utc> = time.parse().unwrap();
-    //todo if to_time == the last 24 hours or some live time, we need to make sure we pull the latest bars from the vendor to make up for any missing bars
-    // we can use BaseDataEnum::last time for this or we simply start update task on this call
-    // now we can load the data from the file system
 
     let file = BaseDataEnum::file_path(&data_folder, &subscription, &time).unwrap();
     //println!("file path: {:?}", file);
