@@ -320,7 +320,6 @@ pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamNam
                 let mut prefixed_msg = Vec::new();
                 prefixed_msg.extend_from_slice(&length);
                 prefixed_msg.extend_from_slice(&bytes);
-
                 // Write the response to the stream
                 match stream.write_all(&prefixed_msg).await {
                     Err(e) => {
@@ -329,6 +328,7 @@ pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamNam
                     }
                     Ok(_) => {}
                 }
+                time_slice = TimeSlice::new();
             }
         }
         STREAM_CALLBACK_SENDERS.remove(&stream_name);
