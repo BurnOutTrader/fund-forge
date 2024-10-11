@@ -29,7 +29,7 @@ impl<T: Clone + Send> StaticInternalBroadcaster<T> {
     }
 
     pub fn has_subscribers(&self) -> bool {
-        self.subscribers.is_empty()
+        !self.subscribers.is_empty()
     }
 
     /// Sequential broadcast: broadcasts the data to all subscribers sequentially without concurrency or creating new tasks.
