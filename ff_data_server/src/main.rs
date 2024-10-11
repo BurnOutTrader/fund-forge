@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
 use ff_rithmic_api::systems::RithmicSystem;
+use futures::future::join_all;
 use structopt::lazy_static::lazy_static;
 use structopt::StructOpt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -84,29 +85,39 @@ struct ServerLaunchOptions {
 #[allow(dead_code)]
 async fn init_apis(options: ServerLaunchOptions) {
     let options = options.clone();
-    if !options.disable_rithmic_server {
-        let toml_files = RithmicClient::get_rithmic_tomls();
-        if !toml_files.is_empty() {
-            for file in toml_files {
-                if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
-                    let client = RithmicClient::new(system).await.unwrap();
-                    let client = Arc::new(client);
-                    match RithmicClient::run_start_up(client.clone(), true, true).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            panic!("Fail to run rithmic client for: {}, reason: {}", system, e);
+    if options.disable_rithmic_server {
+        return
+    }
+    let toml_files = RithmicClient::get_rithmic_tomls();
+    if toml_files.is_empty() {
+        return;
+    }
+    let init_tasks = toml_files.into_iter().filter_map(|file| {
+        RithmicSystem::from_file_string(file.as_str()).map(|system| {
+            task::spawn(async move {
+                match RithmicClient::new(system).await {
+                    Ok(client) => {
+                        let client = Arc::new(client);
+                        match RithmicClient::run_start_up(client.clone(), true, true).await {
+                            Ok(_) => {
+                                RITHMIC_CLIENTS.insert(system, client);
+                                println!("Rithmic client initialized for: {}", system);
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                            }
                         }
                     }
-                    RITHMIC_CLIENTS.insert(system, client);
-                } else {
-                    eprintln!("Error parsing rithmic system from: {}", file);
+                    Err(e) => {
+                        eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
+                    }
                 }
-            }
-        }
-    }
+            })
+        })
+    }).collect::<Vec<_>>();
+    // Wait for all initialization tasks to complete
+    join_all(init_tasks).await;
 }
-
-
 
 async fn logout_apis() {
     println!("Logging Out Apis Function Started");
@@ -137,9 +148,12 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-    init_apis(options.clone()).await;
+    let init_handle = tokio::spawn(init_apis(options.clone()));
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
+
+    // Wait for initialization to complete
+    init_handle.await.expect("Failed to initialize APIs");
 
     // Wait for Ctrl+C
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");
