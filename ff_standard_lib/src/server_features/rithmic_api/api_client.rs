@@ -193,16 +193,20 @@ impl RithmicClient {
     }
 
     pub async fn send_callback(&self, stream_name: StreamName, callback_id: u64, response: DataServerResponse) {
+        let mut disconnected = false;
         if let Some(mut stream_map) = self.callbacks.get_mut(&stream_name) {
             if let Some(sender) = stream_map.value_mut().remove(&callback_id) {
                 match sender.send(response) {
                     Ok(_) => {}
                     Err(e) => {
+                        disconnected = true;
                         eprintln!("Callback error: {:?} Dumping subscriber: {}", e, stream_name);
-                        self.logout_command_vendors(stream_name).await;
                     }
                 }
             }
+        }
+        if disconnected {
+            self.logout_command_vendors(stream_name).await;
         }
     }
 
@@ -540,9 +544,10 @@ impl VendorApiResponse for RithmicClient {
             user_msg: vec![],
             symbol: Some(subscription.symbol.name.to_string()),
             exchange: Some(exchange),
-            request: Some(1), //1 subscribe 2 unsubscribe
+            request: Some(2), //1 subscribe 2 unsubscribe
             update_bits: Some(bits), //1 for ticks 2 for quotes
         };
+        let mut disconnect_symbol = false;
         match subscription.base_data_type {
             BaseDataType::Ticks => {
                 if let Some(broadcaster) = self.tick_feed_broadcasters.get(&subscription.symbol.name) {
@@ -550,12 +555,19 @@ impl VendorApiResponse for RithmicClient {
                     if !broadcaster.has_subscribers() {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
-                        self.tick_feed_broadcasters.remove(&subscription.symbol.name);
+                        disconnect_symbol = true;
                     }
                     return DataServerResponse::UnSubscribeResponse {
                         success: true,
                         subscription,
                         reason: None,
+                    }
+                }
+                if disconnect_symbol {
+                    self.tick_feed_broadcasters.remove(&subscription.symbol.name);
+                    match self.send_message(SysInfraType::TickerPlant, req).await {
+                        Ok(_) => {}
+                        Err(_) => {}
                     }
                 }
             }
@@ -567,12 +579,19 @@ impl VendorApiResponse for RithmicClient {
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
                         self.ask_book.remove(&subscription.symbol.name);
                         self.bid_book.remove(&subscription.symbol.name);
-                        self.quote_feed_broadcasters.remove(&subscription.symbol.name);
+                        disconnect_symbol = true;
                     }
                     return DataServerResponse::UnSubscribeResponse {
                         success: true,
                         subscription,
                         reason: None,
+                    }
+                }
+                if disconnect_symbol {
+                    self.quote_feed_broadcasters.remove(&subscription.symbol.name);
+                    match self.send_message(SysInfraType::TickerPlant, req).await {
+                        Ok(_) => {}
+                        Err(_) => {}
                     }
                 }
             }
@@ -582,12 +601,19 @@ impl VendorApiResponse for RithmicClient {
                     if !broadcaster.has_subscribers() {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
-                        self.candle_feed_broadcasters.remove(&subscription.symbol.name);
+                        disconnect_symbol= true;
                     }
                     return DataServerResponse::UnSubscribeResponse {
                         success: true,
                         subscription,
                         reason: None,
+                    }
+                }
+                if disconnect_symbol {
+                    self.candle_feed_broadcasters.remove(&subscription.symbol.name);
+                    match self.send_message(SysInfraType::TickerPlant, req).await {
+                        Ok(_) => {}
+                        Err(_) => {}
                     }
                 }
             }
