@@ -34,7 +34,7 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(5),
         vec![
-            DataSubscription::new(
+            /*DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Ticks(1),
@@ -47,12 +47,19 @@ async fn main() {
                 Resolution::Instant,
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
-            ),
-            DataSubscription::new(
+            ),*/
+       /*     DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(5),
                 BaseDataType::Candles,
+                MarketType::Futures(FuturesExchange::CME)
+            ),*/
+            DataSubscription::new(
+                SymbolName::from("MNQ"),
+                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+                Resolution::Seconds(5),
+                BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
             ),
         ],
@@ -110,7 +117,7 @@ pub async fn on_data_received(
                                         }
                                     }
 
-                                    if !warmup_complete {
+                                  /*  if !warmup_complete {
                                         continue;
                                     }
 
@@ -199,12 +206,25 @@ pub async fn on_data_received(
 
 
                                     }
-
+                                        */
 
                                 }
                             }
                             BaseDataEnum::Quote(quote) => {
-                                println!("{}", quote);
+                                //println!("{}", quote);
+                            }
+                            BaseDataEnum::QuoteBar(quotebar) => {
+                                if quotebar.is_closed == true {
+                                    let msg = format!("{} {} QuoteBar Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.time_closed_local(strategy.time_zone()));
+                                    if quotebar.bid_close == quotebar.bid_open {
+                                        println!("{}", msg.as_str().blue())
+                                    } else {
+                                        match quotebar.bid_close > quotebar.bid_open {
+                                            true => println!("{}", msg.as_str().bright_green()),
+                                            false => println!("{}", msg.as_str().bright_red()),
+                                        }
+                                    }
+                                }
                             }
                             _ => {}
                         }

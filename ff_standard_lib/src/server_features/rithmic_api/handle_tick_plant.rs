@@ -245,7 +245,7 @@ pub async fn handle_responses_from_ticker_plant(
                                         if let Ok(msg) = BestBidOffer::decode(&message_buf[..]) {
                                             // Best Bid Offer
                                             // From Server
-                                            println!("Best Bid Offer (Template ID: 151) from Server: {:?}", msg);
+                                            //println!("Best Bid Offer (Template ID: 151) from Server: {:?}", msg);
                                             let symbol = match msg.symbol {
                                                 None => continue,
                                                 Some(symbol) => symbol
