@@ -506,7 +506,7 @@ impl VendorApiResponse for RithmicClient {
                 request: Some(1), //1 subscribe 2 unsubscribe
                 update_bits: Some(bits), //1 for ticks 2 for quotes
             };
-      /*      match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,false).await {
+    /*        match self.client.switch_heartbeat_required(SysInfraType::TickerPlant, false).await {
                 Ok(_) => {}
                 Err(_) => {}
             }*/
@@ -554,12 +554,6 @@ impl VendorApiResponse for RithmicClient {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
                     }
-                    if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
-                        match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,true).await {
-                            Ok(_) => {}
-                            Err(_) => {}
-                        }
-                    }
                     if empty_broadcaster {
                         self.tick_feed_broadcasters.remove(&subscription.symbol.name);
                     }
@@ -580,12 +574,6 @@ impl VendorApiResponse for RithmicClient {
                         self.ask_book.remove(&subscription.symbol.name);
                         self.bid_book.remove(&subscription.symbol.name);
                     }
-                    if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
-                        match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,true).await {
-                            Ok(_) => {}
-                            Err(_) => {}
-                        }
-                    }
                     if empty_broadcaster {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                     }
@@ -604,12 +592,6 @@ impl VendorApiResponse for RithmicClient {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
                     }
-                    if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
-                        match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,true).await {
-                            Ok(_) => {}
-                            Err(_) => {}
-                        }
-                    }
                     if empty_broadcaster {
                         self.candle_feed_broadcasters.remove(&subscription.symbol.name);
                     }
@@ -621,6 +603,12 @@ impl VendorApiResponse for RithmicClient {
                 }
             }
             _ => todo!("Handle gracefully by returning err")
+        }
+        if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
+            match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,true).await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
         DataServerResponse::UnSubscribeResponse {
             success: false,
