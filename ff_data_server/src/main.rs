@@ -84,28 +84,26 @@ struct ServerLaunchOptions {
 #[allow(dead_code)]
 async fn init_apis(options: ServerLaunchOptions) {
     let options = options.clone();
-    tokio::task::spawn(async move {
-        if !options.disable_rithmic_server {
-            let toml_files = RithmicClient::get_rithmic_tomls();
-            if !toml_files.is_empty() {
-                for file in toml_files {
-                    if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
-                        let client = RithmicClient::new(system).await.unwrap();
-                        let client = Arc::new(client);
-                        match RithmicClient::run_start_up(client.clone(), true, true).await {
-                            Ok(_) => {}
-                            Err(e) => {
-                                panic!("Fail to run rithmic client for: {}, reason: {}", system, e);
-                            }
+    if !options.disable_rithmic_server {
+        let toml_files = RithmicClient::get_rithmic_tomls();
+        if !toml_files.is_empty() {
+            for file in toml_files {
+                if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
+                    let client = RithmicClient::new(system).await.unwrap();
+                    let client = Arc::new(client);
+                    match RithmicClient::run_start_up(client.clone(), true, true).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            panic!("Fail to run rithmic client for: {}, reason: {}", system, e);
                         }
-                        RITHMIC_CLIENTS.insert(system, client);
-                    } else {
-                        eprintln!("Error parsing rithmic system from: {}", file);
                     }
+                    RITHMIC_CLIENTS.insert(system, client);
+                } else {
+                    eprintln!("Error parsing rithmic system from: {}", file);
                 }
             }
         }
-    });
+    }
 }
 
 
@@ -139,7 +137,7 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-    //init_apis(options.clone()).await;
+    init_apis(options.clone()).await;
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 
