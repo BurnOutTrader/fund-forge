@@ -332,7 +332,9 @@ pub async fn response_handler(
                                     live_order_update(event, true).await;
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
-                                    handle_live_data(settings.clone(), port, buffer_duration, mode, market_update_sender.clone()).await;
+                                    if mode != StrategyMode::Backtest {
+                                        handle_live_data(settings.clone(), port, buffer_duration, market_update_sender.clone()).await;
+                                    }
                                 }
                                 _ => panic!("Incorrect response here: {:?}", response)
                             }
@@ -350,10 +352,7 @@ pub async fn response_handler(
     }
 }
 
-pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration , mode: StrategyMode, market_update_sender: Sender<MarketMessageEnum>) {
-    if mode == StrategyMode::Backtest {
-        panic!("Backtest should not start live handler")
-    }
+pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration ,  market_update_sender: Sender<MarketMessageEnum>) {
     // set up async client
     let mut stream_client = match create_async_api_client(&connection_settings, true).await {
         Ok(client) => client,
@@ -363,10 +362,11 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         }
     };
 
+    const LENGTH: usize = 4;
     // Register with the servers streaming handler
     let stream_registration = DataServerRequest::RegisterStreamer{port: stream_name.clone(), secs: buffer_duration.as_secs(), subsec: buffer_duration.subsec_nanos() };
     let data = stream_registration.to_bytes();
-    let length = (data.len() as u64).to_be_bytes();
+    let length: [u8; 4] = (data.len() as u32).to_be_bytes();
     let mut prefixed_msg = Vec::new();
     prefixed_msg.extend_from_slice(&length);
     prefixed_msg.extend_from_slice(&data);
@@ -375,16 +375,18 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         .write_all(&prefixed_msg)
         .await {
         Ok(_) => { }
-        Err(_e) => {}
+        Err(e) => {
+            eprintln!("{}", e);
+        }
     }
-
 
     tokio::task::spawn(async move {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let market_update_sender = market_update_sender.clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap();
         let mut strategy_time_slice = TimeSlice::new();
-        const LENGTH: usize = 4;
+        let strategy_sender = STRATEGY_SENDER.get().unwrap();
+
         //println!("{:?}: response handler start", incoming.key());
         let mut length_bytes = [0u8; LENGTH];
         while let Ok(_) = stream_client.read_exact(&mut length_bytes).await {
@@ -432,7 +434,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         }
         let mut buffer = StrategyEventBuffer::new();
         buffer.add_event(Utc::now(), StrategyEvent::ShutdownEvent(String::from("Disconnected Live Stream")));
-        match STRATEGY_SENDER.get().unwrap().send(buffer).await {
+        match strategy_sender.send(buffer).await {
             Ok(_) => {}
             Err(_) => {}
         }
