@@ -152,7 +152,8 @@ impl RithmicClient {
         if connect_data {
             match client.client.connect_and_login(SysInfraType::TickerPlant).await {
                 Ok(r) => {
-                    client.handlers.insert(SysInfraType::TickerPlant, handle_responses_from_ticker_plant(client.clone(), r).await);
+                    let handle = handle_responses_from_ticker_plant(client.clone(), r).await;
+                    client.handlers.insert(SysInfraType::TickerPlant, handle);
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -161,7 +162,8 @@ impl RithmicClient {
 
             match client.client.connect_and_login(SysInfraType::HistoryPlant).await {
                 Ok(r) => {
-                    client.handlers.insert(SysInfraType::HistoryPlant, handle_responses_from_history_plant(client.clone(), r).await);
+                    let handle = handle_responses_from_history_plant(client.clone(), r).await;
+                    client.handlers.insert(SysInfraType::HistoryPlant, handle);
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -172,7 +174,8 @@ impl RithmicClient {
         if connect_accounts {
             match client.client.connect_and_login(SysInfraType::OrderPlant).await {
                 Ok(r) => {
-                    client.handlers.insert(SysInfraType::OrderPlant, handle_responses_from_order_plant(client.clone(), r).await);
+                    let handle =handle_responses_from_order_plant(client.clone(), r).await;
+                    client.handlers.insert(SysInfraType::OrderPlant, handle);
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
@@ -181,13 +184,15 @@ impl RithmicClient {
 
             match client.client.connect_and_login(SysInfraType::PnlPlant).await {
                 Ok(r) => {
-                    client.handlers.insert(SysInfraType::PnlPlant, handle_responses_from_pnl_plant(client.clone(), r).await);
+                    let handle = handle_responses_from_pnl_plant(client.clone(), r).await;
+                    client.handlers.insert(SysInfraType::PnlPlant, handle);
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
                 }
             }
         }
+        //todo this causes the thread to block
 /*
        let rms_req = RequestAccountRmsInfo {
             template_id: 304,
