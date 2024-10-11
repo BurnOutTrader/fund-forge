@@ -16,7 +16,6 @@ use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use tokio::net::TcpStream;
-use tokio::task::JoinHandle;
 #[allow(unused_imports)]
 use tokio::time::sleep;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};

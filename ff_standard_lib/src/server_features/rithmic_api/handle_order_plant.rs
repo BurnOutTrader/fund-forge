@@ -13,7 +13,6 @@ use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use tokio::net::TcpStream;
-use tokio::task::JoinHandle;
 use tungstenite::{Message};
 #[allow(unused_imports)]
 use crate::standardized_types::broker_enum::Brokerage;
@@ -25,9 +24,9 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 pub async fn handle_responses_from_order_plant(
     client: Arc<RithmicClient>,
     mut reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
-)  -> JoinHandle<()> {
+) {
     const PLANT: SysInfraType = SysInfraType::OrderPlant;
-    let handle = tokio::task::spawn(async move {
+    tokio::task::spawn(async move {
         while let Some(message) = reader.next().await {
             match message {
                 Ok(message) => {
@@ -455,5 +454,4 @@ pub async fn handle_responses_from_order_plant(
             }
         }
     });
-    handle
 }

@@ -11,7 +11,6 @@ use ff_rithmic_api::rithmic_proto_objects::rti::Reject;
 use futures::stream::SplitStream;
 use prost::{Message as ProstMessage};
 use tokio::net::TcpStream;
-use tokio::task::JoinHandle;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::{Message};
 #[allow(unused_imports)]
@@ -23,9 +22,9 @@ use crate::server_features::rithmic_api::api_client::RithmicClient;
 pub async fn handle_responses_from_pnl_plant(
     client: Arc<RithmicClient>,
     mut reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
-)  -> JoinHandle<()> {
+) {
     const PLANT: SysInfraType = SysInfraType::PnlPlant;
-    let handle = tokio::task::spawn(async move {
+    tokio::task::spawn(async move {
         while let Some(message) = reader.next().await {
             match message {
                 Ok(message) => {
@@ -160,6 +159,5 @@ pub async fn handle_responses_from_pnl_plant(
             }
         }
     });
-    handle
 }
 
