@@ -110,15 +110,8 @@ async fn init_apis(options: ServerLaunchOptions) {
 async fn logout_apis(options: ServerLaunchOptions) {
     println!("Logging Out Apis Function Started");
     if !options.disable_rithmic_server {
-        let toml_files = RithmicClient::get_rithmic_tomls();
-        if !toml_files.is_empty() {
-            for file in toml_files {
-                if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
-                    if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                        client.shutdown().await;
-                    }
-                }
-            }
+        for api_client in RITHMIC_CLIENTS.iter() {
+            api_client.shutdown().await;
         }
     }
     println!("Logging Out Apis Function Ended");

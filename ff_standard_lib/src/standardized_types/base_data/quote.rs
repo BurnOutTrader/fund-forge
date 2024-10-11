@@ -12,7 +12,6 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, TimeString, Volume};
 use crate::standardized_types::resolution::Resolution;
 
-pub type BookLevel = u8;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]

@@ -97,7 +97,7 @@ pub trait VendorApiResponse: Sync + Send {
     /// This command doesn't require a response,
     /// it is sent when a connection is dropped so that we can remove any items associated with the stream
     /// (strategy that is connected to this port)
-    async fn logout_command(
+    async fn logout_command_vendors(
         &self,
         stream_name: StreamName,
     );
@@ -272,14 +272,14 @@ impl VendorApiResponse for DataVendor {
     /// This command doesn't require a response,
     /// it is sent when a connection is dropped so that we can remove any items associated with the stream
     /// (strategy that is connected to this port)
-    async fn logout_command(&self, stream_name: StreamName) {
+    async fn logout_command_vendors(&self, stream_name: StreamName) {
         match self {
         DataVendor::Rithmic(system) => {
             if let Some(client) = get_rithmic_client(system) {
-                client.logout_command(stream_name).await
+                client.logout_command_vendors(stream_name).await
             }
         },
-            DataVendor::Test => TEST_CLIENT.logout_command(stream_name).await
+            DataVendor::Test => TEST_CLIENT.logout_command_vendors(stream_name).await
         }
     }
 }

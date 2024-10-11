@@ -3,6 +3,7 @@ use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
 use ff_rithmic_api::systems::RithmicSystem;
+use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
@@ -93,7 +94,7 @@ pub async fn on_data_received(
                     for base_data in time_slice.iter() {
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
-                            BaseDataEnum::Tick(tick) => {
+                            BaseDataEnum::Tick(_tick) => {
                                // println!("{}", tick);
                             }
                             BaseDataEnum::Candle(candle) => {
@@ -108,7 +109,6 @@ pub async fn on_data_received(
                                             false => println!("{}", msg.as_str().bright_red()),
                                         }
                                     }
-                                    /*
 
                                     if !warmup_complete {
                                         continue;
@@ -200,7 +200,7 @@ pub async fn on_data_received(
 
                                     }
 
-                                     */
+
                                 }
                             }
                             BaseDataEnum::Quote(quote) => {

@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -40,6 +41,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::new_types::Volume;
 use crate::standardized_types::orders::{Order, OrderId};
 use crate::standardized_types::resolution::Resolution;
+use crate::strategies::handlers::market_handlers::BookLevel;
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
@@ -78,6 +80,8 @@ pub struct RithmicClient {
     //subscribers
     pub tick_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
+    pub bid_book: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>>,
+    pub ask_book: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>>,
     pub candle_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
 }
 
@@ -110,11 +114,13 @@ impl RithmicClient {
             symbol_info: Default::default(),
             tick_feed_broadcasters: Default::default(),
             quote_feed_broadcasters: Default::default(),
+            bid_book: Arc::new(Default::default()),
             accounts: Default::default(),
             orders_open: Default::default(),
             products: Default::default(),
             candle_feed_broadcasters: Arc::new(Default::default()),
             handlers: DashMap::with_capacity(5),
+            ask_book: Arc::new(Default::default()),
         };
         Ok(client)
     }
@@ -266,6 +272,10 @@ impl RithmicClient {
             Ok(_) => {}
             Err(e) => eprintln!("Rithmic Client shutdown error: {}", e)
         }
+        for task in self.handlers.iter() {
+            task.value().abort();
+        }
+        self.handlers.clear();
         RITHMIC_CLIENTS.remove(&self.system);
     }
 }
@@ -480,6 +490,8 @@ impl VendorApiResponse for RithmicClient {
                     .entry(subscription.symbol.name.clone())
                     .or_insert_with(|| {
                         println!("Subscribing: {}", subscription);
+                        self.ask_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
+                        self.bid_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
                         is_subscribed = false;
                         Arc::new(StaticInternalBroadcaster::new())
                     });
@@ -602,7 +614,7 @@ impl VendorApiResponse for RithmicClient {
         }
     }
 
-    async fn logout_command(&self, stream_name: StreamName) {
+    async fn logout_command_vendors(&self, stream_name: StreamName) {
         //todo handle dynamically from server using stream name to remove subscriptions and callbacks
         self.callbacks.remove(&stream_name);
         for broadcaster in self.tick_feed_broadcasters.iter() {

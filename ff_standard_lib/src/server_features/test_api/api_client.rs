@@ -265,7 +265,7 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn logout_command(&self, _stream_name: StreamName) {
+    async fn logout_command_vendors(&self, _stream_name: StreamName) {
 
     }
 }

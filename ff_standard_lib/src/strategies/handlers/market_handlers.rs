@@ -22,6 +22,7 @@ use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::messages::data_server_messaging::{FundForgeError};
+use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -32,8 +33,8 @@ use crate::strategies::historical_time::get_backtest_time;
 #[archive_attr(derive(Debug))]
 pub struct BookLevel {
     level: u16,
-    price: Price,
-    volume: Volume
+    pub(crate) price: Price,
+    pub(crate) volume: Volume
 }
 impl BookLevel {
     pub fn new(level: u16, price: Price, volume: Volume) -> Self {
@@ -41,6 +42,17 @@ impl BookLevel {
             level,
             price,
             volume
+        }
+    }
+
+    pub fn into_quote(symbol: Symbol, best_offer: Self, best_bid: Self, time: DateTime<Utc>) -> Quote {
+        Quote {
+            symbol,
+            ask: best_offer.price,
+            bid: best_bid.price,
+            ask_volume: best_offer.volume,
+            bid_volume: best_bid.volume,
+            time: time.to_string(),
         }
     }
 }
