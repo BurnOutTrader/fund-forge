@@ -506,10 +506,11 @@ impl VendorApiResponse for RithmicClient {
                 request: Some(1), //1 subscribe 2 unsubscribe
                 update_bits: Some(bits), //1 for ticks 2 for quotes
             };
-            match self.client.switch_heartbeat_required(SysInfraType::TickerPlant, false).await {
+            //todo Fix ff_rithmic_api switch heartbeat fn. this causes a lock.
+       /*     match self.client.switch_heartbeat_required(SysInfraType::TickerPlant, false).await {
                 Ok(_) => {}
                 Err(_) => {}
-            }
+            }*/
             match self.send_message(SysInfraType::TickerPlant, req).await {
                 Ok(_) => {
                     println!("Subscribed to new ticker subscription");
@@ -544,17 +545,13 @@ impl VendorApiResponse for RithmicClient {
             request: Some(1), //1 subscribe 2 unsubscribe
             update_bits: Some(bits), //1 for ticks 2 for quotes
         };
-        let mut empty_broadcaster = false;
         match subscription.base_data_type {
             BaseDataType::Ticks => {
                 if let Some(broadcaster) = self.tick_feed_broadcasters.get(&subscription.symbol.name) {
                     broadcaster.value().unsubscribe(&stream_name.to_string());
                     if !broadcaster.has_subscribers() {
-                        empty_broadcaster = true;
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
-                    }
-                    if empty_broadcaster {
                         self.tick_feed_broadcasters.remove(&subscription.symbol.name);
                     }
                     return DataServerResponse::UnSubscribeResponse {
@@ -568,13 +565,10 @@ impl VendorApiResponse for RithmicClient {
                 if let Some(broadcaster) = self.quote_feed_broadcasters.get(&subscription.symbol.name) {
                     broadcaster.value().unsubscribe(&stream_name.to_string());
                     if !broadcaster.has_subscribers() {
-                        empty_broadcaster = true;
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
                         self.ask_book.remove(&subscription.symbol.name);
                         self.bid_book.remove(&subscription.symbol.name);
-                    }
-                    if empty_broadcaster {
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                     }
                     return DataServerResponse::UnSubscribeResponse {
@@ -588,11 +582,8 @@ impl VendorApiResponse for RithmicClient {
                 if let Some (broadcaster) = self.candle_feed_broadcasters.get(&subscription.symbol.name) {
                     broadcaster.value().unsubscribe(&stream_name.to_string());
                     if !broadcaster.has_subscribers() {
-                        empty_broadcaster = true;
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
-                    }
-                    if empty_broadcaster {
                         self.candle_feed_broadcasters.remove(&subscription.symbol.name);
                     }
                     return DataServerResponse::UnSubscribeResponse {
@@ -604,12 +595,13 @@ impl VendorApiResponse for RithmicClient {
             }
             _ => todo!("Handle gracefully by returning err")
         }
-        if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
+        //todo Fix ff_rithmic_api switch heartbeat fn. this causes a lock.
+  /*      if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
             match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,true).await {
                 Ok(_) => {}
                 Err(_) => {}
             }
-        }
+        }*/
         DataServerResponse::UnSubscribeResponse {
             success: false,
             subscription,
