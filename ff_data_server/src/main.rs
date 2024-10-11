@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
+use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
+use ff_rithmic_api::rithmic_proto_objects::rti::RequestAccountRmsInfo;
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::future::join_all;
 use structopt::lazy_static::lazy_static;
@@ -115,8 +117,36 @@ async fn init_apis(options: ServerLaunchOptions) {
             })
         })
     }).collect::<Vec<_>>();
+
     // Wait for all initialization tasks to complete
     join_all(init_tasks).await;
+
+    // Create a vector to hold all RMS request tasks
+    let mut rms_tasks = Vec::new();
+
+    for api in RITHMIC_CLIENTS.iter() {
+        let api = api.value().clone();
+        let rms_req = RequestAccountRmsInfo {
+            template_id: 304,
+            user_msg: vec![],
+            fcm_id: api.credentials.fcm_id.clone(),
+            ib_id: api.credentials.ib_id.clone(),
+            user_type: api.credentials.user_type.clone(),
+        };
+
+        // Spawn a new task for each RMS request
+        let task = task::spawn(async move {
+            match api.client.send_message(SysInfraType::OrderPlant, rms_req).await {
+                Ok(_) => println!("RMS request sent successfully for client: {}", api.system),
+                Err(e) => eprintln!("Failed to send RMS request for client: {}, error: {}", api.system, e),
+            }
+        });
+
+        rms_tasks.push(task);
+    }
+
+    // Wait for all RMS request tasks to complete
+    join_all(rms_tasks).await;
 }
 
 async fn logout_apis() {

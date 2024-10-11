@@ -51,7 +51,7 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(5),
+                Resolution::Seconds(1),
                 BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
             ),

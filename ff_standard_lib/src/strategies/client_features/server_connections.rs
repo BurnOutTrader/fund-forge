@@ -85,11 +85,11 @@ pub(crate) async fn forward_buffer(time: DateTime<Utc>) {
 
 
 pub(crate) static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
-pub(crate) async fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
-    SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
+pub(crate) fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
+    SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender) // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
-pub(crate) async fn unsubscribe_primary_subscription_updates(stream_name: &str) {
-    SUBSCRIPTION_HANDLER.get().unwrap().unsubscribe_primary_subscription_updates(stream_name).await // Return a clone of the Arc to avoid moving the value out of the OnceCell
+pub(crate) fn unsubscribe_primary_subscription_updates(stream_name: &str) {
+    SUBSCRIPTION_HANDLER.get().unwrap().unsubscribe_primary_subscription_updates(stream_name) // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
 pub(crate) static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
@@ -126,7 +126,7 @@ pub(crate) async fn live_subscription_handler(
     set_warmup_complete();
 
     let (tx, rx) = mpsc::channel(100);
-    subscribe_primary_subscription_updates("Live Subscription Updates".to_string(), tx).await;
+    subscribe_primary_subscription_updates("Live Subscription Updates".to_string(), tx);
 
     let settings_map = Arc::new(initialise_settings().unwrap());
     let mut subscription_update_channel = rx;
@@ -438,10 +438,6 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         }
     });
 }
-
-/*pub async fn response_handler(mode: StrategyMode, receiver: mpsc::Receiver<StrategyRequest>, buffer_duration: Duration, settings_map: HashMap<ConnectionType, ConnectionSettings>, notify: Arc<Notify>) {
-
-}*/
 
 pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>, event_sender: Sender<StrategyEventBuffer>, indicator_handler: Arc<IndicatorHandler>) {
     let _ = STRATEGY_SENDER.get_or_init(|| {

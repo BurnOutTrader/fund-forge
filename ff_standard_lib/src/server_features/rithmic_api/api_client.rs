@@ -62,6 +62,7 @@ pub struct RithmicClient {
     pub fcm_id: Option<String>,
     pub ib_id: Option<String>,
     pub user_type: Option<i32>,
+    pub credentials: RithmicCredentials,
 
     pub callbacks: DashMap<StreamName, AHashMap<u64, oneshot::Sender<DataServerResponse>>>,
 
@@ -109,6 +110,7 @@ impl RithmicClient {
             fcm_id: credentials.fcm_id.clone(),
             ib_id: credentials.ib_id.clone(),
             user_type: credentials.user_type.clone(),
+            credentials,
             callbacks: Default::default(),
             client: Arc::new(client),
             symbol_info: Default::default(),
@@ -192,17 +194,7 @@ impl RithmicClient {
                 }
             }
         }
-        //todo this causes the thread to block
-/*
-       let rms_req = RequestAccountRmsInfo {
-            template_id: 304,
-            user_msg: vec![],
-            fcm_id: client.fcm_id.clone(),
-            ib_id: client.ib_id.clone(),
-            user_type: client.user_type.clone(),
-        };
-        client.client.send_message(SysInfraType::OrderPlant, rms_req).await.unwrap();
-*/
+
         Ok(())
     }
 
@@ -350,13 +342,13 @@ impl BrokerApiResponse for RithmicClient {
         //todo handle dynamically from server using stream name to remove subscriptions and callbacks
         self.callbacks.remove(&stream_name);
         for broadcaster in self.tick_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string()).await;
+            broadcaster.unsubscribe(&stream_name.to_string());
         }
         for broadcaster in self.quote_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string()).await;
+            broadcaster.unsubscribe(&stream_name.to_string());
         }
         for broadcaster in self.candle_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string()).await;
+            broadcaster.unsubscribe(&stream_name.to_string());
         }
         for handle in &self.handlers {
             handle.abort();
@@ -487,7 +479,7 @@ impl VendorApiResponse for RithmicClient {
                         is_subscribed = false;
                         Arc::new(StaticInternalBroadcaster::new())
                     });
-                broadcaster.value().subscribe(stream_name.to_string(), sender).await;
+                broadcaster.value().subscribe(stream_name.to_string(), sender);
             }
             BaseDataType::Quotes => {
                 let broadcaster = self.quote_feed_broadcasters
@@ -498,7 +490,7 @@ impl VendorApiResponse for RithmicClient {
                         is_subscribed = false;
                         Arc::new(StaticInternalBroadcaster::new())
                     });
-                broadcaster.value().subscribe(stream_name.to_string(), sender).await;
+                broadcaster.value().subscribe(stream_name.to_string(), sender);
             }
             BaseDataType::Candles => {
                 let broadcaster = self.candle_feed_broadcasters
@@ -507,7 +499,7 @@ impl VendorApiResponse for RithmicClient {
                         is_subscribed = false;
                         Arc::new(StaticInternalBroadcaster::new())
                     });
-                broadcaster.value().subscribe(stream_name.to_string(), sender).await;
+                broadcaster.value().subscribe(stream_name.to_string(), sender);
             }
             _ => todo!("Handle gracefully by returning err")
         }
@@ -569,8 +561,8 @@ impl VendorApiResponse for RithmicClient {
         match subscription.base_data_type {
             BaseDataType::Ticks => {
                 if let Some(broadcaster) = self.tick_feed_broadcasters.get(&subscription.symbol.name) {
-                    broadcaster.value().unsubscribe(&stream_name.to_string()).await;
-                    if !broadcaster.has_subscribers().await {
+                    broadcaster.value().unsubscribe(&stream_name.to_string());
+                    if !broadcaster.has_subscribers() {
                         empty_broadcaster = true;
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
@@ -593,8 +585,8 @@ impl VendorApiResponse for RithmicClient {
             }
             BaseDataType::Quotes => {
                 if let Some(broadcaster) = self.quote_feed_broadcasters.get(&subscription.symbol.name) {
-                    broadcaster.value().unsubscribe(&stream_name.to_string()).await;
-                    if !broadcaster.has_subscribers().await {
+                    broadcaster.value().unsubscribe(&stream_name.to_string());
+                    if !broadcaster.has_subscribers() {
                         empty_broadcaster = true;
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
@@ -619,8 +611,8 @@ impl VendorApiResponse for RithmicClient {
             }
             BaseDataType::Candles => {
                 if let Some (broadcaster) = self.candle_feed_broadcasters.get(&subscription.symbol.name) {
-                    broadcaster.value().unsubscribe(&stream_name.to_string()).await;
-                    if !broadcaster.has_subscribers().await {
+                    broadcaster.value().unsubscribe(&stream_name.to_string());
+                    if !broadcaster.has_subscribers() {
                         empty_broadcaster = true;
                         self.quote_feed_broadcasters.remove(&subscription.symbol.name);
                         self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
@@ -661,13 +653,13 @@ impl VendorApiResponse for RithmicClient {
     async fn logout_command_vendors(&self, stream_name: StreamName) {
         self.callbacks.remove(&stream_name);
         for broadcaster in self.tick_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string()).await;
+            broadcaster.unsubscribe(&stream_name.to_string());
         }
         for broadcaster in self.quote_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string()).await;
+            broadcaster.unsubscribe(&stream_name.to_string());
         }
         for broadcaster in self.candle_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string()).await;
+            broadcaster.unsubscribe(&stream_name.to_string());
         }
 
         for handle in &self.handlers {

@@ -49,7 +49,7 @@ impl HistoricalEngine {
         market_event_sender: Sender<MarketMessageEnum>,
     ) -> Self {
         let (tx, rx) = mpsc::channel(10);
-        subscribe_primary_subscription_updates("Historical Engine".to_string(), tx).await;
+        subscribe_primary_subscription_updates("Historical Engine".to_string(), tx);
         let engine = HistoricalEngine {
             mode,
             start_time: start_date,
@@ -165,7 +165,7 @@ impl HistoricalEngine {
                             add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
                             forward_buffer(time).await;
                             if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
-                                unsubscribe_primary_subscription_updates("Historical Engine").await;
+                                unsubscribe_primary_subscription_updates("Historical Engine");
                                 break 'main_loop
                             }
                             println!("Historical Engine: Start Backtest");
