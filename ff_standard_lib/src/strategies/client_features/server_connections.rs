@@ -376,10 +376,10 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
     }
 
 
-    let market_update_sender = market_update_sender.clone();
-    let indicator_handler = INDICATOR_HANDLER.get().unwrap();
     tokio::task::spawn(async move {
-        let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone(); //todo this needs to exist before this fn is called, put response handler in own fn
+        let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
+        let market_update_sender = market_update_sender.clone();
+        let indicator_handler = INDICATOR_HANDLER.get().unwrap();
         const LENGTH: usize = 4;
         //println!("{:?}: response handler start", incoming.key());
         let mut length_bytes = [0u8; LENGTH];
@@ -399,24 +399,20 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                 }
             }
             // these will be buffered eventually into an EventTimeSlice
-            let subscription_handler = subscription_handler.clone();
-            let market_update_sender = market_update_sender.clone();
-            tokio::task::spawn(async move {
-                let time_slice = TimeSlice::from_bytes(&message_body).unwrap();
-                market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
-                let mut strategy_time_slice = TimeSlice::new();
-                if let Some(consolidated) = subscription_handler.update_time_slice(time_slice.clone()).await {
-                    strategy_time_slice.extend(consolidated);
-                }
-                if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
-                    strategy_time_slice.extend(consolidated);
-                }
+            let time_slice = TimeSlice::from_bytes(&message_body).unwrap();
+            market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
+            let mut strategy_time_slice = TimeSlice::new();
+            if let Some(consolidated) = subscription_handler.update_time_slice(time_slice.clone()).await {
+                strategy_time_slice.extend(consolidated);
+            }
+            if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                strategy_time_slice.extend(consolidated);
+            }
 
-                strategy_time_slice.extend(time_slice);
-                indicator_handler.update_time_slice(Utc::now(), &strategy_time_slice).await;
+            strategy_time_slice.extend(time_slice);
+            indicator_handler.update_time_slice(Utc::now(), &strategy_time_slice).await;
 
-                fwd_data(strategy_time_slice).await;
-            });
+            fwd_data(strategy_time_slice).await;
         }
     });
 }

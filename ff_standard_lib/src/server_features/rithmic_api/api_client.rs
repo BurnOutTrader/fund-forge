@@ -189,7 +189,7 @@ impl RithmicClient {
             }
         }
 
-        let rms_req = RequestAccountRmsInfo {
+       let rms_req = RequestAccountRmsInfo {
             template_id: 304,
             user_msg: vec![],
             fcm_id: client.fcm_id.clone(),
@@ -208,16 +208,7 @@ impl RithmicClient {
                     Ok(_) => {}
                     Err(e) => {
                         eprintln!("Callback error: {:?} Dumping subscriber: {}", e, stream_name);
-                        self.callbacks.remove(&stream_name);
-                        for broadcaster in self.tick_feed_broadcasters.iter() {
-                            broadcaster.unsubscribe(&stream_name.to_string()).await;
-                        }
-                        for broadcaster in self.quote_feed_broadcasters.iter() {
-                            broadcaster.unsubscribe(&stream_name.to_string()).await;
-                        }
-                        for broadcaster in self.candle_feed_broadcasters.iter() {
-                            broadcaster.unsubscribe(&stream_name.to_string()).await;
-                        }
+                        self.logout_command_vendors(stream_name).await;
                     }
                 }
             }
@@ -262,11 +253,6 @@ impl RithmicClient {
         self.client.send_message(plant, message).await
     }
 
-    #[allow(dead_code)]
-    async fn intermittent(&self) {
-        //spawan a task, sleepuntil x minutes then runstartup, data upaters etc
-    }
-
     pub async fn shutdown(&self) {
         match self.client.shutdown_all().await {
             Ok(_) => {}
@@ -290,8 +276,22 @@ impl BrokerApiResponse for RithmicClient {
         }
     }
 
-    async fn account_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, _account_id: AccountId, _callback_id: u64) -> DataServerResponse {
-        todo!()
+    async fn account_info_response(&self, mode: StrategyMode, _stream_name: StreamName, account_id: AccountId, callback_id: u64) -> DataServerResponse {
+        //todo use match mode to create sim account
+        match mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
+                todo!("Not implemented for backtest")
+            }
+            StrategyMode::Live => {
+                match self.accounts.get(&account_id) {
+                    None => DataServerResponse::Error {callback_id, error:FundForgeError::ClientSideErrorDebug(format!("{} Has No Account for {}",self.brokerage, account_id))},
+                    Some(account_info) => DataServerResponse::AccountInfo {
+                        callback_id,
+                        account_info: account_info.value().clone(),
+                    }
+                }
+            }
+        }
     }
 
 
@@ -479,7 +479,6 @@ impl VendorApiResponse for RithmicClient {
                 let broadcaster = self.tick_feed_broadcasters
                     .entry(subscription.symbol.name.clone())
                     .or_insert_with(|| {
-                        println!("Subscribing: {}", subscription);
                         is_subscribed = false;
                         Arc::new(StaticInternalBroadcaster::new())
                     });
@@ -489,7 +488,6 @@ impl VendorApiResponse for RithmicClient {
                 let broadcaster = self.quote_feed_broadcasters
                     .entry(subscription.symbol.name.clone())
                     .or_insert_with(|| {
-                        println!("Subscribing: {}", subscription);
                         self.ask_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
                         self.bid_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
                         is_subscribed = false;
@@ -501,7 +499,6 @@ impl VendorApiResponse for RithmicClient {
                 let broadcaster = self.candle_feed_broadcasters
                     .entry(subscription.symbol.name.clone())
                     .or_insert_with(|| {
-                        println!("Subscribing: {}", subscription);
                         is_subscribed = false;
                         Arc::new(StaticInternalBroadcaster::new())
                     });
@@ -529,10 +526,16 @@ impl VendorApiResponse for RithmicClient {
                 Ok(_) => {}
                 Err(_) => {}
             }
-            //todo dont send if already subscribed
-            self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
+            match self.send_message(SysInfraType::TickerPlant, req).await {
+                Ok(_) => {
+                    println!("Subscribed to new ticker subscription");
+                }
+                Err(e) => {
+                    eprintln!("Error sending subscribe request to ticker plant: {}", e);
+                }
+            }
         }
-
+        println!("{} Subscribed: {}", stream_name, subscription);
         DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
     }
 
@@ -631,12 +634,11 @@ impl VendorApiResponse for RithmicClient {
         //todo get dynamically from server using stream name to fwd callback
         DataServerResponse::BaseDataTypes {
             callback_id,
-            base_data_types: vec![BaseDataType::Candles, BaseDataType::Ticks, BaseDataType::Quotes],
+            base_data_types: vec![BaseDataType::Ticks, BaseDataType::Quotes],
         }
     }
 
     async fn logout_command_vendors(&self, stream_name: StreamName) {
-        //todo handle dynamically from server using stream name to remove subscriptions and callbacks
         self.callbacks.remove(&stream_name);
         for broadcaster in self.tick_feed_broadcasters.iter() {
             broadcaster.unsubscribe(&stream_name.to_string()).await;

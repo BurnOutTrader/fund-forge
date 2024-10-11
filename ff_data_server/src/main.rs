@@ -87,16 +87,13 @@ async fn init_apis(options: ServerLaunchOptions) {
             if !toml_files.is_empty() {
                 for file in toml_files {
                     if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
-                        let client = RithmicClient::new(system, ).await.unwrap();
+                        let client = RithmicClient::new(system).await.unwrap();
                         let client = Arc::new(client);
-                        //todo remove this later
-                        let use_data = match system {
-                            RithmicSystem::TopstepTrader => true,
-                            _ => continue
-                        };
-                        match RithmicClient::run_start_up(client.clone(), true, use_data).await {
+                        match RithmicClient::run_start_up(client.clone(), true, true).await {
                             Ok(_) => {}
-                            Err(e) => eprintln!("Fail to run rithmic client for: {}, reason: {}", system, e)
+                            Err(e) => {
+                                panic!("Fail to run rithmic client for: {}, reason: {}", system, e);
+                            }
                         }
                         RITHMIC_CLIENTS.insert(system, client);
                     } else {
@@ -107,6 +104,8 @@ async fn init_apis(options: ServerLaunchOptions) {
         }
     });
 }
+
+
 
 async fn logout_apis(options: ServerLaunchOptions) {
     println!("Logging Out Apis Function Started");

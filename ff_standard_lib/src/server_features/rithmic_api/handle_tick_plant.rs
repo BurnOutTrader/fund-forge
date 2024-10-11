@@ -196,7 +196,7 @@ pub async fn handle_responses_from_ticker_plant(
                                     },
                                     150 => {
                                         if let Ok(msg) = LastTrade::decode(&message_buf[..]) {
-                                            //println!("Last Trade (Template ID: 150) from Server: {:?}", msg);
+                                            println!("Last Trade (Template ID: 150) from Server: {:?}", msg);
                                             // Last Trade
                                             let volume = match msg.trade_size {
                                                 None => continue,

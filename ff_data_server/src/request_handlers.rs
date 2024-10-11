@@ -17,6 +17,7 @@ use tokio::sync::{mpsc};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
 use tokio_rustls::server::TlsStream;
+use ff_standard_lib::server_features::rithmic_api::api_client::RITHMIC_CLIENTS;
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
@@ -247,7 +248,7 @@ pub async fn manage_async_requests(
                 };
             });
         }
-        shutdown(stream_name.clone()).await;
+        shutdown_stream(stream_name.clone()).await;
         response_handle.abort();
     });
 }
@@ -256,7 +257,7 @@ async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteH
     let mut receiver = receiver;
     let mut writer = writer;
     tokio::spawn(async move {
-        while let Some(response) = receiver.recv().await {
+        'receiver_loop: while let Some(response) = receiver.recv().await {
             // Convert the response to bytes
             let bytes = response.to_bytes();
 
@@ -268,12 +269,11 @@ async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteH
 
             // Write the response to the stream
             match writer.write_all(&prefixed_msg).await {
-                Err(_e) => {
-                    // Handle the error (log it or take some other action)
+                Err(e) => {
+                    eprintln!("Shutting down response handler {}", e);
+                    break 'receiver_loop
                 }
-                Ok(_) => {
-                    // Successfully wrote the message
-                }
+                Ok(_) => {}
             }
         }
     })
@@ -296,9 +296,7 @@ where
             // Handle the error (log it or take some other action)
             println!("Failed to send response to stream handler: {:?}", e);
         }
-        Ok(_) => {
-            // Successfully sent the response
-        }
+        Ok(_) => {}
     }
 }
 
@@ -325,20 +323,22 @@ pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamNam
 
                 // Write the response to the stream
                 match stream.write_all(&prefixed_msg).await {
-                    Err(_) => {
+                    Err(e) => {
+                        eprintln!("Shutting down stream handler {}", e);
                         break 'receiver_loop;
                     }
                     Ok(_) => {}
                 }
             }
         }
-        shutdown(stream_name.clone()).await;
         STREAM_CALLBACK_SENDERS.remove(&stream_name);
     })
 }
 
-async fn shutdown(_stream_name: StreamName) {
-    //todo alert api clients that we have shutdown this stream and to cancel all callbacks or streams
+async fn shutdown_stream(stream_name: StreamName) {
+    for api in RITHMIC_CLIENTS.iter() {
+        api.value().logout_command_vendors(stream_name).await;
+    }
 }
 
 async fn stream_response(stream_name: StreamName, request: StreamRequest, sender: Sender<BaseDataEnum>) -> DataServerResponse {

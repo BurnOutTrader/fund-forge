@@ -1,8 +1,8 @@
 # Ignore Rithmic credential files
 /data/rithmic_credentials/rithmic_01.toml
 /data/rithmic_credentials/rithmic_04_colo.toml
-/data/rithmic_credentials/rithmic_paper_trading.toml
 /data/rithmic_credentials/topstep_trader.toml
+/data/rithmic_credentials/rithmic_paper_trading.toml
 /data/rithmic_credentials/speedup.toml
 /data/rithmic_credentials/tradefundrr.toml
 /data/rithmic_credentials/uprofit_trader.toml
