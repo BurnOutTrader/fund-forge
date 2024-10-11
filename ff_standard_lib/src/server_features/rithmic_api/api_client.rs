@@ -301,7 +301,7 @@ impl BrokerApiResponse for RithmicClient {
             pnl_currency,
             value_per_tick,
             tick_size,
-            decimal_accuracy: 4,
+            decimal_accuracy: 2,
         };
 
         DataServerResponse::SymbolInfo {
