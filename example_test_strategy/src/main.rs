@@ -322,8 +322,8 @@ pub async fn on_data_received(
                             BaseDataEnum::Tick(_tick) => {}
                             BaseDataEnum::Quote(quote) => {
                                 //primary data feed won't show up in event loop unless specifically subscribed by the strategy
-                                let msg = format!("{} Quote: bid: {} ,ask {}, Local Time {}", quote.symbol.name, quote.bid, quote.ask, quote.time_local(strategy.time_zone()));
-                                println!("{}", msg.as_str().purple());
+                              /*  let msg = format!("{} Quote: bid: {} ,ask {}, Local Time {}", quote.symbol.name, quote.bid, quote.ask, quote.time_local(strategy.time_zone()));
+                                println!("{}", msg.as_str().purple());*/
                             }
                             BaseDataEnum::Fundamental(_fundamental) => {}
                         }
