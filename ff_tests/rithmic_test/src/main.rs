@@ -47,20 +47,20 @@ async fn main() {
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
-           DataSubscription::new(
+        /*   DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(1),
                 BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
-            ),
-       /*     DataSubscription::new(
+            ),*/
+            DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
-            ),*/
+            ),
         ],
         false,
         100,

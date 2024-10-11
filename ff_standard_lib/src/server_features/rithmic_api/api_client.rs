@@ -309,12 +309,12 @@ impl BrokerApiResponse for RithmicClient {
         }
     }
 
-    async fn margin_required_response(&self,  _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, _quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn margin_required_response(&self,  _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         //todo get dynamically from server using stream name to fwd callback
         DataServerResponse::MarginRequired {
             callback_id,
             symbol_name,
-            price: dec!(0.0),
+            price: quantity * dec!(150.0),
         }
     }
 
@@ -377,7 +377,6 @@ impl VendorApiResponse for RithmicClient {
                 vec![
                     SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
                     SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
-                    SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles),
                 ]
             }
         };
