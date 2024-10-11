@@ -9,7 +9,9 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use dashmap::DashMap;
 use ff_rithmic_api::systems::RithmicSystem;
+use structopt::lazy_static::lazy_static;
 use structopt::StructOpt;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -19,6 +21,7 @@ use tokio_rustls::{TlsAcceptor};
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::messages::data_server_messaging::{DataServerRequest, DataServerResponse};
 use ff_standard_lib::server_features::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
+use ff_standard_lib::server_features::StreamName;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use crate::request_handlers::{manage_async_requests, stream_handler};
@@ -107,14 +110,18 @@ async fn init_apis(options: ServerLaunchOptions) {
 
 
 
-async fn logout_apis(options: ServerLaunchOptions) {
+async fn logout_apis() {
     println!("Logging Out Apis Function Started");
-    if !options.disable_rithmic_server {
+    if !RITHMIC_CLIENTS.is_empty() {
         for api_client in RITHMIC_CLIENTS.iter() {
             api_client.shutdown().await;
         }
     }
     println!("Logging Out Apis Function Ended");
+}
+
+lazy_static! {
+    pub static ref HANDLES: DashMap<StreamName, Vec<JoinHandle<()>>> = DashMap::new();
 }
 
 #[tokio::main]
@@ -141,10 +148,16 @@ async fn main() -> io::Result<()> {
     println!("Ctrl+C received, logging out APIs...");
 
     // Perform logout
-    logout_apis(options).await;
+    logout_apis().await;
 
     println!("Logout complete. Shutting down servers...");
 
+    for handle_list in HANDLES.iter() {
+        for handle in handle_list.value() {
+            handle.abort();
+        }
+    }
+    HANDLES.clear();
     // Abort server tasks
     async_handle.abort();
     stream_handle.abort();
@@ -293,7 +306,6 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) -> Joi
             }
         };
         println!("Stream: Listening on: {}", addr);
-
         'main_loop: loop {
             let (stream, peer_addr) = match listener.accept().await {
                 Ok((stream, peer_addr)) => (stream, peer_addr),
@@ -341,7 +353,10 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) -> Joi
                 // Handle the request and generate a response
                  match request {
                     DataServerRequest::RegisterStreamer{port, secs, subsec } => {
-                        stream_handler(tls_stream, port, Duration::new(secs, subsec)).await;
+                        let mut handles_list = HANDLES.entry(port).or_insert(
+                            vec![]
+                        );
+                        handles_list.push(stream_handler(tls_stream, port, Duration::new(secs, subsec)).await);
                         continue 'main_loop
                     },
                     _ => eprintln!("Stream: Strategy Did not register a Strategy mode")

@@ -26,6 +26,7 @@ use ff_standard_lib::server_features::StreamName;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::OrderRequest;
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
+use crate::HANDLES;
 
 /// Retrieves the base data from the file system or the vendor and sends it back to the client via a NetworkMessage using the response function
 pub async fn base_data_response(
@@ -71,7 +72,10 @@ pub async fn manage_async_requests(
     let (read_half, write_half) = io::split(stream);
     let strategy_mode = strategy_mode;
     let (response_sender, request_receiver) = mpsc::channel(1000);
-    let response_handle = response_handler(request_receiver, write_half).await;
+    let mut handles_list = HANDLES.entry(stream_name).or_insert(
+        vec![]
+    );
+    handles_list.push(response_handler(request_receiver, write_half).await);
     tokio::spawn(async move {
         const LENGTH: usize = 8;
         let mut receiver = read_half;
@@ -250,7 +254,6 @@ pub async fn manage_async_requests(
             });
         }
         shutdown_stream(stream_name.clone()).await;
-        response_handle.abort();
     });
 }
 
@@ -336,8 +339,14 @@ pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamNam
 }
 
 async fn shutdown_stream(stream_name: StreamName) {
+    STREAM_CALLBACK_SENDERS.remove(&stream_name);
     for api in RITHMIC_CLIENTS.iter() {
         api.value().logout_command_vendors(stream_name).await;
+    }
+    if let Some(handles_list) = HANDLES.get(&stream_name) {
+        for handle in handles_list.value() {
+            handle.abort();
+        }
     }
 }
 
