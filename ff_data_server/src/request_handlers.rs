@@ -16,6 +16,7 @@ use tokio::net::TcpStream;
 use tokio::sync::{mpsc};
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::task::JoinHandle;
+use tokio::time::interval;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::rithmic_api::api_client::RITHMIC_CLIENTS;
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
@@ -307,27 +308,31 @@ pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamNam
     let mut stream = stream;
     tokio::spawn(async move {
         let mut time_slice = TimeSlice::new();
-        let mut send_time: DateTime<Utc> = Utc::now() + buffer;
-        'receiver_loop: while let Some(response) = receiver.recv().await {
-            // Convert the response to bytes
-            time_slice.add(response);
-            if Utc::now() >= send_time {
-                send_time = Utc::now() + buffer;
-                let bytes = time_slice.to_bytes();
-                // Prepare the message with a 4-byte length header in big-endian format
-                let length: [u8; 4] = (bytes.len() as u32).to_be_bytes();
-                let mut prefixed_msg = Vec::new();
-                prefixed_msg.extend_from_slice(&length);
-                prefixed_msg.extend_from_slice(&bytes);
-                // Write the response to the stream
-                match stream.write_all(&prefixed_msg).await {
-                    Err(e) => {
-                        eprintln!("Shutting down stream handler {}", e);
-                        break 'receiver_loop;
+        let mut interval = interval(buffer);
+
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    let bytes = time_slice.to_bytes();
+                    // Prepare the message with a 4-byte length header in big-endian format
+                    let length: [u8; 4] = (bytes.len() as u32).to_be_bytes();
+                    let mut prefixed_msg = Vec::new();
+                    prefixed_msg.extend_from_slice(&length);
+                    prefixed_msg.extend_from_slice(&bytes);
+                    // Write the response to the stream
+                    match stream.write_all(&prefixed_msg).await {
+                        Err(e) => {
+                            eprintln!("Shutting down stream handler {}", e);
+                            break;
+                        }
+                        Ok(_) => {}
                     }
-                    Ok(_) => {}
+                    time_slice = TimeSlice::new();
                 }
-                time_slice = TimeSlice::new();
+                Some(response) = receiver.recv() => {
+                    time_slice.add(response);
+                }
+                else => break,
             }
         }
         STREAM_CALLBACK_SENDERS.remove(&stream_name);
