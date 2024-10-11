@@ -333,7 +333,12 @@ pub async fn response_handler(
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {
-                                        handle_live_data(settings.clone(), port, buffer_duration, market_update_sender.clone()).await;
+                                        match handle_live_data(settings.clone(), port, buffer_duration, market_update_sender.clone()).await {
+                                            Ok(_) => {}
+                                            Err(e) => {
+                                                eprintln!("{}", e);
+                                            }
+                                        }
                                     }
                                 }
                                 _ => panic!("Incorrect response here: {:?}", response)
@@ -352,13 +357,13 @@ pub async fn response_handler(
     }
 }
 
-pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration ,  market_update_sender: Sender<MarketMessageEnum>) {
+pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration ,  market_update_sender: Sender<MarketMessageEnum>) -> Result<(), String> {
     // set up async client
     let mut stream_client = match create_async_api_client(&connection_settings, true).await {
         Ok(client) => client,
-        Err(__e) => {
-            eprintln!("{}", format!("Unable to establish connection to server @ address: {:?}", connection_settings));
-            return;
+        Err(e) => {
+            let err = format!("Unable to establish connection to server @ address: {:?}: {}", connection_settings, e);
+            return Err(err);
         }
     };
 
@@ -439,6 +444,8 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
             Err(_) => {}
         }
     });
+
+    Ok(())
 }
 
 pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>, event_sender: Sender<StrategyEventBuffer>, indicator_handler: Arc<IndicatorHandler>) {

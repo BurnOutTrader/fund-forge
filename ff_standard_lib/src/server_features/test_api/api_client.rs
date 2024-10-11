@@ -201,12 +201,15 @@ impl VendorApiResponse for TestApiClient {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
         }
         if !self.data_feed_broadcasters.contains_key(&subscription) {
-            self.data_feed_broadcasters.insert(subscription.clone(), Arc::new(StaticInternalBroadcaster::new()));
-            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name.to_string(), sender);
+            let broadcaster = Arc::new(StaticInternalBroadcaster::new());
+            broadcaster.subscribe(stream_name.to_string(), sender);
+            self.data_feed_broadcasters.insert(subscription.clone(), broadcaster);
             println!("Subscribing: {}", subscription);
         } else {
             // If we already have a running task, we dont need a new one, we just subscribe to the broadcaster
-            self.data_feed_broadcasters.get(&subscription).unwrap().value().subscribe(stream_name.to_string(), sender);
+            if let Some(broadcaster) = self.data_feed_broadcasters.get(&subscription) {
+                broadcaster.value().subscribe(stream_name.to_string(), sender);
+            }
             return DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
         }
         println!("data_feed_subscribe Starting loop");

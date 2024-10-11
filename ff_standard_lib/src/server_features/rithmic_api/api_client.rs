@@ -77,12 +77,12 @@ pub struct RithmicClient {
     pub products: DashMap<MarketType, Vec<Symbol>>,
 
     //subscribers
-    pub tick_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
-    pub quote_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
-    pub candle_feed_broadcasters: Arc<DashMap<SymbolName, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>,
+    pub tick_feed_broadcasters: DashMap<SymbolName, StaticInternalBroadcaster<BaseDataEnum>>,
+    pub quote_feed_broadcasters: DashMap<SymbolName, StaticInternalBroadcaster<BaseDataEnum>>,
+    pub candle_feed_broadcasters: DashMap<SymbolName, StaticInternalBroadcaster<BaseDataEnum>>,
 
-    pub bid_book: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>>,
-    pub ask_book: Arc<DashMap<SymbolName, BTreeMap<u16, BookLevel>>>,
+    pub bid_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
+    pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
 }
 
 impl RithmicClient {
@@ -115,12 +115,12 @@ impl RithmicClient {
             symbol_info: Default::default(),
             tick_feed_broadcasters: Default::default(),
             quote_feed_broadcasters: Default::default(),
-            bid_book: Arc::new(Default::default()),
+            bid_book: Default::default(),
             accounts: Default::default(),
             orders_open: Default::default(),
             products: Default::default(),
-            candle_feed_broadcasters: Arc::new(Default::default()),
-            ask_book: Arc::new(Default::default()),
+            candle_feed_broadcasters: Default::default(),
+            ask_book: Default::default(),
         };
         Ok(client)
     }
@@ -464,7 +464,7 @@ impl VendorApiResponse for RithmicClient {
                     .entry(subscription.symbol.name.clone())
                     .or_insert_with(|| {
                         is_subscribed = false;
-                        Arc::new(StaticInternalBroadcaster::new())
+                        StaticInternalBroadcaster::new()
                     });
                 broadcaster.value().subscribe(stream_name.to_string(), sender);
             }
@@ -475,7 +475,7 @@ impl VendorApiResponse for RithmicClient {
                         self.ask_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
                         self.bid_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
                         is_subscribed = false;
-                        Arc::new(StaticInternalBroadcaster::new())
+                        StaticInternalBroadcaster::new()
                     });
                 broadcaster.value().subscribe(stream_name.to_string(), sender);
             }
@@ -484,7 +484,7 @@ impl VendorApiResponse for RithmicClient {
                     .entry(subscription.symbol.name.clone())
                     .or_insert_with(|| {
                         is_subscribed = false;
-                        Arc::new(StaticInternalBroadcaster::new())
+                        StaticInternalBroadcaster::new()
                     });
                 broadcaster.value().subscribe(stream_name.to_string(), sender);
             }

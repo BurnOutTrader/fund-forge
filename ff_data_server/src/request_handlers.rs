@@ -2,31 +2,25 @@ use std::future::Future;
 use ff_standard_lib::helpers::converters::load_as_bytes;
 use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use ff_standard_lib::messages::data_server_messaging::{BaseDataPayload, FundForgeError, DataServerRequest, DataServerResponse, StreamRequest};
+use ff_standard_lib::messages::data_server_messaging::{BaseDataPayload, DataServerRequest, DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
-use std::time::Duration;
 use dashmap::DashMap;
 use structopt::lazy_static::lazy_static;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc};
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::task::JoinHandle;
-use tokio::time::interval;
 use tokio_rustls::server::TlsStream;
-use ff_standard_lib::server_features::rithmic_api::api_client::RITHMIC_CLIENTS;
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
-use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::server_features::StreamName;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::OrderRequest;
-use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use crate::HANDLES;
+use crate::stream_listener;
 
 /// Retrieves the base data from the file system or the vendor and sends it back to the client via a NetworkMessage using the response function
 pub async fn base_data_response(
@@ -55,7 +49,6 @@ pub async fn base_data_response(
     }
 }
 
-
 lazy_static! {
     pub static ref STREAM_CALLBACK_SENDERS: DashMap<u16 , Sender<BaseDataEnum>> = DashMap::new();
 }
@@ -69,10 +62,9 @@ pub async fn manage_async_requests(
     let (read_half, write_half) = io::split(stream);
     let strategy_mode = strategy_mode;
     let (response_sender, request_receiver) = mpsc::channel(1000);
-    let mut handles_list = HANDLES.entry(stream_name).or_insert(
-        vec![]
-    );
-    handles_list.push(response_handler(request_receiver, write_half).await);
+    tokio::spawn(async move {
+        response_handler(request_receiver, write_half).await;
+    });
     tokio::spawn(async move {
         const LENGTH: usize = 8;
         let mut receiver = read_half;
@@ -226,7 +218,7 @@ pub async fn manage_async_requests(
                             Some(sender) => sender.value().clone()
                         };
                         handle_callback(
-                            || stream_response(stream_name, request, stream_sender),
+                            || stream_listener::stream_response(stream_name, request, stream_sender),
                             sender.clone()).await
                     },
 
@@ -250,34 +242,33 @@ pub async fn manage_async_requests(
                 };
             });
         }
-        shutdown_stream(stream_name.clone()).await;
+        println!("Shutting Down Async ReadHalf");
+        stream_listener::shutdown_stream(stream_name.clone()).await;
     });
 }
 
-async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>) -> JoinHandle<()> {
+async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>)  {
     let mut receiver = receiver;
     let mut writer = writer;
-    tokio::spawn(async move {
-        'receiver_loop: while let Some(response) = receiver.recv().await {
-            // Convert the response to bytes
-            let bytes = response.to_bytes();
+    'receiver_loop: while let Some(response) = receiver.recv().await {
+        // Convert the response to bytes
+        let bytes = response.to_bytes();
 
-            // Prepare the message with a 4-byte length header in big-endian format
-            let length = (bytes.len() as u64).to_be_bytes();
-            let mut prefixed_msg = Vec::new();
-            prefixed_msg.extend_from_slice(&length);
-            prefixed_msg.extend_from_slice(&bytes);
+        // Prepare the message with a 4-byte length header in big-endian format
+        let length = (bytes.len() as u64).to_be_bytes();
+        let mut prefixed_msg = Vec::new();
+        prefixed_msg.extend_from_slice(&length);
+        prefixed_msg.extend_from_slice(&bytes);
 
-            // Write the response to the stream
-            match writer.write_all(&prefixed_msg).await {
-                Err(e) => {
-                    eprintln!("Shutting down response handler {}", e);
-                    break 'receiver_loop
-                }
-                Ok(_) => {}
+        // Write the response to the stream
+        match writer.write_all(&prefixed_msg).await {
+            Err(e) => {
+                eprintln!("Shutting down response handler {}", e);
+                break 'receiver_loop
             }
+            Ok(_) => {}
         }
-    })
+    }
 }
 
 async fn handle_callback<F, Fut>(
@@ -298,73 +289,6 @@ where
             println!("Failed to send response to stream handler: {:?}", e);
         }
         Ok(_) => {}
-    }
-}
-
-pub async fn stream_handler(stream: TlsStream<TcpStream>, stream_name: StreamName, buffer: Duration) -> JoinHandle<()> {
-    let (stream_sender, stream_receiver) = mpsc::channel(1000);
-    STREAM_CALLBACK_SENDERS.insert(stream_name.clone(), stream_sender.clone());
-    let mut receiver = stream_receiver;
-    let mut stream = stream;
-    tokio::spawn(async move {
-        let mut time_slice = TimeSlice::new();
-        let mut interval = interval(buffer);
-
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    let bytes = time_slice.to_bytes();
-                    // Prepare the message with a 4-byte length header in big-endian format
-                    let length: [u8; 4] = (bytes.len() as u32).to_be_bytes();
-                    let mut prefixed_msg = Vec::new();
-                    prefixed_msg.extend_from_slice(&length);
-                    prefixed_msg.extend_from_slice(&bytes);
-                    // Write the response to the stream
-                    if let Err(e) = stream.write_all(&prefixed_msg).await {
-                        eprintln!("Error writing to stream: {}", e);
-                        break;
-                    }
-                    time_slice = TimeSlice::new();
-                }
-                Some(response) = receiver.recv() => {
-                    time_slice.add(response);
-                }
-            }
-        }
-        STREAM_CALLBACK_SENDERS.remove(&stream_name);
-    })
-}
-
-async fn shutdown_stream(stream_name: StreamName) {
-    STREAM_CALLBACK_SENDERS.remove(&stream_name);
-    for api in RITHMIC_CLIENTS.iter() {
-        api.value().logout_command_vendors(stream_name).await;
-    }
-    if let Some(handles_list) = HANDLES.get(&stream_name) {
-        for handle in handles_list.value() {
-            handle.abort();
-        }
-    }
-}
-
-async fn stream_response(stream_name: StreamName, request: StreamRequest, sender: Sender<BaseDataEnum>) -> DataServerResponse {
-    match request {
-        StreamRequest::AccountUpdates(_, _) => {
-            panic!()
-        }
-        StreamRequest::Subscribe(subscription) => {
-            match &subscription.symbol.data_vendor {
-                DataVendor::Test => {
-                    subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
-                }
-                DataVendor::Rithmic(_) => {
-                    subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone(), sender).await
-                }
-            }
-        }
-        StreamRequest::Unsubscribe(_) => {
-            panic!()
-        }
     }
 }
 

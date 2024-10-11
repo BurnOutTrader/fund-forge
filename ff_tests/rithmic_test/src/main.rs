@@ -3,7 +3,6 @@ use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
 use ff_rithmic_api::systems::RithmicSystem;
-use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
