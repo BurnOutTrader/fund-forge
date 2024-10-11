@@ -87,7 +87,7 @@ async fn init_apis(options: ServerLaunchOptions) {
                 for file in toml_files {
                     if let Some(system) = RithmicSystem::from_file_string(file.as_str()) {
                         //todo add a bool option to credentials for is_data_feed
-                        let client = RithmicClient::new(system, true).await.unwrap();
+                        let client = RithmicClient::new(system, ).await.unwrap();
                         let client = Arc::new(client);
                         let use_data = match system {
                             RithmicSystem::TopstepTrader => true,

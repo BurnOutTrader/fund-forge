@@ -83,8 +83,7 @@ pub struct RithmicClient {
 
 impl RithmicClient {
     pub async fn new(
-        system: RithmicSystem,
-        aggregated_quotes: bool,
+        system: RithmicSystem
     ) -> Result<Self, FundForgeError> {
         let brokerage = Brokerage::Rithmic(system.clone());
         let data_vendor = DataVendor::Rithmic(system.clone());
@@ -98,7 +97,7 @@ impl RithmicClient {
             .to_string_lossy()
             .into_owned();
 
-        let client = RithmicApiClient::new(credentials.clone(), aggregated_quotes, server_domains_toml).unwrap();
+        let client = RithmicApiClient::new(credentials.clone(), server_domains_toml).unwrap();
         let client = Self {
             brokerage,
             data_vendor,

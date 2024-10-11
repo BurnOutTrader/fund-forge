@@ -55,9 +55,15 @@ pub fn example() {
         password: "password".to_string(),
         fcm_id: "TopstepTrader".to_string(),
         ib_id: "TopstepTrader".to_string(),
-        user_type: 1
+        user_type: 1,
+        subscribe_data: true,
+        aggregated_quotes: false //this always has to be false, for some reason rithmic server will not parse true on login. I am not sure what is going on here.
     };
     
+    //if you have aggregated_quotes == true you will get this message
+    //ResponseLogin { template_id: 11, template_version: None, user_msg: [], rp_code: ["11", "an error occurred while parsing data."], fcm_id: None, ib_id: None, country_code: None, state_code: None, unique_user_id: None, heartbeat_interval: None }
+
+
     // Note that we use credentials.system_name.file_string() for the file name, so that the server knows where to find credentials.
     let save_path: String = format!("ff_data_server/rithmic_credentials/{}", credentials.file_name());
     credentials.save_credentials_to_file(&save_path);
@@ -74,5 +80,7 @@ app_version = "1.0"
 password = ""  
 fcm_id = "TopstepTrader"  
 ib_id = "TopstepTrader"  
-user_type = 3 
+user_type = 3
+subscribe_data = true
+aggregated_quotes = true
 ```
