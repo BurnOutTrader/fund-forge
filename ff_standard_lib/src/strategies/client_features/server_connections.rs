@@ -430,6 +430,12 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
             fwd_data(strategy_time_slice).await;
             strategy_time_slice = TimeSlice::new();
         }
+        let mut buffer = StrategyEventBuffer::new();
+        buffer.add_event(Utc::now(), StrategyEvent::ShutdownEvent(String::from("Disconnected Live Stream")));
+        match STRATEGY_SENDER.get().unwrap().send(buffer).await {
+            Ok(_) => {}
+            Err(_) => {}
+        }
     });
 }
 
