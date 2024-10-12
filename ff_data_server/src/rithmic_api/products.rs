@@ -1,145 +1,175 @@
 use ahash::AHashMap;
 use rust_decimal_macros::dec;
+
+lazy_static! {
+    static ref AVAILABLE_SYMBOL_NAMES: Vec<String> = vec![
+        // CBOT Futures
+        "XC", "XK", "XW", "YM", "ZB", "ZC", "ZF", "ZL", "ZM", "ZN", "ZO", "ZR", "ZS", "ZT", "ZW",
+
+        // CME Futures
+        "6A", "6B", "6C", "6E", "6J", "6M", "6N", "6S", "E7", "EMD", "ES", "GE", "GF", "HE", "J7",
+        "LE", "NQ", "RF", "SP",
+
+        // COMEX Futures
+        "GC", "HG", "QI", "SI",
+
+        // NYMEX Futures
+        "CL", "HO", "NG", "PA", "PL", "QM", "RB",
+
+        // Micro Futures
+        "MES", "MNQ", "M2K", "MYM", "MGC", "SIL", "MCL", "MBT", "M6A", "M6B", "M6E", "MJY"
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect();
+}
+
+pub fn get_available_symbol_names() -> &'static Vec<String> {
+    &AVAILABLE_SYMBOL_NAMES
+}
+
+lazy_static! {
+    static ref FUTURES_CODE_TO_NAME: AHashMap<&'static str, &'static str> = {
+        let mut futures = AHashMap::new();
+
+        // CBOT Futures
+        futures.insert("XC", "CBOT Mini-sized Corn Futures");
+        futures.insert("XK", "CBOT Mini-sized Soybean Futures");
+        futures.insert("XW", "CBOT Mini-sized Wheat Futures");
+        futures.insert("YM", "Mini-sized Dow Futures ($5)");
+        futures.insert("ZB", "30 Year US Treasury Bond Futures");
+        futures.insert("ZC", "Corn Futures");
+        futures.insert("ZF", "5 Year US Treasury Note Futures");
+        futures.insert("ZL", "Soybean Oil Futures");
+        futures.insert("ZM", "Soybean Meal Futures");
+        futures.insert("ZN", "10 Year US Treasury Note Futures");
+        futures.insert("ZO", "Oat Futures");
+        futures.insert("ZR", "Rough Rice Futures");
+        futures.insert("ZS", "Soybean Futures");
+        futures.insert("ZT", "2 Year US Treasury Note Futures");
+        futures.insert("ZW", "Wheat Futures");
+
+        // CME Futures
+        futures.insert("6A", "Australian Dollar");
+        futures.insert("6B", "British Pound");
+        futures.insert("6C", "Canadian Dollar");
+        futures.insert("6E", "Euro Fx");
+        futures.insert("6J", "Japanese Yen");
+        futures.insert("6M", "Mexican Peso");
+        futures.insert("6N", "New Zealand Dollar");
+        futures.insert("6S", "Swiss Franc");
+        futures.insert("E7", "E-Mini Euro Fx");
+        futures.insert("EMD", "E-Mini S&P Midcap 400");
+        futures.insert("ES", "E-Mini S&P 500");
+        futures.insert("GE", "Eurodollar");
+        futures.insert("GF", "E-Livestock Feeder Cattle");
+        futures.insert("HE", "Lean Hog");
+        futures.insert("J7", "E-Mini Japanese Yen");
+        futures.insert("LE", "E-Livestock Live Cattle");
+        futures.insert("NQ", "E-Mini Nasdaq-100");
+        futures.insert("RF", "Euro Fx/Swiss Franc");
+        futures.insert("SP", "S&P 500");
+
+        // COMEX Futures
+        futures.insert("GC", "COMEX Gold Futures");
+        futures.insert("HG", "COMEX Copper Futures");
+        futures.insert("QG", "COMEX miNY Silver Futures");
+        futures.insert("QI", "COMEX miNY Silver Futures");
+        futures.insert("QO", "COMEX miNY Gold Futures");
+        futures.insert("SI", "COMEX Silver Futures");
+
+        // NYMEX Futures
+        futures.insert("CL", "Light Sweet Crude Oil");
+        futures.insert("HO", "Heating Oil");
+        futures.insert("NG", "Natural Gas");
+        futures.insert("PA", "NYMEX Palladium");
+        futures.insert("PL", "NYMEX Platinum");
+        futures.insert("QG", "NYMEX miNY Natural Gas");
+        futures.insert("QM", "NYMEX miNY Crude Oil");
+        futures.insert("RB", "New York Harbor RBOB Gasoline");
+
+        // Micro Futures
+        futures.insert("MES", "Micro E-mini S&P 500");
+        futures.insert("MNQ", "Micro E-mini Nasdaq-100");
+        futures.insert("M2K", "Micro E-mini Russell 2000");
+        futures.insert("MYM", "Micro E-mini Dow");
+        futures.insert("MGC", "Micro Gold");
+        futures.insert("SIL", "Micro Silver");
+        futures.insert("MCL", "Micro Crude Oil");
+        futures.insert("MBT", "Micro Bitcoin");
+        futures.insert("M6A", "Micro AUD/USD");
+        futures.insert("M6B", "Micro GBP/USD");
+        futures.insert("M6E", "Micro EUR/USD");
+        futures.insert("MJY", "Micro JPY/USD");
+
+        futures
+    };
+}
+
 #[allow(dead_code)]
-pub fn futures_code_to_name() -> AHashMap<&'static str, &'static str> {
-    let mut futures = AHashMap::new();
-
-    // CBOT Futures
-    futures.insert("XC", "CBOT Mini-sized Corn Futures");
-    futures.insert("XK", "CBOT Mini-sized Soybean Futures");
-    futures.insert("XW", "CBOT Mini-sized Wheat Futures");
-    futures.insert("YM", "Mini-sized Dow Futures ($5)");
-    futures.insert("ZB", "30 Year US Treasury Bond Futures");
-    futures.insert("ZC", "Corn Futures");
-    futures.insert("ZF", "5 Year US Treasury Note Futures");
-    futures.insert("ZL", "Soybean Oil Futures");
-    futures.insert("ZM", "Soybean Meal Futures");
-    futures.insert("ZN", "10 Year US Treasury Note Futures");
-    futures.insert("ZO", "Oat Futures");
-    futures.insert("ZR", "Rough Rice Futures");
-    futures.insert("ZS", "Soybean Futures");
-    futures.insert("ZT", "2 Year US Treasury Note Futures");
-    futures.insert("ZW", "Wheat Futures");
-
-    // CME Futures
-    futures.insert("6A", "Australian Dollar");
-    futures.insert("6B", "British Pound");
-    futures.insert("6C", "Canadian Dollar");
-    futures.insert("6E", "Euro Fx");
-    futures.insert("6J", "Japanese Yen");
-    futures.insert("6M", "Mexican Peso");
-    futures.insert("6N", "New Zealand Dollar");
-    futures.insert("6S", "Swiss Franc");
-    futures.insert("E7", "E-Mini Euro Fx");
-    futures.insert("EMD", "E-Mini S&P Midcap 400");
-    futures.insert("ES", "E-Mini S&P 500");
-    futures.insert("GE", "Eurodollar");
-    futures.insert("GF", "E-Livestock Feeder Cattle");
-    futures.insert("HE", "Lean Hog");
-    futures.insert("J7", "E-Mini Japanese Yen");
-    futures.insert("LE", "E-Livestock Live Cattle");
-    futures.insert("NQ", "E-Mini Nasdaq-100");
-    futures.insert("RF", "Euro Fx/Swiss Franc");
-    futures.insert("SP", "S&P 500");
-
-    // COMEX Futures
-    futures.insert("GC", "COMEX Gold Futures");
-    futures.insert("HG", "COMEX Copper Futures");
-    futures.insert("QG", "COMEX miNY Silver Futures");
-    futures.insert("QI", "COMEX miNY Silver Futures");
-    futures.insert("QO", "COMEX miNY Gold Futures");
-    futures.insert("SI", "COMEX Silver Futures");
-
-    // NYMEX Futures
-    futures.insert("CL", "Light Sweet Crude Oil");
-    futures.insert("HO", "Heating Oil");
-    futures.insert("NG", "Natural Gas");
-    futures.insert("PA", "NYMEX Palladium");
-    futures.insert("PL", "NYMEX Platinum");
-    futures.insert("QG", "NYMEX miNY Natural Gas");
-    futures.insert("QM", "NYMEX miNY Crude Oil");
-    futures.insert("RB", "New York Harbor RBOB Gasoline");
-
-    // Micro Futures
-    futures.insert("MES", "Micro E-mini S&P 500");
-    futures.insert("MNQ", "Micro E-mini Nasdaq-100");
-    futures.insert("M2K", "Micro E-mini Russell 2000");
-    futures.insert("MYM", "Micro E-mini Dow");
-    futures.insert("MGC", "Micro Gold");
-    futures.insert("SIL", "Micro Silver");
-    futures.insert("MCL", "Micro Crude Oil");
-    futures.insert("MBT", "Micro Bitcoin");
-    futures.insert("M6A", "Micro AUD/USD");
-    futures.insert("M6B", "Micro GBP/USD");
-    futures.insert("M6E", "Micro EUR/USD");
-    futures.insert("MJY", "Micro JPY/USD");
-
-    futures
+pub fn futures_code_to_name() -> &'static AHashMap<&'static str, &'static str> {
+    &FUTURES_CODE_TO_NAME
 }
 
 use std::collections::HashMap;
+use lazy_static::lazy_static;
 use ff_standard_lib::standardized_types::enums::FuturesExchange;
 use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
 use ff_standard_lib::strategies::ledgers::Currency;
+lazy_static! {
+    static ref CODE_TO_EXCHANGE_MAP: HashMap<&'static str, FuturesExchange> = {
+        let mut map = HashMap::new();
 
-// Function to map contract code to an exchange using the Exchange enum
-pub fn get_code_to_exchange_map() -> HashMap<&'static str, FuturesExchange> {
-    let mut code_to_exchange_map = HashMap::new();
+        // CBOT contracts
+        for code in ["XC", "XK", "XW", "YM", "ZB", "ZC", "ZF", "ZL", "ZM", "ZN", "ZO", "ZR", "ZS", "ZT", "ZW"] {
+            map.insert(code, FuturesExchange::CBOT);
+        }
 
-    // CBOT contracts
-    for code in ["XC", "XK", "XW", "YM", "ZB", "ZC", "ZF", "ZL", "ZM", "ZN", "ZO", "ZR", "ZS", "ZT", "ZW"] {
-        code_to_exchange_map.insert(code, FuturesExchange::CBOT);
-    }
+        // CME contracts
+        for code in ["6A", "6B", "6C", "6E", "6J", "6M", "6N", "6S", "E7", "EMD", "ES", "GE", "GF", "HE", "J7", "LE", "NQ", "RF", "SP"] {
+            map.insert(code, FuturesExchange::CME);
+        }
 
-    // CME contracts
-    for code in ["6A", "6B", "6C", "6E", "6J", "6M", "6N", "6S", "E7", "EMD", "ES", "GE", "GF", "HE", "J7", "LE", "NQ", "RF", "SP"] {
-        code_to_exchange_map.insert(code, FuturesExchange::CME);
-    }
+        // COMEX contracts
+        for code in ["GC", "HG", "QI", "QQ", "SI"] {
+            map.insert(code, FuturesExchange::COMEX);
+        }
 
-    // COMEX contracts
-    for code in ["GC", "HG", "QI", "QQ", "SI"] {
-        code_to_exchange_map.insert(code, FuturesExchange::COMEX);
-    }
+        // NYMEX contracts
+        for code in ["CL", "HO", "NG", "PA", "PL", "QG", "QM", "RB"] {
+            map.insert(code, FuturesExchange::NYMEX);
+        }
 
-    // NYMEX contracts
-    for code in ["CL", "HO", "NG", "PA", "PL", "QG", "QM", "RB"] {
-        code_to_exchange_map.insert(code, FuturesExchange::NYMEX);
-    }
+        // Micro Futures
+        for code in ["MES", "MNQ", "M2K", "MYM", "MGC", "SIL", "MCL", "MBT", "M6A", "M6B", "M6E", "MJY"] {
+            map.insert(code, FuturesExchange::CME); // All micro contracts are typically on CME
+        }
 
-    // Micro Futures
-    for code in ["MES", "MNQ", "M2K", "MYM", "MGC", "SIL", "MCL", "MBT", "M6A", "M6B", "M6E", "MJY"] {
-        code_to_exchange_map.insert(code, FuturesExchange::CME); // All micro contracts are typically on CME
-    }
-
-    // Add more mappings as necessary...
-
-    code_to_exchange_map
+        map
+    };
 }
 
 #[allow(dead_code)]
-// Function to input contract code and get the exchange
 pub fn get_exchange_by_code(code: &str) -> Option<FuturesExchange> {
-    let code_to_exchange_map = get_code_to_exchange_map();
-    code_to_exchange_map.get(code).cloned()
+    CODE_TO_EXCHANGE_MAP.get(code).cloned()
 }
 
-pub fn get_symbol_info_map() -> HashMap<&'static str, SymbolInfo> {
-    let mut symbol_info_map = HashMap::new();
+lazy_static! {
+    static ref SYMBOL_INFO_MAP: HashMap<&'static str, SymbolInfo> = {
+        let mut map = HashMap::new();
 
-    // Helper macro to reduce repetition
-    macro_rules! add_symbol {
-        ($symbol:expr, $currency:expr, $value_per_tick:expr, $tick_size:expr, $accuracy:expr) => {
-            symbol_info_map.insert($symbol, SymbolInfo {
-                symbol_name: $symbol.to_string(),
-                pnl_currency: $currency,
-                value_per_tick: dec!($value_per_tick),
-                tick_size: dec!($tick_size),
-                decimal_accuracy: $accuracy,
-            });
-        };
-    }
+        macro_rules! add_symbol {
+            ($symbol:expr, $currency:expr, $value_per_tick:expr, $tick_size:expr, $accuracy:expr) => {
+                map.insert($symbol, SymbolInfo {
+                    symbol_name: $symbol.to_string(),
+                    pnl_currency: $currency,
+                    value_per_tick: dec!($value_per_tick),
+                    tick_size: dec!($tick_size),
+                    decimal_accuracy: $accuracy,
+                });
+            };
+        }
 
-    // CBOT Futures
     add_symbol!("XC", Currency::USD, 5.0, 0.25, 2);
     add_symbol!("XK", Currency::USD, 5.0, 0.25, 2);
     add_symbol!("XW", Currency::USD, 5.0, 0.25, 2);
@@ -206,13 +236,12 @@ pub fn get_symbol_info_map() -> HashMap<&'static str, SymbolInfo> {
     add_symbol!("M6E", Currency::USD, 1.25, 0.0001, 4);
     add_symbol!("MJY", Currency::USD, 1.25, 0.000001, 6);
 
-    symbol_info_map
+        map
+    };
 }
 
-#[allow(dead_code)]
 pub fn get_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
-    let symbol_info_map = get_symbol_info_map();
-    symbol_info_map.get(symbol)
+    SYMBOL_INFO_MAP.get(symbol)
         .cloned()
         .ok_or_else(|| format!("{} not found", symbol))
 }

@@ -8,15 +8,23 @@ use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::strategies::ledgers::AccountId;
 use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicClient;
-use crate::rithmic_api::products::get_symbol_info;
+use crate::rithmic_api::products::{get_available_symbol_names, get_symbol_info};
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
     async fn symbol_names_response(&self, _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
-        //todo get dynamically from server using stream name to fwd callback
-        DataServerResponse::SymbolNames {
-            callback_id,
-            symbol_names: vec!["MNQ".to_string()],
+        let symbol_names = get_available_symbol_names();
+
+        if symbol_names.is_empty() {
+            DataServerResponse::Error {
+                callback_id,
+                error: FundForgeError::ClientSideErrorDebug("No symbols available".to_string()),
+            }
+        } else {
+            DataServerResponse::SymbolNames {
+                callback_id,
+                symbol_names: symbol_names.clone(),
+            }
         }
     }
 
