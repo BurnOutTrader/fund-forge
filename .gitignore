@@ -20,3 +20,7 @@ ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2024-08.rkyv
 trades exports
 /trades exports
 #/target
+
+/data/rithmic_credentials
+/data/bitget_credentials
+/data/bitget_credentials/bitget_credentials.toml

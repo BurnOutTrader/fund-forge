@@ -16,3 +16,6 @@
 /data/rithmic_credentials/fasttrack_trading.toml
 /data/rithmic_credentials/test.toml
 /data/rithmic_credentials/server_domains/servers.toml
+/data/rithmic_credentials
+/data/bitget_credentials
+/data/bitget_credentials/bitget_credentials.toml
