@@ -25,10 +25,9 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 1. Install [rust](https://www.rust-lang.org/tools/install).
 2. Download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKF125tuEG16grLM_Q?e=Yukrv6) or 
 for more free testing data [see](#demonstration-testing-data)
-3. get the testing data (instructions below)
-4. cargo buid in the fund forge directory
-5. navigate to [ff_data_server](./ff_data_server) directory and `cargo run`
-6. navigate to [example_test_strategy](./example_test_strategy) directory and `cargo run`
+3. Get the testing data (instructions below)
+4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run`
+5. Navigate to [example_test_strategy](./example_test_strategy) directory and `cargo build` then`cargo run`
 
 *When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](example_test_strategy/README.md)
 
