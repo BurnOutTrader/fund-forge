@@ -7,7 +7,7 @@ Focused on backtesting, charting, live trading. With an emphasis for semi-automa
 
 fund-forge is built to allow simple abstractions for common strategy functionality: trade multiple symbols, with multiple indicators and data streams.
 
-***Currently for Development purposes only, Live trading via rithmic in development, but is currently unstable.***
+<span style="color: red;">***Currently for Development purposes only, Live trading via rithmic in development, but is currently unstable.***</span>
 
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
