@@ -21,6 +21,12 @@ lazy_static! {
     static ref STREAM_TASKS: DashMap<u16 , (JoinHandle<()>, JoinHandle<()>)> = DashMap::new();
 }
 
+pub fn shutdown_stream_tasks() {
+    for stream in STREAM_TASKS.iter() {
+        deregister_streamer(stream.key());
+    }
+}
+
 pub async fn initialize_streamer(stream_name: StreamName, buffer: Duration, stream: TlsStream<TcpStream>) {
     let map = Arc::new(RwLock::new(AHashMap::new()));
     let handles = stream_handler(stream_name, buffer, stream, map.clone()).await;

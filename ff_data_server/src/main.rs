@@ -174,8 +174,11 @@ async fn main() -> io::Result<()> {
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");
     println!("Ctrl+C received, logging out APIs...");
 
+    shutdown_stream_tasks();
+
     // Perform logout
     logout_apis().await;
+
 
     println!("Logout complete. Shutting down servers...");
 
@@ -201,6 +204,7 @@ async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
 }
 use std::thread;
 use tokio::runtime::Runtime;
+use ff_standard_lib::server_features::stream_tasks::shutdown_stream_tasks;
 
 fn run_servers(
     config: rustls::ServerConfig,
