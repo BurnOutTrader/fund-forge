@@ -164,6 +164,17 @@ impl VendorApiResponse for TestApiClient {
     }
 
     async fn logout_command_vendors(&self, _stream_name: StreamName) {
-
+        let mut to_remove = vec![];
+        for broadcaster in self.data_feed_broadcasters.iter() {
+            if broadcaster.receiver_count() == 0 {
+                to_remove.push(broadcaster.key());
+            }
+        }
+        for sub in to_remove {
+            self.data_feed_broadcasters.remove(&sub);
+            if let Some(task) = self.data_feed_tasks.remove(&sub) {
+                task.value().abort();
+            }
+        }
     }
 }
