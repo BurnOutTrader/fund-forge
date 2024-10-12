@@ -168,7 +168,7 @@ you will then need to provide matching statements for all existing api objects f
 - for server side [Brokerage](ff_data_server/src/server_side_brokerage.rs)
 - for server side [DataVendor](ff_data_server/src/server_side_datavendor.rs)
 
-you might also need to provide [client side implementations](ff_standard_lib/src/strategies/client_features/client_side_impl.rs).
+you might also need to provide [client side implementations](ff_standard_lib/src/strategies/client_features/client_side_vendor).
 depending on how you want to access the data in your strategies.
 You will then need to complete a matching statement for the server logic in `ff_data_server` function [manage_async_requests()](ff_data_server/src/request_handlers.rs) function so the server knows what to do with the request type.
 This is quite easy as it is just another mathcing statement.
