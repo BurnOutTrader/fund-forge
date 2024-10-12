@@ -14,7 +14,7 @@ use tokio::io;
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::net::TcpStream;
-use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 use tokio::sync::mpsc::{Sender};
 use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
@@ -85,11 +85,8 @@ pub(crate) async fn forward_buffer(time: DateTime<Utc>) {
 
 
 pub(crate) static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
-pub(crate) fn subscribe_primary_subscription_updates(name: String, sender: Sender<Vec<DataSubscription>>) {
-    SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates(name, sender) // Return a clone of the Arc to avoid moving the value out of the OnceCell
-}
-pub(crate) fn unsubscribe_primary_subscription_updates(stream_name: &str) {
-    SUBSCRIPTION_HANDLER.get().unwrap().unsubscribe_primary_subscription_updates(stream_name) // Return a clone of the Arc to avoid moving the value out of the OnceCell
+pub(crate) fn subscribe_primary_subscription_updates() -> broadcast::Receiver<Vec<DataSubscription>> {
+    SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates() // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
 pub(crate) static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
@@ -125,11 +122,10 @@ pub(crate) async fn live_subscription_handler(
     //todo! THIS HAS TO BE REMOVED ONCE LIVE WARM UP IS BUILT
     set_warmup_complete();
 
-    let (tx, rx) = mpsc::channel(100);
-    subscribe_primary_subscription_updates("Live Subscription Updates".to_string(), tx);
+
 
     let settings_map = Arc::new(initialise_settings().unwrap());
-    let mut subscription_update_channel = rx;
+    let mut subscription_update_channel = subscribe_primary_subscription_updates();
 
     let settings_map_ref = settings_map.clone();
     println!("Handler: Start Live handler");
@@ -160,7 +156,7 @@ pub(crate) async fn live_subscription_handler(
                 send_request(request).await;
             }
         }
-        while let Some(updated_subscriptions) = subscription_update_channel.recv().await {
+        while let Ok(updated_subscriptions) = subscription_update_channel.recv().await {
             let mut requests_map = AHashMap::new();
             if current_subscriptions != updated_subscriptions {
                 for subscription in &updated_subscriptions {

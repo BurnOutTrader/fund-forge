@@ -1,5 +1,5 @@
 use chrono::{DateTime, Datelike, Utc,  Duration as ChronoDuration};
-use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, unsubscribe_primary_subscription_updates, add_buffer, forward_buffer};
+use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, forward_buffer};
 use crate::standardized_types::base_data::history::{
     generate_file_dates, get_historical_data,
 };
@@ -10,10 +10,10 @@ use crate::standardized_types::time_slices::TimeSlice;
 use std::collections::BTreeMap;
 use std::thread;
 use std::time::Duration;
-use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{mpsc};
+use tokio::sync::mpsc::{Sender};
 use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
+use tokio::sync::broadcast;
 //Possibly more accurate engine
 /*todo Use this for saving and loading data, it will make smaller file sizes and be less handling for consolidator, we can then just update historical data once per week on sunday and load last week from broker.
   use Create a date (you can use DateTime<Utc>, Local, or NaiveDate)
@@ -33,7 +33,7 @@ pub struct HistoricalEngine {
     warmup_duration: ChronoDuration,
     buffer_resolution: Duration,
     gui_enabled: bool,
-    primary_subscription_updates: Receiver<Vec<DataSubscription>>,
+    primary_subscription_updates: broadcast::Receiver<Vec<DataSubscription>>,
     market_event_sender: Sender<MarketMessageEnum>,
 }
 
@@ -48,8 +48,7 @@ impl HistoricalEngine {
         gui_enabled: bool,
         market_event_sender: Sender<MarketMessageEnum>,
     ) -> Self {
-        let (tx, rx) = mpsc::channel(10);
-        subscribe_primary_subscription_updates("Historical Engine".to_string(), tx);
+        let rx = subscribe_primary_subscription_updates();
         let engine = HistoricalEngine {
             mode,
             start_time: start_date,
@@ -165,7 +164,6 @@ impl HistoricalEngine {
                             add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
                             forward_buffer(time).await;
                             if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
-                                unsubscribe_primary_subscription_updates("Historical Engine");
                                 break 'main_loop
                             }
                             println!("Historical Engine: Start Backtest");

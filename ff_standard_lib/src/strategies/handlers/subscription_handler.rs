@@ -17,7 +17,6 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
 use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::strategies::client_features::server_connections::{add_buffer, is_warmup_complete};
-use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
 use crate::standardized_types::base_data::history::range_data;
@@ -27,6 +26,7 @@ use crate::standardized_types::base_data::tick::Tick;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::resolution::Resolution;
 use crate::strategies::strategy_events::StrategyEvent;
+use tokio::sync::broadcast;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -38,7 +38,7 @@ pub struct SubscriptionHandler {
     strategy_mode: StrategyMode,
     // subscriptions which the strategy actually subscribed to, not the raw data needed to full-fill the subscription.
     strategy_subscriptions: Arc<RwLock<Vec<DataSubscription>>>,
-    primary_subscriptions_broadcaster: Arc<StaticInternalBroadcaster<Vec<DataSubscription>>>,
+    primary_subscriptions_broadcaster: tokio::sync::broadcast::Sender<Vec<DataSubscription>>,
     candle_history: DashMap<DataSubscription, RollingWindow<Candle>>,
     bar_history: DashMap<DataSubscription, RollingWindow<QuoteBar>>,
     tick_history: DashMap<DataSubscription, RollingWindow<Tick>>,
@@ -50,13 +50,14 @@ pub struct SubscriptionHandler {
 
 impl SubscriptionHandler {
     pub async fn new(strategy_mode: StrategyMode, market_event_sender: Sender<MarketMessageEnum>) -> Self {
-        let handler = SubscriptionHandler {
+        let (tx, _) = broadcast::channel(16);
+        SubscriptionHandler {
             market_event_sender,
             fundamental_subscriptions: Default::default(),
             symbol_subscriptions: Default::default(),
             strategy_mode,
             strategy_subscriptions: Default::default(),
-            primary_subscriptions_broadcaster: Arc::new(StaticInternalBroadcaster::new()),
+            primary_subscriptions_broadcaster: tx,
             candle_history: Default::default(),
             bar_history: Default::default(),
             tick_history: Default::default(),
@@ -64,16 +65,11 @@ impl SubscriptionHandler {
             fundamental_history: Default::default(),
             open_candles: Default::default(),
             open_bars: Default::default(),
-        };
-        handler
+        }
     }
 
-    pub(crate) fn subscribe_primary_subscription_updates(&self, name: String, sender: Sender<Vec<DataSubscription>>) {
-        self.primary_subscriptions_broadcaster.subscribe(name, sender);
-    }
-
-    pub(crate) fn unsubscribe_primary_subscription_updates(&self, name: &str) {
-        self.primary_subscriptions_broadcaster.unsubscribe(name);
+    pub(crate) fn subscribe_primary_subscription_updates(&self) -> broadcast::Receiver<Vec<DataSubscription>> {
+        self.primary_subscriptions_broadcaster.subscribe()
     }
 
     pub async fn strategy_subscriptions(&self) -> Vec<DataSubscription> {
@@ -108,7 +104,11 @@ impl SubscriptionHandler {
             if !fundamental_subscriptions.contains(&new_subscription) {
                 fundamental_subscriptions.push(new_subscription.clone());
             }
-            self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+            let subscriptions = self.primary_subscriptions().await;
+            match self.primary_subscriptions_broadcaster.send(subscriptions) {
+                Ok(_) => {}
+                Err(_) => {}
+            }
             return Ok(DataSubscriptionEvent::Subscribed(new_subscription));
         }
 
@@ -194,9 +194,13 @@ impl SubscriptionHandler {
                     }
                 }
                 if broadcast {
-                    self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+                    let subscriptions = self.primary_subscriptions().await;
+                    match self.primary_subscriptions_broadcaster.send(subscriptions) {
+                        Ok(_) => {}
+                        Err(_) => {}
+                    }
                 }
-                return Ok(DataSubscriptionEvent::Subscribed(new_subscription));
+                Ok(DataSubscriptionEvent::Subscribed(new_subscription))
             }
             Err(e) => {
                 Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription, e.to_string()))
@@ -226,7 +230,11 @@ impl SubscriptionHandler {
             }
         }
         if broadcast {
-            self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+            let subscriptions = self.primary_subscriptions().await;
+            match self.primary_subscriptions_broadcaster.send(subscriptions) {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
     }
 
@@ -245,7 +253,11 @@ impl SubscriptionHandler {
             if strategy_subscriptions.contains(&subscription) {
                 strategy_subscriptions.retain(|x| x != &subscription);
             }
-            self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+            let subscriptions = self.primary_subscriptions().await;
+            match self.primary_subscriptions_broadcaster.send(subscriptions) {
+                Ok(_) => {}
+                Err(_) => {}
+            }
             //println!("Handler: Unsubscribed: {}", subscription);
             return;
         }
@@ -276,7 +288,11 @@ impl SubscriptionHandler {
             }
         }
         if broadcast {
-            self.primary_subscriptions_broadcaster.broadcast(self.primary_subscriptions().await).await;
+            let subscriptions = self.primary_subscriptions().await;
+            match self.primary_subscriptions_broadcaster.send(subscriptions) {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
     }
 
