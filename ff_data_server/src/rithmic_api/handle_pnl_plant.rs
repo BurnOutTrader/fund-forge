@@ -7,21 +7,22 @@ use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 #[allow(unused_imports)]
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
+use ff_rithmic_api::rithmic_proto_objects::rti::Reject;
 use futures::stream::SplitStream;
 use prost::{Message as ProstMessage};
 use tokio::net::TcpStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::{Message};
 #[allow(unused_imports)]
-use crate::standardized_types::broker_enum::Brokerage;
-use crate::server_features::rithmic_api::api_client::RithmicClient;
+use ff_standard_lib::standardized_types::broker_enum::Brokerage;
+use crate::rithmic_api::api_client::RithmicClient;
 
 #[allow(dead_code)]
-pub async fn handle_responses_from_repo_plant(
+pub async fn handle_responses_from_pnl_plant(
     client: Arc<RithmicClient>,
     mut reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
-) -> Result<(), RithmicApiError> {
-    const PLANT: SysInfraType = SysInfraType::RepositoryPlant;
+) {
+    const PLANT: SysInfraType = SysInfraType::PnlPlant;
     tokio::task::spawn(async move {
         while let Some(message) = reader.next().await {
             match message {
@@ -33,8 +34,8 @@ pub async fn handle_responses_from_repo_plant(
                         }
                         Message::Binary(bytes) => {
                             // spawn a new task so that we can handle next message faster.
-                            let client = client.clone();
-                            tokio::task::spawn(async move {
+                           // let client = client.clone();
+                           // tokio::task::spawn(async move {
                                 //messages will be forwarded here
                                 let mut cursor = Cursor::new(bytes);
                                 // Read the 4-byte length header
@@ -54,6 +55,13 @@ pub async fn handle_responses_from_repo_plant(
                                     println!("Extracted template_id: {}", template_id);
                                     // Now you can use the template_id to determine which type to decode into the concrete types
                                     match template_id {
+                                        75 => {
+                                            if let Ok(msg) = Reject::decode(&message_buf[..]) {
+                                                // Login Response
+                                                // From Server
+                                                println!("Reject Response (Template ID: 11) from Server: {:?}", msg);
+                                            }
+                                        }
                                         11 => {
                                             if let Ok(msg) = ResponseLogin::decode(&message_buf[..]) {
                                                 // Login Response
@@ -89,45 +97,39 @@ pub async fn handle_responses_from_repo_plant(
                                                 println!("Response Heartbeat (Template ID: 19) from Server: {:?}", msg);
                                             }
                                         },
-                                        501 => {
-                                            if let Ok(msg) = ResponseListUnacceptedAgreements::decode(&message_buf[..]) {
-                                                // List Unaccepted Agreements Response
+                                        401 => {
+                                            if let Ok(msg) = ResponsePnLPositionUpdates::decode(&message_buf[..]) {
+                                                // PnL Position Updates Response
                                                 // From Server
-                                                println!("List Unaccepted Agreements Response (Template ID: 501) from Server: {:?}", msg);
+                                                println!("PnL Position Updates Response (Template ID: 401) from Server: {:?}", msg);
                                             }
                                         },
-                                        503 => {
-                                            if let Ok(msg) = ResponseListAcceptedAgreements::decode(&message_buf[..]) {
-                                                // List Accepted Agreements Response
+                                        403 => {
+                                            if let Ok(msg) = ResponsePnLPositionSnapshot::decode(&message_buf[..]) {
+                                                // PnL Position Snapshot Response
                                                 // From Server
-                                                println!("List Accepted Agreements Response (Template ID: 503) from Server: {:?}", msg);
+                                                println!("PnL Position Snapshot Response (Template ID: 403) from Server: {:?}", msg);
+
                                             }
                                         },
-                                        505 => {
-                                            if let Ok(msg) = ResponseAcceptAgreement::decode(&message_buf[..]) {
-                                                // Accept Agreement Response
+                                        450 => {
+                                            if let Ok(msg) = InstrumentPnLPositionUpdate::decode(&message_buf[..]) {
+                                                // Instrument PnL Position Update
                                                 // From Server
-                                                println!("Accept Agreement Response (Template ID: 505) from Server: {:?}", msg);
+                                                println!("Instrument PnL Position Update (Template ID: 450) from Server: {:?}", msg);
                                             }
                                         },
-                                        507 => {
-                                            if let Ok(msg) = ResponseShowAgreement::decode(&message_buf[..]) {
-                                                // Show Agreement Response
+                                        451 => {
+                                            if let Ok(msg) = AccountPnLPositionUpdate::decode(&message_buf[..]) {
+                                                // Account PnL Position Update
                                                 // From Server
-                                                println!("Show Agreement Response (Template ID: 507) from Server: {:?}", msg);
-                                            }
-                                        },
-                                        509 => {
-                                            if let Ok(msg) = ResponseSetRithmicMrktDataSelfCertStatus::decode(&message_buf[..]) {
-                                                // Set Rithmic MarketData Self Certification Status Response
-                                                // From Server
-                                                println!("Set Rithmic MarketData Self Certification Status Response (Template ID: 509) from Server: {:?}", msg);
+                                                println!("Account PnL Position Update (Template ID: 451) from Server: {:?}", msg);
                                             }
                                         },
                                         _ => println!("No match for template_id: {}", template_id)
                                     }
                                 }
-                            });
+                           // });
                         }
                         Message::Ping(ping) => {
                             println!("{:?}", ping)
@@ -156,5 +158,5 @@ pub async fn handle_responses_from_repo_plant(
             }
         }
     });
-    Ok(())
 }
+

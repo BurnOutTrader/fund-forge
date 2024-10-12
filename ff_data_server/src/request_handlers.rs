@@ -13,12 +13,12 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
 use tokio_rustls::server::TlsStream;
-use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
-use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
-use ff_standard_lib::server_features::stream_tasks::deregister_streamer;
-use ff_standard_lib::server_features::StreamName;
+use crate::server_side_brokerage::{account_info_response, accounts_response, margin_required_response, symbol_info_response, symbol_names_response};
+use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, symbols_response, tick_size_response};
+use crate::stream_tasks::deregister_streamer;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::OrderRequest;
+use ff_standard_lib::StreamName;
 use crate::stream_listener;
 
 /// Retrieves the base data from the file system or the vendor and sends it back to the client via a NetworkMessage using the response function
@@ -102,7 +102,7 @@ pub async fn manage_async_requests(
                         callback_id,
                         symbol_name
                     } => handle_callback(
-                        || data_vendor.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id),
+                        || decimal_accuracy_response(data_vendor, mode, stream_name, symbol_name, callback_id),
                         sender.clone()
                     ).await,
 
@@ -111,7 +111,7 @@ pub async fn manage_async_requests(
                         brokerage,
                         callback_id
                     } => handle_callback(
-                        || brokerage.symbol_info_response(mode, stream_name, symbol_name, callback_id),
+                        || symbol_info_response(brokerage, mode, stream_name, symbol_name, callback_id),
                         sender.clone()
                     ).await,
 
@@ -129,7 +129,7 @@ pub async fn manage_async_requests(
                         market_type,
                         callback_id,
                     } => handle_callback(
-                        || data_vendor.symbols_response(mode,stream_name, market_type, callback_id),
+                        || symbols_response(data_vendor, mode,stream_name, market_type, callback_id),
                         sender.clone()
                     ).await,
 
@@ -138,7 +138,7 @@ pub async fn manage_async_requests(
                         data_vendor,
                         market_type,
                     } => handle_callback(
-                        || data_vendor.resolutions_response(mode, stream_name, market_type, callback_id),
+                        || resolutions_response(data_vendor, mode, stream_name, market_type, callback_id),
                         sender.clone()
                     ).await,
 
@@ -147,7 +147,7 @@ pub async fn manage_async_requests(
                         brokerage,
                         account_id,
                     } => handle_callback(
-                        || brokerage.account_info_response(mode, stream_name, account_id, callback_id),
+                        || account_info_response(brokerage, mode, stream_name, account_id, callback_id),
                         sender.clone()
                     ).await,
 
@@ -155,7 +155,7 @@ pub async fn manage_async_requests(
                         callback_id,
                         data_vendor,
                     } => handle_callback(
-                        || data_vendor.markets_response(mode, stream_name, callback_id),
+                        || markets_response(data_vendor, mode, stream_name, callback_id),
                         sender.clone()
                     ).await,
 
@@ -164,21 +164,21 @@ pub async fn manage_async_requests(
                         data_vendor,
                         symbol_name,
                     } => handle_callback(
-                        || data_vendor.tick_size_response(mode, stream_name, symbol_name, callback_id),
+                        || tick_size_response(data_vendor, mode, stream_name, symbol_name, callback_id),
                         sender.clone()).await,
 
                     DataServerRequest::Accounts {
                         callback_id,
                         brokerage
                     } => handle_callback(
-                        || brokerage.accounts_response(mode, stream_name, callback_id),
+                        || accounts_response(brokerage, mode, stream_name, callback_id),
                         sender.clone()).await,
 
                     DataServerRequest::BaseDataTypes {
                         callback_id,
                         data_vendor
                     } => handle_callback(
-                        || data_vendor.base_data_types_response(mode, stream_name, callback_id),
+                        || base_data_types_response(data_vendor, mode, stream_name, callback_id),
                         sender.clone()).await,
 
                     DataServerRequest::MarginRequired {
@@ -187,12 +187,12 @@ pub async fn manage_async_requests(
                         symbol_name,
                         quantity
                     } => handle_callback(
-                        || brokerage.margin_required_response(mode, stream_name, symbol_name, quantity, callback_id),
+                        || margin_required_response(brokerage, mode, stream_name, symbol_name, quantity, callback_id),
                         sender.clone()).await,
 
                     DataServerRequest::SymbolNames{ callback_id, brokerage } => {
                         handle_callback(
-                            || brokerage.symbol_names_response(mode, stream_name, callback_id),
+                            || symbol_names_response(brokerage, mode, stream_name, callback_id),
                             sender.clone()).await
                     }
 

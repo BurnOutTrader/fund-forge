@@ -33,8 +33,8 @@ use crate::strategies::historical_time::get_backtest_time;
 #[archive_attr(derive(Debug))]
 pub struct BookLevel {
     level: u16,
-    pub(crate) price: Price,
-    pub(crate) volume: Volume
+    pub price: Price,
+    pub volume: Volume
 }
 impl BookLevel {
     pub fn new(level: u16, price: Price, volume: Volume) -> Self {

@@ -161,12 +161,12 @@ You will then need to complete a matching statement for the server logic in ff_d
 
 #### Long Option A
 If you want all implementations to return this kind of response then you will then need to add a new `VendorApiResponse` or `BrokerApiResponse` to the trait.
-- trait [BrokerApiResponse](ff_standard_lib/src/server_features/server_side_brokerage.rs).
-- trait [VendorApiResponse](ff_standard_lib/src/server_features/server_side_datavendor.rs).
+- trait [BrokerApiResponse](ff_data_server/src/server_side_brokerage.rs).
+- trait [VendorApiResponse](ff_data_server/src/server_side_datavendor.rs).
 
 you will then need to provide matching statements for all existing api objects for the enum type on the server side.
-- for server side [Brokerage](ff_standard_lib/src/server_features/server_side_brokerage.rs)
-- for server side [DataVendor](ff_standard_lib/src/server_features/server_side_datavendor.rs)
+- for server side [Brokerage](ff_data_server/src/server_side_brokerage.rs)
+- for server side [DataVendor](ff_data_server/src/server_side_datavendor.rs)
 
 you might also need to provide [client side implementations](ff_standard_lib/src/strategies/client_features/client_side_impl.rs).
 depending on how you want to access the data in your strategies.

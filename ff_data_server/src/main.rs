@@ -14,10 +14,17 @@ use structopt::StructOpt;
 use tokio::net::TcpStream;
 use tokio::{signal, task};
 use tokio_rustls::server::TlsStream;
-use ff_standard_lib::server_features::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
 pub mod request_handlers;
 mod stream_listener;
 mod async_listener;
+pub mod rithmic_api;
+pub mod test_api;
+pub mod rate_limiter;
+pub mod update_tasks;
+pub mod server_side_brokerage;
+pub mod server_side_datavendor;
+pub mod bitget_api;
+pub mod stream_tasks;
 
 #[derive(Debug, StructOpt, Clone)]
 struct ServerLaunchOptions {
@@ -165,7 +172,7 @@ async fn main() -> io::Result<()> {
 
 
     //let init_rithmic_handle = tokio::spawn(init_rithmic_apis(options.clone()));
-    let (_, _) = run_servers(config, options.clone());
+    let (async_handle, stream_handle) = run_servers(config, options.clone());
 
     // Wait for initialization to complete
     //init_rithmic_handle.await.expect("Failed to initialize APIs");
@@ -180,6 +187,10 @@ async fn main() -> io::Result<()> {
     // Perform logout
     logout_apis().await;
 
+    async_handle.abort();
+    stream_handle.abort();
+
+
     println!("Shutdown complete");
     Ok(())
 }
@@ -188,33 +199,31 @@ async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
     let tcp_stream = stream.get_ref();
     tcp_stream.0.peer_addr().unwrap()
 }
-use std::thread;
-use tokio::runtime::Runtime;
-use ff_standard_lib::server_features::stream_tasks::shutdown_stream_tasks;
-use ff_standard_lib::server_features::test_api::api_client::TEST_CLIENT;
+use tokio::task::JoinHandle;
+use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
+use crate::stream_tasks::shutdown_stream_tasks;
+use crate::test_api::api_client::TEST_CLIENT;
 
 fn run_servers(
     config: rustls::ServerConfig,
-    options: ServerLaunchOptions,
-) -> (thread::JoinHandle<()>, thread::JoinHandle<()>) {
+    options: ServerLaunchOptions
+) -> (JoinHandle<()>, JoinHandle<()>) {
     let config_clone = config.clone();
     let options_clone = options.clone();
 
-    let async_handle = thread::spawn(move || {
-        let rt = Runtime::new().unwrap();
-        rt.block_on(async_listener::async_server(
+    let async_handle = task::spawn(async move  {
+        async_listener::async_server(
             config_clone,
             SocketAddr::new(options_clone.listener_address, options_clone.port),
-            options_clone.data_folder,
-        ));
+            options_clone.data_folder
+        ).await
     });
 
-    let stream_handle = thread::spawn(move || {
-        let rt = Runtime::new().unwrap();
-        rt.block_on(stream_listener::stream_server(
+    let stream_handle = task::spawn(async move  {
+         stream_listener::stream_server(
             config,
             SocketAddr::new(options.stream_address, options.stream_port),
-        ));
+        ).await
     });
 
     (async_handle, stream_handle)

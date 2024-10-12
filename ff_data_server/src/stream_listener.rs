@@ -8,9 +8,9 @@ use tokio_rustls::server::TlsStream;
 use ff_standard_lib::messages::data_server_messaging::{DataServerRequest, DataServerResponse, StreamRequest};
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
-use ff_standard_lib::server_features::StreamName;
-use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
-use ff_standard_lib::server_features::stream_tasks::initialize_streamer;
+use ff_standard_lib::StreamName;
+use crate::server_side_datavendor::{data_feed_subscribe};
+use crate::stream_tasks::initialize_streamer;
 
 pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
     let acceptor = TlsAcceptor::from(Arc::new(config));
@@ -94,7 +94,7 @@ pub async fn stream_response(stream_name: StreamName, request: StreamRequest) ->
             panic!()
         }
         StreamRequest::Subscribe(subscription) => {
-            subscription.symbol.data_vendor.data_feed_subscribe(stream_name, subscription.clone()).await
+            data_feed_subscribe(stream_name, subscription.clone()).await
         }
         StreamRequest::Unsubscribe(_) => {
             panic!()

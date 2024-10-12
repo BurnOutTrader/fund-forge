@@ -64,7 +64,7 @@ pub fn futures_code_to_name() -> AHashMap<&'static str, &'static str> {
 }
 
 use std::collections::HashMap;
-use crate::standardized_types::enums::FuturesExchange;
+use ff_standard_lib::standardized_types::enums::FuturesExchange;
 
 // Function to map contract code to an exchange using the Exchange enum
 pub fn get_code_to_exchange_map() -> HashMap<&'static str, FuturesExchange> {

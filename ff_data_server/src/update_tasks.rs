@@ -1,5 +1,5 @@
-use crate::standardized_types::resolution::Resolution;
-use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
+use ff_standard_lib::standardized_types::resolution::Resolution;
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::future::Future;

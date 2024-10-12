@@ -11,8 +11,8 @@ use futures::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
 use base64::Engine;
 use sha2::Sha256;
-use crate::helpers::get_data_folder;
-use crate::messages::data_server_messaging::FundForgeError;
+use ff_standard_lib::helpers::get_data_folder;
+use ff_standard_lib::messages::data_server_messaging::FundForgeError;
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Serialize, Deserialize)]
