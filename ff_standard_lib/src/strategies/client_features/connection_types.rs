@@ -6,9 +6,6 @@ use crate::standardized_types::broker_enum::Brokerage;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::datavendor_enum::DataVendor;
 
-pub const GUI_ENABLED: bool = true;
-pub const GUI_DISABLED: bool = false;
-
 /// A wrapper to allow us to pass in either a `Brokerage` or a `DataVendor`
 /// # Variants
 /// * `Broker(Brokerage)` - Containing a `Brokerage` object

@@ -16,7 +16,6 @@ use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent;
 use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
-use ff_standard_lib::strategies::client_features::connection_types::GUI_DISABLED;
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 
@@ -66,7 +65,7 @@ async fn main() {
         100,
         strategy_event_sender,
         core::time::Duration::from_millis(30),
-        GUI_DISABLED,
+        false,
     ).await;
 
     on_data_received(strategy, strategy_event_receiver).await;

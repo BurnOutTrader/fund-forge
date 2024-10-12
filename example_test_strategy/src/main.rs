@@ -21,7 +21,6 @@ use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
-use ff_standard_lib::strategies::client_features::connection_types::GUI_DISABLED;
 use ff_standard_lib::standardized_types::orders::{OrderId, OrderState, OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
@@ -89,7 +88,7 @@ async fn main() {
 
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
-        GUI_DISABLED,
+        false,
     ).await;
 
     // we can subscribe to indicators here or in our event loop at run time.
