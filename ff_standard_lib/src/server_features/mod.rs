@@ -7,4 +7,5 @@ pub mod rate_limiter;
 pub mod update_tasks;
 pub mod server_side_brokerage;
 pub mod server_side_datavendor;
-mod handle_repo_plant;
+pub mod handle_repo_plant;
+pub mod bitget_api;
