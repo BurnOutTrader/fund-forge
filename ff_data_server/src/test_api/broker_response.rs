@@ -78,7 +78,7 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
-    async fn margin_required_response(
+    async fn intraday_margin_required_response(
         &self,
         _mode: StrategyMode,
         _stream_name: StreamName,

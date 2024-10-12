@@ -59,7 +59,7 @@ impl BrokerApiResponse for RithmicClient {
         }
     }
 
-    async fn margin_required_response(&self,  _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn intraday_margin_required_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
         //todo get dynamically from server using stream name to fwd callback
         DataServerResponse::MarginRequired {
             callback_id,

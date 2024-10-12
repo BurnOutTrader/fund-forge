@@ -42,7 +42,7 @@ pub trait BrokerApiResponse: Sync + Send {
     /// We can return hard coded values for backtesting and live values for live or live paper
     /// return `DataServerResponse::MarginRequired` or `DataServerResponse::Error(FundForgeError)`
     /// server or client error depending on who caused this problem
-    async fn margin_required_response(
+    async fn intraday_margin_required_response(
         &self,
         mode: StrategyMode,
         stream_name: StreamName,

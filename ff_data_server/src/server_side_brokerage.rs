@@ -85,15 +85,15 @@ pub async fn margin_required_response(brokerage: Brokerage,  mode: StrategyMode,
     match brokerage {
         Brokerage::Rithmic(system) => {
             if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                return client.margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
+                return client.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
             }
         },
         Brokerage::Bitget => {
             if let Some(client) = BITGET_CLIENT.get() {
-                return client.margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
+                return client.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
             }
         }
-        Brokerage::Test => return TEST_CLIENT.margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
+        Brokerage::Test => return TEST_CLIENT.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
     }
     DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
 }
