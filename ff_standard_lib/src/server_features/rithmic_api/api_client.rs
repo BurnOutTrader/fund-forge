@@ -531,108 +531,75 @@ impl VendorApiResponse for RithmicClient {
 
     async fn data_feed_unsubscribe(&self, _mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         let exchange = match subscription.market_type {
-            MarketType::Futures(exchange) => {
-                exchange.to_string()
-            }
-            _ => todo!()
+            MarketType::Futures(exchange) => exchange.to_string(),
+            _ => return DataServerResponse::SubscribeResponse {
+                success: false,
+                subscription: subscription.clone(),
+                reason: Some(format!("Unsupported market type: {:?}", subscription.market_type)),
+            },
         };
-        let bits = match subscription.base_data_type {
-            BaseDataType::Ticks => 1,
-            BaseDataType::Quotes => 2,
-            _ => return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
-            //BaseDataType::Candles => {}
+
+        let (bits, broadcaster_map) = match subscription.base_data_type {
+            BaseDataType::Ticks => (1, &self.tick_feed_broadcasters),
+            BaseDataType::Quotes => (2, &self.quote_feed_broadcasters),
+            BaseDataType::Candles => (3, &self.candle_feed_broadcasters),
+            _ => return DataServerResponse::SubscribeResponse {
+                success: false,
+                subscription: subscription.clone(),
+                reason: Some(format!("Unsupported data type: {:?}", subscription.base_data_type)),
+            },
         };
-        let req = RequestMarketDataUpdate {
-            template_id: 100,
-            user_msg: vec![],
-            symbol: Some(subscription.symbol.name.to_string()),
-            exchange: Some(exchange),
-            request: Some(2), //1 subscribe 2 unsubscribe
-            update_bits: Some(bits), //1 for ticks 2 for quotes
-        };
-        let mut disconnect_symbol = false;
-        match subscription.base_data_type {
-            BaseDataType::Ticks => {
-                if let Some(broadcaster) = self.tick_feed_broadcasters.get(&subscription.symbol.name) {
-                    broadcaster.value().unsubscribe(&stream_name.to_string());
-                    if !broadcaster.has_subscribers() {
-                        self.quote_feed_broadcasters.remove(&subscription.symbol.name);
-                        self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
-                        disconnect_symbol = true;
-                    }
-                    return DataServerResponse::UnSubscribeResponse {
-                        success: true,
-                        subscription,
-                        reason: None,
-                    }
-                }
-                if disconnect_symbol {
-                    self.tick_feed_broadcasters.remove(&subscription.symbol.name);
-                    match self.send_message(SysInfraType::TickerPlant, req).await {
-                        Ok(_) => {}
-                        Err(_) => {}
-                    }
-                }
-            }
-            BaseDataType::Quotes => {
-                if let Some(broadcaster) = self.quote_feed_broadcasters.get(&subscription.symbol.name) {
-                    broadcaster.value().unsubscribe(&stream_name.to_string());
-                    if !broadcaster.has_subscribers() {
-                        self.quote_feed_broadcasters.remove(&subscription.symbol.name);
-                        self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
-                        self.ask_book.remove(&subscription.symbol.name);
-                        self.bid_book.remove(&subscription.symbol.name);
-                        disconnect_symbol = true;
-                    }
-                    return DataServerResponse::UnSubscribeResponse {
-                        success: true,
-                        subscription,
-                        reason: None,
-                    }
-                }
-                if disconnect_symbol {
-                    self.quote_feed_broadcasters.remove(&subscription.symbol.name);
-                    match self.send_message(SysInfraType::TickerPlant, req).await {
-                        Ok(_) => {}
-                        Err(_) => {}
-                    }
-                }
-            }
-            BaseDataType::Candles => {
-                if let Some (broadcaster) = self.candle_feed_broadcasters.get(&subscription.symbol.name) {
-                    broadcaster.value().unsubscribe(&stream_name.to_string());
-                    if !broadcaster.has_subscribers() {
-                        self.quote_feed_broadcasters.remove(&subscription.symbol.name);
-                        self.send_message(SysInfraType::TickerPlant, req).await.unwrap();
-                        disconnect_symbol= true;
-                    }
-                    return DataServerResponse::UnSubscribeResponse {
-                        success: true,
-                        subscription,
-                        reason: None,
-                    }
-                }
-                if disconnect_symbol {
-                    self.candle_feed_broadcasters.remove(&subscription.symbol.name);
-                    match self.send_message(SysInfraType::TickerPlant, req).await {
-                        Ok(_) => {}
-                        Err(_) => {}
-                    }
-                }
-            }
-            _ => todo!("Handle gracefully by returning err")
+
+        let symbol = subscription.symbol.name.clone();
+        let mut should_disconnect = false;
+
+        if let Some(broadcaster) = broadcaster_map.get_mut(&symbol) {
+            broadcaster.unsubscribe(&stream_name.to_string());
+            should_disconnect = !broadcaster.has_subscribers();
         }
-        //todo Fix ff_rithmic_api switch heartbeat fn. this causes a lock.
-  /*      if self.quote_feed_broadcasters.len() == 0 && self.tick_feed_broadcasters.len() == 0 && self.candle_feed_broadcasters.len() == 0 {
-            match self.client.switch_heartbeat_required(SysInfraType::TickerPlant,true).await {
-                Ok(_) => {}
-                Err(_) => {}
+
+        if should_disconnect {
+            broadcaster_map.remove(&symbol);
+
+            let req = RequestMarketDataUpdate {
+                template_id: 100,
+                user_msg: vec![],
+                symbol: Some(symbol.clone()),
+                exchange: Some(exchange),
+                request: Some(2), // 2 for unsubscribe
+                update_bits: Some(bits),
+            };
+
+            if let Err(e) = self.send_message(SysInfraType::TickerPlant, req).await {
+                return DataServerResponse::UnSubscribeResponse {
+                    success: false,
+                    subscription,
+                    reason: Some(format!("Failed to send unsubscribe message: {}", e)),
+                };
             }
-        }*/
+
+            // Additional cleanup for quotes
+            if subscription.base_data_type == BaseDataType::Quotes {
+                self.ask_book.remove(&symbol);
+                self.bid_book.remove(&symbol);
+            }
+        }
+
+        // Check if we need to switch heartbeat
+        if self.tick_feed_broadcasters.is_empty() &&
+            self.quote_feed_broadcasters.is_empty() &&
+            self.candle_feed_broadcasters.is_empty()
+        {
+            //todo fix in ff_rithmic api this causes a lock
+         /*   if let Err(e) = self.client.switch_heartbeat_required(SysInfraType::TickerPlant, true).await {
+                eprintln!("Failed to switch heartbeat: {}", e);
+            }*/
+        }
+
         DataServerResponse::UnSubscribeResponse {
-            success: false,
+            success: true,
             subscription,
-            reason: Some(String::from("Subscription Not Found or Incorrect type for Rithmic")),
+            reason: None,
         }
     }
 
