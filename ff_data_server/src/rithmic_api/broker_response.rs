@@ -1,15 +1,14 @@
 use async_trait::async_trait;
 use rust_decimal_macros::dec;
-use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
-use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
-use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
+use ff_standard_lib::strategies::ledgers::AccountId;
 use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::products::get_symbol_info;
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
@@ -46,24 +45,9 @@ impl BrokerApiResponse for RithmicClient {
         symbol_name: SymbolName,
         callback_id: u64
     ) -> DataServerResponse {
-        //todo get dynamically from server using stream name to fwd callback
-        let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
-        let (pnl_currency, value_per_tick, tick_size, decimal_accuracy) = match symbol_name.as_str() {
-            "MNQ" => (Currency::USD, dec!(2.0), dec!(0.25), 2), // MNQ in USD with $2 per tick at 0.25 tick size and decimal accuracy of 2
-            _ => return DataServerResponse::Error { callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{} not found with: {}", symbol_name, self.brokerage))}
-        };
-
-        let symbol_info = SymbolInfo {
-            symbol_name,
-            pnl_currency,
-            value_per_tick,
-            tick_size,
-            decimal_accuracy,
-        };
-
-        DataServerResponse::SymbolInfo {
-            callback_id,
-            symbol_info,
+        match get_symbol_info(&symbol_name) {
+            Ok(symbol_info) => DataServerResponse::SymbolInfo {callback_id, symbol_info},
+            Err(e) => DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{}", e))}
         }
     }
 
