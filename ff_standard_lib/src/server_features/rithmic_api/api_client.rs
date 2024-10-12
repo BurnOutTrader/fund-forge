@@ -375,7 +375,10 @@ impl VendorApiResponse for RithmicClient {
     async fn resolutions_response(&self, mode: StrategyMode, _stream_name: StreamName, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
         let subs = match mode {
             StrategyMode::Backtest => {
-                vec![]
+                vec![
+                    SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
+                    SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
+                ]
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live => {
                 vec![
