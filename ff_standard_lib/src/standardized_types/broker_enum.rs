@@ -11,6 +11,7 @@ use crate::messages::data_server_messaging::FundForgeError;
 pub enum Brokerage {
     Test, //DO NOT CHANGE ORDER
     Rithmic(RithmicSystem),
+    Bitget
 }
 impl FromStr for Brokerage {
     type Err = FundForgeError;

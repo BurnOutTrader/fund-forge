@@ -123,7 +123,7 @@ impl VendorApiResponse for DataVendor {
                 }
             },
             DataVendor::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, callback_id).await,
-            DataVendor::BitGet => {
+            DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.symbols_response(mode, stream_name, market_type, callback_id).await;
                 }
@@ -152,7 +152,7 @@ impl VendorApiResponse for DataVendor {
                 }
             },
             DataVendor::Test => return TEST_CLIENT.resolutions_response(mode, stream_name, market_type, callback_id).await,
-            DataVendor::BitGet => {
+            DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.resolutions_response(mode, stream_name, market_type, callback_id).await;
                 }
@@ -176,7 +176,7 @@ impl VendorApiResponse for DataVendor {
                 }
             },
             DataVendor::Test => return TEST_CLIENT.markets_response(mode, stream_name, callback_id).await,
-            DataVendor::BitGet => {
+            DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.markets_response(mode, stream_name, callback_id).await;
                 }
@@ -202,7 +202,7 @@ impl VendorApiResponse for DataVendor {
                 }
             },
             DataVendor::Test => return TEST_CLIENT.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await,
-            DataVendor::BitGet => {
+            DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await;
                 }
@@ -227,7 +227,7 @@ impl VendorApiResponse for DataVendor {
                 }
             },
             DataVendor::Test => return TEST_CLIENT.tick_size_response(mode, stream_name, symbol_name, callback_id).await,
-            DataVendor::BitGet => {
+            DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await;
                 }
@@ -252,7 +252,7 @@ impl VendorApiResponse for DataVendor {
                 }
             },
             DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription, sender).await,
-            DataVendor::BitGet => {
+            DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.data_feed_subscribe(stream_name, subscription, sender).await;
                 }
@@ -277,7 +277,7 @@ impl VendorApiResponse for DataVendor {
                 }
             },
             DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(mode, stream_name, subscription).await,
-            DataVendor::BitGet => {
+            DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.data_feed_unsubscribe(mode, stream_name, subscription).await;
                 }
@@ -301,7 +301,7 @@ impl VendorApiResponse for DataVendor {
                 }
             },
             DataVendor::Test => return TEST_CLIENT.base_data_types_response(mode, stream_name, callback_id).await,
-            DataVendor::BitGet => {
+            DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.base_data_types_response(mode, stream_name, callback_id).await;
                 }
@@ -321,7 +321,7 @@ impl VendorApiResponse for DataVendor {
             }
         },
             DataVendor::Test => TEST_CLIENT.logout_command_vendors(stream_name).await,
-            DataVendor::BitGet => {
+            DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
                     client.logout_command_vendors(stream_name).await;
                 }

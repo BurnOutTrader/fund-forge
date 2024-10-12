@@ -14,7 +14,7 @@ use crate::messages::data_server_messaging::FundForgeError;
 pub enum DataVendor {
     Test, //DO NOT CHANGE ORDER
     Rithmic(RithmicSystem),
-    BitGet
+    Bitget
 }
 
 impl FromStr for DataVendor {
@@ -34,7 +34,7 @@ impl FromStr for DataVendor {
                 )))
             }
         } else if s == "BitGet" {
-            Ok(DataVendor::BitGet)
+            Ok(DataVendor::Bitget)
         } else {
             Err(FundForgeError::ClientSideErrorDebug(format!(
                 "Unknown DataVendor string: {}",

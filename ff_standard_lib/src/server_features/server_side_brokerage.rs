@@ -3,6 +3,7 @@ use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError}
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::enums::{StrategyMode};
 use async_trait::async_trait;
+use crate::server_features::bitget_api::api_client::{BITGET_CLIENT};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::server_features::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::server_features::StreamName;
@@ -89,7 +90,12 @@ impl BrokerApiResponse for Brokerage {
                     return client.symbol_names_response(mode, stream_name, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.symbol_names_response(mode, stream_name, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.symbol_names_response(mode, stream_name, callback_id).await,
+            Brokerage::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.symbol_names_response(mode, stream_name, callback_id).await
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -109,7 +115,12 @@ impl BrokerApiResponse for Brokerage {
                     return client.account_info_response(mode, stream_name, account_id, callback_id).await
                 }
             },
-            Brokerage::Test => return TEST_CLIENT.account_info_response(mode, stream_name, account_id, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.account_info_response(mode, stream_name, account_id, callback_id).await,
+            Brokerage::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.account_info_response(mode, stream_name, account_id, callback_id).await
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -121,6 +132,11 @@ impl BrokerApiResponse for Brokerage {
                     return client.symbol_info_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
+            Brokerage::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.symbol_info_response(mode, stream_name, symbol_name, callback_id).await
+                }
+            }
             Brokerage::Test => return TEST_CLIENT.symbol_info_response(mode, stream_name, symbol_name, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
@@ -137,6 +153,11 @@ impl BrokerApiResponse for Brokerage {
                     return client.margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
                 }
             },
+            Brokerage::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
+                }
+            }
             Brokerage::Test => return TEST_CLIENT.margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
@@ -151,6 +172,11 @@ impl BrokerApiResponse for Brokerage {
                     return client.accounts_response(mode, stream_name, callback_id).await
                 }
             },
+            Brokerage::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.accounts_response(mode, stream_name, callback_id).await
+                }
+            }
             Brokerage::Test => return TEST_CLIENT.accounts_response(mode, stream_name, callback_id).await
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
@@ -166,6 +192,11 @@ impl BrokerApiResponse for Brokerage {
                     client.logout_command(stream_name).await;
                 }
             },
+            Brokerage::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    client.logout_command(stream_name).await
+                }
+            }
             Brokerage::Test => TEST_CLIENT.logout_command(stream_name).await
         }
     }
