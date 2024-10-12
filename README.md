@@ -52,7 +52,7 @@ Tick data from histdata.com will actually be parsed into the engine as `BaseData
 
 Since the tick data is actually best bid and ask data.
 
-There is a crude test data parser [here](https://github.com/BurnOutTrader/fund-forge/tree/main/test_data_parser)
+There is a crude test data parser [here](test_data_parser)
 
 You will need to manually download the files, then put all the .csv files into 1 folder and change the variables such as input/output folders and Symbol of the data.
 
