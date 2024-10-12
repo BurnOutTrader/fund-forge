@@ -111,6 +111,6 @@ impl BrokerApiResponse for TestApiClient {
     }
 
     async fn logout_command(&self, stream_name: StreamName) {
-        self.logout_command_vendors(stream_name)
+        self.logout_command_vendors(stream_name).await;
     }
 }
