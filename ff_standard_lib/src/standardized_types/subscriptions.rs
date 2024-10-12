@@ -80,7 +80,8 @@ impl Display for CandleType {
 /// * `data_vendor` - The data vendor of the subscription. [DataVendor](ff_strategy::vendors::DataVendor)
 /// * `resolution` - The resolution of the subscription. [Resolution](ff_common_library::models::resolution::Resolution)
 /// * `base_data_type` - The base data type of the subscription. [BaseDataType](crate::base_data::base_data_type::BaseDataType)
-/// * `name` - The name of the subscription, this can be used to [`BaseDataType::Fundamental`](crate::base_data::base_data_type::BaseDataType) data. to give the subscription a name, this name can be used to sort and categorise the data in the strategy.
+/// * `market_type` - The market type of the subscription.
+/// * `candle_type` - The option CandleType for candle or quote bar data feeds
 pub struct DataSubscription {
     pub symbol: Symbol,
     pub resolution: Resolution,
