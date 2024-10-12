@@ -1,5 +1,5 @@
 ## Subscription handling
-- Live subsriptions will be done by
+- Live subscriptions will be done by
 1. Starting the warm up while also buffering incoming new data
    - this will require a check to see if the individual subscription is warmed up
    - new data is fed from buffer into consolidators etc
