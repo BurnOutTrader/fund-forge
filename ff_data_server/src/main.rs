@@ -74,7 +74,7 @@ struct ServerLaunchOptions {
 }
 
 #[allow(dead_code)]
-async fn init_apis(options: ServerLaunchOptions) {
+async fn init_rithmic_apis(options: ServerLaunchOptions) {
     let options = options.clone();
     if options.disable_rithmic_server {
         return
@@ -163,12 +163,12 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-    let init_handle = tokio::spawn(init_apis(options.clone()));
 
+    //let init_rithmic_handle = tokio::spawn(init_rithmic_apis(options.clone()));
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 
     // Wait for initialization to complete
-    init_handle.await.expect("Failed to initialize APIs");
+    //init_rithmic_handle.await.expect("Failed to initialize APIs");
 
     // Wait for Ctrl+C
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");
