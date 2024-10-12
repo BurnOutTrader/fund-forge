@@ -18,7 +18,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - [Bitget Setup](ff_data_server/src/bitget_api/BITGET_SETUP)
 - [Back Test Accuracy](ff_standard_lib/src/strategies/ACCURACY_README.md)
 - [Developing Engine](DEV_README.md)
-- [Current Items I Am Working On](DEV_TODO_ISSUES.md)
+- [Current Development Tasks](DEV_TODO_ISSUES.md)
 - [Licence](LICENCE.md)
 
 ### Initial Setup
