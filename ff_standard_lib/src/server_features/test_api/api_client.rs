@@ -25,6 +25,7 @@ use crate::standardized_types::new_types::Volume;
 use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
 use tokio::sync::broadcast;
+use tokio::task::JoinHandle;
 use crate::server_features::stream_tasks::{subscribe_stream, unsubscribe_stream};
 use crate::standardized_types::resolution::Resolution;
 
@@ -33,14 +34,23 @@ lazy_static! {
 }
 
 pub struct TestApiClient {
-    data_feed_broadcasters: Arc<DashMap<DataSubscription, broadcast::Sender<BaseDataEnum>>>
+    data_feed_broadcasters: Arc<DashMap<DataSubscription, broadcast::Sender<BaseDataEnum>>>,
+    data_feed_tasks: Arc<DashMap<DataSubscription, JoinHandle<()>>>
 }
 
 impl TestApiClient {
     fn new() -> Self {
         Self {
             data_feed_broadcasters: Default::default(),
+            data_feed_tasks: Default::default(),
         }
+    }
+
+    pub fn shutdown(&self) {
+        for task in self.data_feed_tasks.iter() {
+            task.value().abort();
+        }
+        self.data_feed_broadcasters.clear();
     }
 }
 
@@ -57,6 +67,28 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
+
+    async fn account_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, account_id: AccountId, callback_id: u64) -> DataServerResponse {
+        let account_info = AccountInfo {
+            brokerage: Brokerage::Test,
+            cash_value: dec!(100000),
+            cash_available:dec!(100000),
+            currency: Currency::USD,
+            cash_used: dec!(0),
+            positions: vec![],
+            account_id,
+            is_hedging: false,
+            buy_limit: None,
+            sell_limit: None,
+            max_orders: None,
+            daily_max_loss: None,
+            daily_max_loss_reset_time: None,
+        };
+        DataServerResponse::AccountInfo {
+            callback_id,
+            account_info,
+        }
+    }
 
     async fn symbol_info_response(
         &self,
@@ -83,28 +115,6 @@ impl BrokerApiResponse for TestApiClient {
         DataServerResponse::SymbolInfo {
             callback_id,
             symbol_info,
-        }
-    }
-
-    async fn account_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, account_id: AccountId, callback_id: u64) -> DataServerResponse {
-        let account_info = AccountInfo {
-            brokerage: Brokerage::Test,
-            cash_value: dec!(100000),
-            cash_available:dec!(100000),
-            currency: Currency::USD,
-            cash_used: dec!(0),
-            positions: vec![],
-            account_id,
-            is_hedging: false,
-            buy_limit: None,
-            sell_limit: None,
-            max_orders: None,
-            daily_max_loss: None,
-            daily_max_loss_reset_time: None,
-        };
-        DataServerResponse::AccountInfo {
-            callback_id,
-            account_info,
         }
     }
 
@@ -223,7 +233,7 @@ impl VendorApiResponse for TestApiClient {
         let subscription_clone_2 = subscription.clone();
         let broadcasters = self.data_feed_broadcasters.clone();
         let broadcaster = self.data_feed_broadcasters.get(&subscription).unwrap().value().clone();
-        tokio::task::spawn(async move {
+        self.data_feed_tasks.insert(subscription.clone(), tokio::task::spawn(async move {
             let naive_dt_1 = NaiveDate::from_ymd_opt(2024, 6, 01).unwrap().and_hms_opt(0, 0, 0).unwrap();
             let utc_dt_1 = Utc.from_utc_datetime(&naive_dt_1);
 
@@ -258,7 +268,7 @@ impl VendorApiResponse for TestApiClient {
                 }
             }
             broadcasters.remove(&subscription_clone);
-        });
+        }));
         DataServerResponse::SubscribeResponse{ success: true, subscription: subscription_clone_2.clone(), reason: None}
     }
 

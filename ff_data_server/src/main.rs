@@ -165,7 +165,7 @@ async fn main() -> io::Result<()> {
 
 
     //let init_rithmic_handle = tokio::spawn(init_rithmic_apis(options.clone()));
-    let (async_handle, stream_handle) = run_servers(config, options.clone());
+    let (_, _) = run_servers(config, options.clone());
 
     // Wait for initialization to complete
     //init_rithmic_handle.await.expect("Failed to initialize APIs");
@@ -175,6 +175,7 @@ async fn main() -> io::Result<()> {
     println!("Ctrl+C received, logging out APIs...");
 
     shutdown_stream_tasks();
+    TEST_CLIENT.shutdown();
 
     // Perform logout
     logout_apis().await;
@@ -190,6 +191,7 @@ async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
 use std::thread;
 use tokio::runtime::Runtime;
 use ff_standard_lib::server_features::stream_tasks::shutdown_stream_tasks;
+use ff_standard_lib::server_features::test_api::api_client::TEST_CLIENT;
 
 fn run_servers(
     config: rustls::ServerConfig,
