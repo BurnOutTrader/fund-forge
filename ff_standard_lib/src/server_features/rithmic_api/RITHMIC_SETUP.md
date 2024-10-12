@@ -33,17 +33,15 @@ Test = "You need to contact rithmic for this"
 
 For each rithmic RithmicSystem you intend to use, you will need to create a rithmic .toml file for the credentials.
 
+You will need to use the following folder/file structure
+
+![img.png](misc/img.png)
+
 for each RithmicSystem system you intend to use you will need  RithmicCredentials file in ff_data_server/data/rithmic_credentials.
 The file name is created using `credentials.system_name.file_string()`. This allows the credentials to be found by the data server.
 
 save the toml file as `ff_data_server/rithmic_credentials/credentials.system_name.file_string();`
 ```rust
-pub struct RithmicCredentials {
-    pub user: String,
-    pub server_name: RithmicServer,
-    pub system_name: RithmicSystem,
-    pub password: String,
-}
 
 pub fn example() {
     let credentials = RithmicCredentials {
