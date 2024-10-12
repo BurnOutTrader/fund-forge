@@ -11,10 +11,9 @@ use dashmap::DashMap;
 use futures::stream::{SplitSink, SplitStream};
 use once_cell::sync::OnceCell;
 use tungstenite::Message;
-use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use tokio::sync::Mutex as TokioMutex;
+use tokio::sync::{broadcast, Mutex as TokioMutex};
 use crate::server_features::bitget_api::login;
 use crate::server_features::bitget_api::login::BitGetCredentials;
 use crate::standardized_types::subscriptions::SymbolName;
@@ -55,10 +54,10 @@ impl InstType {
 pub struct BitgetClient {
     credentials: BitGetCredentials,
     tick_data_write: Arc<TokioMutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
-    tick_subscriptions: Arc<DashMap<InstType, DashMap<SymbolName, StaticInternalBroadcaster<BaseDataEnum>>>>,
+    tick_subscriptions: Arc<DashMap<InstType, DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>>,
 
     quote_data_write: Arc<TokioMutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
-    quote_subscriptions: Arc<DashMap<InstType, DashMap<SymbolName, StaticInternalBroadcaster<BaseDataEnum>>>>,
+    quote_subscriptions: Arc<DashMap<InstType, DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>>,
 
     sync_socket: Arc<TokioMutex<WebSocketStream<MaybeTlsStream<TcpStream>>>>,
     message_queue: Arc<Mutex<VecDeque<String>>>,
@@ -118,9 +117,8 @@ impl BitgetClient {
         Ok(client)
     }
 
-    async fn receive_data_event_loop(mut data_read: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, _subscriptions: Arc<DashMap<InstType, DashMap<SymbolName, StaticInternalBroadcaster<BaseDataEnum>>>>) {
-        //todo learn box pin for streams and see if we can do everything from the stack.
-        //todo It might be better to have a receiver for subscribe an unsubscribe and keep the broadcaster in function. use  tokio::select! to listen to stream and subscription reader at same time
+
+    async fn receive_data_event_loop(mut data_read: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, _subscriptions: Arc<DashMap<InstType, DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>>) {
         //todo need to handle sending heartbeat every 30 seconds when no incoming data
         //todo need to deserialize tick and quote data and convert to BaseDataEnum
         //todo need to broadcast base data enum to subscribers

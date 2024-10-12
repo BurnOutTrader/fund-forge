@@ -15,6 +15,7 @@ use tokio::sync::mpsc::{Receiver};
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
+use ff_standard_lib::server_features::stream_tasks::deregister_streamer;
 use ff_standard_lib::server_features::StreamName;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::OrderRequest;
@@ -229,6 +230,7 @@ pub async fn manage_async_requests(
                 };
             });
         }
+        deregister_streamer(&stream_name);
         println!("Shutting Down Async ReadHalf");
     });
 }
