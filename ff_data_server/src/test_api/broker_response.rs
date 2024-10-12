@@ -4,6 +4,7 @@ use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
 use ff_standard_lib::helpers::decimal_calculators::round_to_decimals;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
+use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
@@ -109,7 +110,7 @@ impl BrokerApiResponse for TestApiClient {
        DataServerResponse::Accounts {callback_id, accounts: vec!["TestAccount1".to_string(), "TestAccount2".to_string()]}
     }
 
-    async fn logout_command(&self, _stream_name: StreamName) {
-
+    async fn logout_command(&self, stream_name: StreamName) {
+        self.logout_command_vendors(stream_name)
     }
 }
