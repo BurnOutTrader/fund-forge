@@ -113,6 +113,7 @@ pub fn futures_code_to_name() -> &'static AHashMap<&'static str, &'static str> {
 
 use std::collections::HashMap;
 use lazy_static::lazy_static;
+use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::enums::FuturesExchange;
 use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
 use ff_standard_lib::strategies::ledgers::Currency;
@@ -245,5 +246,131 @@ pub fn get_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
         .cloned()
         .ok_or_else(|| format!("{} not found", symbol))
 }
+lazy_static! {
+    static ref INTRADAY_MARGINS: HashMap<&'static str, Decimal> = {
+        let mut map = HashMap::new();
+        map.insert("MES", dec!(40.00));
+        map.insert("MNQ", dec!(100.00));
+        map.insert("MYM", dec!(50.00));
+        map.insert("M2K", dec!(50.00));
+        map.insert("ES", dec!(400.00));
+        map.insert("NQ", dec!(1000.00));
+        map.insert("YM", dec!(500.00));
+        map.insert("RTY", dec!(500.00));
+        map.insert("EMD", dec!(3775.00));
+        map.insert("NKD", dec!(2250.00));
+        map.insert("6A", dec!(362.50));
+        map.insert("6B", dec!(475.00));
+        map.insert("6C", dec!(250.00));
+        map.insert("6E", dec!(525.00));
+        map.insert("6J", dec!(700.00));
+        map.insert("6N", dec!(350.00));
+        map.insert("6S", dec!(925.00));
+        map.insert("E7", dec!(262.50));
+        map.insert("J7", dec!(350.00));
+        map.insert("M6A", dec!(36.25));
+        map.insert("M6B", dec!(47.50));
+        map.insert("M6E", dec!(52.50));
+        map.insert("MJY", dec!(70.00));
+        map.insert("CL", dec!(1650.00));
+        map.insert("QM", dec!(825.00));
+        map.insert("MCL", dec!(165.00));
+        map.insert("NG", dec!(5500.00));
+        map.insert("QG", dec!(1460.00));
+        map.insert("RB", dec!(7900.00));
+        map.insert("HO", dec!(8600.00));
+        map.insert("GC", dec!(2075.00));
+        map.insert("QO", dec!(1037.50));
+        map.insert("MGC", dec!(207.50));
+        map.insert("HG", dec!(1525.00));
+        map.insert("QC", dec!(762.50));
+        map.insert("SI", dec!(11000.00));
+        map.insert("QI", dec!(5500.00));
+        map.insert("SIL", dec!(2200.00));
+        map.insert("PL", dec!(2800.00));
+        map.insert("ZB", dec!(925.00));
+        map.insert("ZF", dec!(350.00));
+        map.insert("ZN", dec!(500.00));
+        map.insert("ZT", dec!(262.50));
+        map.insert("ZC", dec!(1300.00));
+        map.insert("ZW", dec!(2000.00));
+        map.insert("ZS", dec!(2400.00));
+        map.insert("ZL", dec!(3150.00));
+        map.insert("ZM", dec!(3100.00));
+        map.insert("ZO", dec!(1400.00));
+        map.insert("ZR", dec!(1575.00));
+        map.insert("XC", dec!(260.00));
+        map.insert("XW", dec!(400.00));
+        map.insert("XK", dec!(480.00));
+        map
+    };
+
+    static ref OVERNIGHT_MARGINS: HashMap<&'static str, Decimal> = {
+        let mut map = HashMap::new();
+        map.insert("MES", dec!(1460.00));
+        map.insert("MNQ", dec!(2220.00));
+        map.insert("MYM", dec!(1040.00));
+        map.insert("M2K", dec!(760.00));
+        map.insert("ES", dec!(14600.00));
+        map.insert("NQ", dec!(22200.00));
+        map.insert("YM", dec!(10400.00));
+        map.insert("RTY", dec!(7600.00));
+        map.insert("EMD", dec!(15100.00));
+        map.insert("NKD", dec!(12000.00));
+        map.insert("6A", dec!(1450.00));
+        map.insert("6B", dec!(1900.00));
+        map.insert("6C", dec!(1000.00));
+        map.insert("6E", dec!(2100.00));
+        map.insert("6J", dec!(2800.00));
+        map.insert("6N", dec!(1450.00));
+        map.insert("6S", dec!(3700.00));
+        map.insert("E7", dec!(1050.00));
+        map.insert("J7", dec!(1400.00));
+        map.insert("M6A", dec!(145.00));
+        map.insert("M6B", dec!(190.00));
+        map.insert("M6E", dec!(210.00));
+        map.insert("MJY", dec!(280.00));
+        map.insert("CL", dec!(6600.00));
+        map.insert("QM", dec!(3300.00));
+        map.insert("MCL", dec!(660.00));
+        map.insert("NG", dec!(5500.00));
+        map.insert("QG", dec!(1460.00));
+        map.insert("RB", dec!(7900.00));
+        map.insert("HO", dec!(8600.00));
+        map.insert("GC", dec!(10000.00));
+        map.insert("QO", dec!(5000.00));
+        map.insert("MGC", dec!(1000.00));
+        map.insert("HG", dec!(6100.00));
+        map.insert("QC", dec!(3050.00));
+        map.insert("SI", dec!(11000.00));
+        map.insert("QI", dec!(5500.00));
+        map.insert("SIL", dec!(2200.00));
+        map.insert("PL", dec!(2800.00));
+        map.insert("ZB", dec!(3700.00));
+        map.insert("ZF", dec!(1400.00));
+        map.insert("ZN", dec!(2000.00));
+        map.insert("ZT", dec!(1050.00));
+        map.insert("ZC", dec!(1300.00));
+        map.insert("ZW", dec!(2000.00));
+        map.insert("ZS", dec!(2400.00));
+        map.insert("ZL", dec!(3150.00));
+        map.insert("ZM", dec!(3100.00));
+        map.insert("ZO", dec!(1400.00));
+        map.insert("ZR", dec!(1575.00));
+        map.insert("XC", dec!(260.00));
+        map.insert("XW", dec!(400.00));
+        map.insert("XK", dec!(480.00));
+        map
+    };
+}
+
+pub fn get_intraday_margin(symbol: &str) -> Option<Decimal> {
+    INTRADAY_MARGINS.get(symbol).cloned()
+}
+
+pub fn get_overnight_margin(symbol: &str) -> Option<Decimal> {
+    OVERNIGHT_MARGINS.get(symbol).cloned()
+}
+
 
 

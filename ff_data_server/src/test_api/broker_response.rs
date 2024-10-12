@@ -106,6 +106,10 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
+    async fn overnight_margin_required_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+        self.intraday_margin_required_response( mode, stream_name, symbol_name, quantity, callback_id).await
+    }
+
     async fn accounts_response(&self, _mode: StrategyMode,_stream_name: StreamName, callback_id: u64) -> DataServerResponse {
        DataServerResponse::Accounts {callback_id, accounts: vec!["TestAccount1".to_string(), "TestAccount2".to_string()]}
     }

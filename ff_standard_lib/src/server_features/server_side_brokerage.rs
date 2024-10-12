@@ -50,6 +50,14 @@ pub trait BrokerApiResponse: Sync + Send {
         quantity: Volume,
         callback_id: u64
     ) -> DataServerResponse;
+    async fn overnight_margin_required_response(
+        &self,
+        _mode: StrategyMode,
+        _stream_name: StreamName,
+        symbol_name: SymbolName,
+        quantity: Volume,
+        callback_id: u64
+    ) -> DataServerResponse;
 
     /// return `DataServerResponse::Accounts or DataServerResponse::Error(FundForgeError)`
     /// server or client error depending on who caused this problem

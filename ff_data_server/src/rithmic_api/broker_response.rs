@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
@@ -8,7 +9,7 @@ use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::strategies::ledgers::AccountId;
 use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicClient;
-use crate::rithmic_api::products::{get_available_symbol_names, get_symbol_info};
+use crate::rithmic_api::products::{get_available_symbol_names, get_intraday_margin, get_overnight_margin, get_symbol_info};
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
@@ -59,12 +60,39 @@ impl BrokerApiResponse for RithmicClient {
         }
     }
 
-    async fn intraday_margin_required_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-        //todo get dynamically from server using stream name to fwd callback
+    async fn intraday_margin_required_response(
+        &self,
+        _mode: StrategyMode, //todo we should check with broker when live
+        _stream_name: StreamName,
+        symbol_name: SymbolName,
+        quantity: Volume,
+        callback_id: u64
+    ) -> DataServerResponse {
+        let margin = get_intraday_margin(&symbol_name).unwrap_or_else(|| dec!(0.0));
+        let required_margin = margin * Decimal::from(quantity.abs());
+
         DataServerResponse::MarginRequired {
             callback_id,
             symbol_name,
-            price: quantity * dec!(150.0),
+            price: required_margin,
+        }
+    }
+
+    async fn overnight_margin_required_response(
+        &self,
+        _mode: StrategyMode, //todo we should check with broker when live
+        _stream_name: StreamName,
+        symbol_name: SymbolName,
+        quantity: Volume,
+        callback_id: u64
+    ) -> DataServerResponse {
+        let margin = get_overnight_margin(&symbol_name).unwrap_or_else(|| dec!(0.0));
+        let required_margin = margin * Decimal::from(quantity.abs());
+
+        DataServerResponse::MarginRequired {
+            callback_id,
+            symbol_name,
+            price: required_margin,
         }
     }
 

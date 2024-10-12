@@ -31,6 +31,11 @@ impl BrokerApiResponse for BitgetClient {
     }
 
     #[allow(unused)]
+    async fn overnight_margin_required_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+        todo!()
+    }
+
+    #[allow(unused)]
     async fn accounts_response(&self, mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         todo!()
     }
