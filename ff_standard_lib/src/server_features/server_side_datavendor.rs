@@ -5,6 +5,7 @@ use crate::server_features::rithmic_api::api_client::{get_rithmic_client};
 use crate::server_features::StreamName;
 use crate::server_features::test_api::api_client::TEST_CLIENT;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
+use crate::server_features::bitget_api::api_client::{BITGET_CLIENT};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
@@ -121,7 +122,12 @@ impl VendorApiResponse for DataVendor {
                     return client.symbols_response(mode, stream_name, market_type, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, callback_id).await
+            DataVendor::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, callback_id).await,
+            DataVendor::BitGet => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.symbols_response(mode, stream_name, market_type, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -145,7 +151,12 @@ impl VendorApiResponse for DataVendor {
                     return client.resolutions_response(mode, stream_name, market_type, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.resolutions_response(mode, stream_name, market_type, callback_id).await
+            DataVendor::Test => return TEST_CLIENT.resolutions_response(mode, stream_name, market_type, callback_id).await,
+            DataVendor::BitGet => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.resolutions_response(mode, stream_name, market_type, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -164,7 +175,12 @@ impl VendorApiResponse for DataVendor {
                     return client.markets_response(mode, stream_name, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.markets_response(mode, stream_name, callback_id).await
+            DataVendor::Test => return TEST_CLIENT.markets_response(mode, stream_name, callback_id).await,
+            DataVendor::BitGet => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.markets_response(mode, stream_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -185,7 +201,12 @@ impl VendorApiResponse for DataVendor {
                     return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await
+            DataVendor::Test => return TEST_CLIENT.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await,
+            DataVendor::BitGet => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -205,7 +226,12 @@ impl VendorApiResponse for DataVendor {
                     return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.tick_size_response(mode, stream_name, symbol_name, callback_id).await
+            DataVendor::Test => return TEST_CLIENT.tick_size_response(mode, stream_name, symbol_name, callback_id).await,
+            DataVendor::BitGet => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -225,7 +251,12 @@ impl VendorApiResponse for DataVendor {
                     return client.data_feed_subscribe(stream_name, subscription, sender).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription, sender).await
+            DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription, sender).await,
+            DataVendor::BitGet => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.data_feed_subscribe(stream_name, subscription, sender).await;
+                }
+            }
         }
         DataServerResponse::SubscribeResponse{ success: false, subscription, reason: Some(format!("Unable to find api client instance for: {}", self))}
     }
@@ -245,7 +276,12 @@ impl VendorApiResponse for DataVendor {
                     return client.data_feed_unsubscribe(mode, stream_name, subscription).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(mode, stream_name, subscription).await
+            DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(mode, stream_name, subscription).await,
+            DataVendor::BitGet => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.data_feed_unsubscribe(mode, stream_name, subscription).await;
+                }
+            }
         }
         DataServerResponse::UnSubscribeResponse{ success: false, subscription, reason: Some(format!("Unable to find api client instance for: {}", self))}
     }
@@ -264,7 +300,12 @@ impl VendorApiResponse for DataVendor {
                     return client.base_data_types_response(mode, stream_name, callback_id).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.base_data_types_response(mode, stream_name, callback_id).await
+            DataVendor::Test => return TEST_CLIENT.base_data_types_response(mode, stream_name, callback_id).await,
+            DataVendor::BitGet => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.base_data_types_response(mode, stream_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", self))}
     }
@@ -279,7 +320,12 @@ impl VendorApiResponse for DataVendor {
                 client.logout_command_vendors(stream_name).await
             }
         },
-            DataVendor::Test => TEST_CLIENT.logout_command_vendors(stream_name).await
+            DataVendor::Test => TEST_CLIENT.logout_command_vendors(stream_name).await,
+            DataVendor::BitGet => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    client.logout_command_vendors(stream_name).await;
+                }
+            }
         }
     }
 }
