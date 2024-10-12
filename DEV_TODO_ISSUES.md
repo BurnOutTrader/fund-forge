@@ -1,10 +1,8 @@
-## Put buffer on server side
-- Consider moving buffer to server side to simplify engine logic
-
 ## Subscription handling
-Need a new function for warming up new live subscriptions.
-- Live subscription in symbol subscription handler could be simplified by just allowing the data server to determine the correct primary resolution.
-- Live history requests will require the server to manage updating from the last serialized data point to fill forward until Utc::now().
+- Live subsriptions will be done by
+1. Starting the warm up while also buffering incoming new data
+   - this will require a check to see if the individual subscription is warmed up
+   - new data is fed from buffer into consolidators etc
 
 ## Build Tests
 - Test live subscription warm up
