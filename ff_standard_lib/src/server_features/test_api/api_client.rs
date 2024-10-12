@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use tokio::sync::mpsc::Sender;
 use std::sync::Arc;
 use chrono::{NaiveDate, TimeZone, Utc};
 use std::path::PathBuf;
@@ -14,7 +13,6 @@ use crate::server_features::StreamName;
 use crate::helpers::converters::{fund_forge_formatted_symbol_name, load_as_bytes};
 use crate::helpers::decimal_calculators::round_to_decimals;
 use crate::helpers::get_data_folder;
-use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
 use crate::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -26,6 +24,8 @@ use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::new_types::Volume;
 use lazy_static::lazy_static;
 use rust_decimal_macros::dec;
+use tokio::sync::broadcast;
+use crate::server_features::stream_tasks::{subscribe_stream, unsubscribe_stream};
 use crate::standardized_types::resolution::Resolution;
 
 lazy_static! {
@@ -33,7 +33,7 @@ lazy_static! {
 }
 
 pub struct TestApiClient {
-    data_feed_broadcasters: Arc<DashMap<DataSubscription, Arc<StaticInternalBroadcaster<BaseDataEnum>>>>
+    data_feed_broadcasters: Arc<DashMap<DataSubscription, broadcast::Sender<BaseDataEnum>>>
 }
 
 impl TestApiClient {
@@ -194,24 +194,30 @@ impl VendorApiResponse for TestApiClient {
         }
     }
 
-    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription, sender: Sender<BaseDataEnum>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         let available_subscription_1 = DataSubscription::new(SymbolName::from("AUD-CAD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
         let available_subscription_2 = DataSubscription::new(SymbolName::from("EUR-USD"), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
+
         if subscription != available_subscription_1 && subscription != available_subscription_2 {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
         }
+
         if !self.data_feed_broadcasters.contains_key(&subscription) {
-            let broadcaster = Arc::new(StaticInternalBroadcaster::new());
-            broadcaster.subscribe(stream_name.to_string(), sender);
-            self.data_feed_broadcasters.insert(subscription.clone(), broadcaster);
+            let (sender, receiver) = broadcast::channel(100);
+            // We can use the subscribe stream function to pass the new receiver to our stream handler task for the stream_name.
+            subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+            self.data_feed_broadcasters.insert(subscription.clone(), sender);
             println!("Subscribing: {}", subscription);
         } else {
-            // If we already have a running task, we dont need a new one, we just subscribe to the broadcaster
+            // If we already have a running task, we don't need a new one, we just subscribe to the broadcaster
             if let Some(broadcaster) = self.data_feed_broadcasters.get(&subscription) {
-                broadcaster.value().subscribe(stream_name.to_string(), sender);
+                let receiver = broadcaster.value().subscribe();
+                // We can use the subscribe stream function to pass the new receiver to our stream handler task for the stream_name.
+                subscribe_stream(&stream_name, subscription.clone(), receiver).await;
             }
             return DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
         }
+
         println!("data_feed_subscribe Starting loop");
         let subscription_clone = subscription.clone();
         let subscription_clone_2 = subscription.clone();
@@ -235,9 +241,12 @@ impl VendorApiResponse for TestApiClient {
                     last_time = base_data.time_closed_utc();
                     match base_data {
                         BaseDataEnum::Quote(ref mut quote) => {
-                            if broadcaster.has_subscribers() {
+                            if broadcaster.receiver_count() > 0 {
                                 quote.time = Utc::now().to_string();
-                                broadcaster.broadcast(base_data).await;
+                                match broadcaster.send(base_data) {
+                                    Ok(_) => {}
+                                    Err(_) => {}
+                                }
                                 sleep(Duration::from_millis(5)).await;
                             } else {
                                 println!("No subscribers");
@@ -254,11 +263,22 @@ impl VendorApiResponse for TestApiClient {
     }
 
     async fn data_feed_unsubscribe(&self,  _mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+        let mut empty_broadcaster = false;
+        let mut success = false;
+        unsubscribe_stream(&stream_name, &subscription).await;
         if let Some(broadcaster) = self.data_feed_broadcasters.get(&subscription) {
-            broadcaster.unsubscribe(&stream_name.to_string());
-            return DataServerResponse::UnSubscribeResponse{ success: true, subscription, reason: None}
+            if broadcaster.receiver_count() == 0 {
+                empty_broadcaster = true;
+            }
+            success = true
         }
-        DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("There is no active subscription for: {}", subscription))}
+        if empty_broadcaster {
+            self.data_feed_broadcasters.remove(&subscription);
+        }
+        match success {
+            true =>  DataServerResponse::UnSubscribeResponse{ success: true, subscription, reason: None},
+            false => DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("There is no active subscription for: {}", subscription))}
+        }
     }
 
     async fn base_data_types_response(&self,  _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {

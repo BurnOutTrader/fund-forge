@@ -1,12 +1,10 @@
 use async_trait::async_trait;
-use tokio::sync::mpsc::{Sender};
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::server_features::rithmic_api::api_client::{get_rithmic_client};
 use crate::server_features::StreamName;
 use crate::server_features::test_api::api_client::TEST_CLIENT;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::bitget_api::api_client::{BITGET_CLIENT};
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
 
@@ -73,8 +71,7 @@ pub trait VendorApiResponse: Sync + Send {
     async fn data_feed_subscribe(
         &self,
         stream_name: StreamName,
-        subscription: DataSubscription,
-        sender: Sender<BaseDataEnum>
+        subscription: DataSubscription
     ) -> DataServerResponse;
 
     /// return `DataServerResponse::UnSubscribeResponse` or `DataServerResponse::Error(FundForgeError)`
@@ -242,19 +239,18 @@ impl VendorApiResponse for DataVendor {
     async fn data_feed_subscribe(
         &self,
         stream_name: StreamName,
-        subscription: DataSubscription,
-        sender: Sender<BaseDataEnum>
+        subscription: DataSubscription
     ) -> DataServerResponse {
         match self {
             DataVendor::Rithmic(system) => {
                 if let Some(client) = get_rithmic_client(system) {
-                    return client.data_feed_subscribe(stream_name, subscription, sender).await
+                    return client.data_feed_subscribe(stream_name, subscription).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription, sender).await,
+            DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
-                    return client.data_feed_subscribe(stream_name, subscription, sender).await;
+                    return client.data_feed_subscribe(stream_name, subscription).await;
                 }
             }
         }

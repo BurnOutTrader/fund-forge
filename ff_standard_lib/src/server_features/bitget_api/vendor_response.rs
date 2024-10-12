@@ -1,10 +1,8 @@
 use async_trait::async_trait;
-use tokio::sync::mpsc::Sender;
 use crate::messages::data_server_messaging::DataServerResponse;
 use crate::server_features::bitget_api::api_client::BitgetClient;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::server_features::StreamName;
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
 
@@ -31,7 +29,7 @@ impl VendorApiResponse for BitgetClient {
         todo!()
     }
     #[allow(unused)]
-    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription, sender: Sender<BaseDataEnum>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         todo!()
     }
     #[allow(unused)]

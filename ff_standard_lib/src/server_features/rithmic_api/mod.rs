@@ -5,3 +5,4 @@ pub mod rithmic_specific;
 pub mod products;
 pub mod handle_pnl_plant;
 pub mod handle_history_plant;
+pub mod handle_repo_plant;

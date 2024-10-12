@@ -16,26 +16,25 @@ use ff_rithmic_api::systems::RithmicSystem;
 use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
 use rust_decimal_macros::dec;
-use tokio::sync::mpsc::Sender;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::server_features::StreamName;
 use crate::helpers::get_data_folder;
-use crate::communicators::internal_broadcaster::StaticInternalBroadcaster;
 use crate::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use tokio::sync::oneshot;
+use tokio::sync::{broadcast, oneshot};
 use crate::helpers::converters::fund_forge_formatted_symbol_name;
 use crate::server_features::rithmic_api::handle_history_plant::handle_responses_from_history_plant;
 use crate::server_features::rithmic_api::handle_order_plant::handle_responses_from_order_plant;
 use crate::server_features::rithmic_api::handle_pnl_plant::handle_responses_from_pnl_plant;
 use crate::server_features::rithmic_api::handle_tick_plant::handle_responses_from_ticker_plant;
+use crate::server_features::stream_tasks::{subscribe_stream, unsubscribe_stream};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::new_types::Volume;
 use crate::standardized_types::orders::{Order, OrderId};
@@ -77,9 +76,9 @@ pub struct RithmicClient {
     pub products: DashMap<MarketType, Vec<Symbol>>,
 
     //subscribers
-    pub tick_feed_broadcasters: DashMap<SymbolName, StaticInternalBroadcaster<BaseDataEnum>>,
-    pub quote_feed_broadcasters: DashMap<SymbolName, StaticInternalBroadcaster<BaseDataEnum>>,
-    pub candle_feed_broadcasters: DashMap<SymbolName, StaticInternalBroadcaster<BaseDataEnum>>,
+    pub tick_feed_broadcasters: DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>,
+    pub quote_feed_broadcasters: DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>,
+    pub candle_feed_broadcasters: DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>,
 
     pub bid_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
@@ -334,15 +333,6 @@ impl BrokerApiResponse for RithmicClient {
     async fn logout_command(&self, stream_name: StreamName) {
         //todo handle dynamically from server using stream name to remove subscriptions and callbacks
         self.callbacks.remove(&stream_name);
-        for broadcaster in self.tick_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string());
-        }
-        for broadcaster in self.quote_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string());
-        }
-        for broadcaster in self.candle_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string());
-        }
     }
 }
 #[allow(dead_code)]
@@ -432,7 +422,7 @@ impl VendorApiResponse for RithmicClient {
         }
     }
 
-    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription, sender: Sender<BaseDataEnum>) -> DataServerResponse {
+    async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         let exchange = match subscription.market_type {
             MarketType::Futures(exchange) => {
                 exchange.to_string()
@@ -465,33 +455,37 @@ impl VendorApiResponse for RithmicClient {
         //todo have a unique function per base data type.
         match subscription.base_data_type {
             BaseDataType::Ticks => {
-                let broadcaster = self.tick_feed_broadcasters
-                    .entry(subscription.symbol.name.clone())
-                    .or_insert_with(|| {
-                        is_subscribed = false;
-                        StaticInternalBroadcaster::new()
-                    });
-                broadcaster.value().subscribe(stream_name.to_string(), sender);
+                if let Some(broadcaster) = self.tick_feed_broadcasters.get(&subscription.symbol.name) {
+                    let receiver = broadcaster.value().subscribe();
+                    subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+                    is_subscribed = false;
+                } else {
+                    let (sender, receiver) = broadcast::channel(500);
+                    self.tick_feed_broadcasters.insert(subscription.symbol.name.clone(), sender);
+                    subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+                }
             }
             BaseDataType::Quotes => {
-                let broadcaster = self.quote_feed_broadcasters
-                    .entry(subscription.symbol.name.clone())
-                    .or_insert_with(|| {
-                        self.ask_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
-                        self.bid_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
-                        is_subscribed = false;
-                        StaticInternalBroadcaster::new()
-                    });
-                broadcaster.value().subscribe(stream_name.to_string(), sender);
+                if let Some(broadcaster) = self.quote_feed_broadcasters.get(&subscription.symbol.name) {
+                    let receiver = broadcaster.value().subscribe();
+                    subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+                    is_subscribed = false;
+                } else {
+                    let (sender, receiver) = broadcast::channel(500);
+                    self.quote_feed_broadcasters.insert(subscription.symbol.name.clone(), sender);
+                    subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+                }
             }
             BaseDataType::Candles => {
-                let broadcaster = self.candle_feed_broadcasters
-                    .entry(subscription.symbol.name.clone())
-                    .or_insert_with(|| {
-                        is_subscribed = false;
-                        StaticInternalBroadcaster::new()
-                    });
-                broadcaster.value().subscribe(stream_name.to_string(), sender);
+                if let Some(broadcaster) = self.candle_feed_broadcasters.get(&subscription.symbol.name) {
+                    let receiver = broadcaster.value().subscribe();
+                    subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+                    is_subscribed = false;
+                } else {
+                    let (sender, receiver) = broadcast::channel(500);
+                    self.candle_feed_broadcasters.insert(subscription.symbol.name.clone(), sender);
+                    subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+                }
             }
             _ => todo!("Handle gracefully by returning err")
         }
@@ -539,6 +533,8 @@ impl VendorApiResponse for RithmicClient {
             },
         };
 
+        unsubscribe_stream(&stream_name, &subscription).await;
+
         let (bits, broadcaster_map) = match subscription.base_data_type {
             BaseDataType::Ticks => (1, &self.tick_feed_broadcasters),
             BaseDataType::Quotes => (2, &self.quote_feed_broadcasters),
@@ -554,8 +550,7 @@ impl VendorApiResponse for RithmicClient {
         let mut should_disconnect = false;
 
         if let Some(broadcaster) = broadcaster_map.get_mut(&symbol) {
-            broadcaster.unsubscribe(&stream_name.to_string());
-            should_disconnect = !broadcaster.has_subscribers();
+            should_disconnect = broadcaster.receiver_count() == 0;
         }
 
         if should_disconnect {
@@ -613,14 +608,5 @@ impl VendorApiResponse for RithmicClient {
 
     async fn logout_command_vendors(&self, stream_name: StreamName) {
         self.callbacks.remove(&stream_name);
-        for broadcaster in self.tick_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string());
-        }
-        for broadcaster in self.quote_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string());
-        }
-        for broadcaster in self.candle_feed_broadcasters.iter() {
-            broadcaster.unsubscribe(&stream_name.to_string());
-        }
     }
 }

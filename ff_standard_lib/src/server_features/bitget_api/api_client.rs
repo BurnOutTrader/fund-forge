@@ -51,7 +51,6 @@ impl InstType {
     }
 }
 
-
 #[allow(unused)]
 pub struct BitgetClient {
     credentials: BitGetCredentials,

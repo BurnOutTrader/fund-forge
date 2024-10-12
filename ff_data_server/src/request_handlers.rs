@@ -7,13 +7,11 @@ use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
-use dashmap::DashMap;
-use structopt::lazy_static::lazy_static;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::{Receiver};
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
@@ -47,10 +45,6 @@ pub async fn base_data_response(
         None => DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(format!("No such file: {:?}", file))},
         Some(payload) => DataServerResponse::HistoricalBaseData{callback_id, payload}
     }
-}
-
-lazy_static! {
-    pub static ref STREAM_CALLBACK_SENDERS: DashMap<u16 , Sender<BaseDataEnum>> = DashMap::new();
 }
 
 pub async fn manage_async_requests(
@@ -210,15 +204,8 @@ pub async fn manage_async_requests(
                             return
                         }
                         println!("{:?}", request);
-                        let stream_sender = match STREAM_CALLBACK_SENDERS.get(&stream_name) {
-                            None => {
-                                eprintln!("No Stream Sender found for: {}", stream_name);
-                                return;
-                            }
-                            Some(sender) => sender.value().clone()
-                        };
                         handle_callback(
-                            || stream_listener::stream_response(stream_name, request, stream_sender),
+                            || stream_listener::stream_response(stream_name, request),
                             sender.clone()).await
                     },
 
@@ -243,7 +230,6 @@ pub async fn manage_async_requests(
             });
         }
         println!("Shutting Down Async ReadHalf");
-        stream_listener::shutdown_stream(stream_name.clone()).await;
     });
 }
 

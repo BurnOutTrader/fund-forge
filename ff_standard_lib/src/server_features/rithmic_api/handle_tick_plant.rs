@@ -374,7 +374,10 @@ async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
     let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
     let tick = Tick::new(symbol, price, Utc::now().to_string(), volume, side);
     if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
-        broadcaster.value().broadcast(BaseDataEnum::Tick(tick)).await;
+        match broadcaster.value().send(BaseDataEnum::Tick(tick)) {
+            Ok(_) => {}
+            Err(_) => {}
+        }
     }
 }
 
@@ -448,7 +451,10 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
                                 time: Utc::now().to_string(),
                             }
                         );
-                        broadcaster.broadcast(data).await;
+                        match broadcaster.value().send(data) {
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
                     }
                 }
             }
