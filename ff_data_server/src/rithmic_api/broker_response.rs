@@ -50,7 +50,7 @@ impl BrokerApiResponse for RithmicClient {
         let symbol_name = fund_forge_formatted_symbol_name(&symbol_name);
         let (pnl_currency, value_per_tick, tick_size, decimal_accuracy) = match symbol_name.as_str() {
             "MNQ" => (Currency::USD, dec!(2.0), dec!(0.25), 2), // MNQ in USD with $2 per tick at 0.25 tick size and decimal accuracy of 2
-            _ => todo!()       // Default values
+            _ => return DataServerResponse::Error { callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{} not found with: {}", symbol_name, self.brokerage))}
         };
 
         let symbol_info = SymbolInfo {
