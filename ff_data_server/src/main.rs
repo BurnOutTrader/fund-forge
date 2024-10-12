@@ -179,21 +179,6 @@ async fn main() -> io::Result<()> {
     // Perform logout
     logout_apis().await;
 
-
-    println!("Logout complete. Shutting down servers...");
-
-    // Signal the server threads to shut down
-    // You'll need to implement a shutdown mechanism in your server loops
-    // This could be done using a shared atomic bool or a channel
-
-    // Wait for server threads to finish
-    if let Err(e) = async_handle.join() {
-        eprintln!("Error joining async server thread: {:?}", e);
-    }
-    if let Err(e) = stream_handle.join() {
-        eprintln!("Error joining stream server thread: {:?}", e);
-    }
-
     println!("Shutdown complete");
     Ok(())
 }
