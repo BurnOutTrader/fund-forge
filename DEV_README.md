@@ -187,7 +187,47 @@ If you sent a `StrategyRequest::CallBack`, then you just wait until the response
 ## Indicators
 See [Indicators readme](ff_standard_lib/src/strategies/indicators/INDICATORS_README.md)
 
+## Subscribing to Streams
+We use a broadcaster to manage streams.
+How you manage streams inside your api object is up to you, but the data will be received by the server through a `tokio::sync::broadcast::Receiver<BaseDataEnum>`.
+All the logic is handled for you, you just need to call the subscribe_stream or unsubscribe_stream functions from inside your api logic and pass in the correct
 
+Our api object will hold some map of `tokio::sync::broadcast::Sender<BaseDataEnum>`.
+
+for example we might have: 
+```rust
+struct ClientExample {
+  streams: DashMap<DataSubscription, tokio::sync::broadcast::Sender<BaseDataEnum> >
+}
+```
+
+We need to create a broadcast receiver.
+If we already have an active broadcaster for an existing stream we can just subscribe the new broadcaster to the new stream, 
+
+```rust
+fn example(client: ClientExample, subscription: DataSubscription) {
+    // stream name is the port number of the incoming request, it is not related to your stream, it will be passed to your client in your `impl VendorApiResponse`
+    // subscription will also be passed to you.
+    // you will need to create a receiver by calling your clients broadcaster object 
+    let receiver = match client.streams.get(&subscription) {
+      Some(stream) => {
+        let receiver = broadcaster.value().subscribe();
+        receiver
+      }
+      None => {
+        // you will have to handle how you intialize new streams with your client. you just need to get data from the api and convert it to base data enum
+        // you need to create a new broadcaster for the subscription
+        // you need to broadcast the base data enum to subscribers
+      }
+    };
+    
+    // Once we have a receiver we can send it to the handler by using this helper function and the data server will do the rest
+    pub async fn subscribe_stream(stream_name: &StreamName, subscription: DataSubscription, receiver: broadcast::Receiver<BaseDataEnum>);
+
+    // When you receive an unsubscribe request, use this function to stop the data server from trying to check the receiver before you drop it.
+    pub async fn unsubscribe_stream(stream_name: &StreamName, subscription: &DataSubscription);
+}
+```
 
 
 
