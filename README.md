@@ -22,18 +22,53 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - [Licence](LICENCE.md)
 
 ### Initial Setup
-First install [rust tool chain](https://www.rust-lang.org/tools/install)
-
-**You can not run the test strategy from the main fund forge directory**
-1. get the testing data (instructions below)
-2. cargo buid in the fund forge directory
-3. navigate to [ff_data_server](./ff_data_server) directory and `cargo run`
-4. navigate to [example_test_strategy](./example_test_strategy) directory and `cargo run`
+1. Install [rust](https://www.rust-lang.org/tools/install).
+2. Download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKF125tuEG16grLM_Q?e=Yukrv6) or 
+for more free testing data [see](#demonstration-testing-data)
+3. get the testing data (instructions below)
+4. cargo buid in the fund forge directory
+5. navigate to [ff_data_server](./ff_data_server) directory and `cargo run`
+6. navigate to [example_test_strategy](./example_test_strategy) directory and `cargo run`
 
 *When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](example_test_strategy/README.md)
 
 *When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](example_test_strategy/README.md)
 
+## Demonstration Testing Data
+You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKF125tuEG16grLM_Q?e=Yukrv6)
+Password "fundforge"
+The Forex folder should be put into the following directory "ff_data_server/data/Test".
+
+*Note that between updates old data may become incompatible, this will only be during initial development, but be sure to keep original backups of any data if you parse your own data into the engine.
+
+The parsed data includes Quote data for AUD-CAD and EUR-CAD from start of 06/2024 to end of 08/2024.
+From this data your strategy will consolidate Candles or QuoteBars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
+
+![img.png](misc/img.png)
+
+### For more testing and development data
+You can download some free testing data [here](https://www.histdata.com/download-free-forex-data/?/ascii/tick-data-quotes)
+
+Tick data from histdata.com will actually be parsed into the engine as `BaseDataEnum::Quotes(Quote)`
+
+Since the tick data is actually best bid and ask data.
+
+There is a crude test data parser [here](https://github.com/BurnOutTrader/fund-forge/tree/main/test_data_parser)
+
+You will need to manually download the files, then put all the .csv files into 1 folder and change the variables such as input/output folders and Symbol of the data.
+
+Change the following to suit the symbol and your directory.
+
+The parsing logic expects the original files to be in a director with the same symbol name eg "/Users/{username}/Downloads/AUD-CAD"
+```rust
+fn main() {
+    let your_folder_path: String = "/Downloads".to_string(); //it will be assumed there is a folder named "AUD-CAD" here
+    let symbol_name: String = "AUD-CAD".to_string();
+}
+```
+After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
+
+## Overview
 The engine is designed to provide simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators,
 or managing orders, brokers and data streams. 
 
@@ -249,40 +284,6 @@ I intend to build a full glossary and video tutorial series when live trading fe
 I will walk through the entire code base during the video tutorial to assist people creating new Brokerage or DataVendor implementations.
 
 I have only tested on Mac and Linux, but there should not be any problems with Windows.
-
-## Demonstration Testing Data
-You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKE5Vp170W2GI9ITKw?e=FKn7Oc)
-Password "fundforge"
-The Forex folder should be put into the following directory "ff_data_server/data/Test".
-
-*Note that between updates old data may become incompatible, this will only be during initial development, but be sure to keep original backups of any data if you parse your own data into the engine.
-
-The parsed data includes Quote data for AUD-CAD and EUR-CAD from start of 06/2024 to end of 08/2024.
-From this data your strategy will consolidate Candles or QuoteBars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
-
-![img.png](misc/img.png)
-
-### For more testing and development data
-You can download some free testing data [here](https://www.histdata.com/download-free-forex-data/?/ascii/tick-data-quotes)
-
-Tick data from histdata.com will actually be parsed into the engine as `BaseDataEnum::Quotes(Quote)`
-
-Since the tick data is actually best bid and ask data.
-
-There is a crude test data parser [here](https://github.com/BurnOutTrader/fund-forge/tree/main/test_data_parser)
-
-You will need to manually download the files, then put all the .csv files into 1 folder and change the variables such as input/output folders and Symbol of the data.
-
-Change the following to suit the symbol and your directory.
-
-The parsing logic expects the original files to be in a director with the same symbol name eg "/Users/{username}/Downloads/AUD-CAD"
-```rust
-fn main() {
-    let your_folder_path: String = "/Downloads".to_string(); //it will be assumed there is a folder named "AUD-CAD" here
-    let symbol_name: String = "AUD-CAD".to_string();
-}
-```
-After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
 
 ## Backtest Accuracy
 Market orders will attempt to use the order book to fill, assuming we get to soak up 100% volume per level, if the book only has 1 level then it will just fill according to order side assuming that we only have best bid or best offer.
