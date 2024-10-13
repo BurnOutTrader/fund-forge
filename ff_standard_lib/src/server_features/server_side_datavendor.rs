@@ -112,15 +112,19 @@ pub trait VendorApiResponse: Sync + Send {
     ///
     /// `is_24_hour: bool` would be `true` for crypto and forex.
     ///
+    /// `pub is_closed: bool` is true if the market is closed for the current `date_time: DateTime<Utc>` do not use Utc::now(), you need a fn to determine historical bool, or always return false for historical.
+    ///
     /// `pub open_utc: Option<String>` would always be `None` for crypto and `Some(time.to_utc().to_string())` for forex only on market open (New Zealand monday morning).
     ///
     /// `pub close_utc: Option<String>` would always be None for crypto and `None` for forex midweek and `Some(time.to_utc().to_string())` on close of US markets Friday or Saturday night, depending on original time zone `(Tz)`.
+    ///
     /// ```rust
     /// use chrono::{DateTime, Utc};
     ///
     /// pub struct SessionMarketHours {
     ///     pub has_close: bool,
     ///     pub is_24_hour: bool,
+    ///     pub is_closed: bool,
     ///     pub open_time_utc_string: Option<String>,
     ///     pub close_time_utc_string: Option<String>,
     /// }

@@ -49,6 +49,7 @@ pub struct CommissionInfo {
 pub struct SessionMarketHours {
     pub has_close: bool,
     pub is_24_hour: bool,
+    pub is_closed: bool,
     pub open_time_utc_string: Option<String>,
     pub close_time_utc_string: Option<String>,
 }
