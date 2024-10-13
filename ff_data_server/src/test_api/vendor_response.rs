@@ -102,7 +102,7 @@ impl VendorApiResponse for TestApiClient {
             let naive_dt_1 = NaiveDate::from_ymd_opt(2024, 6, 01).unwrap().and_hms_opt(0, 0, 0).unwrap();
             let utc_dt_1 = Utc.from_utc_datetime(&naive_dt_1);
 
-            let naive_dt_2 = NaiveDate::from_ymd_opt(2024, 8, 31).unwrap().and_hms_opt(0, 0, 0).unwrap();
+            let naive_dt_2 = NaiveDate::from_ymd_opt(2024, 6, 6).unwrap().and_hms_opt(0, 0, 0).unwrap();
             let utc_dt_2 = Utc.from_utc_datetime(&naive_dt_2);
 
             let mut last_time = utc_dt_1;
