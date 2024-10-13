@@ -68,13 +68,21 @@ impl BrokerApiResponse for RithmicClient {
         quantity: Volume,
         callback_id: u64
     ) -> DataServerResponse {
-        let margin = get_intraday_margin(&symbol_name).unwrap_or_else(|| dec!(0.0));
-        let required_margin = margin * Decimal::from(quantity.abs());
-
-        DataServerResponse::MarginRequired {
-            callback_id,
-            symbol_name,
-            price: required_margin,
+        match get_intraday_margin(&symbol_name) {
+            None => {
+                DataServerResponse::Error {
+                    callback_id,
+                    error: FundForgeError::ClientSideErrorDebug(format!("{} not found with: {}", symbol_name, self.brokerage)),
+                }
+            }
+            Some(margin) => {
+                let required_margin = margin * Decimal::from(quantity.abs());
+                DataServerResponse::MarginRequired {
+                    callback_id,
+                    symbol_name,
+                    price: required_margin,
+                }
+            }
         }
     }
 
@@ -86,13 +94,22 @@ impl BrokerApiResponse for RithmicClient {
         quantity: Volume,
         callback_id: u64
     ) -> DataServerResponse {
-        let margin = get_overnight_margin(&symbol_name).unwrap_or_else(|| dec!(0.0));
-        let required_margin = margin * Decimal::from(quantity.abs());
+        match get_overnight_margin(&symbol_name) {
+            None => {
+                DataServerResponse::Error {
+                    callback_id,
+                    error: FundForgeError::ClientSideErrorDebug(format!("{} not found with: {}", symbol_name, self.brokerage)),
+                }
+            }
+            Some(margin) => {
+                let required_margin = margin * Decimal::from(quantity.abs());
 
-        DataServerResponse::MarginRequired {
-            callback_id,
-            symbol_name,
-            price: required_margin,
+                DataServerResponse::MarginRequired {
+                    callback_id,
+                    symbol_name,
+                    price: required_margin,
+                }
+            }
         }
     }
 

@@ -106,7 +106,14 @@ impl BrokerApiResponse for TestApiClient {
         }
     }
 
-    async fn overnight_margin_required_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+    async fn overnight_margin_required_response(
+        &self,
+        mode: StrategyMode,
+        stream_name: StreamName,
+        symbol_name: SymbolName,
+        quantity: Volume,
+        callback_id: u64
+    ) -> DataServerResponse {
         self.intraday_margin_required_response( mode, stream_name, symbol_name, quantity, callback_id).await
     }
 
@@ -117,7 +124,6 @@ impl BrokerApiResponse for TestApiClient {
     async fn logout_command(&self, stream_name: StreamName) {
         self.logout_command_vendors(stream_name).await;
     }
-
 
     async fn commission_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, _symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         DataServerResponse::CommissionInfo {
