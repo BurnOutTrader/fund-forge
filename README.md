@@ -669,7 +669,7 @@ The final objective is to:
 1. Create strategies in their own private repos by importing ff_standard_lib from crates.io.
 This will enable: 
 - Keeping secret keys in our private repo for easy login etc
-- Building strategies in small private repose.
+- Building strategies in small private repo's.
 - Updating strategies on our remote machines using git pull/update
 
 2. Create ff_data_servers in their own private repos by importing ff_standard_lib from crates.io.
