@@ -162,6 +162,9 @@ async fn main() {
         //this allows us full control over how the strategy buffers data and how it processes data, in live trading.
         // In live trading we can set this to None to skip buffering and send the data directly to the strategy or we can use a buffer to keep live consistency with backtesting.
         Some(Duration::from_millis(100)),
+        
+        //Gui enabled, this needs to be false until strategy registry is overhauled.
+        false,
     ).await;
 
     // We start receiving data in our on data fn
