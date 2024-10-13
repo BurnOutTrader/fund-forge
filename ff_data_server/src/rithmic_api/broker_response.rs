@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
-use ff_standard_lib::strategies::ledgers::AccountId;
+use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::products::{get_available_symbol_names, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
@@ -44,6 +45,29 @@ impl BrokerApiResponse for RithmicClient {
                     }
                 }
             }
+        }
+    }
+
+    async fn paper_account_init(&self, account_id: AccountId, callback_id: u64) -> DataServerResponse {
+        let account_info = AccountInfo {
+            account_id,
+            brokerage: self.brokerage,
+            cash_value: dec!(0.0),
+            cash_available: dec!(0.0),
+            currency: Currency::USD,
+            cash_used: dec!(0.0),
+            positions: vec![],
+            is_hedging: false,
+            leverage: 0,
+            buy_limit: None,
+            sell_limit: None,
+            max_orders: None,
+            daily_max_loss: None,
+            daily_max_loss_reset_time: None,
+        };
+        DataServerResponse::PaperAccountInit {
+            callback_id,
+            account_info,
         }
     }
 

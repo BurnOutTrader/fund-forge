@@ -12,7 +12,6 @@ use crate::test_api::api_client::TEST_CLIENT;
 
 // Responses
 
-
 /// return `DataServerResponse::SessionMarketHours` or `DataServerResponse::Error(FundForgeError)`.
 pub async fn session_market_hours_response(mode: StrategyMode, data_vendor: DataVendor, symbol_name: SymbolName, date: String, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
     let time = match DateTime::<Utc>::from_str(&date) {

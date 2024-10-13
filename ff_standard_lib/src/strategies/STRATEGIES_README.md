@@ -167,6 +167,24 @@ async fn main() {
         false,
     ).await;
 
+   // We dont have to pass in accounts, but if you want to customise accounts you can do it like this.
+   // Any account you use in a backtest will be automatically created if you do not pass it in here.
+   let mut account_info = AccountSetup {
+      account_id: "123".to_string(),
+      brokerage: Brokerage::Test,
+      cash_value: dec!(100000),
+      currency: Currency::USD,
+      is_hedging: false,
+      buy_limit: None, //will be implemented but not currently relevant
+      sell_limit: None, //will be implemented but not currently relevant
+      max_orders: None, //will be implemented but not currently relevant
+      daily_max_loss: None, //will be implemented but not currently relevant
+      daily_max_reset_time: None, //will be implemented but not currently relevant
+      leverage: 0,
+   };
+   // pass in the account info to create an account for this product
+   strategy.add_account(account_info);
+
     // We start receiving data in our on data fn
     on_data_received(strategy, strategy_event_receiver).await;
 }

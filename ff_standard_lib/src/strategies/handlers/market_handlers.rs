@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
-use crate::strategies::ledgers::{AccountId, Currency, Ledger};
+use crate::strategies::ledgers::{AccountId, AccountInfo, Currency, Ledger};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
@@ -106,6 +106,11 @@ fn historical_base_data_updates(base_data_enum: BaseDataEnum, time: DateTime<Utc
     }
 }
 
+pub(crate) fn add_account(mode: StrategyMode, account_info: AccountInfo) {
+    let map = BACKTEST_LEDGERS.entry(account_info.brokerage).or_insert(DashMap::new());
+    map.insert(account_info.account_id.clone() ,Ledger::new(account_info, mode));
+}
+
 pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decimal, account_currency: Currency) -> Sender<MarketMessageEnum> {
     let (sender, receiver) = mpsc::channel(1000);
     let mut receiver = receiver;
@@ -155,7 +160,7 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                             panic!("Live orders do not get sent via market handler");
                         }
                         StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
-                            simulated_order_matching(mode, order_request, starting_balances, account_currency, time).await;
+                            simulated_order_matching(mode, starting_balances, account_currency, order_request, time).await;
                         }
                     }
                 }
@@ -215,9 +220,9 @@ fn update_base_data(base_data_enum: BaseDataEnum) {
 // need to rethink this.. do we have ledgers or just static properties linked to account id's and positions and orders linked to account ids
 pub async fn simulated_order_matching(
     mode: StrategyMode,
+    starting_balance: Decimal,
+    currency: Currency,
     order_request: OrderRequest,
-    starting_balances: Decimal,
-    account_currency: Currency,
     time: DateTime<Utc>
 ) {
     match order_request {
@@ -228,7 +233,12 @@ pub async fn simulated_order_matching(
                 BACKTEST_LEDGERS.insert(order.brokerage, broker_map);
             }
             if !BACKTEST_LEDGERS.get(&order.brokerage).unwrap().contains_key(&order.account_id) {
-                let ledger = Ledger::paper_account_init(mode, order.account_id.clone(), order.brokerage, starting_balances, account_currency);
+                let ledger = match order.brokerage.paper_account_init(mode, starting_balance, currency, order.account_id.clone()).await {
+                    Ok(ledger) => ledger,
+                    Err(e) => {
+                        panic!("Order Matching Engine: Error Initializing Account: {}", e);
+                    }
+                };
                 BACKTEST_LEDGERS.get(&order.brokerage).unwrap().insert(order.account_id.clone(), ledger);
             }
             BACKTEST_OPEN_ORDER_CACHE.insert(order.id.clone(), order);

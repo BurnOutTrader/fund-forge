@@ -1,6 +1,7 @@
 use std::fs::create_dir_all;
 use std::path::Path;
 use chrono::{DateTime, TimeZone, Utc};
+use chrono_tz::Tz;
 use crate::standardized_types::enums::{PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::SymbolName;
 use dashmap::DashMap;
@@ -59,6 +60,19 @@ impl Currency {
    To achieve this ledgers will need to be able to hold multiple sub position details or positions themselves generate 'trade' objects
  */
 
+pub struct AccountSetup {
+    pub account_id: AccountId,
+    pub brokerage: Brokerage,
+    pub cash_value: Price,
+    pub currency: Currency,
+    pub buy_limit: Option<Volume>,
+    pub sell_limit: Option<Volume>,
+    pub max_orders: Option<Volume>,
+    pub daily_max_loss: Option<Price>,
+    pub daily_max_loss_reset_hour: Option<u32>, //the hour of the day that the dail max loss resets
+    pub daily_max_loss_reset_time_zone: Tz,
+    leverage: u32
+}
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
 #[derive(Debug)]
 pub struct Ledger {
@@ -76,6 +90,8 @@ pub struct Ledger {
     pub open_pnl: DashMap<SymbolName, Price>,
     pub booked_pnl: Price,
     pub mode: StrategyMode,
+    pub leverage: u32,
+    //todo, add daily max loss, max order size etc to ledger
 }
 impl Ledger {
     pub fn new(account_info: AccountInfo, strategy_mode: StrategyMode) -> Self {
@@ -100,11 +116,35 @@ impl Ledger {
             open_pnl: DashMap::new(),
             booked_pnl: dec!(0.0),
             mode: strategy_mode,
+            leverage: account_info.leverage
+        };
+        ledger
+    }
+
+    pub fn user_initiated(account_setup: AccountSetup, strategy_mode: StrategyMode) -> Self {
+        //todo, add daily max loss, max order size etc to ledger
+        let ledger = Self {
+            account_id: account_setup.account_id,
+            brokerage: account_setup.brokerage,
+            cash_value: account_setup.cash_value,
+            cash_available: account_setup.cash_value,
+            currency: account_setup.currency,
+            cash_used: dec!(0.0),
+            positions: DashMap::new(),
+            margin_used: DashMap::new(),
+            positions_closed: DashMap::new(),
+            positions_counter: DashMap::new(),
+            symbol_info: DashMap::new(),
+            open_pnl: DashMap::new(),
+            booked_pnl: dec!(0.0),
+            mode: strategy_mode,
+            leverage: account_setup.leverage
         };
         ledger
     }
 
     pub fn add_live_position(&self, mut position: Position) {
+        //todo, check ledger max order etc before placing orders
         if let Some((symbol_name, mut existing_position)) = self.positions.remove(&position.symbol_name) {
             existing_position.is_closed = true;
             self.positions_closed
@@ -337,6 +377,8 @@ impl Ledger {
 pub(crate) mod historical_ledgers {
     use chrono::{DateTime, Utc};
     use dashmap::DashMap;
+    use rust_decimal::Decimal;
+    use rust_decimal::prelude::FromPrimitive;
     use rust_decimal_macros::dec;
     use crate::standardized_types::broker_enum::Brokerage;
     use crate::strategies::ledgers::{AccountId, Currency, Ledger};
@@ -363,7 +405,7 @@ pub(crate) mod historical_ledgers {
             let margin = self.brokerage.intraday_margin_required(symbol_name.clone(), quantity).await?;
             let margin =match margin {
                 None => {
-                    quantity * market_price
+                    (quantity * market_price) / Decimal::from_u32(self.leverage).unwrap()
                 }
                 Some(margin) => margin
             };
@@ -382,6 +424,7 @@ pub(crate) mod historical_ledgers {
             brokerage: Brokerage,
             cash_value: Price,
             currency: Currency,
+            leverage: u32
         ) -> Self {
             let account = Self {
                 account_id,
@@ -389,6 +432,7 @@ pub(crate) mod historical_ledgers {
                 cash_value,
                 cash_available: cash_value,
                 currency,
+                leverage,
                 cash_used: dec!(0.0),
                 positions: DashMap::new(),
                 positions_closed: DashMap::new(),
@@ -460,6 +504,7 @@ pub(crate) mod historical_ledgers {
 
         /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
         /// todo Need to handle creating a new opposing position when
+        ///todo, check ledger max order etc before placing orders
         pub async fn update_or_create_paper_position(
             &mut self,
             symbol_name: &SymbolName,
@@ -632,6 +677,7 @@ pub struct AccountInfo {
     pub cash_used: Price,
     pub positions: Vec<Position>,
     pub is_hedging: bool,
+    pub leverage: u32,
     pub buy_limit: Option<Volume>,
     pub sell_limit: Option<Volume>,
     pub max_orders: Option<Volume>,

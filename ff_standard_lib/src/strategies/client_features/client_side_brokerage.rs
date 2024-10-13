@@ -1,15 +1,57 @@
 use chrono::{DateTime, Utc};
+use dashmap::DashMap;
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use tokio::sync::oneshot;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::standardized_types::broker_enum::Brokerage;
+use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
-use crate::strategies::ledgers::AccountId;
+use crate::strategies::ledgers::{AccountId, Currency, Ledger};
 
 impl Brokerage {
+    pub async fn paper_account_init(&self, mode: StrategyMode, starting_balance: Decimal, currency: Currency, account_id: AccountId) -> Result<Ledger, FundForgeError> {
+        let request = DataServerRequest::PaperAccountInit {
+            account_id,
+            callback_id: 0,
+            brokerage: self.clone(),
+        };
+        let (sender, receiver) = oneshot::channel();
+        let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
+        send_request(msg).await;
+        match receiver.await {
+            Ok(response) => {
+                match response {
+                    DataServerResponse::PaperAccountInit { account_info, .. } => {
+                         Ok(Ledger {
+                            account_id: account_info.account_id,
+                            brokerage: account_info.brokerage,
+                            cash_value: starting_balance,
+                            cash_available: starting_balance,
+                            currency,
+                            cash_used: dec!(0.0),
+                            positions: DashMap::new(),
+                            margin_used: DashMap::new(),
+                            positions_closed: DashMap::new(),
+                            positions_counter: DashMap::new(),
+                            symbol_info: DashMap::new(),
+                            open_pnl: DashMap::new(),
+                            booked_pnl: dec!(0.0),
+                            mode,
+                            leverage: account_info.leverage
+                        })
+                    },
+                    DataServerResponse::Error { error, .. } => Err(error),
+                    _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
+                }
+            },
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+        }
+    }
     pub async fn intraday_margin_required(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Option<Price>, FundForgeError> {
         let request = DataServerRequest::IntradayMarginRequired {
             callback_id: 0,

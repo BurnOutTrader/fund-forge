@@ -113,6 +113,7 @@ pub async fn handle_responses_from_order_plant(
                                                         cash_used: Default::default(),
                                                         positions: vec![],
                                                         is_hedging: false,
+                                                        leverage: 0,
                                                         buy_limit: None,
                                                         sell_limit: None,
                                                         max_orders: None,

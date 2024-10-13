@@ -7,7 +7,7 @@ use crate::strategies::indicators::indicator_enum::IndicatorEnum;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
-use crate::strategies::ledgers::{AccountId, Currency};
+use crate::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::base_data::history::{range_history_data};
 use crate::standardized_types::enums::{OrderSide, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -24,7 +24,7 @@ use tokio::sync::{mpsc, RwLock};
 use tokio::sync::mpsc::Sender;
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc};
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::strategies::handlers::market_handlers::{booked_pnl_live, booked_pnl_paper, export_trades, get_market_fill_price_estimate, get_market_price, in_drawdown_live, in_drawdown_paper, in_profit_live, in_profit_paper, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, pnl_live, pnl_paper, position_size_live, position_size_paper, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
+use crate::strategies::handlers::market_handlers::{add_account, booked_pnl_live, booked_pnl_paper, export_trades, get_market_fill_price_estimate, get_market_price, in_drawdown_live, in_drawdown_paper, in_profit_live, in_profit_paper, is_flat_live, is_flat_paper, is_long_live, is_long_paper, is_short_live, is_short_paper, market_handler, pnl_live, pnl_paper, position_size_live, position_size_paper, print_ledger, process_ledgers, MarketMessageEnum, BACKTEST_OPEN_ORDER_CACHE, LAST_PRICE, LIVE_ORDER_CACHE};
 use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, send_request, StrategyRequest};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
@@ -159,6 +159,10 @@ impl FundForgeStrategy {
             },
         }
         strategy
+    }
+
+    pub async fn add_account(&self, account_info: AccountInfo) {
+        add_account(self.mode.clone(), account_info);
     }
 
     pub async fn get_market_fill_price_estimate (
