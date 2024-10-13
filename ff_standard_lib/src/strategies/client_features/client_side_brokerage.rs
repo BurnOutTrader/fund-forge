@@ -10,8 +10,8 @@ use crate::strategies::client_features::server_connections::{send_request, Strat
 use crate::strategies::ledgers::AccountId;
 
 impl Brokerage {
-    pub async fn margin_required(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Price, FundForgeError> {
-        let request = DataServerRequest::MarginRequired {
+    pub async fn intraday_margin_required(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Price, FundForgeError> {
+        let request = DataServerRequest::IntradayMarginRequired {
             callback_id: 0,
             brokerage: self.clone(),
             symbol_name,
@@ -23,7 +23,7 @@ impl Brokerage {
         match receiver.await {
             Ok(response) => {
                 match response {
-                    DataServerResponse::MarginRequired { price, .. } => Ok(price),
+                    DataServerResponse::IntradayMarginRequired { price, .. } => Ok(price),
                     DataServerResponse::Error { error, .. } => Err(error),
                     _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
                 }

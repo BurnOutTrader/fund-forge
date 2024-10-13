@@ -100,7 +100,7 @@ impl BrokerApiResponse for TestApiClient {
         // You may want to factor in symbol-specific prices if available
         let margin_required = round_to_decimals(quantity * dec!(100.0), 2);
 
-        DataServerResponse::MarginRequired {
+        DataServerResponse::IntradayMarginRequired {
             callback_id,
             symbol_name,
             price: margin_required,  // Here price represents the margin required

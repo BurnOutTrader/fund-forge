@@ -103,7 +103,7 @@ pub async fn symbol_info_response(brokerage: Brokerage, mode: StrategyMode, stre
 /// We can return hard coded values for backtesting and live values for live or live paper
 /// return `DataServerResponse::MarginRequired` or `DataServerResponse::Error(FundForgeError)`
 /// server or client error depending on who caused this problem
-pub async fn itraday_margin_required_response(brokerage: Brokerage, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+pub async fn intraday_margin_required_response(brokerage: Brokerage, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
     match brokerage {
         Brokerage::Rithmic(system) => {
             if let Some(client) = RITHMIC_CLIENTS.get(&system) {
@@ -119,6 +119,7 @@ pub async fn itraday_margin_required_response(brokerage: Brokerage, mode: Strate
     }
     DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
 }
+
 
 pub async fn overnight_margin_required_response(brokerage: Brokerage, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
     match brokerage {

@@ -110,7 +110,13 @@ pub enum DataServerRequest {
     OrderRequest {
         request: OrderRequest
     },
-    MarginRequired {
+    IntradayMarginRequired {
+        callback_id: u64,
+        quantity: Volume,
+        brokerage: Brokerage,
+        symbol_name: SymbolName
+    },
+    OvernightMarginRequired {
         callback_id: u64,
         quantity: Volume,
         brokerage: Brokerage,
@@ -165,13 +171,14 @@ impl DataServerRequest {
             DataServerRequest::StreamRequest   { .. } => {}
             DataServerRequest::Register {  .. } => {}
             DataServerRequest::OrderRequest { .. } => {}
-            DataServerRequest::MarginRequired { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::IntradayMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Accounts { callback_id, .. } => {*callback_id = id}
             DataServerRequest::PrimarySubscriptionFor { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
             DataServerRequest::RegisterStreamer{..} => {}
             DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SessionMarketHours { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -265,7 +272,13 @@ DataServerResponse {
         info_vec: Vec<SymbolInfo>
     },
 
-    MarginRequired {
+    IntradayMarginRequired {
+        callback_id: u64,
+        symbol_name: SymbolName,
+        price: Price
+    },
+
+    OvernightMarginRequired {
         callback_id: u64,
         symbol_name: SymbolName,
         price: Price
@@ -327,7 +340,7 @@ impl DataServerResponse {
             DataServerResponse::ValuePerTick  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SymbolInfo  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SymbolInfoMany  { callback_id,.. } => Some(callback_id.clone()),
-            DataServerResponse::MarginRequired { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::IntradayMarginRequired { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::BaseDataTypes { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SubscribeResponse { .. } => None,
             DataServerResponse::UnSubscribeResponse { .. } => None,
@@ -338,6 +351,7 @@ impl DataServerResponse {
             DataServerResponse::RegistrationResponse(_) => None,
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SessionMarketHours { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
         }
     }
 }

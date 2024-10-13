@@ -77,7 +77,7 @@ impl BrokerApiResponse for RithmicClient {
             }
             Some(margin) => {
                 let required_margin = margin * Decimal::from(quantity.abs());
-                DataServerResponse::MarginRequired {
+                DataServerResponse::IntradayMarginRequired {
                     callback_id,
                     symbol_name,
                     price: required_margin,
@@ -104,7 +104,7 @@ impl BrokerApiResponse for RithmicClient {
             Some(margin) => {
                 let required_margin = margin * Decimal::from(quantity.abs());
 
-                DataServerResponse::MarginRequired {
+                DataServerResponse::IntradayMarginRequired {
                     callback_id,
                     symbol_name,
                     price: required_margin,
