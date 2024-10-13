@@ -19,6 +19,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - [Back Test Accuracy](ff_standard_lib/src/strategies/ACCURACY_README.md)
 - [Developing Engine](DEV_README.md)
 - [Current Development Tasks](DEV_TODO_ISSUES.md)
+- [The End Game](#the-end-game)
 - [Licence](LICENCE.md)
 
 ### Initial Setup
@@ -663,6 +664,19 @@ Create a new key
 openssl genpkey -algorithm RSA -out /path/to/your_directory/key.pem -pkeyopt rsa_keygen_bits:2048
 ```
 
+## The End Game
+The final objective is to:
+1. Create strategies in their own private repos by importing ff_standard_lib from crates.io.
+This will enable: 
+- Keeping secret keys in our private repo for easy login etc
+- Building strategies in small private repose.
+- Updating strategies on our remote machines using git pull/update
 
+2. Create ff_data_servers in their own private repos by importing ff_standard_lib from crates.io.
+- Keeping secret keys in our private repo for easy login etc
+- Updating servers on our remote machines using git pull/update
+- Have servers always online in the cloud so that they can regularly capture and serialize historical data.
 
-
+3. Connect to remote machines using a gui.
+We will be able to use a local Gui platform to remotely control our strategies and data servers. \
+We will be able to view charts, and manually control strategies, including sending drawing objects to strategies so that they can interact with us.
