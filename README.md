@@ -670,11 +670,11 @@ The final objective is to:
 This will enable: 
 - Keeping secret keys in our private repo for easy login etc
 - Building strategies in small private repo's.
-- Updating strategies on our remote machines using git pull/update
+- Updating strategies on our remote machines using git pull/update or docker.
 
 2. Create ff_data_servers in their own private repos by importing ff_standard_lib from crates.io.
 - Keeping secret keys in our private repo for easy login etc
-- Updating servers on our remote machines using git pull/update
+- Updating servers on our remote machines using git pull/update or docker.
 - Have servers always online in the cloud so that they can regularly capture and serialize historical data.
 
 3. Connect to remote machines using a gui.
