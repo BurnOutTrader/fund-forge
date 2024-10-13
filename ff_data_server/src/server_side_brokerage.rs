@@ -10,7 +10,24 @@ use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 
-/// Responses
+// Responses
+
+pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, symbol_name: SymbolName, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+    match brokerage {
+        Brokerage::Rithmic(system) => {
+            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                return client.value().commission_info_response(mode, stream_name, symbol_name, callback_id).await
+            }
+        },
+        Brokerage::Test => return TEST_CLIENT.commission_info_response(mode, stream_name, symbol_name, callback_id).await,
+        Brokerage::Bitget => {
+            if let Some(client) = BITGET_CLIENT.get() {
+                return client.commission_info_response(mode, stream_name, symbol_name, callback_id).await
+            }
+        }
+    }
+    DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
+}
     /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`.
     /// server or client error depending on who caused this problem
 pub async fn symbol_names_response(

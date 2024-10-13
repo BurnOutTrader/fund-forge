@@ -11,7 +11,7 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
-use crate::standardized_types::symbol_info::SymbolInfo;
+use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 
 /// An Api key String
 pub type ApiKey = String;
@@ -119,9 +119,16 @@ pub enum DataServerRequest {
         callback_id: u64,
         subscription: DataSubscription
     },
+    CommissionInfo{
+        callback_id: u64,
+        brokerage: Brokerage,
+        symbol_name: SymbolName
+    },
+
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage},
-    RegisterStreamer{port: u16, secs: u64, subsec: u32}
+    RegisterStreamer{port: u16, secs: u64, subsec: u32},
+
 }
 
 impl DataServerRequest {
@@ -156,6 +163,7 @@ impl DataServerRequest {
             DataServerRequest::PrimarySubscriptionFor { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
             DataServerRequest::RegisterStreamer{..} => {}
+            DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -275,7 +283,9 @@ DataServerResponse {
 
     OrderUpdates(OrderUpdateEvent),
 
-    RegistrationResponse(u16)
+    RegistrationResponse(u16),
+
+    CommissionInfo{callback_id: u64, commission_info: CommissionInfo}
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -294,8 +304,6 @@ impl Bytes<DataServerResponse> for DataServerResponse {
 }
 
 impl DataServerResponse {
-
-
     pub fn get_callback_id(&self) -> Option<u64> {
         match self {
             DataServerResponse::HistoricalBaseData { callback_id,.. } => Some(callback_id.clone()),
@@ -317,7 +325,8 @@ impl DataServerResponse {
             DataServerResponse::OrderUpdates(_) => None,
             DataServerResponse::PrimarySubscriptionFor {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::SymbolNames {callback_id, ..} => Some(callback_id.clone()),
-            DataServerResponse::RegistrationResponse(_) => None
+            DataServerResponse::RegistrationResponse(_) => None,
+            DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
         }
     }
 }

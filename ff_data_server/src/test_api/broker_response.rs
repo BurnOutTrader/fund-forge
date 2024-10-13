@@ -9,7 +9,7 @@ use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
-use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
+use ff_standard_lib::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use ff_standard_lib::StreamName;
 use crate::test_api::api_client::TestApiClient;
@@ -116,5 +116,16 @@ impl BrokerApiResponse for TestApiClient {
 
     async fn logout_command(&self, stream_name: StreamName) {
         self.logout_command_vendors(stream_name).await;
+    }
+
+
+    async fn commission_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, _symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        DataServerResponse::CommissionInfo {
+            callback_id,
+            commission_info: CommissionInfo {
+                per_side: dec!(0.0),
+                currency: Currency::USD,
+            },
+        }
     }
 }

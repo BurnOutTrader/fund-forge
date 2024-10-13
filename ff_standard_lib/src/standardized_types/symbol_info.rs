@@ -1,4 +1,5 @@
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use rust_decimal::Decimal;
 use crate::strategies::ledgers::Currency;
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::SymbolName;
@@ -30,4 +31,12 @@ impl SymbolInfo {
             decimal_accuracy,
         }
     }
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct CommissionInfo {
+    pub per_side: Decimal,
+    pub currency: Currency,
 }

@@ -44,4 +44,9 @@ impl BrokerApiResponse for BitgetClient {
     async fn logout_command(&self, stream_name: StreamName) {
         todo!()
     }
+
+    #[allow(unused)]
+    async fn commission_info_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        todo!()
+    }
 }

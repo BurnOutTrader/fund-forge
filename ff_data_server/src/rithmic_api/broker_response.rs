@@ -9,7 +9,7 @@ use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::strategies::ledgers::AccountId;
 use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicClient;
-use crate::rithmic_api::products::{get_available_symbol_names, get_intraday_margin, get_overnight_margin, get_symbol_info};
+use crate::rithmic_api::products::{get_available_symbol_names, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
@@ -108,5 +108,19 @@ impl BrokerApiResponse for RithmicClient {
     async fn logout_command(&self, stream_name: StreamName) {
         //todo handle dynamically from server using stream name to remove subscriptions and callbacks
         self.callbacks.remove(&stream_name);
+    }
+
+    async fn commission_info_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        //todo add a mode to get live commsions from specific brokerage.
+        match get_futures_commissions_info(&symbol_name) {
+            Ok(commission_info) => DataServerResponse::CommissionInfo {
+                callback_id,
+                commission_info,
+            },
+            Err(e) => DataServerResponse::Error {
+                callback_id,
+                error: FundForgeError::ClientSideErrorDebug(e)
+            }
+        }
     }
 }

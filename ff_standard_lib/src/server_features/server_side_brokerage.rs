@@ -9,7 +9,7 @@ use crate::StreamName;
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
 #[async_trait]
 pub trait BrokerApiResponse: Sync + Send {
-    /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`.
+    /// return `DataServerResponse::Symbols` or `DataServerResponse::Error{error: FundForgeError, callback_id: u64}`
     /// server or client error depending on who caused this problem
     async fn symbol_names_response(
         &self,
@@ -18,7 +18,7 @@ pub trait BrokerApiResponse: Sync + Send {
         callback_id: u64
     ) -> DataServerResponse;
 
-    /// return `DataServerResponse::AccountInfo` or `DataServerResponse::Error(FundForgeError)`
+    /// return `DataServerResponse::AccountInfo` or `DataServerResponse::Error{error: FundForgeError, callback_id: u64}`
     /// server or client error depending on who caused this problem
     async fn account_info_response(
         &self,
@@ -28,7 +28,7 @@ pub trait BrokerApiResponse: Sync + Send {
         callback_id: u64
     ) -> DataServerResponse;
 
-    /// return` DataServerResponse::SymbolInfo` or `DataServerResponse::Error(FundForgeError)`
+    /// return` DataServerResponse::SymbolInfo` or `DataServerResponse::Error{error: FundForgeError, callback_id: u64}`
     /// server or client error depending on who caused this problem
     async fn symbol_info_response(
         &self,
@@ -40,7 +40,7 @@ pub trait BrokerApiResponse: Sync + Send {
 
     /// Margin required for x units of the symbol, the mode is passed in
     /// We can return hard coded values for backtesting and live values for live or live paper
-    /// return `DataServerResponse::MarginRequired` or `DataServerResponse::Error(FundForgeError)`
+    /// return `DataServerResponse::MarginRequired` or `DataServerResponse::Error{error: FundForgeError, callback_id: u64}`
     /// server or client error depending on who caused this problem
     async fn intraday_margin_required_response(
         &self,
@@ -59,7 +59,7 @@ pub trait BrokerApiResponse: Sync + Send {
         callback_id: u64
     ) -> DataServerResponse;
 
-    /// return `DataServerResponse::Accounts or DataServerResponse::Error(FundForgeError)`
+    /// return `DataServerResponse::Accounts or DataServerResponse::Error{error: FundForgeError, callback_id: u64}`
     /// server or client error depending on who caused this problem
     async fn accounts_response(
         &self,
@@ -75,4 +75,13 @@ pub trait BrokerApiResponse: Sync + Send {
         &self,
         stream_name: StreamName,
     );
+
+    /// Returns a `DataServerResponse::CommissionInfo` object if symbol is found, else returns a `DataServerResponse::Error{error: FundForgeError, callback_id: u64}`
+    async fn commission_info_response(
+        &self,
+        mode: StrategyMode,
+        stream_name: StreamName,
+        symbol_name: SymbolName,
+        callback_id: u64
+    ) -> DataServerResponse;
 }

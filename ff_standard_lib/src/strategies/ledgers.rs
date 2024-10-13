@@ -33,7 +33,8 @@ pub enum Currency {
     USD,
     CAD,
     EUR,
-    BTC,
+    JPY,
+    USDT
 }
 
 impl Currency {
@@ -43,7 +44,8 @@ impl Currency {
             "USD" => Currency::USD,
             "CAD" => Currency::CAD,
             "EUR" => Currency::EUR,
-            "BTC" => Currency::BTC,
+            "JPY" => Currency::JPY,
+            "USDT" => Currency::USDT,
             _ => panic!("No currency matching string, please implement")
         }
     }
