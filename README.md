@@ -677,6 +677,8 @@ This will enable:
 - Updating servers on our remote machines using git pull/update or docker.
 - Have servers always online in the cloud so that they can regularly capture and serialize historical data.
 
-#### Connect a GUI remote machines.
+#### Connect a GUI to our remote machines.
 - Use a local Gui platform to remotely control our strategies and data servers. 
 - View charts, and manually control strategies, including sending drawing objects to strategies so that they can interact with us.
+
+This will be done via the ff_strategy_registry, which is currently in a non-working state, but will be fixed once basic live trading functionality is complete.
