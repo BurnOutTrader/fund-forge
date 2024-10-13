@@ -359,6 +359,7 @@ pub(crate) mod historical_ledgers {
         }
 
         pub async fn commit_margin(&mut self, symbol_name: &SymbolName, quantity: Volume, market_price: Price) -> Result<(), FundForgeError> {
+            //todo match time to market close and choose between intraday or overnight margin request.
             let margin = self.brokerage.intraday_margin_required(symbol_name.clone(), quantity).await?;
             let margin =match margin {
                 None => {
@@ -436,6 +437,7 @@ pub(crate) mod historical_ledgers {
         }
 
         pub fn on_base_data_update(&mut self, base_data_enum: BaseDataEnum, time: DateTime<Utc>) {
+            //todo match time to market close and update overnight or intraday margin requirements
                 let data_symbol_name = &base_data_enum.symbol().name;
                 if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
                 if position.is_closed {
