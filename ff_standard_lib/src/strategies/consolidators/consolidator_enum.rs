@@ -2,11 +2,11 @@ use crate::strategies::consolidators::candlesticks::CandleStickConsolidator;
 use crate::strategies::consolidators::count::CountConsolidator;
 use crate::strategies::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Duration, Utc};
+use crate::standardized_types::base_data::history::get_historical_data;
 use crate::standardized_types::resolution::Resolution;
 
 pub enum ConsolidatorEnum {
@@ -144,10 +144,17 @@ impl ConsolidatorEnum {
             min_resolution.base_data_type,
             subscription.market_type.clone(),
         );
-        let primary_history = range_data(from_time, to_time, base_subscription.clone()).await;
 
         let mut history = RollingWindow::new(history_to_retain as usize);
-        for (_time, time_slice) in primary_history {
+        let data = match get_historical_data(vec![base_subscription.clone()], from_time, to_time).await {
+            Ok(data) => data,
+            Err(e) => {
+                eprintln!("No data available or error: {}", e);
+                return  (consolidator, history)
+            }
+        };
+
+        for (_time, time_slice) in data {
             for base_data in time_slice.iter() {
                 let consolidated_data = consolidator.update(&base_data);
                 if let Some(closed_data) = consolidated_data.closed_data {

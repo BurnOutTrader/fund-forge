@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use crate::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
@@ -12,6 +13,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::symbol_info::{CommissionInfo, SessionMarketHours, SymbolInfo};
+use crate::standardized_types::time_slices::TimeSlice;
 
 /// An Api key String
 pub type ApiKey = String;
@@ -51,14 +53,12 @@ pub enum StreamRequest {
 /// * [`SynchronousRequestType::HistoricalBaseData`](ff_data_vendors::networks::RequestType) : Requests the Base data for the specified subscriptions. Server returns a ResponseType::HistoricalBaseData with the data payload.
 pub enum DataServerRequest {
     Register(StrategyMode),
-    /// Requests historical `Vec<BaseDataEnum>` for a specified list of subscriptions at the specified time, this request is specifically used by the strategy backend to delegate data into the engine
-    /// # Fields
-    /// * `subscriptions: Vec<Subscription>`
-    /// * `time: String,`
-    HistoricalBaseData {
+
+    HistoricalBaseDataRange {
         callback_id: u64,
-        subscription: DataSubscription,
-        time: String,
+        subscriptions: Vec<DataSubscription>,
+        from_time: String,
+        to_time: String,
     },
     /// Requests a list of instruments all instruments available with the `DataVendor` from the server, an instrument object is the vendors specific data type.
     /// # Fields
@@ -165,7 +165,6 @@ impl DataServerRequest {
     }
     pub fn set_callback_id(&mut self, id: u64) {
         match self {
-            DataServerRequest::HistoricalBaseData { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolsVendor { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Resolutions {callback_id, .. } => {*callback_id = id}
             DataServerRequest::AccountInfo { callback_id, .. } => {*callback_id = id}
@@ -186,20 +185,11 @@ impl DataServerRequest {
             DataServerRequest::SessionMarketHours { callback_id, .. } => {*callback_id = id}
             DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::PaperAccountInit { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
         }
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Archive, Debug)]
-#[archive(compare(PartialEq), check_bytes, )]
-#[archive_attr(derive(Debug))]
-pub struct BaseDataPayload {
-    /// a Vec<BaseDataEnum> in bytes form
-    pub bytes: Vec<u8>,
-
-    /// the `Subscription` for the `bytes`
-    pub subscription: DataSubscription,
-}
 
 #[derive(Clone, Serialize, Deserialize, Archive, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -207,12 +197,9 @@ pub struct BaseDataPayload {
 /// Represents a request type for the network message. This enum is used to specify the type of request and the returning response
 pub enum
 DataServerResponse {
-    /// This is for generic history requests, Responds with `payload` as `Payload` which contains:
-    /// ## HistoricalBaseData Fields
-    /// * `payloads` as `BaseDataPayload`
     HistoricalBaseData {
         callback_id: u64,
-        payload: BaseDataPayload
+        payload: BTreeMap<i64, TimeSlice>
     },
 
     /// Responds with `instruments` as `Vec<InstrumentEnum>` which contains:

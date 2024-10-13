@@ -1,9 +1,6 @@
 use chrono::{DateTime, Datelike, Utc,  Duration as ChronoDuration};
 use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, forward_buffer};
-use crate::standardized_types::base_data::history::{
-    generate_file_dates, get_historical_data,
-};
-use crate::messages::data_server_messaging::FundForgeError;
+use crate::standardized_types::base_data::history::{generate_file_dates, get_historical_data};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent};
 use crate::standardized_types::time_slices::TimeSlice;
@@ -13,17 +10,8 @@ use std::time::Duration;
 use tokio::sync::mpsc::{Sender};
 use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
-use tokio::sync::broadcast;
-//Possibly more accurate engine
-/*todo Use this for saving and loading data, it will make smaller file sizes and be less handling for consolidator, we can then just update historical data once per week on sunday and load last week from broker.
-  use Create a date (you can use DateTime<Utc>, Local, or NaiveDate)
-  let date = Utc.ymd(2023, 8, 19); // Year, Month, Date
-  let iso_week = date.iso_week();
-  let week_number = iso_week.week(); // Get the week number (1-53)
-  let week_year = iso_week.year(); // Get the year of the week (ISO week year)
-  println!("The date {:?} is in ISO week {} of the year {}", date, week_number, week_year);
-  The date 2023-08-19 is in ISO week 33 of the year 2023
-*/
+use tokio::sync::{broadcast};
+use crate::helpers::converters::next_month;
 
 #[allow(dead_code)]
 pub struct HistoricalEngine {
@@ -98,24 +86,12 @@ impl HistoricalEngine {
         });
     }
 
-
-    async fn get_base_time_slices(
-        &self,
-        month_start: DateTime<Utc>,
-        primary_subscriptions: &Vec<DataSubscription>
-    ) -> Result<BTreeMap<DateTime<Utc>, TimeSlice>, FundForgeError> {
-        match get_historical_data(primary_subscriptions.clone(), month_start).await {
-            Ok(time_slices) => Ok(time_slices),
-            Err(e) => Err(e),
-        }
-    }
-
     /// Feeds the historical data to the strategy, along with any events that were created.
     /// Simulates trading with a live buffer, where we catch events for x duration before forwarding to the strategy
     #[allow(unused_assignments)]
     async fn historical_data_feed(
         &mut self,
-        month_years: BTreeMap<i32, DateTime<Utc>>,
+        month_years: BTreeMap<i32, DateTime<Utc>>, //todo overhaul historical engine, no need to
         warm_up_start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
         buffer_duration: Duration,
@@ -138,7 +114,7 @@ impl HistoricalEngine {
             let mut last_time = start.clone();
             'month_loop: loop {
                 println!("Buffered Engine: Preparing TimeSlices For: {}", start.date_naive().format("%B %Y"));
-                let month_time_slices = match self.get_base_time_slices(start.clone(), &primary_subscriptions).await {
+                let month_time_slices = match get_historical_data(primary_subscriptions.clone(), start.clone(), next_month(&start)).await {
                     Ok(time_slices) => time_slices,
                     Err(e) => {
                         eprintln!("Historical Engine: Error getting historical data for: {:?}: {:?}", start, e);
@@ -189,7 +165,7 @@ impl HistoricalEngine {
 
                     // Collect data from the primary feeds simulating a buffering range
                     let time_slice: TimeSlice = month_time_slices
-                        .range(last_time..=time)
+                        .range(last_time.timestamp_nanos_opt().unwrap()..=time.timestamp_nanos_opt().unwrap())
                         .flat_map(|(_, value)| value.iter().cloned())
                         .collect();
                     self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();

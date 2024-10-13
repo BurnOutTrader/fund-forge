@@ -8,7 +8,7 @@ Focused on backtesting, charting, live trading. With an emphasis for semi-automa
 fund-forge is built to allow simple abstractions for common strategy functionality: trade multiple symbols, with multiple indicators and data streams.
 
 <span style="color: red;">***For development and testing purposes only. live trading is in development. repo is currently unstable.***</span>
-
+#### <span style="color: red;">Data Serialization is being overhauled, if you suddenly have trouble running between git pulls, then try re-parsing the test data.</span>
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
 - [Example Strategy](example_test_strategy/src/main.rs)
@@ -24,7 +24,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
-2. Download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKF125tuEG16grLM_Q?e=Yukrv6) or 
+2. Download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKID2SU-oFFpKWsqGg?e=jYaN6n) or 
 for more free testing data [Demonstration Testing Data](#demonstration-testing-data) below
 3. Get the testing data (instructions below)
 4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run`
@@ -78,14 +78,11 @@ This allows people familiar with concepts from common automated trading platform
 Simply build strategies using higher level abstractions like you would in any familiar commercial trading platform, but enjoy the benefits of the rust programing language.
 
 The only major difference in fund forge is the idea of the ff_data_server, a server which hosts your api instances locally or on a remote machine and allows multiple strategies to connect or disconnect while persisting historical data from a centralized location.
-It is possible to have multiple data server instances and it is easy to configure different servers to host specific broker or data vendor API's.
-
-By default all Api's will launch on a single server instance.
 
 It is easy to build and run strategies which can be deployed and communicate across multiple machines, docker containers or simply run everything locally.
 It is easy to build new indicators and add new brokers or data feeds, including fundamental data feeds.
 
-There are event driven handlers and a buffering mechanism for maintaining consistency from back testing to live trading.
+There are handlers and a buffering mechanism for maintaining consistency from back testing to live trading.
 
 The correct strategy engine  started in the background depending on the StrategyMode. 
 The strategy can be shared between threads as an `Arc<FundForgeStrategy>` and maintain full functionality, allowing the strategy logic to be delegated between custom user functions and async architectures.
@@ -620,14 +617,9 @@ Since I am avoiding dynamic dispatch in favour of using an enum variant for each
 It is easy to add a new `DataServerResponse` and `DataServerRequest` variants to handle new api requirements.
 
 ## Advanced Setup Options
-To create strategies in a separate crate you will need to copy the resources folder from test strategy.
-
-This folder contains the client and server authentication keys.
+To create strategies or servers in a separate crate you will need to copy the resources folder from test strategy, this folder contains the client and server authentication keys.
 
 It also contains the servers.toml file, which is used by strategies to find the address of your data servers.
-
-If you want to have multiple ff_data_server instances you will need to edit the server_settings.toml file for each connection type that you want to run independently on its own server.
-Any connections not specified will use the default server address.
 
 For optimal security, please ensure that you generate new authentication certificates before running your server publicly, and ensure to add them to git ignore etc.
 ```rust

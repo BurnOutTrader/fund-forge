@@ -19,7 +19,6 @@ use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::strategies::client_features::server_connections::{add_buffer, is_warmup_complete};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
-use crate::standardized_types::base_data::history::range_data;
 use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
@@ -27,6 +26,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::resolution::Resolution;
 use crate::strategies::strategy_events::StrategyEvent;
 use tokio::sync::broadcast;
+use crate::standardized_types::base_data::history::get_historical_data;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
@@ -747,9 +747,9 @@ impl SymbolSubscriptionHandler {
                         warm_up_to_time - subtract_duration - Duration::days(5)
                     }
                 };
-                let primary_history = block_on(range_data(from_time, warm_up_to_time, closure_subscription.clone()));
+                let data = block_on(get_historical_data(vec![closure_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
                 let mut history = RollingWindow::new(history_to_retain);
-                for (_, slice) in primary_history {
+                for (_, slice) in data {
                     for data in slice.iter() {
                         history.add(data.clone());
                     }
@@ -861,9 +861,9 @@ impl SymbolSubscriptionHandler {
                                     warm_up_to_time - subtract_duration - Duration::days(5)
                                 }
                             };
-                            let primary_history = range_data(from_time, warm_up_to_time, lowest_possible_primary.clone()).await;
+                            let data = block_on(get_historical_data(vec![lowest_possible_primary.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
                             let mut history = RollingWindow::new(history_to_retain);
-                            for (_, slice) in primary_history {
+                            for (_, slice) in data {
                                 for data in slice.iter() {
                                     history.add(data.clone());
                                 }
@@ -904,9 +904,9 @@ impl SymbolSubscriptionHandler {
                                     warm_up_to_time - subtract_duration - Duration::days(5)
                                 }
                             };
-                            let primary_history = range_data(from_time, warm_up_to_time, new_primary.clone()).await;
+                            let data = block_on(get_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
                             let mut history = RollingWindow::new(history_to_retain);
-                            for (_, slice) in primary_history {
+                            for (_, slice) in data {
                                 for data in slice.iter() {
                                     history.add(data.clone());
                                 }

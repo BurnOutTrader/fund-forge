@@ -12,7 +12,7 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 /// * `Vendor(DataVendor)` - Containing a `DataVendor` object
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Hash, Serialize, Deserialize, Debug, Display)]
 pub enum ConnectionType {
-    Vendor(DataVendor),
+    Vendor(DataVendor), //todo remove data vendor and brokerage, only support a single data server to keep thiings simple when getting historical data or improve get data fn
     Broker(Brokerage),
     Default,
     StrategyRegistry,

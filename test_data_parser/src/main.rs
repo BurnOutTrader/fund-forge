@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
@@ -8,6 +7,7 @@ use std::io::{self, BufRead};
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+use ff_standard_lib::server_features::database::HybridStorage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -18,9 +18,10 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 /// to parse free testing data from https://www.histdata.com/
 /// 1. Put all the csv data into one folder
 /// 2. Configure the subscription properties and directory path
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     let your_folder_path: String = "/Users/kevmonaghan/Downloads".to_string();
-    let symbol_name: String = "AUD-CAD".to_string();
+    let symbol_name: String = "EUR-USD".to_string();
 
     let symbol = Symbol {
         name: symbol_name, //CHANGE THIS
@@ -44,7 +45,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         candle_type: None,
     };
 
-    let mut data : BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
+    let mut data : Vec<BaseDataEnum> = Vec::new();
     for entry in fs::read_dir(dir_path)? {
         // Iterate through each file in the directory
         let entry = entry?;
@@ -67,12 +68,18 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
 
+    //old way
     // Save formatted data
-    BaseDataEnum::format_and_save(&base_data_path, data, &subscription)
+    /*BaseDataEnum::format_and_save(&base_data_path, data, &subscription)
         .map_err(|e| {
             println!("Failed to save data for file {:?}: {}", base_data_path, e);
             e
-        })?;
+        })?;*/
+
+    //new way
+    let path = PathBuf::from(your_folder_path);
+    let storage = HybridStorage::new(path);
+    storage.save_data_bulk(data).await.unwrap();
 
     Ok(())
 }
@@ -80,11 +87,11 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 
 ///to parse 'Tick' data from https://www.histdata.com/. in fund forge we use this kind of data as quotes.
-fn load_csv_quotes(file_path: &str, symbol: Symbol) -> Result<BTreeMap<DateTime<Utc>, BaseDataEnum>, Box<dyn std::error::Error>> {
+fn load_csv_quotes(file_path: &str, symbol: Symbol) -> Result<Vec<BaseDataEnum>, Box<dyn std::error::Error>> {
     let file = File::open(file_path)?;
     let reader = io::BufReader::new(file);
 
-    let mut quotes = BTreeMap::new();
+    let mut quotes = Vec::new();
     for line in reader.lines() {
         let line = line?;
         let parts: Vec<&str> = line.split(',').collect();
@@ -101,10 +108,10 @@ fn load_csv_quotes(file_path: &str, symbol: Symbol) -> Result<BTreeMap<DateTime<
             bid: parts.get(1).expect("REASON").parse::<Decimal>()?,
             ask_volume: dec!(0.0),
             ask: parts.get(2).expect("REASON").parse::<Decimal>()?,
-            time: utc_datetime.to_string(),
+            time: utc_datetime.clone().to_string(),
             bid_volume: dec!(0.0),
         };
-        quotes.insert(utc_datetime, BaseDataEnum::Quote(quote));
+        quotes.push(BaseDataEnum::Quote(quote));
     }
     Ok(quotes)
 }
