@@ -191,7 +191,7 @@ impl HybridStorage {
         let current_date = Utc::now();
         let mut date = current_date;
 
-        for _ in 0..12 {  // Check up to 12 months back
+        for _ in 0..36 {  // Check up to 36 months back
             let file_path = self.get_file_path(symbol, resolution, data_type, &date);
             if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
                 let month_data = BaseDataEnum::from_array_bytes(&mmap.to_vec())?;
