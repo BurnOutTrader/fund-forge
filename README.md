@@ -666,13 +666,13 @@ openssl genpkey -algorithm RSA -out /path/to/your_directory/key.pem -pkeyopt rsa
 
 ## The End Game
 ### The final objective is to:
-#### Create strategies in their own private repos by importing ff_standard_lib from crates.io.
+#### Create strategies in their own private repos by importing `ff_standard_lib` from crates.io.
 This will enable: 
 - Keeping secret keys in our private repo for easy login etc
 - Building strategies in small private repo's.
 - Updating strategies on our remote machines using git pull/update or docker.
 
-#### Create ff_data_servers in their own private repos by importing ff_standard_lib from crates.io.
+#### Create ff_data_servers in their own private repos by importing `ff_standard_lib` from crates.io.
 - Keeping secret keys in our private repo for easy login etc
 - Updating servers on our remote machines using git pull/update or docker.
 - Have servers always online in the cloud so that they can regularly capture and serialize historical data.
