@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use ff_standard_lib::helpers::converters::{fund_forge_formatted_symbol_name, load_as_bytes};
-use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
+use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -17,6 +17,7 @@ use tokio::time::sleep;
 use std::time::Duration;
 use rust_decimal_macros::dec;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
+use crate::request_handlers::DATA_BASE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 use crate::test_api::api_client::TestApiClient;
 
@@ -107,12 +108,15 @@ impl VendorApiResponse for TestApiClient {
 
             let mut last_time = utc_dt_1;
             'main_loop: while last_time < utc_dt_2 {
-                let data_folder = PathBuf::from(get_data_folder());
-                let file = BaseDataEnum::file_path(&data_folder, &subscription, &last_time).unwrap();
-                let data = load_as_bytes(file.clone()).unwrap();
-                let month_time_slices = BaseDataEnum::from_array_bytes(&data).unwrap();
+                let data = match DATA_BASE.get_data_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, utc_dt_1, utc_dt_2).await {
+                    Ok(data) => data,
+                    Err(e) => {
+                        eprintln!("Failed to get test data: {}", e);
+                        return
+                    }
+                };
 
-                for mut base_data in month_time_slices {
+                for mut base_data in data {
                     last_time = base_data.time_closed_utc();
                     match base_data {
                         BaseDataEnum::Quote(ref mut quote) => {
