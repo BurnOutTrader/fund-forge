@@ -290,6 +290,8 @@ fn example() {
 
 ## Time
 ### When downloading and parsing data from a DataVendor for the engine
+All data should be saved using the static `HybridStorage` object, the data server hosts a public static `DATA_STORAGE` object, this object acts as a data base tool for serializing and loading data.
+Historical data loading will be handled automatically by the server, when you need to serialize data in a new API implementation, you should use the `DATA_STORAGE.save_data_bulk(data).await.unwrap()` function.
 chrono_tz will automatically handle live and historical time zone conversions for us.
 All serialized data should be saved in UTC time as a `DateTime<Utc>`, and then converted to the strategy's time zone when needed.
 there are converters for both local and utc time in ff_standard_lib/src/helpers/converters.

@@ -91,7 +91,7 @@ impl HistoricalEngine {
     #[allow(unused_assignments)]
     async fn historical_data_feed(
         &mut self,
-        month_years: BTreeMap<i32, DateTime<Utc>>, //todo overhaul historical engine, no need to
+        month_years: BTreeMap<i32, DateTime<Utc>>, //todo overhaul historical engine, no need to get using months, we could get just 1 week at a time
         warm_up_start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
         buffer_duration: Duration,

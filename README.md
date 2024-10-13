@@ -538,7 +538,10 @@ Live trading in the Un-Buffered engine will have no minimum accuracy.
 Both Live trading and Backtesting in the Buffered engine, has a minimum accuracy of your `buffer_duration: Option<Duration>` parameter, and will never depend on the granularity of your data.
 
 ### Parsing Data Time
-All data should be saved as 1 file per month and all times for data should be Utc time, use the time parsing functions in `ff_standard_lib::helpers::converters` [here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_standard_lib/src/helpers/converters.rs) to parse time from your time zone, 
+All data should be saved using the static `HybridStorage` object, the data server hosts a public static `DATA_STORAGE` object, this object acts as a data base tool for serializing and loading data.
+Historical data loading will be handled automatically by the server, when you need to serialize data in a new API implementation, you should use the `DATA_STORAGE.save_data_bulk(data).await.unwrap()` function.
+
+All time properties for data should be Utc time, use the time parsing functions in `ff_standard_lib::helpers::converters` [here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_standard_lib/src/helpers/converters.rs) to parse time from your time zone, 
 these functions use `chrono-tz` and will automatically handle historical time zone conversions such as daylight savings times. All Base data time properties are serialized as Strings, these strings are auto parsed into `DateTime<Utc>` using `base_data.time_utc()` or. `DateTime<Tz>` using `base_data.time_local(Tz)` the reason for parsing to string is simply for easier `ser/de` using `rkyv` until DateTime is better supported.
 
 There are a number of helpers built into `BaseDataEnum impl` which help with parsing and serializing `BaseDataEnum`. for example `BaseDataEnum::format_and_save()` 

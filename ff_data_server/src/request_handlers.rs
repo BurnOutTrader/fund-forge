@@ -24,7 +24,7 @@ use ff_standard_lib::StreamName;
 use crate::stream_listener;
 
 lazy_static!(
-    pub static ref DATA_BASE: Arc<HybridStorage> = Arc::new(HybridStorage::new(PathBuf::from(get_data_folder())));
+    pub static ref DATA_STORAGE: Arc<HybridStorage> = Arc::new(HybridStorage::new(PathBuf::from(get_data_folder())));
 );
 
 pub async fn base_data_response(
