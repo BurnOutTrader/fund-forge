@@ -16,6 +16,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 
 // Todo, save as 1 file per week.
 //todo add update management handling, so we dont access data while it is being updated. instead we join a que to await the updates
+// use market type in folder structure
 pub struct HybridStorage {
     base_path: PathBuf,
     mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>,
@@ -32,6 +33,7 @@ impl HybridStorage {
     fn get_file_path(&self, symbol: &Symbol, resolution: &str, data_type: &BaseDataType, date: &DateTime<Utc>) -> PathBuf {
         self.base_path
             .join(symbol.data_vendor.to_string())
+            .join(symbol.market_type.to_string())
             .join(symbol.name.to_string())
             .join(resolution)
             .join(data_type.to_string())

@@ -106,7 +106,7 @@ impl VendorApiResponse for TestApiClient {
 
             let mut last_time = from_time;
             'main_loop: while last_time < to_time {
-                let data = match DATA_BASE.get_data_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, from_time, to_time).await {
+                let data = match DATA_STORAGE.get_data_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, from_time, to_time).await {
                     Ok(data) => data,
                     Err(e) => {
                         eprintln!("Failed to get test data: {}", e);

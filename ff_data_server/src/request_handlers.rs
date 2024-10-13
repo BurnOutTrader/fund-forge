@@ -36,7 +36,7 @@ pub async fn base_data_response(
     let from_time: DateTime<Utc> = from_time.parse().unwrap();
     let to_time: DateTime<Utc> = to_time.parse().unwrap();
 
-    let data = match DATA_BASE.get_bulk_data(&subscriptions, from_time, to_time).await {
+    let data = match DATA_STORAGE.get_bulk_data(&subscriptions, from_time, to_time).await {
         Err(e) => return  DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(e.to_string())},
         Ok(data) => data
     };

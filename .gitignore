@@ -24,8 +24,8 @@ trades exports
 /data/rithmic_credentials
 /data/bitget_credentials
 /data/bitget_credentials/bitget_credentials.toml
-/ff_data_server/data/Test/EUR-USD/I/Quotes/202407.bin
-/ff_data_server/data/Test/AUD-CAD/I/Quotes/202406.bin
-/ff_data_server/data/Test/AUD-CAD/I/Quotes/202408.bin
-/ff_data_server/data/Test/EUR-USD/I/Quotes/202406.bin
-/ff_data_server/data/Test/EUR-USD/I/Quotes/202408.bin
+/ff_data_server/data/Test/Forex/EUR-USD/I/Quotes/202407.bin
+/ff_data_server/data/Test/Forex/AUD-CAD/I/Quotes/202406.bin
+/ff_data_server/data/Test/Forex/AUD-CAD/I/Quotes/202408.bin
+/ff_data_server/data/Test/Forex/EUR-USD/I/Quotes/202406.bin
+/ff_data_server/data/Test/Forex/EUR-USD/I/Quotes/202408.bin

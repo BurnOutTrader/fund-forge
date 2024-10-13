@@ -44,7 +44,7 @@ The Forex folder should be put into the following directory "ff_data_server/data
 The parsed data includes Quote data for AUD-CAD and EUR-CAD from start of 06/2024 to end of 08/2024.
 From this data your strategy will consolidate Candles or QuoteBars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
 
-![img_1.png](misc/folder_structure.png)
+![img.png](misc/folder_structure.png)
 
 ### For more testing and development data
 You can download some free testing data [here](https://www.histdata.com/download-free-forex-data/?/ascii/tick-data-quotes)
