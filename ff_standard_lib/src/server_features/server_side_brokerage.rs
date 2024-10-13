@@ -50,6 +50,7 @@ pub trait BrokerApiResponse: Sync + Send {
         quantity: Volume,
         callback_id: u64
     ) -> DataServerResponse;
+
     async fn overnight_margin_required_response(
         &self,
         _mode: StrategyMode,

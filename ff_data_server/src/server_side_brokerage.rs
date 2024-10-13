@@ -12,6 +12,7 @@ use crate::test_api::api_client::TEST_CLIENT;
 
 // Responses
 
+/// return `DataServerResponse::CommissionInfo` or `DataServerResponse::Error(FundForgeError)`.
 pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, symbol_name: SymbolName, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
     match brokerage {
         Brokerage::Rithmic(system) => {
@@ -28,8 +29,9 @@ pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, 
     }
     DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
 }
-    /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`.
-    /// server or client error depending on who caused this problem
+
+/// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`.
+/// server or client error depending on who caused this problem
 pub async fn symbol_names_response(
     brokerage: Brokerage,
     mode: StrategyMode,
