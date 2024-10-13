@@ -1,3 +1,6 @@
+## Implement DataBase for BaseDataEnum
+
+
 ## Subscription handling
 - Live subscriptions will be done by
 1. Starting the warm up while also buffering incoming new data
