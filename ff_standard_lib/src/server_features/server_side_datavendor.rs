@@ -9,7 +9,7 @@ use crate::StreamName;
 #[async_trait]
 pub trait VendorApiResponse: Sync + Send {
     /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`
-    /// server or client error depending on who caused this problem
+    /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
     async fn symbols_response(
         &self,
         mode: StrategyMode,
@@ -19,10 +19,11 @@ pub trait VendorApiResponse: Sync + Send {
     ) -> DataServerResponse;
 
     /// return `DataServerResponse::Resolutions` or `DataServerResponse::Error(FundForgeError)`
-    /// server or client error depending on who caused this problem
-    /// Note that we are not just returning resolutions here,
-    /// we return `Vec<SubscriptionResolutionType>`
-    /// `SubscriptionResolutionType` is a struct which pairs a `Resolution` and a `BaseDataType`
+    /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
+    ///
+    /// Note that we are not just returning resolutions here, \
+    /// we return `Vec<SubscriptionResolutionType>` \
+    /// `SubscriptionResolutionType` is a struct which pairs a `Resolution` and a `BaseDataType` \
     /// This is used to match data types to resolutions for consolidating data, and choosing correct consolidators automatically.
     async fn resolutions_response(
         &self,
@@ -33,7 +34,7 @@ pub trait VendorApiResponse: Sync + Send {
     ) -> DataServerResponse;
 
     /// return `DataServerResponse::Markets` or `DataServerResponse::Error(FundForgeError)`
-    /// server or client error depending on who caused this problem
+    /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
     async fn markets_response(
         &self,
         mode: StrategyMode,
@@ -42,8 +43,9 @@ pub trait VendorApiResponse: Sync + Send {
     ) -> DataServerResponse;
 
     /// return `DataServerResponse::DecimalAccuracy` or `DataServerResponse::Error(FundForgeError)`
-    /// server or client error depending on who caused this problem.
-    /// decimal accuracy is an integer, for AUD-USD it is accurate to 5 decimal places
+    /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
+    ///
+    /// decimal_accuracy is an integer, for AUD-USD the symbol is accurate to 5 decimal places
     async fn decimal_accuracy_response(
         &self,
         mode: StrategyMode,
@@ -63,7 +65,8 @@ pub trait VendorApiResponse: Sync + Send {
     ) -> DataServerResponse;
 
     /// return `DataServerResponse::SubscribeResponse` or `DataServerResponse::Error(FundForgeError)`
-    /// server or client error depending on who caused this problem
+    /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
+    ///
     /// The caller does not await this method, but it lets the strategy know if the subscription was successful.
     async fn data_feed_subscribe(
         &self,
@@ -72,7 +75,8 @@ pub trait VendorApiResponse: Sync + Send {
     ) -> DataServerResponse;
 
     /// return `DataServerResponse::UnSubscribeResponse` or `DataServerResponse::Error(FundForgeError)`
-    /// server or client error depending on who caused this problem
+    /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
+    ///
     /// The caller does not await this method, but it lets the strategy know if the subscription was successful.
     async fn data_feed_unsubscribe(
         &self,
@@ -82,10 +86,16 @@ pub trait VendorApiResponse: Sync + Send {
     ) -> DataServerResponse;
 
     /// return `DataServerResponse::BaseDataTypes` or `DataServerResponse::Error(FundForgeError)`
-    /// This is to help the strategy engine determine which data types are supplied by the `DataVendor`
+    /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
+    ///
+    /// This is to help the strategy engine determine which data types are supplied by the `DataVendor`.
+    ///
     /// We only need to supply the types that we want to use for subscriptions.
+    ///
     /// There is no point using candles if we have tick history and live data.
+    ///
     /// There is no point using QuoteBars if we have quote history and live data.
+    ///
     /// We may need to match based on `StrategyMode` maybe we only have backtest data as candles but in live we can use ticks.
     async fn base_data_types_response(
         &self,
@@ -103,8 +113,12 @@ pub trait VendorApiResponse: Sync + Send {
     );
 
     /// return `DataServerResponse::SessionMarketHours` or `DataServerResponse::Error(FundForgeError)` //todo build historical closing hours function and add it to the function BaseDataEnum::serialize_and_save()
-    /// we might be able to get this from the vendor when trading live, or we could use serialized lists.
+    /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.
+    ///
+    /// We might be able to get this from the vendor when trading live, or we could use serialized lists.
+    ///
     /// In historical we use the datetime to determine the date, so we can determine the response.
+    ///
     /// The level of detail we go into here can change over time, but we could create a hardcoded historical list of session times easily by using a function to generate a historical map<Date, (open_time, close_time)> of open and close times
     /// based on historical data then we could serialize that map to disk and use it for backtesting look-ups of closing hours.
     ///
