@@ -37,6 +37,7 @@ pub async fn session_market_hours_response(mode: StrategyMode, data_vendor: Data
 
 /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`
 /// server or client error depending on who caused this problem
+/// `time` is optional, during backtesting conditions some markets such as equities might require us to filter the symbols that were available during the time period.
 pub async fn symbols_response(
     data_vendor: DataVendor,
     mode: StrategyMode,
