@@ -16,7 +16,9 @@ pub trait BrokerApiResponse: Sync + Send {
     async fn symbol_names_response(
         &self,
         mode: StrategyMode,
-        stream_name: StreamName, // The stream name is just the u16 port number the strategy is connecting to
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
+        stream_name: StreamName,
         callback_id: u64
     ) -> DataServerResponse;
 
@@ -25,6 +27,8 @@ pub trait BrokerApiResponse: Sync + Send {
     async fn account_info_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         account_id: AccountId,
         callback_id: u64
@@ -37,6 +41,8 @@ pub trait BrokerApiResponse: Sync + Send {
     async fn symbol_info_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64
@@ -52,6 +58,8 @@ pub trait BrokerApiResponse: Sync + Send {
     async fn intraday_margin_required_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         symbol_name: SymbolName,
         quantity: Volume,
@@ -68,8 +76,10 @@ pub trait BrokerApiResponse: Sync + Send {
     /// equities we might want to get dynamically from the brokerage, or use a calculation based on current market price
     async fn overnight_margin_required_response(
         &self,
-        _mode: StrategyMode,
-        _stream_name: StreamName,
+        mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
+        stream_name: StreamName,
         symbol_name: SymbolName,
         quantity: Volume,
         callback_id: u64
@@ -80,6 +90,8 @@ pub trait BrokerApiResponse: Sync + Send {
     async fn accounts_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         callback_id: u64
     ) -> DataServerResponse;
@@ -89,6 +101,8 @@ pub trait BrokerApiResponse: Sync + Send {
     /// (strategy that is connected to this port)
     async fn logout_command(
         &self,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
     );
 
@@ -100,6 +114,8 @@ pub trait BrokerApiResponse: Sync + Send {
     async fn commission_info_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64

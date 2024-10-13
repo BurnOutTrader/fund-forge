@@ -13,7 +13,9 @@ pub trait VendorApiResponse: Sync + Send {
     async fn symbols_response(
         &self,
         mode: StrategyMode,
-        stream_name: StreamName, // The stream name is just the u16 port number the strategy is connecting to
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
+        stream_name: StreamName,
         market_type: MarketType,
         callback_id: u64
     ) -> DataServerResponse;
@@ -28,6 +30,8 @@ pub trait VendorApiResponse: Sync + Send {
     async fn resolutions_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         market_type: MarketType,
         callback_id: u64
@@ -38,6 +42,8 @@ pub trait VendorApiResponse: Sync + Send {
     async fn markets_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         callback_id: u64
     ) -> DataServerResponse;
@@ -49,6 +55,8 @@ pub trait VendorApiResponse: Sync + Send {
     async fn decimal_accuracy_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64
@@ -59,6 +67,8 @@ pub trait VendorApiResponse: Sync + Send {
     async fn tick_size_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64
@@ -70,6 +80,8 @@ pub trait VendorApiResponse: Sync + Send {
     /// The caller does not await this method, but it lets the strategy know if the subscription was successful.
     async fn data_feed_subscribe(
         &self,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         subscription: DataSubscription
     ) -> DataServerResponse;
@@ -81,6 +93,8 @@ pub trait VendorApiResponse: Sync + Send {
     async fn data_feed_unsubscribe(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         subscription: DataSubscription,
     ) -> DataServerResponse;
@@ -100,6 +114,8 @@ pub trait VendorApiResponse: Sync + Send {
     async fn base_data_types_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         callback_id: u64
     ) -> DataServerResponse;
@@ -109,6 +125,8 @@ pub trait VendorApiResponse: Sync + Send {
     /// (strategy that is connected to this port)
     async fn logout_command_vendors(
         &self,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
     );
 
@@ -146,6 +164,8 @@ pub trait VendorApiResponse: Sync + Send {
     async fn session_market_hours_response(
         &self,
         mode: StrategyMode,
+        // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
+        // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         symbol_name: SymbolName,
         date_time: DateTime<Utc>,
