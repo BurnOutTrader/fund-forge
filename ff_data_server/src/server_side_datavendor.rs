@@ -1,3 +1,5 @@
+use std::str::FromStr;
+use chrono::{DateTime, Utc};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -5,10 +7,33 @@ use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
-use crate::rithmic_api::api_client::get_rithmic_client;
+use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 
-/// Responses
+// Responses
+
+
+/// return `DataServerResponse::SessionMarketHours` or `DataServerResponse::Error(FundForgeError)`.
+pub async fn session_market_hours_response(mode: StrategyMode, data_vendor: DataVendor, symbol_name: SymbolName, date: String, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+    let time = match DateTime::<Utc>::from_str(&date) {
+        Ok(time) => time,
+        Err(e) => return DataServerResponse::Error {error: FundForgeError::ClientSideErrorDebug(format!("{}", e)), callback_id}
+    };
+    match data_vendor {
+        DataVendor::Rithmic(system) => {
+            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                return client.value().session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
+            }
+        },
+        DataVendor::Test => return TEST_CLIENT.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await,
+        DataVendor::Bitget => {
+            if let Some(client) = BITGET_CLIENT.get() {
+                return client.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
+            }
+        }
+    }
+    DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+}
 
 /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`
 /// server or client error depending on who caused this problem

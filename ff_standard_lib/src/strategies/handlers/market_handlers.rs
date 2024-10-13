@@ -36,6 +36,7 @@ pub struct BookLevel {
     pub price: Price,
     pub volume: Volume
 }
+
 impl BookLevel {
     pub fn new(level: u16, price: Price, volume: Volume) -> Self {
         BookLevel {

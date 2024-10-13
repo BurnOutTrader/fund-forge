@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestProductCodes};
 use rust_decimal_macros::dec;
@@ -286,5 +287,10 @@ impl VendorApiResponse for RithmicClient {
 
     async fn logout_command_vendors(&self, stream_name: StreamName) {
         self.callbacks.remove(&stream_name);
+    }
+
+    #[allow(unused)]
+    async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
+        todo!()
     }
 }

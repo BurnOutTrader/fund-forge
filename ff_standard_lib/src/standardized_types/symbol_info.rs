@@ -1,3 +1,5 @@
+use std::str::FromStr;
+use chrono::{DateTime, Utc};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal::Decimal;
 use crate::strategies::ledgers::Currency;
@@ -39,4 +41,30 @@ impl SymbolInfo {
 pub struct CommissionInfo {
     pub per_side: Decimal,
     pub currency: Currency,
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct SessionMarketHours {
+    pub has_close: bool,
+    pub is_24_hour: bool,
+    pub open_time_utc_string: Option<String>,
+    pub close_time_utc_string: Option<String>,
+}
+
+impl SessionMarketHours {
+    pub fn close_time_utc(&self) -> Option<DateTime<Utc>> {
+        if let Some(time_string) = &self.close_time_utc_string {
+            return Some(DateTime::from_str(time_string).unwrap())
+        }
+        None
+    }
+
+    pub fn open_time_utc(&self) -> Option<DateTime<Utc>> {
+        if let Some(time_string) = &self.open_time_utc_string {
+            return Some(DateTime::from_str(time_string).unwrap())
+        }
+        None
+    }
 }

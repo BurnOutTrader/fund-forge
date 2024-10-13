@@ -9,7 +9,7 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
-use chrono::{NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use std::path::PathBuf;
 use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -176,5 +176,10 @@ impl VendorApiResponse for TestApiClient {
                 task.abort();
             }
         }
+    }
+
+    #[allow(unused)]
+    async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
+        todo!()
     }
 }

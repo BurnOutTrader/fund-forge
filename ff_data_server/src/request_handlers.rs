@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
 use tokio_rustls::server::TlsStream;
 use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, itraday_margin_required_response, symbol_info_response, symbol_names_response};
-use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, symbols_response, tick_size_response};
+use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, session_market_hours_response, symbols_response, tick_size_response};
 use crate::stream_tasks::deregister_streamer;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::OrderRequest;
@@ -199,6 +199,12 @@ pub async fn manage_async_requests(
                     DataServerRequest::CommissionInfo { callback_id, brokerage, symbol_name } => {
                         handle_callback(
                             || commission_info_response(mode, brokerage, symbol_name, stream_name, callback_id),
+                            sender.clone()).await
+                    }
+
+                    DataServerRequest::SessionMarketHours { callback_id, data_vendor, symbol_name, date } => {
+                        handle_callback(
+                            || session_market_hours_response(mode, data_vendor, symbol_name, date, stream_name, callback_id),
                             sender.clone()).await
                     }
 

@@ -11,7 +11,7 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
-use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
+use crate::standardized_types::symbol_info::{CommissionInfo, SessionMarketHours, SymbolInfo};
 
 /// An Api key String
 pub type ApiKey = String;
@@ -125,10 +125,16 @@ pub enum DataServerRequest {
         symbol_name: SymbolName
     },
 
+    SessionMarketHours{
+        callback_id: u64,
+        data_vendor: DataVendor,
+        symbol_name: SymbolName,
+        date: String
+    },
+
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage},
     RegisterStreamer{port: u16, secs: u64, subsec: u32},
-
 }
 
 impl DataServerRequest {
@@ -164,6 +170,7 @@ impl DataServerRequest {
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
             DataServerRequest::RegisterStreamer{..} => {}
             DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::SessionMarketHours { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -285,7 +292,9 @@ DataServerResponse {
 
     RegistrationResponse(u16),
 
-    CommissionInfo{callback_id: u64, commission_info: CommissionInfo}
+    CommissionInfo{callback_id: u64, commission_info: CommissionInfo},
+
+    SessionMarketHours{callback_id: u64, session_market_hours: SessionMarketHours}
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -327,6 +336,7 @@ impl DataServerResponse {
             DataServerResponse::SymbolNames {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::RegistrationResponse(_) => None,
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
+            DataServerResponse::SessionMarketHours { callback_id,.. } => Some(callback_id.clone()),
         }
     }
 }
