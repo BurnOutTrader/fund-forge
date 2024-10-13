@@ -108,6 +108,9 @@ fn historical_base_data_updates(base_data_enum: BaseDataEnum, time: DateTime<Utc
 
 pub(crate) fn add_account(mode: StrategyMode, account_info: AccountInfo) {
     let map = BACKTEST_LEDGERS.entry(account_info.brokerage).or_insert(DashMap::new());
+    if map.contains_key(&account_info.account_id) {
+        return;
+    }
     map.insert(account_info.account_id.clone() ,Ledger::new(account_info, mode));
 }
 
