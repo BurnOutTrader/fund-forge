@@ -7,7 +7,7 @@ use crate::strategies::indicators::indicator_enum::IndicatorEnum;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
-use crate::strategies::ledgers::{AccountId, AccountInfo, Currency};
+use crate::strategies::ledgers::{AccountId, AccountSetup, Currency};
 use crate::standardized_types::base_data::history::{range_history_data};
 use crate::standardized_types::enums::{OrderSide, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -161,8 +161,8 @@ impl FundForgeStrategy {
         strategy
     }
 
-    pub async fn add_account(&self, account_info: AccountInfo) {
-        add_account(self.mode.clone(), account_info);
+    pub async fn add_account(&self, account_setup: AccountSetup) {
+        add_account(self.mode.clone(), account_setup);
     }
 
     pub async fn get_market_fill_price_estimate (

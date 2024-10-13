@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
-use crate::strategies::ledgers::{AccountId, AccountInfo, Currency, Ledger};
+use crate::strategies::ledgers::{AccountId, AccountSetup, Currency, Ledger};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
@@ -106,12 +106,12 @@ fn historical_base_data_updates(base_data_enum: BaseDataEnum, time: DateTime<Utc
     }
 }
 
-pub(crate) fn add_account(mode: StrategyMode, account_info: AccountInfo) {
-    let map = BACKTEST_LEDGERS.entry(account_info.brokerage).or_insert(DashMap::new());
-    if map.contains_key(&account_info.account_id) {
+pub(crate) fn add_account(mode: StrategyMode, account_setup: AccountSetup) {
+    let map = BACKTEST_LEDGERS.entry(account_setup.brokerage).or_insert(DashMap::new());
+    if map.contains_key(&account_setup.account_id) {
         return;
     }
-    map.insert(account_info.account_id.clone() ,Ledger::new(account_info, mode));
+    map.insert(account_setup.account_id.clone() ,Ledger::user_initiated(account_setup, mode));
 }
 
 pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decimal, account_currency: Currency) -> Sender<MarketMessageEnum> {
