@@ -174,7 +174,7 @@ async fn main() {
       brokerage: Brokerage::Test,
       cash_value: dec!(100000),
       currency: Currency::USD,
-      is_hedging: false,
+      is_hedging: false, //will be implemented but not currently relevant
       buy_limit: None, //will be implemented but not currently relevant
       sell_limit: None, //will be implemented but not currently relevant
       max_orders: None, //will be implemented but not currently relevant
