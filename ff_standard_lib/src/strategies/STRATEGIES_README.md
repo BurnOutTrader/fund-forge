@@ -174,12 +174,12 @@ async fn main() {
       brokerage: Brokerage::Test,
       cash_value: dec!(100000),
       currency: Currency::USD,
-      is_hedging: false, //will be implemented but not currently relevant
       buy_limit: None, //will be implemented but not currently relevant
       sell_limit: None, //will be implemented but not currently relevant
       max_orders: None, //will be implemented but not currently relevant
       daily_max_loss: None, //will be implemented but not currently relevant
-      daily_max_reset_time: None, //will be implemented but not currently relevant
+      daily_max_reset_time: None, //will be implemented but not currently relevant, will be the hour of the day 
+      daily_max_loss_reset_time_zone: Tz, //will be implemented but not currently relevant, the time zone of the max loss reset hour.
       leverage: 1, //un-leveraged 1 to 1, rithmic and test brokerage does not use this regardless of input.
    };
    // pass in the account info to create an account for this product
