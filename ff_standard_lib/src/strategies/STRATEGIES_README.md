@@ -167,7 +167,7 @@ async fn main() {
         false,
     ).await;
 
-   // We dont have to pass in accounts, but if you want to customise accounts you can do it like this.
+   // You don't have to pass in accounts, but if you want to customise accounts you can do it like this.
    // Any account you use in a backtest will be automatically created if you do not pass it in here.
    let mut account_info = AccountSetup {
       account_id: "123".to_string(),
