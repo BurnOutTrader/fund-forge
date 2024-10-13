@@ -196,7 +196,7 @@ pub async fn manage_async_requests(
                         brokerage,
                         callback_id,
                         symbol_name,
-                        quantity
+                        quantity,
                     } => handle_callback(
                         || intraday_margin_required_response(brokerage, mode, stream_name, symbol_name, quantity, callback_id),
                         sender.clone()).await,

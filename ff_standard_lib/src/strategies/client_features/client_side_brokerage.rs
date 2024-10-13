@@ -10,7 +10,7 @@ use crate::strategies::client_features::server_connections::{send_request, Strat
 use crate::strategies::ledgers::AccountId;
 
 impl Brokerage {
-    pub async fn intraday_margin_required(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Price, FundForgeError> {
+    pub async fn intraday_margin_required(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Option<Price>, FundForgeError> {
         let request = DataServerRequest::IntradayMarginRequired {
             callback_id: 0,
             brokerage: self.clone(),

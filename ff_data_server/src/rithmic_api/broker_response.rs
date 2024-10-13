@@ -80,7 +80,7 @@ impl BrokerApiResponse for RithmicClient {
                 DataServerResponse::IntradayMarginRequired {
                     callback_id,
                     symbol_name,
-                    price: required_margin,
+                    price: Some(required_margin),
                 }
             }
         }
@@ -107,7 +107,7 @@ impl BrokerApiResponse for RithmicClient {
                 DataServerResponse::IntradayMarginRequired {
                     callback_id,
                     symbol_name,
-                    price: required_margin,
+                    price: Some(required_margin),
                 }
             }
         }

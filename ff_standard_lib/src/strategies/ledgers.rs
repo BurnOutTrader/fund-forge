@@ -69,6 +69,7 @@ pub struct Ledger {
     pub currency: Currency,
     pub cash_used: Price,
     pub positions: DashMap<SymbolName, Position>,
+    pub margin_used: DashMap<SymbolName, Price>,
     pub positions_closed: DashMap<SymbolName, Vec<Position>>,
     pub positions_counter: DashMap<SymbolName, u64>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
@@ -92,6 +93,7 @@ impl Ledger {
             currency: account_info.currency,
             cash_used: account_info.cash_used,
             positions,
+            margin_used: Default::default(),
             positions_closed: DashMap::new(),
             positions_counter: DashMap::new(),
             symbol_info: DashMap::new(),
@@ -349,14 +351,21 @@ pub(crate) mod historical_ledgers {
     use crate::standardized_types::time_slices::TimeSlice;
 
     impl Ledger {
-        pub async fn release_margin_used(&mut self, symbol_name: &SymbolName, quantity: Volume) {
-            let margin = self.brokerage.intraday_margin_required(symbol_name.clone(), quantity).await.unwrap();
-            self.cash_available += margin;
-            self.cash_used -= margin;
+        pub async fn release_margin_used(&mut self, symbol_name: &SymbolName) {
+            if let Some((_, margin_used)) = self.margin_used.remove(symbol_name) {
+                self.cash_available += margin_used;
+                self.cash_used -= margin_used;
+            }
         }
 
-        pub async fn commit_margin(&mut self, symbol_name: &SymbolName, quantity: Volume) -> Result<(), FundForgeError> {
+        pub async fn commit_margin(&mut self, symbol_name: &SymbolName, quantity: Volume, market_price: Price) -> Result<(), FundForgeError> {
             let margin = self.brokerage.intraday_margin_required(symbol_name.clone(), quantity).await?;
+            let margin =match margin {
+                None => {
+                    quantity * market_price
+                }
+                Some(margin) => margin
+            };
             // Check if the available cash is sufficient to cover the margin
             if self.cash_available < margin {
                 return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
@@ -383,6 +392,7 @@ pub(crate) mod historical_ledgers {
                 positions: DashMap::new(),
                 positions_closed: DashMap::new(),
                 positions_counter: DashMap::new(),
+                margin_used: DashMap::new(),
                 symbol_info: DashMap::new(),
                 open_pnl: DashMap::new(),
                 booked_pnl: dec!(0.0),
@@ -469,7 +479,7 @@ pub(crate) mod historical_ledgers {
                 if is_reducing {
                     remaining_quantity -= existing_position.quantity_open;
                     let event= existing_position.reduce_paper_position_size(market_price, quantity, time, tag.clone(), self.currency).await;
-                    self.release_margin_used(&symbol_name, quantity).await;
+                    self.release_margin_used(&symbol_name).await;
 
                     match &event {
                         PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
@@ -491,7 +501,7 @@ pub(crate) mod historical_ledgers {
                     self.cash_value = self.cash_used + self.cash_available;
                     updates.push(event);
                 } else {
-                    match self.commit_margin(&symbol_name, quantity).await {
+                    match self.commit_margin(&symbol_name, quantity, market_price).await {
                         Ok(_) => {}
                         Err(e) => {
                             return Err(OrderUpdateEvent::OrderRejected {
@@ -512,7 +522,7 @@ pub(crate) mod historical_ledgers {
                 }
             }
             if remaining_quantity > dec!(0.0) {
-                match self.commit_margin(&symbol_name, quantity).await {
+                match self.commit_margin(&symbol_name, quantity, market_price).await {
                     Ok(_) => {}
                     Err(e) => {
                         return Err(OrderUpdateEvent::OrderRejected {
@@ -580,7 +590,7 @@ pub(crate) mod historical_ledgers {
                 existing_position.is_closed = true;
 
                 // Calculate booked profit by reducing the position size
-                self.release_margin_used(&symbol_name, existing_position.quantity_open).await;
+                self.release_margin_used(&symbol_name).await;
                 let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
                 match &event {
                     PositionUpdateEvent::PositionClosed { booked_pnl,.. } => {

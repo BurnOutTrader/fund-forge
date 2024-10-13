@@ -12,8 +12,6 @@ use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 
 // Responses
-
-
 /// return `DataServerResponse::CommissionInfo` or `DataServerResponse::Error(FundForgeError)`.
 pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, symbol_name: SymbolName, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
     match brokerage {
@@ -119,7 +117,6 @@ pub async fn intraday_margin_required_response(brokerage: Brokerage, mode: Strat
     }
     DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
 }
-
 
 pub async fn overnight_margin_required_response(brokerage: Brokerage, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
     match brokerage {

@@ -103,7 +103,7 @@ impl BrokerApiResponse for TestApiClient {
         DataServerResponse::IntradayMarginRequired {
             callback_id,
             symbol_name,
-            price: margin_required,  // Here price represents the margin required
+            price: Some(margin_required),  // Here price represents the margin required
         }
     }
 

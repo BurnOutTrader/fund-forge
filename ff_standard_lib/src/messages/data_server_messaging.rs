@@ -272,16 +272,18 @@ DataServerResponse {
         info_vec: Vec<SymbolInfo>
     },
 
+    /// if `price: None` is returned the engine will treat the product as an un-leveraged product and calculate cash used as 1 to 1
     IntradayMarginRequired {
         callback_id: u64,
         symbol_name: SymbolName,
-        price: Price
+        price: Option<Price>
     },
 
+    /// if `price: None` is returned the engine will treat the product as an un-leveraged product and calculate cash used as 1 to 1
     OvernightMarginRequired {
         callback_id: u64,
         symbol_name: SymbolName,
-        price: Price
+        price: Option<Price>
     },
 
     SubscribeResponse {
