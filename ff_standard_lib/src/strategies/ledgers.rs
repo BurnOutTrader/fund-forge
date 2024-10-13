@@ -65,13 +65,12 @@ pub struct AccountSetup {
     pub brokerage: Brokerage,
     pub cash_value: Price,
     pub currency: Currency,
-    pub buy_limit: Option<Volume>,
-    pub sell_limit: Option<Volume>,
+    pub size_limit: Option<Volume>,
     pub max_orders: Option<Volume>,
     pub daily_max_loss: Option<Price>,
     pub daily_max_loss_reset_hour: Option<u32>, //the hour of the day that the dail max loss resets
     pub daily_max_loss_reset_time_zone: Tz,
-    leverage: u32
+    leverage: Option<u32>
 }
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
 #[derive(Debug)]
@@ -123,6 +122,7 @@ impl Ledger {
 
     pub fn user_initiated(account_setup: AccountSetup, strategy_mode: StrategyMode) -> Self {
         //todo, add daily max loss, max order size etc to ledger
+        let leverage = account_setup.leverage.unwrap_or_else(|| 1);
         let ledger = Self {
             account_id: account_setup.account_id,
             brokerage: account_setup.brokerage,
@@ -138,7 +138,7 @@ impl Ledger {
             open_pnl: DashMap::new(),
             booked_pnl: dec!(0.0),
             mode: strategy_mode,
-            leverage: account_setup.leverage
+            leverage
         };
         ledger
     }
