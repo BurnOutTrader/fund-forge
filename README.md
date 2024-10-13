@@ -59,7 +59,7 @@ You will need to manually download the files, then put all the .csv files into 1
 
 Change the following to suit the symbol and your directory.
 
-The parsing logic expects the original files to be in a director with the same symbol name eg "/Users/{username}/Downloads/AUD-CAD"
+The parsing logic expects the original files to be in a directory with the same symbol name eg "/Users/{username}/Downloads/AUD-CAD"
 ```rust
 fn main() {
     let your_folder_path: String = "/Downloads".to_string(); //it will be assumed there is a folder named "AUD-CAD" here

@@ -99,14 +99,14 @@ impl VendorApiResponse for TestApiClient {
         let broadcaster = self.data_feed_broadcasters.get(&subscription).unwrap().value().clone();
         self.data_feed_tasks.insert(subscription.clone(), tokio::task::spawn(async move {
             let naive_dt_1 = NaiveDate::from_ymd_opt(2024, 6, 01).unwrap().and_hms_opt(0, 0, 0).unwrap();
-            let utc_dt_1 = Utc.from_utc_datetime(&naive_dt_1);
+            let from_time = Utc.from_utc_datetime(&naive_dt_1);
 
             let naive_dt_2 = NaiveDate::from_ymd_opt(2024, 6, 6).unwrap().and_hms_opt(0, 0, 0).unwrap();
-            let utc_dt_2 = Utc.from_utc_datetime(&naive_dt_2);
+            let to_time = Utc.from_utc_datetime(&naive_dt_2);
 
-            let mut last_time = utc_dt_1;
-            'main_loop: while last_time < utc_dt_2 {
-                let data = match DATA_BASE.get_data_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, utc_dt_1, utc_dt_2).await {
+            let mut last_time = from_time;
+            'main_loop: while last_time < to_time {
+                let data = match DATA_BASE.get_data_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, from_time, to_time).await {
                     Ok(data) => data,
                     Err(e) => {
                         eprintln!("Failed to get test data: {}", e);
