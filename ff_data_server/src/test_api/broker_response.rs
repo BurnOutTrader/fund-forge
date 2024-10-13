@@ -63,7 +63,7 @@ impl BrokerApiResponse for TestApiClient {
                positions: vec![],
                account_id,
                is_hedging: false,
-               leverage: 0,
+               leverage: 1,
                buy_limit: None,
                sell_limit: None,
                max_orders: None,

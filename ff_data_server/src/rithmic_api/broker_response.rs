@@ -58,7 +58,7 @@ impl BrokerApiResponse for RithmicClient {
             cash_used: dec!(0.0),
             positions: vec![],
             is_hedging: false,
-            leverage: 0,
+            leverage: 1,
             buy_limit: None,
             sell_limit: None,
             max_orders: None,

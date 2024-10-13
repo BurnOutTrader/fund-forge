@@ -180,7 +180,7 @@ async fn main() {
       max_orders: None, //will be implemented but not currently relevant
       daily_max_loss: None, //will be implemented but not currently relevant
       daily_max_reset_time: None, //will be implemented but not currently relevant
-      leverage: 0,
+      leverage: 1, //un-leveraged 1 to 1
    };
    // pass in the account info to create an account for this product
    strategy.add_account(account_info);
