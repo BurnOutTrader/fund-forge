@@ -19,7 +19,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - [Back Test Accuracy](ff_standard_lib/src/strategies/ACCURACY_README.md)
 - [Developing Engine](DEV_README.md)
 - [Current Development Tasks](DEV_TODO_ISSUES.md)
-- [The End Game](#the-end-game)
+- [The End Game: Project Goals](#the-end-game)
 - [Licence](LICENCE.md)
 
 ### Initial Setup
