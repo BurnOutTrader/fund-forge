@@ -17,7 +17,7 @@ use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 #[allow(dead_code)]
 #[async_trait]
 impl VendorApiResponse for RithmicClient {
-    async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse{
+    async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, _time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse{
         const SYSTEM: SysInfraType = SysInfraType::TickerPlant;
         match mode {
             StrategyMode::Backtest => {

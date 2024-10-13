@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use tokio::sync::oneshot;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::standardized_types::broker_enum::Brokerage;
@@ -72,10 +73,15 @@ impl Brokerage {
         }
     }
 
-    pub async fn symbol_names(&self, callback_id: u64) -> Result<Vec<SymbolName>, FundForgeError> {
+    pub async fn symbol_names(&self, callback_id: u64, time: Option<DateTime<Utc>>) -> Result<Vec<SymbolName>, FundForgeError> {
+        let time = match time {
+            None => None,
+            Some(t) => Some(t.to_string())
+        };
         let request = DataServerRequest::SymbolNames {
             callback_id,
-            brokerage: self.clone()
+            brokerage: self.clone(),
+            time
         };
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);

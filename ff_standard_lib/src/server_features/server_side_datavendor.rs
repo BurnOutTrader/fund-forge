@@ -17,6 +17,7 @@ pub trait VendorApiResponse: Sync + Send {
         // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,
         market_type: MarketType,
+        time: Option<DateTime<Utc>>,
         callback_id: u64
     ) -> DataServerResponse;
 

@@ -67,7 +67,8 @@ pub enum DataServerRequest {
     SymbolsVendor {
         callback_id: u64,
         data_vendor: DataVendor,
-        market_type: MarketType
+        market_type: MarketType,
+        time: Option<String>
     },
     BaseDataTypes {
         callback_id: u64,
@@ -133,7 +134,7 @@ pub enum DataServerRequest {
     },
 
     Accounts{callback_id: u64, brokerage: Brokerage},
-    SymbolNames{callback_id: u64, brokerage: Brokerage},
+    SymbolNames{callback_id: u64, brokerage: Brokerage, time: Option<String>},
     RegisterStreamer{port: u16, secs: u64, subsec: u32},
 }
 

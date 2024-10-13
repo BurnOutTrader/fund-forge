@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use rust_decimal_macros::dec;
 use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
 use ff_standard_lib::helpers::decimal_calculators::round_to_decimals;
@@ -16,7 +17,7 @@ use crate::test_api::api_client::TestApiClient;
 
 #[async_trait]
 impl BrokerApiResponse for TestApiClient {
-    async fn symbol_names_response(&self, _mode: StrategyMode, _stream_name: StreamName,  callback_id: u64) -> DataServerResponse {
+    async fn symbol_names_response(&self, _mode: StrategyMode, _time: Option<DateTime<Utc>>, _stream_name: StreamName,  callback_id: u64) -> DataServerResponse {
         DataServerResponse::SymbolNames {
             callback_id,
             symbol_names: vec![

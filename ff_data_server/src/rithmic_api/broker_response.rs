@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
@@ -12,7 +13,7 @@ use crate::rithmic_api::products::{get_available_symbol_names, get_futures_commi
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
-    async fn symbol_names_response(&self, _mode: StrategyMode, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+    async fn symbol_names_response(&self, _mode: StrategyMode, _time: Option<DateTime<Utc>>, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         let symbol_names = get_available_symbol_names();
 
         if symbol_names.is_empty() {

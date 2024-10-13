@@ -7,6 +7,7 @@ use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use chrono::{DateTime, Utc};
 use std::path::PathBuf;
+use std::str::FromStr;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
@@ -128,10 +129,20 @@ pub async fn manage_async_requests(
                         data_vendor,
                         market_type,
                         callback_id,
-                    } => handle_callback(
-                        || symbols_response(data_vendor, mode,stream_name, market_type, callback_id),
-                        sender.clone()
-                    ).await,
+                        time
+                    } => {
+                        let time = match time {
+                            None => None,
+                            Some(t) => match DateTime::<Utc>::from_str(&t) {
+                                Ok(t) => Some(t),
+                                Err(_) => None
+                            }
+                        };
+                        handle_callback(
+                            || symbols_response(data_vendor, mode,stream_name, market_type, time, callback_id),
+                            sender.clone()
+                        ).await
+                    },
 
                     DataServerRequest::Resolutions {
                         callback_id,
@@ -190,9 +201,16 @@ pub async fn manage_async_requests(
                         || itraday_margin_required_response(brokerage, mode, stream_name, symbol_name, quantity, callback_id),
                         sender.clone()).await,
 
-                    DataServerRequest::SymbolNames{ callback_id, brokerage } => {
+                    DataServerRequest::SymbolNames{ callback_id, brokerage, time } => {
+                        let time = match time {
+                            None => None,
+                            Some(t) => match DateTime::<Utc>::from_str(&t) {
+                                Ok(t) => Some(t),
+                                Err(_) => None
+                            }
+                        };
                         handle_callback(
-                            || symbol_names_response(brokerage, mode, stream_name, callback_id),
+                            || symbol_names_response(brokerage, mode, stream_name, time, callback_id),
                             sender.clone()).await
                     }
 

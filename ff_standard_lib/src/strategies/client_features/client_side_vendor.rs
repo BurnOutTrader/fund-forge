@@ -33,9 +33,14 @@ impl Symbol {
 }
 
 impl DataVendor {
-    pub async fn symbols(&self, market_type: MarketType) -> Result<Vec<Symbol>, FundForgeError> {
+    pub async fn symbols(&self, market_type: MarketType, time: Option<DateTime<Utc>>) -> Result<Vec<Symbol>, FundForgeError> {
+        let time = match time {
+            None => None,
+            Some(t) => Some(t.to_string())
+        };
         let request = DataServerRequest::SymbolsVendor {
             callback_id: 0,
+            time,
             data_vendor: self.clone(),
             market_type,
         };

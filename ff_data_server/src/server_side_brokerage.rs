@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
@@ -37,18 +38,19 @@ pub async fn symbol_names_response(
     brokerage: Brokerage,
     mode: StrategyMode,
     stream_name: StreamName,
+    time: Option<DateTime<Utc>>,
     callback_id: u64
 ) -> DataServerResponse {
     match brokerage {
         Brokerage::Rithmic(system) => {
             if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                return client.value().symbol_names_response(mode, stream_name, callback_id).await
+                return client.value().symbol_names_response(mode, time, stream_name, callback_id).await
             }
         },
-        Brokerage::Test => return TEST_CLIENT.symbol_names_response(mode, stream_name, callback_id).await,
+        Brokerage::Test => return TEST_CLIENT.symbol_names_response(mode, time, stream_name, callback_id).await,
         Brokerage::Bitget => {
             if let Some(client) = BITGET_CLIENT.get() {
-                return client.symbol_names_response(mode, stream_name, callback_id).await
+                return client.symbol_names_response(mode, time, stream_name, callback_id).await
             }
         }
     }

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use crate::messages::data_server_messaging::DataServerResponse;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::Volume;
@@ -16,6 +17,7 @@ pub trait BrokerApiResponse: Sync + Send {
     async fn symbol_names_response(
         &self,
         mode: StrategyMode,
+        time: Option<DateTime<Utc>>,
         // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
         // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,

@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
@@ -11,7 +12,7 @@ use crate::bitget_api::api_client::BitgetClient;
 #[async_trait]
 impl BrokerApiResponse for BitgetClient {
     #[allow(unused)]
-    async fn symbol_names_response(&self, mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
+    async fn symbol_names_response(&self, mode: StrategyMode, time: Option<DateTime<Utc>>, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         todo!()
     }
 

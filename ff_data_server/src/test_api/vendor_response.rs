@@ -22,7 +22,7 @@ use crate::test_api::api_client::TestApiClient;
 
 #[async_trait]
 impl VendorApiResponse for TestApiClient {
-    async fn symbols_response(&self,  _mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse{
+    async fn symbols_response(&self,  _mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, _time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse{
         DataServerResponse::Symbols {
             callback_id,
             symbols: vec![

@@ -42,18 +42,19 @@ pub async fn symbols_response(
     mode: StrategyMode,
     stream_name: StreamName,
     market_type: MarketType,
+    time: Option<DateTime<Utc>>,
     callback_id: u64
 ) -> DataServerResponse {
     match data_vendor {
         DataVendor::Rithmic(system) => {
             if let Some(client) = get_rithmic_client(&system) {
-                return client.symbols_response(mode, stream_name, market_type, callback_id).await
+                return client.symbols_response(mode, stream_name, market_type, time, callback_id).await
             }
         },
-        DataVendor::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, callback_id).await,
+        DataVendor::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, time, callback_id).await,
         DataVendor::Bitget => {
             if let Some(client) = BITGET_CLIENT.get() {
-                return client.symbols_response(mode, stream_name, market_type, callback_id).await;
+                return client.symbols_response(mode, stream_name, market_type, time, callback_id).await;
             }
         }
     }

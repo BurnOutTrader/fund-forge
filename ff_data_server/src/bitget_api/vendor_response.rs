@@ -10,7 +10,7 @@ use crate::bitget_api::api_client::BitgetClient;
 #[async_trait]
 impl VendorApiResponse for BitgetClient {
     #[allow(unused)]
-    async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse {
         todo!()
     }
     #[allow(unused)]
