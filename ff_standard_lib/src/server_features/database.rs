@@ -19,7 +19,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 // use market type in folder structure
 pub struct HybridStorage {
     base_path: PathBuf,
-    mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>,
+    mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>,     //todo: don't cache indefinitely
 }
 
 impl HybridStorage {
@@ -289,6 +289,7 @@ impl HybridStorage {
         Ok(None)
     }
 
+    //todo: don't cache indefinitely
     fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
         let mut cache = self.mmap_cache.lock().unwrap();
         if let Some(mmap) = cache.get(file_path.to_string_lossy().as_ref()) {
