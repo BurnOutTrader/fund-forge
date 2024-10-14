@@ -9,7 +9,8 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::messages::data_server_messaging::FundForgeError;
-use crate::standardized_types::enums::{MarketType, OrderSide, SubscriptionResolutionType};
+use crate::standardized_types::base_data::tick::Aggressor;
+use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
 use crate::standardized_types::new_types::{Price, Volume};
 
 pub struct HeikinAshiConsolidator {
@@ -128,16 +129,10 @@ impl HeikinAshiConsolidator {
                 self.previous_ha_open = ha_open;
                 let time = open_time(&self.subscription, new_data.time_utc());
 
-                let (ask_volume, bid_volume) = match tick.side {
-                    Some(side) => {
-                        match side {
-                            OrderSide::Buy => (dec!(0.0), tick.volume),
-                            OrderSide::Sell => (tick.volume, dec!(0.0))
-                        }
-                    }
-                    None => {
-                        (dec!(0.0), dec!(0.0))
-                    }
+                let (ask_volume, bid_volume) = match tick.aggressor {
+                    Aggressor::Buy => (dec!(0.0), tick.volume),
+                    Aggressor::Sell => (tick.volume, dec!(0.0)),
+                    Aggressor::None => (dec!(0), dec!(0))
                 };
 
                 self.candle_from_base_data(
@@ -285,12 +280,11 @@ impl HeikinAshiConsolidator {
                             candle.low = tick.price.min(candle.low);
                             candle.range = self.market_type.round_price(candle.high - candle.low, self.tick_size, self.decimal_accuracy);
                             candle.volume += tick.volume;
-                            if let Some(side) = tick.side {
-                                match side {
-                                    OrderSide::Buy => candle.bid_volume += tick.volume,
-                                    OrderSide::Sell => candle.ask_volume += tick.volume
-                                };
-                            }
+                            match tick.aggressor {
+                                Aggressor::Buy => candle.bid_volume += tick.volume,
+                                Aggressor::Sell => candle.ask_volume += tick.volume,
+                                Aggressor::None => {}
+                            };
                             candle.close = self.market_type.round_price((candle.open + candle.high + candle.low + candle.close) / dec!(4.0), self.tick_size, self.decimal_accuracy);
                             return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                         }

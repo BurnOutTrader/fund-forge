@@ -24,7 +24,7 @@ use tungstenite::{Message};
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;
-use ff_standard_lib::standardized_types::base_data::tick::Tick;
+use ff_standard_lib::standardized_types::base_data::tick::{Aggressor, Tick};
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide};
 use ff_standard_lib::standardized_types::subscriptions::Symbol;
 use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
@@ -196,8 +196,8 @@ pub async fn handle_responses_from_ticker_plant(
                                     },
                                     150 => {
                                         if let Ok(msg) = LastTrade::decode(&message_buf[..]) {
-                                            //println!("Last Trade (Template ID: 150) from Server: {:?}", msg);
-                                            tokio::spawn(handle_tick(client.clone(), msg));
+                                           // println!("Last Trade (Template ID: 150) from Server: {:?}", msg);
+                                            handle_tick(client.clone(), msg).await;
                                         }
                                     },
                                     151 => {
@@ -205,7 +205,7 @@ pub async fn handle_responses_from_ticker_plant(
                                             // Best Bid Offer
                                             // From Server
                                             //println!("Best Bid Offer (Template ID: 151) from Server: {:?}", msg);
-                                            tokio::spawn(handle_quote(client.clone(), msg));
+                                            handle_quote(client.clone(), msg).await;
                                         }
                                     },
                                     152 => {
@@ -358,12 +358,12 @@ async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
         }
     };
     let side = match msg.aggressor {
-        None => None,
+        None => Aggressor::None,
         Some(aggressor) => {
             match aggressor {
-                1 => Some(OrderSide::Buy),
-                2 => Some(OrderSide::Sell),
-                _ => None,
+                1 => Aggressor::Buy,
+                2 => Aggressor::Sell,
+                _ => Aggressor::None,
             }
         }
     };
@@ -371,8 +371,15 @@ async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
         None => return,
         Some(symbol) => symbol
     };
+    let time = msg.ssboe.and_then(|ssboe| msg.usecs.map(|usecs| {
+        chrono::DateTime::from_timestamp(ssboe as i64, usecs as u32 * 1000)
+            .unwrap_or_else(|| Utc::now())
+    }))
+        .unwrap_or_else(|| Utc::now())
+        .to_string();
+
     let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
-    let tick = Tick::new(symbol, price, Utc::now().to_string(), volume, side);
+    let tick = Tick::new(symbol, price, time.to_string(), volume, side);
     if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
         match broadcaster.value().send(BaseDataEnum::Tick(tick)) {
             Ok(_) => {}
@@ -387,77 +394,71 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
         Some(symbol) => symbol
     };
 
-    if let Some(price) = msg.ask_price {
-        let ask_price = match Decimal::from_f64(price) {
-            None => return,
-            Some(ask_price) => ask_price
-        };
-        if let Some(volume) = msg.ask_size {
-            let ask_volume = match Decimal::from_i32(volume) {
-                None => return,
-                Some(volume) => volume
-            };
-            if let Some(mut ask_book) = client.ask_book.get_mut(&symbol) {
-                let level = BookLevel::new(0, ask_price, ask_volume);
-                ask_book.insert(0, level);
-            }
+    let mut updated = false;
+
+    // Handle ask update
+    if let (Some(price), Some(volume)) = (msg.ask_price, msg.ask_size) {
+        if let (Some(ask_price), Some(ask_volume)) = (Decimal::from_f64(price), Decimal::from_i32(volume)) {
+            client.ask_book.entry(symbol.clone()).or_default().insert(0, BookLevel::new(0, ask_price, ask_volume));
+            updated = true;
         }
     }
 
-    if let Some(price) = msg.bid_price {
-        let bid_price = match Decimal::from_f64(price) {
-            None => return,
-            Some(bid_price) => bid_price
-        };
-        if let Some(volume) = msg.bid_size {
-            let bid_volume = match Decimal::from_i32(volume) {
-                None => return,
-                Some(volume) => volume
-            };
-            if let Some(mut bid_book) = client.bid_book.get_mut(&symbol) {
-                let level: BookLevel = BookLevel::new(0, bid_price, bid_volume);
-                bid_book.insert(0, level);
-            }
+    // Handle bid update
+    if let (Some(price), Some(volume)) = (msg.bid_price, msg.bid_size) {
+        if let (Some(bid_price), Some(bid_volume)) = (Decimal::from_f64(price), Decimal::from_i32(volume)) {
+            client.bid_book.entry(symbol.clone()).or_default().insert(0, BookLevel::new(0, bid_price, bid_volume));
+            updated = true;
         }
     }
-    // From Server
 
-    let exchange = match msg.exchange {
-        None => return,
-        Some(exchange) => {
-            match FuturesExchange::from_string(&exchange) {
-                Ok(ex) => ex,
-                Err(_e) => {
-                    eprintln!("Error deserializing Exchange");
-                    return
-                }
-            }
+    if !updated {
+        return;
+    }
+
+    let exchange = match msg.exchange.as_deref().and_then(|e| FuturesExchange::from_string(e).ok()) {
+        Some(ex) => ex,
+        None => {
+            eprintln!("Error deserializing Exchange for symbol {}", symbol);
+            return;
         }
     };
 
     if let Some(broadcaster) = client.quote_feed_broadcasters.get(&symbol) {
-        if let Some(ask_book) = client.ask_book.get(&symbol) {
-            if let Some(best_offer) = ask_book.value().get(&0) {
-                if let Some(bid_book) = client.bid_book.get(&symbol) {
-                    if let Some(best_bid) = bid_book.value().get(&0) {
-                        let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
-                        let data = BaseDataEnum::Quote(
-                            Quote {
-                                symbol,
-                                ask: best_offer.price,
-                                bid: best_bid.price,
-                                ask_volume: best_offer.volume,
-                                bid_volume: best_bid.volume,
-                                time: Utc::now().to_string(),
-                            }
-                        );
-                        match broadcaster.value().send(data) {
-                            Ok(_) => {}
-                            Err(_) => {}
-                        }
-                    }
-                }
+        let (ask, ask_volume) = client.ask_book
+            .get(&symbol)
+            .and_then(|book| book.get(&0).map(|level| (level.price, level.volume)))
+            .unwrap_or_else(|| (Decimal::ZERO, Decimal::ZERO));
+
+        let (bid, bid_volume) = client.bid_book
+            .get(&symbol)
+            .and_then(|book| book.get(&0).map(|level| (level.price, level.volume)))
+            .unwrap_or_else(|| (Decimal::ZERO, Decimal::ZERO));
+
+        // Return if we don't have both valid sides
+        if ask == Decimal::ZERO || bid == Decimal::ZERO {
+            return;
+        }
+
+        let symbol_obj = Symbol::new(symbol.clone(), client.data_vendor.clone(), MarketType::Futures(exchange));
+        let data = BaseDataEnum::Quote(
+            Quote {
+                symbol: symbol_obj,
+                ask,
+                bid,
+                ask_volume,
+                bid_volume,
+                time: msg.ssboe.and_then(|ssboe| msg.usecs.map(|usecs| {
+                    chrono::DateTime::from_timestamp(ssboe as i64, usecs as u32 * 1000)
+                        .unwrap_or_else(|| Utc::now())
+                }))
+                    .unwrap_or_else(|| Utc::now())
+                    .to_string(),
             }
+        );
+
+        if let Err(e) = broadcaster.send(data) {
+           eprintln!("Failed to send quote for symbol {}: {}", symbol, e);
         }
     }
 }

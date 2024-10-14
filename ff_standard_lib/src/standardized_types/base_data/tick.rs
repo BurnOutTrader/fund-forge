@@ -1,5 +1,5 @@
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{MarketType, OrderSide};
+use crate::standardized_types::enums::{MarketType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
@@ -7,6 +7,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use std::fmt;
 use std::fmt::Debug;
 use std::str::FromStr;
+use strum_macros::Display;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, TimeString, Volume};
@@ -27,7 +28,16 @@ pub struct Tick {
     pub price: Price,
     pub time: TimeString,
     pub volume: Volume,
-    pub side: Option<OrderSide>
+    pub aggressor: Aggressor
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Display)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub enum Aggressor {
+    Buy,
+    Sell,
+    None
 }
 
 impl BaseData for Tick {
@@ -94,41 +104,33 @@ impl Tick {
     /// 4. `volume` - The volume of the trade.
     /// 5. `side` - The side of the trade `Side` enum variant.
     /// 6. `data_vendor` - The data vendor of the trade.
-    pub fn new(symbol: Symbol, price: Price, time: TimeString, volume: Volume, side: Option<OrderSide>) -> Self {
+    pub fn new(symbol: Symbol, price: Price, time: TimeString, volume: Volume, aggressor: Aggressor) -> Self {
         Tick {
             symbol,
             price,
             time,
             volume,
-            side,
+            aggressor,
         }
     }
 }
 
 impl fmt::Display for Tick {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let side = match self.side {
-            None => "None".to_string(),
-            Some(side) => side.to_string()
-        };
         write!(
             f,
             "{:?},{},{},{},{}",
-            self.symbol, self.price, self.volume, side, self.time
+            self.symbol, self.price, self.volume, self.aggressor, self.time
         )
     }
 }
 
 impl fmt::Debug for Tick {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let side = match self.side {
-            None => "None".to_string(),
-            Some(side) => side.to_string()
-        };
         write!(
             f,
-            "Tick {{ symbol: {:?}, price: {}, volume: {}, side: {}, time: {}}}",
-            self.symbol, self.price, self.volume, side, self.time
+            "Tick {{ symbol: {:?}, price: {}, volume: {}, aggressor: {}, time: {}}}",
+            self.symbol, self.price, self.volume, self.aggressor, self.time
         )
     }
 }

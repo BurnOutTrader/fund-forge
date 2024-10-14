@@ -4,7 +4,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::enums::{MarketType, OrderSide, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -12,6 +12,7 @@ use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::helpers::converters::open_time;
 use crate::messages::data_server_messaging::FundForgeError;
+use crate::standardized_types::base_data::tick::Aggressor;
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::resolution::Resolution;
 
@@ -124,12 +125,13 @@ impl CandleStickConsolidator {
                         candle.low = candle.low.min(tick.price);
                         candle.close = tick.price;
                         candle.range = self.market_type.round_price(candle.high - candle.low, self.tick_size, self.decimal_accuracy);
-                        if let Some(side) = tick.side {
-                            match side {
-                                OrderSide::Buy => candle.bid_volume += tick.volume,
-                                OrderSide::Sell => candle.ask_volume += tick.volume
-                            }
+
+                        match tick.aggressor {
+                            Aggressor::Buy => candle.bid_volume += tick.volume,
+                            Aggressor::Sell => candle.ask_volume += tick.volume,
+                            _ => {}
                         }
+
                         candle.volume += tick.volume;
                         return ConsolidatedData::with_open(BaseDataEnum::Candle(candle.clone()))
                     }
@@ -261,16 +263,10 @@ impl CandleStickConsolidator {
         let time = converters::open_time(&self.subscription, new_data.time_utc());
         match new_data {
             BaseDataEnum::Tick(tick) => {
-                let (ask_volume, bid_volume) = match tick.side {
-                    Some(side) => {
-                        match side {
-                            OrderSide::Buy => (dec!(0.0), tick.volume),
-                            OrderSide::Sell => (tick.volume, dec!(0.0))
-                        }
-                    }
-                    None => {
-                        (dec!(0.0), dec!(0.0))
-                    }
+                let (ask_volume, bid_volume) = match tick.aggressor {
+                    Aggressor::Buy => (dec!(0.0), tick.volume),
+                    Aggressor::Sell => (tick.volume, dec!(0.0)),
+                    Aggressor::None => (dec!(0), dec!(0))
                 };
                 Candle::new(
                     self.subscription.symbol.clone(),
