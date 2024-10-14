@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
 use std::fs::File;
 use std::io::{self, BufRead};
+use std::time::Duration;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
@@ -69,7 +70,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     //new way
     let path = PathBuf::from(your_folder_path);
-    let storage = HybridStorage::new(path);
+    let storage = HybridStorage::new(path, Duration::from_secs(100000));
     storage.save_data_bulk(data).await.unwrap();
 
     Ok(())
