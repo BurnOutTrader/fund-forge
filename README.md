@@ -34,7 +34,7 @@ for more free testing data [Demonstration Testing Data](#demonstration-testing-d
 
 *When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](example_test_strategy/README.md)
 
-The historical engine loads data from the server 1 day at a time, it might pause for a few seconds over weekends as we check for weekend data 1 day at a time, this pause will be longer the more symbols and resolutions we have subscribed to.
+If strategy parameter `tick_over_no_data: bool` == true; The engine might seem to pause for a few seconds over weekends as we check for weekend data 1 day at a time, this pause will be longer the more symbols and resolutions we have subscribed to.
 Even when there is no weekend data, the engine will run at buffer speed through the weekend or no data periods.
 
 ## Demonstration Testing Data
