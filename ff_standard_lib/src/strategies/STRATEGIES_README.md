@@ -791,6 +791,7 @@ fn example(strategy: &FundForgeStrategy, brokerage: Brokerage, account_name: Acc
 ## Timed Events 
 TimedEvents are a way to schedule events to occur at a specific time, they are useful for scheduling events like closing orders at a specific time, or sending notifications.
 We can also specify whether the event should fire during warm up.
+When an event is triggered the event name will be sent to the StrategyBuffer as a `StrategyEvent::TimedEvents(String)`
 ```rust
 fn example() {
     pub enum EventTimeEnum {
@@ -837,9 +838,8 @@ fn example() {
 
     // next we need to create a TimedEvent
     
-    // we need 
-    let (sender, receiver) = mpsc::channel(100);
-    let event = TimedEvent::new("test_event".to_string, event_time, sender);
+    // we need
+    let event = TimedEvent::new("test_event".to_string, event_time);
     
     // then we pass the event to the strategy timed event handler
     strategy.timed_event_subscribe(event).await;
