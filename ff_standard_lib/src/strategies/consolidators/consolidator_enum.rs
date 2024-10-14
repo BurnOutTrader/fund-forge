@@ -138,7 +138,7 @@ impl ConsolidatorEnum {
         let mut from_time = to_time - subtract_duration ;
 
         if to_time.weekday() == Weekday::Sun {
-            from_time - Duration::days(3);
+            from_time -= Duration::days(3);
         }
 
         let base_subscription = DataSubscription::new(
