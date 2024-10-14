@@ -22,10 +22,9 @@ use crate::standardized_types::time_slices::TimeSlice;
 // the engine manages datavendor.update_data() functions, not the user
 // use market type in folder structure
 
-
 pub struct HybridStorage {
     base_path: PathBuf,
-    mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>, //todo [urgent] we need to regularly save any updated data and clear the cache
+    mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>,
     cache_last_accessed: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
     cache_is_updated: Arc<Mutex<HashMap<String, bool>>>,
     clear_cache_duration: Duration
