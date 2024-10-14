@@ -48,6 +48,7 @@ From this data your strategy will consolidate Candles or QuoteBars of any desire
 
 ## File and Folder Structure
 1 file per day for base data, since we focus on keeping only the lowest resolution data available with each vendor.
+
 ![img.png](misc/folder_structure.png)
 
 ### For more testing and development data
