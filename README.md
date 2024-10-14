@@ -671,6 +671,8 @@ This will enable:
 - Keeping secret keys in our private repo for easy login etc
 - Updating servers on our remote machines using git or docker.
 - Have servers always online in the cloud so that they can regularly capture and serialize historical data.
+- Collect all the free market data available at the end of each UTC day.
+- Collect all provider data at the end of each session, if provider has low resolution data (tick, quote, 1 second).
 
 #### Connect a GUI to our remote machines.
 Possibly paid service.

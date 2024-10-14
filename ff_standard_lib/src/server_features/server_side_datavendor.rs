@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use crate::messages::data_server_messaging::DataServerResponse;
+use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use crate::StreamName;
@@ -172,4 +172,8 @@ pub trait VendorApiResponse: Sync + Send {
         date_time: DateTime<Utc>,
         callback_id: u64
     ) -> DataServerResponse;
+
+    // This should be your conversion into the DataVendor implementations historical data download function, historical data will be downloaded at the end of each UTC day.
+    // You
+    async fn update_historical_data_for(subscription: DataSubscription, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<(), FundForgeError>;
 }

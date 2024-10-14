@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
+use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
@@ -48,6 +48,10 @@ impl VendorApiResponse for BitgetClient {
 
     #[allow(unused)]
     async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
+        todo!()
+    }
+    #[allow(unused)]
+    async fn update_historical_data_for(subscription: DataSubscription, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<(), FundForgeError> {
         todo!()
     }
 }

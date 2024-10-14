@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use ff_standard_lib::helpers::converters::{fund_forge_formatted_symbol_name};
-use ff_standard_lib::messages::data_server_messaging::{DataServerResponse};
+use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -182,6 +182,10 @@ impl VendorApiResponse for TestApiClient {
 
     #[allow(unused)]
     async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
+        todo!()
+    }
+    #[allow(unused)]
+    async fn update_historical_data_for(subscription: DataSubscription, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<(), FundForgeError> {
         todo!()
     }
 }

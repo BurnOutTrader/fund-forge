@@ -80,7 +80,7 @@ impl HybridStorage {
                 d.symbol().clone(),
                 d.resolution(),
                 d.base_data_type(),
-                d.time_closed_utc().date().and_hms(0, 0, 0)
+                d.time_closed_utc().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap()
             );
             grouped_data.entry(key).or_insert_with(Vec::new).push(d);
         }
@@ -141,7 +141,7 @@ impl HybridStorage {
     ) -> Result<Vec<BaseDataEnum>, FundForgeError> {
         let mut all_data = Vec::new();
 
-        let mut current_date = start.date().and_hms(0, 0, 0);
+        let mut current_date = start.date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
 
         while current_date <= end {
             let file_path = self.get_file_path(symbol, resolution, data_type, &current_date, false);
