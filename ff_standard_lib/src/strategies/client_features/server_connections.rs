@@ -387,6 +387,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         let indicator_handler = INDICATOR_HANDLER.get().unwrap();
         let mut strategy_time_slice = TimeSlice::new();
         let strategy_sender = STRATEGY_SENDER.get().unwrap();
+        let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap();
 
         //println!("{:?}: response handler start", incoming.key());
         let mut length_bytes = [0u8; LENGTH];
@@ -405,7 +406,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                     continue;
                 }
             }
-
+            timed_event_handler.update_time(Utc::now()).await;
             // these will be buffered eventually into an EventTimeSlice
             let time_slice = TimeSlice::from_bytes(&message_body).unwrap();
 
