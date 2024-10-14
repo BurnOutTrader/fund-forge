@@ -406,6 +406,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                     continue;
                 }
             }
+
             timed_event_handler.update_time(Utc::now()).await;
             // these will be buffered eventually into an EventTimeSlice
             let time_slice = TimeSlice::from_bytes(&message_body).unwrap();
