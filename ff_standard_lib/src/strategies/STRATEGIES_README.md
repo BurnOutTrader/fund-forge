@@ -108,7 +108,7 @@ core::time::Duration::from_millis(100),
 The historical engine or server will buffer data streams at this resolution.
 This helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
 
-#### `gui_enabled: bool` (Do no set to false, in development)
+#### `gui_enabled: bool` (Do not set to true, in development)
 This enables the ff_strategy_registry connection to connect to our gui, if false we will not broadcast events to the registry and will be invisible to the gui.
 
 #### `tick_over_no_data: bool`
