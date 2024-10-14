@@ -8,7 +8,7 @@ authors = ["Kevin Monaghan"]
 server = []
 
 [dependencies]
-ff_rithmic_api = "0.2.1"
+ff_rithmic_api = "0.2.2"
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
 rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }

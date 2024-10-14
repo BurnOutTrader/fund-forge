@@ -6,13 +6,13 @@ use ahash::AHashMap;
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
-use ff_rithmic_api::errors::RithmicApiError;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-#[allow(unused_imports)]
-use ff_rithmic_api::rithmic_proto_objects::rti::{AccountPnLPositionUpdate, RequestAccountList, RequestAccountRmsInfo, RequestLoginInfo, RequestPnLPositionSnapshot, RequestProductCodes, ResponseAccountRmsInfo};
 use ff_rithmic_api::systems::RithmicSystem;
+use futures::{SinkExt, StreamExt};
+use futures::stream::{SplitSink, SplitStream};
+#[allow(unused_imports)]
 use structopt::lazy_static::lazy_static;
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::{broadcast, oneshot, Mutex};
 use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -25,11 +25,10 @@ use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
 use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
 use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo};
 use ff_standard_lib::StreamName;
-use crate::rithmic_api::plant_handlers::handle_history_plant::handle_responses_from_history_plant;
-use crate::rithmic_api::plant_handlers::handle_order_plant::handle_responses_from_order_plant;
-use crate::rithmic_api::plant_handlers::handle_pnl_plant::handle_responses_from_pnl_plant;
-use crate::rithmic_api::plant_handlers::handle_tick_plant::handle_responses_from_ticker_plant;
 use prost::Message as ProstMessage;
+use tokio::net::TcpStream;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
+use tungstenite::Message;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 
 lazy_static! {
@@ -54,7 +53,7 @@ pub struct RithmicClient {
     pub credentials: RithmicCredentials,
 
     pub callbacks: DashMap<StreamName, AHashMap<u64, oneshot::Sender<DataServerResponse>>>,
-
+    pub writers: DashMap<SysInfraType, Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
@@ -101,6 +100,7 @@ impl RithmicClient {
             user_type: credentials.user_type.clone(),
             credentials,
             callbacks: Default::default(),
+            writers: Default::default(),
             client: Arc::new(client),
             symbol_info: Default::default(),
             tick_feed_broadcasters: Default::default(),
@@ -137,49 +137,17 @@ impl RithmicClient {
         toml_files
     }
 
-    //todo run start up... we might need to connect to all plants for this..
-    pub async fn run_start_up(client: Arc<Self>, connect_accounts: bool, connect_data: bool) -> Result<(), FundForgeError> {
-        if connect_data {
-            match client.client.connect_and_login(SysInfraType::TickerPlant).await {
-                Ok(r) => {
-                   tokio::spawn(handle_responses_from_ticker_plant(client.clone(), r));
-                },
-                Err(e) => {
-                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
-                }
+    pub async fn connect_plant(&self, system: SysInfraType) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, FundForgeError >{
+        match self.client.connect_and_login(system.clone()).await {
+            Ok(r) => {
+                let (writer, receiver) = r.split();
+                self.writers.insert(system, Arc::new(Mutex::new(writer)));
+                Ok(receiver)
+            },
+            Err(e) => {
+                Err(FundForgeError::ServerErrorDebug(e.to_string()))
             }
-
-     /*       match client.client.connect_and_login(SysInfraType::HistoryPlant).await {
-                Ok(r) => {
-                    tokio::spawn(handle_responses_from_history_plant(client.clone(), r));
-                },
-                Err(e) => {
-                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
-                }
-            }*/
         }
-
-        if connect_accounts {
-     /*       match client.client.connect_and_login(SysInfraType::OrderPlant).await {
-                Ok(r) => {
-                    tokio::spawn(handle_responses_from_order_plant(client.clone(), r));
-                },
-                Err(e) => {
-                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
-                }
-            }*/
-
-      /*      match client.client.connect_and_login(SysInfraType::PnlPlant).await {
-                Ok(r) => {
-                    tokio::spawn(handle_responses_from_pnl_plant(client.clone(), r));
-                },
-                Err(e) => {
-                    return Err(FundForgeError::ServerErrorDebug(e.to_string()))
-                }
-            }*/
-        }
-
-        Ok(())
     }
 
     pub async fn send_callback(&self, stream_name: StreamName, callback_id: u64, response: DataServerResponse) {
@@ -232,17 +200,34 @@ impl RithmicClient {
 
     pub async fn send_message<T: ProstMessage>(
         &self,
-        plant: SysInfraType,
+        plant: &SysInfraType,
         message: T
-    ) -> Result<(), RithmicApiError> {
-        self.client.send_message(plant, message).await
+    ) {
+        if let Some(write_stream) = self.writers.get(plant) {
+            let mut buf = Vec::new();
+
+            match message.encode(&mut buf) {
+                Ok(_) => {}
+                Err(e) => {
+                    eprintln!("Failed to encode rithmic message: {}", e);
+                    return
+                }
+            }
+
+            let length = buf.len() as u32;
+            let mut prefixed_msg = length.to_be_bytes().to_vec();
+            prefixed_msg.extend(buf);
+
+            let mut write_stream = write_stream.lock().await;
+            match write_stream.send(Message::Binary(prefixed_msg)).await {
+                Ok(_) => {},
+                Err(e) => eprintln!("Failed to write rithmic stream: {}", e)
+            }
+        }
     }
 
     pub async fn shutdown(&self) {
-        match self.client.shutdown_all().await {
-            Ok(_) => {}
-            Err(e) => eprintln!("Rithmic Client shutdown error: {}", e)
-        }
+        // shutdown using self.client.shutdown_plant() for each connection
         RITHMIC_CLIENTS.remove(&self.system);
     }
 }

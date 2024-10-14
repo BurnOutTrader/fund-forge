@@ -1,6 +1,7 @@
 use std::io::Cursor;
 use std::sync::Arc;
 use async_std::stream::StreamExt;
+use ff_rithmic_api::api_client::extract_template_id;
 #[allow(unused_imports)]
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
@@ -54,7 +55,7 @@ pub async fn handle_responses_from_order_plant(
                                     Ok(_) => {}
                                     Err(e) => eprintln!("Failed to read_extract message: {}", e)
                                 }
-                                if let Some(template_id) = client.client.extract_template_id(&message_buf) {
+                                if let Some(template_id) = extract_template_id(&message_buf) {
                                     //println!("Extracted template_id: {}", template_id);
                                     // Now you can use the template_id to determine which type to decode into the concrete types
                                     match template_id {
@@ -143,10 +144,7 @@ pub async fn handle_responses_from_order_plant(
                                                         ib_id: client.ib_id.clone(),
                                                         account_id: Some(id.clone()),
                                                     };
-                                                    match client.send_message(SysInfraType::PnlPlant, req).await {
-                                                        Ok(_) => {}
-                                                        Err(e) => eprintln!("{}", e)
-                                                    }
+                                                    client.send_message(&PLANT, req).await;
                                                     let req = RequestPnLPositionUpdates {
                                                         template_id: 400 ,
                                                         user_msg: vec![],
@@ -155,10 +153,7 @@ pub async fn handle_responses_from_order_plant(
                                                         ib_id: client.ib_id.clone(),
                                                         account_id: Some(id.clone()),
                                                     };
-                                                    match client.send_message(SysInfraType::PnlPlant, req).await {
-                                                        Ok(_) => {}
-                                                        Err(e) => eprintln!("{}", e)
-                                                    }
+                                                    client.send_message(&PLANT, req).await;
                                                     let req = RequestShowOrders {
                                                         template_id: 320,
                                                         user_msg: vec![],
@@ -166,10 +161,7 @@ pub async fn handle_responses_from_order_plant(
                                                         ib_id: client.ib_id.clone(),
                                                         account_id: Some(id.clone()),
                                                     };
-                                                    match client.send_message(SysInfraType::OrderPlant, req).await {
-                                                        Ok(_) => {}
-                                                        Err(e) => eprintln!("{}", e)
-                                                    }
+                                                    client.send_message(&PLANT, req).await;
                                                     let req = RequestSubscribeForOrderUpdates {
                                                         template_id,
                                                         user_msg: vec![],
@@ -177,10 +169,7 @@ pub async fn handle_responses_from_order_plant(
                                                         ib_id: client.ib_id.clone(),
                                                         account_id: Some(id.clone()),
                                                     };
-                                                    match client.send_message(SysInfraType::OrderPlant, req).await {
-                                                        Ok(_) => {}
-                                                        Err(e) => eprintln!("{}", e)
-                                                    }
+                                                    client.send_message(&PLANT, req).await;
                                                 }
                                             }
                                         },

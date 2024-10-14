@@ -1,6 +1,7 @@
 use std::io::Cursor;
 use std::sync::Arc;
 use async_std::stream::StreamExt;
+use ff_rithmic_api::api_client::extract_template_id;
 #[allow(unused_imports)]
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
@@ -16,7 +17,7 @@ use tungstenite::{Message};
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use crate::rithmic_api::api_client::RithmicClient;
 
-#[allow(dead_code)]
+#[allow(dead_code, unused)]
 pub async fn handle_responses_from_repo_plant(
     client: Arc<RithmicClient>,
     mut reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>
@@ -33,7 +34,7 @@ pub async fn handle_responses_from_repo_plant(
                         }
                         Message::Binary(bytes) => {
                             // spawn a new task so that we can handle next message faster.
-                            let client = client.clone();
+                            //let client = client.clone();
                             tokio::task::spawn(async move {
                                 //messages will be forwarded here
                                 let mut cursor = Cursor::new(bytes);
@@ -50,7 +51,7 @@ pub async fn handle_responses_from_repo_plant(
                                     Ok(_) => {}
                                     Err(e) => eprintln!("Failed to read_extract message: {}", e)
                                 }
-                                if let Some(template_id) = client.client.extract_template_id(&message_buf) {
+                                if let Some(template_id) = extract_template_id(&message_buf) {
                                     println!("Extracted template_id: {}", template_id);
                                     // Now you can use the template_id to determine which type to decode into the concrete types
                                     match template_id {

@@ -193,14 +193,8 @@ impl VendorApiResponse for RithmicClient {
                 Ok(_) => {}
                 Err(_) => {}
             }*/
-            match self.send_message(SysInfraType::TickerPlant, req).await {
-                Ok(_) => {
-                    println!("Subscribed to new ticker subscription");
-                }
-                Err(e) => {
-                    eprintln!("Error sending subscribe request to ticker plant: {}", e);
-                }
-            }
+            const PLANT: SysInfraType = SysInfraType::TickerPlant;
+            self.send_message(&PLANT, req).await;
         }
         println!("{} Subscribed: {}", stream_name, subscription);
         DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
@@ -248,13 +242,8 @@ impl VendorApiResponse for RithmicClient {
                 update_bits: Some(bits),
             };
 
-            if let Err(e) = self.send_message(SysInfraType::TickerPlant, req).await {
-                return DataServerResponse::UnSubscribeResponse {
-                    success: false,
-                    subscription,
-                    reason: Some(format!("Failed to send unsubscribe message: {}", e)),
-                };
-            }
+            const PLANT: SysInfraType = SysInfraType::TickerPlant;
+            self.send_message(&PLANT, req).await;
 
             // Additional cleanup for quotes
             if subscription.base_data_type == BaseDataType::Quotes {

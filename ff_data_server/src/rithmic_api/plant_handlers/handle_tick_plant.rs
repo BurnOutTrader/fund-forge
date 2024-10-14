@@ -4,6 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use async_std::stream::StreamExt;
 use chrono::Utc;
+use ff_rithmic_api::api_client::extract_template_id;
 #[allow(unused_imports)]
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::errors::RithmicApiError;
@@ -25,7 +26,7 @@ use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;
 use ff_standard_lib::standardized_types::base_data::tick::{Aggressor, Tick};
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType};
 use ff_standard_lib::standardized_types::subscriptions::Symbol;
 use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
 use crate::rithmic_api::api_client::RithmicClient;
@@ -64,7 +65,7 @@ pub async fn handle_responses_from_ticker_plant(
                                 Ok(_) => {}
                                 Err(e) => eprintln!("Failed to read_extract message: {}", e)
                             }
-                            if let Some(template_id) = client.client.extract_template_id(&message_buf) {
+                            if let Some(template_id) = extract_template_id(&message_buf) {
                                 //println!("Extracted template_id: {}", template_id);
                                 // Now you can use the template_id to determine which type to decode into the concrete types
                                 match template_id {
