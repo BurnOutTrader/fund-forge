@@ -39,7 +39,7 @@ async fn main() {
                 BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::CME)
             ),
-            /*DataSubscription::new(
+      /*      DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Instant,
@@ -53,13 +53,13 @@ async fn main() {
                 BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
-            DataSubscription::new(
+        /*    DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
-            ),
+            ),*/
         ],
         false,
         100,
@@ -100,7 +100,7 @@ pub async fn on_data_received(
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::Tick(tick) => {
-                               //println!("{}", tick);
+                               println!("{}", tick);
                             }
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
@@ -209,7 +209,7 @@ pub async fn on_data_received(
                                 }
                             }
                             BaseDataEnum::Quote(quote) => {
-                                //println!("{}", quote);
+                                println!("{}", quote);
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 if quotebar.is_closed == true {
