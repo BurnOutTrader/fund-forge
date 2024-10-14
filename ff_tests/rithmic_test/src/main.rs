@@ -263,6 +263,9 @@ pub async fn on_data_received(
                         _ =>  println!("{}", msg.as_str().bright_yellow())
                     }
                 }
+                StrategyEvent::TimedEvent(name) => {
+                    println!("{} has triggered", name);
+                }
                 _ => {}
             }
         }

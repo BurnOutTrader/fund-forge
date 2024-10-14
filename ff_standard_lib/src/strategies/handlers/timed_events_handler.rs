@@ -1,9 +1,10 @@
 use std::sync::Arc;
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc, Weekday};
-use std::sync::mpsc::Sender;
 use tokio::sync::RwLock;
+use crate::strategies::client_features::server_connections::add_buffer;
+use crate::strategies::strategy_events::StrategyEvent;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EventTimeEnum {
     /// Events to occur at on a specific day of the week
     Weekday { day: Weekday, fire_in_warmup: bool },
@@ -108,15 +109,13 @@ impl EventTimeEnum {
 pub struct TimedEvent {
     name: String,
     time: EventTimeEnum,
-    sender: Sender<TimedEvent>,
 }
 
 impl TimedEvent {
-    pub fn new(name: String, event_time: EventTimeEnum, sender: Sender<TimedEvent>) -> Self {
+    pub fn new(name: String, event_time: EventTimeEnum) -> Self {
         TimedEvent {
             name,
             time: event_time,
-            sender,
         }
     }
 }
@@ -158,10 +157,7 @@ impl TimedEventHandler {
         let mut events_to_remove = vec![];
         for event in schedule.iter_mut() {
             if event.time.event_time(current_time) {
-                match event.sender.send(event.clone()) {
-                    Ok(_) => {}
-                    Err(_) => {}
-                }
+                add_buffer(current_time, StrategyEvent::TimedEvent(event.name.clone())).await;
                 if let EventTimeEnum::DateTime { .. } = event.time {
                     events_to_remove.push(event.name.clone());
                 }
@@ -171,6 +167,5 @@ impl TimedEventHandler {
             }
         }
         schedule.retain(|e| !events_to_remove.contains(&e.name));
-
     }
 }

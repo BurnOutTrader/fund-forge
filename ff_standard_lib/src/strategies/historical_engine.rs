@@ -129,7 +129,8 @@ impl HistoricalEngine {
                     time_slices
                 },
                 Err(e) => {
-                    panic!("{}", e);
+                    eprintln!("Error: {}", e);
+                    continue;
                 }
             };
 
@@ -166,12 +167,11 @@ impl HistoricalEngine {
                     .range(last_time.timestamp_nanos_opt().unwrap()..=time.timestamp_nanos_opt().unwrap())
                     .flat_map(|(_, value)| value.iter().cloned())
                     .collect();
-                self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
-
 
                 let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                 // update our consolidators and create the strategies time slice with any new data or just create empty slice.
                 if !time_slice.is_empty() {
+                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
                     // Add only primary data which the strategy has subscribed to into the strategies time slice
                     if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
                         strategy_time_slice.extend(consolidated_data);

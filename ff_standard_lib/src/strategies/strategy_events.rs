@@ -27,6 +27,7 @@ pub enum StrategyEventType {
     WarmUpComplete,
     IndicatorEvent,
     PositionEvents,
+    TimedEvents
 }
 
 /// All strategies can be sent or received by the strategy or the UI.
@@ -90,7 +91,9 @@ pub enum StrategyEvent {
     IndicatorEvent(IndicatorEvents),
 
 
-    PositionEvents(PositionUpdateEvent)
+    PositionEvents(PositionUpdateEvent),
+
+    TimedEvent(String)
 }
 
 impl StrategyEvent {
@@ -131,7 +134,8 @@ impl StrategyEvent {
             StrategyEvent::WarmUpComplete => StrategyEventType::WarmUpComplete,
             StrategyEvent::IndicatorEvent(_) => StrategyEventType::IndicatorEvent,
             StrategyEvent::PositionEvents(_) => StrategyEventType::PositionEvents,
-            StrategyEvent::DataSubscriptionEvent(_) => StrategyEventType::DataSubscriptionEvents
+            StrategyEvent::DataSubscriptionEvent(_) => StrategyEventType::DataSubscriptionEvents,
+            StrategyEvent::TimedEvent(_) => StrategyEventType::TimedEvents
         }
     }
 
