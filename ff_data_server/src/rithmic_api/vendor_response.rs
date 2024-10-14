@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
@@ -11,6 +12,7 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
+use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
@@ -294,7 +296,7 @@ impl VendorApiResponse for RithmicClient {
         todo!()
     }
     #[allow(unused)]
-    async fn update_historical_data_for(subscription: DataSubscription, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<(), FundForgeError> {
+    async fn update_historical_data_for(subscription: DataSubscription, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<Option<BTreeMap<i64, BaseDataEnum>>, FundForgeError> {
         todo!()
     }
 }

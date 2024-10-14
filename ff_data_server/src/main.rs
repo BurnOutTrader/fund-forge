@@ -171,11 +171,13 @@ async fn main() -> io::Result<()> {
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
 
-    //let init_rithmic_handle = tokio::spawn(init_rithmic_apis(options.clone()));
+    let init_rithmic_handle = tokio::spawn(init_rithmic_apis(options.clone()));
+    init_rithmic_handle.await.expect("Failed to initialize APIs");
+
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 
     // Wait for initialization to complete
-    //init_rithmic_handle.await.expect("Failed to initialize APIs");
+
 
     // Wait for Ctrl+C
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");

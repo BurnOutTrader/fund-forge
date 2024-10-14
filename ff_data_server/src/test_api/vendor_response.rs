@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use async_trait::async_trait;
 use ff_standard_lib::helpers::converters::{fund_forge_formatted_symbol_name};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
@@ -185,7 +186,7 @@ impl VendorApiResponse for TestApiClient {
         todo!()
     }
     #[allow(unused)]
-    async fn update_historical_data_for(subscription: DataSubscription, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<(), FundForgeError> {
+    async fn update_historical_data_for(subscription: DataSubscription, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<Option<BTreeMap<i64, BaseDataEnum>>, FundForgeError> {
         todo!()
     }
 }
