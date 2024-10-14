@@ -4,7 +4,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
@@ -250,7 +250,7 @@ impl HeikinAshiConsolidator {
             }));
         }
         if let Some(current_data) = self.current_data.as_mut() {
-            if time >= current_data.time_closed_utc() {
+            if time > current_data.time_closed_utc() - Duration::nanoseconds(1) {
                 let mut return_data = current_data.clone();
                 return_data.set_is_closed(true);
                 self.current_data = None;
