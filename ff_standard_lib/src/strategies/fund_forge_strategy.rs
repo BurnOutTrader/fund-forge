@@ -113,7 +113,6 @@ impl FundForgeStrategy {
         tick_over_no_data: bool,
     ) -> FundForgeStrategy {
 
-
         let timed_event_handler = Arc::new(TimedEventHandler::new());
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
         initialize_static(
