@@ -30,7 +30,7 @@ This can be achieved by either:
 - Manually sending cancel order to the Brokerage at the specified time.
 
 ## Indicators Not fully tested
-These will be tested with properly charting enabled
+These will be tested with charting enabled
 - Renko
 - ATR
 
