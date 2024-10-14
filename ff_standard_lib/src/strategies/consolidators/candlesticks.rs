@@ -27,17 +27,15 @@ pub struct CandleStickConsolidator {
     fill_forward: bool,
     market_type: MarketType,
     subscription_resolution_type: SubscriptionResolutionType,
-    last_processed_time: Option<DateTime<Utc>>,
 }
 
 impl CandleStickConsolidator {
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
-        if let Some(last_time) = self.last_processed_time {
-            if time <= last_time {
-                return None
+        if let Some(current_bar) = &self.current_data {
+            if time < current_bar.time_utc() {
+                return None;
             }
         }
-        self.last_processed_time = Some(time);
         if self.fill_forward && self.current_data == None {
             match self.subscription.base_data_type {
                 BaseDataType::QuoteBars => {
@@ -111,13 +109,9 @@ impl CandleStickConsolidator {
             return ConsolidatedData::with_open(self.current_data.clone().unwrap())
         }
         else if let Some(current_bar) = self.current_data.as_mut() {
-            if let Some(last_time) = self.last_processed_time {
-                let time = base_data.time_closed_utc();
-                if time <= last_time {
-                    // We've already processed data for this time or earlier, so we skip it
-                    return ConsolidatedData::with_open(current_bar.clone());
-                }
-                self.last_processed_time = Some(time);
+            let time = base_data.time_closed_utc();
+            if time < current_bar.time_utc() {
+                return ConsolidatedData::with_open(current_bar.clone());
             }
             if base_data.time_closed_utc() >= current_bar.time_closed_utc() {
                 let mut consolidated_bar = current_bar.clone();
@@ -187,17 +181,19 @@ impl CandleStickConsolidator {
                 new_bar.resolution = self.subscription.resolution.clone();
                 new_bar
             }
-            BaseDataEnum::Quote(quote) => QuoteBar::new(
-                self.subscription.symbol.clone(),
-                quote.bid,
-                quote.ask,
-                quote.bid_volume + quote.bid_volume,
-                quote.ask_volume,
-                quote.bid_volume,
-                time.to_string(),
-                self.subscription.resolution.clone(),
-                CandleType::CandleStick,
-            ),
+            BaseDataEnum::Quote(quote) => {
+                QuoteBar::new(
+                    self.subscription.symbol.clone(),
+                    quote.bid,
+                    quote.ask,
+                    quote.bid_volume + quote.bid_volume,
+                    quote.ask_volume,
+                    quote.bid_volume,
+                    time.to_string(),
+                    self.subscription.resolution.clone(),
+                    CandleType::CandleStick,
+                )
+            },
             _ => panic!("Invalid base data type for QuoteBar consolidator"),
         }
     }
@@ -212,13 +208,10 @@ impl CandleStickConsolidator {
             self.current_data = Some(BaseDataEnum::QuoteBar(data));
             return ConsolidatedData::with_open(self.current_data.clone().unwrap())
         } else if let Some(current_bar) = self.current_data.as_mut() {
-            if let Some(last_time) = self.last_processed_time {
-                let time = base_data.time_closed_utc();
-                if time <= last_time {
-                    // We've already processed data for this time or earlier, so we skip it
-                    return ConsolidatedData::with_open(current_bar.clone());
-                }
-                self.last_processed_time = Some(time);
+            let time = base_data.time_utc();
+            if time < current_bar.time_utc() {
+                // We've already processed data for this time or earlier, so we skip it
+                return ConsolidatedData::with_open(current_bar.clone());
             }
             if base_data.time_closed_utc() >= current_bar.time_closed_utc() {
                 let mut consolidated_bar = current_bar.clone();
@@ -350,7 +343,6 @@ impl CandleStickConsolidator {
             last_bid_close: None,
             fill_forward,
             subscription_resolution_type,
-            last_processed_time: None,
         })
     }
 
