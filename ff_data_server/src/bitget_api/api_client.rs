@@ -158,6 +158,7 @@ impl BitgetClient {
                 Ok(msg) => {
                     match msg {
                         Message::Text(msg) => {
+                            //todo match message is what we wanted or use callback id if possible
                             Ok(msg)
                         }
                         Message::Binary(_) => todo!(),

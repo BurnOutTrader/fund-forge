@@ -19,7 +19,6 @@ tokio =  { version = "*", features = ["full"] }
 once_cell = "*"
 lazy_static = "*"
 structopt = "*"
-indicatif = "*"
 strum_macros = "0.26.4"
 strum ="*"
 reqwest = { version = "*", features = ["stream"] }

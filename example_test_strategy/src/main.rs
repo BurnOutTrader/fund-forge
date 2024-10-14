@@ -43,21 +43,7 @@ async fn main() {
         Australia::Sydney,                      // the strategy time zone
         Duration::hours(3), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
-            /*DataSubscription::new(
-                SymbolName::from("EUR-USD"),
-                DataVendor::Test,
-                Resolution::Instant,
-                BaseDataType::Quotes,
-                MarketType::Forex,
-            ),
-            DataSubscription::new(
-                SymbolName::from("AUD-CAD"),
-                DataVendor::Test,
-                Resolution::Instant,
-                BaseDataType::Quotes,
-                MarketType::Forex,
-            ),*/
-            // Since we only have quote level test data, the next 2 subscriptions will be created by the consolidators.
+            // Since we only have quote level test data, the next 2 subscriptions will be created by the consolidators. Quote data will automatically be subscribed as primary data.
             DataSubscription::new(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,

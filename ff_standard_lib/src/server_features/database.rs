@@ -23,6 +23,8 @@ use crate::standardized_types::time_slices::TimeSlice;
 // the engine manages datavendor.update_data() functions, not the user
 // use market type in folder structure
 
+// todo Multiple concurrent calls possibly causing locking, need a test.
+
 pub struct HybridStorage {
     base_path: PathBuf,
     mmap_cache: Arc<DashMap<String, Arc<Mmap>>>,
