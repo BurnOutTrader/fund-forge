@@ -149,34 +149,34 @@ impl RithmicClient {
                 }
             }
 
-            match client.client.connect_and_login(SysInfraType::HistoryPlant).await {
+     /*       match client.client.connect_and_login(SysInfraType::HistoryPlant).await {
                 Ok(r) => {
                     tokio::spawn(handle_responses_from_history_plant(client.clone(), r));
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
                 }
-            }
+            }*/
         }
 
         if connect_accounts {
-            match client.client.connect_and_login(SysInfraType::OrderPlant).await {
+     /*       match client.client.connect_and_login(SysInfraType::OrderPlant).await {
                 Ok(r) => {
                     tokio::spawn(handle_responses_from_order_plant(client.clone(), r));
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
                 }
-            }
+            }*/
 
-            match client.client.connect_and_login(SysInfraType::PnlPlant).await {
+      /*      match client.client.connect_and_login(SysInfraType::PnlPlant).await {
                 Ok(r) => {
                     tokio::spawn(handle_responses_from_pnl_plant(client.clone(), r));
                 },
                 Err(e) => {
                     return Err(FundForgeError::ServerErrorDebug(e.to_string()))
                 }
-            }
+            }*/
         }
 
         Ok(())
