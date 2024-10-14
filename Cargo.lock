@@ -950,7 +950,6 @@ dependencies = [
  "lazy_static",
  "once_cell",
  "prost",
- "rayon",
  "rust_decimal",
  "rust_decimal_macros",
  "rustls",
@@ -966,7 +965,6 @@ dependencies = [
  "tokio-tungstenite",
  "toml",
  "tungstenite",
- "uuid",
  "webpki-roots",
 ]
 
