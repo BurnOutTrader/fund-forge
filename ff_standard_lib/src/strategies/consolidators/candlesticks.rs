@@ -26,11 +26,18 @@ pub struct CandleStickConsolidator {
     last_bid_close: Option<Price>,
     fill_forward: bool,
     market_type: MarketType,
-    subscription_resolution_type: SubscriptionResolutionType
+    subscription_resolution_type: SubscriptionResolutionType,
+    last_processed_time: Option<DateTime<Utc>>,
 }
 
 impl CandleStickConsolidator {
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
+        if let Some(last_time) = self.last_processed_time {
+            if time <= last_time {
+                return None
+            }
+        }
+        self.last_processed_time = Some(time);
         if self.fill_forward && self.current_data == None {
             match self.subscription.base_data_type {
                 BaseDataType::QuoteBars => {
@@ -104,6 +111,14 @@ impl CandleStickConsolidator {
             return ConsolidatedData::with_open(self.current_data.clone().unwrap())
         }
         else if let Some(current_bar) = self.current_data.as_mut() {
+            if let Some(last_time) = self.last_processed_time {
+                let time = base_data.time_closed_utc();
+                if time <= last_time {
+                    // We've already processed data for this time or earlier, so we skip it
+                    return ConsolidatedData::with_open(current_bar.clone());
+                }
+                self.last_processed_time = Some(time);
+            }
             if base_data.time_closed_utc() >= current_bar.time_closed_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
@@ -197,6 +212,14 @@ impl CandleStickConsolidator {
             self.current_data = Some(BaseDataEnum::QuoteBar(data));
             return ConsolidatedData::with_open(self.current_data.clone().unwrap())
         } else if let Some(current_bar) = self.current_data.as_mut() {
+            if let Some(last_time) = self.last_processed_time {
+                let time = base_data.time_closed_utc();
+                if time <= last_time {
+                    // We've already processed data for this time or earlier, so we skip it
+                    return ConsolidatedData::with_open(current_bar.clone());
+                }
+                self.last_processed_time = Some(time);
+            }
             if base_data.time_closed_utc() >= current_bar.time_closed_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
@@ -326,7 +349,8 @@ impl CandleStickConsolidator {
             last_ask_close: None,
             last_bid_close: None,
             fill_forward,
-            subscription_resolution_type
+            subscription_resolution_type,
+            last_processed_time: None,
         })
     }
 

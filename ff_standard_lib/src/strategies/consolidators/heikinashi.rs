@@ -22,7 +22,8 @@ pub struct HeikinAshiConsolidator {
     tick_size: Decimal,
     fill_forward: bool,
     market_type: MarketType,
-    subscription_resolution_type: SubscriptionResolutionType
+    subscription_resolution_type: SubscriptionResolutionType,
+    last_processed_time: Option<DateTime<Utc>>,
 }
 
 impl HeikinAshiConsolidator {
@@ -220,10 +221,18 @@ impl HeikinAshiConsolidator {
             decimal_accuracy,
             tick_size,
             fill_forward,
+            last_processed_time: None,
         })
     }
 
     pub fn update_time(&mut self, time: DateTime<Utc>) -> Option<BaseDataEnum> {
+        if let Some(last_time) = self.last_processed_time {
+            if time <= last_time {
+                // We've already processed data for this time or earlier, so we skip it
+                return None;
+            }
+            self.last_processed_time = Some(time);
+        }
         //todo add fill forward option for this
         if self.fill_forward && self.current_data == None  {
             let ha_open =  self.market_type.round_price((self.previous_ha_open + self.previous_ha_close) / dec!(2.0), self.tick_size, self.decimal_accuracy);
@@ -265,6 +274,14 @@ impl HeikinAshiConsolidator {
             self.current_data = Some(BaseDataEnum::Candle(data));
             return ConsolidatedData::with_open(self.current_data.clone().unwrap())
         } else if let Some(current_bar) = self.current_data.as_mut() {
+            if let Some(last_time) = self.last_processed_time {
+                let time = base_data.time_closed_utc();
+                if time <= last_time {
+                    // We've already processed data for this time or earlier, so we skip it
+                    return ConsolidatedData::with_open(current_bar.clone());
+                }
+                self.last_processed_time = Some(time);
+            }
             if base_data.time_closed_utc() >= current_bar.time_closed_utc() {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);

@@ -328,164 +328,82 @@ impl SubscriptionHandler {
         let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
         let mut time_slice_bars = TimeSlice::new();
 
-        // Create a FuturesUnordered to collect all futures and run them concurrently.
         let mut update_futures = FuturesUnordered::new();
 
         for base_data in time_slice.iter() {
             let symbol = base_data.symbol();
-            // let symbol_subscriptions = symbol_subscriptions.clone(); // Clone the Arc for each task.
-            let base_data = base_data.clone(); // Clone base_data to avoid borrowing issues.
-
+            let base_data = base_data.clone();
             let symbol_subscriptions = symbol_subscriptions.clone();
-            // Add the future to the FuturesUnordered.
+
             update_futures.push(async move {
-                // Get a read guard inside the async block to avoid lifetime issues.
                 if let Some(handler) = symbol_subscriptions.get(&symbol) {
                     handler.update(&base_data).await
                 } else {
-                    println!("No handler: {:?}", symbol);
-                    Vec::new() // Return empty if handler is not found.
+                    Vec::new()
                 }
             });
         }
 
-        // Process all the updates concurrently.
+        let mut all_bars: BTreeMap<(DataSubscription, DateTime<Utc>), BaseDataEnum> = BTreeMap::new();
         while let Some(data) = update_futures.next().await {
             for consolidated_bars in data {
                 if let Some(consolidated_bar) = consolidated_bars.closed_data {
-                    time_slice_bars.add(consolidated_bar.clone());
-                    let subscription = consolidated_bar.subscription();
-                    match consolidated_bar {
-                        BaseDataEnum::Tick(tick) => {
-                            if let Some(mut rolling_window) = self.tick_history.get_mut(&subscription) {
-                                rolling_window.add(tick);
-                            }
-                        }
-                        BaseDataEnum::Quote(quote) => {
-                            if let Some(mut rolling_window) = self.quote_history.get_mut(&subscription) {
-                                rolling_window.add(quote);
-                            }
-                        }
-                        BaseDataEnum::QuoteBar(qb) => {
-                            if let Some(mut rolling_window) = self.bar_history.get_mut(&subscription) {
-                                rolling_window.add(qb);
-                            }
-                        }
-                        BaseDataEnum::Candle(candle) => {
-                            if let Some(mut rolling_window) = self.candle_history.get_mut(&subscription) {
-                                rolling_window.add(candle);
-                            }
-                        }
-                        BaseDataEnum::Fundamental(fund) => {
-                            if let Some(mut rolling_window) = self.fundamental_history.get_mut(&subscription) {
-                                rolling_window.add(fund);
-                            }
-                        }
-                    }
+                    let key = (consolidated_bar.subscription(), consolidated_bar.time_utc());
+                    all_bars.entry(key).or_insert(consolidated_bar);
                 }
-                open_bars.insert(consolidated_bars.open_data.subscription(), consolidated_bars.open_data);
+                let open_key = consolidated_bars.open_data.subscription();
+                open_bars.entry(open_key).or_insert(consolidated_bars.open_data);
             }
         }
 
-        // Combine open and closed bars.
-        for (_, data) in open_bars {
+        for ((subscription, _), data) in all_bars {
             match &data {
-                BaseDataEnum::Candle(ref candle) => {
-                    self.open_candles.insert(data.subscription(), candle.clone());
+                BaseDataEnum::Tick(tick) => {
+                    if let Some(mut rolling_window) = self.tick_history.get_mut(&subscription) {
+                        rolling_window.add(tick.clone());
+                    }
                 }
-                BaseDataEnum::QuoteBar(ref qb) => {
-                    self.open_bars.insert(data.subscription(), qb.clone());
+                BaseDataEnum::Quote(quote) => {
+                    if let Some(mut rolling_window) = self.quote_history.get_mut(&subscription) {
+                        rolling_window.add(quote.clone());
+                    }
+                }
+                BaseDataEnum::QuoteBar(qb) => {
+                    if let Some(mut rolling_window) = self.bar_history.get_mut(&subscription) {
+                        rolling_window.add(qb.clone());
+                    }
+                }
+                BaseDataEnum::Candle(candle) => {
+                    if let Some(mut rolling_window) = self.candle_history.get_mut(&subscription) {
+                        rolling_window.add(candle.clone());
+                    }
+                }
+                BaseDataEnum::Fundamental(fund) => {
+                    if let Some(mut rolling_window) = self.fundamental_history.get_mut(&subscription) {
+                        rolling_window.add(fund.clone());
+                    }
+                }
+            }
+            time_slice_bars.add(data);
+        }
+
+        for (subscription, data) in open_bars {
+            match &data {
+                BaseDataEnum::Candle(candle) => {
+                    self.open_candles.insert(subscription.clone(), candle.clone());
+                }
+                BaseDataEnum::QuoteBar(qb) => {
+                    self.open_bars.insert(subscription.clone(), qb.clone());
                 }
                 _ => {}
             }
             time_slice_bars.add(data);
         }
 
-        match time_slice_bars.is_empty() {
-            true => None,
-            false => Some(time_slice_bars)
-        }
-    }
-
-    pub async fn update_base_data(&self, base_data: BaseDataEnum) -> Option<TimeSlice> {
-        let symbol_subscriptions = self.symbol_subscriptions.clone();
-        let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
-        let mut time_slice_bars = TimeSlice::new();
-
-        // Create a FuturesUnordered to collect all futures and run them concurrently.
-        let mut update_futures = FuturesUnordered::new();
-
-        let symbol = base_data.symbol();
-        // let symbol_subscriptions = symbol_subscriptions.clone(); // Clone the Arc for each task.
-        let base_data = base_data.clone(); // Clone base_data to avoid borrowing issues.
-
-        let symbol_subscriptions = symbol_subscriptions.clone();
-        // Add the future to the FuturesUnordered.
-        update_futures.push(async move {
-            // Get a read guard inside the async block to avoid lifetime issues.
-            if let Some(handler) = symbol_subscriptions.get(&symbol) {
-                handler.update(&base_data).await
-            } else {
-                eprintln!("No handler: {:?}", symbol);
-                Vec::new() // Return empty if handler is not found.
-            }
-        });
-
-        // Process all the updates concurrently.
-        while let Some(data) = update_futures.next().await {
-            for consolidated_bars in data {
-                if let Some(consolidated_bar) = consolidated_bars.closed_data {
-                    time_slice_bars.add(consolidated_bar.clone());
-                    let subscription = consolidated_bar.subscription();
-                    match consolidated_bar {
-                        BaseDataEnum::Tick(tick) => {
-                            if let Some(mut rolling_window) = self.tick_history.get_mut(&subscription) {
-                                rolling_window.add(tick);
-                            }
-                        }
-                        BaseDataEnum::Quote(quote) => {
-                            if let Some(mut rolling_window) = self.quote_history.get_mut(&subscription) {
-                                rolling_window.add(quote);
-                            }
-                        }
-                        BaseDataEnum::QuoteBar(qb) => {
-                            if let Some(mut rolling_window) = self.bar_history.get_mut(&subscription) {
-                                rolling_window.add(qb);
-                            }
-                        }
-                        BaseDataEnum::Candle(candle) => {
-                            if let Some(mut rolling_window) = self.candle_history.get_mut(&subscription) {
-                                rolling_window.add(candle);
-                            }
-                        }
-                        BaseDataEnum::Fundamental(fund) => {
-                            if let Some(mut rolling_window) = self.fundamental_history.get_mut(&subscription) {
-                                rolling_window.add(fund);
-                            }
-                        }
-                    }
-                }
-                open_bars.insert(consolidated_bars.open_data.subscription(), consolidated_bars.open_data);
-            }
-        }
-
-        // Combine open and closed bars.
-        for (_, data) in open_bars {
-            match &data {
-                BaseDataEnum::Candle(ref candle) => {
-                    self.open_candles.insert(data.subscription(), candle.clone());
-                }
-                BaseDataEnum::QuoteBar(ref qb) => {
-                    self.open_bars.insert(data.subscription(), qb.clone());
-                }
-                _ => {}
-            }
-            time_slice_bars.add(data);
-        }
-
-        match time_slice_bars.is_empty() {
-            true => None,
-            false => Some(time_slice_bars)
+        if time_slice_bars.is_empty() {
+            None
+        } else {
+            Some(time_slice_bars)
         }
     }
 
