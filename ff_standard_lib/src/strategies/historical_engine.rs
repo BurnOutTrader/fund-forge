@@ -115,10 +115,9 @@ impl HistoricalEngine {
 
             let time_slices = match get_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
-                  /*  if time_slices.is_empty() {
-                        last_time = to_time;
-                        continue 'main_loop;
-                    }*/
+                    if time_slices.is_empty() {
+                        println!("Historical Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
+                    }
                     time_slices
                 },
                 Err(e) => {
