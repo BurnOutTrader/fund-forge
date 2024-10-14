@@ -19,3 +19,4 @@ trades exports
 /data/bitget_credentials
 /data/bitget_credentials/bitget_credentials.toml
 /ff_data_server/data/Test
+/ff_data_server/rithmic_credentials
