@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -233,7 +234,7 @@ async fn warmup( //todo make async task version for live mode
         }
         _ => {}
     }
-
+    let _ = subscription_handler.deref();
     let consolidator = ConsolidatorEnum::create_consolidator(subscription.clone(), false, SubscriptionResolutionType::new(subscription.resolution, subscription.base_data_type)).await;
     let (_, window) = ConsolidatorEnum::warmup(consolidator, to_time, (indicator.data_required_warmup() + 1) as i32, strategy_mode).await;
     for data in window.history {
