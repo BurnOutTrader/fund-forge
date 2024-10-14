@@ -105,7 +105,7 @@ impl HistoricalEngine {
         let mut first_iteration = true;
         'main_loop: while last_time <= end_time {
             if !first_iteration {
-                last_time += buffer_duration
+                last_time += Duration::from_nanos(1)
             }
             let to_time: DateTime<Utc> = {
                 let end_of_day_naive = last_time.date_naive().and_time(NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).unwrap());
@@ -129,15 +129,9 @@ impl HistoricalEngine {
                 first_iteration = false;
             }
 
-            'day_loop: loop {
-                let time = last_time + buffer_duration;
-                if time <= last_time {
-                    continue;
-                }
-                if time.date_naive() != last_time.date_naive() {
-                    break 'day_loop
-                }
-                //self.notify.notified().await;
+            let mut time = last_time;
+            'day_loop: while time <= to_time {
+                time += buffer_duration;
                 if !warm_up_complete {
                     if time >= self.start_time {
                         warm_up_complete = true;
