@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use chrono::{DateTime, Utc, Duration as ChronoDuration, TimeZone, NaiveTime};
 use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, forward_buffer, TIMED_EVENT_HANDLER};
 use crate::standardized_types::base_data::history::{get_historical_data};
@@ -129,8 +130,13 @@ impl HistoricalEngine {
                     time_slices
                 },
                 Err(e) => {
-                    eprintln!("Error: {}", e);
-                    continue;
+                    if self.tick_over_no_data {
+                        println!("Historical Engine: Error getting data: {}", e);
+                    } else if !self.tick_over_no_data {
+                        last_time = to_time;
+                        continue 'main_loop
+                    }
+                    BTreeMap::new()
                 }
             };
 
