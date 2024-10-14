@@ -213,8 +213,8 @@ pub async fn on_data_received(
                                     // We can subscribe to new DataSubscriptions at run time
                                     // We can use a strategy reference and still use strategy functions in the receiving functions.
                                     if count == 20 {
-                                        subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
-                                        subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        //subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        //subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                                 //do something with the current open bar
@@ -446,7 +446,15 @@ pub async fn on_data_received(
 // We can subscribe to new indicators at run time
 // We can use a strategy reference for strategy functions.
 pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
-    let msg = format!("{} Subscribing to new indicator heikin_atr10_15min and warming up subscriptions, this will also take time if we don't have enough history to warm up, sometimes in current development state it bugs and freezes engine restart if > 1 min", strategy.time_local());
+    let msg = format!(
+        "{time} [INDICATOR SUBSCRIPTION] heikin_atr10_15min
+    • Status: Initializing and warming up
+    • Process: Fetching historical data for warm-up
+    • Duration: May take longer if insufficient history available
+    • Caution: Potential freeze in current dev state
+    • Action: Restart if initialization exceeds 1 minute",
+        time = strategy.time_local()
+    );
     println!("{}",msg.as_str().purple());
     // this will test both our auto warm up for indicators and data subscriptions
     let quote_bar_atr10_15min = IndicatorEnum::AverageTrueRange(
@@ -473,8 +481,13 @@ pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
 // We can subscribe to new data feeds at run time
 // We can use a strategy reference for strategy functions.
 pub async fn subscribe_to_new_candles_example(strategy: &FundForgeStrategy) {
-    let msg = format!("{} Subscribing to new AUD-CAD HeikinAshi Candle at 15 Minute Resolution and warming subscription to have 48 bars of memory,
-                                        This should be fast in warm up and backtest, sometimes in current development state it bugs and freezes engine, restart if > 1 min", strategy.time_local());
+    let msg = format!(
+        "[{}] Subscription Update: AUD-CAD HeikinAshi Candle
+    Resolution: 15 Minutes
+    Memory: 48 bars
+    Note: If loading takes >1 min, consider restarting the engine.",
+        strategy.time_local(),
+    );
     println!("{}",msg.as_str().to_uppercase().purple());
 
     let minute_15_ha_candles = DataSubscription::new_custom(
