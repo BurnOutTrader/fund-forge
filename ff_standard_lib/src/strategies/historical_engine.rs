@@ -122,13 +122,12 @@ impl HistoricalEngine {
                         println!("Historical Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
                     } else if time_slices.is_empty() && !self.tick_over_no_data {
                         last_time = to_time;
-                        continue;
+                        continue 'main_loop
                     }
                     time_slices
                 },
                 Err(e) => {
-                    eprintln!("{}", e);
-                    continue;
+                    panic!("{}", e);
                 }
             };
             if first_iteration {
