@@ -22,7 +22,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 
 pub struct HybridStorage {
     base_path: PathBuf,
-    mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>, //todo [urgent] we need to regularly clear the save updated data and clear the cache
+    mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>, //todo [urgent] we need to regularly save any updated data and clear the cache
 }
 
 impl HybridStorage {
