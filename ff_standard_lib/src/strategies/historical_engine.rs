@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc, Duration as ChronoDuration, TimeZone, NaiveTime};
-use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, forward_buffer};
+use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, forward_buffer, TIMED_EVENT_HANDLER};
 use crate::standardized_types::base_data::history::{get_historical_data};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent};
@@ -91,6 +91,7 @@ impl HistoricalEngine {
         println!("Historical Engine: Warming up the strategy...");
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
+        let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap().clone();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         let mut warm_up_complete = false;
         let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
@@ -114,10 +115,10 @@ impl HistoricalEngine {
 
             let time_slices = match get_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
-                    if time_slices.is_empty() {
+                  /*  if time_slices.is_empty() {
                         last_time = to_time;
                         continue 'main_loop;
-                    }
+                    }*/
                     time_slices
                 },
                 Err(e) => {
@@ -155,7 +156,7 @@ impl HistoricalEngine {
                     }
                     Err(_) => {}
                 }
-
+                timed_event_handler.update_time(time.clone()).await;
                 // Collect data from the primary feeds simulating a buffering range
                 let time_slice: TimeSlice = time_slices
                     .range(last_time.timestamp_nanos_opt().unwrap()..=time.timestamp_nanos_opt().unwrap())

@@ -90,7 +90,7 @@ pub(crate) fn subscribe_primary_subscription_updates() -> broadcast::Receiver<Ve
 }
 
 pub(crate) static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
-static TIMED_EVENT_HANDLER: OnceCell<Arc<TimedEventHandler>> = OnceCell::new();
+pub(crate) static TIMED_EVENT_HANDLER: OnceCell<Arc<TimedEventHandler>> = OnceCell::new();
 static DRAWING_OBJECTS_HANDLER: OnceCell<Arc<DrawingObjectHandler>> = OnceCell::new();
 
 pub(crate) enum StrategyRequest {
