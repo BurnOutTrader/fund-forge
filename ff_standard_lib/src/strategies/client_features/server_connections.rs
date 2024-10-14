@@ -422,13 +422,13 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                 if let Some(consolidated) = subscription_handler.update_time_slice(time_slice.clone()).await {
                     strategy_time_slice.extend(consolidated);
                 }
-            } else {
-                // todo, not having else here will result in duplicate bars, some sort of race condition, but we do need to update consolidators based on time in live
-                // todo... if we dont have any data on this slice. we need to tick at buffer speed
-                if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
-                    strategy_time_slice.extend(consolidated);
-                }
             }
+        /*        // todo, not having else here will result in duplicate bars, some sort of race condition, but we do need to update consolidators based on time in live
+                // todo... if we dont have any data on this slice. we need to tick at buffer speed
+               if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                    strategy_time_slice.extend(consolidated);
+                }*/
+
 
             strategy_time_slice.extend(time_slice);
             indicator_handler.update_time_slice(Utc::now(), &strategy_time_slice).await;
