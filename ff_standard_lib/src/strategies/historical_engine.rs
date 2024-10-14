@@ -1,17 +1,15 @@
-use chrono::{DateTime, Datelike, Utc,  Duration as ChronoDuration};
+use chrono::{DateTime, Utc, Duration as ChronoDuration, TimeZone, NaiveTime};
 use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, forward_buffer};
-use crate::standardized_types::base_data::history::{generate_file_dates, get_historical_data};
+use crate::standardized_types::base_data::history::{get_historical_data};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent};
 use crate::standardized_types::time_slices::TimeSlice;
-use std::collections::BTreeMap;
 use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::{Sender};
 use crate::strategies::handlers::market_handlers::MarketMessageEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
 use tokio::sync::{broadcast};
-use crate::helpers::converters::next_month;
 
 #[allow(dead_code)]
 pub struct HistoricalEngine {
@@ -65,14 +63,8 @@ impl HistoricalEngine {
                     StrategyMode::Backtest => self.end_time,
                     StrategyMode::Live | StrategyMode::LivePaperTrading => self.start_time
                 };
-                let month_years = generate_file_dates(
-                    warm_up_start_time,
-                    end_time,
-                );
 
-
-                self.historical_data_feed(month_years, warm_up_start_time, end_time, self.buffer_resolution, self.mode).await;
-
+                self.historical_data_feed(warm_up_start_time, end_time, self.buffer_resolution, self.mode).await;
 
                 match self.mode {
                     StrategyMode::Backtest => {
@@ -91,7 +83,6 @@ impl HistoricalEngine {
     #[allow(unused_assignments)]
     async fn historical_data_feed(
         &mut self,
-        month_years: BTreeMap<i32, DateTime<Utc>>, //todo overhaul historical engine, no need to get using months, we could get just 1 week at a time
         warm_up_start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
         buffer_duration: Duration,
@@ -110,102 +101,103 @@ impl HistoricalEngine {
         for subscription in &strategy_subscriptions {
             println!("Historical Engine: Strategy Subscription: {}", subscription);
         }
-        'main_loop: for (_, start) in &month_years {
-            let mut last_time = start.clone();
-            'month_loop: loop {
-                println!("Buffered Engine: Preparing TimeSlices For: {}", start.date_naive().format("%B %Y"));
-                let month_time_slices = match get_historical_data(primary_subscriptions.clone(), start.clone(), next_month(&start)).await {
-                    Ok(time_slices) => time_slices,
-                    Err(e) => {
-                        eprintln!("Historical Engine: Error getting historical data for: {:?}: {:?}", start, e);
-                        continue;
+        let mut last_time = warm_up_start_time.clone();
+        let mut first_iteration = true;
+        'main_loop: while last_time <= end_time {
+            if !first_iteration {
+                last_time += buffer_duration
+            }
+            let to_time: DateTime<Utc> = {
+                let end_of_day_naive = last_time.date_naive().and_time(NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).unwrap());
+                Utc.from_utc_datetime(&end_of_day_naive).max(last_time + buffer_duration)
+            };
+
+            let time_slices = match get_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
+                Ok(time_slices) => {
+                    if time_slices.is_empty() {
+                        last_time = to_time;
+                        continue 'main_loop;
                     }
-                };
-                println!("{} Data Points Recovered from Server: {} for {}", start.date_naive(), month_time_slices.len(), start.date_naive());
-                let mut end_month = true;
-                'time_instance_loop: loop {
-                    let time = last_time + buffer_duration;
-                    if time > end_time {
-                        println!("Historical Engine: End Time: {}", end_time);
-                        break 'main_loop;
+                    time_slices
+                },
+                Err(e) => {
+                    eprintln!("{}", e);
+                    continue;
+                }
+            };
+            if first_iteration {
+                first_iteration = false;
+            }
+
+            'day_loop: loop {
+                let time = last_time + buffer_duration;
+                if time <= last_time {
+                    continue;
+                }
+                if time.date_naive() != last_time.date_naive() {
+                    break 'day_loop
+                }
+                //self.notify.notified().await;
+                if !warm_up_complete {
+                    if time >= self.start_time {
+                        warm_up_complete = true;
+                        set_warmup_complete();
+                        add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
+                        forward_buffer(time).await;
+                        if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
+                            break 'main_loop
+                        }
+                        println!("Historical Engine: Start Backtest");
                     }
-                    if time < warm_up_start_time {
-                        continue
-                    }
-                    if time <= last_time {
-                        continue;
-                    }
-                    //self.notify.notified().await;
-                    if !warm_up_complete {
-                        if time >= self.start_time {
-                            warm_up_complete = true;
-                            set_warmup_complete();
-                            add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
-                            forward_buffer(time).await;
-                            if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
-                                break 'main_loop
-                            }
-                            println!("Historical Engine: Start Backtest");
+                }
+
+                // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
+                match self.primary_subscription_updates.try_recv() {
+                    Ok(updates) => {
+                        if updates != primary_subscriptions {
+                            primary_subscriptions = updates;
+                            break 'day_loop
                         }
                     }
+                    Err(_) => {}
+                }
 
-                    if time.month() != start.month() {
-                        //println!("Next Month Time");
-                        break 'month_loop;
-                    }
-
-                    // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
-                    match self.primary_subscription_updates.try_recv() {
-                        Ok(updates) => {
-                            if updates != primary_subscriptions {
-                                primary_subscriptions = updates;
-                                end_month = false;
-                                break 'time_instance_loop
-                            }
-                        }
-                        Err(_) => {}
-                    }
-
-                    // Collect data from the primary feeds simulating a buffering range
-                    let time_slice: TimeSlice = month_time_slices
-                        .range(last_time.timestamp_nanos_opt().unwrap()..=time.timestamp_nanos_opt().unwrap())
-                        .flat_map(|(_, value)| value.iter().cloned())
-                        .collect();
-                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
+                // Collect data from the primary feeds simulating a buffering range
+                let time_slice: TimeSlice = time_slices
+                    .range(last_time.timestamp_nanos_opt().unwrap()..=time.timestamp_nanos_opt().unwrap())
+                    .flat_map(|(_, value)| value.iter().cloned())
+                    .collect();
+                self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
 
 
-                    let mut strategy_time_slice: TimeSlice = TimeSlice::new();
-                    // update our consolidators and create the strategies time slice with any new data or just create empty slice.
-                    if !time_slice.is_empty() {
-                        // Add only primary data which the strategy has subscribed to into the strategies time slice
-                        if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
-                            strategy_time_slice.extend(consolidated_data);
-                        }
-
-                        strategy_time_slice.extend(time_slice);
-                    }
-
-                    // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
-                    if let Some(consolidated_data) = subscription_handler.update_consolidators_time(time.clone()).await {
+                let mut strategy_time_slice: TimeSlice = TimeSlice::new();
+                // update our consolidators and create the strategies time slice with any new data or just create empty slice.
+                if !time_slice.is_empty() {
+                    // Add only primary data which the strategy has subscribed to into the strategies time slice
+                    if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
                         strategy_time_slice.extend(consolidated_data);
                     }
 
-                    if !strategy_time_slice.is_empty() {
-                        // Update indicators and get any generated events.
-                        indicator_handler.update_time_slice(time, &strategy_time_slice).await;
+                    strategy_time_slice.extend(time_slice);
+                }
 
-                        // add the strategy time slice to the new events.
-                        let slice_event = StrategyEvent::TimeSlice(
-                            strategy_time_slice,
-                        );
-                        add_buffer(time, slice_event).await;
-                    }
-                    forward_buffer(time).await;
-                    last_time = time.clone();
+                // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
+                if let Some(consolidated_data) = subscription_handler.update_consolidators_time(time.clone()).await {
+                    strategy_time_slice.extend(consolidated_data);
                 }
-                if end_month {
-                    break 'month_loop;
+
+                if !strategy_time_slice.is_empty() {
+                    // Update indicators and get any generated events.
+                    indicator_handler.update_time_slice(time, &strategy_time_slice).await;
+
+                    // add the strategy time slice to the new events.
+                    let slice_event = StrategyEvent::TimeSlice(
+                        strategy_time_slice,
+                    );
+                    add_buffer(time, slice_event).await;
                 }
+                forward_buffer(time).await;
+                last_time = time.clone();
             }
         }
     }

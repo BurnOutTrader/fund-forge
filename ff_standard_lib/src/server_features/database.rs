@@ -15,7 +15,6 @@ use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 
-// Todo, save as 1 file per week.
 //todo add update management handling, so we dont access data while it is being updated. instead we join a que to await the updates
 // use market type in folder structure
 
