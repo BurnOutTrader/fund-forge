@@ -134,7 +134,6 @@ impl HistoricalEngine {
                 }
             };
 
-
             let mut time = last_time;
             'day_loop: while time <= to_time {
                 time += buffer_duration;
