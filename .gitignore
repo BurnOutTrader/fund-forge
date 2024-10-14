@@ -15,8 +15,7 @@ trades exports
 /trades exports
 #/target
 
-/data/rithmic_credentials
-/data/bitget_credentials
+/ff_data_server/data/rithmic_credentials
+/ff_data_server/data/bitget_credentials
 /data/bitget_credentials/bitget_credentials.toml
 /ff_data_server/data/Test
-/ff_data_server/rithmic_credentials
