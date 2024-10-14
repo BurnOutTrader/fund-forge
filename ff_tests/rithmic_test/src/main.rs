@@ -32,13 +32,13 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(5),
         vec![
-       /*     DataSubscription::new(
+            DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Ticks(1),
                 BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::CME)
-            ),*/
+            ),
             /*DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),

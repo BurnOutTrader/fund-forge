@@ -82,67 +82,69 @@ struct ServerLaunchOptions {
 
 #[allow(dead_code)]
 async fn init_rithmic_apis(options: ServerLaunchOptions) {
-    let options = options.clone();
-    if options.disable_rithmic_server {
-        return
-    }
-    let toml_files = RithmicClient::get_rithmic_tomls();
-    if toml_files.is_empty() {
-        return;
-    }
-    let init_tasks = toml_files.into_iter().filter_map(|file| {
-        RithmicSystem::from_file_string(file.as_str()).map(|system| {
-            task::spawn(async move {
-                match RithmicClient::new(system).await {
-                    Ok(client) => {
-                        let client = Arc::new(client);
-                        match RithmicClient::run_start_up(client.clone(), true, true).await {
-                            Ok(_) => {
-                                RITHMIC_CLIENTS.insert(system, client);
-                                println!("Rithmic client initialized for: {}", system);
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+    let options = options;
+    tokio::task::spawn(async move {
+        if options.disable_rithmic_server {
+            return
+        }
+        let toml_files = RithmicClient::get_rithmic_tomls();
+        if toml_files.is_empty() {
+            return;
+        }
+        let init_tasks = toml_files.into_iter().filter_map(|file| {
+            RithmicSystem::from_file_string(file.as_str()).map(|system| {
+                task::spawn(async move {
+                    match RithmicClient::new(system).await {
+                        Ok(client) => {
+                            let client = Arc::new(client);
+                            match RithmicClient::run_start_up(client.clone(), true, true).await {
+                                Ok(_) => {
+                                    RITHMIC_CLIENTS.insert(system, client);
+                                    println!("Rithmic client initialized for: {}", system);
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
                             }
                         }
+                        Err(e) => {
+                            eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
+                        }
                     }
-                    Err(e) => {
-                        eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
-                    }
-                }
+                })
             })
-        })
-    }).collect::<Vec<_>>();
+        }).collect::<Vec<_>>();
 
-    // Wait for all initialization tasks to complete
-/*    join_all(init_tasks).await;
+        // Wait for all initialization tasks to complete
+        join_all(init_tasks).await;
 
-    // Create a vector to hold all RMS request tasks
-    let mut rms_tasks = Vec::new();
+        // Create a vector to hold all RMS request tasks
+        let mut rms_tasks = Vec::new();
 
-    for api in RITHMIC_CLIENTS.iter() {
-        let api = api.value().clone();
-        let rms_req = RequestAccountRmsInfo {
-            template_id: 304,
-            user_msg: vec![],
-            fcm_id: api.credentials.fcm_id.clone(),
-            ib_id: api.credentials.ib_id.clone(),
-            user_type: api.credentials.user_type.clone(),
-        };
+        for api in RITHMIC_CLIENTS.iter() {
+            let api = api.value().clone();
+            let rms_req = RequestAccountRmsInfo {
+                template_id: 304,
+                user_msg: vec![],
+                fcm_id: api.credentials.fcm_id.clone(),
+                ib_id: api.credentials.ib_id.clone(),
+                user_type: api.credentials.user_type.clone(),
+            };
 
-        // Spawn a new task for each RMS request
-        let task = task::spawn(async move {
-            match api.client.send_message(SysInfraType::OrderPlant, rms_req).await {
-                Ok(_) => println!("RMS request sent successfully for client: {}", api.system),
-                Err(e) => eprintln!("Failed to send RMS request for client: {}, error: {}", api.system, e),
-            }
-        });
+            // Spawn a new task for each RMS request
+            let task = task::spawn(async move {
+                match api.client.send_message(SysInfraType::OrderPlant, rms_req).await {
+                    Ok(_) => println!("RMS request sent successfully for client: {}", api.system),
+                    Err(e) => eprintln!("Failed to send RMS request for client: {}, error: {}", api.system, e),
+                }
+            });
 
-        rms_tasks.push(task);
-    }
+            rms_tasks.push(task);
+        }
 
-    // Wait for all RMS request tasks to complete
-    join_all(rms_tasks).await;*/
+        // Wait for all RMS request tasks to complete
+        join_all(rms_tasks).await;
+    });
 }
 
 async fn logout_apis() {
@@ -171,8 +173,7 @@ async fn main() -> io::Result<()> {
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
 
-    //let init_rithmic_handle = tokio::spawn(init_rithmic_apis(options.clone()));
-    //init_rithmic_handle.await.expect("Failed to initialize APIs");
+    init_rithmic_apis(options.clone()).await;
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 
