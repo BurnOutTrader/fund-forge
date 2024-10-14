@@ -14,7 +14,6 @@ serde = { version = "*", features = ["derive"] }
 rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }
 bytes = "*"
 zip = "*"
-log = "*"
 serde_json = "*"
 tokio =  { version = "*", features = ["full"] }
 once_cell = "*"
@@ -33,7 +32,6 @@ futures = "*"
 rustls = "0.23.5"
 tokio-rustls = "*"
 rust_decimal = { version = "*", features = ["rkyv", "rkyv-safe"] }
-float-cmp = "*"
 rustls-pemfile = "*"
 async-std = "*"
 async-trait = "0.1.80"
@@ -42,5 +40,4 @@ ahash = "*"
 dashmap = "6.1.0"
 csv ="*"
 rust_decimal_macros ="*"
-rayon = "1.10.0"
 memmap2 = "0.9.5"
