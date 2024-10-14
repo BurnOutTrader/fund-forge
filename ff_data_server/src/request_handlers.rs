@@ -271,7 +271,7 @@ pub async fn manage_async_requests(
             });
         }
         deregister_streamer(&stream_name);
-        println!("Shutting Down Async ReadHalf");
+        println!("Streamer Disconnected: {}", stream_name);
     });
 }
 
