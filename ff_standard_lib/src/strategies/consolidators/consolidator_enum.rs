@@ -5,7 +5,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Datelike, Duration, Utc, Weekday};
 use crate::standardized_types::base_data::history::get_historical_data;
 use crate::standardized_types::resolution::Resolution;
 
@@ -135,7 +135,11 @@ impl ConsolidatorEnum {
         };
 
         let subtract_duration: Duration = consolidator.resolution().as_duration() * history_to_retain;
-        let from_time = to_time - subtract_duration - Duration::days(1);
+        let mut from_time = to_time - subtract_duration ;
+
+        if to_time.weekday() == Weekday::Sun {
+            from_time - Duration::days(3);
+        }
 
         let base_subscription = DataSubscription::new(
             subscription.symbol.name.clone(),
