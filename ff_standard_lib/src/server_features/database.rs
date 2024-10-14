@@ -16,6 +16,7 @@ use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 
 //todo add update management handling, so we dont access data while it is being updated. instead we join a que to await the updates
+// the engine manages datavendor.update_data() functions, not the user
 // use market type in folder structure
 
 
