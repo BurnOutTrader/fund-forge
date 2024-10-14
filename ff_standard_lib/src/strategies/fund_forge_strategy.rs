@@ -112,6 +112,15 @@ impl FundForgeStrategy {
         gui_enabled: bool,
         tick_over_no_data: bool,
     ) -> FundForgeStrategy {
+
+
+        let timed_event_handler = Arc::new(TimedEventHandler::new());
+        let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
+        initialize_static(
+            timed_event_handler.clone(),
+            drawing_objects_handler.clone()
+        ).await;
+
         let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
         let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
         let warm_up_start_time = start_time - warmup_duration;
@@ -124,8 +133,6 @@ impl FundForgeStrategy {
 
         subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
 
-        let timed_event_handler = Arc::new(TimedEventHandler::new());
-        let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
 
         let strategy = FundForgeStrategy {
             mode: strategy_mode.clone(),
@@ -133,17 +140,12 @@ impl FundForgeStrategy {
             time_zone,
             subscription_handler,
             indicator_handler: indicator_handler.clone(),
-            timed_event_handler: timed_event_handler.clone(),
-            drawing_objects_handler: drawing_objects_handler.clone(),
+            timed_event_handler,
+            drawing_objects_handler,
             orders_count: Default::default(),
             market_event_sender: market_event_sender.clone(),
             orders: Default::default(),
         };
-
-        initialize_static(
-            timed_event_handler,
-            drawing_objects_handler
-        ).await;
 
         match strategy_mode {
             StrategyMode::Backtest => {

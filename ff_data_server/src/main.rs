@@ -115,7 +115,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
     }).collect::<Vec<_>>();
 
     // Wait for all initialization tasks to complete
-    join_all(init_tasks).await;
+/*    join_all(init_tasks).await;
 
     // Create a vector to hold all RMS request tasks
     let mut rms_tasks = Vec::new();
@@ -142,7 +142,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
     }
 
     // Wait for all RMS request tasks to complete
-    join_all(rms_tasks).await;
+    join_all(rms_tasks).await;*/
 }
 
 async fn logout_apis() {
