@@ -37,7 +37,7 @@ for more free testing data [Demonstration Testing Data](#demonstration-testing-d
 If strategy parameter `tick_over_no_data: bool` == true; The engine might seem to pause for a few seconds over weekends as we check for weekend data 1 day at a time, this pause will be longer the more symbols and resolutions we have subscribed to.
 Even when there is no weekend data, the engine will run at buffer speed through the weekend or no data periods.
 
-If false the engine will have a much smaller weekend pause as it requests 1 days worth of data at a time from the server, and finds the next data points.
+If `tick_over_no_data: bool` == false; The engine will have a much smaller weekend pause as it requests 1 days worth of data at a time from the server, and finds the next data points.
 
 ## Demonstration Testing Data
 You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKF125tuEG16grLM_Q?e=Yukrv6)
