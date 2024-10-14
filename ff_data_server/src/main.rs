@@ -117,7 +117,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
 
         // Wait for all initialization tasks to complete
         join_all(init_tasks).await;
-
+/*
         // Create a vector to hold all RMS request tasks
         let mut rms_tasks = Vec::new();
 
@@ -143,7 +143,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
         }
 
         // Wait for all RMS request tasks to complete
-        join_all(rms_tasks).await;
+        join_all(rms_tasks).await;*/
     });
 }
 
@@ -173,7 +173,7 @@ async fn main() -> io::Result<()> {
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
 
-    init_rithmic_apis(options.clone()).await;
+    //init_rithmic_apis(options.clone()).await;
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 
