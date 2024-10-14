@@ -4,9 +4,10 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use std::path::{Path, PathBuf};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use std::time::Duration;
 use chrono::{DateTime, Datelike, TimeZone, Utc};
+use dashmap::DashMap;
 use futures::future;
 use memmap2::{Mmap};
 use tokio::task;
@@ -24,9 +25,9 @@ use crate::standardized_types::time_slices::TimeSlice;
 
 pub struct HybridStorage {
     base_path: PathBuf,
-    mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>,
-    cache_last_accessed: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
-    cache_is_updated: Arc<Mutex<HashMap<String, bool>>>,
+    mmap_cache: Arc<DashMap<String, Arc<Mmap>>>,
+    cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
+    cache_is_updated: Arc<DashMap<String, bool>>,
     clear_cache_duration: Duration
 }
 
@@ -34,14 +35,14 @@ impl HybridStorage {
     pub fn new(base_path: PathBuf, clear_cache_duration: Duration) -> Self {
         let storage = Self {
             base_path,
-            mmap_cache: Arc::new(Mutex::new(HashMap::new())),
-            cache_last_accessed: Arc::new(Mutex::new(Default::default())),
-            cache_is_updated: Arc::new(Mutex::new(Default::default())),
+            mmap_cache: Arc::new(DashMap::new()),
+            cache_last_accessed: Arc::new(DashMap::new()),
+            cache_is_updated: Arc::new(DashMap::new()),
             clear_cache_duration
         };
 
         // Start the background task for cache management
-        //storage.start_cache_management();
+        storage.start_cache_management();
 
         storage
     }
@@ -58,19 +59,17 @@ impl HybridStorage {
             loop {
                 interval.tick().await;
 
-                let mut cache = mmap_cache.lock().unwrap();
-                let mut last_accessed = cache_last_accessed.lock().unwrap();
-                let mut is_updated = cache_is_updated.lock().unwrap();
-
                 let now = Utc::now();
 
-                cache.retain(|path, mmap| {
-                    if let Some(last_access) = last_accessed.get(path) {
+                mmap_cache.retain(|path, mmap| {
+                    if let Some(last_access) = cache_last_accessed.get(path) {
                         if now.signed_duration_since(*last_access) > chrono::Duration::from_std(clear_cache_duration).unwrap() {
-                            if *is_updated.get(path).unwrap_or(&false) {
-                                // Save the updated mmap to disk
-                                if let Err(e) = Self::save_mmap_to_disk(path, mmap) {
-                                    eprintln!("Failed to save mmap to disk: {}", e);
+                            if let Some(updated) = cache_is_updated.get(path) {
+                                if *updated.value() {
+                                    // Save the updated mmap to disk
+                                    if let Err(e) = Self::save_mmap_to_disk(path, mmap) {
+                                        eprintln!("Failed to save mmap to disk: {}", e);
+                                    }
                                 }
                             }
                             false // Remove from cache
@@ -83,8 +82,8 @@ impl HybridStorage {
                 });
 
                 // Clean up the auxiliary hashmaps
-                last_accessed.retain(|k, _| cache.contains_key(k));
-                is_updated.retain(|k, _| cache.contains_key(k));
+                cache_last_accessed.retain(|k, _| mmap_cache.contains_key(k));
+                cache_is_updated.retain(|k, _| mmap_cache.contains_key(k));
             }
         });
     }
@@ -220,12 +219,10 @@ impl HybridStorage {
         file.set_len(0)?;
         file.write_all(&bytes)?;
 
-        let mut cache = self.mmap_cache.lock().unwrap();
         let mmap = unsafe { Mmap::map(&file)? };
-        cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
+        self.mmap_cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
 
-        let mut is_updated = self.cache_is_updated.lock().unwrap();
-        is_updated.insert(file_path.to_string_lossy().to_string(), true);
+        self.cache_is_updated.insert(file_path.to_string_lossy().to_string(), true);
 
         Ok(())
     }
@@ -381,23 +378,19 @@ impl HybridStorage {
     }
 
     fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
-        let mut cache = self.mmap_cache.lock().unwrap();
         let path_str = file_path.to_string_lossy().to_string();
 
-        if let Some(mmap) = cache.get(&path_str) {
-            let mut last_accessed = self.cache_last_accessed.lock().unwrap();
-            last_accessed.insert(path_str.clone(), Utc::now());
-            Ok(Arc::clone(mmap))
+        if let Some(mmap) = self.mmap_cache.get(&path_str) {
+            self.cache_last_accessed.insert(path_str.clone(), Utc::now());
+            Ok(Arc::clone(mmap.value()))
         } else {
             let file = File::open(file_path)?;
             let mmap = Arc::new(unsafe { Mmap::map(&file)? });
-            cache.insert(path_str.clone(), Arc::clone(&mmap));
+            self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
 
-            let mut last_accessed = self.cache_last_accessed.lock().unwrap();
-            last_accessed.insert(path_str.clone(), Utc::now());
+            self.cache_last_accessed.insert(path_str.clone(), Utc::now());
 
-            let mut is_updated = self.cache_is_updated.lock().unwrap();
-            is_updated.insert(path_str, false);
+            self.cache_is_updated.insert(path_str, false);
 
             Ok(mmap)
         }
