@@ -1,5 +1,6 @@
-## Implement DataBase for BaseDataEnum
-
+## Fix server
+- Need a better server architecture, consider using warp to manage server threads.
+- Need to fix thread management for Rithmic, currently it has problems.
 
 ## Subscription handling
 - Live subscriptions will be done by
