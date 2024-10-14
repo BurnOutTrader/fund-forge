@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc, Weekday};
 use tokio::sync::RwLock;
@@ -123,6 +124,7 @@ impl TimedEvent {
 pub struct TimedEventHandler {
     pub(crate) schedule: Arc<RwLock<Vec<TimedEvent>>>,
     is_warmed_up: RwLock<bool>,
+    last_fired: Arc<RwLock<HashMap<String, DateTime<Utc>>>>,
 }
 
 impl TimedEventHandler {
@@ -130,6 +132,7 @@ impl TimedEventHandler {
         TimedEventHandler {
             schedule: Default::default(),
             is_warmed_up: RwLock::new(false),
+            last_fired: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -146,23 +149,46 @@ impl TimedEventHandler {
             .write()
             .await
             .retain(|event| event.name != name);
+        self.last_fired.write().await.remove(&name);
     }
 
-    #[allow(unused_variables)] #[allow(unused_assignments)]
     pub async fn update_time(&self, current_time: DateTime<Utc>) {
         let mut schedule = self.schedule.write().await;
-        if schedule.len() == 0 {
+        let mut last_fired = self.last_fired.write().await;
+        if schedule.is_empty() {
             return;
         }
         let mut events_to_remove = vec![];
         for event in schedule.iter_mut() {
             if event.time.event_time(current_time) {
-                add_buffer(current_time, StrategyEvent::TimedEvent(event.name.clone())).await;
-                if let EventTimeEnum::DateTime { .. } = event.time {
-                    events_to_remove.push(event.name.clone());
-                }
-                if let EventTimeEnum::Every { duration, mut next_time, .. } = event.time {
-                    next_time = current_time + duration;
+                let should_fire = match &event.time {
+                    EventTimeEnum::Weekday { .. } => {
+                        last_fired.get(&event.name).map_or(true, |&last| last.date_naive() < current_time.date_naive())
+                    },
+                    EventTimeEnum::HourOfDay { .. } => {
+                        last_fired.get(&event.name).map_or(true, |&last|
+                            last.date_naive() < current_time.date_naive() || last.hour() < current_time.hour()
+                        )
+                    },
+                    EventTimeEnum::TimeOnWeekDay { .. } | EventTimeEnum::TimeOfDay { .. } => {
+                        last_fired.get(&event.name).map_or(true, |&last| last.date_naive() < current_time.date_naive())
+                    },
+                    EventTimeEnum::DateTime { .. } => true,
+                    EventTimeEnum::Every { duration, .. } => {
+                        last_fired.get(&event.name).map_or(true, |&last| current_time - last >= *duration)
+                    },
+                };
+
+                if should_fire {
+                    add_buffer(current_time, StrategyEvent::TimedEvent(event.name.clone())).await;
+                    last_fired.insert(event.name.clone(), current_time);
+
+                    if let EventTimeEnum::DateTime { .. } = event.time {
+                        events_to_remove.push(event.name.clone());
+                    }
+                    if let EventTimeEnum::Every { duration, ref mut next_time, .. } = event.time {
+                        *next_time = current_time + duration;
+                    }
                 }
             }
         }
