@@ -113,7 +113,7 @@ impl HistoricalEngine {
             }
             let to_time: DateTime<Utc> = {
                 let end_of_day_naive = last_time.date_naive().and_time(NaiveTime::from_hms_nano_opt(23, 59, 59, 999_999_999).unwrap());
-                Utc.from_utc_datetime(&end_of_day_naive).max(last_time + buffer_duration)
+                Utc.from_utc_datetime(&end_of_day_naive).max(last_time)
             };
             if first_iteration {
                 first_iteration = false;
