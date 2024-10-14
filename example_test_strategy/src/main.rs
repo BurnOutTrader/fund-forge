@@ -89,6 +89,8 @@ async fn main() {
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
         false,
+
+        //tick over no data, strategy will run at buffer resolution speed to simulate weekends and holidays, if false we will just skip over them to the next data point.
         false,
     ).await;
 
