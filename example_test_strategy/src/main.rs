@@ -449,10 +449,9 @@ pub async fn on_data_received(
 // We can use a strategy reference for strategy functions.
 pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
     let msg = format!(
-        "{time} [INDICATOR SUBSCRIPTION] heikin_atr10_15min
-    • Status: Initializing and warming up
+        "{time} Warming Up New heikin_atr10_15min
     • Process: Fetching historical data for warm-up
-    • Duration: May take longer if insufficient history available
+    • Duration: May take longer if insufficient history available in memory
     • Caution: Potential freeze in current dev state
     • Action: Restart if initialization exceeds 1 minute",
         time = strategy.time_local()
@@ -484,9 +483,10 @@ pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
 // We can use a strategy reference for strategy functions.
 pub async fn subscribe_to_new_candles_example(strategy: &FundForgeStrategy) {
     let msg = format!(
-        "[{}] Subscription Update: AUD-CAD HeikinAshi Candle
+        "[{}] Warming Up New Subscription Update: AUD-CAD HeikinAshi Candle
     Resolution: 15 Minutes
     Memory: 48 bars
+    Caution: Potential freeze in current dev state
     Note: If loading takes >1 min, consider restarting the engine.",
         strategy.time_local(),
     );
