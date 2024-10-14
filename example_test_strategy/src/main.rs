@@ -249,6 +249,8 @@ pub async fn on_data_received(
                                             bars_since_entry_2 += 1;
                                         }
 
+                                        //if we start the warm up on a weekend, this unwrap will crash, because we didn't have warm up data available for the warm up period.
+                                        // To avoid this in live strategies we should set a warm up period >= 3 days for strategies that we need to frequently stop and start.
                                         let last_bar: QuoteBar = strategy.bar_index(&base_data.subscription(), 1).unwrap();
 
                                         // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
