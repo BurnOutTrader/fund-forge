@@ -21,6 +21,7 @@ pub struct HistoricalEngine {
     gui_enabled: bool,
     primary_subscription_updates: broadcast::Receiver<Vec<DataSubscription>>,
     market_event_sender: Sender<MarketMessageEnum>,
+    tick_over_no_data: bool
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -33,6 +34,7 @@ impl HistoricalEngine {
         buffer_resolution: Duration,
         gui_enabled: bool,
         market_event_sender: Sender<MarketMessageEnum>,
+        tick_over_no_data: bool
     ) -> Self {
         let rx = subscribe_primary_subscription_updates();
         let engine = HistoricalEngine {
@@ -44,6 +46,7 @@ impl HistoricalEngine {
             gui_enabled,
             primary_subscription_updates: rx,
             market_event_sender,
+            tick_over_no_data
         };
         engine
     }
@@ -115,8 +118,11 @@ impl HistoricalEngine {
 
             let time_slices = match get_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
-                    if time_slices.is_empty() {
+                    if time_slices.is_empty() && self.tick_over_no_data {
                         println!("Historical Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
+                    } else if time_slices.is_empty() && !self.tick_over_no_data {
+                        last_time = to_time;
+                        continue;
                     }
                     time_slices
                 },

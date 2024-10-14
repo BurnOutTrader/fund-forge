@@ -103,11 +103,18 @@ If this is false, you will see periods of no data in backtests when the market i
 The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
 any additional subscriptions added later will be able to specify their own history requirements.
 
-##### `buffering_duration: Option<core::time::Duration>` 
+#### `buffering_duration: Option<core::time::Duration>` 
 core::time::Duration::from_millis(100),
 The historical engine or server will buffer data streams at this resolution.
 This helps us get consistent results between back testing and live trading and also reduces cpu load from constantly sending messages to our `fn on_data_received()`.
 
+#### `gui_enabled: bool` (Do no set to false, in development)
+This enables the ff_strategy_registry connection to connect to our gui, if false we will not broadcast events to the registry and will be invisible to the gui.
+
+#### `tick_over_no_data: bool`
+If true the historical engine will tick at buffer duration speed when there is no historical data available.
+This allows us to use timed events of fill forward over weekends, if no, the engine will skip days where no data was available and jump to the next time instantly.
+This does nothing in live.
 ```rust
 use std::time::Duration;
 
@@ -165,6 +172,11 @@ async fn main() {
         
         //Gui enabled, this needs to be false until strategy registry is overhauled.
         false,
+        
+        // tick_over_no_data, if true the historical engine will tick at buffer duration speed when there is no historical data available.
+        // This allows us to use timed events of fill forward over weekends, if no, the engine will skip days where no data was available and jump to the next time instantly.
+        // This does nothing in live.
+        true,
     ).await;
 
    // You don't have to pass in accounts, but if you want to customise accounts you can do it like this.

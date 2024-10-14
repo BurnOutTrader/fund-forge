@@ -89,6 +89,7 @@ async fn main() {
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
         false,
+        true,
     ).await;
 
     // we can subscribe to indicators here or in our event loop at run time.

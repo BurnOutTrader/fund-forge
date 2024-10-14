@@ -66,6 +66,7 @@ async fn main() {
         strategy_event_sender,
         core::time::Duration::from_millis(30),
         false,
+        true,
     ).await;
 
     on_data_received(strategy, strategy_event_receiver).await;
