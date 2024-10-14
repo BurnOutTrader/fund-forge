@@ -7,6 +7,7 @@ use chrono::{DateTime, Utc};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::time::Duration;
 use lazy_static::lazy_static;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
@@ -24,7 +25,7 @@ use ff_standard_lib::StreamName;
 use crate::stream_listener;
 
 lazy_static!(
-    pub static ref DATA_STORAGE: Arc<HybridStorage> = Arc::new(HybridStorage::new(PathBuf::from(get_data_folder())));
+    pub static ref DATA_STORAGE: Arc<HybridStorage> = Arc::new(HybridStorage::new(PathBuf::from(get_data_folder()), Duration::from_secs(1800)));
 );
 
 pub async fn base_data_response(

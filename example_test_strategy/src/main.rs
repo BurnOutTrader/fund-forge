@@ -210,8 +210,8 @@ pub async fn on_data_received(
                                     // We can subscribe to new DataSubscriptions at run time
                                     // We can use a strategy reference and still use strategy functions in the receiving functions.
                                     if count == 20 {
-                                        //subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
-                                        //subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
+                                        subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
                                     }
                                 }
                                 //do something with the current open bar

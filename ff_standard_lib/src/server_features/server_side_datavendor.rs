@@ -176,8 +176,9 @@ pub trait VendorApiResponse: Sync + Send {
     ) -> DataServerResponse;
 
     /// This should be your conversion into the DataVendor implementations historical data download function, historical data will be downloaded at the end of each UTC day.
-    /// You are returning a Option<BTreeMap<nanosecond timestamp, BaseDataEnum>>
-    /// If there was no data during the period then we return None
+    /// You are returning a Option<BTreeMap<nanosecond timestamp, BaseDataEnum>> where data.time_closed_utc().timestamp_nanos(), nanos is important
+    /// If there was no data during the period then we return None.
+    /// You should only return data.is_closed == true data points. although the server will filter out open data, it will still be better.
     async fn update_historical_data_for(
         subscription: DataSubscription,
         from: DateTime<Utc>,

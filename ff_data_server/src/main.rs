@@ -171,8 +171,8 @@ async fn main() -> io::Result<()> {
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
 
-    let init_rithmic_handle = tokio::spawn(init_rithmic_apis(options.clone()));
-    init_rithmic_handle.await.expect("Failed to initialize APIs");
+    //let init_rithmic_handle = tokio::spawn(init_rithmic_apis(options.clone()));
+    //init_rithmic_handle.await.expect("Failed to initialize APIs");
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 

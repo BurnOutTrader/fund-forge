@@ -5,9 +5,12 @@ use std::path::{Path, PathBuf};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::sync::{Arc, Mutex};
-use chrono::{DateTime, Datelike, Utc};
+use std::time::Duration;
+use chrono::{DateTime, Datelike, TimeZone, Utc};
 use futures::future;
 use memmap2::{Mmap};
+use tokio::task;
+use tokio::time::interval;
 use crate::messages::data_server_messaging::{FundForgeError};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -23,14 +26,75 @@ use crate::standardized_types::time_slices::TimeSlice;
 pub struct HybridStorage {
     base_path: PathBuf,
     mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>, //todo [urgent] we need to regularly save any updated data and clear the cache
+    cache_last_accessed: Arc<Mutex<HashMap<String, DateTime<Utc>>>>,
+    cache_is_updated: Arc<Mutex<HashMap<String, bool>>>,
+    clear_cache_duration: Duration
 }
 
 impl HybridStorage {
-    pub fn new(base_path: PathBuf) -> Self {
-        Self {
+    pub fn new(base_path: PathBuf, clear_cache_duration: Duration) -> Self {
+        let storage = Self {
             base_path,
             mmap_cache: Arc::new(Mutex::new(HashMap::new())),
-        }
+            cache_last_accessed: Arc::new(Mutex::new(Default::default())),
+            cache_is_updated: Arc::new(Mutex::new(Default::default())),
+            clear_cache_duration
+        };
+
+        // Start the background task for cache management
+        storage.start_cache_management();
+
+        storage
+    }
+
+    fn start_cache_management(&self) {
+        let mmap_cache = Arc::clone(&self.mmap_cache);
+        let cache_last_accessed = Arc::clone(&self.cache_last_accessed);
+        let cache_is_updated = Arc::clone(&self.cache_is_updated);
+        let clear_cache_duration = self.clear_cache_duration;
+
+        task::spawn(async move {
+            let mut interval = interval(clear_cache_duration);
+
+            loop {
+                interval.tick().await;
+
+                let mut cache = mmap_cache.lock().unwrap();
+                let mut last_accessed = cache_last_accessed.lock().unwrap();
+                let mut is_updated = cache_is_updated.lock().unwrap();
+
+                let now = Utc::now();
+
+                cache.retain(|path, mmap| {
+                    if let Some(last_access) = last_accessed.get(path) {
+                        if now.signed_duration_since(*last_access) > chrono::Duration::from_std(clear_cache_duration).unwrap() {
+                            if *is_updated.get(path).unwrap_or(&false) {
+                                // Save the updated mmap to disk
+                                if let Err(e) = Self::save_mmap_to_disk(path, mmap) {
+                                    eprintln!("Failed to save mmap to disk: {}", e);
+                                }
+                            }
+                            false // Remove from cache
+                        } else {
+                            true // Keep in cache
+                        }
+                    } else {
+                        false // Remove if no last access time (shouldn't happen)
+                    }
+                });
+
+                // Clean up the auxiliary hashmaps
+                last_accessed.retain(|k, _| cache.contains_key(k));
+                is_updated.retain(|k, _| cache.contains_key(k));
+            }
+        });
+    }
+
+    fn save_mmap_to_disk(path: &str, mmap: &Arc<Mmap>) -> io::Result<()> {
+        let mut file = OpenOptions::new().write(true).open(path)?;
+        file.write_all(mmap.as_ref())?;
+        file.sync_all()?;
+        Ok(())
     }
 
     fn get_base_path(&self, symbol: &Symbol, resolution: &Resolution, data_type: &BaseDataType, is_saving: bool) -> PathBuf {
@@ -76,11 +140,44 @@ impl HybridStorage {
         let mut grouped_data: HashMap<(Symbol, Resolution, BaseDataType, DateTime<Utc>), Vec<BaseDataEnum>> = HashMap::new();
 
         for d in data {
+            if !d.is_closed() {
+                continue;
+            }
             let key = (
                 d.symbol().clone(),
                 d.resolution(),
                 d.base_data_type(),
                 d.time_closed_utc().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap()
+            );
+            grouped_data.entry(key).or_insert_with(Vec::new).push(d);
+        }
+
+        for ((symbol, resolution, data_type, date), group) in grouped_data {
+            let file_path = self.get_file_path(&symbol, &resolution, &data_type, &date, true);
+            self.save_data_to_file(&file_path, &group).await?;
+        }
+
+        Ok(())
+    }
+
+
+    pub async fn save_data_bulk_tree(&self, data: BTreeMap<i64, BaseDataEnum>) -> io::Result<()> {
+        if data.is_empty() {
+            return Ok(());
+        }
+
+        let mut grouped_data: HashMap<(Symbol, Resolution, BaseDataType, DateTime<Utc>), Vec<BaseDataEnum>> = HashMap::new();
+
+        for (timestamp, d) in data {
+            if !d.is_closed() {
+                continue;
+            }
+            let datetime = Utc.timestamp_nanos(timestamp);
+            let key = (
+                d.symbol().clone(),
+                d.resolution(),
+                d.base_data_type(),
+                datetime.date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap()
             );
             grouped_data.entry(key).or_insert_with(Vec::new).push(d);
         }
@@ -127,6 +224,9 @@ impl HybridStorage {
         let mut cache = self.mmap_cache.lock().unwrap();
         let mmap = unsafe { Mmap::map(&file)? };
         cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
+
+        let mut is_updated = self.cache_is_updated.lock().unwrap();
+        is_updated.insert(file_path.to_string_lossy().to_string(), true);
 
         Ok(())
     }
@@ -283,12 +383,23 @@ impl HybridStorage {
 
     fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
         let mut cache = self.mmap_cache.lock().unwrap();
-        if let Some(mmap) = cache.get(file_path.to_string_lossy().as_ref()) {
+        let path_str = file_path.to_string_lossy().to_string();
+
+        if let Some(mmap) = cache.get(&path_str) {
+            let mut last_accessed = self.cache_last_accessed.lock().unwrap();
+            last_accessed.insert(path_str.clone(), Utc::now());
             Ok(Arc::clone(mmap))
         } else {
             let file = File::open(file_path)?;
             let mmap = Arc::new(unsafe { Mmap::map(&file)? });
-            cache.insert(file_path.to_string_lossy().to_string(), Arc::clone(&mmap));
+            cache.insert(path_str.clone(), Arc::clone(&mmap));
+
+            let mut last_accessed = self.cache_last_accessed.lock().unwrap();
+            last_accessed.insert(path_str.clone(), Utc::now());
+
+            let mut is_updated = self.cache_is_updated.lock().unwrap();
+            is_updated.insert(path_str, false);
+
             Ok(mmap)
         }
     }
