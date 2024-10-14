@@ -7,13 +7,7 @@
 /.obsidian/core-plugins-migration.json
 /.obsidian/workspace.json
 ff_data_server/data/rithmic_credentials//rithmic_credentials/rithmic_credentials.toml
-ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2024-06.rkyv
-ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2024-07.rkyv
-ff_data_server/data/test/Forex/quotes/I/AUD-CAD/AUD-CAD_I_2024-08.rkyv
 
-ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2024-06.rkyv
-ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2024-07.rkyv
-ff_data_server/data/test/Forex/quotes/I/EUR-USD/EUR-USD_I_2024-08.rkyv
 # Added by cargo
 #
 # already existing elements were commented out
@@ -24,9 +18,4 @@ trades exports
 /data/rithmic_credentials
 /data/bitget_credentials
 /data/bitget_credentials/bitget_credentials.toml
-/ff_data_server/data/Test/Forex/EUR-USD/I/Quotes/202407.bin
-/ff_data_server/data/Test/Forex/AUD-CAD/I/Quotes/202406.bin
-/ff_data_server/data/Test/Forex/AUD-CAD/I/Quotes/202408.bin
-/ff_data_server/data/Test/Forex/EUR-USD/I/Quotes/202406.bin
-/ff_data_server/data/Test/Forex/EUR-USD/I/Quotes/202408.bin
-/ff_data_server/data/Test/Forex/AUD-CAD/I/Quotes/202407.bin
+/ff_data_server/data/Test

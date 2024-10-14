@@ -1,12 +1,13 @@
 use std::collections::{BTreeMap, HashMap};
+use std::fs;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use std::path::{Path, PathBuf};
-use std::fs::{read_dir, File, OpenOptions};
+use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::sync::{Arc, Mutex};
-use chrono::{DateTime, Datelike, TimeZone, Utc};
+use chrono::{DateTime, Datelike, Utc};
 use futures::future;
-use memmap2::{Mmap, MmapMut};
+use memmap2::{Mmap};
 use crate::messages::data_server_messaging::{FundForgeError};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -17,9 +18,11 @@ use crate::standardized_types::time_slices::TimeSlice;
 // Todo, save as 1 file per week.
 //todo add update management handling, so we dont access data while it is being updated. instead we join a que to await the updates
 // use market type in folder structure
+
+
 pub struct HybridStorage {
     base_path: PathBuf,
-    mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>,     //todo: don't cache indefinitely
+    mmap_cache: Arc<Mutex<HashMap<String, Arc<Mmap>>>>,
 }
 
 impl HybridStorage {
@@ -30,14 +33,24 @@ impl HybridStorage {
         }
     }
 
-    fn get_file_path(&self, symbol: &Symbol, resolution: &str, data_type: &BaseDataType, date: &DateTime<Utc>) -> PathBuf {
-        self.base_path
+    fn get_base_path(&self, symbol: &Symbol, resolution: &Resolution, data_type: &BaseDataType, is_saving: bool) -> PathBuf {
+        let base_path = self.base_path
             .join(symbol.data_vendor.to_string())
             .join(symbol.market_type.to_string())
             .join(symbol.name.to_string())
-            .join(resolution)
-            .join(data_type.to_string())
-            .join(format!("{:04}{:02}.bin", date.year(), date.month()))
+            .join(resolution.to_string())
+            .join(data_type.to_string());
+
+        if is_saving && !base_path.exists() {
+            fs::create_dir_all(&base_path).unwrap();
+        }
+
+        base_path
+    }
+
+    fn get_file_path(&self, symbol: &Symbol, resolution: &Resolution, data_type: &BaseDataType, date: &DateTime<Utc>, is_saving: bool) -> PathBuf {
+        let base_path = self.get_base_path(symbol, resolution, data_type, is_saving);
+        base_path.join(format!("{:04}{:02}{:02}.bin", date.year(), date.month(), date.day()))
     }
 
     pub async fn save_data(&self, data: &BaseDataEnum) -> io::Result<()> {
@@ -47,9 +60,10 @@ impl HybridStorage {
 
         let file_path = self.get_file_path(
             data.symbol(),
-            &data.resolution().to_string(),
+            &data.resolution(),
             &data.base_data_type(),
-            &data.time_closed_utc()
+            &data.time_closed_utc(),
+            true
         );
         self.save_data_to_file(&file_path, &[data.clone()]).await
     }
@@ -59,16 +73,20 @@ impl HybridStorage {
             return Ok(());
         }
 
-        let mut grouped_data: HashMap<(Symbol, Resolution, BaseDataType, i32, u32), Vec<BaseDataEnum>> = HashMap::new();
+        let mut grouped_data: HashMap<(Symbol, Resolution, BaseDataType, DateTime<Utc>), Vec<BaseDataEnum>> = HashMap::new();
 
         for d in data {
-            let key = (d.symbol().clone(), d.resolution(), d.base_data_type(), d.time_closed_utc().year(), d.time_closed_utc().month());
+            let key = (
+                d.symbol().clone(),
+                d.resolution(),
+                d.base_data_type(),
+                d.time_closed_utc().date().and_hms(0, 0, 0)
+            );
             grouped_data.entry(key).or_insert_with(Vec::new).push(d);
         }
 
-        for ((symbol, resolution, data_type, year, month), group) in grouped_data {
-            let date: DateTime<Utc> = Utc.with_ymd_and_hms(year, month, 1, 0, 0, 0).unwrap();
-            let file_path = self.get_file_path(&symbol, &resolution.to_string(), &data_type, &date);
+        for ((symbol, resolution, data_type, date), group) in grouped_data {
+            let file_path = self.get_file_path(&symbol, &resolution, &data_type, &date, true);
             self.save_data_to_file(&file_path, &group).await?;
         }
 
@@ -76,8 +94,6 @@ impl HybridStorage {
     }
 
     async fn save_data_to_file(&self, file_path: &Path, new_data: &[BaseDataEnum]) -> io::Result<()> {
-        std::fs::create_dir_all(file_path.parent().unwrap())?;
-
         let mut file = OpenOptions::new()
             .create(true)
             .read(true)
@@ -109,8 +125,8 @@ impl HybridStorage {
         file.write_all(&bytes)?;
 
         let mut cache = self.mmap_cache.lock().unwrap();
-        let mmap = unsafe { MmapMut::map_mut(&file)? }.make_read_only()?;
-        cache.insert(file_path.to_string_lossy().to_string(), mmap.into());
+        let mmap = unsafe { Mmap::map(&file)? };
+        cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
 
         Ok(())
     }
@@ -125,20 +141,129 @@ impl HybridStorage {
     ) -> Result<Vec<BaseDataEnum>, FundForgeError> {
         let mut all_data = Vec::new();
 
-        let mut current_date: DateTime<Utc> = Utc
-            .with_ymd_and_hms(start.year(), start.month(), start.day(), 0, 0, 0)
-            .unwrap();
+        let mut current_date = start.date().and_hms(0, 0, 0);
 
         while current_date <= end {
-            let file_path = self.get_file_path(symbol, &resolution.to_string(), data_type, &current_date);
+            let file_path = self.get_file_path(symbol, resolution, data_type, &current_date, false);
             if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
-                let month_data = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()).unwrap(); //todo handle instead of unwrap
-                all_data.extend(month_data.into_iter().filter(|d| d.time_closed_utc() >= start && d.time_closed_utc() <= end));
+                let day_data = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()).unwrap(); //todo handle instead of unwrap
+                all_data.extend(day_data.into_iter().filter(|d| d.time_closed_utc() >= start && d.time_closed_utc() <= end));
             }
-            current_date = current_date.with_month(current_date.month() + 1).unwrap_or_else(|| current_date.with_year(current_date.year() + 1).unwrap().with_month(1).unwrap());
+            current_date = current_date + chrono::Duration::days(1);
         }
 
         Ok(all_data)
+    }
+
+    pub async fn get_latest_data_point(
+        &self,
+        symbol: &Symbol,
+        resolution: &Resolution,
+        data_type: &BaseDataType,
+    ) -> Result<Option<BaseDataEnum>, Box<dyn std::error::Error>> {
+        let current_date = Utc::now();
+        let mut date = current_date;
+
+        for _ in 0..365 {  // Check up to a year back
+            let file_path = self.get_file_path(symbol, resolution, data_type, &date, false);
+            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
+                let day_data = BaseDataEnum::from_array_bytes(&mmap.to_vec())?;
+                if let Some(latest) = day_data.into_iter().max_by_key(|d| d.time_closed_utc()) {
+                    return Ok(Some(latest));
+                }
+            }
+            date = date - chrono::Duration::days(1);
+        }
+
+        Ok(None)
+    }
+
+    pub async fn get_latest_data_time(
+        &self,
+        symbol: &Symbol,
+        resolution: &Resolution,
+        data_type: &BaseDataType,
+    ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
+        let base_path = self.get_base_path(symbol, resolution, data_type, false);
+
+        let mut latest_file: Option<PathBuf> = None;
+        let mut latest_modified: Option<std::time::SystemTime> = None;
+
+        if let Ok(entries) = fs::read_dir(&base_path) {
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("bin") {
+                    if let Ok(metadata) = entry.metadata() {
+                        if let Ok(modified) = metadata.modified() {
+                            if latest_modified.map_or(true, |t| modified > t) {
+                                latest_modified = Some(modified);
+                                latest_file = Some(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(file_path) = latest_file {
+            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
+                if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
+                    return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).max());
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    pub async fn get_earliest_data_time(
+        &self,
+        symbol: &Symbol,
+        resolution: &Resolution,
+        data_type: &BaseDataType,
+    ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
+        let base_path = self.get_base_path(symbol, resolution, data_type, false);
+
+        let mut earliest_file: Option<PathBuf> = None;
+        let mut earliest_modified: Option<std::time::SystemTime> = None;
+
+        if let Ok(entries) = fs::read_dir(&base_path) {
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("bin") {
+                    if let Ok(metadata) = entry.metadata() {
+                        if let Ok(modified) = metadata.modified() {
+                            if earliest_modified.map_or(true, |t| modified < t) {
+                                earliest_modified = Some(modified);
+                                earliest_file = Some(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if let Some(file_path) = earliest_file {
+            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
+                if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
+                    return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).min());
+                }
+            }
+        }
+
+        Ok(None)
+    }
+
+    fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
+        let mut cache = self.mmap_cache.lock().unwrap();
+        if let Some(mmap) = cache.get(file_path.to_string_lossy().as_ref()) {
+            Ok(Arc::clone(mmap))
+        } else {
+            let file = File::open(file_path)?;
+            let mmap = Arc::new(unsafe { Mmap::map(&file)? });
+            cache.insert(file_path.to_string_lossy().to_string(), Arc::clone(&mmap));
+            Ok(mmap)
+        }
     }
 
     pub async fn get_bulk_data(
@@ -180,125 +305,5 @@ impl HybridStorage {
         }
 
         Ok(combined_data)
-    }
-
-    pub async fn get_latest_data_point(
-        &self,
-        symbol: &Symbol,
-        resolution: &str,
-        data_type: &BaseDataType,
-    ) -> Result<Option<BaseDataEnum>, Box<dyn std::error::Error>> {
-        let current_date = Utc::now();
-        let mut date = current_date;
-
-        for _ in 0..36 {  // Check up to 36 months back
-            let file_path = self.get_file_path(symbol, resolution, data_type, &date);
-            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
-                let month_data = BaseDataEnum::from_array_bytes(&mmap.to_vec())?;
-                if let Some(latest) = month_data.into_iter().max_by_key(|d| d.time_closed_utc()) {
-                    return Ok(Some(latest));
-                }
-            }
-            date = date.with_month(date.month() - 1).unwrap_or_else(|| date.with_year(date.year() - 1).unwrap().with_month(12).unwrap());
-        }
-
-        Ok(None)
-    }
-
-    pub async fn get_latest_data_time(
-        &self,
-        symbol: &Symbol,
-        resolution: &str,
-        data_type: &BaseDataType,
-    ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
-        let base_path = self.base_path
-            .join(symbol.data_vendor.to_string())
-            .join(symbol.name.to_string())
-            .join(resolution)
-            .join(data_type.to_string());
-
-        let mut latest_file: Option<PathBuf> = None;
-        let mut latest_modified: Option<std::time::SystemTime> = None;
-
-        if let Ok(entries) = read_dir(&base_path) {
-            for entry in entries.filter_map(Result::ok) {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("bin") {
-                    if let Ok(metadata) = entry.metadata() {
-                        if let Ok(modified) = metadata.modified() {
-                            if latest_modified.map_or(true, |t| modified > t) {
-                                latest_modified = Some(modified);
-                                latest_file = Some(path);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some(file_path) = latest_file {
-            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
-                if let Ok(month_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
-                    return Ok(month_data.into_iter().map(|d| d.time_closed_utc()).max());
-                }
-            }
-        }
-
-        Ok(None)
-    }
-
-    pub async fn get_earliest_data_time(
-        &self,
-        symbol: &Symbol,
-        resolution: &str,
-        data_type: &BaseDataType,
-    ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
-        let base_path = self.base_path
-            .join(symbol.data_vendor.to_string())
-            .join(symbol.name.to_string())
-            .join(resolution)
-            .join(data_type.to_string());
-
-        let mut earliest_file: Option<PathBuf> = None;
-        let mut earliest_modified: Option<std::time::SystemTime> = None;
-
-        if let Ok(entries) = read_dir(&base_path) {
-            for entry in entries.filter_map(Result::ok) {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("bin") {
-                    if let Ok(metadata) = entry.metadata() {
-                        if let Ok(modified) = metadata.modified() {
-                            if earliest_modified.map_or(true, |t| modified < t) {
-                                earliest_modified = Some(modified);
-                                earliest_file = Some(path);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if let Some(file_path) = earliest_file {
-            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
-                if let Ok(month_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
-                    return Ok(month_data.into_iter().map(|d| d.time_closed_utc()).min());
-                }
-            }
-        }
-
-        Ok(None)
-    }
-
-    //todo: don't cache indefinitely
-    fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
-        let mut cache = self.mmap_cache.lock().unwrap();
-        if let Some(mmap) = cache.get(file_path.to_string_lossy().as_ref()) {
-            Ok(Arc::clone(mmap))
-        } else {
-            let file = File::open(file_path)?;
-            let mmap = Arc::new(unsafe { Mmap::map(&file)? });
-            cache.insert(file_path.to_string_lossy().to_string(), Arc::clone(&mmap));
-            Ok(mmap)
-        }
     }
 }

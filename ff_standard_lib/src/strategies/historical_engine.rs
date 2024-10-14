@@ -132,6 +132,9 @@ impl HistoricalEngine {
                     if time < warm_up_start_time {
                         continue
                     }
+                    if time <= last_time {
+                        continue;
+                    }
                     //self.notify.notified().await;
                     if !warm_up_complete {
                         if time >= self.start_time {
