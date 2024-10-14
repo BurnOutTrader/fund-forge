@@ -139,33 +139,35 @@ impl VendorApiResponse for RithmicClient {
                 if let Some(broadcaster) = self.tick_feed_broadcasters.get(&subscription.symbol.name) {
                     let receiver = broadcaster.value().subscribe();
                     subscribe_stream(&stream_name, subscription.clone(), receiver).await;
-                    is_subscribed = false;
                 } else {
                     let (sender, receiver) = broadcast::channel(500);
                     self.tick_feed_broadcasters.insert(subscription.symbol.name.clone(), sender);
                     subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+                    is_subscribed = false;
                 }
             }
             BaseDataType::Quotes => {
                 if let Some(broadcaster) = self.quote_feed_broadcasters.get(&subscription.symbol.name) {
                     let receiver = broadcaster.value().subscribe();
                     subscribe_stream(&stream_name, subscription.clone(), receiver).await;
-                    is_subscribed = false;
                 } else {
                     let (sender, receiver) = broadcast::channel(500);
                     self.quote_feed_broadcasters.insert(subscription.symbol.name.clone(), sender);
                     subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+                    self.ask_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
+                    self.ask_book.insert(subscription.symbol.name.clone(), BTreeMap::new());
+                    is_subscribed = false;
                 }
             }
             BaseDataType::Candles => {
                 if let Some(broadcaster) = self.candle_feed_broadcasters.get(&subscription.symbol.name) {
                     let receiver = broadcaster.value().subscribe();
                     subscribe_stream(&stream_name, subscription.clone(), receiver).await;
-                    is_subscribed = false;
                 } else {
                     let (sender, receiver) = broadcast::channel(500);
                     self.candle_feed_broadcasters.insert(subscription.symbol.name.clone(), sender);
                     subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+                    is_subscribed = false;
                 }
             }
             _ => todo!("Handle gracefully by returning err")
