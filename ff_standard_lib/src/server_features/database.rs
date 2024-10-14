@@ -155,27 +155,54 @@ impl HybridStorage {
         Ok(all_data)
     }
 
+    /// This function will only check back 10,000 days, it will therefore not work beyond 27.5 years into the past,
     pub async fn get_latest_data_point(
         &self,
         symbol: &Symbol,
         resolution: &Resolution,
         data_type: &BaseDataType,
     ) -> Result<Option<BaseDataEnum>, Box<dyn std::error::Error>> {
-        let current_date = Utc::now();
-        let mut date = current_date;
+        let current_date = Utc::now().date_naive();
+        let mut file_cache = HashMap::new();
 
-        for _ in 0..365 {  // Check up to a year back
-            let file_path = self.get_file_path(symbol, resolution, data_type, &date, false);
-            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
-                let day_data = BaseDataEnum::from_array_bytes(&mmap.to_vec())?;
-                if let Some(latest) = day_data.into_iter().max_by_key(|d| d.time_closed_utc()) {
-                    return Ok(Some(latest));
+        // Binary search
+        let mut left = 0;
+        let mut right = 10000; // Maximum number of days to look back
+
+        while left <= right {
+            let mid = (left + right) / 2;
+            let date = current_date - chrono::Duration::days(mid);
+            let file_path = self.get_file_path(symbol, resolution, data_type, &date.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap(), false);
+
+            if let Some(&exists) = file_cache.get(&mid) {
+                if exists {
+                    // File exists, check the next more recent date
+                    right = mid - 1;
+                } else {
+                    // File doesn't exist, check older dates
+                    left = mid + 1;
+                }
+            } else {
+                let exists = file_path.exists();
+                file_cache.insert(mid, exists);
+                if exists {
+                    right = mid - 1;
+                } else {
+                    left = mid + 1;
                 }
             }
-            date = date - chrono::Duration::days(1);
         }
 
-        Ok(None)
+        // At this point, 'left' is the index of the most recent existing file
+        let latest_date = current_date - chrono::Duration::days(left);
+        let file_path = self.get_file_path(symbol, resolution, data_type, &latest_date.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap(), false);
+
+        if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
+            let day_data = BaseDataEnum::from_array_bytes(&mmap.to_vec())?;
+            Ok(day_data.into_iter().max_by_key(|d| d.time_closed_utc()))
+        } else {
+            Ok(None)
+        }
     }
 
     pub async fn get_latest_data_time(
