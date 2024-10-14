@@ -122,12 +122,7 @@ impl FundForgeStrategy {
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
         init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), market_event_sender.clone()).await;
 
-
         subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
-
-        //todo There is a problem with quote bars not being produced consistently since refactoring
-
-
 
         let timed_event_handler = Arc::new(TimedEventHandler::new());
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
