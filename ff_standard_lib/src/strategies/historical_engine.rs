@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use chrono::{DateTime, Utc, Duration as ChronoDuration, TimeZone, NaiveTime};
-use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, forward_buffer, TIMED_EVENT_HANDLER};
+use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, backtest_forward_buffer, TIMED_EVENT_HANDLER};
 use crate::standardized_types::base_data::history::{get_historical_data};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent};
@@ -73,7 +73,7 @@ impl HistoricalEngine {
                 match self.mode {
                     StrategyMode::Backtest => {
                         add_buffer(end_time, StrategyEvent::ShutdownEvent("Backtest Complete".to_string()) ).await;
-                        forward_buffer(warm_up_start_time).await;
+                        backtest_forward_buffer(warm_up_start_time).await;
                     }
                     StrategyMode::Live => {}
                     StrategyMode::LivePaperTrading => {}
@@ -148,7 +148,7 @@ impl HistoricalEngine {
                         warm_up_complete = true;
                         set_warmup_complete();
                         add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
-                        forward_buffer(time).await;
+                        backtest_forward_buffer(time).await;
                         if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
                             break 'main_loop
                         }
@@ -200,7 +200,7 @@ impl HistoricalEngine {
                     );
                     add_buffer(time, slice_event).await;
                 }
-                forward_buffer(time).await;
+                backtest_forward_buffer(time).await;
                 last_time = time.clone();
             }
         }

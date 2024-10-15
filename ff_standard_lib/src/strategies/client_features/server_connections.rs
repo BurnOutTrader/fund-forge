@@ -7,15 +7,17 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Timelike, Utc};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
-use tokio::io;
+use tokio::{io, select};
 use once_cell::sync::OnceCell;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::net::TcpStream;
+use tokio::runtime::Runtime;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 use tokio::sync::mpsc::{Sender};
+use tokio::time::{interval_at, Instant};
 use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
@@ -73,14 +75,12 @@ pub(crate) async fn extend_buffer(time: DateTime<Utc>, events: Vec<StrategyEvent
 }
 
 #[inline(always)]
-pub(crate) async fn forward_buffer(time: DateTime<Utc>) {
+pub(crate) async fn backtest_forward_buffer(time: DateTime<Utc>) {
     update_backtest_time(time);
     let mut buffer = EVENT_BUFFER.lock().await;
-    if !buffer.is_empty() {
-        let last_buffer = buffer.clone();
-        buffer.clear();
-        send_strategy_event_slice(last_buffer).await;
-    }
+    let last_buffer = buffer.clone();
+    buffer.clear();
+    send_strategy_event_slice(last_buffer).await;
 }
 
 
@@ -244,10 +244,19 @@ async fn request_handler(
     });
 }
 
-async fn fwd_data(time_slice: TimeSlice) {
-    let slice = StrategyEvent::TimeSlice(time_slice);
-    add_buffer(Utc::now(), slice).await;
-    forward_buffer(Utc::now()).await;
+async fn live_fwd_data(time_slice: Option<TimeSlice>) {
+    if let Some(time_slice) = time_slice {
+        INDICATOR_HANDLER.get().unwrap().update_time_slice(Utc::now(), &time_slice).await;
+        let slice = StrategyEvent::TimeSlice(time_slice);
+        add_buffer(Utc::now(), slice).await;
+    }
+    let last_buffer = {
+        let mut buffer = EVENT_BUFFER.lock().await;
+        let last_buffer = buffer.clone();
+        buffer.clear();
+        last_buffer
+    };
+    send_strategy_event_slice(last_buffer).await;
 }
 
 pub async fn response_handler(
@@ -325,16 +334,11 @@ pub async fn response_handler(
                                     }
                                 }
                                 DataServerResponse::OrderUpdates(event) => {
-                                    live_order_update(event, true).await;
+                                    live_order_update(event).await;
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {
-                                        match handle_live_data(settings.clone(), port, buffer_duration, market_update_sender.clone()).await {
-                                            Ok(_) => {}
-                                            Err(e) => {
-                                                eprintln!("{}", e);
-                                            }
-                                        }
+                                        handle_live_data(settings.clone(), port, buffer_duration, market_update_sender.clone()).await;
                                     }
                                 }
                                 _ => panic!("Incorrect response here: {:?}", response)
@@ -353,13 +357,12 @@ pub async fn response_handler(
     }
 }
 
-pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration ,  market_update_sender: Sender<MarketMessageEnum>) -> Result<(), String> {
+pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration ,  market_update_sender: Sender<MarketMessageEnum>) {
     // set up async client
     let mut stream_client = match create_async_api_client(&connection_settings, true).await {
         Ok(client) => client,
         Err(e) => {
-            let err = format!("Unable to establish connection to server @ address: {:?}: {}", connection_settings, e);
-            return Err(err);
+            panic!("Unable to establish connection to server @ address: {:?}: {}", connection_settings, e);
         }
     };
 
@@ -381,68 +384,110 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         }
     }
 
-    tokio::task::spawn(async move {
-        let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
-        let market_update_sender = market_update_sender.clone();
-        let indicator_handler = INDICATOR_HANDLER.get().unwrap();
-        let mut strategy_time_slice = TimeSlice::new();
-        let strategy_sender = STRATEGY_SENDER.get().unwrap();
-        let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap();
+    let _ = tokio::task::spawn_blocking(move || {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
+            let market_update_sender = market_update_sender.clone();
+            let strategy_sender = STRATEGY_SENDER.get().unwrap();
+            let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap();
 
-        //println!("{:?}: response handler start", incoming.key());
-        let mut length_bytes = [0u8; LENGTH];
-        while let Ok(_) = stream_client.read_exact(&mut length_bytes).await {
-            // Parse the length from the header
-            let msg_length = u32::from_be_bytes(length_bytes) as usize;
-            let mut message_body = vec![0u8; msg_length];
+            let length_bytes = [0u8; LENGTH];
+            let mut strategy_time_slice = TimeSlice::new();
 
-            // Read the message body based on the length
-            match stream_client.read_exact(&mut message_body).await {
-                Ok(_) => {
-                    //eprintln!("Ok reading message body");
-                },
-                Err(e) => {
-                    eprintln!("Error reading message body: {}", e);
-                    continue;
+            // Calculate the start of the next second
+            let now = Utc::now();
+            let next_second = (now + chrono::Duration::seconds(1))
+                .with_nanosecond(1)
+                .unwrap();
+            let duration_until_next_second = next_second.signed_duration_since(now);
+            let start = Instant::now() + Duration::from_nanos(duration_until_next_second.num_nanoseconds().unwrap() as u64);
+
+            let mut interval = interval_at(start, Duration::from_secs(1));
+            let mut last_second = Utc::now().timestamp();
+
+            loop {
+                let mut length_bytes = [0u8; 4];
+                select! {
+                    result = stream_client.read_exact(&mut length_bytes) => {
+                        match result {
+                            Ok(_) => {
+                                last_second = Utc::now().timestamp();
+                                let msg_length = u32::from_be_bytes(length_bytes) as usize;
+                                let mut message_body = vec![0u8; msg_length];
+
+                                if let Err(e) = stream_client.read_exact(&mut message_body).await {
+                                    eprintln!("Error reading message body: {}", e);
+                                    continue;
+                                }
+
+                                let time_slice = TimeSlice::from_bytes(&message_body).unwrap();
+
+                                if !is_warmup_complete() {
+                                    strategy_time_slice.extend(time_slice);
+                                    continue;
+                                }
+
+                                if !time_slice.is_empty() {
+                                    if let Err(e) = market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await {
+                                        eprintln!("Failed to send market update: {}", e);
+                                    }
+                                    if let Some(consolidated) = subscription_handler.update_time_slice(time_slice.clone()).await {
+                                        strategy_time_slice.extend(consolidated);
+                                    }
+                                    strategy_time_slice.extend(time_slice);
+                                }
+
+                                match strategy_time_slice.is_empty() {
+                                    true => {
+                                        live_fwd_data(None).await;
+                                    }
+                                    false => {
+                                        live_fwd_data(Some(strategy_time_slice)).await;
+                                        strategy_time_slice = TimeSlice::new();
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                let mut buffer = StrategyEventBuffer::new();
+                                buffer.add_event(Utc::now(), StrategyEvent::ShutdownEvent(String::from("Disconnected Live Stream")));
+                                if let Err(e) = strategy_sender.send(buffer).await {
+                                    eprintln!("Failed to send shutdown event: {}", e);
+                                }
+                                break;  // Exit the loop on error
+                            }
+                        }
+                    }
+                    _ = interval.tick() => {
+                        timed_event_handler.update_time(Utc::now()).await;
+                        if !is_warmup_complete() {
+                            continue;
+                        }
+
+                        let now_second = Utc::now().timestamp();
+                        if now_second == last_second {
+                            continue;
+                        }
+                        last_second = now_second;
+
+                        if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                            strategy_time_slice.extend(consolidated);
+                        }
+
+                        match strategy_time_slice.is_empty() {
+                            true => {
+                                live_fwd_data(None).await;
+                            }
+                            false => {
+                                live_fwd_data(Some(strategy_time_slice)).await;
+                                strategy_time_slice = TimeSlice::new();
+                            }
+                        }
+                    }
                 }
             }
-
-            timed_event_handler.update_time(Utc::now()).await;
-            // these will be buffered eventually into an EventTimeSlice
-            let time_slice = TimeSlice::from_bytes(&message_body).unwrap();
-
-            // catch the data feed in a buffer until warm up completes
-            if !is_warmup_complete() {
-                strategy_time_slice.extend(time_slice);
-                continue;
-            }
-
-            if !time_slice.is_empty() {
-                market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
-                if let Some(consolidated) = subscription_handler.update_time_slice(time_slice.clone()).await {
-                    strategy_time_slice.extend(consolidated);
-                }
-            }
-            // this was causing a duplicate 1 second bar, it should be fixed now
-           /*if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
-                strategy_time_slice.extend(consolidated);
-            }*/
-
-            strategy_time_slice.extend(time_slice);
-            indicator_handler.update_time_slice(Utc::now(), &strategy_time_slice).await;
-
-            fwd_data(strategy_time_slice).await;
-            strategy_time_slice = TimeSlice::new();
-        }
-        let mut buffer = StrategyEventBuffer::new();
-        buffer.add_event(Utc::now(), StrategyEvent::ShutdownEvent(String::from("Disconnected Live Stream")));
-        match strategy_sender.send(buffer).await {
-            Ok(_) => {}
-            Err(_) => {}
-        }
+        });
     });
-
-    Ok(())
 }
 
 pub async fn init_sub_handler(subscription_handler: Arc<SubscriptionHandler>, event_sender: Sender<StrategyEventBuffer>, indicator_handler: Arc<IndicatorHandler>) {

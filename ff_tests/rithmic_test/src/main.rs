@@ -69,7 +69,7 @@ async fn main() {
         false,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(300),
+        core::time::Duration::from_millis(50),
         false,
         true,
     ).await;
