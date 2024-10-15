@@ -5,7 +5,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::bytes_trait::Bytes;
-
+use crate::standardized_types::subscriptions::DataSubscription;
 
 /// A `TimeSlice` is a consolidated slice of data that is consolidated into a single point in time, you could have 1 hundred Ticks, 1 Quotebar and 3 Candles of different time frames,
 /// if they all occurred at the same time, not all the data types will be the same time
@@ -78,6 +78,15 @@ impl TimeSlice {
     pub fn get_by_type(self, data_type: BaseDataType) -> impl Iterator<Item = BaseDataEnum> {
         self.data.into_iter().flat_map(move |(_, items)| {
             items.into_iter().filter(move |item| item.base_data_type() == data_type)
+        })
+    }
+
+    pub fn get_by_subscription(self, subscription: DataSubscription) -> impl Iterator<Item = BaseDataEnum> {
+        self.data.into_iter().flat_map(move |(_, items)| {
+            items.into_iter().filter({
+            let value = subscription.clone();
+                move |item| item.subscription() == value
+            })
         })
     }
 

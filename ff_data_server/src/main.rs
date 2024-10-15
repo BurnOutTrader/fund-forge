@@ -180,7 +180,7 @@ async fn main() -> io::Result<()> {
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
 
-    //init_rithmic_apis(options.clone()).await;
+    init_rithmic_apis(options.clone()).await;
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 

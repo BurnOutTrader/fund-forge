@@ -7,6 +7,7 @@ use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
 use chrono::{DateTime, Duration, Utc};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+use crate::helpers::converters;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::base_data::tick::Aggressor;
@@ -23,6 +24,7 @@ pub struct HeikinAshiConsolidator {
     fill_forward: bool,
     market_type: MarketType,
     subscription_resolution_type: SubscriptionResolutionType,
+    last_bar_open: DateTime<Utc>,
 }
 
 impl HeikinAshiConsolidator {
@@ -57,6 +59,12 @@ impl HeikinAshiConsolidator {
     }
 
     fn new_heikin_ashi_candle(&mut self, new_data: &BaseDataEnum) -> Candle {
+        let mut time = converters::open_time(&self.subscription, new_data.time_utc());
+        if time == self.last_bar_open {
+            time += self.subscription.resolution.as_duration();
+        }
+        self.last_bar_open = time.clone();
+
         match new_data {
             BaseDataEnum::Candle(candle) => {
                 if self.previous_ha_close == dec!(0.0) && self.previous_ha_open == dec!(0.0) {
@@ -71,7 +79,6 @@ impl HeikinAshiConsolidator {
                 // Update previous Heikin Ashi values for next bar
                 self.previous_ha_close = ha_close;
                 self.previous_ha_open = ha_open;
-                let time = open_time(&self.subscription, new_data.time_utc());
 
                 self.candle_from_base_data(
                     ha_open,
@@ -99,7 +106,6 @@ impl HeikinAshiConsolidator {
                 // Update previous Heikin Ashi values for next bar
                 self.previous_ha_close = ha_close;
                 self.previous_ha_open = ha_open;
-                let time = open_time(&self.subscription, new_data.time_utc());
 
                 self.candle_from_base_data(
                     ha_open,
@@ -127,7 +133,6 @@ impl HeikinAshiConsolidator {
                 // Update previous Heikin Ashi values for next bar
                 self.previous_ha_close = ha_close;
                 self.previous_ha_open = ha_open;
-                let time = open_time(&self.subscription, new_data.time_utc());
 
                 let (ask_volume, bid_volume) = match tick.aggressor {
                     Aggressor::Buy => (dec!(0.0), tick.volume),
@@ -161,7 +166,6 @@ impl HeikinAshiConsolidator {
                 // Update previous Heikin Ashi values for next bar
                 self.previous_ha_close = ha_close;
                 self.previous_ha_open = ha_open;
-                let time = open_time(&self.subscription, new_data.time_utc());
 
                 self.candle_from_base_data(
                     ha_open,
@@ -220,6 +224,7 @@ impl HeikinAshiConsolidator {
             decimal_accuracy,
             tick_size,
             fill_forward,
+            last_bar_open: DateTime::<Utc>::MIN_UTC,
         })
     }
 
@@ -229,10 +234,29 @@ impl HeikinAshiConsolidator {
                 return None;
             }
         }
-        //todo add fill forward option for this
-        if self.fill_forward && self.current_data == None  {
+
+        if let Some(current_data) = self.current_data.as_mut() {
+            if time > current_data.time_closed_utc()  {
+                let mut return_data = current_data.clone();
+                return_data.set_is_closed(true);
+                self.current_data = None;
+                self.fill_forward(time);
+                return Some(return_data);
+            }
+        } else if self.current_data == None {
+            self.fill_forward(time);
+        }
+        None
+    }
+
+    fn fill_forward(&mut self, time: DateTime<Utc>) {
+        if self.fill_forward {
             let ha_open =  self.market_type.round_price((self.previous_ha_open + self.previous_ha_close) / dec!(2.0), self.tick_size, self.decimal_accuracy);
-            let time = open_time(&self.subscription, time);
+            let mut time = converters::open_time(&self.subscription, time);
+            if time == self.last_bar_open {
+                time += self.subscription.resolution.as_duration();
+            }
+            self.last_bar_open = time.clone();
             self.current_data = Some(BaseDataEnum::Candle(Candle {
                 symbol: self.subscription.symbol.clone(),
                 open: ha_open,
@@ -249,23 +273,10 @@ impl HeikinAshiConsolidator {
                 candle_type: CandleType::HeikinAshi,
             }));
         }
-        const NANO: Duration = Duration::nanoseconds(1);
-        if let Some(current_data) = self.current_data.as_mut() {
-            if time > current_data.time_closed_utc() - NANO {
-                let mut return_data = current_data.clone();
-                return_data.set_is_closed(true);
-                self.current_data = None;
-                return Some(return_data);
-            }
-        }
-        None
     }
 
     //problem where this is returning a closed candle constantly
     pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
-        if base_data.subscription().subscription_resolution_type() != self.subscription_resolution_type {
-            panic!("Unsupported type") //todo remove this check on final builds
-        }
         if self.current_data.is_none() {
             let data = self.new_heikin_ashi_candle(base_data);
             self.current_data = Some(BaseDataEnum::Candle(data));

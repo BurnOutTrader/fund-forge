@@ -69,7 +69,7 @@ async fn main() {
         true,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(50),
+        core::time::Duration::from_millis(10),
         false,
         true,
     ).await;
@@ -131,12 +131,12 @@ pub async fn on_data_received(
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::Tick(tick) => {
-                              // println!("{}", tick);
+                              println!("{}", tick);
                             }
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
+                                    let msg = format!("{} {} {} Close: {}, {}, strategy time: {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()), strategy.time_local());
                                     if candle.close == candle.open {
                                         println!("{}", msg.as_str().blue())
                                     } else {

@@ -244,21 +244,6 @@ async fn request_handler(
     });
 }
 
-async fn live_fwd_data(time_slice: Option<TimeSlice>) {
-    if let Some(time_slice) = time_slice {
-        INDICATOR_HANDLER.get().unwrap().update_time_slice(Utc::now(), &time_slice).await;
-        let slice = StrategyEvent::TimeSlice(time_slice);
-        add_buffer(Utc::now(), slice).await;
-    }
-    let last_buffer = {
-        let mut buffer = EVENT_BUFFER.lock().await;
-        let last_buffer = buffer.clone();
-        buffer.clear();
-        last_buffer
-    };
-    send_strategy_event_slice(last_buffer).await;
-}
-
 pub async fn response_handler(
     mode: StrategyMode,
     buffer_duration: Duration,
@@ -355,6 +340,21 @@ pub async fn response_handler(
             });
         }
     }
+}
+
+async fn live_fwd_data(time_slice: Option<TimeSlice>) {
+    if let Some(time_slice) = time_slice {
+        INDICATOR_HANDLER.get().unwrap().update_time_slice(Utc::now(), &time_slice).await;
+        let slice = StrategyEvent::TimeSlice(time_slice);
+        add_buffer(Utc::now(), slice).await;
+    }
+    let last_buffer = {
+        let mut buffer = EVENT_BUFFER.lock().await;
+        let last_buffer = buffer.clone();
+        buffer.clear();
+        last_buffer
+    };
+    send_strategy_event_slice(last_buffer).await;
 }
 
 pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration ,  market_update_sender: Sender<MarketMessageEnum>) {

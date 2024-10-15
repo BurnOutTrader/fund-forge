@@ -1,6 +1,7 @@
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use ahash::AHashMap;
 use async_std::task::block_on;
 use crate::strategies::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
@@ -573,7 +574,7 @@ impl SymbolSubscriptionHandler {
             primary_subscriptions: DashMap::with_capacity(5),
             secondary_subscriptions: DashMap::with_capacity(5),
             vendor_primary_resolutions,
-            vendor_data_types
+            vendor_data_types,
         };
         handler
     }
@@ -615,6 +616,7 @@ impl SymbolSubscriptionHandler {
                 consolidated_data.extend(data);
             }
         }
+
         match consolidated_data.is_empty() {
             true => None,
             false => Some(consolidated_data),
