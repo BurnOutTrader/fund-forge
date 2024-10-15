@@ -424,10 +424,9 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                 }
             }
             // this was causing a duplicate 1 second bar, it should be fixed now
-       /*    if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
+           /*if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
                 strategy_time_slice.extend(consolidated);
             }*/
-
 
             strategy_time_slice.extend(time_slice);
             indicator_handler.update_time_slice(Utc::now(), &strategy_time_slice).await;

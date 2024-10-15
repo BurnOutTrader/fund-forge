@@ -72,7 +72,7 @@ pub async fn stream_handler(
             let receivers = stream_receivers.read().await;
             if receivers.is_empty() {
                 drop(receivers);
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_millis(1500)).await;
                 continue;
             }
 
