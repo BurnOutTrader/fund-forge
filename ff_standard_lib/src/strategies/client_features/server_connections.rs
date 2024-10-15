@@ -388,103 +388,55 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
-            let market_update_sender = market_update_sender.clone();
+            let market_event_sender = market_update_sender.clone();
             let strategy_sender = STRATEGY_SENDER.get().unwrap();
             let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap();
 
-            let length_bytes = [0u8; LENGTH];
-            let mut strategy_time_slice = TimeSlice::new();
-
-            // Calculate the start of the next second
-            let now = Utc::now();
-            let next_second = (now + chrono::Duration::seconds(1))
-                .with_nanosecond(1)
-                .unwrap();
-            let duration_until_next_second = next_second.signed_duration_since(now);
-            let start = Instant::now() + Duration::from_nanos(duration_until_next_second.num_nanoseconds().unwrap() as u64);
-
-            let mut interval = interval_at(start, Duration::from_secs(1));
-            let mut last_second = Utc::now().timestamp();
-
-            loop {
-                let mut length_bytes = [0u8; 4];
-                select! {
-                    result = stream_client.read_exact(&mut length_bytes) => {
-                        match result {
-                            Ok(_) => {
-                                last_second = Utc::now().timestamp();
-                                let msg_length = u32::from_be_bytes(length_bytes) as usize;
-                                let mut message_body = vec![0u8; msg_length];
-
-                                if let Err(e) = stream_client.read_exact(&mut message_body).await {
-                                    eprintln!("Error reading message body: {}", e);
-                                    continue;
-                                }
-
-                                let time_slice = TimeSlice::from_bytes(&message_body).unwrap();
-
-                                if !is_warmup_complete() {
-                                    strategy_time_slice.extend(time_slice);
-                                    continue;
-                                }
-
-                                if !time_slice.is_empty() {
-                                    if let Err(e) = market_update_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await {
-                                        eprintln!("Failed to send market update: {}", e);
-                                    }
-                                    if let Some(consolidated) = subscription_handler.update_time_slice(time_slice.clone()).await {
-                                        strategy_time_slice.extend(consolidated);
-                                    }
-                                    strategy_time_slice.extend(time_slice);
-                                }
-
-                                match strategy_time_slice.is_empty() {
-                                    true => {
-                                        live_fwd_data(None).await;
-                                    }
-                                    false => {
-                                        live_fwd_data(Some(strategy_time_slice)).await;
-                                        strategy_time_slice = TimeSlice::new();
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                let mut buffer = StrategyEventBuffer::new();
-                                buffer.add_event(Utc::now(), StrategyEvent::ShutdownEvent(String::from("Disconnected Live Stream")));
-                                if let Err(e) = strategy_sender.send(buffer).await {
-                                    eprintln!("Failed to send shutdown event: {}", e);
-                                }
-                                break;  // Exit the loop on error
-                            }
-                        }
-                    }
-                    _ = interval.tick() => {
-                        timed_event_handler.update_time(Utc::now()).await;
-                        if !is_warmup_complete() {
-                            continue;
-                        }
-
-                        let now_second = Utc::now().timestamp();
-                        if now_second == last_second {
-                            continue;
-                        }
-                        last_second = now_second;
-
-                        if let Some(consolidated) = subscription_handler.update_consolidators_time(Utc::now()).await {
-                            strategy_time_slice.extend(consolidated);
-                        }
-
-                        match strategy_time_slice.is_empty() {
-                            true => {
-                                live_fwd_data(None).await;
-                            }
-                            false => {
-                                live_fwd_data(Some(strategy_time_slice)).await;
-                                strategy_time_slice = TimeSlice::new();
-                            }
-                        }
-                    }
+            let mut length_bytes = [0u8; LENGTH];
+            while let Ok(_) = stream_client.read_exact(&mut length_bytes).await {
+                //println!("start: {}", Utc::now());
+                let msg_length = u32::from_be_bytes(length_bytes) as usize;
+                let mut message_body = vec![0u8; msg_length];
+                timed_event_handler.update_time(Utc::now()).await;
+                if let Err(e) = stream_client.read_exact(&mut message_body).await {
+                    continue;
                 }
+
+                let time_slice = match TimeSlice::from_bytes(&message_body) {
+                    Ok(ts) => ts,
+                    Err(e) => {
+                        continue;
+                    }
+                };
+
+                let mut strategy_time_slice: TimeSlice = TimeSlice::new();
+                // update our consolidators and create the strategies time slice with any new data or just create empty slice.
+                if !time_slice.is_empty() {
+                    market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
+                    // Add only primary data which the strategy has subscribed to into the strategies time slice
+                    if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
+                        strategy_time_slice.extend(consolidated_data);
+                    }
+                    strategy_time_slice.extend(time_slice);
+                }
+
+                // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
+                if let Some(consolidated_data) = subscription_handler.update_consolidators_time(Utc::now()).await {
+                    strategy_time_slice.extend(consolidated_data);
+                }
+
+                if strategy_time_slice.is_empty() {
+                    live_fwd_data(None).await;
+
+                } else {
+                    live_fwd_data(Some(strategy_time_slice.clone())).await;
+                }
+                //println!("end: {}", Utc::now());
+            }
+            let mut buffer = StrategyEventBuffer::new();
+            buffer.add_event(Utc::now(), StrategyEvent::ShutdownEvent(String::from("Disconnected Live Stream")));
+            if let Err(e) = strategy_sender.send(buffer).await {
+                eprintln!("Failed to send shutdown event: {}", e);
             }
         });
     });
