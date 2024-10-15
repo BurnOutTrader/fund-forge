@@ -11,6 +11,7 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::{mpsc};
+use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -18,6 +19,10 @@ use ff_standard_lib::standardized_types::orders::OrderUpdateEvent;
 use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
+use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
+use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
+use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
+use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 
 // to launch on separate machine
 #[tokio::main]
@@ -64,7 +69,7 @@ async fn main() {
         false,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(100),
+        core::time::Duration::from_millis(300),
         false,
         true,
     ).await;
@@ -83,6 +88,32 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
+    let atr_5 = IndicatorEnum::AverageTrueRange(
+        AverageTrueRange::new(
+            IndicatorName::from("atr_5"),
+            // The subscription for the indicator
+            DataSubscription::new(
+                SymbolName::from("MNQ"),
+                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+                Resolution::Seconds(1),
+                BaseDataType::Candles,
+                MarketType::Futures(FuturesExchange::CME)
+            ),
+
+            // history to retain
+            10,
+
+            // atr period
+            5,
+
+            // Plot color for GUI or println!()
+            Color::new (128, 0, 128)
+        ).await,
+    );
+
+    //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
+    strategy.subscribe_indicator(atr_5, false).await;
+
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
     let account_1 = AccountId::from("Test_Account_1");
@@ -105,7 +136,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
+                                    let msg = format!("{} {} {} Close: {}, {}, strategy_time: {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()), strategy.time_local());
                                     if candle.close == candle.open {
                                         println!("{}", msg.as_str().blue())
                                     } else {
@@ -265,6 +296,39 @@ pub async fn on_data_received(
                 }
                 StrategyEvent::TimedEvent(name) => {
                     println!("{} has triggered", name);
+                }
+                StrategyEvent::IndicatorEvent(indicator_event) => {
+                    //we can handle indicator events here, this is useful for debugging and monitoring the state of the indicators.
+                    match indicator_event {
+                        IndicatorEvents::IndicatorAdded(added_event) => {
+                            let msg = format!("Strategy:Indicator Added: {:?}", added_event);
+                            println!("{}", msg.as_str().yellow());
+                        }
+                        IndicatorEvents::IndicatorRemoved(removed_event) => {
+                            let msg = format!("Strategy:Indicator Removed: {:?}", removed_event);
+                            println!("{}", msg.as_str().yellow());
+                        }
+                        IndicatorEvents::IndicatorTimeSlice(slice_event) => {
+                            // we can see our auto manged indicator values for here.
+                            for indicator_values in slice_event {
+                                //we could access the exact plot we want using its name, Average True Range only has 1 plot but MACD would have multiple
+                                let plot = indicator_values.get_plot(&"atr".to_string());
+
+                                //or we can access all values as a single collection
+                                let indicator_values = format!("{}", indicator_values);
+
+                                //if we have a plot named atr we will print it
+                                if let Some(plot) = plot {
+                                    // the plot color is in rgb, so we can convert to any gui styled coloring and we will print all the values in this color
+                                    println!("{}", indicator_values.as_str().truecolor(plot.color.red, plot.color.green, plot.color.blue));
+                                }
+                            }
+                        }
+                        IndicatorEvents::Replaced(replace_event) => {
+                            let msg = format!("Strategy:Indicator Replaced: {:?}", replace_event);
+                            println!("{}", msg.as_str().yellow());
+                        }
+                    }
                 }
                 _ => {}
             }

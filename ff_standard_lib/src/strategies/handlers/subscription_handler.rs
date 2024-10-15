@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use ahash::AHashMap;
 use async_std::task::block_on;
@@ -97,7 +98,7 @@ impl SubscriptionHandler {
             let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
             return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), msg));
         }
-
+        let _ = strategy_subscriptions.deref();
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
             //subscribe to fundamental
             let mut fundamental_subscriptions = self.fundamental_subscriptions.write().await;
