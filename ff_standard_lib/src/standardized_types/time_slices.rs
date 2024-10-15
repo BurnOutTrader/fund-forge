@@ -94,20 +94,3 @@ impl TimeSlice {
         })
     }
 }
-
-// Custom iterator for TimeSlice
-pub struct TimeSliceIterator<'a> {
-    inner: std::iter::FlatMap<
-        std::collections::btree_map::Iter<'a, i64, Vec<BaseDataEnum>>,
-        std::iter::Map<std::slice::Iter<'a, BaseDataEnum>, Box<dyn Fn(&'a BaseDataEnum) -> (&'a i64, &'a BaseDataEnum)>>,
-        Box<dyn Fn((&'a i64, &'a Vec<BaseDataEnum>)) -> std::iter::Map<std::slice::Iter<'a, BaseDataEnum>, Box<dyn Fn(&'a BaseDataEnum) -> (&'a i64, &'a BaseDataEnum)>>>
-    >
-}
-
-impl<'a> Iterator for TimeSliceIterator<'a> {
-    type Item = (&'a i64, &'a BaseDataEnum);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next()
-    }
-}
