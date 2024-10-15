@@ -156,75 +156,31 @@ pub fn open_time(subscription: &DataSubscription, time: DateTime<Utc>) -> DateTi
         Resolution::Seconds(interval) => {
             let timestamp = time.timestamp();
             let rounded_timestamp = timestamp - (timestamp % interval as i64);
-            DateTime::from_timestamp(rounded_timestamp, 0).unwrap()
+            Utc.timestamp_opt(rounded_timestamp, 0).unwrap()
         }
         Resolution::Minutes(interval) => {
-            let minute = time.minute() as i64;
-            let rounded_minute = (minute / interval as i64) * interval as i64;
-            let rounded_time = time
-                .with_minute(rounded_minute as u32)
+            let minute = (time.minute() as u64 / interval) * interval;
+            time.with_minute(minute as u32)
                 .unwrap()
                 .with_second(0)
                 .unwrap()
                 .with_nanosecond(0)
-                .unwrap();
-            rounded_time
+                .unwrap()
         }
         Resolution::Hours(interval) => {
-            let hour = time.hour() as i64;
-            let rounded_hour = (hour / interval as i64) * interval as i64;
-            let rounded_time = time
-                .with_hour(rounded_hour as u32)
+            let hour = (time.hour() as u64 / interval) * interval;
+            time.with_hour(hour as u32)
                 .unwrap()
                 .with_minute(0)
                 .unwrap()
                 .with_second(0)
                 .unwrap()
                 .with_nanosecond(0)
-                .unwrap();
-            rounded_time
+                .unwrap()
         }
-        _ => time, // Handle other resolutions if necessary
+        _ => time, // Handle other cases if necessary
     }
 }
-
-pub fn open_time_from_resolution(resolution: Resolution, time: DateTime<Utc>) -> DateTime<Utc> {
-    match resolution {
-        Resolution::Seconds(interval) => {
-            let timestamp = time.timestamp();
-            let rounded_timestamp = timestamp - (timestamp % interval as i64);
-            DateTime::from_timestamp(rounded_timestamp, 0).unwrap()
-        }
-        Resolution::Minutes(interval) => {
-            let minute = time.minute() as i64;
-            let rounded_minute = (minute / interval as i64) * interval as i64;
-            let rounded_time = time
-                .with_minute(rounded_minute as u32)
-                .unwrap()
-                .with_second(0)
-                .unwrap()
-                .with_nanosecond(0)
-                .unwrap();
-            rounded_time
-        }
-        Resolution::Hours(interval) => {
-            let hour = time.hour() as i64;
-            let rounded_hour = (hour / interval as i64) * interval as i64;
-            let rounded_time = time
-                .with_hour(rounded_hour as u32)
-                .unwrap()
-                .with_minute(0)
-                .unwrap()
-                .with_second(0)
-                .unwrap()
-                .with_nanosecond(0)
-                .unwrap();
-            rounded_time
-        }
-        _ => time, // Handle other resolutions if necessary
-    }
-}
-
 
 pub fn format_duration(duration: Duration) -> String {
     let total_seconds = duration.num_seconds();
