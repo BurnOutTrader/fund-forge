@@ -424,14 +424,14 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                 if let Some(consolidated_data) = subscription_handler.update_consolidators_time(Utc::now()).await {
                     strategy_time_slice.extend(consolidated_data);
                 }
-
-                if strategy_time_slice.is_empty() {
-                    live_fwd_data(None).await;
-
-                } else {
-                    live_fwd_data(Some(strategy_time_slice.clone())).await;
-                }
-                //println!("end: {}", Utc::now());
+                tokio::task::spawn(async move {
+                    if strategy_time_slice.is_empty() {
+                        live_fwd_data(None).await;
+                    } else {
+                        live_fwd_data(Some(strategy_time_slice.clone())).await;
+                    }
+                });
+               // println!("end: {}", Utc::now());
             }
             let mut buffer = StrategyEventBuffer::new();
             buffer.add_event(Utc::now(), StrategyEvent::ShutdownEvent(String::from("Disconnected Live Stream")));

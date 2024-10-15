@@ -66,7 +66,7 @@ async fn main() {
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
         ],
-        false,
+        true,
         100,
         strategy_event_sender,
         core::time::Duration::from_millis(50),
@@ -88,7 +88,7 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
-    let atr_5 = IndicatorEnum::AverageTrueRange(
+ /*   let atr_5 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(
             IndicatorName::from("atr_5"),
             // The subscription for the indicator
@@ -112,7 +112,7 @@ pub async fn on_data_received(
     );
 
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
-    strategy.subscribe_indicator(atr_5, false).await;
+    strategy.subscribe_indicator(atr_5, true).await;*/
 
     let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
@@ -136,7 +136,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    let msg = format!("{} {} {} Close: {}, {}, strategy_time: {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()), strategy.time_local());
+                                    let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
                                     if candle.close == candle.open {
                                         println!("{}", msg.as_str().blue())
                                     } else {

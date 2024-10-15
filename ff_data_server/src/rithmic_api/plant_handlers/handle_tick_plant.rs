@@ -469,9 +469,7 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
             }
         );
 
-        if let Err(e) = broadcaster.send(data) {
-           eprintln!("Failed to send quote for symbol {}: {}", symbol, e);
-        }
+        if let Err(_e) = broadcaster.send(data) {}
     }
 }
 
