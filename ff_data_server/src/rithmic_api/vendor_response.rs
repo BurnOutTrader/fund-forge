@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::fmt::format;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
@@ -13,7 +14,9 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
 use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::products::{get_available_symbol_names, get_symbol_info};
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
 #[allow(dead_code)]
@@ -80,26 +83,32 @@ impl VendorApiResponse for RithmicClient {
     }
 
     async fn decimal_accuracy_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        //todo get dynamically from server using stream name to fwd callback
-        let accuracy = match symbol_name.as_str() {
-            "MNQ" => 2,
-            _ => todo!(),
+        let info = match get_symbol_info(&symbol_name) {
+            Ok(info) => {
+                info
+            }
+            Err(e) => {
+                return DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{} Accuracy Info not found with: {}", symbol_name, self.data_vendor))}
+            }
         };
         DataServerResponse::DecimalAccuracy {
             callback_id,
-            accuracy,
+            accuracy: info.decimal_accuracy,
         }
     }
 
     async fn tick_size_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        //todo get dynamically from server using stream name to fwd callback
-        let tick_size = match symbol_name.as_str() {
-            "MNQ" => dec!(0.25),
-            _ => todo!(),
+        let info = match get_symbol_info(&symbol_name) {
+            Ok(info) => {
+                info
+            }
+            Err(e) => {
+                return DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{} Tick Size Info not found with: {}", symbol_name, self.data_vendor))}
+            }
         };
         DataServerResponse::TickSize {
             callback_id,
-            tick_size,
+            tick_size: info.tick_size,
         }
     }
 
@@ -111,26 +120,19 @@ impl VendorApiResponse for RithmicClient {
             _ => todo!()
         };
 
-
- /*       let req = RequestTimeBarUpdate {
-        template_id: 200,
-        user_msg: vec![],
-        symbol: Some("NQ".to_string()),
-        exchange: Some(Exchange::CME.to_string()),
-        request: Some(Request::Subscribe.into()),
-        bar_type: Some(1),
-        bar_type_period: Some(5),
-    };*/
-
         //todo if not working try resolution Instant
-        let available_subscriptions = vec![
-            DataSubscription::new(SymbolName::from("MNQ"), self.data_vendor.clone(), Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Futures(FuturesExchange::CME)),
-            DataSubscription::new(SymbolName::from("MNQ"), self.data_vendor.clone(), Resolution::Instant, BaseDataType::Quotes, MarketType::Futures(FuturesExchange::CME))
-        ];
-        if !available_subscriptions.contains(&subscription) {
-            eprintln!("Rithmic Subscription Not Available: {:?}", subscription);
-            return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
+        let symbols = get_available_symbol_names();
+        if !symbols.contains(&subscription.symbol.name) {
+            return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
+        const RESOLUTIONS: &[Resolution] = &[Resolution::Ticks(1), Resolution::Instant];
+        if !RESOLUTIONS.contains(&subscription.resolution) {
+            return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
+        }
+        const BASEDATA_TYPES: &[BaseDataType] = &[BaseDataType::Ticks, BaseDataType::Quotes];
+        if !BASEDATA_TYPES.contains(&subscription.base_data_type) {
+            return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
+        };
 
         let mut is_subscribed = true;
         //todo have a unique function per base data type.
