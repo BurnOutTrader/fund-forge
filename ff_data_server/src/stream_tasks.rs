@@ -88,7 +88,7 @@ pub async fn stream_handler(
                 tick_sender.send(()).unwrap();
 
                 if stream_receivers.is_empty() {
-                    sleep(Duration::from_millis(100)).await;
+                    sleep(Duration::from_millis(500)).await;
                     continue;
                 }
 
