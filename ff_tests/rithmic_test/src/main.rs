@@ -129,7 +129,6 @@ pub async fn on_data_received(
                 StrategyEvent::TimeSlice(time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
                     for base_data in time_slice.iter() {
-                        // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::Tick(tick) => {
                                let msg =  format!("{} Tick: {} @ {}", tick.symbol.name, tick.price, tick.time_local(strategy.time_zone()));
