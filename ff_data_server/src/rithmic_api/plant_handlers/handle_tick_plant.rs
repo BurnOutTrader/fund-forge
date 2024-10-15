@@ -3,7 +3,7 @@ use std::sync::Arc;
 #[allow(unused_imports)]
 use std::time::Duration;
 use async_std::stream::StreamExt;
-use chrono::Utc;
+use chrono::{DateTime, TimeZone, Utc};
 use ff_rithmic_api::api_client::extract_template_id;
 #[allow(unused_imports)]
 use ff_rithmic_api::credentials::RithmicCredentials;
@@ -329,6 +329,8 @@ pub async fn handle_responses_from_ticker_plant(
 }
 
 async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
+    let time = deserialize_time(&msg);
+   // println!("{:?}", msg);
     let volume = match msg.trade_size {
         None => return,
         Some(size) => {
@@ -372,12 +374,6 @@ async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
         None => return,
         Some(symbol) => symbol
     };
-    let time = msg.ssboe.and_then(|ssboe| msg.usecs.map(|usecs| {
-        chrono::DateTime::from_timestamp(ssboe as i64, usecs as u32 * 1000)
-            .unwrap_or_else(|| Utc::now())
-    }))
-        .unwrap_or_else(|| Utc::now())
-        .to_string();
 
     let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
     let tick = Tick::new(symbol, price, time.to_string(), volume, side);
@@ -389,7 +385,27 @@ async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
     }
 }
 
+fn deserialize_time(msg: &LastTrade) -> DateTime<Utc> {
+    msg.source_ssboe
+        .and_then(|ssboe| msg.source_nsecs.map(|nsecs| (ssboe, nsecs)))
+        .and_then(|(ssboe, nsecs)| {
+            Utc.timestamp_opt(ssboe as i64, nsecs as u32).single()
+        })
+        .or_else(|| {
+            msg.ssboe
+                .and_then(|ssboe| msg.usecs.map(|usecs| (ssboe, usecs)))
+                .and_then(|(ssboe, usecs)| {
+                    Utc.timestamp_opt(ssboe as i64, usecs as u32 * 1000).single()
+                })
+        })
+        .unwrap_or_else(|| {
+            //eprintln!("Warning: Using current time due to invalid timestamp in message");
+            Utc::now()
+        })
+}
+
 async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
+    let time = deserialize_quote_time(&msg);
     let symbol = match msg.symbol {
         None => return,
         Some(symbol) => symbol
@@ -449,12 +465,7 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
                 bid,
                 ask_volume,
                 bid_volume,
-                time: msg.ssboe.and_then(|ssboe| msg.usecs.map(|usecs| {
-                    chrono::DateTime::from_timestamp(ssboe as i64, usecs as u32 * 1000)
-                        .unwrap_or_else(|| Utc::now())
-                }))
-                    .unwrap_or_else(|| Utc::now())
-                    .to_string(),
+                time: time.to_string(),
             }
         );
 
@@ -462,4 +473,16 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
            eprintln!("Failed to send quote for symbol {}: {}", symbol, e);
         }
     }
+}
+
+fn deserialize_quote_time(msg: &BestBidOffer) -> DateTime<Utc> {
+    msg.ssboe
+        .and_then(|ssboe| msg.usecs.map(|usecs| (ssboe, usecs)))
+        .and_then(|(ssboe, usecs)| {
+            Utc.timestamp_opt(ssboe as i64, usecs as u32 * 1000).single()
+        })
+        .unwrap_or_else(|| {
+            //eprintln!("Warning: Using current time due to invalid timestamp in quote");
+            Utc::now()
+        })
 }
