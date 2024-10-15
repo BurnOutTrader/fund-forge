@@ -62,7 +62,7 @@ pub async fn stream_handler(
     mut stream: TlsStream<TcpStream>,
     stream_receivers: Arc<DashMap<DataSubscription, broadcast::Receiver<BaseDataEnum>>>,
 ) -> (JoinHandle<()>, JoinHandle<()>) {
-    let (data_sender, mut data_receiver) = mpsc::channel::<Vec<BaseDataEnum>>(500);
+    let (data_sender, mut data_receiver) = mpsc::channel::<TimeSlice>(10);
 
     let receiver_task = tokio::spawn(async move {
         loop {
@@ -109,10 +109,8 @@ pub async fn stream_handler(
                         time_slice.clear();
                     }
                 }
-                Some(batch) = data_receiver.recv() => {
-                    for base_data_enum in batch {
-                        time_slice.add(base_data_enum);
-                    }
+                Some(slice) = data_receiver.recv() => {
+                    time_slice.extend(slice);
                 }
             }
         }
@@ -124,19 +122,22 @@ pub async fn stream_handler(
 
 async fn process_receiver(
     rx: &mut broadcast::Receiver<BaseDataEnum>,
-    data_sender: mpsc::Sender<Vec<BaseDataEnum>>,
+    data_sender: mpsc::Sender<TimeSlice>,
 ) {
-    let mut batch = Vec::with_capacity(BATCH_SIZE);
+    let mut time_slice = TimeSlice::new();
+    let mut count = 0;
     while let Ok(base_data_enum) = rx.try_recv() {
-        batch.push(base_data_enum);
-        if batch.len() >= BATCH_SIZE {
-            if data_sender.send(batch).await.is_err() {
+        time_slice.add(base_data_enum);
+        count += 1;
+        if count >= BATCH_SIZE {
+            if data_sender.send(time_slice).await.is_err() {
                 return; // Main task has been dropped
             }
-            batch = Vec::with_capacity(BATCH_SIZE);
+            time_slice = TimeSlice::new();
+            count = 0;
         }
     }
-    if !batch.is_empty() {
-        let _ = data_sender.send(batch).await;
+    if !time_slice.is_empty() {
+        let _ = data_sender.send(time_slice).await;
     }
 }
