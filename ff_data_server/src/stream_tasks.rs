@@ -7,6 +7,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
+use tokio::time::sleep;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
@@ -64,10 +65,11 @@ pub async fn stream_handler(
     let (data_sender, mut data_receiver) = mpsc::channel::<Vec<BaseDataEnum>>(500);
 
     let receiver_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_millis(10));
         loop {
-            interval.tick().await;
-
+            if stream_receivers.is_empty() {
+                sleep(Duration::from_millis(500)).await;
+                continue;
+            }
             let futures = stream_receivers
                 .iter()
                 .map(|entry| {
