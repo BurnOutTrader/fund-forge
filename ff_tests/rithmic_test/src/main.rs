@@ -132,7 +132,8 @@ pub async fn on_data_received(
                         // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                         match base_data {
                             BaseDataEnum::Tick(tick) => {
-                              println!("{}", tick);
+                               let msg =  format!("{} Tick: {} @ {}", tick.symbol.name, tick.price, tick.time_local(strategy.time_zone()));
+                                println!("{}", msg.as_str().purple());
                             }
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
@@ -241,7 +242,8 @@ pub async fn on_data_received(
                                 }
                             }
                             BaseDataEnum::Quote(quote) => {
-                                println!("{}", quote);
+                                let msg = format!("{} Quote: {} @ {}", quote.symbol.name, quote.bid, quote.time_local(strategy.time_zone()));
+                                println!("{}", msg.as_str().yellow());
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 if quotebar.is_closed == true {
