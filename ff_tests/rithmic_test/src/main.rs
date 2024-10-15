@@ -258,16 +258,16 @@ pub async fn on_data_received(
                                 count += 1;
 
                                 if count == 5 {
-                                    println!("Subscribing to CL");
+                                    println!("Subscribing to YM");
                                     let sub = DataSubscription::new(
-                                        SymbolName::from("CL"),
+                                        SymbolName::from("YM"),
                                         DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                                         Resolution::Seconds(5),
-                                        BaseDataType::QuoteBars,
-                                        MarketType::Futures(FuturesExchange::CME)
+                                        BaseDataType::Candles,
+                                        MarketType::Futures(FuturesExchange::CBOT)
                                     );
                                     strategy.subscribe(sub, 1, true).await;
-                                    println!("Subscribed to CL");
+                                    println!("Subscribed to YM");
                                 }
                             }
                             _ => {}
