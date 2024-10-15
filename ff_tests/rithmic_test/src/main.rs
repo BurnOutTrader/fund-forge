@@ -44,27 +44,27 @@ async fn main() {
                 BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
-      /*      DataSubscription::new(
+            /*DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Instant,
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
-           DataSubscription::new(
+      /*     DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(1),
                 BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
-            ),
-      /*      DataSubscription::new(
+            ),*/
+            DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
-            ),*/
+            ),
         ],
         true,
         100,
@@ -244,7 +244,7 @@ pub async fn on_data_received(
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 if quotebar.is_closed == true {
-                                    let msg = format!("{} {} QuoteBar Bid Close: {}, Ask Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.ask_close, quotebar.time_closed_local(strategy.time_zone()));
+                                    let msg = format!("{} {} QuoteBar Bid Close: {}, Ask Close: {}, {}, Strategy Time: {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.ask_close, quotebar.time_closed_local(strategy.time_zone()), strategy.time_local());
                                     if quotebar.bid_close == quotebar.bid_open {
                                         println!("{}", msg.as_str().blue())
                                     } else {

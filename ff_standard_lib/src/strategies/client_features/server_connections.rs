@@ -440,6 +440,8 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
 
                                 if !strategy_time_slice.is_empty() {
                                     live_fwd_data(Some(strategy_time_slice)).await;
+                                } else {
+                                    live_fwd_data(None).await;
                                 }
                             }
                             Err(e) => {
