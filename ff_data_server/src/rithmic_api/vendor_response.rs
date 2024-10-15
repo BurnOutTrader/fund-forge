@@ -1,10 +1,8 @@
 use std::collections::BTreeMap;
-use std::fmt::format;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestProductCodes};
-use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -14,7 +12,6 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::products::{get_available_symbol_names, get_symbol_info};
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
@@ -87,7 +84,7 @@ impl VendorApiResponse for RithmicClient {
             Ok(info) => {
                 info
             }
-            Err(e) => {
+            Err(_e) => {
                 return DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{} Accuracy Info not found with: {}", symbol_name, self.data_vendor))}
             }
         };
@@ -102,7 +99,7 @@ impl VendorApiResponse for RithmicClient {
             Ok(info) => {
                 info
             }
-            Err(e) => {
+            Err(_e) => {
                 return DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{} Tick Size Info not found with: {}", symbol_name, self.data_vendor))}
             }
         };

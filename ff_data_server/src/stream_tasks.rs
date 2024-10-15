@@ -1,14 +1,12 @@
 use std::sync::{Arc};
 use std::time::Duration;
-use ahash::AHashMap;
 use dashmap::DashMap;
-use futures::stream::{StreamExt, FuturesUnordered};
+use futures::future::join_all;
 use lazy_static::lazy_static;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tokio::sync::{broadcast, mpsc, RwLock};
+use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
-use tokio::time::interval;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
@@ -17,7 +15,7 @@ use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use ff_standard_lib::StreamName;
 
 lazy_static! {
-    static ref STREAM_RECEIVERS: DashMap<u16 , Arc<RwLock<AHashMap<DataSubscription ,broadcast::Receiver<BaseDataEnum>>>>> = DashMap::new();
+    static ref STREAM_RECEIVERS: DashMap<u16 , Arc<DashMap<DataSubscription ,broadcast::Receiver<BaseDataEnum>>>> = DashMap::new();
     static ref STREAM_TASKS: DashMap<u16 , (JoinHandle<()>, JoinHandle<()>)> = DashMap::new();
 }
 
@@ -28,7 +26,7 @@ pub fn shutdown_stream_tasks() {
 }
 
 pub async fn initialize_streamer(stream_name: StreamName, buffer: Duration, stream: TlsStream<TcpStream>) {
-    let map = Arc::new(RwLock::new(AHashMap::new()));
+    let map = Arc::new(DashMap::new());
     let handles = stream_handler(stream_name, buffer, stream, map.clone()).await;
     STREAM_TASKS.insert(stream_name, handles);
     STREAM_RECEIVERS.insert(stream_name, map);
@@ -45,78 +43,98 @@ pub fn deregister_streamer(stream_name: &StreamName) {
 
 pub async fn subscribe_stream(stream_name: &StreamName, subscription: DataSubscription, receiver: broadcast::Receiver<BaseDataEnum>) {
     if let Some(sender_ref) = STREAM_RECEIVERS.get(stream_name) {
-        let mut write_ref = sender_ref.write().await;
-        write_ref.insert(subscription, receiver);
+        sender_ref.insert(subscription, receiver);
     }
 }
 
 pub async fn unsubscribe_stream(stream_name: &StreamName, subscription: &DataSubscription) {
     if let Some(sender_ref) = STREAM_RECEIVERS.get(stream_name) {
-        let mut write_ref = sender_ref.write().await;
-        write_ref.remove(subscription);
+        sender_ref.remove(subscription);
     }
 }
-
 const LENGTH: usize = 4;
+const BATCH_SIZE: usize = 20;
+
 pub async fn stream_handler(
     stream_name: StreamName,
     buffer: Duration,
     mut stream: TlsStream<TcpStream>,
-    stream_receivers: Arc<RwLock<AHashMap<DataSubscription, broadcast::Receiver<BaseDataEnum>>>>,
+    stream_receivers: Arc<DashMap<DataSubscription, broadcast::Receiver<BaseDataEnum>>>,
 ) -> (JoinHandle<()>, JoinHandle<()>) {
-
-        let (data_sender, mut data_receiver) = mpsc::channel::<BaseDataEnum>(500);  // Adjust buffer size as needed
+    let (data_sender, mut data_receiver) = mpsc::channel::<Vec<BaseDataEnum>>(500);
 
     let receiver_task = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(10));
         loop {
-            let receivers = stream_receivers.read().await;
-            if receivers.is_empty() {
-                drop(receivers);
-                tokio::time::sleep(Duration::from_millis(1500)).await;
-                continue;
-            }
+            interval.tick().await;
 
-            let mut futures = FuturesUnordered::new();
-            for (_, rx) in receivers.iter() {
-                let mut rx = rx.resubscribe();
-                futures.push(async move { rx.recv().await });
-            }
-            drop(receivers);
+            let futures = stream_receivers
+                .iter()
+                .map(|entry| {
+                    let key = entry.key().clone();
+                    let data_sender = data_sender.clone();
+                    let stream_receivers = stream_receivers.clone();
+                    tokio::spawn(async move {
+                        if let Some(mut entry) = stream_receivers.get_mut(&key) {
+                            process_receiver(entry.value_mut(), data_sender).await;
+                        }
+                    })
+                })
+                .collect::<Vec<_>>();
 
-            while let Some(result) = futures.next().await {
-                if let Ok(base_data_enum) = result {
-                    if data_sender.send(base_data_enum).await.is_err() {
-                        return;  // Main task has been dropped
-                    }
-                }
-            }
+            join_all(futures).await;
         }
     });
+
     let time_slice_task = tokio::spawn(async move {
         let mut time_slice = TimeSlice::new();
-        let mut interval = interval(buffer);
+        let mut interval = tokio::time::interval(buffer);
 
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    let bytes = time_slice.to_bytes();
-                    let length: [u8; LENGTH] = (bytes.len() as u32).to_be_bytes();
-                    let mut prefixed_msg = Vec::new();
-                    prefixed_msg.extend_from_slice(&length);
-                    prefixed_msg.extend_from_slice(&bytes);
+                    if !time_slice.is_empty() {
+                        let bytes = time_slice.to_bytes();
+                        let length = (bytes.len() as u32).to_be_bytes();
+                        let mut prefixed_msg = Vec::with_capacity(LENGTH + bytes.len());
+                        prefixed_msg.extend_from_slice(&length);
+                        prefixed_msg.extend_from_slice(&bytes);
 
-                    if let Err(e) = stream.write_all(&prefixed_msg).await {
-                        eprintln!("Error writing to stream: {}", e);
-                        break;
+                        if let Err(e) = stream.write_all(&prefixed_msg).await {
+                            eprintln!("Error writing to stream: {}", e);
+                            break;
+                        }
+                        time_slice.clear();
                     }
-                    time_slice = TimeSlice::new();
                 }
-                Some(base_data_enum) = data_receiver.recv() => {
-                    time_slice.add(base_data_enum);
+                Some(batch) = data_receiver.recv() => {
+                    for base_data_enum in batch {
+                        time_slice.add(base_data_enum);
+                    }
                 }
             }
         }
         println!("Stream handler for {} has shut down", stream_name);
     });
+
     (receiver_task, time_slice_task)
+}
+
+async fn process_receiver(
+    rx: &mut broadcast::Receiver<BaseDataEnum>,
+    data_sender: mpsc::Sender<Vec<BaseDataEnum>>,
+) {
+    let mut batch = Vec::with_capacity(BATCH_SIZE);
+    while let Ok(base_data_enum) = rx.try_recv() {
+        batch.push(base_data_enum);
+        if batch.len() >= BATCH_SIZE {
+            if data_sender.send(batch).await.is_err() {
+                return; // Main task has been dropped
+            }
+            batch = Vec::with_capacity(BATCH_SIZE);
+        }
+    }
+    if !batch.is_empty() {
+        let _ = data_sender.send(batch).await;
+    }
 }

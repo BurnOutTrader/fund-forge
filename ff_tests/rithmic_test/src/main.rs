@@ -54,14 +54,14 @@ async fn main() {
           DataSubscription::new(
                 SymbolName::from("MES"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(15),
-                BaseDataType::Candles,
+                Resolution::Seconds(1),
+                BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
             ),
             DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(15),
+                Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
             ),
@@ -128,7 +128,7 @@ pub async fn on_data_received(
             match strategy_event {
                 StrategyEvent::TimeSlice(time_slice) => {
                     // here we would process the time slice events and update the strategy state accordingly.
-                    for base_data in time_slice.iter() {
+                    for (_, base_data) in time_slice.iter_ordered() {
                         match base_data {
                             BaseDataEnum::Tick(tick) => {
                                let msg =  format!("{} Tick: {} @ {}", tick.symbol.name, tick.price, tick.time_local(strategy.time_zone()));
@@ -137,7 +137,7 @@ pub async fn on_data_received(
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
                                 if candle.is_closed == true {
-                                    let msg = format!("{} {} {} Close: {}, {}, strategy time: {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()), strategy.time_local());
+                                    let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
                                     if candle.close == candle.open {
                                         println!("{}", msg.as_str().blue())
                                     } else {
@@ -154,7 +154,7 @@ pub async fn on_data_received(
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
                                 if quotebar.is_closed == true {
-                                    let msg = format!("{} {} QuoteBar Bid Close: {}, Ask Close: {}, {}, Strategy Time: {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.ask_close, quotebar.time_closed_local(strategy.time_zone()), strategy.time_local());
+                                    let msg = format!("{} {} QuoteBar Bid Close: {}, {}", quotebar.symbol.name, quotebar.resolution, quotebar.bid_close, quotebar.time_closed_local(strategy.time_zone()));
                                     if quotebar.bid_close == quotebar.bid_open {
                                         println!("{}", msg.as_str().blue())
                                     } else {
@@ -171,7 +171,7 @@ pub async fn on_data_received(
                                     let sub = DataSubscription::new(
                                         SymbolName::from("YM"),
                                         DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
-                                        Resolution::Seconds(15),
+                                        Resolution::Seconds(1),
                                         BaseDataType::Candles,
                                         MarketType::Futures(FuturesExchange::CBOT)
                                     );

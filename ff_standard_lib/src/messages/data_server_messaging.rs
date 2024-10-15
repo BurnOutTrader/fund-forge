@@ -190,6 +190,12 @@ impl DataServerRequest {
     }
 }
 
+//todo, could do something like this
+pub enum SubscriptionResponse {
+    CreateConsolidator{callback_id: u64, base_subscription: DataSubscription},
+    Subscribed{callback_id: u64},
+    UnableToSubscribe{callback_id: u64}
+}
 
 #[derive(Clone, Serialize, Deserialize, Archive, Debug)]
 #[archive(compare(PartialEq), check_bytes)]

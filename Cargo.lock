@@ -931,6 +931,7 @@ dependencies = [
  "indicatif",
  "lazy_static",
  "once_cell",
+ "parking_lot",
  "prost",
  "rust_decimal",
  "rust_decimal_macros",

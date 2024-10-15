@@ -211,7 +211,6 @@ async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
 }
 use tokio::task::JoinHandle;
 use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
-use crate::rithmic_api::plant_handlers::handle_order_plant::handle_responses_from_order_plant;
 use crate::rithmic_api::plant_handlers::handle_tick_plant::handle_responses_from_ticker_plant;
 use crate::stream_tasks::shutdown_stream_tasks;
 use crate::test_api::api_client::TEST_CLIENT;
