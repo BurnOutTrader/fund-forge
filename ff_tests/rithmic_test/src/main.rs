@@ -260,7 +260,7 @@ pub async fn on_data_received(
                                 count += 1;
 
                                 if count == 5 {
-                                    println!("Subscribing to YM");
+                                    println!("Subscribing to YM On Another Rithmic API");
                                     let sub = DataSubscription::new(
                                         SymbolName::from("YM"),
                                         DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
@@ -269,7 +269,7 @@ pub async fn on_data_received(
                                         MarketType::Futures(FuturesExchange::CBOT)
                                     );
                                     strategy.subscribe(sub, 1, true).await;
-                                    println!("Subscribed to YM");
+                                    println!("Subscribed to YM On Another Rithmic API");
                                 }
                             }
                             _ => {}
