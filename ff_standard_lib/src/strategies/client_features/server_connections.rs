@@ -375,9 +375,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
     prefixed_msg.extend_from_slice(&length);
     prefixed_msg.extend_from_slice(&data);
     // Lock the mutex to get mutable access
-    match stream_client
-        .write_all(&prefixed_msg)
-        .await {
+    match stream_client.write_all(&prefixed_msg).await {
         Ok(_) => { }
         Err(e) => {
             eprintln!("{}", e);
@@ -393,46 +391,64 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
             let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap();
 
             let mut length_bytes = [0u8; LENGTH];
-            while let Ok(_) = stream_client.read_exact(&mut length_bytes).await {
-                //println!("start: {}", Utc::now());
-                let msg_length = u32::from_be_bytes(length_bytes) as usize;
-                let mut message_body = vec![0u8; msg_length];
-                timed_event_handler.update_time(Utc::now()).await;
-                if let Err(e) = stream_client.read_exact(&mut message_body).await {
-                    continue;
-                }
+            let mut interval = tokio::time::interval(Duration::from_secs(1));
 
-                let time_slice = match TimeSlice::from_bytes(&message_body) {
-                    Ok(ts) => ts,
-                    Err(e) => {
-                        continue;
+            loop {
+                tokio::select! {
+                    _ = interval.tick() => {
+                        let now = Utc::now();
+                        timed_event_handler.update_time(now).await;
+                        let mut strategy_time_slice = TimeSlice::new();
+
+                        if let Some(consolidated_data) = subscription_handler.update_consolidators_time(now).await {
+                            strategy_time_slice.extend(consolidated_data);
+                        }
+
+                        if !strategy_time_slice.is_empty() {
+                            live_fwd_data(Some(strategy_time_slice)).await;
+                        } else {
+                            live_fwd_data(None).await;
+                        }
                     }
-                };
+                    result = stream_client.read_exact(&mut length_bytes) => {
+                        match result {
+                            Ok(_) => {
+                                let msg_length = u32::from_be_bytes(length_bytes) as usize;
+                                let mut message_body = vec![0u8; msg_length];
 
-                let mut strategy_time_slice: TimeSlice = TimeSlice::new();
-                // update our consolidators and create the strategies time slice with any new data or just create empty slice.
-                if !time_slice.is_empty() {
-                    market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
-                    // Add only primary data which the strategy has subscribed to into the strategies time slice
-                    if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
-                        strategy_time_slice.extend(consolidated_data);
+                                if let Err(e) = stream_client.read_exact(&mut message_body).await {
+                                    eprintln!("Error reading message body: {}", e);
+                                    continue;
+                                }
+
+                                let time_slice = match TimeSlice::from_bytes(&message_body) {
+                                    Ok(ts) => ts,
+                                    Err(e) => {
+                                        eprintln!("Error parsing TimeSlice: {}", e);
+                                        continue;
+                                    }
+                                };
+
+                                let mut strategy_time_slice = TimeSlice::new();
+                                if !time_slice.is_empty() {
+                                    market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
+                                    if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
+                                        strategy_time_slice.extend(consolidated_data);
+                                    }
+                                    strategy_time_slice.extend(time_slice);
+                                }
+
+                                if !strategy_time_slice.is_empty() {
+                                    live_fwd_data(Some(strategy_time_slice)).await;
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("Error reading length bytes: {}", e);
+                                break;
+                            }
+                        }
                     }
-                    strategy_time_slice.extend(time_slice);
                 }
-
-                // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
-                if let Some(consolidated_data) = subscription_handler.update_consolidators_time(Utc::now()).await {
-                    strategy_time_slice.extend(consolidated_data);
-                }
-
-                tokio::task::spawn(async move {
-                    if strategy_time_slice.is_empty() {
-                        live_fwd_data(None).await;
-                    } else {
-                        live_fwd_data(Some(strategy_time_slice.clone())).await;
-                    }
-                });
-               //println!("end: {}", Utc::now());
             }
             let mut buffer = StrategyEventBuffer::new();
             buffer.add_event(Utc::now(), StrategyEvent::ShutdownEvent(String::from("Disconnected Live Stream")));
