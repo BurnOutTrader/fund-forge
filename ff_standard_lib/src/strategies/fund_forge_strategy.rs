@@ -830,7 +830,7 @@ impl FundForgeStrategy {
             }
             StrategyMode::Live | StrategyMode::LivePaperTrading => {
                 let handler = self.subscription_handler.clone();
-                tokio::task::spawn(async move{
+                //tokio::task::spawn(async move{
                     let result = handler
                         .subscribe(subscription.clone(), Utc::now(), fill_forward, history_to_retain, true)
                         .await;
@@ -842,7 +842,7 @@ impl FundForgeStrategy {
                             //add_buffer(Utc::now(), StrategyEvent::DataSubscriptionEvent(sub_result.to_owned())).await;
                         }
                     }
-                });
+                //});
             }
         }
     }

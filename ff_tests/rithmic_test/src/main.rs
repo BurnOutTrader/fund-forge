@@ -54,14 +54,14 @@ async fn main() {
           DataSubscription::new(
                 SymbolName::from("MES"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(5),
-                BaseDataType::QuoteBars,
+                Resolution::Seconds(15),
+                BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
             ),
             DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(5),
+                Resolution::Seconds(15),
                 BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
             ),
@@ -261,8 +261,8 @@ pub async fn on_data_received(
                                     println!("Subscribing to YM");
                                     let sub = DataSubscription::new(
                                         SymbolName::from("YM"),
-                                        DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                                        Resolution::Seconds(5),
+                                        DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
+                                        Resolution::Seconds(15),
                                         BaseDataType::Candles,
                                         MarketType::Futures(FuturesExchange::CBOT)
                                     );
