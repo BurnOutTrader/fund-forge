@@ -105,7 +105,7 @@ pub async fn range_history_data(
         let resolution_ns = subscription.resolution.as_duration().num_nanoseconds().unwrap(); // Total nanoseconds in `resolution`
 
         let history_to_retain = duration_ns / resolution_ns;
-        let consolidator = ConsolidatorEnum::create_consolidator(subscription, false, sub_res_type).await;
+        let consolidator = ConsolidatorEnum::create_consolidator(subscription, false).await;
         let (_, window) = ConsolidatorEnum::warmup(consolidator, to_time, history_to_retain as i32, mode).await;
         let mut map:BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         for base_data in window.history() {
