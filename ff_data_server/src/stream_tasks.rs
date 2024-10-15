@@ -5,9 +5,9 @@ use futures::future::join_all;
 use lazy_static::lazy_static;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, watch};
 use tokio::task::JoinHandle;
-use tokio::time::sleep;
+use tokio::time::{interval, sleep, Instant};
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
@@ -54,7 +54,6 @@ pub async fn unsubscribe_stream(stream_name: &StreamName, subscription: &DataSub
     }
 }
 const LENGTH: usize = 4;
-const BATCH_SIZE: usize = 20;
 
 pub async fn stream_handler(
     stream_name: StreamName,
@@ -63,22 +62,29 @@ pub async fn stream_handler(
     stream_receivers: Arc<DashMap<DataSubscription, broadcast::Receiver<BaseDataEnum>>>,
 ) -> (JoinHandle<()>, JoinHandle<()>) {
     let (data_sender, mut data_receiver) = mpsc::channel::<TimeSlice>(10);
+    let (tick_sender, tick_receiver) = watch::channel(());
 
     let receiver_task = tokio::spawn(async move {
+        let mut interval = interval(buffer);
         loop {
+            interval.tick().await;
+            tick_sender.send(()).unwrap();
+
             if stream_receivers.is_empty() {
-                sleep(Duration::from_millis(500)).await;
+                sleep(Duration::from_millis(100)).await;
                 continue;
             }
+
             let futures = stream_receivers
                 .iter()
                 .map(|entry| {
                     let key = entry.key().clone();
                     let data_sender = data_sender.clone();
                     let stream_receivers = stream_receivers.clone();
+                    let tick_receiver = tick_receiver.clone();
                     tokio::spawn(async move {
                         if let Some(mut entry) = stream_receivers.get_mut(&key) {
-                            process_receiver(entry.value_mut(), data_sender).await;
+                            process_receiver(entry.value_mut(), data_sender, tick_receiver, buffer).await;
                         }
                     })
                 })
@@ -90,28 +96,28 @@ pub async fn stream_handler(
 
     let time_slice_task = tokio::spawn(async move {
         let mut time_slice = TimeSlice::new();
-        let mut interval = tokio::time::interval(buffer);
+        let mut interval = interval(buffer);
 
         loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    if !time_slice.is_empty() {
-                        let bytes = time_slice.to_bytes();
-                        let length = (bytes.len() as u32).to_be_bytes();
-                        let mut prefixed_msg = Vec::with_capacity(LENGTH + bytes.len());
-                        prefixed_msg.extend_from_slice(&length);
-                        prefixed_msg.extend_from_slice(&bytes);
+            interval.tick().await;
 
-                        if let Err(e) = stream.write_all(&prefixed_msg).await {
-                            eprintln!("Error writing to stream: {}", e);
-                            break;
-                        }
-                        time_slice.clear();
-                    }
+            // Collect any remaining data from receivers
+            while let Ok(slice) = data_receiver.try_recv() {
+                time_slice.extend(slice);
+            }
+
+            if !time_slice.is_empty() {
+                let bytes = time_slice.to_bytes();
+                let length = (bytes.len() as u32).to_be_bytes();
+                let mut prefixed_msg = Vec::with_capacity(LENGTH + bytes.len());
+                prefixed_msg.extend_from_slice(&length);
+                prefixed_msg.extend_from_slice(&bytes);
+
+                if let Err(e) = stream.write_all(&prefixed_msg).await {
+                    eprintln!("Error writing to stream: {}", e);
+                    break;
                 }
-                Some(slice) = data_receiver.recv() => {
-                    time_slice.extend(slice);
-                }
+                time_slice.clear();
             }
         }
         println!("Stream handler for {} has shut down", stream_name);
@@ -123,21 +129,33 @@ pub async fn stream_handler(
 async fn process_receiver(
     rx: &mut broadcast::Receiver<BaseDataEnum>,
     data_sender: mpsc::Sender<TimeSlice>,
+    mut tick_receiver: watch::Receiver<()>,
+    buffer: Duration,
 ) {
     let mut time_slice = TimeSlice::new();
-    let mut count = 0;
-    while let Ok(base_data_enum) = rx.try_recv() {
-        time_slice.add(base_data_enum);
-        count += 1;
-        if count >= BATCH_SIZE {
-            if data_sender.send(time_slice).await.is_err() {
-                return; // Main task has been dropped
+    let mut last_send = Instant::now();
+
+    loop {
+        tokio::select! {
+            _ = tick_receiver.changed() => {
+                if !time_slice.is_empty() {
+                    if data_sender.send(time_slice).await.is_err() {
+                        return; // Main task has been dropped
+                    }
+                    time_slice = TimeSlice::new();
+                }
+                last_send = Instant::now();
             }
-            time_slice = TimeSlice::new();
-            count = 0;
+            Ok(base_data_enum) = rx.recv() => {
+                time_slice.add(base_data_enum);
+                if last_send.elapsed() >= buffer {
+                    if data_sender.send(time_slice).await.is_err() {
+                        return; // Main task has been dropped
+                    }
+                    time_slice = TimeSlice::new();
+                    last_send = Instant::now();
+                }
+            }
         }
-    }
-    if !time_slice.is_empty() {
-        let _ = data_sender.send(time_slice).await;
     }
 }
