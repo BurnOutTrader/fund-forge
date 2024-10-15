@@ -74,7 +74,6 @@ pub async fn stream_handler(
     let (data_sender, mut data_receiver) = mpsc::channel::<TimeSlice>(10);
     let (tick_sender, tick_receiver) = watch::channel(());
 
-    //todo, this works perfectly but we need to check stream receivers and subscribe new streams at run time.
     let receiver_task = tokio::spawn({
         let data_sender = data_sender.clone();
         let tick_receiver = tick_receiver.clone();
