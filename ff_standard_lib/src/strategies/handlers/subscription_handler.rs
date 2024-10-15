@@ -489,6 +489,7 @@ impl SubscriptionHandler {
         None
     }
 
+    //todo need a live version of this, where we record which consolidators had data and which didnt, we update time for thise that didn't
     pub async fn update_consolidators_time(&self, time: DateTime<Utc>) -> Option<TimeSlice> {
         let symbol_subscriptions = self.symbol_subscriptions.clone();
         let futures: Vec<_> = symbol_subscriptions.iter().map(|symbol_handler| {

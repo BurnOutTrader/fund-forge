@@ -242,15 +242,16 @@ impl HeikinAshiConsolidator {
                 volume: dec!(0.0),
                 ask_volume: dec!(0.0),
                 bid_volume: dec!(0.0),
-                time: time.to_string(),
+                time: open_time(&self.subscription, time).to_string(),
                 resolution: self.subscription.resolution.clone(),
                 is_closed: false,
                 range: dec!(0.0),
                 candle_type: CandleType::HeikinAshi,
             }));
         }
+        const NANO: Duration = Duration::nanoseconds(1);
         if let Some(current_data) = self.current_data.as_mut() {
-            if time > current_data.time_closed_utc() - Duration::nanoseconds(1) {
+            if time > current_data.time_closed_utc() - NANO {
                 let mut return_data = current_data.clone();
                 return_data.set_is_closed(true);
                 self.current_data = None;
@@ -275,7 +276,8 @@ impl HeikinAshiConsolidator {
                 // We've already processed data for this time or earlier, so we skip it
                 return ConsolidatedData::with_open(current_bar.clone());
             }
-            if base_data.time_closed_utc() >= current_bar.time_closed_utc() {
+            const NANO: Duration = Duration::nanoseconds(1);
+            if base_data.time_closed_utc() >= current_bar.time_closed_utc() - NANO {
                 let mut consolidated_bar = current_bar.clone();
                 consolidated_bar.set_is_closed(true);
                 let new_bar = self.new_heikin_ashi_candle(base_data);

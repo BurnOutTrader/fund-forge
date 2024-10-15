@@ -99,12 +99,20 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                             match client.connect_plant(SysInfraType::TickerPlant).await {
                                 Ok(receiver) => {
                                     RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_responses_from_ticker_plant(client, receiver).await;
+                                    handle_responses_from_ticker_plant(client.clone(), receiver).await;
                                 }
                                 Err(e) => {
                                     eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
                                 }
                             }
+                          /*  match client.connect_plant(SysInfraType::OrderPlant).await {
+                                Ok(receiver) => {
+                                    handle_responses_from_order_plant(client.clone(), receiver).await;
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
+                            }*/
                         }
                         Err(e) => {
                             eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
@@ -172,7 +180,7 @@ async fn main() -> io::Result<()> {
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
 
-    init_rithmic_apis(options.clone()).await;
+    //init_rithmic_apis(options.clone()).await;
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
 
@@ -203,6 +211,7 @@ async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
 }
 use tokio::task::JoinHandle;
 use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
+use crate::rithmic_api::plant_handlers::handle_order_plant::handle_responses_from_order_plant;
 use crate::rithmic_api::plant_handlers::handle_tick_plant::handle_responses_from_ticker_plant;
 use crate::stream_tasks::shutdown_stream_tasks;
 use crate::test_api::api_client::TEST_CLIENT;

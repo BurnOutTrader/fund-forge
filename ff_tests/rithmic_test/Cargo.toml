@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ff_rithmic_api = "0.2.2"
+ff_rithmic_api = "0.2.3"
 chrono-tz = "0.10.0"
 tokio = "1.36.0"
 chrono = "*"
