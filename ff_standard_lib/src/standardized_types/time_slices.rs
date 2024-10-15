@@ -2,8 +2,6 @@ use std::collections::BTreeMap;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::resolution::Resolution;
-use crate::standardized_types::subscriptions::Symbol;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::bytes_trait::Bytes;
@@ -47,7 +45,7 @@ impl TimeSlice {
     }
 
     pub fn add(&mut self, item: BaseDataEnum) {
-        let time = item.time_closed_utc().timestamp_nanos();
+        let time = item.time_closed_utc().timestamp_nanos_opt().unwrap();
         self.data.entry(time).or_insert_with(Vec::new).push(item);
     }
 

@@ -198,84 +198,61 @@ pub enum StrategyControls {
     /// Send bytes over TCP for larger more complex commands that can be deserialized to concrete types by a u64 identifier
     CustomBytes(u64, Vec<u8>)
 }
-
 #[derive(Clone, PartialEq, Debug)]
 pub struct StrategyEventBuffer {
-    /// Events stored with their DateTimes in order
-    events: Vec<(DateTime<Utc>, StrategyEvent)>,
-    /// Keep a record of event index by event type so we can seperate events.
-    events_by_type: BTreeMap<StrategyEventType, Vec<u64>>,
+    // Events stored with their timestamps in order
+    events: BTreeMap<i64, Vec<StrategyEvent>>,
+    // Keep a record of event indices by event type
+    events_by_type: BTreeMap<StrategyEventType, Vec<(i64, usize)>>,
 }
 
 impl StrategyEventBuffer {
     pub fn new() -> Self {
         StrategyEventBuffer {
-            events: Vec::new(),
+            events: BTreeMap::new(),
             events_by_type: BTreeMap::new(),
         }
     }
 
-    // Adds an event with a given time maintaining the order of the event slice so that when we iterate earliest occurring events will be presented first
     pub fn add_event(&mut self, time: DateTime<Utc>, event: StrategyEvent) {
-        // Insert event into the main list
-        self.events.push((time, event.clone()));
+        let timestamp = time.timestamp_nanos_opt().unwrap();
+        let event_type = event.get_type();
 
-        // Sort the events by time (stable sort keeps order for equal times)
-        self.events.sort_by_key(|(time, _)| *time);
+        // Add event to the main BTreeMap
+        let events_at_time = self.events.entry(timestamp).or_insert_with(Vec::new);
+        let index = events_at_time.len();
+        events_at_time.push(event);
 
-        // Instead of finding the index after sorting, we could assume the event may have shifted
-        // and directly locate it using binary search.
-        let sorted_event_index = self
-            .events
-            .binary_search_by_key(&time, |(t, _)| *t)
-            .unwrap_or_else(|_| panic!("Newly added event not found after sorting"));
-
-        // Insert the sorted index into the type map and keep it sorted by time
-        let entry = self
-            .events_by_type
-            .entry(event.get_type()) // Assuming StrategyEvent has a `get_type` method
-            .or_insert_with(Vec::new);
-
-        // Use binary search to find the correct insertion position
-        let insertion_position = entry
-            .binary_search_by_key(&time, |&idx| self.events[idx as usize].0)
-            .unwrap_or_else(|pos| pos); // Find the correct insertion position
-        entry.insert(insertion_position, sorted_event_index as u64);
+        // Update the events_by_type index
+        self.events_by_type
+            .entry(event_type)
+            .or_insert_with(Vec::new)
+            .push((timestamp, index));
     }
 
-    // Iterate over the sorted events by time
-    pub fn iter(&self) -> impl Iterator<Item = &(DateTime<Utc>, StrategyEvent)> {
-        self.events.iter()
+    pub fn iter(&self) -> impl Iterator<Item = (DateTime<Utc>, &StrategyEvent)> + '_ {
+        self.events.iter().flat_map(|(&timestamp, events)| {
+            let time = DateTime::from_timestamp_nanos(timestamp);
+            events.iter().map(move |event| (time, event))
+        })
     }
 
-    // Returns an iterator over events of a given type, sorted by time (borrowed version)
-    pub fn get_events_by_type(
-        &self,
-        event_type: StrategyEventType,
-    ) -> impl Iterator<Item = &(DateTime<Utc>, StrategyEvent)> {
+    pub fn get_events_by_type(&self, event_type: StrategyEventType) -> impl Iterator<Item = (DateTime<Utc>, &StrategyEvent)> + '_ {
         self.events_by_type
             .get(&event_type)
             .into_iter()
             .flat_map(move |indices| {
-                indices.iter().map(move |&idx| &self.events[idx as usize])
+                indices.iter().filter_map(move |&(timestamp, index)| {
+                    let time = DateTime::from_timestamp_nanos(timestamp);
+                    self.events.get(&timestamp).and_then(|events| events.get(index)).map(|event| (time, event))
+                })
             })
     }
 
-    // Returns a Vec of events of a given type, sorted by time (owned version)
-    // This fn does not remove the events but instead clones them.
-    // If you are using this fn to move certain events to another function, be careful that you do not double handle events, ie react to the same event twice
-    pub fn get_owned_events_by_type(
-        &self,
-        event_type: StrategyEventType,
-    ) -> Vec<(DateTime<Utc>, StrategyEvent)> {
-        self.events_by_type
-            .get(&event_type)
-            .map_or_else(Vec::new, |indices| {
-                indices
-                    .iter()
-                    .map(|&idx| self.events[idx as usize].clone()) // Clone to return owned data
-                    .collect()
-            })
+    pub fn get_owned_events_by_type(&self, event_type: StrategyEventType) -> Vec<(DateTime<Utc>, StrategyEvent)> {
+        self.get_events_by_type(event_type)
+            .map(|(time, event)| (time, event.clone()))
+            .collect()
     }
 
     pub fn is_empty(&self) -> bool {
