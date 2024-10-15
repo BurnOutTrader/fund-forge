@@ -4,9 +4,9 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType};
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription};
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
@@ -26,7 +26,6 @@ pub struct CandleStickConsolidator {
     last_bid_close: Option<Price>,
     fill_forward: bool,
     market_type: MarketType,
-    subscription_resolution_type: SubscriptionResolutionType,
     last_bar_open: DateTime<Utc>,
 }
 
@@ -327,7 +326,6 @@ impl CandleStickConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         fill_forward: bool,
-        subscription_resolution_type: SubscriptionResolutionType
     ) -> Result<Self, FundForgeError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(FundForgeError::ClientSideErrorDebug(format!(
@@ -360,7 +358,6 @@ impl CandleStickConsolidator {
             last_ask_close: None,
             last_bid_close: None,
             fill_forward,
-            subscription_resolution_type,
             last_bar_open: DateTime::<Utc>::MIN_UTC
         })
     }

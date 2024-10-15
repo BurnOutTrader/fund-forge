@@ -11,7 +11,7 @@ use crate::helpers::converters;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::base_data::tick::Aggressor;
-use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType};
 use crate::standardized_types::new_types::{Price, Volume};
 
 pub struct HeikinAshiConsolidator {
@@ -23,7 +23,6 @@ pub struct HeikinAshiConsolidator {
     tick_size: Decimal,
     fill_forward: bool,
     market_type: MarketType,
-    subscription_resolution_type: SubscriptionResolutionType,
     last_bar_open: DateTime<Utc>,
 }
 
@@ -189,7 +188,6 @@ impl HeikinAshiConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         fill_forward: bool,
-        subscription_resolution_type: SubscriptionResolutionType
     ) -> Result<HeikinAshiConsolidator, FundForgeError> {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(FundForgeError::ClientSideErrorDebug(format!(
@@ -216,7 +214,6 @@ impl HeikinAshiConsolidator {
 
         Ok(HeikinAshiConsolidator {
             market_type,
-            subscription_resolution_type,
             current_data: None,
             subscription,
             previous_ha_close: dec!(0.0),

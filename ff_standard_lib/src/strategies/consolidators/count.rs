@@ -4,7 +4,7 @@ use crate::strategies::consolidators::consolidator_enum::ConsolidatedData;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::candle::Candle;
-use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::resolution::Resolution;
@@ -21,13 +21,11 @@ pub struct CountConsolidator {
     decimal_accuracy: u32,
     tick_size: Decimal,
     market_type: MarketType,
-    subscription_resolution_type: SubscriptionResolutionType
 }
 
 impl CountConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
-        subscription_resolution_type: SubscriptionResolutionType
     ) -> Result<Self, FundForgeError> {
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
@@ -65,15 +63,11 @@ impl CountConsolidator {
             subscription,
             decimal_accuracy,
             tick_size,
-            subscription_resolution_type
         })
     }
 
     /// Returns a candle if the count is reached
     pub(crate) fn update(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
-        if base_data.subscription().subscription_resolution_type() != self.subscription_resolution_type {
-            panic!("Unsupported type") //todo remove this check on final builds
-        }
         match base_data {
             BaseDataEnum::Tick(tick) => {
                 if self.counter == 0 {

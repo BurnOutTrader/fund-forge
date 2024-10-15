@@ -2,7 +2,7 @@ use crate::strategies::consolidators::candlesticks::CandleStickConsolidator;
 use crate::strategies::consolidators::count::CountConsolidator;
 use crate::strategies::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Datelike, Duration, Utc, Weekday};
@@ -20,7 +20,6 @@ impl ConsolidatorEnum {
     pub async fn create_consolidator(
         subscription: DataSubscription,
         fill_forward: bool,
-        subscription_resolution_type: SubscriptionResolutionType,
     ) -> ConsolidatorEnum {
         //todo handle errors here gracefully
         let is_tick = match subscription.resolution {
@@ -30,7 +29,7 @@ impl ConsolidatorEnum {
 
         if is_tick {
            return ConsolidatorEnum::Count(
-                CountConsolidator::new(subscription.clone(), subscription_resolution_type)
+                CountConsolidator::new(subscription.clone())
                     .await
                     .unwrap(),
             )
@@ -39,12 +38,12 @@ impl ConsolidatorEnum {
         let consolidator = match &subscription.candle_type {
             Some(candle_type) => match candle_type {
                 CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(
-                    HeikinAshiConsolidator::new(subscription.clone(), fill_forward, subscription_resolution_type)
+                    HeikinAshiConsolidator::new(subscription.clone(), fill_forward)
                         .await
                         .unwrap(),
                 ),
                 CandleType::CandleStick => ConsolidatorEnum::CandleStickConsolidator(
-                    CandleStickConsolidator::new(subscription.clone(), fill_forward, subscription_resolution_type)
+                    CandleStickConsolidator::new(subscription.clone(), fill_forward)
                         .await
                         .unwrap(),
                 ),

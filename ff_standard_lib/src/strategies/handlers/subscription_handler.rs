@@ -1,7 +1,6 @@
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc};
 use ahash::AHashMap;
 use async_std::task::block_on;
 use crate::strategies::consolidators::consolidator_enum::{ConsolidatedData, ConsolidatorEnum};
@@ -798,7 +797,7 @@ impl SymbolSubscriptionHandler {
                             self.secondary_subscriptions.insert(primary_res_sub_type.clone(), AHashMap::new());
                         }
                     }
-                    let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone(), primary_res_sub_type).await;
+                    let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone()).await;
                     let (consolidator, window) = match is_warmed_up {
                         true => ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await,
                         false => (consolidator, RollingWindow::new(history_to_retain))
@@ -838,7 +837,7 @@ impl SymbolSubscriptionHandler {
                             returned_windows.insert(new_primary.clone(), RollingWindow::new(history_to_retain));
                         }
                     }
-                    let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone(), new_primary.subscription_resolution_type()).await;
+                    let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone()).await;
                     let (final_consolidator, window) = match is_warmed_up {
                         true => {
                             let (final_consolidator, window) = ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await;
