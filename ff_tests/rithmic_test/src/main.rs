@@ -172,7 +172,7 @@ pub async fn on_data_received(
                                         SymbolName::from("YM"),
                                         DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
                                         Resolution::Seconds(1),
-                                        BaseDataType::Candles,
+                                        BaseDataType::QuoteBars,
                                         MarketType::Futures(FuturesExchange::CBOT)
                                     );
                                     strategy.subscribe(sub, 1, true).await;
