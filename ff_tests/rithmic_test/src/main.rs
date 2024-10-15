@@ -51,17 +51,17 @@ async fn main() {
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
-      /*     DataSubscription::new(
-                SymbolName::from("MNQ"),
+          DataSubscription::new(
+                SymbolName::from("MES"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(1),
-                BaseDataType::Candles,
+                Resolution::Seconds(5),
+                BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
-            ),*/
+            ),
             DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(1),
+                Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
                 MarketType::Futures(FuturesExchange::CME)
             ),
@@ -69,7 +69,7 @@ async fn main() {
         true,
         100,
         strategy_event_sender,
-        core::time::Duration::from_millis(10),
+        core::time::Duration::from_millis(500),
         false,
         true,
     ).await;
@@ -119,6 +119,7 @@ pub async fn on_data_received(
     let account_1 = AccountId::from("Test_Account_1");
     let mut last_side = LastSide::Flat;
     println!("Staring Strategy Loop");
+    let mut count = 0;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -253,6 +254,20 @@ pub async fn on_data_received(
                                             false => println!("{}", msg.as_str().bright_red()),
                                         }
                                     }
+                                }
+                                count += 1;
+
+                                if count == 5 {
+                                    println!("Subscribing to CL");
+                                    let sub = DataSubscription::new(
+                                        SymbolName::from("CL"),
+                                        DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+                                        Resolution::Seconds(5),
+                                        BaseDataType::QuoteBars,
+                                        MarketType::Futures(FuturesExchange::CME)
+                                    );
+                                    strategy.subscribe(sub, 1, true).await;
+                                    println!("Subscribed to CL");
                                 }
                             }
                             _ => {}
