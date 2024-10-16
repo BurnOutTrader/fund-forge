@@ -33,6 +33,7 @@ use ff_standard_lib::standardized_types::subscriptions::Symbol;
 use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
 use crate::rithmic_api::api_client::RithmicClient;
 use futures::FutureExt;
+use tungstenite::protocol::CloseFrame;
 use crate::rithmic_api::plant_handlers::reconnect::attempt_reconnect;
 use crate::subscribe_server_shutdown;
 
@@ -359,7 +360,17 @@ pub async fn handle_responses_from_ticker_plant(
                                         Some(CloseFrame { code: Normal, reason: "normal closure" })
                                         Error: ServerErrorDebug("Failed to send RithmicMessage, possible disconnect, try reconnecting to plant TickerPlant: Trying to work with closed connection")
                                     */
-                                    println!("{}", frame)
+                                    if let Some(CloseFrame { code, reason }) = frame.into_data() {
+                                        println!("Received close frame: code = {:?}, reason = {}", code, reason);
+                                        if let Some(new_reader) = attempt_reconnect(&client, PLANT).await {
+                                            reader = new_reader;
+                                            continue; // Skip to the next iteration of the main loop
+                                        } else {
+                                            println!("Failed to reconnect after normal closure. Exiting.");
+                                            break;
+                                        }
+                                    }
+                                    println!("Received frame: {:?}", frame);
                                 }
                             }
                         }
