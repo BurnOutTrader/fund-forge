@@ -30,23 +30,13 @@ use crate::rithmic_api::plant_handlers::handle_pnl_plant::match_pnl_plant_id;
 use crate::rithmic_api::plant_handlers::handle_repo_plant::match_repo_plant_id;
 use crate::rithmic_api::plant_handlers::handle_tick_plant::match_ticker_plant_id;
 use crate::rithmic_api::plant_handlers::reconnect::attempt_reconnect;
-use crate::subscribe_server_shutdown;
 
 pub fn handle_rithmic_responses(
     client: Arc<RithmicClient>,
     mut reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     plant: SysInfraType,
+    running: Arc<AtomicBool>
 ) {
-    let running = Arc::new(AtomicBool::new(true));
-    let running_clone = running.clone();
-
-    // Task 1: Handle shutdown signal
-    tokio::spawn(async move {
-        let mut shutdown_receiver = subscribe_server_shutdown();
-        let _ = shutdown_receiver.recv().await;
-        running_clone.store(false, Ordering::SeqCst);
-    });
-
     // Task 2: Handle Rithmic responses
     tokio::spawn(async move {
         while running.load(Ordering::SeqCst) {

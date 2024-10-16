@@ -6,6 +6,7 @@ use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::RequestAccountRmsInfo;
 use ff_rithmic_api::systems::RithmicSystem;
@@ -95,13 +96,23 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
     let init_tasks = toml_files.into_iter().filter_map(|file| {
         RithmicSystem::from_file_string(file.as_str()).map(|system| {
             task::spawn(async move {
+                let running = Arc::new(AtomicBool::new(true));
+                let running_clone = running.clone();
+
+                // Task 1: Handle shutdown signal
+                tokio::spawn(async move {
+                    let mut shutdown_receiver = subscribe_server_shutdown();
+                    let _ = shutdown_receiver.recv().await;
+                    running_clone.store(false, Ordering::SeqCst);
+                });
+
                 match RithmicClient::new(system).await {
                     Ok(client) => {
                         let client = Arc::new(client);
                         match client.connect_plant(SysInfraType::TickerPlant).await {
                             Ok(receiver) => {
                                 RITHMIC_CLIENTS.insert(system, client.clone());
-                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant);
+                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant, running.clone());
                             }
                             Err(e) => {
                                 eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
@@ -110,7 +121,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                         match client.connect_plant(SysInfraType::HistoryPlant).await {
                             Ok(receiver) => {
                                 RITHMIC_CLIENTS.insert(system, client.clone());
-                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant);
+                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant, running.clone());
                             }
                             Err(e) => {
                                 eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
