@@ -4,12 +4,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::RequestHeartbeat;
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestHeartbeat, ResponseHeartbeat};
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::{SinkExt, StreamExt};
 use futures::stream::{SplitSink, SplitStream};
@@ -319,5 +319,32 @@ impl RithmicClient {
         });
         self.heartbeat_tasks.insert(plant, task);
     }
+
+
+    // In your handle_response_heartbeat function:
+    pub fn handle_response_heartbeat(&self, plant: SysInfraType, response: ResponseHeartbeat) {
+        let now = Utc::now();
+
+        if let (Some(ssboe), Some(usecs)) = (response.ssboe, response.usecs) {
+            let response_time = Utc.timestamp_opt(ssboe as i64, usecs as u32 * 1000).unwrap();
+            let latency = (now - response_time).num_microseconds().unwrap_or(i64::MAX);
+
+            self.latency.insert(plant.clone(), latency);
+
+            let formatted_latency = format_latency(latency);
+            println!("Latency for {:?}: {}", plant, formatted_latency);
+        } else {
+            println!("Unable to calculate latency: missing timestamp in ResponseHeartbeat");
+        }
+    }
 }
 
+fn format_latency(latency_us: i64) -> String {
+    if latency_us < 1_000 {
+        format!("{} µs", latency_us)
+    } else if latency_us < 1_000_000 {
+        format!("{:.2} ms", latency_us as f64 / 1_000.0)
+    } else {
+        format!("{:.3} s", latency_us as f64 / 1_000_000.0)
+    }
+}

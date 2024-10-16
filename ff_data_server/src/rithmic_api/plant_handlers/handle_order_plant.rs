@@ -42,7 +42,8 @@ pub async fn match_order_plant_id(
             if let Ok(msg) = ResponseHeartbeat::decode(&message_buf[..]) {
                 // Response Heartbeat
                 // From Server
-                println!("Response Heartbeat (Template ID: 19) from Server: {:?}", msg);
+                //println!("Response Heartbeat (Template ID: 19) from Server: {:?}", msg);
+                client.handle_response_heartbeat(PLANT, msg);
             }
         },
         301 => {

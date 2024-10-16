@@ -152,3 +152,4 @@ pub async fn shutdown_plant(
         Err(e) => Err(RithmicApiError::Disconnected(e.to_string()))
     }
 }
+
