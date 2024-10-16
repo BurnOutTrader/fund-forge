@@ -88,7 +88,7 @@ We might also need a certain amount of history to be available before starting, 
 
 #### `subscriptions: Vec<DataSubscription>:`
 The initial data subscriptions for the strategy.
-strategy_event_sender: mpsc::Sender<EventTimeSlice>: The sender for strategy events.
+
 If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
 
 ##### In Backtest mode 
@@ -133,6 +133,9 @@ if self.vendor_primary_resolutions.contains(&sub_res_type) && !self.primary_subs
     //if these conditions are true we will subscribe directly from the data vendor
 }
 ```
+
+#### `strategy_event_sender: mpsc::Sender<EventTimeSlice>:` 
+The sender for strategy events, the send half of the mpsc::channel we will use to receive the `StrategyEventBuffers`
 
 #### `fill_forward`: bool
 This is only regarding initial subscriptions, additional subscriptions will have to specify the option.
