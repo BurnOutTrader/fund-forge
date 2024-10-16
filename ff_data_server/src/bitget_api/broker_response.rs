@@ -6,6 +6,7 @@ use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
+use ff_standard_lib::standardized_types::orders::Order;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use ff_standard_lib::StreamName;
@@ -30,6 +31,10 @@ impl BrokerApiResponse for BitgetClient {
                 cash_value: dec!(100000),
                 cash_available: dec!(100000),
                 currency: Currency::USD,
+                open_pnl: dec!(0),
+                booked_pnl: dec!(0),
+                day_open_pnl: dec!(0),
+                day_booked_pnl: dec!(0),
                 cash_used: dec!(0),
                 positions: vec![],
                 account_id,
@@ -72,6 +77,10 @@ impl BrokerApiResponse for BitgetClient {
 
     #[allow(unused)]
     async fn commission_info_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
+        todo!()
+    }
+    #[allow(unused)]
+    async fn live_market_order(&self, mode: StrategyMode, order: Order) -> DataServerResponse {
         todo!()
     }
 }

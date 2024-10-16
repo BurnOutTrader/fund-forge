@@ -33,7 +33,7 @@ use crate::standardized_types::base_data::tick::Tick;
 use crate::messages::data_server_messaging::{DataServerRequest, FundForgeError};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::new_types::{Price, Volume};
-use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderUpdateType, TimeInForce};
+use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderType, OrderUpdateType, TimeInForce};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::historical_engine::HistoricalEngine;
 use crate::strategies::historical_time::{get_backtest_time};
@@ -250,7 +250,7 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let market_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let market_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::EnterLong };
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(market_request);
@@ -286,7 +286,7 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::EnterShort};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
@@ -322,7 +322,7 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::ExitLong};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
@@ -358,7 +358,7 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::ExitShort};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
@@ -395,7 +395,7 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::Market};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
@@ -432,7 +432,7 @@ impl FundForgeStrategy {
             order_id.clone(),
             self.time_utc(),
         );
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::Market};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(request);
@@ -463,7 +463,7 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Limit", side)).await;
         let order = Order::limit_order(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(), limit_price, tif);
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::Limit};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(order_request);
@@ -494,7 +494,7 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(&symbol_name, account_id, brokerage, &format!("{} MIT", side)).await;
         let order = Order::market_if_touched(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::MarketIfTouched};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(order_request);
@@ -525,7 +525,7 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop", side)).await;
         let order = Order::stop(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif);
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::StopMarket};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 let request =MarketMessageEnum::OrderRequest(order_request);
@@ -557,7 +557,7 @@ impl FundForgeStrategy {
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop Limit", side)).await;
         let order = Order::stop_limit(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),limit_price, trigger_price, tif);
-        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone()};
+        let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::StopLimit};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 self.market_event_sender.send(MarketMessageEnum::OrderRequest(request)).await.unwrap();

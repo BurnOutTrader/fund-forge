@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use crate::messages::data_server_messaging::DataServerResponse;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::Volume;
+use crate::standardized_types::orders::{Order};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::strategies::ledgers::AccountId;
 use crate::StreamName;
@@ -127,5 +128,11 @@ pub trait BrokerApiResponse: Sync + Send {
         stream_name: StreamName,
         symbol_name: SymbolName,
         callback_id: u64
+    ) -> DataServerResponse;
+
+    async fn live_market_order(
+        &self,
+        mode: StrategyMode,
+        order: Order,
     ) -> DataServerResponse;
 }

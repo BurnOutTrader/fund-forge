@@ -4,6 +4,7 @@ use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
+use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::strategies::ledgers::AccountId;
 use ff_standard_lib::StreamName;
@@ -190,5 +191,34 @@ pub async fn logout_command(brokerage: Brokerage, stream_name: StreamName) {
             }
         }
         Brokerage::Test => TEST_CLIENT.logout_command(stream_name).await
+    }
+}
+
+pub async fn send_market_order(mode: StrategyMode, order: Order) -> DataServerResponse {
+    match order.brokerage {
+        Brokerage::Test => {
+            DataServerResponse::OrderUpdates(OrderUpdateEvent::OrderRejected {
+                brokerage: order.brokerage,
+                account_id: order.account_id,
+                order_id: order.id,
+                reason: "Test Brokerage Can Not Place Live Orders".to_string(),
+                tag: order.tag,
+                time: Utc::now().to_string() })
+        }
+        Brokerage::Rithmic(system) => {
+            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                return client.live_market_order(mode, order).await
+            }
+            DataServerResponse::OrderUpdates(OrderUpdateEvent::OrderRejected {
+                brokerage: order.brokerage,
+                account_id: order.account_id,
+                order_id: order.id,
+                reason: "Client Not found with {} for {}".to_string(),
+                tag: order.tag,
+                time: Utc::now().to_string() })
+        }
+        Brokerage::Bitget => {
+            todo!()
+        }
     }
 }

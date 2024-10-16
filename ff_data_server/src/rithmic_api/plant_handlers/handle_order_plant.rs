@@ -6,8 +6,11 @@ use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use ff_rithmic_api::rithmic_proto_objects::rti::{Reject};
 use prost::{Message as ProstMessage};
+use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
+use ff_standard_lib::strategies::ledgers::{AccountInfo, Currency};
 use crate::rithmic_api::api_client::RithmicClient;
 
 #[allow(unused, dead_code)]
@@ -63,13 +66,17 @@ pub async fn match_order_plant_id(
         305 => {
             if let Ok(msg) = ResponseAccountRmsInfo::decode(&message_buf[..]) {
                 //println!("Response Account Rms Info (Template ID: 305) from Server: {:?}", msg);
-                /*if let Some(id) = &msg.account_id {
+                if let Some(id) = msg.account_id {
                     let mut account_info = AccountInfo {
                         account_id: id.to_string(),
                         brokerage: client.brokerage.clone(),
                         cash_value: Default::default(),
                         cash_available: Default::default(),
                         currency: Currency::USD,
+                        open_pnl: Default::default(),
+                        booked_pnl: Default::default(),
+                        day_open_pnl: Default::default(),
+                        day_booked_pnl: Default::default(),
                         cash_used: Default::default(),
                         positions: vec![],
                         is_hedging: false,
@@ -95,41 +102,11 @@ pub async fn match_order_plant_id(
                     if let Some(ref max_loss) = msg.loss_limit {
                         account_info.daily_max_loss = Some(Decimal::from_u32(max_loss.clone() as u32).unwrap());
                     }
-                    client.accounts.insert(id.clone(), account_info);
-                    let req = RequestPnLPositionSnapshot {
-                        template_id: 402,
-                        user_msg: vec![],
-                        fcm_id: client.fcm_id.clone(),
-                        ib_id: client.ib_id.clone(),
-                        account_id: Some(id.clone()),
-                    };
-                    client.send_message(&SysInfraType::PnlPlant, req).await;
-                    let req = RequestPnLPositionUpdates {
-                        template_id: 400 ,
-                        user_msg: vec![],
-                        request: Some(1),
-                        fcm_id: client.fcm_id.clone(),
-                        ib_id: client.ib_id.clone(),
-                        account_id: Some(id.clone()),
-                    };
-                    client.send_message(&SysInfraType::PnlPlant, req).await;
-                    let req = RequestShowOrders {
-                        template_id: 320,
-                        user_msg: vec![],
-                        fcm_id: client.fcm_id.clone(),
-                        ib_id: client.ib_id.clone(),
-                        account_id: Some(id.clone()),
-                    };
-                    client.send_message(&PLANT, req).await;
-                    let req = RequestSubscribeForOrderUpdates {
-                        template_id,
-                        user_msg: vec![],
-                        fcm_id: client.fcm_id.clone(),
-                        ib_id: client.ib_id.clone(),
-                        account_id: Some(id.clone()),
-                    };
-                    client.send_message(&PLANT, req).await;
-                }*/
+                    tokio::spawn(async move {
+                        client.account_info.insert(id.clone(), account_info);
+                        client.request_updates().await;
+                    });
+                }
             }
         },
         307 => {
@@ -298,6 +275,18 @@ pub async fn match_order_plant_id(
                 // Rithmic Order Notification
                 // From Server
                 println!("Rithmic Order Notification (Template ID: 351) from Server: {:?}", msg);
+                /*
+                Rithmic Order Notification (Template ID: 351) from Server: RithmicOrderNotification { template_id: 351, user_tag: None, notify_type: Some(OrderRcvdFromClnt),
+                is_snapshot: None, status: Some("Order received from client"), basket_id: Some("233651480"), original_basket_id: None, linked_basket_ids: None,
+                fcm_id: Some("TopstepTrader"), ib_id: Some("TopstepTrader"), user_id: Some("kevtaz"), account_id: Some("S1Sep246906077"), symbol: Some("M6AZ4"),
+                exchange: Some("CME"), trade_exchange: Some("CME"), trade_route: Some("simulator"), exchange_order_id: None, instrument_type: None,
+                completion_reason: None, quantity: Some(2), quan_release_pending: None, price: None, trigger_price: None, transaction_type: Some(Sell),
+                duration: Some(Day), price_type: Some(Market), orig_price_type: Some(Market), manual_or_auto: Some(Manual), bracket_type: None,
+                avg_fill_price: None, total_fill_size: None, total_unfilled_size: None, trail_by_ticks: None, trail_by_price_id: None, sequence_number: None,
+                orig_sequence_number: None, cor_sequence_number: None, currency: None, country_code: None, text: None, report_text: None, remarks: None,
+                window_name: Some("Quote Board, Sell Button, Confirm "), originator_window_name: None, cancel_at_ssboe: None, cancel_at_usecs: None, cancel_after_secs: None,
+                ssboe: Some(1729085413), usecs: Some(477767) }
+                */
             }
         },
         352 => {

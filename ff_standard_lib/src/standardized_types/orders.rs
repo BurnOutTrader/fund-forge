@@ -17,7 +17,7 @@ use crate::standardized_types::new_types::{Price, TimeString, TzString, Volume};
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum OrderRequest {
-    Create{brokerage: Brokerage, order: Order},
+    Create{brokerage: Brokerage, order: Order, order_type: OrderType},
     Cancel{brokerage: Brokerage, order_id: OrderId, account_id: AccountId},
     Update{brokerage: Brokerage, order_id: OrderId, account_id: AccountId, update: OrderUpdateType },
     CancelAll{brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName},

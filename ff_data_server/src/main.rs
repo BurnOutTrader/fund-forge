@@ -127,10 +127,10 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                                 eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
                             }
                         }
-                   /*     match client.connect_plant(SysInfraType::OrderPlant).await {
+                        match client.connect_plant(SysInfraType::OrderPlant).await {
                             Ok(receiver) => {
                                 RITHMIC_CLIENTS.insert(system, client.clone());
-                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant);
+                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant, running.clone());
                             }
                             Err(e) => {
                                 eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
@@ -139,15 +139,15 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                         match client.connect_plant(SysInfraType::PnlPlant).await {
                             Ok(receiver) => {
                                 RITHMIC_CLIENTS.insert(system, client.clone());
-                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant);
+                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant, running.clone());
                             }
                             Err(e) => {
                                 eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
                             }
-                        }*/
-                      /*  match client.connect_plant(SysInfraType::OrderPlant).await {
+                        }
+                        /*match client.connect_plant(SysInfraType::RepositoryPlant).await {
                             Ok(receiver) => {
-                                handle_responses_from_order_plant(client.clone(), receiver).await;
+                                handle_rithmic_responses(client.clone(), receiver).await;
                             }
                             Err(e) => {
                                 eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);

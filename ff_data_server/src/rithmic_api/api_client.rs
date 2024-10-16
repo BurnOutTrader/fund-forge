@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestHeartbeat, ResponseHeartbeat};
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestHeartbeat, RequestShowOrders, RequestSubscribeForOrderUpdates, ResponseHeartbeat};
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::{SinkExt, StreamExt};
 use futures::stream::{SplitSink, SplitStream};
@@ -21,7 +21,7 @@ use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundF
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::enums::MarketType;
+use ff_standard_lib::standardized_types::enums::{MarketType, OrderSide};
 use ff_standard_lib::standardized_types::orders::{Order, OrderId};
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
@@ -29,13 +29,15 @@ use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
 use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo};
 use ff_standard_lib::StreamName;
 use prost::Message as ProstMessage;
+use rust_decimal::Decimal;
 use tokio::net::TcpStream;
 use tokio::{select, task};
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tungstenite::Message;
+use tungstenite::{Message};
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
+use ff_standard_lib::standardized_types::new_types::Volume;
 use crate::subscribe_server_shutdown;
 
 lazy_static! {
@@ -69,7 +71,21 @@ pub struct RithmicClient {
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
 
     // accounts
-    pub accounts: DashMap<AccountId, AccountInfo>,
+    pub account_info: DashMap<AccountId, AccountInfo>,
+    pub account_balance: DashMap<AccountId, Decimal>,
+    pub account_cash_available: DashMap<AccountId, Decimal>,
+    pub account_cash_used: DashMap<AccountId, Decimal>,
+    pub margin_used: DashMap<AccountId, Decimal>,
+    pub margin_available: DashMap<AccountId, Decimal>,
+    pub open_pnl: DashMap<AccountId, Decimal>,
+    pub closed_pnl: DashMap<AccountId, Decimal>,
+    pub day_open_pnl: DashMap<AccountId, Decimal>,
+    pub day_closed_pnl: DashMap<AccountId, Decimal>,
+    pub max_size: DashMap<AccountId, Volume>,
+    pub total_open_size: DashMap<AccountId, Volume>,
+    pub long_quantity: DashMap<AccountId, DashMap<SymbolName, Volume>>,
+    pub short_quantity: DashMap<AccountId, DashMap<SymbolName, Volume>>,
+
     pub orders_open: DashMap<OrderId, Order>,
 
     //products
@@ -82,6 +98,8 @@ pub struct RithmicClient {
 
     pub bid_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
+
+    pub order_broadcaster: broadcast::Sender<DataServerResponse>
 }
 
 impl RithmicClient {
@@ -101,6 +119,7 @@ impl RithmicClient {
             .into_owned();
 
         let client = RithmicApiClient::new(credentials.clone(), server_domains_toml).unwrap();
+        let (sender, _) = broadcast::channel(500);
         let client = Self {
             brokerage,
             data_vendor,
@@ -116,14 +135,29 @@ impl RithmicClient {
             latency: Arc::new(DashMap::with_capacity(5)),
             client: Arc::new(client),
             symbol_info: Default::default(),
+            account_info: Default::default(),
+            account_balance: Default::default(),
+            account_cash_available: Default::default(),
+            account_cash_used: Default::default(),
+            margin_used: Default::default(),
+            margin_available: Default::default(),
+            open_pnl: Default::default(),
+            closed_pnl: Default::default(),
+            day_open_pnl: Default::default(),
+            day_closed_pnl: Default::default(),
+            max_size: Default::default(),
             tick_feed_broadcasters: Arc::new(Default::default()),
             quote_feed_broadcasters: Arc::new(Default::default()),
             bid_book: Default::default(),
-            accounts: Default::default(),
+
             orders_open: Default::default(),
             products: Default::default(),
             candle_feed_broadcasters: Arc::new(Default::default()),
             ask_book: Default::default(),
+            order_broadcaster: sender,
+            total_open_size: Default::default(),
+            long_quantity: Default::default(),
+            short_quantity: Default::default(),
         };
         Ok(client)
     }
@@ -328,20 +362,77 @@ impl RithmicClient {
 
             self.latency.insert(plant.clone(), latency);
 
-            let formatted_latency = format_latency(latency);
+            let formatted_latency = if latency < 1_000 {
+                format!("{} µs", latency)
+            } else if latency < 1_000_000 {
+                format!("{:.2} ms", latency as f64 / 1_000.0)
+            } else {
+                format!("{:.3} s", latency as f64 / 1_000_000.0)
+            };
+
             println!("Round Trip Latency for Rithmic {:?}: {}", plant, formatted_latency);
         } else {
             println!("Unable to calculate latency: missing timestamp in ResponseHeartbeat");
         }
     }
-}
 
-fn format_latency(latency_us: i64) -> String {
-    if latency_us < 1_000 {
-        format!("{} µs", latency_us)
-    } else if latency_us < 1_000_000 {
-        format!("{:.2} ms", latency_us as f64 / 1_000.0)
-    } else {
-        format!("{:.3} s", latency_us as f64 / 1_000_000.0)
+    pub async fn request_updates(&self) {
+        for id_account_info_kvp in self.account_info.iter() {
+            let req = RequestShowOrders {
+                template_id: 320,
+                user_msg: vec![],
+                fcm_id: self.fcm_id.clone(),
+                ib_id: self.ib_id.clone(),
+                account_id: Some(id_account_info_kvp.key().clone()),
+            };
+            self.send_message(&SysInfraType::OrderPlant, req).await;
+            let req = RequestSubscribeForOrderUpdates {
+                template_id: 308 ,
+                user_msg: vec![],
+                fcm_id: self.fcm_id.clone(),
+                ib_id: self.ib_id.clone(),
+                account_id: Some(id_account_info_kvp.key().clone()),
+            };
+            self.send_message(&SysInfraType::OrderPlant, req).await;
+        }
+    }
+
+    pub fn is_valid_order(&self, order: &Order) -> Result<(), String> {
+        if let Some(max_size) = self.max_size.get(&order.account_id) {
+            match order.side {
+                OrderSide::Buy => {
+                    if let Some(account_long_quantity) = self.long_quantity.get(&order.id) {
+                        if let Some(symbol_long_quantity) = account_long_quantity.value().get(&order.symbol_name) {
+                            if symbol_long_quantity.value() + order.quantity_open.clone() > *max_size.value() {
+                                return Err(format!("Order Would Exceed Max Position Size: {}", order.tag))
+                            }
+                        }
+                    }
+                    else if let Some(account_short_quantity) = self.short_quantity.get(&order.id) {
+                        if let Some(symbol_short_quantity) = account_short_quantity.get(&order.symbol_name) {
+                            if (order.quantity_open - symbol_short_quantity.value()).abs() > *max_size.value() {
+                                return Err(format!("Order Would Exceed Max Position Size: {}", order.tag))
+                            }
+                        }
+                    }
+                }
+                OrderSide::Sell => {
+                    if let Some(account_short_quantity) = self.short_quantity.get(&order.id) {
+                        if let Some(symbol_short_quantity) = account_short_quantity.value().get(&order.symbol_name) {
+                            if symbol_short_quantity.value() + order.quantity_open > *max_size.value() {
+                                return Err(format!("Order Would Exceed Max Position Size: {}", order.tag))
+                            }
+                        }
+                    } else if let Some(account_long_quantity) = self.long_quantity.get(&order.id) {
+                        if let Some(symbol_long_quantity) = account_long_quantity.get(&order.symbol_name) {
+                            if (order.quantity_open - symbol_long_quantity.value().clone()).abs() > *max_size.value() {
+                                return Err(format!("Order Would Exceed Max Position Size: {}", order.tag))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }

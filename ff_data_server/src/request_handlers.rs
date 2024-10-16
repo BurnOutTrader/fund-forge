@@ -16,13 +16,13 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::database::HybridStorage;
-use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, symbol_info_response, symbol_names_response};
+use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, send_market_order, symbol_info_response, symbol_names_response};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, session_market_hours_response, symbols_response, tick_size_response};
 use crate::stream_tasks::{deregister_streamer};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::orders::OrderRequest;
+use ff_standard_lib::standardized_types::orders::{OrderRequest, OrderType};
 use ff_standard_lib::StreamName;
-use crate::{stream_listener};
+use crate::{get_shutdown_sender, stream_listener};
 
 lazy_static!(
     pub static ref DATA_STORAGE: Arc<HybridStorage> = Arc::new(HybridStorage::new(PathBuf::from(get_data_folder()), Duration::from_secs(1800)));
@@ -258,7 +258,7 @@ pub async fn manage_async_requests(
                             return;
                         }
                         println!("{:?}", request);
-                        order_response(request).await;
+                        order_response(mode, request).await;
                     },
 
                     DataServerRequest::PrimarySubscriptionFor { .. } => {
@@ -327,12 +327,55 @@ where
     }
 }
 
-async fn order_response(request: OrderRequest) {
+#[allow(dead_code, unused)]
+async fn order_response(mode: StrategyMode, request: OrderRequest) -> DataServerResponse {
+    if mode != StrategyMode::Live {
+        get_shutdown_sender().send(()).unwrap();
+        panic!("Attempt to send Live order from: {:?}", mode);
+    }
     match request {
-        OrderRequest::Create { .. } => {}
-        OrderRequest::Cancel { .. } => {}
-        OrderRequest::Update { .. } => {}
-        OrderRequest::CancelAll { .. } => {}
-        OrderRequest::FlattenAllFor { .. } => {}
+        OrderRequest::Create { brokerage, order, order_type } => {
+            match order_type {
+                OrderType::Limit => {
+                    todo!()
+                }
+                OrderType::Market => {
+                    send_market_order(mode, order).await
+                }
+                OrderType::MarketIfTouched => {
+                    todo!()
+                }
+                OrderType::StopMarket => {
+                    todo!()
+                }
+                OrderType::StopLimit => {
+                    todo!()
+                }
+                OrderType::EnterLong => {
+                    todo!()
+                }
+                OrderType::EnterShort => {
+                    todo!()
+                }
+                OrderType::ExitLong => {
+                    todo!()
+                }
+                OrderType::ExitShort => {
+                    todo!()
+                }
+            }
+        }
+        OrderRequest::Cancel { .. } => {
+            todo!()
+        }
+        OrderRequest::Update { .. } => {
+            todo!()
+        }
+        OrderRequest::CancelAll { .. } => {
+            todo!()
+        }
+        OrderRequest::FlattenAllFor { .. } => {
+            todo!()
+        }
     }
 }
