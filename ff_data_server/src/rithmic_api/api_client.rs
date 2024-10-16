@@ -329,7 +329,7 @@ impl RithmicClient {
             self.latency.insert(plant.clone(), latency);
 
             let formatted_latency = format_latency(latency);
-            println!("Latency for {:?}: {}", plant, formatted_latency);
+            println!("Round Trip Latency for {:?}: {}", plant, formatted_latency);
         } else {
             println!("Unable to calculate latency: missing timestamp in ResponseHeartbeat");
         }
