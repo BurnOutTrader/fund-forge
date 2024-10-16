@@ -11,7 +11,6 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::{mpsc};
-use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -19,10 +18,7 @@ use ff_standard_lib::standardized_types::orders::OrderUpdateEvent;
 use ff_standard_lib::strategies::ledgers::{AccountId, Currency};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
-use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
-use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
-use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 
 // to launch on separate machine
 #[tokio::main]
@@ -54,14 +50,14 @@ async fn main() {
           DataSubscription::new(
                 SymbolName::from("MES"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(1),
+                Resolution::Seconds(5),
                 BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
             ),
             DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(1),
+                Resolution::Seconds(5),
                 BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
             ),

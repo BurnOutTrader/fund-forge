@@ -91,6 +91,47 @@ The initial data subscriptions for the strategy.
 strategy_event_sender: mpsc::Sender<EventTimeSlice>: The sender for strategy events.
 If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
 
+##### In Backtest mode 
+The engine and server will use consolidators to consolidate historical data from a low resolution.
+
+##### In Live or Live paper 
+The engine will use Quote data as priority feed for quote bars. \
+The engine will try to determine the most suitable resolution. \
+If you subscribed to 15 seconds Candles it will prioritise using candles, unless you have already subscribed to ticks. \
+If you choose fill forward it will always choose to subscribe to ticks and to consolidate the bars itself. \
+If the data vendor has live data for the resolution, and you have not already subscribed to a preferred resolution like ticks or lower resolution candles. \
+The engine will subscribe directly from the data vendor, the implications of this will be that you will never have access to the open bar prices. \
+If you need Open bar prices, then you should use fill forward, or first subscribe to either Ticks, Quotes or The lowest resolution candles the vendor has, this choice will depend on the vendor and data type. \
+The logic can be seen here:
+```rust
+let has_candles = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles));
+let has_ticks = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
+
+//determine the prefered resolution for teh subscription
+if has_ticks && has_candles {
+    if fill_forward {
+        SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
+    } else {
+        SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
+    }
+} else {
+    if has_candles {
+        match self.primary_subscriptions.contains_key(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
+            true => SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
+            false => SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
+        }
+    } else if has_ticks {
+        SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
+    } else {
+        SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
+    }
+}
+
+if !fill_forward && self.vendor_primary_resolutions.contains(&sub_res_type) && !self.primary_subscriptions.contains_key(&sub_res_type) && !self.primary_subscriptions.contains_key(&ideal_subscription) {
+    //if these conditions are true we will subscribe directly from the data vendor
+}
+```
+
 #### `fill_forward`: bool
 This is only regarding initial subscriptions, additional subscriptions will have to specify the option.
 If true we will create new bars based on the time when there is no new primary data available, this can result in bars where ohlc price are all == to the last bars close price.

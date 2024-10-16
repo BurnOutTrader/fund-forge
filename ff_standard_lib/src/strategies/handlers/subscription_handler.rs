@@ -571,8 +571,8 @@ impl SymbolSubscriptionHandler {
         let vendor_primary_resolutions = symbol.data_vendor.resolutions(symbol.market_type.clone()).await.unwrap();
         let vendor_data_types = symbol.data_vendor.base_data_types().await.unwrap();
         let handler = SymbolSubscriptionHandler {
-            primary_subscriptions: DashMap::with_capacity(5),
-            secondary_subscriptions: DashMap::with_capacity(5),
+            primary_subscriptions: DashMap::new(),
+            secondary_subscriptions: DashMap::new(),
             vendor_primary_resolutions,
             vendor_data_types,
         };
@@ -684,6 +684,7 @@ impl SymbolSubscriptionHandler {
         };
 
         let sub_res_type = new_subscription.subscription_resolution_type();
+
         // if the vendor doesn't supply this data we need to determine if we can atleast consolidate it from some source they do supply
         match new_subscription.base_data_type {
             BaseDataType::Ticks => {
@@ -734,7 +735,10 @@ impl SymbolSubscriptionHandler {
                             }
                         } else {
                             if has_candles {
-                                SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
+                                match self.primary_subscriptions.contains_key(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
+                                    true => SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
+                                    false => SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
+                                }
                             } else if has_ticks {
                                 SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
                             } else {
@@ -744,6 +748,11 @@ impl SymbolSubscriptionHandler {
                     }
                     _ => panic!("This cant happen")
                 };
+
+                if !fill_forward && self.vendor_primary_resolutions.contains(&sub_res_type) && !self.primary_subscriptions.contains_key(&sub_res_type) && !self.primary_subscriptions.contains_key(&ideal_subscription) {
+                    self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
+                    return load_data_closure(&new_subscription);
+                }
 
                 //if we don't have quotes we subscribe to the lowest possible resolution of the same data type
                 if !self.vendor_primary_resolutions.contains(&ideal_subscription) {

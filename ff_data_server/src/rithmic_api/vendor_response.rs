@@ -17,6 +17,45 @@ use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::products::{get_available_symbol_names, get_symbol_info};
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
+fn generate_subscription_resolutions() -> Vec<SubscriptionResolutionType> {
+    let mut resolutions = Vec::new();
+
+    // Add seconds 1-60
+    for seconds in 1..=60 {
+        resolutions.push(SubscriptionResolutionType::new(Resolution::Seconds(seconds), BaseDataType::Candles));
+    }
+
+    // Add minutes 1 to 480 (8 hours)
+    for minutes in 1..=480 {
+        resolutions.push(SubscriptionResolutionType::new(Resolution::Minutes(minutes), BaseDataType::Candles));
+    }
+
+    resolutions.push(SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes));
+    resolutions.push(SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
+    resolutions
+}
+
+fn generate_resolutions(mode: StrategyMode) -> Vec<Resolution> {
+    if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Live {
+        let mut resolutions = Vec::new();
+
+        // Add seconds 1-60
+        for seconds in 1..=60 {
+            resolutions.push(Resolution::Seconds(seconds));
+        }
+
+        // Add minutes 1 to 480 (8 hours)
+        for minutes in 1..=480 {
+            resolutions.push(Resolution::Minutes(minutes));
+        }
+
+        resolutions.push(Resolution::Instant);
+        resolutions.push(Resolution::Ticks(1));
+        return resolutions
+    }
+    vec![Resolution::Instant, Resolution::Seconds(1), Resolution::Ticks(1)]
+}
+
 #[allow(dead_code)]
 #[async_trait]
 impl VendorApiResponse for RithmicClient {
@@ -47,19 +86,11 @@ impl VendorApiResponse for RithmicClient {
 
     async fn resolutions_response(&self, mode: StrategyMode, _stream_name: StreamName, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
         let subs = match mode {
+            StrategyMode::LivePaperTrading | StrategyMode::Live => generate_subscription_resolutions(),
             StrategyMode::Backtest => {
-                vec![
-                    SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
-                    SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
-                    SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles),
-                ]
-            }
-            StrategyMode::LivePaperTrading | StrategyMode::Live => {
-                vec![
-                    SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
-                    SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
-                    SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles),
-                ]
+                vec![SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
+                     SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
+                     SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)]
             }
         };
         DataServerResponse::Resolutions {
@@ -126,10 +157,12 @@ impl VendorApiResponse for RithmicClient {
         if !symbols.contains(&subscription.symbol.name) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
-        const RESOLUTIONS: &[Resolution] = &[Resolution::Ticks(1), Resolution::Instant, Resolution::Seconds(1)];
-        if !RESOLUTIONS.contains(&subscription.resolution) {
+
+        //we can pass in live here because backtest never calls this fn
+        if !generate_resolutions(StrategyMode::Live).contains(&subscription.resolution) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
+
         const BASEDATA_TYPES: &[BaseDataType] = &[BaseDataType::Ticks, BaseDataType::Quotes, BaseDataType::Candles];
         if !BASEDATA_TYPES.contains(&subscription.base_data_type) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
@@ -181,7 +214,7 @@ impl VendorApiResponse for RithmicClient {
                 let bits = match subscription.base_data_type {
                     BaseDataType::Ticks => 1,
                     BaseDataType::Quotes => 2,
-                    _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription)) }
+                    _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", self.data_vendor, subscription)) }
                     //BaseDataType::Candles => {}
                 };
                 let req = RequestMarketDataUpdate {
@@ -200,14 +233,20 @@ impl VendorApiResponse for RithmicClient {
                 const PLANT: SysInfraType = SysInfraType::TickerPlant;
                 self.send_message(&PLANT, req).await;
             } else if subscription.base_data_type == BaseDataType::Candles {
+                let (num, res_type) = match subscription.resolution {
+                    Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
+                    Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
+                    Resolution::Hours(num) => ((num * 60) as i32, BarType::MinuteBar),
+                    _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", self.data_vendor,subscription)) }
+                };
                 let req =RequestTimeBarUpdate {
                     template_id: 200,
                     user_msg: vec![],
                     symbol: Some(subscription.symbol.name.to_string()),
                     exchange: Some(exchange),
                     request: Some(1), //1 subscribe 2 unsubscribe
-                    bar_type: Some(BarType::SecondBar.into()),
-                    bar_type_period: Some(1),
+                    bar_type: Some(res_type.into()),
+                    bar_type_period: Some(num),
                 };
                 const PLANT: SysInfraType = SysInfraType::HistoryPlant;
                 self.send_message(&PLANT, req).await;
