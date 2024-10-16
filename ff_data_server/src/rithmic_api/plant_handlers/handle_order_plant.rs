@@ -105,7 +105,7 @@ pub async fn match_order_plant_id(
                         ib_id: client.ib_id.clone(),
                         account_id: Some(id.clone()),
                     };
-                    client.send_message(&PLANT, req).await;
+                    client.send_message(&SysInfraType::PnlPlant, req).await;
                     let req = RequestPnLPositionUpdates {
                         template_id: 400 ,
                         user_msg: vec![],
@@ -114,7 +114,7 @@ pub async fn match_order_plant_id(
                         ib_id: client.ib_id.clone(),
                         account_id: Some(id.clone()),
                     };
-                    client.send_message(&PLANT, req).await;
+                    client.send_message(&SysInfraType::PnlPlant, req).await;
                     let req = RequestShowOrders {
                         template_id: 320,
                         user_msg: vec![],

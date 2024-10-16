@@ -236,30 +236,32 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
 
         // Send the candle data
         if let Err(e) = broadcaster.send(data) {
-            let bar_type = match msg.r#type {
-                Some(num) => Some(num),
-                None => None, // Exit if msg.r#type is None
-            };
-            let period = match msg.period {
-                Some(p) => match p.parse::<i32>().ok() {
+            if broadcaster.receiver_count() == 0 {
+                let bar_type = match msg.r#type {
+                    Some(num) => Some(num),
+                    None => None, // Exit if msg.r#type is None
+                };
+                let period = match msg.period {
+                    Some(p) => match p.parse::<i32>().ok() {
+                        None => None,
+                        Some(period) => Some(period)
+                    },
                     None => None,
-                    Some(period) => Some(period)
-                },
-                None => None,
-            };
-            let req =RequestTimeBarUpdate {
-                template_id: 200,
-                user_msg: vec![],
-                symbol: Some(symbol_obj.name.clone()),
-                exchange: Some(exchange.to_string()),
-                request: Some(2), //1 subscribe 2 unsubscribe
-                bar_type,
-                bar_type_period: period,
-            };
-            const PLANT: SysInfraType = SysInfraType::HistoryPlant;
-            client.send_message(&PLANT, req).await;
-            client.candle_feed_broadcasters.remove(&symbol_obj.name);
-            eprintln!("Failed to broadcast candle: {:?}", e);
+                };
+                let req = RequestTimeBarUpdate {
+                    template_id: 200,
+                    user_msg: vec![],
+                    symbol: Some(symbol_obj.name.clone()),
+                    exchange: Some(exchange.to_string()),
+                    request: Some(2), //1 subscribe 2 unsubscribe
+                    bar_type,
+                    bar_type_period: period,
+                };
+                const PLANT: SysInfraType = SysInfraType::HistoryPlant;
+                client.send_message(&PLANT, req).await;
+                client.candle_feed_broadcasters.remove(&symbol_obj.name);
+                eprintln!("Failed to broadcast candle: {:?}", e);
+            }
         }
     }
 }

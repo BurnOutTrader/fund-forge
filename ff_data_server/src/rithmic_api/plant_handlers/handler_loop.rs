@@ -1,5 +1,6 @@
 use std::io::Cursor;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 #[allow(unused_imports)]
 use std::time::Duration;
 use async_std::stream::StreamExt;
@@ -18,7 +19,6 @@ use tokio::time::sleep;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use crate::rithmic_api::api_client::RithmicClient;
-use futures::FutureExt;
 use futures::stream::{SplitSink, SplitStream};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -32,135 +32,108 @@ use crate::rithmic_api::plant_handlers::handle_tick_plant::match_ticker_plant_id
 use crate::rithmic_api::plant_handlers::reconnect::attempt_reconnect;
 use crate::subscribe_server_shutdown;
 
-/// we use extract_template_id() to get the template id using the field_number 154467 without casting to any concrete type, then we map to the concrete type and handle that message.
-pub async fn handle_rithmic_responses(
+pub fn handle_rithmic_responses(
     client: Arc<RithmicClient>,
-    reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
-    plant: SysInfraType
+    mut reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+    plant: SysInfraType,
 ) {
-        tokio::task::spawn(async move {
-            let mut reader = reader;
-            let mut shutdown_receiver = subscribe_server_shutdown();
-            'main_loop: loop {
-                tokio::select! {
-                 _ = shutdown_receiver.recv() => {
-                    if let Some((_, writer)) = client.writers.remove(&plant) {
-                         match shutdown_plant(writer).await {
-                            Ok(_) => {},
-                            Err(_) => {}
-                        }
-                    }
-                    break 'main_loop;
-                },
-                message = reader.next().fuse() => {
+    let running = Arc::new(AtomicBool::new(true));
+    let running_clone = running.clone();
+
+    // Task 1: Handle shutdown signal
+    tokio::spawn(async move {
+        let mut shutdown_receiver = subscribe_server_shutdown();
+        let _ = shutdown_receiver.recv().await;
+        running_clone.store(false, Ordering::SeqCst);
+    });
+
+    // Task 2: Handle Rithmic responses
+    tokio::spawn(async move {
+        while running.load(Ordering::SeqCst) {
+            match reader.next().await {
+                Some(Ok(message)) => {
                     match message {
-                        Some(Ok(message)) => {
-                            match message {
-                                // Tungstenite messages, if you use ProstMessage here you will get a trait related compile time error
-                                Message::Binary(bytes) => {
-                                    let client = client.clone();
-                                    // spawn a new task so that we can handle next message faster.
-                                    //messages will be forwarded here
-                                    let mut cursor = Cursor::new(bytes);
-                                    // Read the 4-byte length header
-                                    let mut length_buf = [0u8; 4];
-                                    let _ = tokio::io::AsyncReadExt::read_exact(&mut cursor, &mut length_buf).await.map_err(RithmicApiError::Io);
-                                    let length = u32::from_be_bytes(length_buf) as usize;
-                                    //println!("Length: {}", length);
-
-                                    // Read the Protobuf message
-                                    let mut message_buf = vec![0u8; length];
-
-                                    match tokio::io::AsyncReadExt::read_exact(&mut cursor, &mut message_buf).await.map_err(RithmicApiError::Io) {
-                                        Ok(_) => {}
-                                        Err(e) => eprintln!("Failed to read_extract message: {}", e)
-                                    }
-                                    tokio::task::spawn(async move {
-                                        if let Some(template_id) = extract_template_id(&message_buf) {
-                                            //println!("Extracted template_id: {}", template_id);
-                                            match plant {
-                                                SysInfraType::TickerPlant =>  match_ticker_plant_id(template_id, message_buf, client.clone()).await,
-                                                SysInfraType::OrderPlant =>  match_order_plant_id(template_id, message_buf, client.clone()).await,
-                                                SysInfraType::HistoryPlant =>  match_history_plant_id(template_id, message_buf, client.clone()).await,
-                                                SysInfraType::PnlPlant =>  match_pnl_plant_id(template_id, message_buf, client.clone()).await,
-                                                SysInfraType::RepositoryPlant =>  match_repo_plant_id(template_id, message_buf, client.clone()).await,
-                                            }
-                                        }
-                                    });
-                                }
-                                Message::Text(text) => {
-                                    println!("{}", text)
-                                }
-                                Message::Ping(ping) => {
-                                    println!("{:?}", ping)
-                                }
-                                Message::Pong(pong) => {
-                                    println!("{:?}", pong)
-                                }
-                                Message::Close(close_frame) => {
-                                    if let Some(frame) = close_frame {
-                                        println!("Received close frame: code = {:?}, reason = {}", frame.code, frame.reason);
-                                        if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
-                                            reader = new_reader;
-                                            continue; // Skip to the next iteration of the main loop
-                                        } else {
-                                            println!("Failed to reconnect after normal closure. Exiting.");
-                                            break;
-                                        }
-                                    } else {
-                                        println!("Received close message without a frame.");
-                                    }
-                                    // Attempt reconnection for any close message
-                                    if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
-                                        reader = new_reader;
-                                    } else {
-                                        println!("Failed to reconnect after close message. Exiting.");
-                                        break;
-                                    }
-                                }
-                                Message::Frame(frame) => {
-                                          /* Example of received market closed message
-                                        Some(CloseFrame { code: Normal, reason: "normal closure" })
-                                        Error: ServerErrorDebug("Failed to send RithmicMessage, possible disconnect, try reconnecting to plant TickerPlant: Trying to work with closed connection")
-                                    */
-                                        let frame_str = format!("{:?}", frame);
-                                    if frame_str.contains("CloseFrame") {
-                                        println!("Received close frame with normal closure. Attempting reconnection.");
-                                        if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
-                                            reader = new_reader;
-                                            continue;
-                                        } else {
-                                            println!("Failed to reconnect. Exiting.");
-                                            break;
-                                        }
-                                    } else {
-                                        println!("Received frame: {:?}", frame);
-                                        // Process other types of frames here
-                                    }
-                                }
+                        Message::Binary(bytes) => {
+                            let client = client.clone();
+                            let mut cursor = Cursor::new(bytes);
+                            let mut length_buf = [0u8; 4];
+                            if let Err(e) = tokio::io::AsyncReadExt::read_exact(&mut cursor, &mut length_buf).await {
+                                eprintln!("Failed to read length: {}", e);
+                                continue;
                             }
+                            let length = u32::from_be_bytes(length_buf) as usize;
+
+                            let mut message_buf = vec![0u8; length];
+                            if let Err(e) = tokio::io::AsyncReadExt::read_exact(&mut cursor, &mut message_buf).await {
+                                eprintln!("Failed to read message: {}", e);
+                                continue;
+                            }
+
+                            tokio::spawn(async move {
+                                if let Some(template_id) = extract_template_id(&message_buf) {
+                                    match plant {
+                                        SysInfraType::TickerPlant => match_ticker_plant_id(template_id, message_buf, client.clone()).await,
+                                        SysInfraType::OrderPlant => match_order_plant_id(template_id, message_buf, client.clone()).await,
+                                        SysInfraType::HistoryPlant => match_history_plant_id(template_id, message_buf, client.clone()).await,
+                                        SysInfraType::PnlPlant => match_pnl_plant_id(template_id, message_buf, client.clone()).await,
+                                        SysInfraType::RepositoryPlant => match_repo_plant_id(template_id, message_buf, client.clone()).await,
+                                    }
+                                }
+                            });
                         }
-                        Some(Err(e)) => {
-                            eprintln!("WebSocket error: {:?}", e);
+                        Message::Text(text) => println!("{}", text),
+                        Message::Ping(ping) => println!("{:?}", ping),
+                        Message::Pong(pong) => println!("{:?}", pong),
+                        Message::Close(close_frame) => {
+                            println!("Received close message: {:?}", close_frame);
                             if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
                                 reader = new_reader;
                             } else {
+                                println!("Failed to reconnect after close message. Exiting.");
                                 break;
                             }
                         }
-                        None => {
-                            println!("WebSocket stream ended");
-                            if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
-                                reader = new_reader;
+                        Message::Frame(frame) => {
+                            let frame_str = format!("{:?}", frame);
+                            if frame_str.contains("CloseFrame") {
+                                println!("Received close frame. Attempting reconnection.");
+                                if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
+                                    reader = new_reader;
+                                } else {
+                                    println!("Failed to reconnect. Exiting.");
+                                    break;
+                                }
                             } else {
-                                break;
+                                println!("Received frame: {:?}", frame);
                             }
                         }
                     }
                 }
+                Some(Err(e)) => {
+                    eprintln!("WebSocket error: {:?}", e);
+                    if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
+                        reader = new_reader;
+                    } else {
+                        break;
+                    }
+                }
+                None => {
+                    println!("WebSocket stream ended");
+                    if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
+                        reader = new_reader;
+                    } else {
+                        break;
+                    }
+                }
             }
         }
-        eprintln!("Rithmic Plant Shutdown Permanently: {:?}", plant);
+
+        println!("Shutting down Rithmic response handler for plant: {:?}", plant);
+        if let Some((_, writer)) = client.writers.remove(&plant) {
+            if let Err(e) = shutdown_plant(writer).await {
+                eprintln!("Error shutting down plant: {:?}", e);
+            }
+        }
     });
 }
 

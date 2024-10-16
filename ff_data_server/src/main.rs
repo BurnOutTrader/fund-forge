@@ -102,7 +102,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                             match client.connect_plant(SysInfraType::TickerPlant).await {
                                 Ok(receiver) => {
                                     RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant).await;
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant);
                                 }
                                 Err(e) => {
                                     eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
@@ -111,7 +111,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                             match client.connect_plant(SysInfraType::HistoryPlant).await {
                                 Ok(receiver) => {
                                     RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant).await;
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant);
                                 }
                                 Err(e) => {
                                     eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
@@ -120,7 +120,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                             match client.connect_plant(SysInfraType::OrderPlant).await {
                                 Ok(receiver) => {
                                     RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant).await;
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant);
                                 }
                                 Err(e) => {
                                     eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
@@ -129,7 +129,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                             match client.connect_plant(SysInfraType::PnlPlant).await {
                                 Ok(receiver) => {
                                     RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant).await;
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant);
                                 }
                                 Err(e) => {
                                     eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);

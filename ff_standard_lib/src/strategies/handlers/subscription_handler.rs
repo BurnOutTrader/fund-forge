@@ -622,7 +622,7 @@ impl SymbolSubscriptionHandler {
         }
     }
 
-    //todo, split this into 5 functions, 1 per base data type tp be more easily read and maintained
+    //todo, add a fn to DataVendor Server Side, to return the correct primary resolution for a subscription, this way we can handle on a vendor by vendor basis.
     /// Currently This function works in 1 of 2 ways,
     /// 1. Backtesting, it will try to subscribe directly to any historical data directly available from the data server, the downside to this would be that you will not have open bars for that subscription as they will always be closed.
     /// The advantage is backetest speed. we should todo, we should also check here that we don't have a subscription of a lower resolution we can use, its pointless to use serialized bars in this case, might as well consolidate
