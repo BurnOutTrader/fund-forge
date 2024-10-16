@@ -31,6 +31,7 @@ use ff_standard_lib::StreamName;
 use prost::Message as ProstMessage;
 use tokio::net::TcpStream;
 use tokio::{select, task};
+use tokio::task::JoinHandle;
 use tokio::time::interval;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
@@ -61,6 +62,7 @@ pub struct RithmicClient {
     pub callbacks: DashMap<StreamName, AHashMap<u64, oneshot::Sender<DataServerResponse>>>,
     pub writers: DashMap<SysInfraType, Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
     pub heartbeat_times: Arc<DashMap<SysInfraType, DateTime<Utc>>>,
+    pub heartbeat_tasks: Arc<DashMap<SysInfraType, JoinHandle<()>>>,
     pub latency: Arc<DashMap<SysInfraType, i64>>,
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
@@ -74,9 +76,9 @@ pub struct RithmicClient {
     pub products: DashMap<MarketType, Vec<Symbol>>,
 
     //subscribers
-    pub tick_feed_broadcasters: DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>,
-    pub quote_feed_broadcasters: DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>,
-    pub candle_feed_broadcasters: DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>,
+    pub tick_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
+    pub quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
+    pub candle_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
 
     pub bid_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
@@ -110,16 +112,17 @@ impl RithmicClient {
             callbacks: Default::default(),
             writers: DashMap::with_capacity(5),
             heartbeat_times: Arc::new(DashMap::with_capacity(5)),
+            heartbeat_tasks: Arc::new(DashMap::with_capacity(5)),
             latency: Arc::new(DashMap::with_capacity(5)),
             client: Arc::new(client),
             symbol_info: Default::default(),
-            tick_feed_broadcasters: Default::default(),
-            quote_feed_broadcasters: Default::default(),
+            tick_feed_broadcasters: Arc::new(Default::default()),
+            quote_feed_broadcasters: Arc::new(Default::default()),
             bid_book: Default::default(),
             accounts: Default::default(),
             orders_open: Default::default(),
             products: Default::default(),
-            candle_feed_broadcasters: Default::default(),
+            candle_feed_broadcasters: Arc::new(Default::default()),
             ask_book: Default::default(),
         };
         Ok(client)
@@ -147,7 +150,7 @@ impl RithmicClient {
         toml_files
     }
 
-    pub async fn connect_plant(&self, system: SysInfraType) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, FundForgeError >{
+    pub async fn connect_plant(&self, system: SysInfraType) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, FundForgeError> {
         match self.client.connect_and_login(system.clone()).await {
             Ok(r) => {
                 let (writer, receiver) = r.split();
@@ -244,7 +247,6 @@ impl RithmicClient {
         RITHMIC_CLIENTS.remove(&self.system);
     }
 
-
     async fn start_heart_beat(
         &self,
         plant: SysInfraType,
@@ -257,55 +259,65 @@ impl RithmicClient {
         };
 
         let mut interval = interval(heart_beat_interval);
-        task::spawn(async move {
+        let quote_broadcasters = self.quote_feed_broadcasters.clone();
+        let tick_feed_broadcasters = self.tick_feed_broadcasters.clone();
+        let candle_broadcasters = self.candle_feed_broadcasters.clone();
+        let task = task::spawn(async move {
             let mut shutdown_receiver = subscribe_server_shutdown();
             'heartbeat_loop: loop {
                 select! {
-                    _ = interval.tick() => {
-                        let now = Utc::now();
-                        let should_send_heartbeat = if let Some(last_time) = heartbeat_times.get(&plant) {
-                            now.signed_duration_since(*last_time) >= chrono::Duration::from_std(heart_beat_interval).unwrap()
-                        } else {
-                            true // If no last heartbeat time, we should send one
+                _ = interval.tick() => {
+                    let now = Utc::now();
+                    let skip_heartbeat = match plant {
+                        SysInfraType::TickerPlant => {
+                            !quote_broadcasters.is_empty() || !tick_feed_broadcasters.is_empty()
+                        }
+                        SysInfraType::HistoryPlant => {
+                            !candle_broadcasters.is_empty()
+                        }
+                        _ => false
+                    };
+
+                    if !skip_heartbeat {
+                        let request = RequestHeartbeat {
+                            template_id: 18,
+                            user_msg: vec![],
+                            ssboe: Some(now.timestamp() as i32),
+                            usecs: Some(now.timestamp_subsec_micros() as i32),
                         };
+                        let mut buf = Vec::new();
+                        if let Err(e) = request.encode(&mut buf) {
+                            eprintln!("Failed to encode message for {:?}: {}", plant, e);
+                            continue 'heartbeat_loop;
+                        }
 
-                        if should_send_heartbeat {
-                            let request = RequestHeartbeat {
-                                template_id: 18,
-                                user_msg: vec![],
-                                ssboe: Some(now.timestamp() as i32),
-                                usecs: Some(now.timestamp_subsec_micros() as i32),
-                            };
-                            let mut buf = Vec::new();
-                            if let Err(e) = request.encode(&mut buf) {
-                                eprintln!("Failed to encode message for {:?}: {}", plant, e);
-                                continue 'heartbeat_loop;
-                            }
+                        let length = buf.len() as u32;
+                        let mut prefixed_msg = length.to_be_bytes().to_vec();
+                        prefixed_msg.extend(buf);
 
-                            let length = buf.len() as u32;
-                            let mut prefixed_msg = length.to_be_bytes().to_vec();
-                            prefixed_msg.extend(buf);
-
-                            let mut write_stream = write_stream.lock().await;
-                            match write_stream.send(Message::Binary(prefixed_msg)).await {
-                                Ok(_) => {
-                                    heartbeat_times.insert(plant.clone(), now);
-                                },
-                                Err(e) => {
-                                    eprintln!("Failed to send heartbeat to {:?}: {}", plant, e);
-                                    break 'heartbeat_loop;
-                                }
+                        let mut write_stream = write_stream.lock().await;
+                        match write_stream.send(Message::Binary(prefixed_msg)).await {
+                            Ok(_) => {
+                                heartbeat_times.insert(plant.clone(), now);
+                                eprintln!("Heartbeat sent for {:?} at {:?}", plant, now);
+                            },
+                            Err(e) => {
+                                eprintln!("Failed to send heartbeat to {:?}: {}", plant, e);
+                                break 'heartbeat_loop;
                             }
                         }
-                    }
-                    _ = shutdown_receiver.recv() => {
-                        println!("Shutting down heartbeat task for system {:?}", plant);
-                        break 'heartbeat_loop;
+                    } else {
+                        eprintln!("Skipping heartbeat for {:?} due to active broadcasters at {:?}", plant, now);
                     }
                 }
+                _ = shutdown_receiver.recv() => {
+                    println!("Shutting down heartbeat task for system {:?}", plant);
+                    break 'heartbeat_loop;
+                }
+            }
             }
         });
+        self.heartbeat_tasks.insert(plant, task);
     }
 }
-
 
