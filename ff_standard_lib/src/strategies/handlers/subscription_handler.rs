@@ -822,7 +822,6 @@ impl SymbolSubscriptionHandler {
                     add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
                     Ok(returned_windows)
                 } else {
-                    println!("Subscribing directly");
                     let mut returned_windows = AHashMap::new();
                     let new_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), ideal_subscription.resolution, ideal_subscription.base_data_type, new_subscription.market_type.clone());
                     if !self.primary_subscriptions.contains_key(&ideal_subscription) {
