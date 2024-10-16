@@ -85,88 +85,86 @@ struct ServerLaunchOptions {
 #[allow(dead_code)]
 async fn init_rithmic_apis(options: ServerLaunchOptions) {
     let options = options;
-    tokio::task::spawn(async move {
-        if options.disable_rithmic_server {
-            return
-        }
-        let toml_files = RithmicClient::get_rithmic_tomls();
-        if toml_files.is_empty() {
-            return;
-        }
-        let init_tasks = toml_files.into_iter().filter_map(|file| {
-            RithmicSystem::from_file_string(file.as_str()).map(|system| {
-                task::spawn(async move {
-                    match RithmicClient::new(system).await {
-                        Ok(client) => {
-                            let client = Arc::new(client);
-                            match client.connect_plant(SysInfraType::TickerPlant).await {
-                                Ok(receiver) => {
-                                    RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant);
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                                }
+    if options.disable_rithmic_server {
+        return
+    }
+    let toml_files = RithmicClient::get_rithmic_tomls();
+    if toml_files.is_empty() {
+        return;
+    }
+    let init_tasks = toml_files.into_iter().filter_map(|file| {
+        RithmicSystem::from_file_string(file.as_str()).map(|system| {
+            task::spawn(async move {
+                match RithmicClient::new(system).await {
+                    Ok(client) => {
+                        let client = Arc::new(client);
+                        match client.connect_plant(SysInfraType::TickerPlant).await {
+                            Ok(receiver) => {
+                                RITHMIC_CLIENTS.insert(system, client.clone());
+                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant);
                             }
-                            match client.connect_plant(SysInfraType::HistoryPlant).await {
-                                Ok(receiver) => {
-                                    RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant);
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                                }
+                            Err(e) => {
+                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
                             }
-                       /*     match client.connect_plant(SysInfraType::OrderPlant).await {
-                                Ok(receiver) => {
-                                    RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant);
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                                }
-                            }
-                            match client.connect_plant(SysInfraType::PnlPlant).await {
-                                Ok(receiver) => {
-                                    RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant);
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                                }
-                            }*/
-                          /*  match client.connect_plant(SysInfraType::OrderPlant).await {
-                                Ok(receiver) => {
-                                    handle_responses_from_order_plant(client.clone(), receiver).await;
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                                }
-                            }*/
                         }
-                        Err(e) => {
-                            eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
+                        match client.connect_plant(SysInfraType::HistoryPlant).await {
+                            Ok(receiver) => {
+                                RITHMIC_CLIENTS.insert(system, client.clone());
+                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant);
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                            }
                         }
+                   /*     match client.connect_plant(SysInfraType::OrderPlant).await {
+                            Ok(receiver) => {
+                                RITHMIC_CLIENTS.insert(system, client.clone());
+                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant);
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                            }
+                        }
+                        match client.connect_plant(SysInfraType::PnlPlant).await {
+                            Ok(receiver) => {
+                                RITHMIC_CLIENTS.insert(system, client.clone());
+                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant);
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                            }
+                        }*/
+                      /*  match client.connect_plant(SysInfraType::OrderPlant).await {
+                            Ok(receiver) => {
+                                handle_responses_from_order_plant(client.clone(), receiver).await;
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                            }
+                        }*/
                     }
-                })
+                    Err(e) => {
+                        eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
+                    }
+                }
             })
-        }).collect::<Vec<_>>();
+        })
+    }).collect::<Vec<_>>();
 
-        // Wait for all initialization tasks to complete
-        join_all(init_tasks).await;
+    // Wait for all initialization tasks to complete
+    join_all(init_tasks).await;
 
-        for api in RITHMIC_CLIENTS.iter() {
-            let api = api.value().clone();
-            let rms_req = RequestAccountRmsInfo {
-                template_id: 304,
-                user_msg: vec![],
-                fcm_id: api.credentials.fcm_id.clone(),
-                ib_id: api.credentials.ib_id.clone(),
-                user_type: api.credentials.user_type.clone(),
-            };
-            api.send_message(&SysInfraType::OrderPlant, rms_req).await;
-        }
-    });
+    for api in RITHMIC_CLIENTS.iter() {
+        let api = api.value().clone();
+        let rms_req = RequestAccountRmsInfo {
+            template_id: 304,
+            user_msg: vec![],
+            fcm_id: api.credentials.fcm_id.clone(),
+            ib_id: api.credentials.ib_id.clone(),
+            user_type: api.credentials.user_type.clone(),
+        };
+        api.send_message(&SysInfraType::OrderPlant, rms_req).await;
+    }
 }
 
 async fn logout_apis() {
