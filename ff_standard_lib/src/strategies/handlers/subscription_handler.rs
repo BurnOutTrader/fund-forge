@@ -749,7 +749,7 @@ impl SymbolSubscriptionHandler {
                     _ => panic!("This cant happen")
                 };
 
-                if !fill_forward && self.vendor_primary_resolutions.contains(&sub_res_type) && !self.primary_subscriptions.contains_key(&sub_res_type) && !self.primary_subscriptions.contains_key(&ideal_subscription) {
+                if self.vendor_primary_resolutions.contains(&sub_res_type) && !self.primary_subscriptions.contains_key(&ideal_subscription) {
                     self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
                     return load_data_closure(&new_subscription);
                 }

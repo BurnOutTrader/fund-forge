@@ -104,10 +104,10 @@ The engine will subscribe directly from the data vendor, the implications of thi
 If you need Open bar prices, then you should use fill forward, or first subscribe to either Ticks, Quotes or The lowest resolution candles the vendor has, this choice will depend on the vendor and data type. \
 The logic can be seen here:
 ```rust
+//This is the logic the engine uses to determine the best resolution for candles, and if we need to consolidate or subscribe directly from the DataVendor
 let has_candles = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles));
 let has_ticks = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
-
-//determine the prefered resolution for teh subscription
+//determine the prefered resolution for the subscription
 if has_ticks && has_candles {
     if fill_forward {
         SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
@@ -127,7 +127,7 @@ if has_ticks && has_candles {
     }
 }
 
-if !fill_forward && self.vendor_primary_resolutions.contains(&sub_res_type) && !self.primary_subscriptions.contains_key(&sub_res_type) && !self.primary_subscriptions.contains_key(&ideal_subscription) {
+if self.vendor_primary_resolutions.contains(&sub_res_type) && !self.primary_subscriptions.contains_key(&ideal_subscription) {
     //if these conditions are true we will subscribe directly from the data vendor
 }
 ```
