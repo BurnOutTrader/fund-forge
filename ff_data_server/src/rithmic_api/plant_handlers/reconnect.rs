@@ -49,14 +49,14 @@ pub(crate) async fn attempt_reconnect(
     }
 }
 
-fn is_weekend_or_off_hours(nyc_time: &DateTime<chrono_tz::Tz>, auckland_time: &DateTime<chrono_tz::Tz>) -> bool {
-    let nyc_friday_5pm = nyc_time.weekday() == Weekday::Fri && nyc_time.hour() >= 17;
+fn is_weekend_or_off_hours(chicago_time: &DateTime<chrono_tz::Tz>, auckland_time: &DateTime<chrono_tz::Tz>) -> bool {
+    let nyc_friday_5pm = chicago_time.weekday() == Weekday::Fri && chicago_time.hour() >= 17;
     let auckland_monday_before_955am = auckland_time.weekday() == Weekday::Mon &&
         (auckland_time.hour() < 9 ||
             (auckland_time.hour() == 9 && auckland_time.minute() < 55));
 
     nyc_friday_5pm || auckland_monday_before_955am ||
-        (nyc_time.weekday() == Weekday::Sat || nyc_time.weekday() == Weekday::Sun)
+        (chicago_time.weekday() == Weekday::Sat || chicago_time.weekday() == Weekday::Sun)
 }
 
 fn next_auckland_market_open(auckland_time: &DateTime<chrono_tz::Tz>) -> DateTime<Utc> {
