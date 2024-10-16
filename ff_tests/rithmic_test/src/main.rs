@@ -66,7 +66,7 @@ async fn main() {
                 MarketType::Futures(FuturesExchange::CME)
             ),
         ],
-        true,
+        false,
         100,
         strategy_event_sender,
         core::time::Duration::from_millis(500),
