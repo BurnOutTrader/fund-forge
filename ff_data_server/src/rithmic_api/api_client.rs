@@ -320,11 +320,8 @@ impl RithmicClient {
         self.heartbeat_tasks.insert(plant, task);
     }
 
-
-    // In your handle_response_heartbeat function:
     pub fn handle_response_heartbeat(&self, plant: SysInfraType, response: ResponseHeartbeat) {
         let now = Utc::now();
-
         if let (Some(ssboe), Some(usecs)) = (response.ssboe, response.usecs) {
             let response_time = Utc.timestamp_opt(ssboe as i64, usecs as u32 * 1000).unwrap();
             let latency = (now - response_time).num_microseconds().unwrap_or(i64::MAX);
