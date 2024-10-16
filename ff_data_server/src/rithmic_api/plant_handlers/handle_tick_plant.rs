@@ -33,7 +33,6 @@ use ff_standard_lib::standardized_types::subscriptions::Symbol;
 use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
 use crate::rithmic_api::api_client::RithmicClient;
 use futures::FutureExt;
-use tungstenite::protocol::CloseFrame;
 use crate::rithmic_api::plant_handlers::reconnect::attempt_reconnect;
 use crate::subscribe_server_shutdown;
 
@@ -349,19 +348,9 @@ pub async fn handle_responses_from_ticker_plant(
                                 Message::Pong(pong) => {
                                     println!("{:?}", pong)
                                 }
-                                Message::Close(close) => {
-                                    // receive this message when market is closed.
-                                    // received: Ok(Close(Some(CloseFrame { code: Normal, reason: "normal closure" })))
-                                    println!("{:?}", close)
-                                }
-                                Message::Frame(frame) => {
-                                    //This message is sent on weekends, you can use this message to schedule a reconnection attempt for market open.
-                                    /* Example of received market closed message
-                                        Some(CloseFrame { code: Normal, reason: "normal closure" })
-                                        Error: ServerErrorDebug("Failed to send RithmicMessage, possible disconnect, try reconnecting to plant TickerPlant: Trying to work with closed connection")
-                                    */
-                                  /*  if let Some(CloseFrame { code, reason }) = frame.into_data() {
-                                        println!("Received close frame: code = {:?}, reason = {}", code, reason);
+                                Message::Close(close_frame) => {
+                                    if let Some(frame) = close_frame {
+                                        println!("Received close frame: code = {:?}, reason = {}", frame.code, frame.reason);
                                         if let Some(new_reader) = attempt_reconnect(&client, PLANT).await {
                                             reader = new_reader;
                                             continue; // Skip to the next iteration of the main loop
@@ -369,8 +358,36 @@ pub async fn handle_responses_from_ticker_plant(
                                             println!("Failed to reconnect after normal closure. Exiting.");
                                             break;
                                         }
+                                    } else {
+                                        println!("Received close message without a frame.");
                                     }
-                                    println!("Received frame: {:?}", frame);*/
+                                    // Attempt reconnection for any close message
+                                    if let Some(new_reader) = attempt_reconnect(&client, PLANT).await {
+                                        reader = new_reader;
+                                    } else {
+                                        println!("Failed to reconnect after close message. Exiting.");
+                                        break;
+                                    }
+                                }
+                                Message::Frame(frame) => {
+                                          /* Example of received market closed message
+                                        Some(CloseFrame { code: Normal, reason: "normal closure" })
+                                        Error: ServerErrorDebug("Failed to send RithmicMessage, possible disconnect, try reconnecting to plant TickerPlant: Trying to work with closed connection")
+                                    */
+                                        let frame_str = format!("{:?}", frame);
+                                    if frame_str.contains("CloseFrame") {
+                                        println!("Received close frame with normal closure. Attempting reconnection.");
+                                        if let Some(new_reader) = attempt_reconnect(&client, PLANT).await {
+                                            reader = new_reader;
+                                            continue;
+                                        } else {
+                                            println!("Failed to reconnect. Exiting.");
+                                            break;
+                                        }
+                                    } else {
+                                        println!("Received frame: {:?}", frame);
+                                        // Process other types of frames here
+                                    }
                                 }
                             }
                         }
