@@ -157,7 +157,7 @@ impl RithmicClient {
                 let writer = Arc::new(Mutex::new(writer));
                 self.writers.insert(system.clone(), writer.clone());
                 self.heartbeat_times.insert(system.clone(), Utc::now());
-                let _ = self.start_heart_beat(system, writer, self.heartbeat_times.clone());
+                self.start_heart_beat(system, writer, self.heartbeat_times.clone()).await;
                 Ok(receiver)
             },
             Err(e) => {
@@ -255,7 +255,7 @@ impl RithmicClient {
     ) {
         let heart_beat_interval = match self.client.heartbeat_interval_seconds.get(&plant) {
             Some(interval) => Duration::from_secs(interval.value().clone()),
-            None => Duration::from_secs(60)
+            None => Duration::from_secs(59)
         };
 
         let mut interval = interval(heart_beat_interval);
@@ -299,7 +299,7 @@ impl RithmicClient {
                         match write_stream.send(Message::Binary(prefixed_msg)).await {
                             Ok(_) => {
                                 heartbeat_times.insert(plant.clone(), now);
-                                eprintln!("Heartbeat sent for {:?} at {:?}", plant, now);
+                                //eprintln!("Heartbeat sent for {:?} at {:?}", plant, now);
                             },
                             Err(e) => {
                                 eprintln!("Failed to send heartbeat to {:?}: {}", plant, e);
@@ -307,7 +307,7 @@ impl RithmicClient {
                             }
                         }
                     } else {
-                        eprintln!("Skipping heartbeat for {:?} due to active broadcasters at {:?}", plant, now);
+                        //eprintln!("Skipping heartbeat for {:?} due to active broadcasters at {:?}", plant, now);
                     }
                 }
                 _ = shutdown_receiver.recv() => {
