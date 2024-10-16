@@ -78,7 +78,6 @@ pub async fn handle_rithmic_responses(
                                     tokio::task::spawn(async move {
                                         if let Some(template_id) = extract_template_id(&message_buf) {
                                             //println!("Extracted template_id: {}", template_id);
-                                            // Now you can use the template_id to determine which type to decode into the concrete types
                                             match plant {
                                                 SysInfraType::TickerPlant =>  match_ticker_plant_id(template_id, message_buf, client.clone()).await,
                                                 SysInfraType::OrderPlant =>  match_order_plant_id(template_id, message_buf, client.clone()).await,
