@@ -100,8 +100,7 @@ The engine will use Quote data as priority feed for quote bars. \
 The engine will try to determine the most suitable resolution. \
 If you subscribed to 15 seconds Candles it will prioritise using candles, unless you have already subscribed to ticks. \
 If you choose fill forward it will always choose to subscribe to ticks and to consolidate the bars itself. \
-If the data vendor has live data for the resolution, and you have not already subscribed to a preferred resolution like ticks or lower resolution candles. \
-The engine will subscribe directly from the data vendor, the implications of this will be that you will never have access to the open bar prices. \
+If the data vendor has live data for the resolution, and you have not already subscribed to a preferred resolution like ticks or lower resolution candles, then the engine will subscribe directly from the data vendor, the implications of this will be that you will never have access to the open bar prices. \
 If you need Open bar prices, then you should use fill forward, or first subscribe to either Ticks, Quotes or The lowest resolution candles the vendor has, this choice will depend on the vendor and data type. \
 The logic can be seen here:
 ```rust
