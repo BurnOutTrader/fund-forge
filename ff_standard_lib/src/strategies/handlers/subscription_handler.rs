@@ -98,6 +98,7 @@ impl SubscriptionHandler {
             let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
             return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), msg));
         }
+
         let _ = strategy_subscriptions.deref();
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
             //subscribe to fundamental
@@ -821,48 +822,8 @@ impl SymbolSubscriptionHandler {
                     add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
                     Ok(returned_windows)
                 } else {
-                    let mut returned_windows = AHashMap::new();
-                    //if we have quotes we subscribe to quotes
-                    let new_primary = DataSubscription::new(new_subscription.symbol.name.clone(), new_subscription.symbol.data_vendor.clone(), ideal_subscription.resolution, ideal_subscription.base_data_type, new_subscription.market_type.clone());
-                    if !self.primary_subscriptions.contains_key(&ideal_subscription) {
-                        self.primary_subscriptions.insert(new_primary.subscription_resolution_type(), new_primary.clone());
-                        if is_warmed_up {
-                            let from_time = match new_primary.resolution == Resolution::Instant {
-                                true => {
-                                    let subtract_duration: Duration = Duration::seconds(2) * history_to_retain as i32;
-                                    warm_up_to_time - subtract_duration - Duration::days(5)
-                                }
-                                false => {
-                                    let subtract_duration: Duration = new_primary.resolution.as_duration() * history_to_retain as i32;
-                                    warm_up_to_time - subtract_duration - Duration::days(5)
-                                }
-                            };
-                            let data = block_on(get_historical_data(vec![new_primary.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
-                            let mut history = RollingWindow::new(history_to_retain);
-                            for (_, slice) in data {
-                                for data in slice.iter() {
-                                    history.add(data.clone());
-                                }
-                            }
-                            returned_windows.insert(new_primary.clone(), history);
-                        } else {
-                            returned_windows.insert(new_primary.clone(), RollingWindow::new(history_to_retain));
-                        }
-                    }
-                    let consolidator = ConsolidatorEnum::create_consolidator(new_subscription.clone(), fill_forward.clone()).await;
-                    let (final_consolidator, window) = match is_warmed_up {
-                        true => {
-                            let (final_consolidator, window) = ConsolidatorEnum::warmup(consolidator, warm_up_to_time, history_to_retain as i32, strategy_mode).await;
-                            (final_consolidator, window)
-                        },
-                        false => (consolidator, RollingWindow::new(history_to_retain))
-                    };
-                    self.secondary_subscriptions
-                        .entry(new_primary.subscription_resolution_type())
-                        .or_insert_with(AHashMap::new)
-                        .insert(new_subscription.clone(), final_consolidator);
-                    returned_windows.insert(new_subscription.clone(), window);
-                    Ok(returned_windows)
+                    self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
+                    load_data_closure(&new_subscription)
                 }
             }
             _ => panic!("This shouldnt be possible")

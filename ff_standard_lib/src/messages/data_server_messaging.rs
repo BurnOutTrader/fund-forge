@@ -23,6 +23,7 @@ pub type ApiKey = String;
 #[archive_attr(derive(Debug))]
 pub enum StreamResponse {
     SubscribeBaseData(DataSubscription),
+    CreateConsolidator{primary: DataSubscription, secondary: DataSubscription},
     UnSubscribeBaseData(DataSubscription),
 }
 
