@@ -723,7 +723,9 @@ impl SymbolSubscriptionHandler {
                         if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) && !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::Candles) {
                             return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
                         }
-                        if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
+                        if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)) {
+                            SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
+                        } else if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) {
                             SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
                         } else {
                             SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)

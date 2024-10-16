@@ -27,6 +27,7 @@ impl CountConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
     ) -> Result<Self, FundForgeError> {
+        println!("Creating Consolidator For: {}", subscription);
         let number = match subscription.resolution {
             Resolution::Ticks(num) => num,
             _ => {

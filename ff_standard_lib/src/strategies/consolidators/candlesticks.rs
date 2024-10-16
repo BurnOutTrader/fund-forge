@@ -327,6 +327,7 @@ impl CandleStickConsolidator {
         subscription: DataSubscription,
         fill_forward: bool,
     ) -> Result<Self, FundForgeError> {
+        println!("Creating Consolidator For: {}", subscription);
         if subscription.base_data_type == BaseDataType::Fundamentals {
             return Err(FundForgeError::ClientSideErrorDebug(format!(
                     "{} is an Invalid base data type for TimeConsolidator",

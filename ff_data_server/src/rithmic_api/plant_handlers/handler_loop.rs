@@ -160,7 +160,7 @@ pub async fn handle_rithmic_responses(
                 }
             }
         }
-            eprintln!("Tick Plant dropped");
+        eprintln!("Rithmic Plant Shutdown Permanently: {:?}", plant);
     });
 }
 

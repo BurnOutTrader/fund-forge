@@ -197,6 +197,7 @@ impl HeikinAshiConsolidator {
             ));
         }
 
+        println!("Creating Consolidator For: {}", subscription);
         if let Some(candle_type) = &subscription.candle_type {
             if candle_type != &CandleType::HeikinAshi {
                 return Err(FundForgeError::ClientSideErrorDebug(format!(

@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestProductCodes};
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestProductCodes, RequestTimeBarUpdate};
+use ff_rithmic_api::rithmic_proto_objects::rti::request_time_bar_update::BarType;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -27,6 +28,7 @@ impl VendorApiResponse for RithmicClient {
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live => {
                 match market_type {
+                    //todo, use this in a rithmic only fn, to get the toi products, just return the hardcoded list here.
                     MarketType::Futures(exchange) => {
                         let _req = RequestProductCodes {
                             template_id: 111 ,
@@ -49,12 +51,14 @@ impl VendorApiResponse for RithmicClient {
                 vec![
                     SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
                     SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
+                    SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles),
                 ]
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live => {
                 vec![
                     SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
                     SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
+                    SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles),
                 ]
             }
         };
@@ -122,11 +126,11 @@ impl VendorApiResponse for RithmicClient {
         if !symbols.contains(&subscription.symbol.name) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
-        const RESOLUTIONS: &[Resolution] = &[Resolution::Ticks(1), Resolution::Instant];
+        const RESOLUTIONS: &[Resolution] = &[Resolution::Ticks(1), Resolution::Instant, Resolution::Seconds(1)];
         if !RESOLUTIONS.contains(&subscription.resolution) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
-        const BASEDATA_TYPES: &[BaseDataType] = &[BaseDataType::Ticks, BaseDataType::Quotes];
+        const BASEDATA_TYPES: &[BaseDataType] = &[BaseDataType::Ticks, BaseDataType::Quotes, BaseDataType::Candles];
         if !BASEDATA_TYPES.contains(&subscription.base_data_type) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         };
@@ -173,27 +177,41 @@ impl VendorApiResponse for RithmicClient {
         }
 
         if !is_subscribed {
-            let bits = match subscription.base_data_type {
-                BaseDataType::Ticks => 1,
-                BaseDataType::Quotes => 2,
-                _ => return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription))}
-                //BaseDataType::Candles => {}
-            };
-            let req = RequestMarketDataUpdate {
-                template_id: 100,
-                user_msg: vec![],
-                symbol: Some(subscription.symbol.name.to_string()),
-                exchange: Some(exchange),
-                request: Some(1), //1 subscribe 2 unsubscribe
-                update_bits: Some(bits), //1 for ticks 2 for quotes
-            };
-            //todo Fix ff_rithmic_api switch heartbeat fn. this causes a lock.
-       /*     match self.client.switch_heartbeat_required(SysInfraType::TickerPlant, false).await {
-                Ok(_) => {}
-                Err(_) => {}
-            }*/
-            const PLANT: SysInfraType = SysInfraType::TickerPlant;
-            self.send_message(&PLANT, req).await;
+            if subscription.base_data_type == BaseDataType::Quotes || subscription.base_data_type == BaseDataType::Ticks {
+                let bits = match subscription.base_data_type {
+                    BaseDataType::Ticks => 1,
+                    BaseDataType::Quotes => 2,
+                    _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with DataVendor::Test: {}", subscription)) }
+                    //BaseDataType::Candles => {}
+                };
+                let req = RequestMarketDataUpdate {
+                    template_id: 100,
+                    user_msg: vec![],
+                    symbol: Some(subscription.symbol.name.to_string()),
+                    exchange: Some(exchange),
+                    request: Some(1), //1 subscribe 2 unsubscribe
+                    update_bits: Some(bits), //1 for ticks 2 for quotes
+                };
+                //todo Fix ff_rithmic_api switch heartbeat fn. this causes a lock.
+                /*     match self.client.switch_heartbeat_required(SysInfraType::TickerPlant, false).await {
+                         Ok(_) => {}
+                         Err(_) => {}
+                     }*/
+                const PLANT: SysInfraType = SysInfraType::TickerPlant;
+                self.send_message(&PLANT, req).await;
+            } else if subscription.base_data_type == BaseDataType::Candles {
+                let req =RequestTimeBarUpdate {
+                    template_id: 200,
+                    user_msg: vec![],
+                    symbol: Some(subscription.symbol.name.to_string()),
+                    exchange: Some(exchange),
+                    request: Some(1), //1 subscribe 2 unsubscribe
+                    bar_type: Some(BarType::SecondBar.into()),
+                    bar_type_period: Some(1),
+                };
+                const PLANT: SysInfraType = SysInfraType::HistoryPlant;
+                self.send_message(&PLANT, req).await;
+            }
         }
         println!("{} Subscribed: {}", stream_name, subscription);
         DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
@@ -230,24 +248,38 @@ impl VendorApiResponse for RithmicClient {
         }
 
         if should_disconnect {
-            broadcaster_map.remove(&symbol);
+            if subscription.base_data_type == BaseDataType::Quotes || subscription.base_data_type == BaseDataType::Ticks {
+                broadcaster_map.remove(&symbol);
 
-            let req = RequestMarketDataUpdate {
-                template_id: 100,
-                user_msg: vec![],
-                symbol: Some(symbol.clone()),
-                exchange: Some(exchange),
-                request: Some(2), // 2 for unsubscribe
-                update_bits: Some(bits),
-            };
+                let req = RequestMarketDataUpdate {
+                    template_id: 100,
+                    user_msg: vec![],
+                    symbol: Some(symbol.clone()),
+                    exchange: Some(exchange),
+                    request: Some(2), // 2 for unsubscribe
+                    update_bits: Some(bits),
+                };
 
-            const PLANT: SysInfraType = SysInfraType::TickerPlant;
-            self.send_message(&PLANT, req).await;
+                const PLANT: SysInfraType = SysInfraType::TickerPlant;
+                self.send_message(&PLANT, req).await;
 
-            // Additional cleanup for quotes
-            if subscription.base_data_type == BaseDataType::Quotes {
-                self.ask_book.remove(&symbol);
-                self.bid_book.remove(&symbol);
+                // Additional cleanup for quotes
+                if subscription.base_data_type == BaseDataType::Quotes {
+                    self.ask_book.remove(&symbol);
+                    self.bid_book.remove(&symbol);
+                }
+            } else if subscription.base_data_type == BaseDataType::Candles {
+                let req =RequestTimeBarUpdate {
+                    template_id: 200,
+                    user_msg: vec![],
+                    symbol: Some(subscription.symbol.name.to_string()),
+                    exchange: Some(exchange),
+                    request: Some(2), //1 subscribe 2 unsubscribe
+                    bar_type: Some(BarType::SecondBar.into()),
+                    bar_type_period: Some(1),
+                };
+                const PLANT: SysInfraType = SysInfraType::HistoryPlant;
+                self.send_message(&PLANT, req).await;
             }
         }
 
@@ -273,7 +305,7 @@ impl VendorApiResponse for RithmicClient {
         //todo get dynamically from server using stream name to fwd callback
         DataServerResponse::BaseDataTypes {
             callback_id,
-            base_data_types: vec![BaseDataType::Ticks, BaseDataType::Quotes],
+            base_data_types: vec![BaseDataType::Ticks, BaseDataType::Quotes, BaseDataType::Candles],
         }
     }
 

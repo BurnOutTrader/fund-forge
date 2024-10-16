@@ -7,6 +7,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
+use ff_rithmic_api::rithmic_proto_objects::rti::RequestAccountRmsInfo;
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::future::join_all;
 use once_cell::sync::Lazy;
@@ -107,6 +108,33 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                                     eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
                                 }
                             }
+                            match client.connect_plant(SysInfraType::HistoryPlant).await {
+                                Ok(receiver) => {
+                                    RITHMIC_CLIENTS.insert(system, client.clone());
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant).await;
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
+                            }
+                            match client.connect_plant(SysInfraType::OrderPlant).await {
+                                Ok(receiver) => {
+                                    RITHMIC_CLIENTS.insert(system, client.clone());
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant).await;
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
+                            }
+                            match client.connect_plant(SysInfraType::PnlPlant).await {
+                                Ok(receiver) => {
+                                    RITHMIC_CLIENTS.insert(system, client.clone());
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant).await;
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
+                            }
                           /*  match client.connect_plant(SysInfraType::OrderPlant).await {
                                 Ok(receiver) => {
                                     handle_responses_from_order_plant(client.clone(), receiver).await;
@@ -126,9 +154,6 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
 
         // Wait for all initialization tasks to complete
         join_all(init_tasks).await;
-/*
-        // Create a vector to hold all RMS request tasks
-        let mut rms_tasks = Vec::new();
 
         for api in RITHMIC_CLIENTS.iter() {
             let api = api.value().clone();
@@ -139,20 +164,8 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                 ib_id: api.credentials.ib_id.clone(),
                 user_type: api.credentials.user_type.clone(),
             };
-
-            // Spawn a new task for each RMS request
-            let task = task::spawn(async move {
-                match api.client.send_message(SysInfraType::OrderPlant, rms_req).await {
-                    Ok(_) => println!("RMS request sent successfully for client: {}", api.system),
-                    Err(e) => eprintln!("Failed to send RMS request for client: {}, error: {}", api.system, e),
-                }
-            });
-
-            rms_tasks.push(task);
+            api.send_message(&SysInfraType::OrderPlant, rms_req).await;
         }
-
-        // Wait for all RMS request tasks to complete
-        join_all(rms_tasks).await;*/
     });
 }
 

@@ -62,7 +62,7 @@ async fn main() {
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(1),
-                BaseDataType::QuoteBars,
+                BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
             ),
         ],
@@ -154,8 +154,8 @@ pub async fn on_data_received(
                                         let sub = DataSubscription::new(
                                             SymbolName::from("YM"),
                                             DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
-                                            Resolution::Seconds(1),
-                                            BaseDataType::QuoteBars,
+                                            Resolution::Seconds(15),
+                                            BaseDataType::Candles,
                                             MarketType::Futures(FuturesExchange::CBOT)
                                         );
                                         strategy.subscribe(sub, 1, true).await;
