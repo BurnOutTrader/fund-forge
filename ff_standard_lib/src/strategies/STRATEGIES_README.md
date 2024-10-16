@@ -99,6 +99,13 @@ With fill forward enabled, during market close you will receive a series of bars
 You should consider that some indicators like ATR might see these bars and drop the ATR to 0 during these periods.
 If this is false, you will see periods of no data in backtests when the market is closed, as the engine ticks at buffering_millis through the close hours, until new  data is received.
 
+fill forward is best used on very low resolutions, like seconds. If fill forward is enabled on a candle feed, the engine will prioritise a tick feed.
+
+If fall forward == false, the engine will prioritise a 1-second candle feed if it is available.
+
+If using very low resolutions <= 15 seconds, it is better to use QuoteBars, Quotes have many more updates than Ticks and you will get cleaner bars.
+QuoteBars will always update from Quote Feeds, this is a very expensive feed, it is better to use candles if you do not need the low resolutions of a Quote feed.
+
 #### `retain_history: u64:`
 The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
 any additional subscriptions added later will be able to specify their own history requirements.
