@@ -96,7 +96,7 @@ This will depend on what historical data we are serializing, currently the resol
 in the future there will be a toml for configuring which resolutions the server should save and make available for backtesting. 
 
 ##### In Live or Live paper 
-The engine will use Quote data as priority feed for quote bars. \
+The engine will use Quote data as priority feed for quote bars. 
 
 The engine will try to determine the most suitable resolution.
 
