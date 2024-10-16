@@ -18,11 +18,11 @@ use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::database::HybridStorage;
 use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, symbol_info_response, symbol_names_response};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, session_market_hours_response, symbols_response, tick_size_response};
-use crate::stream_tasks::deregister_streamer;
+use crate::stream_tasks::{deregister_streamer};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::OrderRequest;
 use ff_standard_lib::StreamName;
-use crate::stream_listener;
+use crate::{stream_listener};
 
 lazy_static!(
     pub static ref DATA_STORAGE: Arc<HybridStorage> = Arc::new(HybridStorage::new(PathBuf::from(get_data_folder()), Duration::from_secs(1800)));
@@ -270,7 +270,7 @@ pub async fn manage_async_requests(
                 };
             });
         }
-        deregister_streamer(&stream_name);
+        deregister_streamer(&stream_name).await;
         println!("Streamer Disconnected: {}", stream_name);
     });
 }
@@ -278,23 +278,30 @@ pub async fn manage_async_requests(
 async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>)  {
     let mut receiver = receiver;
     let mut writer = writer;
-    'receiver_loop: while let Some(response) = receiver.recv().await {
-        // Convert the response to bytes
-        let bytes = response.to_bytes();
+    'receiver_loop: loop {
+        match receiver.recv().await {
+            Some(response) => {
+                // Convert the response to bytes
+                let bytes = response.to_bytes();
 
-        // Prepare the message with a 4-byte length header in big-endian format
-        let length = (bytes.len() as u64).to_be_bytes();
-        let mut prefixed_msg = Vec::new();
-        prefixed_msg.extend_from_slice(&length);
-        prefixed_msg.extend_from_slice(&bytes);
+                // Prepare the message with a 4-byte length header in big-endian format
+                let length = (bytes.len() as u64).to_be_bytes();
+                let mut prefixed_msg = Vec::new();
+                prefixed_msg.extend_from_slice(& length);
+                prefixed_msg.extend_from_slice( & bytes);
 
-        // Write the response to the stream
-        match writer.write_all(&prefixed_msg).await {
-            Err(e) => {
-                eprintln!("Shutting down response handler {}", e);
+                // Write the response to the stream
+                match writer.write_all( & prefixed_msg).await {
+                    Err(e) => {
+                        eprintln!("Shutting down response handler {}", e);
+                        break 'receiver_loop
+                    }
+                    Ok(_) => {}
+                }
+            }
+            None => {
                 break 'receiver_loop
             }
-            Ok(_) => {}
         }
     }
 }

@@ -922,6 +922,7 @@ dependencies = [
  "async-trait",
  "base64",
  "chrono",
+ "chrono-tz",
  "dashmap",
  "env_logger",
  "ff_rithmic_api",
