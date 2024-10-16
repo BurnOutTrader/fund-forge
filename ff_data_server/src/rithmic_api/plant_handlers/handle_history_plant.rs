@@ -124,7 +124,7 @@ pub async fn match_history_plant_id(
             if let Ok(msg) = TimeBar::decode(&message_buf[..]) {
                 // Time Bar
                 // From Server
-                println!("Time Bar (Template ID: 250) from Server: {:?}", msg);
+                //println!("Time Bar (Template ID: 250) from Server: {:?}", msg);
                 handle_candle(client.clone(), msg).await;
             }
         },
