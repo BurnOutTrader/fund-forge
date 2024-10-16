@@ -360,7 +360,7 @@ pub async fn handle_responses_from_ticker_plant(
                                         Some(CloseFrame { code: Normal, reason: "normal closure" })
                                         Error: ServerErrorDebug("Failed to send RithmicMessage, possible disconnect, try reconnecting to plant TickerPlant: Trying to work with closed connection")
                                     */
-                                    if let Some(CloseFrame { code, reason }) = frame.into_data() {
+                                  /*  if let Some(CloseFrame { code, reason }) = frame.into_data() {
                                         println!("Received close frame: code = {:?}, reason = {}", code, reason);
                                         if let Some(new_reader) = attempt_reconnect(&client, PLANT).await {
                                             reader = new_reader;
@@ -370,7 +370,7 @@ pub async fn handle_responses_from_ticker_plant(
                                             break;
                                         }
                                     }
-                                    println!("Received frame: {:?}", frame);
+                                    println!("Received frame: {:?}", frame);*/
                                 }
                             }
                         }
