@@ -306,11 +306,24 @@ async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
     };
 
     let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
-    let tick = Tick::new(symbol, price, time.to_string(), volume, side);
+    let tick = Tick::new(symbol.clone(), price, time.to_string(), volume, side);
     if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
         match broadcaster.value().send(BaseDataEnum::Tick(tick)) {
             Ok(_) => {}
-            Err(_) => {}
+            Err(_) => {
+                client.quote_feed_broadcasters.remove(&symbol.name);
+                let req = RequestMarketDataUpdate {
+                    template_id: 100,
+                    user_msg: vec![],
+                    symbol: Some(symbol.name.clone()),
+                    exchange: Some(exchange.to_string()),
+                    request: Some(2), // 2 for unsubscribe
+                    update_bits: Some(1),  //1 ticks, 2 quotes
+                };
+
+                const PLANT: SysInfraType = SysInfraType::TickerPlant;
+                client.send_message(&PLANT, req).await;
+            }
         }
     }
 }
@@ -390,7 +403,7 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
         let symbol_obj = Symbol::new(symbol.clone(), client.data_vendor.clone(), MarketType::Futures(exchange));
         let data = BaseDataEnum::Quote(
             Quote {
-                symbol: symbol_obj,
+                symbol: symbol_obj.clone(),
                 ask,
                 bid,
                 ask_volume,
@@ -399,7 +412,22 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
             }
         );
 
-        if let Err(_e) = broadcaster.send(data) {}
+        if let Err(_e) = broadcaster.send(data) {
+            client.quote_feed_broadcasters.remove(&symbol_obj.name);
+            client.ask_book.remove(&symbol);
+            client.bid_book.remove(&symbol);
+            let req = RequestMarketDataUpdate {
+                template_id: 100,
+                user_msg: vec![],
+                symbol: Some(symbol.clone()),
+                exchange: Some(exchange.to_string()),
+                request: Some(2), // 2 for unsubscribe
+                update_bits: Some(2), //1 ticks, 2 quotes
+            };
+
+            const PLANT: SysInfraType = SysInfraType::TickerPlant;
+            client.send_message(&PLANT, req).await;
+        }
     }
 }
 

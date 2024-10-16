@@ -187,7 +187,7 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
             None => return,  // Exit if close price is invalid
         };
 
-        let period = match msg.period {
+        let period = match msg.period.clone() {
             Some(p) => match p.parse::<u64>().ok() {
                 None => return,
                 Some(period) => period
@@ -219,7 +219,7 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
 
         // Construct the candle
         let data = BaseDataEnum::Candle(Candle {
-            symbol: symbol_obj,
+            symbol: symbol_obj.clone(),
             high,
             low,
             open,
@@ -236,6 +236,29 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
 
         // Send the candle data
         if let Err(e) = broadcaster.send(data) {
+            let bar_type = match msg.r#type {
+                Some(num) => Some(num),
+                None => None, // Exit if msg.r#type is None
+            };
+            let period = match msg.period {
+                Some(p) => match p.parse::<i32>().ok() {
+                    None => None,
+                    Some(period) => Some(period)
+                },
+                None => None,
+            };
+            let req =RequestTimeBarUpdate {
+                template_id: 200,
+                user_msg: vec![],
+                symbol: Some(symbol_obj.name.clone()),
+                exchange: Some(exchange.to_string()),
+                request: Some(2), //1 subscribe 2 unsubscribe
+                bar_type,
+                bar_type_period: period,
+            };
+            const PLANT: SysInfraType = SysInfraType::HistoryPlant;
+            client.send_message(&PLANT, req).await;
+            client.candle_feed_broadcasters.remove(&symbol_obj.name);
             eprintln!("Failed to broadcast candle: {:?}", e);
         }
     }
