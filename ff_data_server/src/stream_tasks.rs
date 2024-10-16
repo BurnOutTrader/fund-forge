@@ -6,7 +6,6 @@ use lazy_static::lazy_static;
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
 use tokio::sync::{broadcast, mpsc, oneshot, watch, RwLock};
-use tokio::task::JoinHandle;
 use tokio::time::{interval, sleep, Instant};
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -18,13 +17,29 @@ use ff_standard_lib::StreamName;
 lazy_static! {
     static ref STREAM_RECEIVERS: DashMap<u16 , Arc<DashMap<DataSubscription ,broadcast::Receiver<BaseDataEnum>>>> = DashMap::new();
     static ref SUBSCRIPTIONS: DashMap<u16 , Arc<RwLock<Vec<DataSubscription>>>> = DashMap::new();
-    static ref STREAM_TASKS: DashMap<u16 , (JoinHandle<()>, JoinHandle<()>)> = DashMap::new();
+    static ref SHUTDOWN_CLIENT: DashMap<u16 , broadcast::Sender<()>> = DashMap::new();
 }
 
-pub fn shutdown_stream_tasks() {
-    for stream in STREAM_TASKS.iter() {
-        deregister_streamer(stream.key());
+async fn broadcast_shutdown(stream_name: StreamName) {
+    if let Some(shutdown_sender) = SHUTDOWN_CLIENT.get(&stream_name) {
+        match shutdown_sender.value().send(()) {
+            Ok(_) => {}
+            Err(_) => {}
+        }
     }
+}
+
+pub async fn shutdown_all_stream_tasks() {
+    let mut keys = vec![];
+    for stream in SHUTDOWN_CLIENT.iter() {
+        keys.push(stream.key().clone());
+    }
+    for key in keys {
+        deregister_streamer(&key).await;
+    }
+    STREAM_RECEIVERS.clear();
+    SUBSCRIPTIONS.clear();
+    SHUTDOWN_CLIENT.clear();
 }
 
 pub async fn initialize_streamer(stream_name: StreamName, buffer: Duration, stream: TlsStream<TcpStream>) {
@@ -32,18 +47,14 @@ pub async fn initialize_streamer(stream_name: StreamName, buffer: Duration, stre
     let list = Arc::new(RwLock::new(vec![]));
     SUBSCRIPTIONS.insert(stream_name, list.clone());
     STREAM_RECEIVERS.insert(stream_name, map.clone());
-    let handles = stream_handler(stream_name, buffer, stream, map, list).await;
-    STREAM_TASKS.insert(stream_name, handles);
+    let (shutdown_sender, _) = broadcast::channel(100);
+    SHUTDOWN_CLIENT.insert(stream_name, shutdown_sender);
+    stream_handler(stream_name, buffer, stream, map, list).await;
 }
 
-pub fn deregister_streamer(stream_name: &StreamName) {
+pub async fn deregister_streamer(stream_name: &StreamName) {
     STREAM_RECEIVERS.remove(stream_name);
-    if let Some((_, handles)) = STREAM_TASKS.remove(stream_name) {
-        let (receiver_task, timeslice_task) = handles;
-        receiver_task.abort();
-        timeslice_task.abort();
-        SUBSCRIPTIONS.remove(stream_name);
-    }
+    broadcast_shutdown(stream_name.clone()).await;
 }
 
 pub async fn subscribe_stream(stream_name: &StreamName, subscription: DataSubscription, receiver: broadcast::Receiver<BaseDataEnum>) {
@@ -70,26 +81,40 @@ pub async fn stream_handler(
     mut stream: TlsStream<TcpStream>,
     stream_receivers: Arc<DashMap<DataSubscription, broadcast::Receiver<BaseDataEnum>>>,
     subscriptions: Arc<RwLock<Vec<DataSubscription>>>,
-) -> (JoinHandle<()>, JoinHandle<()>) {
+) {
     let (data_sender, mut data_receiver) = mpsc::channel::<TimeSlice>(10);
     let (tick_sender, tick_receiver) = watch::channel(());
 
-    let receiver_task = tokio::spawn({
+    let _ = tokio::spawn({
         let data_sender = data_sender.clone();
         let tick_receiver = tick_receiver.clone();
         let stream_receivers = stream_receivers.clone();
         let subscriptions = subscriptions.clone();
         async move {
+            let mut task_1_shutdown_receiver = SHUTDOWN_CLIENT.get(&stream_name).unwrap().subscribe();
             let mut interval = interval(buffer);
             let running_streams: Arc<RwLock<AHashMap<DataSubscription, oneshot::Sender<()>>>> = Arc::new(RwLock::new(AHashMap::new()));
-
-            loop {
+            'subscriber_loop: loop {
                 interval.tick().await;
                 tick_sender.send(()).unwrap();
 
                 if stream_receivers.is_empty() {
                     sleep(Duration::from_millis(500)).await;
                     continue;
+                }
+
+                if let Ok(_) = task_1_shutdown_receiver.try_recv() {
+                    let mut running_streams = running_streams.write().await;
+                    let mut to_shutdown = Vec::new();
+                    for (sub, _) in running_streams.iter() {
+                        to_shutdown.push(sub.clone());
+                    }
+                    for sub in to_shutdown {
+                        if let Some(shutdown_sender) = running_streams.remove(&sub) {
+                            shutdown_sender.send(()).unwrap();
+                        }
+                    }
+                    break 'subscriber_loop
                 }
 
                 let mut to_remove = Vec::new();
@@ -144,36 +169,44 @@ pub async fn stream_handler(
         }
     });
 
-    let time_slice_task = tokio::spawn(async move {
+    let _ = tokio::spawn(async move {
         let mut time_slice = TimeSlice::new();
-        let mut interval = interval(buffer);
-
+        let mut interval = interval(buffer.clone());
+        let mut task_2_shutdown_receiver = SHUTDOWN_CLIENT.get(&stream_name).unwrap().subscribe();
         loop {
-            interval.tick().await;
+            tokio::select! {
+                _ = interval.tick() => {
+                    if !time_slice.is_empty() {
+                        let bytes = time_slice.to_bytes();
+                        let length = (bytes.len() as u32).to_be_bytes();
+                        let mut prefixed_msg = Vec::with_capacity(LENGTH + bytes.len());
+                        prefixed_msg.extend_from_slice(&length);
+                        prefixed_msg.extend_from_slice(&bytes);
 
-            // Collect any remaining data from receivers
-            while let Ok(slice) = data_receiver.try_recv() {
-                time_slice.extend(slice);
-            }
-
-            if !time_slice.is_empty() {
-                let bytes = time_slice.to_bytes();
-                let length = (bytes.len() as u32).to_be_bytes();
-                let mut prefixed_msg = Vec::with_capacity(LENGTH + bytes.len());
-                prefixed_msg.extend_from_slice(&length);
-                prefixed_msg.extend_from_slice(&bytes);
-
-                if let Err(e) = stream.write_all(&prefixed_msg).await {
-                    eprintln!("Error writing to stream: {}", e);
+                        if let Err(e) = stream.write_all(&prefixed_msg).await {
+                            eprintln!("Error writing to stream: {}", e);
+                            broadcast_shutdown(stream_name).await;
+                            break;
+                        }
+                        time_slice.clear();
+                    }
+                }
+                result = data_receiver.recv() => {
+                    match result {
+                        Some(slice) => time_slice.extend(slice),
+                        None => {
+                            sleep(buffer.clone()).await;
+                        }
+                    }
+                }
+                _ = task_2_shutdown_receiver.recv() => {
+                    println!("Shutdown signal received. Stopping stream handler.");
                     break;
                 }
-                time_slice.clear();
             }
         }
         println!("Stream handler for {} has shut down", stream_name);
     });
-
-    (receiver_task, time_slice_task)
 }
 async fn process_receiver(
     mut rx: broadcast::Receiver<BaseDataEnum>,
@@ -208,7 +241,7 @@ async fn process_receiver(
                     }
                 }
                 _ = &mut shutdown => {
-                    println!("Shutdown signal received. Stopping process_receiver.");
+                    //println!("Shutdown signal received. Stopping process_receiver.");
                     // Perform any cleanup if necessary
                     if !time_slice.is_empty() {
                         // Send any remaining data before shutting down

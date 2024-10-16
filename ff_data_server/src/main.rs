@@ -9,9 +9,11 @@ use std::sync::Arc;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::future::join_all;
+use once_cell::sync::Lazy;
 use structopt::StructOpt;
 use tokio::net::TcpStream;
 use tokio::{signal, task};
+use tokio::sync::{broadcast};
 use tokio_rustls::server::TlsStream;
 pub mod request_handlers;
 mod stream_listener;
@@ -164,6 +166,21 @@ async fn logout_apis() {
     println!("Logging Out Apis Function Ended");
 }
 
+static SHUTDOWN_CHANNEL: Lazy<broadcast::Sender<()>> = Lazy::new(|| {
+    let (sender, _) = broadcast::channel(20);
+    sender
+});
+
+// Function to get the sender
+pub fn get_shutdown_sender() -> &'static broadcast::Sender<()> {
+    &SHUTDOWN_CHANNEL
+}
+
+// Function to get a new receiver
+pub fn subscribe_server_shutdown() -> broadcast::Receiver<()> {
+    SHUTDOWN_CHANNEL.subscribe()
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let options = ServerLaunchOptions::from_args();
@@ -179,7 +196,6 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-
     init_rithmic_apis(options.clone()).await;
 
     let (async_handle, stream_handle) = run_servers(config, options.clone());
@@ -190,8 +206,11 @@ async fn main() -> io::Result<()> {
     // Wait for Ctrl+C
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");
     println!("Ctrl+C received, logging out APIs...");
+    match get_shutdown_sender().send(()) {
+        Ok(_) => eprintln!("Shutdown Signal Sent"),
+        Err(e) =>  eprintln!("Shutdown Signal Failed: {}", e),
+    }
 
-    shutdown_stream_tasks();
     TEST_CLIENT.shutdown();
 
     // Perform logout
@@ -212,7 +231,6 @@ async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
 use tokio::task::JoinHandle;
 use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
 use crate::rithmic_api::plant_handlers::handle_tick_plant::handle_responses_from_ticker_plant;
-use crate::stream_tasks::shutdown_stream_tasks;
 use crate::test_api::api_client::TEST_CLIENT;
 
 fn run_servers(

@@ -76,7 +76,7 @@ pub struct RithmicClient {
 
 impl RithmicClient {
     pub async fn new(
-        system: RithmicSystem
+        system: RithmicSystem,
     ) -> Result<Self, FundForgeError> {
         let brokerage = Brokerage::Rithmic(system.clone());
         let data_vendor = DataVendor::Rithmic(system.clone());

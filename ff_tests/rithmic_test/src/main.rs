@@ -55,7 +55,7 @@ async fn main() {
                 SymbolName::from("MES"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
                 Resolution::Seconds(1),
-                BaseDataType::QuoteBars,
+                BaseDataType::Candles,
                 MarketType::Futures(FuturesExchange::CME)
             ),
             DataSubscription::new(
@@ -146,6 +146,21 @@ pub async fn on_data_received(
                                             false => println!("{}", msg.as_str().bright_red()),
                                         }
                                     }
+
+                                    count += 1;
+
+                                    if count == 5 {
+                                        println!("Subscribing to YM On Another Rithmic API");
+                                        let sub = DataSubscription::new(
+                                            SymbolName::from("YM"),
+                                            DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
+                                            Resolution::Seconds(1),
+                                            BaseDataType::QuoteBars,
+                                            MarketType::Futures(FuturesExchange::CBOT)
+                                        );
+                                        strategy.subscribe(sub, 1, true).await;
+                                        println!("Subscribed to YM On Another Rithmic API");
+                                    }
                                 }
                             }
                             BaseDataEnum::Quote(quote) => {
@@ -163,20 +178,6 @@ pub async fn on_data_received(
                                             false => println!("{}", msg.as_str().bright_red()),
                                         }
                                     }
-                                }
-                                count += 1;
-
-                                if count == 5 {
-                                    println!("Subscribing to YM On Another Rithmic API");
-                                    let sub = DataSubscription::new(
-                                        SymbolName::from("YM"),
-                                        DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
-                                        Resolution::Seconds(1),
-                                        BaseDataType::QuoteBars,
-                                        MarketType::Futures(FuturesExchange::CBOT)
-                                    );
-                                    strategy.subscribe(sub, 1, true).await;
-                                    println!("Subscribed to YM On Another Rithmic API");
                                 }
                             }
                             _ => {}
