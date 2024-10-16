@@ -88,7 +88,6 @@ We might also need a certain amount of history to be available before starting, 
 
 #### `subscriptions: Vec<DataSubscription>:`
 The initial data subscriptions for the strategy.
-
 If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
 
 ##### In Backtest mode 
