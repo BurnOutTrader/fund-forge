@@ -101,7 +101,7 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                             match client.connect_plant(SysInfraType::TickerPlant).await {
                                 Ok(receiver) => {
                                     RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_responses_from_ticker_plant(client.clone(), receiver).await;
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant).await;
                                 }
                                 Err(e) => {
                                     eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
@@ -230,7 +230,7 @@ async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
 }
 use tokio::task::JoinHandle;
 use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
-use crate::rithmic_api::plant_handlers::handle_tick_plant::handle_responses_from_ticker_plant;
+use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::test_api::api_client::TEST_CLIENT;
 
 fn run_servers(
