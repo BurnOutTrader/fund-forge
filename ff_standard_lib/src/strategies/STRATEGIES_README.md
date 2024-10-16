@@ -92,7 +92,9 @@ strategy_event_sender: mpsc::Sender<EventTimeSlice>: The sender for strategy eve
 If your subscriptions are empty, you will need to add some at the start of your `fn on_data_received()` function.
 
 ##### In Backtest mode 
-The engine and server will use consolidators to consolidate historical data from a low resolution.
+The engine and server will use consolidators to consolidate historical data from a low resolution. \
+This will depend on what historical data we are serialzing, currently the resolutions available are hard coded, \
+in the future there will be a toml for configuring which resolutions the server should save and make available for backtesting. 
 
 ##### In Live or Live paper 
 The engine will use Quote data as priority feed for quote bars. \
