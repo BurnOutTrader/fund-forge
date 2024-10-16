@@ -2,11 +2,14 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 use ahash::AHashMap;
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
+use ff_rithmic_api::rithmic_proto_objects::rti::RequestHeartbeat;
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::{SinkExt, StreamExt};
 use futures::stream::{SplitSink, SplitStream};
@@ -27,9 +30,12 @@ use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo};
 use ff_standard_lib::StreamName;
 use prost::Message as ProstMessage;
 use tokio::net::TcpStream;
+use tokio::{select, task};
+use tokio::time::interval;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
+use crate::subscribe_server_shutdown;
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
@@ -54,6 +60,8 @@ pub struct RithmicClient {
 
     pub callbacks: DashMap<StreamName, AHashMap<u64, oneshot::Sender<DataServerResponse>>>,
     pub writers: DashMap<SysInfraType, Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
+    pub heartbeat_times: Arc<DashMap<SysInfraType, DateTime<Utc>>>,
+    pub latency: Arc<DashMap<SysInfraType, i64>>,
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
@@ -100,7 +108,9 @@ impl RithmicClient {
             user_type: credentials.user_type.clone(),
             credentials,
             callbacks: Default::default(),
-            writers: Default::default(),
+            writers: DashMap::with_capacity(5),
+            heartbeat_times: Arc::new(DashMap::with_capacity(5)),
+            latency: Arc::new(DashMap::with_capacity(5)),
             client: Arc::new(client),
             symbol_info: Default::default(),
             tick_feed_broadcasters: Default::default(),
@@ -141,7 +151,10 @@ impl RithmicClient {
         match self.client.connect_and_login(system.clone()).await {
             Ok(r) => {
                 let (writer, receiver) = r.split();
-                self.writers.insert(system, Arc::new(Mutex::new(writer)));
+                let writer = Arc::new(Mutex::new(writer));
+                self.writers.insert(system.clone(), writer.clone());
+                self.heartbeat_times.insert(system.clone(), Utc::now());
+                let _ = self.start_heart_beat(system, writer, self.heartbeat_times.clone());
                 Ok(receiver)
             },
             Err(e) => {
@@ -205,12 +218,12 @@ impl RithmicClient {
     ) {
         if let Some(write_stream) = self.writers.get(plant) {
             let mut buf = Vec::new();
-
+            self.heartbeat_times.insert(plant.clone(), Utc::now());
             match message.encode(&mut buf) {
                 Ok(_) => {}
                 Err(e) => {
-                    eprintln!("Failed to encode rithmic message: {}", e);
-                    return
+                    eprintln!("Failed to send message to: {:?}: {}", plant, e);
+                    return;
                 }
             }
 
@@ -221,7 +234,7 @@ impl RithmicClient {
             let mut write_stream = write_stream.lock().await;
             match write_stream.send(Message::Binary(prefixed_msg)).await {
                 Ok(_) => {},
-                Err(e) => eprintln!("Failed to write rithmic stream: {}", e)
+                Err(e) => eprintln!("Failed to send message to: {:?}: {}", plant, e)
             }
         }
     }
@@ -230,5 +243,69 @@ impl RithmicClient {
         // shutdown using self.client.shutdown_plant() for each connection
         RITHMIC_CLIENTS.remove(&self.system);
     }
+
+
+    async fn start_heart_beat(
+        &self,
+        plant: SysInfraType,
+        write_stream: Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>,
+        heartbeat_times: Arc<DashMap<SysInfraType, DateTime<Utc>>>
+    ) {
+        let heart_beat_interval = match self.client.heartbeat_interval_seconds.get(&plant) {
+            Some(interval) => Duration::from_secs(interval.value().clone()),
+            None => Duration::from_secs(60)
+        };
+
+        let mut interval = interval(heart_beat_interval);
+        task::spawn(async move {
+            let mut shutdown_receiver = subscribe_server_shutdown();
+            'heartbeat_loop: loop {
+                select! {
+                    _ = interval.tick() => {
+                        let now = Utc::now();
+                        let should_send_heartbeat = if let Some(last_time) = heartbeat_times.get(&plant) {
+                            now.signed_duration_since(*last_time) >= chrono::Duration::from_std(heart_beat_interval).unwrap()
+                        } else {
+                            true // If no last heartbeat time, we should send one
+                        };
+
+                        if should_send_heartbeat {
+                            let request = RequestHeartbeat {
+                                template_id: 18,
+                                user_msg: vec![],
+                                ssboe: Some(now.timestamp() as i32),
+                                usecs: Some(now.timestamp_subsec_micros() as i32),
+                            };
+                            let mut buf = Vec::new();
+                            if let Err(e) = request.encode(&mut buf) {
+                                eprintln!("Failed to encode message for {:?}: {}", plant, e);
+                                continue 'heartbeat_loop;
+                            }
+
+                            let length = buf.len() as u32;
+                            let mut prefixed_msg = length.to_be_bytes().to_vec();
+                            prefixed_msg.extend(buf);
+
+                            let mut write_stream = write_stream.lock().await;
+                            match write_stream.send(Message::Binary(prefixed_msg)).await {
+                                Ok(_) => {
+                                    heartbeat_times.insert(plant.clone(), now);
+                                },
+                                Err(e) => {
+                                    eprintln!("Failed to send heartbeat to {:?}: {}", plant, e);
+                                    break 'heartbeat_loop;
+                                }
+                            }
+                        }
+                    }
+                    _ = shutdown_receiver.recv() => {
+                        println!("Shutting down heartbeat task for system {:?}", plant);
+                        break 'heartbeat_loop;
+                    }
+                }
+            }
+        });
+    }
 }
+
 
