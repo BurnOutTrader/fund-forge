@@ -65,7 +65,7 @@ pub async fn match_order_plant_id(
         305 => {
             if let Ok(msg) = ResponseAccountRmsInfo::decode(&message_buf[..]) {
                 //println!("Response Account Rms Info (Template ID: 305) from Server: {:?}", msg);
-                if let Some(id) = &msg.account_id {
+                /*if let Some(id) = &msg.account_id {
                     let mut account_info = AccountInfo {
                         account_id: id.to_string(),
                         brokerage: client.brokerage.clone(),
@@ -131,7 +131,7 @@ pub async fn match_order_plant_id(
                         account_id: Some(id.clone()),
                     };
                     client.send_message(&PLANT, req).await;
-                }
+                }*/
             }
         },
         307 => {
