@@ -311,7 +311,7 @@ async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
         match broadcaster.value().send(BaseDataEnum::Tick(tick)) {
             Ok(_) => {}
             Err(_) => {
-                client.quote_feed_broadcasters.remove(&symbol.name);
+                client.tick_feed_broadcasters.remove(&symbol.name);
                 let req = RequestMarketDataUpdate {
                     template_id: 100,
                     user_msg: vec![],
