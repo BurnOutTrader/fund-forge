@@ -99,7 +99,9 @@ With fill forward enabled, during market close you will receive a series of bars
 You should consider that some indicators like ATR might see these bars and drop the ATR to 0 during these periods.
 If this is false, you will see periods of no data in backtests when the market is closed, as the engine ticks at buffering_millis through the close hours, until new  data is received.
 
-fill forward is best used on very low resolutions, like seconds. If fill forward is enabled on a candle feed, the engine will prioritise a tick feed.
+fill forward is best used on very low resolutions, like seconds. 
+
+If fill forward is enabled on a candle feed, the engine will prioritise a tick feed and consolidate the candles.
 
 If fall forward == false, the engine will prioritise a 1-second candle feed if it is available.
 
