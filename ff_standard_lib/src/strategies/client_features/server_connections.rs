@@ -21,7 +21,7 @@ use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::handlers::market_handlers::{MarketMessageEnum};
+use crate::strategies::handlers::market_handler::market_handlers::{MarketMessageEnum};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent, StrategyEventBuffer};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;

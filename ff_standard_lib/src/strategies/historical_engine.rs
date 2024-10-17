@@ -8,7 +8,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::{Sender};
-use crate::strategies::handlers::market_handlers::MarketMessageEnum;
+use crate::strategies::handlers::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
 use tokio::sync::{broadcast};
 

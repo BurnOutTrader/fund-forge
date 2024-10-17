@@ -16,7 +16,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
+use crate::strategies::handlers::market_handler::market_handlers::SYMBOL_INFO;
 
 /*todo,
    Make ledger take functions as params, create_order_reduce_position, increase_position, reduce_position, we will pass these in based on the type of positions we want.
