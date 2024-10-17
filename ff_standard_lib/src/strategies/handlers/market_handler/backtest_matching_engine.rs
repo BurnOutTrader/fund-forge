@@ -293,7 +293,7 @@ pub async fn backtest_matching_engine(
                 if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
                     if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                         if account_map.value().is_short(&order.symbol_name) {
-                            account_map.value_mut().exit_position(&order.symbol_name, time, market_price, String::from("Reverse Position")).await;
+                            account_map.value_mut().exit_position(&order.symbol_name, time, market_price, String::from("Reverse Position On Enter Long")).await;
                         }
                     }
                 }
@@ -307,7 +307,7 @@ pub async fn backtest_matching_engine(
                 if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
                     if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                         if account_map.value().is_long(&order.symbol_name) {
-                            account_map.value_mut().exit_position(&order.symbol_name, time, market_price, String::from("Reverse Position")).await;
+                            account_map.value_mut().exit_position(&order.symbol_name, time, market_price, String::from("Reverse Position On Enter Short")).await;
                         }
                     }
                 }
