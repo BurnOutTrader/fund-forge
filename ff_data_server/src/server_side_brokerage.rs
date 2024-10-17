@@ -229,54 +229,150 @@ pub async fn logout_command(brokerage: Brokerage, stream_name: StreamName) {
     }
 }
 
-pub async fn send_market_order(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
-    let order_ref = order.clone();
+fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
+    OrderUpdateEvent::OrderRejected {
+        brokerage: order.brokerage,
+        account_id: order.account_id.clone(),
+        order_id: order.id.clone(),
+        reason,
+        tag: order.tag.clone(),
+        time: Utc::now().to_string(),
+    }
+}
+
+pub async fn live_market_order(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+
     let operation = async {
         match order.brokerage {
             Brokerage::Test => {
-                return Err(OrderUpdateEvent::OrderRejected {
-                    brokerage: order.brokerage,
-                    account_id: order.account_id,
-                    order_id: order.id,
-                    reason: "Test Brokerage Can Not Place Live Orders".to_string(),
-                    tag: order.tag,
-                    time: Utc::now().to_string() })
+                Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
             }
             Brokerage::Rithmic(system) => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                    return client.live_market_order(stream_name, mode, order.clone()).await
-                }
-                return Err(OrderUpdateEvent::OrderRejected {
-                    brokerage: order.brokerage,
-                    account_id: order.account_id,
-                    order_id: order.id,
-                    reason: "Client Not found with {} for {}".to_string(),
-                    tag: order.tag,
-                    time: Utc::now().to_string() })
+                RITHMIC_CLIENTS.get(&system)
+                    .ok_or_else(|| create_order_rejected(&order, format!("Client Not found for Rithmic system: {}", system)))?
+                    .live_market_order(stream_name, mode, order.clone())
+                    .await
             }
             Brokerage::Bitget => {
-                if let Some(client) = BITGET_CLIENT.get() {
-                    return client.live_market_order(stream_name, mode, order.clone()).await
-                }
-                return Err(OrderUpdateEvent::OrderRejected {
-                    brokerage: order.brokerage,
-                    account_id: order.account_id,
-                    order_id: order.id,
-                    reason: "Client Not found with {} for {}".to_string(),
-                    tag: order.tag,
-                    time: Utc::now().to_string() })
+                BITGET_CLIENT.get()
+                    .ok_or_else(|| create_order_rejected(&order, "Bitget client not found".to_string()))?
+                    .live_market_order(stream_name, mode, order.clone())
+                    .await
             }
         }
     };
 
     match timeout(TIMEOUT_DURATION, operation).await {
         Ok(result) => result,
-        Err(_) => Err(OrderUpdateEvent::OrderRejected {
-            brokerage: order_ref.brokerage,
-            account_id: order_ref.account_id,
-            order_id: order_ref.id,
-            reason: "Operation timed out".to_string(),
-            tag: order_ref.tag,
-            time: Utc::now().to_string() })
+        Err(_) => Err(create_order_rejected(&order, "Operation timed out".to_string()))
+    }
+}
+
+pub async fn live_enter_long(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+    let operation = async {
+        match order.brokerage {
+            Brokerage::Test => {
+                Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
+            }
+            Brokerage::Rithmic(system) => {
+                RITHMIC_CLIENTS.get(&system)
+                    .ok_or_else(|| create_order_rejected(&order, format!("Client Not found for Rithmic system: {}", system)))?
+                    .live_enter_long(stream_name, mode, order.clone())
+                    .await
+            }
+            Brokerage::Bitget => {
+                BITGET_CLIENT.get()
+                    .ok_or_else(|| create_order_rejected(&order, "Bitget client not found".to_string()))?
+                    .live_enter_long(stream_name, mode, order.clone())
+                    .await
+            }
+        }
+    };
+
+    match timeout(TIMEOUT_DURATION, operation).await {
+        Ok(result) => result,
+        Err(_) => Err(create_order_rejected(&order, "Operation timed out".to_string()))
+    }
+}
+
+pub async fn live_enter_short(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+    let operation = async {
+        match order.brokerage {
+            Brokerage::Test => {
+                Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
+            }
+            Brokerage::Rithmic(system) => {
+                RITHMIC_CLIENTS.get(&system)
+                    .ok_or_else(|| create_order_rejected(&order, format!("Client Not found for Rithmic system: {}", system)))?
+                    .live_enter_short(stream_name, mode, order.clone())
+                    .await
+            }
+            Brokerage::Bitget => {
+                BITGET_CLIENT.get()
+                    .ok_or_else(|| create_order_rejected(&order, "Bitget client not found".to_string()))?
+                    .live_enter_short(stream_name, mode, order.clone())
+                    .await
+            }
+        }
+    };
+
+    match timeout(TIMEOUT_DURATION, operation).await {
+        Ok(result) => result,
+        Err(_) => Err(create_order_rejected(&order, "Operation timed out".to_string()))
+    }
+}
+
+pub async fn live_exit_short(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+    let operation = async {
+        match order.brokerage {
+            Brokerage::Test => {
+                Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
+            }
+            Brokerage::Rithmic(system) => {
+                RITHMIC_CLIENTS.get(&system)
+                    .ok_or_else(|| create_order_rejected(&order, format!("Client Not found for Rithmic system: {}", system)))?
+                    .live_exit_short(stream_name, mode, order.clone())
+                    .await
+            }
+            Brokerage::Bitget => {
+                BITGET_CLIENT.get()
+                    .ok_or_else(|| create_order_rejected(&order, "Bitget client not found".to_string()))?
+                    .live_exit_short(stream_name, mode, order.clone())
+                    .await
+            }
+        }
+    };
+
+    match timeout(TIMEOUT_DURATION, operation).await {
+        Ok(result) => result,
+        Err(_) => Err(create_order_rejected(&order, "Operation timed out".to_string()))
+    }
+}
+
+
+pub async fn live_exit_long(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+    let operation = async {
+        match order.brokerage {
+            Brokerage::Test => {
+                Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
+            }
+            Brokerage::Rithmic(system) => {
+                RITHMIC_CLIENTS.get(&system)
+                    .ok_or_else(|| create_order_rejected(&order, format!("Client Not found for Rithmic system: {}", system)))?
+                    .live_exit_long(stream_name, mode, order.clone())
+                    .await
+            }
+            Brokerage::Bitget => {
+                BITGET_CLIENT.get()
+                    .ok_or_else(|| create_order_rejected(&order, "Bitget client not found".to_string()))?
+                    .live_exit_long(stream_name, mode, order.clone())
+                    .await
+            }
+        }
+    };
+
+    match timeout(TIMEOUT_DURATION, operation).await {
+        Ok(result) => result,
+        Err(_) => Err(create_order_rejected(&order, "Operation timed out".to_string()))
     }
 }

@@ -408,7 +408,7 @@ impl FundForgeStrategy {
         let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::Market};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                let request =MarketMessageEnum::OrderRequest(request);
+                let request = MarketMessageEnum::OrderRequest(request);
                 self.market_event_sender.send(request).await.unwrap();
             }
             StrategyMode::Live => {

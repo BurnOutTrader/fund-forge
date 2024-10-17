@@ -2,14 +2,16 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use ahash::AHashMap;
 use chrono::{DateTime, TimeZone, Utc};
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestFrontMonthContract, RequestHeartbeat, RequestShowOrders, RequestSubscribeForOrderUpdates, ResponseHeartbeat};
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestShowOrders, RequestSubscribeForOrderUpdates, ResponseHeartbeat};
+use ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::OrderPlacement;
+use ff_rithmic_api::rithmic_proto_objects::rti::request_new_order::PriceType;
 use ff_rithmic_api::rithmic_proto_objects::rti::rithmic_order_notification::TransactionType;
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::{SinkExt, StreamExt};
@@ -35,13 +37,15 @@ use rust_decimal::prelude::ToPrimitive;
 use tokio::net::TcpStream;
 use tokio::{select, task};
 use tokio::task::JoinHandle;
-use tokio::time::{interval, timeout};
+use tokio::time::{interval, sleep, timeout};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use crate::{get_shutdown_sender, subscribe_server_shutdown};
 use crate::rithmic_api::products::get_exchange_by_code;
+
+
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
@@ -264,31 +268,35 @@ impl RithmicClient {
         }
     }
 
+
     pub async fn send_message<T: ProstMessage>(
         &self,
         plant: &SysInfraType,
         message: T
     ) {
-        if let Some(write_stream) = self.writers.get(plant) {
-            let mut buf = Vec::new();
-            self.heartbeat_times.insert(plant.clone(), Utc::now());
-            match message.encode(&mut buf) {
-                Ok(_) => {}
-                Err(e) => {
-                    eprintln!("Failed to send message to: {:?}: {}", plant, e);
-                    return;
-                }
+        let mut buf = Vec::new();
+        match message.encode(&mut buf).map_err(|e| format!("Failed to encode message: {}", e)) {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("Failed to encode rithmic proto message: {}", e);
+                return;
             }
+        }
 
-            let length = buf.len() as u32;
-            let mut prefixed_msg = length.to_be_bytes().to_vec();
-            prefixed_msg.extend(buf);
+        let length = buf.len() as u32;
+        let mut prefixed_msg = length.to_be_bytes().to_vec();
+        prefixed_msg.extend(buf);
+
+        if let Some(write_stream) = self.writers.get(plant) {
+            self.heartbeat_times.insert(plant.clone(), Utc::now());
 
             let mut write_stream = write_stream.lock().await;
-            match write_stream.send(Message::Binary(prefixed_msg)).await {
+            match write_stream.send(Message::Binary(prefixed_msg.clone())).await {
                 Ok(_) => {},
-                Err(e) => eprintln!("Failed to send message to: {:?}: {}", plant, e)
+                Err(e) => eprintln!("Failed to send message to {:?}: {}. Retrying...", plant, e),
             }
+        } else {
+            eprintln!("No write stream available for {:?}. Retrying...", plant);
         }
     }
 
@@ -590,9 +598,46 @@ impl RithmicClient {
             quantity,
         })
     }
+
+    pub async fn submit_market_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) {
+        let req = RequestNewOrder {
+            template_id: 312,
+            user_msg: vec![stream_name.to_string(), order.id.clone()],
+            user_tag: Some(order.tag.clone()),
+            window_name: None,
+            fcm_id: self.fcm_id.clone(),
+            ib_id: self.ib_id.clone(),
+            account_id: Some(order.account_id.clone()),
+            symbol: Some(details.symbol),
+            exchange: Some(details.exchange.to_string()),
+            quantity: Some(details.quantity),
+            price: None,
+            trigger_price: None,
+            transaction_type: Some(details.transaction_type.into()),
+            duration: Some(ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into()),
+            price_type: Some(PriceType::Market.into()),
+            trade_route: Some(details.route),
+            manual_or_auto: Some(OrderPlacement::Auto.into()),
+            trailing_stop: None,
+            trail_by_ticks: None,
+            trail_by_price_id: None,
+            release_at_ssboe: None,
+            release_at_usecs: None,
+            cancel_at_ssboe: None,
+            cancel_at_usecs: None,
+            cancel_after_secs: None,
+            if_touched_symbol: None,
+            if_touched_exchange: None,
+            if_touched_condition: None,
+            if_touched_price_field: None,
+            if_touched_price: None,
+        };
+
+        self.send_message(&SysInfraType::OrderPlant, req).await;
+    }
 }
 
-pub(crate) struct CommonRithmicOrderDetails {
+pub struct CommonRithmicOrderDetails {
     pub symbol: SymbolName,
     pub exchange: FuturesExchange,
     pub transaction_type: TransactionType,

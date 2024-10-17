@@ -1,24 +1,18 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestNewOrder};
-use ff_rithmic_api::rithmic_proto_objects::rti::last_trade::TransactionType;
-use ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::{Duration, OrderPlacement};
-use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::request_new_order::PriceType;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{StrategyMode};
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use ff_standard_lib::StreamName;
-use crate::get_shutdown_sender;
-use crate::rithmic_api::api_client::{CommonRithmicOrderDetails, RithmicClient};
-use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_code, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
+use crate::rithmic_api::api_client::{RithmicClient};
+use crate::rithmic_api::products::{get_available_symbol_names, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
@@ -188,50 +182,140 @@ impl BrokerApiResponse for RithmicClient {
             Ok(details) => details,
             Err(e) => return Err(e)
         };
-
-       let req = RequestNewOrder {
-           template_id: 312,
-           user_msg: vec![order.id.clone()],
-           user_tag: Some(order.tag.clone()),
-           window_name: None,
-           fcm_id: self.fcm_id.clone(),
-           ib_id: self.ib_id.clone(),
-           account_id: Some(order.account_id.clone()),
-           symbol: Some(details.symbol),
-           exchange: Some(details.exchange.to_string()),
-           quantity: Some(details.quantity),
-           price: None,
-           trigger_price: None,
-           transaction_type: Some(details.transaction_type.into()),
-           duration: Some(Duration::Fok.into()),
-           price_type: Some(PriceType::Market.into()),
-           trade_route: Some(details.route),
-           manual_or_auto: Some(OrderPlacement::Auto.into()),
-           trailing_stop: None,
-           trail_by_ticks: None,
-           trail_by_price_id: None,
-           release_at_ssboe: None,
-           release_at_usecs: None,
-           cancel_at_ssboe: None,
-           cancel_at_usecs: None,
-           cancel_after_secs: None,
-           if_touched_symbol: None,
-           if_touched_exchange: None,
-           if_touched_condition: None,
-           if_touched_price_field: None,
-           if_touched_price: None,
-       };
-
-        self.send_message(&SysInfraType::OrderPlant, req).await;
+        self.submit_market_order(stream_name, order, details).await;
         Ok(())
     }
 
-    async fn buy_market_order(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
-        todo!()
+    async fn live_enter_long(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        let mut details = match self.rithmic_order_details(mode, stream_name, &order).await {
+            Ok(details) => details,
+            Err(e) => return Err(e)
+        };
+
+        //check if we are short and add to quantity
+        if let Some(account_short_map) = self.short_quantity.get(&order.account_id) {
+            if let Some(symbol_volume) = account_short_map.get(&details.symbol) {
+                let additional_volume = match symbol_volume.to_i32() {
+                    None => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            brokerage: order.brokerage,
+                            account_id: order.account_id,
+                            order_id: order.id.clone(),
+                            reason: "Server Error: Unable to Parse Existing Position Size".to_string(),
+                            tag: order.tag,
+                            time: Utc::now().to_string(),
+                        })
+                    }
+                    Some(volume) => volume
+                };
+                details.quantity += additional_volume;
+            }
+        }
+        self.submit_market_order(stream_name, order, details).await;
+        Ok(())
     }
 
-    async fn sell_market_order(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
-        todo!()
+    async fn live_enter_short(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        let mut details = match self.rithmic_order_details(mode, stream_name, &order).await {
+            Ok(details) => details,
+            Err(e) => return Err(e)
+        };
+
+        //check if we are short and add to quantity
+        if let Some(account_long_map) = self.long_quantity.get(&order.account_id) {
+            if let Some(symbol_volume) = account_long_map.get(&details.symbol) {
+                let additional_volume = match symbol_volume.to_i32() {
+                    None => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            brokerage: order.brokerage,
+                            account_id: order.account_id,
+                            order_id: order.id.clone(),
+                            reason: "Server Error: Unable to Parse Existing Position Size".to_string(),
+                            tag: order.tag,
+                            time: Utc::now().to_string(),
+                        })
+                    }
+                    Some(volume) => volume
+                };
+                details.quantity += additional_volume;
+            }
+        }
+        self.submit_market_order(stream_name, order, details).await;
+        Ok(())
+    }
+
+    async fn live_exit_short(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        let mut details = match self.rithmic_order_details(mode, stream_name, &order).await {
+            Ok(details) => details,
+            Err(e) => return Err(e)
+        };
+
+        let reject_order = |reason: String| -> Result<(), OrderUpdateEvent> {
+            Err(OrderUpdateEvent::OrderRejected {
+                brokerage: order.brokerage.clone(),
+                account_id: order.account_id.clone(),
+                order_id: order.id.clone(),
+                reason,
+                tag: order.tag.clone(),
+                time: Utc::now().to_string(),
+            })
+        };
+
+        //check if we are short and add to quantity
+        if let Some(account_short_map) = self.short_quantity.get(&order.account_id) {
+            if let Some(symbol_volume) = account_short_map.get(&details.symbol) {
+                let volume = match symbol_volume.to_i32() {
+                    None => {
+                        return reject_order("Server Error: Unable to Parse Existing Position Size".to_string())
+                    }
+                    Some(volume) => volume
+                };
+                details.quantity = volume;
+            } else {
+                return reject_order(format!("No Short Position To Exit: {}", details.symbol))
+            }
+        } else {
+            return reject_order(format!("No Short Position To Exit: {}", details.symbol))
+        }
+        self.submit_market_order(stream_name, order, details).await;
+        Ok(())
+    }
+
+    async fn live_exit_long(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        let mut details = match self.rithmic_order_details(mode, stream_name, &order).await {
+            Ok(details) => details,
+            Err(e) => return Err(e)
+        };
+
+        let reject_order = |reason: String| -> Result<(), OrderUpdateEvent> {
+            Err(OrderUpdateEvent::OrderRejected {
+                brokerage: order.brokerage.clone(),
+                account_id: order.account_id.clone(),
+                order_id: order.id.clone(),
+                reason,
+                tag: order.tag.clone(),
+                time: Utc::now().to_string(),
+            })
+        };
+
+        //check if we are short and add to quantity
+        if let Some(account_long_map) = self.long_quantity.get(&order.account_id) {
+            if let Some(symbol_volume) = account_long_map.get(&details.symbol) {
+                let volume = match symbol_volume.to_i32() {
+                    None => {
+                        return reject_order("Server Error: Unable to Parse Existing Position Size".to_string())
+                    }
+                    Some(volume) => volume
+                };
+                details.quantity = volume;
+            } else {
+                return reject_order(format!("No Long Position To Exit: {}", details.symbol))
+            }
+        } else {
+            return reject_order(format!("No Long Position To Exit: {}", details.symbol))
+        }
+        self.submit_market_order(stream_name, order, details).await;
+        Ok(())
     }
 }
 

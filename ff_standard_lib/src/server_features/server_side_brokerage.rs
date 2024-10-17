@@ -196,14 +196,28 @@ pub trait BrokerApiResponse: Sync + Send {
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
 
-    async fn buy_market_order(
+    async fn live_enter_long(
         &self,
         stream_name: StreamName,
         mode: StrategyMode,
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
 
-    async fn sell_market_order(
+    async fn live_enter_short(
+        &self,
+        stream_name: StreamName,
+        mode: StrategyMode,
+        order: Order,
+    ) -> Result<(), OrderUpdateEvent>;
+
+    async fn live_exit_short(
+        &self,
+        stream_name: StreamName,
+        mode: StrategyMode,
+        order: Order,
+    ) -> Result<(), OrderUpdateEvent>;
+
+    async fn live_exit_long(
         &self,
         stream_name: StreamName,
         mode: StrategyMode,

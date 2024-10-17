@@ -17,11 +17,11 @@ use tokio::sync::mpsc::{Receiver};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::database::HybridStorage;
-use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, send_market_order, symbol_info_response, symbol_names_response};
+use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, session_market_hours_response, symbols_response, tick_size_response};
 use crate::stream_tasks::{deregister_streamer};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::orders::{OrderRequest, OrderType, OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{Order, OrderRequest, OrderType, OrderUpdateEvent};
 use ff_standard_lib::StreamName;
 use crate::{get_shutdown_sender, stream_listener};
 
@@ -331,6 +331,7 @@ where
     }
 }
 
+
 const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 #[allow(dead_code, unused)]
 async fn order_response(stream_name: StreamName, mode: StrategyMode, request: OrderRequest, sender: tokio::sync::mpsc::Sender<DataServerResponse>) {
@@ -338,6 +339,25 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
         get_shutdown_sender().send(()).unwrap();
         panic!("Attempt to send Live order from: {:?}", mode);
     }
+
+    async fn send_error_response(sender: &tokio::sync::mpsc::Sender<DataServerResponse>, error: OrderUpdateEvent, stream_name: &StreamName) {
+        let event = DataServerResponse::OrderUpdates(error);
+        if let Err(_) = sender.send(event).await {
+            eprintln!("Failed to send order response to: {}", stream_name);
+        }
+    }
+
+    fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
+        OrderUpdateEvent::OrderRejected {
+            brokerage: order.brokerage.clone(),
+            account_id: order.account_id.clone(),
+            order_id: order.id.clone(),
+            reason,
+            tag: order.tag.clone(),
+            time: Utc::now().to_string(),
+        }
+    }
+
     match request {
         OrderRequest::Create { brokerage, order, order_type } => {
             match order_type {
@@ -345,30 +365,15 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
                     todo!()
                 }
                 OrderType::Market => {
-                    let send_order_result = timeout(TIMEOUT_DURATION, send_market_order(stream_name.clone(), mode, order.clone())).await;
+                    let send_order_result = timeout(TIMEOUT_DURATION, live_market_order(stream_name.clone(), mode, order.clone())).await;
                     match send_order_result {
-                        Ok(result) => match result {
-                            Ok(_) => {}
-                            Err(e) => {
-                                let event = DataServerResponse::OrderUpdates(e);
-                                if let Err(_) = sender.send(event).await {
-                                    eprintln!("Failed to send order rejection response to: {}", stream_name);
-                                }
-                            }
-                        },
+                        Ok(Ok(_)) => {} // Order placed successfully
+                        Ok(Err(e)) => {
+                            send_error_response(&sender, e, &stream_name).await;
+                        }
                         Err(_) => {
-                            let timeout_error = OrderUpdateEvent::OrderRejected {
-                                brokerage: order.brokerage.clone(),
-                                account_id: order.account_id,
-                                order_id: order.id,
-                                reason: "Order placement timed out".to_string(),
-                                tag: order.tag,
-                                time: Utc::now().to_string(),
-                            };
-                            let event = DataServerResponse::OrderUpdates(timeout_error);
-                            if let Err(_) = sender.send(event).await {
-                                eprintln!("Failed to send order timeout response to: {}", order.brokerage);
-                            }
+                            let timeout_error = create_order_rejected(&order, "Order placement timed out".to_string());
+                            send_error_response(&sender, timeout_error, &stream_name).await;
                         }
                     }
                 }
@@ -382,16 +387,56 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
                     todo!()
                 }
                 OrderType::EnterLong => {
-                    todo!()
+                    let send_order_result = timeout(TIMEOUT_DURATION, live_enter_long(stream_name.clone(), mode, order.clone())).await;
+                    match send_order_result {
+                        Ok(Ok(_)) => {} // Order placed successfully
+                        Ok(Err(e)) => {
+                            send_error_response(&sender, e, &stream_name).await;
+                        }
+                        Err(_) => {
+                            let timeout_error = create_order_rejected(&order, "Order placement timed out".to_string());
+                            send_error_response(&sender, timeout_error, &stream_name).await;
+                        }
+                    }
                 }
                 OrderType::EnterShort => {
-                    todo!()
+                    let send_order_result = timeout(TIMEOUT_DURATION, live_enter_short(stream_name.clone(), mode, order.clone())).await;
+                    match send_order_result {
+                        Ok(Ok(_)) => {} // Order placed successfully
+                        Ok(Err(e)) => {
+                            send_error_response(&sender, e, &stream_name).await;
+                        }
+                        Err(_) => {
+                            let timeout_error = create_order_rejected(&order, "Order placement timed out".to_string());
+                            send_error_response(&sender, timeout_error, &stream_name).await;
+                        }
+                    }
                 }
                 OrderType::ExitLong => {
-                    todo!()
+                    let send_order_result = timeout(TIMEOUT_DURATION, live_exit_long(stream_name.clone(), mode, order.clone())).await;
+                    match send_order_result {
+                        Ok(Ok(_)) => {} // Order placed successfully
+                        Ok(Err(e)) => {
+                            send_error_response(&sender, e, &stream_name).await;
+                        }
+                        Err(_) => {
+                            let timeout_error = create_order_rejected(&order, "Order placement timed out".to_string());
+                            send_error_response(&sender, timeout_error, &stream_name).await;
+                        }
+                    }
                 }
                 OrderType::ExitShort => {
-                    todo!()
+                    let send_order_result = timeout(TIMEOUT_DURATION, live_exit_short(stream_name.clone(), mode, order.clone())).await;
+                    match send_order_result {
+                        Ok(Ok(_)) => {} // Order placed successfully
+                        Ok(Err(e)) => {
+                            send_error_response(&sender, e, &stream_name).await;
+                        }
+                        Err(_) => {
+                            let timeout_error = create_order_rejected(&order, "Order placement timed out".to_string());
+                            send_error_response(&sender, timeout_error, &stream_name).await;
+                        }
+                    }
                 }
             }
         }
