@@ -4,8 +4,8 @@ use crate::strategies::client_features::server_connections::add_buffer;
 use crate::strategies::handlers::market_handler::market_handlers::{LIVE_CLOSED_ORDER_CACHE, LIVE_LEDGERS, LIVE_ORDER_CACHE};
 use crate::strategies::strategy_events::StrategyEvent;
 
-pub async fn live_order_update(order_upate_event: OrderUpdateEvent) {
-    match order_upate_event {
+pub async fn live_order_update(order_update_event: OrderUpdateEvent) {
+    match order_update_event {
         OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id ,tag, time} => {
             if let Some(mut order) = LIVE_ORDER_CACHE.get_mut(&order_id) {
                 order.value_mut().state = OrderState::Accepted;
@@ -18,10 +18,10 @@ pub async fn live_order_update(order_upate_event: OrderUpdateEvent) {
                 }
             }
         }
-        OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id ,tag,time} => {
+        OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id , price, quantity, tag,time } => {
             if let Some((order_id,mut order)) = LIVE_ORDER_CACHE.remove(&order_id) {
                 order.state = OrderState::Filled;
-                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id: order_id.clone(), account_id: account_id.clone(), brokerage, tag, time});
+                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id: order_id.clone(), price, account_id: account_id.clone(), brokerage, tag, time, quantity });
                 add_buffer(Utc::now(), event).await;
                 if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
                     if let Some(_account_ledger) = broker_map.get_mut(&account_id) {
@@ -31,10 +31,10 @@ pub async fn live_order_update(order_upate_event: OrderUpdateEvent) {
                 LIVE_CLOSED_ORDER_CACHE.insert(order_id.clone(), order);
             }
         }
-        OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id,tag, time } => {
+        OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id, price, quantity, tag, time } => {
             if let Some(mut order) = LIVE_ORDER_CACHE.get_mut(&order_id) {
                 order.value_mut().state = OrderState::PartiallyFilled;
-                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id, account_id: account_id.clone(), brokerage, tag, time});
+                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {order_id, price, account_id: account_id.clone(), brokerage, tag, time, quantity });
                 add_buffer(Utc::now(), event).await;
                 if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
                     if let Some(_account_ledger) = broker_map.get_mut(&account_id) {

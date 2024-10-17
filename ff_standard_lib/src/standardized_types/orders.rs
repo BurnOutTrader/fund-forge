@@ -527,9 +527,9 @@ pub enum OrderUpdateType {
 pub enum OrderUpdateEvent {
     OrderAccepted {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
 
-    OrderFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
+    OrderFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
-    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
+    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
     OrderCancelled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
 

@@ -373,7 +373,7 @@ async fn fill_order(
                         for event in events {
                             add_buffer(time, StrategyEvent::PositionEvents(event)).await;
                         }
-                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone(), tag: order.tag.clone(),time: time.to_string()})).await;
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), price: market_price, brokerage: order.brokerage, account_id: order.account_id.clone(), tag: order.tag.clone(),time: time.to_string(), quantity: order.quantity_filled })).await;
                     }
                     Err(e) => {
                         match &e {
@@ -411,7 +411,7 @@ async fn partially_fill_order(
                         for event in events {
                             add_buffer(time, StrategyEvent::PositionEvents(event)).await;
                         }
-                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderPartiallyFilled { order_id: order.id.clone(), brokerage: order.brokerage, account_id: order.account_id.clone(), tag: order.tag.clone(), time: time.to_string()})).await;
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderPartiallyFilled { order_id: order.id.clone(), price: fill_price, brokerage: order.brokerage, account_id: order.account_id.clone(), tag: order.tag.clone(), time: time.to_string(), quantity: fill_volume })).await;
                     }
                     Err(e) => {
                         match &e {
