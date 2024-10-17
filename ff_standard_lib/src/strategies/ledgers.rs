@@ -2,7 +2,7 @@ use std::fs::create_dir_all;
 use std::path::Path;
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
-use crate::standardized_types::enums::{PositionSide, StrategyMode};
+use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::SymbolName;
 use dashmap::DashMap;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -12,10 +12,13 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::position::{Position, PositionId};
+use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use serde_derive::{Deserialize, Serialize};
+use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, Volume};
+use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
+use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
 
 lazy_static! {
@@ -372,10 +375,215 @@ impl Ledger {
         // Return the generated position ID
         format!("{}-{}-{}-{}-{}", self.brokerage, self.account_id, symbol_name, side, counter)
     }
+
+    pub fn timeslice_update(&mut self, time_slice: TimeSlice, time: DateTime<Utc>) {
+        for base_data_enum in time_slice.iter() {
+            let data_symbol_name = &base_data_enum.symbol().name;
+            if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
+                if position.is_closed {
+                    continue
+                }
+                //returns booked pnl if exit on brackets
+                position.backtest_update_base_data(&base_data_enum, time, self.currency);
+                self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
+
+                if position.is_closed {
+                    // Move the position to the closed positions map
+                    let (symbol_name, position) = self.positions.remove(data_symbol_name).unwrap();
+                    self.positions_closed
+                        .entry(symbol_name)
+                        .or_insert_with(Vec::new)
+                        .push(position);
+                }
+            }
+        }
+        if self.mode != StrategyMode::Live {
+            self.cash_value = self.cash_used + self.cash_available;
+        }
+    }
+
+    /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
+    /// todo Need to handle creating a new opposing position when
+    ///todo, check ledger max order etc before placing orders
+    pub async fn update_or_create_position(
+        &mut self,
+        symbol_name: &SymbolName,
+        order_id: OrderId,
+        quantity: Volume,
+        side: OrderSide,
+        time: DateTime<Utc>,
+        market_fill_price: Price, // we use the passed in price because we dont know what sort of order was filled, limit or market
+        tag: String
+    ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
+        let mut updates = vec![];
+        // Check if there's an existing position for the given symbol
+        let mut remaining_quantity = quantity;
+        if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
+
+            let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell)
+                || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
+
+            if is_reducing {
+                remaining_quantity -= existing_position.quantity_open;
+                let event= existing_position.reduce_paper_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
+
+                if self.mode != StrategyMode::Live {
+                    self.release_margin_used(&symbol_name).await;
+                }
+
+                match &event {
+                    PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
+                        self.positions.insert(symbol_name, existing_position);
+
+                        if self.mode != StrategyMode::Live {
+                            self.cash_available += booked_pnl;
+                        }
+                    }
+                    PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
+                        self.booked_pnl += booked_pnl;
+
+                        if self.mode != StrategyMode::Live {
+                            self.cash_available += booked_pnl;
+                        }
+                        if !self.positions_closed.contains_key(&symbol_name) {
+                            self.positions_closed.insert(symbol_name.clone(), vec![]);
+                        }
+                        if let Some(mut positions_closed) = self.positions_closed.get_mut(&symbol_name){
+                            positions_closed.value_mut().push(existing_position);
+                        }
+                    }
+                    _ => panic!("This shouldn't happen")
+                }
+
+                if self.mode != StrategyMode::Live {
+                    self.cash_value = self.cash_used + self.cash_available;
+                }
+                updates.push(event);
+            } else {
+                match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            brokerage: self.brokerage,
+                            account_id: self.account_id.clone(),
+                            order_id,
+                            reason: e.to_string(),
+                            tag,
+                            time: time.to_string()
+                        })
+                    }
+                }
+                let event = existing_position.add_to_position(market_fill_price, quantity, time, tag.clone(), self.currency).await;
+                self.positions.insert(existing_position.symbol_name.clone(), existing_position);
+
+                if self.mode != StrategyMode::Live {
+                    self.cash_value = self.cash_used + self.cash_available;
+                }
+
+                updates.push(event);
+                remaining_quantity = dec!(0.0);
+            }
+        }
+        if remaining_quantity > dec!(0.0) {
+            match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(OrderUpdateEvent::OrderRejected {
+                        brokerage: self.brokerage,
+                        account_id: self.account_id.clone(),
+                        order_id,
+                        reason: e.to_string(),
+                        tag,
+                        time: time.to_string()
+                    })
+                }
+            }
+
+            // Determine the side of the position based on the order side
+            let position_side = match side {
+                OrderSide::Buy => PositionSide::Long,
+                OrderSide::Sell => PositionSide::Short,
+            };
+
+            let info = self.symbol_info(symbol_name).await;
+            let id = self.generate_id(symbol_name, position_side);
+            // Create a new position
+            let position = Position::new(
+                symbol_name.clone(),
+                self.brokerage.clone(),
+                self.account_id.clone(),
+                position_side,
+                remaining_quantity,
+                market_fill_price,
+                id.clone(),
+                info.clone(),
+                info.pnl_currency,
+                tag.clone(),
+                time,
+            );
+
+            // Insert the new position into the positions map
+            self.positions.insert(symbol_name.clone(), position);
+            if !self.positions_closed.contains_key(symbol_name) {
+                self.positions_closed.insert(symbol_name.clone(), vec![]);
+            }
+
+            let event = PositionUpdateEvent::PositionOpened{
+                position_id: id,
+                account_id: self.account_id.clone(),
+                brokerage: self.brokerage.clone(),
+                originating_order_tag: tag,
+                time: time.to_string()
+            };
+
+            if self.mode != StrategyMode::Live {
+                self.cash_value = self.cash_used + self.cash_available;
+            }
+            updates.push(event);
+        }
+        Ok(updates)
+    }
+
+    pub async fn exit_position(
+        &mut self,
+        symbol_name: &SymbolName,
+        time: DateTime<Utc>,
+        market_price: Price,
+        tag: String
+    ) -> Option<PositionUpdateEvent>  {
+        if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
+            // Mark the position as closed
+            existing_position.is_closed = true;
+
+            // Calculate booked profit by reducing the position size
+            self.release_margin_used(&symbol_name).await;
+            let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
+            match &event {
+                PositionUpdateEvent::PositionClosed { booked_pnl,.. } => {
+                    self.booked_pnl += booked_pnl;
+                    if self.mode != StrategyMode::Live {
+                        self.cash_available += booked_pnl;
+                    }
+                }
+                _ => panic!("this shouldn't happen")
+            }
+
+            if self.mode != StrategyMode::Live {
+                self.cash_value = self.cash_used + self.cash_available;
+            }
+            // Add the closed position to the positions_closed DashMap
+            self.positions_closed
+                .entry(symbol_name.clone())                  // Access the entry for the symbol name
+                .or_insert_with(Vec::new)                    // If no entry exists, create a new Vec
+                .push(existing_position);     // Push the closed position to the Vec
+
+            return Some(event)
+        }
+        None
+    }
 }
 
 pub(crate) mod historical_ledgers {
-    use chrono::{DateTime, Utc};
     use dashmap::DashMap;
     use rust_decimal::Decimal;
     use rust_decimal::prelude::FromPrimitive;
@@ -383,13 +591,10 @@ pub(crate) mod historical_ledgers {
     use crate::standardized_types::broker_enum::Brokerage;
     use crate::strategies::ledgers::{AccountId, Currency, Ledger};
     use crate::messages::data_server_messaging::FundForgeError;
-    use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
-    use crate::standardized_types::position::{Position, PositionUpdateEvent};
-    use crate::standardized_types::base_data::traits::BaseData;
+    use crate::standardized_types::enums::{StrategyMode};
+    use crate::standardized_types::position::{Position};
     use crate::standardized_types::new_types::{Price, Volume};
-    use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
     use crate::standardized_types::subscriptions::SymbolName;
-    use crate::standardized_types::time_slices::TimeSlice;
 
     impl Ledger {
         pub async fn release_margin_used(&mut self, symbol_name: &SymbolName) {
@@ -453,208 +658,6 @@ pub(crate) mod historical_ledgers {
                     positions.value_mut().push(position);
                 }
             }
-        }
-
-        pub fn timeslice_update(&mut self, time_slice: TimeSlice, time: DateTime<Utc>) {
-            for base_data_enum in time_slice.iter() {
-                let data_symbol_name = &base_data_enum.symbol().name;
-                if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
-                    if position.is_closed {
-                        continue
-                    }
-                    //returns booked pnl if exit on brackets
-                    position.backtest_update_base_data(&base_data_enum, time, self.currency);
-                    self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
-
-                    if position.is_closed {
-                        // Move the position to the closed positions map
-                        let (symbol_name, position) = self.positions.remove(data_symbol_name).unwrap();
-                        self.positions_closed
-                            .entry(symbol_name)
-                            .or_insert_with(Vec::new)
-                            .push(position);
-                    }
-                }
-            }
-            if self.mode != StrategyMode::Live {
-                self.cash_value = self.cash_used + self.cash_available;
-            }
-        }
-
-        /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
-        /// todo Need to handle creating a new opposing position when
-        ///todo, check ledger max order etc before placing orders
-        pub async fn update_or_create_position(
-            &mut self,
-            symbol_name: &SymbolName,
-            order_id: OrderId,
-            quantity: Volume,
-            side: OrderSide,
-            time: DateTime<Utc>,
-            market_fill_price: Price, // we use the passed in price because we dont know what sort of order was filled, limit or market
-            tag: String
-        ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
-            let mut updates = vec![];
-            // Check if there's an existing position for the given symbol
-            let mut remaining_quantity = quantity;
-            if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
-
-                let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell)
-                    || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
-
-                if is_reducing {
-                    remaining_quantity -= existing_position.quantity_open;
-                    let event= existing_position.reduce_paper_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
-
-                    if self.mode != StrategyMode::Live {
-                        self.release_margin_used(&symbol_name).await;
-                    }
-
-                    match &event {
-                        PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
-                            self.positions.insert(symbol_name, existing_position);
-
-                            if self.mode != StrategyMode::Live {
-                                self.cash_available += booked_pnl;
-                            }
-                        }
-                        PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
-                            self.booked_pnl += booked_pnl;
-
-                            if self.mode != StrategyMode::Live {
-                                self.cash_available += booked_pnl;
-                            }
-                            if !self.positions_closed.contains_key(&symbol_name) {
-                                self.positions_closed.insert(symbol_name.clone(), vec![]);
-                            }
-                            if let Some(mut positions_closed) = self.positions_closed.get_mut(&symbol_name){
-                                positions_closed.value_mut().push(existing_position);
-                            }
-                        }
-                        _ => panic!("This shouldn't happen")
-                    }
-
-                    if self.mode != StrategyMode::Live {
-                        self.cash_value = self.cash_used + self.cash_available;
-                    }
-                    updates.push(event);
-                } else {
-                    match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
-                        Ok(_) => {}
-                        Err(e) => {
-                            return Err(OrderUpdateEvent::OrderRejected {
-                                brokerage: self.brokerage,
-                                account_id: self.account_id.clone(),
-                                order_id,
-                                reason: e.to_string(),
-                                tag,
-                                time: time.to_string()
-                            })
-                        }
-                    }
-                    let event = existing_position.add_to_position(market_fill_price, quantity, time, tag.clone(), self.currency).await;
-                    self.positions.insert(existing_position.symbol_name.clone(), existing_position);
-
-                    if self.mode != StrategyMode::Live {
-                        self.cash_value = self.cash_used + self.cash_available;
-                    }
-
-                    updates.push(event);
-                    remaining_quantity = dec!(0.0);
-                }
-            }
-            if remaining_quantity > dec!(0.0) {
-                match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        return Err(OrderUpdateEvent::OrderRejected {
-                            brokerage: self.brokerage,
-                            account_id: self.account_id.clone(),
-                            order_id,
-                            reason: e.to_string(),
-                            tag: tag,
-                            time: time.to_string()
-                        })
-                    }
-                }
-
-                // Determine the side of the position based on the order side
-                let position_side = match side {
-                    OrderSide::Buy => PositionSide::Long,
-                    OrderSide::Sell => PositionSide::Short,
-                };
-
-                let info = self.symbol_info(symbol_name).await;
-                let id = self.generate_id(symbol_name, position_side);
-                // Create a new position
-                let position = Position::new(
-                    symbol_name.clone(),
-                    self.brokerage.clone(),
-                    self.account_id.clone(),
-                    position_side,
-                    remaining_quantity,
-                    market_fill_price,
-                    id.clone(),
-                    info.clone(),
-                    info.pnl_currency,
-                    tag.clone(),
-                    time,
-                );
-
-                // Insert the new position into the positions map
-                self.positions.insert(symbol_name.clone(), position);
-                if !self.positions_closed.contains_key(symbol_name) {
-                    self.positions_closed.insert(symbol_name.clone(), vec![]);
-                }
-
-                let event = PositionUpdateEvent::PositionOpened{
-                    position_id: id,
-                    account_id: self.account_id.clone(),
-                    brokerage: self.brokerage.clone(),
-                    originating_order_tag: tag,
-                    time: time.to_string()
-                };
-
-                if self.mode != StrategyMode::Live {
-                    self.cash_value = self.cash_used + self.cash_available;
-                }
-                updates.push(event);
-            }
-            Ok(updates)
-        }
-
-        pub async fn exit_position_paper(
-            &mut self,
-            symbol_name: &SymbolName,
-            time: DateTime<Utc>,
-            market_price: Price,
-            tag: String
-        ) -> Option<PositionUpdateEvent>  {
-            if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
-                // Mark the position as closed
-                existing_position.is_closed = true;
-
-                // Calculate booked profit by reducing the position size
-                self.release_margin_used(&symbol_name).await;
-                let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
-                match &event {
-                    PositionUpdateEvent::PositionClosed { booked_pnl,.. } => {
-                        self.booked_pnl += booked_pnl;
-                        self.cash_available += booked_pnl;
-                    }
-                    _ => panic!("this shouldn't happen")
-                }
-
-                self.cash_value = self.cash_used + self.cash_available;
-                // Add the closed position to the positions_closed DashMap
-                self.positions_closed
-                    .entry(symbol_name.clone())                  // Access the entry for the symbol name
-                    .or_insert_with(Vec::new)                    // If no entry exists, create a new Vec
-                    .push(existing_position);     // Push the closed position to the Vec
-
-                return Some(event)
-            }
-            None
         }
     }
 }
