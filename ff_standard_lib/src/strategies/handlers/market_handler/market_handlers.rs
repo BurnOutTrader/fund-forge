@@ -208,28 +208,28 @@ pub async fn simulated_order_matching(
         }
         OrderRequest::Update{ brokerage, order_id, account_id, update } => {
             if let Some((order_id, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id) {
-                match update {
+                match &update {
                     OrderUpdateType::LimitPrice(price) => {
                         if let Some(ref mut limit_price) = order.limit_price {
-                            *limit_price = price;
+                            *limit_price = price.clone();
                         }
                     }
                     OrderUpdateType::TriggerPrice(price) => {
                         if let Some(ref mut trigger_price) = order.trigger_price {
-                            *trigger_price = price;
+                            *trigger_price = price.clone();
                         }
                     }
                     OrderUpdateType::TimeInForce(tif) => {
-                        order.time_in_force = tif;
+                        order.time_in_force = tif.clone();
                     }
                     OrderUpdateType::Quantity(quantity) => {
-                        order.quantity_open = quantity;
+                        order.quantity_open = quantity.clone();
                     }
                     OrderUpdateType::Tag(tag) => {
-                        order.tag = tag;
+                        order.tag = tag.clone();
                     }
                 }
-                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone(), order: order.clone(), tag: order.tag.clone(), time: time.to_string()});
+                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone(), update_type: update, tag: order.tag.clone(), time: time.to_string()});
                 BACKTEST_OPEN_ORDER_CACHE.insert(order_id, order);
                 add_buffer(time, update_event).await;
             } else {

@@ -603,8 +603,8 @@ impl RithmicClient {
     pub async fn submit_market_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) {
         let req = RequestNewOrder {
             template_id: 312,
-            user_msg: vec![stream_name.to_string(), order.id.clone()],
-            user_tag: Some(order.tag.clone()),
+            user_msg: vec![stream_name.to_string(), order.account_id.clone(), order.tag.clone()],
+            user_tag: Some(order.id.clone()),
             window_name: None,
             fcm_id: self.fcm_id.clone(),
             ib_id: self.ib_id.clone(),

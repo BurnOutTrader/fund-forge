@@ -1,5 +1,5 @@
 use chrono::Utc;
-use crate::standardized_types::orders::{OrderState, OrderUpdateEvent};
+use crate::standardized_types::orders::{OrderState, OrderUpdateEvent, OrderUpdateType};
 use crate::strategies::client_features::server_connections::add_buffer;
 use crate::strategies::handlers::market_handler::market_handlers::{LIVE_CLOSED_ORDER_CACHE, LIVE_LEDGERS, LIVE_ORDER_CACHE};
 use crate::strategies::strategy_events::StrategyEvent;
@@ -75,9 +75,17 @@ pub fn live_order_update(order_update_event: OrderUpdateEvent) {
                     LIVE_CLOSED_ORDER_CACHE.insert(order_id.clone(), order);
                 }
             }
-            OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, order, tag, time } => {
-                LIVE_ORDER_CACHE.insert(order_id.clone(), order.clone());
-                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { order_id, account_id, brokerage, order, tag, time });
+            OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, update_type, tag, time } => {
+                if let Some((_id, mut order)) = LIVE_ORDER_CACHE.remove(&order_id) {
+                    match &update_type {
+                        OrderUpdateType::LimitPrice(price) => order.limit_price = Some(price.clone()),
+                        OrderUpdateType::TriggerPrice(price) => order.trigger_price = Some(price.clone()),
+                        OrderUpdateType::TimeInForce(tif) => order.time_in_force = tif.clone(),
+                        OrderUpdateType::Quantity(quantity) => order.quantity_open = quantity.clone(),
+                        OrderUpdateType::Tag(tag) => order.tag = tag.clone()
+                    }
+                }
+                let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { order_id, account_id, brokerage, tag, time, update_type });
                 add_buffer(Utc::now(), event).await;
             }
             OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason, time } => {

@@ -8,12 +8,13 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
+use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
-use tokio::sync::mpsc::{Receiver};
+use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::database::HybridStorage;
@@ -27,6 +28,8 @@ use crate::{get_shutdown_sender, stream_listener};
 
 lazy_static!(
     pub static ref DATA_STORAGE: Arc<HybridStorage> = Arc::new(HybridStorage::new(PathBuf::from(get_data_folder()), Duration::from_secs(1800)));
+
+    pub static ref RESPONSE_SENDERS: Arc<DashMap<StreamName, Sender<DataServerResponse>>> = Arc::new(DashMap::new());
 );
 
 pub async fn base_data_response(
@@ -55,6 +58,8 @@ pub async fn manage_async_requests(
     let (read_half, write_half) = io::split(stream);
     let strategy_mode = strategy_mode;
     let (response_sender, request_receiver) = mpsc::channel(1000);
+    RESPONSE_SENDERS.insert(stream_name.clone(), response_sender.clone());
+
     tokio::spawn(async move {
         response_handler(request_receiver, write_half).await;
     });
@@ -272,6 +277,7 @@ pub async fn manage_async_requests(
             });
         }
         deregister_streamer(&stream_name).await;
+        RESPONSE_SENDERS.remove(&stream_name);
         println!("Streamer Disconnected: {}", stream_name);
     });
 }

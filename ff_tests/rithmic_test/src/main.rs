@@ -110,7 +110,9 @@ pub async fn on_data_received(
     let mut warmup_complete = false;
     let account_1 = AccountId::from("Test_Account_1");
     let mut last_side = LastSide::Flat;
+    let account: AccountId = "S1Sep246906077".to_string();
     println!("Staring Strategy Loop");
+    let symbol = "MNQ".to_string();
     let mut count = 0;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
@@ -141,13 +143,11 @@ pub async fn on_data_received(
 
                                     count += 1;
                                     if count == 5 || count == 15 {
-                                        let account: AccountId = "S1Sep246906077".to_string();
-                                        let entry_id = strategy.buy_market(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
+                                        let entry_id = strategy.buy_market(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
                                     }
 
-                                    if count == 10 || count == 20 || count == 25 {
-                                        let account: AccountId = "S1Sep246906077".to_string();
-                                        let exit_id = strategy.sell_market(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
+                                    if count == 10 || count == 20 || count == 25 && strategy.is_long(&Brokerage::Rithmic(RithmicSystem::TopstepTrader), &account, &symbol) {
+                                        let exit_id = strategy.sell_market(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
                                     }
                                 }
                             }

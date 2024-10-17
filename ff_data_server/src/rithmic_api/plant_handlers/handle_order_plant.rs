@@ -1,21 +1,36 @@
+use std::str::FromStr;
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 #[allow(unused_imports)]
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 #[allow(unused_imports)]
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use ff_rithmic_api::rithmic_proto_objects::rti::Reject;
+use lazy_static::lazy_static;
 use prost::Message as ProstMessage;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
-use ff_standard_lib::standardized_types::accounts::AccountInfo;
+use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
+use ff_standard_lib::standardized_types::accounts::{AccountId, AccountInfo};
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::FuturesExchange;
 use ff_standard_lib::standardized_types::accounts::Currency;
+use ff_standard_lib::standardized_types::new_types::{Price, Volume};
+use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent, OrderUpdateType};
+use ff_standard_lib::StreamName;
+use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
-
+type BasketId = String;
+lazy_static! {
+    pub static ref BASKET_ID_TO_ID_MAP: DashMap<BasketId , OrderId> = DashMap::new();
+    pub static ref BASKET_TO_STREAM_NAME_MAP: DashMap<BasketId , StreamName> = DashMap::new();
+    pub static ref ID_TO_STREAM_NAME_MAP: DashMap<OrderId , u16> = DashMap::new();
+    pub static ref ID_TO_TAG: DashMap<OrderId , String> = DashMap::new();
+    pub static ref ID_UPDATE_TYPE: DashMap<OrderId , OrderUpdateType> = DashMap::new();
+}
 
 #[allow(unused, dead_code)]
 pub async fn match_order_plant_id(
@@ -153,18 +168,47 @@ pub async fn match_order_plant_id(
             if let Ok(msg) = ResponseNewOrder::decode(&message_buf[..]) {
                 // New Order Response
                 // From Server
-                println!("New Order Response (Template ID: 313) from Server: {:?}", msg);
-              /*  if let (Some(basket_id), Some(ssboe), Some(usecs)) = (msg.basket_id, msg.ssboe, msg.usecs) {
+                //println!("New Order Response (Template ID: 313) from Server: {:?}", msg);
+                if let (Some(basket_id), Some(ssboe), Some(usecs)) = (msg.basket_id, msg.ssboe, msg.usecs) {
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();
-                    let order_event = OrderUpdateEvent::OrderAccepted {
+
+                    let order_id = match msg.user_tag {
+                        None => return,
+                        Some(order_id) => order_id
+                    };
+                    BASKET_ID_TO_ID_MAP.insert(basket_id.clone(), order_id.clone());
+
+                    let stream_name = match msg.user_msg.get(0) {
+                        None => return,
+                        Some(stream_name) => stream_name
+                    };
+
+                    let stream_name = u16::from_str(&stream_name).unwrap_or_default();
+
+                    BASKET_TO_STREAM_NAME_MAP.insert(basket_id,stream_name );
+                    ID_TO_STREAM_NAME_MAP.insert(order_id.clone(), stream_name);
+
+                    let tag = match msg.user_msg.get(2) {
+                        None => return,
+                        Some(tag) => tag
+                    };
+                    ID_TO_TAG.insert(order_id.clone(), tag.clone());
+
+                    let account_id = match msg.user_msg.get(1) {
+                        None => return,
+                        Some(id) => id
+                    };
+
+                    let event = OrderUpdateEvent::OrderAccepted {
                         brokerage: client.brokerage.clone(),
-                        account_id: client.account_id.clone(),
-                        order_id: OrderId::from(basket_id),
-                        tag: msg.user_tag.unwrap_or_default(),
+                        account_id: account_id.to_owned(),
+                        order_id: order_id.clone(),
+                        tag: tag.to_owned(),
                         time,
                     };
-                    // You can handle the order_event here
-                }*/
+
+                    send_order_update(&order_id, event).await;
+                }
             }
         },
         315 => {
@@ -317,75 +361,80 @@ pub async fn match_order_plant_id(
             */
             if let Ok(msg) = RithmicOrderNotification::decode(&message_buf[..]) {
                 //println!("Rithmic Order Notification (Template ID: 351) from Server: {:?}", msg);
-                /*if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(order_id)) =
+               /* if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(order_id)) =
                     (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {
-                    let time = create_datetime(ssboe, usecs).to_string();
-                    let order_event = match notify_type {
-                        NotifyType::OrderRcvdFromClnt | NotifyType::OrderRcvdByExchGtwy | NotifyType::OrderSentToExch => {
-                            OrderUpdateEvent::OrderAccepted {
-                                brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id),
-                                order_id: OrderId::from(basket_id),
-                                tag: msg.user_tag.unwrap_or_default(),
-                                time,
-                            }
+                    let time = create_datetime(ssboe as i64, usecs as i64).to_string();
+                    let notify_type = match NotifyType::try_from(notify_type) {
+                        Err(e) => return,
+                        Ok(notify) => notify
+                    };
+
+                    let tag = match ID_TO_TAG.get(&order_id) {
+                        None => {
+                            eprintln!("Tag not found for order: {}", order_id);
+                            return;
                         },
+                        Some(tag) => tag.value().clone()
+                    };
+                    match notify_type {
                         NotifyType::Open => {
-                            OrderUpdateEvent::OrderAccepted {
+                            //todo, we dont need to do this here
+                        /*    let event = OrderUpdateEvent::OrderAccepted {
                                 brokerage: client.brokerage.clone(),
                                 account_id: AccountId::from(account_id),
-                                order_id: OrderId::from(basket_id),
-                                tag: msg.user_tag.unwrap_or_default(),
+                                order_id: order_id.clone(),
+                                tag,
                                 time,
-                            }
+                            };
+                            send_order_update(&order_id, event).await;*/
                         },
                         NotifyType::Complete => {
-                            if msg.completion_reason == Some("F".to_string()) {
-                                OrderUpdateEvent::OrderFilled {
-                                    brokerage: client.brokerage.clone(),
-                                    account_id: AccountId::from(account_id),
-                                    order_id: OrderId::from(basket_id),
-                                    tag: msg.user_tag.unwrap_or_default(),
-                                    time,
-                                }
-                            } else {
-                                OrderUpdateEvent::OrderCancelled {
-                                    brokerage: client.brokerage.clone(),
-                                    account_id: AccountId::from(account_id),
-                                    order_id: OrderId::from(basket_id),
-                                    tag: msg.user_tag.unwrap_or_default(),
-                                    time,
+                            if msg.completion_reason == Some("Fill".to_string()) {
+                                if let (Some(price), Some(quantity)) = (msg.price, msg.quantity) {
+                                    let price = match Decimal::from_f64_retain(price) {
+                                        None => return,
+                                        Some(p) => p
+                                    };
+                                    let quantity = match Decimal::from_i32(quantity) {
+                                        None => return,
+                                        Some(q) => q
+                                    };
+                                    let event = OrderUpdateEvent::OrderFilled {
+                                        brokerage: client.brokerage.clone(),
+                                        account_id: AccountId::from(account_id),
+                                        order_id: order_id.clone(),
+                                        price,
+                                        quantity,
+                                        tag,
+                                        time,
+                                    };
+                                    send_order_update(&order_id, event).await;
                                 }
                             }
                         },
-                        NotifyType::CancelRcvdFromClnt | NotifyType::CancelRcvdByExchGtwy | NotifyType::CancelSentToExch => {
-                            OrderUpdateEvent::OrderCancelled {
-                                brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id),
-                                order_id: OrderId::from(basket_id),
-                                tag: msg.user_tag.unwrap_or_default(),
-                                time,
-                            }
-                        },
-                        NotifyType::ModifyRcvdFromClnt | NotifyType::ModifyRcvdByExchGtwy | NotifyType::ModifySentToExch | NotifyType::Modified => {
+                        NotifyType::Modified => {
                             // Assuming you have an OrderUpdated event
-                            OrderUpdateEvent::OrderUpdated {
-                                brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id),
-                                order_id: OrderId::from(basket_id),
-                                order: msg.into(), // You might need to implement a conversion from RithmicOrderNotification to Order
-                                tag: msg.user_tag.unwrap_or_default(),
-                                time,
+                            if let Some((order_id, update_type)) = ID_UPDATE_TYPE.remove(&order_id) {
+                                let event = OrderUpdateEvent::OrderUpdated {
+                                    brokerage: client.brokerage.clone(),
+                                    account_id: AccountId::from(account_id),
+                                    update_type,
+                                    order_id: order_id.clone(),
+                                    tag,
+                                    time,
+                                };
+                                send_order_update(&order_id, event).await;
                             }
                         },
                         NotifyType::ModificationFailed | NotifyType::CancellationFailed => {
-                            OrderUpdateEvent::OrderUpdateRejected {
+                            let event = OrderUpdateEvent::OrderUpdateRejected {
                                 brokerage: client.brokerage.clone(),
                                 account_id: AccountId::from(account_id),
-                                order_id: OrderId::from(basket_id),
+                                order_id: order_id.clone(),
                                 reason: msg.status.unwrap_or_default(),
                                 time,
-                            }
+                            };
+                            send_order_update(&order_id, event).await;
                         },
                         _ => return,  // Ignore other notification types
                     };
@@ -400,32 +449,119 @@ pub async fn match_order_plant_id(
             //println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
             if let Ok(msg) = ExchangeOrderNotification::decode(&message_buf[..]) {
                 println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
-                if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type)) =
-                    (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type) {
-                    //let time = create_datetime(ssboe, usecs).to_string();
-                    /*let order_event = match notify_type {
-                        NotifyType::Fill => {
-                            if msg.total_unfilled_size == Some(0) {
-                                OrderUpdateEvent::OrderFilled {
+                if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(user_tag)) =
+                    (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {
+                    let time = create_datetime(ssboe as i64, usecs as i64).to_string();
+
+                    let order_id = match BASKET_ID_TO_ID_MAP.get(&basket_id) {
+                        Some(id) => id.clone(),
+                        None => {
+                            eprintln!("Order ID not found for basket: {}", basket_id);
+                            return;
+                        },
+                    };
+
+                    let tag = match ID_TO_TAG.get(&order_id) {
+                        Some(tag) => tag.clone(),
+                        None => {
+                            eprintln!("Tag not found for order: {}", user_tag);
+                            return;
+                        },
+                    };
+
+                    let event = match notify_type {
+                        1 => {
+                            OrderUpdateEvent::OrderAccepted {
+                                brokerage: client.brokerage.clone(),
+                                account_id: AccountId::from(account_id),
+                                order_id: order_id.clone(),
+                                tag,
+                                time,
+                            }
+                        },
+                        5 => {
+                            if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size)) =
+                                (msg.fill_price, msg.fill_size, msg.total_unfilled_size) {
+                                let price = match Price::from_f64_retain(fill_price) {
+                                    Some(p) => p,
+                                    None => return,
+                                };
+                                let quantity = match Volume::from_f64_retain(fill_size as f64) {
+                                    Some(q) => q,
+                                    None => return,
+                                };
+                                if total_unfilled_size == 0 {
+
+                                    OrderUpdateEvent::OrderFilled {
+                                        brokerage: client.brokerage.clone(),
+                                        account_id: AccountId::from(account_id),
+                                        order_id: order_id.clone(),
+                                        price,
+                                        quantity,
+                                        tag,
+                                        time,
+                                    }
+                                } else {
+                                    OrderUpdateEvent::OrderPartiallyFilled {
+                                        brokerage: client.brokerage.clone(),
+                                        account_id: AccountId::from(account_id),
+                                        order_id: order_id.clone(),
+                                        price,
+                                        quantity,
+                                        tag,
+                                        time,
+                                    }
+                                }
+                            } else {
+                                return;
+                            }
+                        },
+                        3 => {
+                            OrderUpdateEvent::OrderCancelled {
+                                brokerage: client.brokerage.clone(),
+                                account_id: AccountId::from(account_id),
+                                order_id: order_id.clone(),
+                                tag,
+                                time,
+                            }
+                        },
+                        6 => {
+                            OrderUpdateEvent::OrderRejected {
+                                brokerage: client.brokerage.clone(),
+                                account_id: AccountId::from(account_id),
+                                order_id: order_id.clone(),
+                                reason: msg.status.unwrap_or_default(),
+                                tag,
+                                time,
+                            }
+                        },
+                       2 => {
+                            if let Some((_, update_type)) = ID_UPDATE_TYPE.remove(&order_id) {
+                                OrderUpdateEvent::OrderUpdated {
                                     brokerage: client.brokerage.clone(),
-                                    account_id: AccountId(account_id),
-                                    order_id: OrderId(basket_id),
-                                    tag: msg.user_tag.unwrap_or_default(),
+                                    account_id: AccountId::from(account_id),
+                                    order_id: order_id.clone(),
+                                    update_type,
+                                    tag,
                                     time,
                                 }
                             } else {
-                                OrderUpdateEvent::OrderPartiallyFilled {
-                                    brokerage: client.brokerage.clone(),
-                                    account_id: AccountId(account_id),
-                                    order_id: OrderId(basket_id),
-                                    tag: msg.user_tag.unwrap_or_default(),
-                                    time,
-                                }
+                                return;
+                            }
+                        },
+                        7 | 8 => {
+                            OrderUpdateEvent::OrderUpdateRejected {
+                                brokerage: client.brokerage.clone(),
+                                account_id: AccountId::from(account_id),
+                                order_id: order_id.clone(),
+                                reason: msg.status.unwrap_or_default(),
+                                time,
                             }
                         },
                         _ => return,  // Ignore other notification types
-                    };*/
-                    // You can handle the order_event here
+                    };
+
+                    send_order_update(&order_id, event).await;
                 }
             }
         },
@@ -494,5 +630,17 @@ pub async fn match_order_plant_id(
         },
 
         _ => println!("No match for template_id: {}", template_id)
+    }
+}
+
+async fn send_order_update(order_id: &OrderId, event: OrderUpdateEvent) {
+    if let Some(stream_name) = ID_TO_STREAM_NAME_MAP.get(order_id) {
+        let order_event = DataServerResponse::OrderUpdates(event);
+        if let Some(sender) = RESPONSE_SENDERS.get(&stream_name) {
+            match sender.send(order_event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e)
+            }
+        }
     }
 }

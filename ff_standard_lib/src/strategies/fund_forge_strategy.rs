@@ -48,7 +48,7 @@ use crate::strategies::indicators::indicator_events::IndicatorEvents;
 pub struct FundForgeStrategy {
     mode: StrategyMode,
 
-    time_zone: Tz,
+    time_zone: chrono_tz::Tz,
 
     buffer_resolution: Duration,
 
