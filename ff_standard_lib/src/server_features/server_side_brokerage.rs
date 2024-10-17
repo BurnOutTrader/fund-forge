@@ -195,4 +195,18 @@ pub trait BrokerApiResponse: Sync + Send {
         mode: StrategyMode,
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
+
+    async fn buy_market_order(
+        &self,
+        stream_name: StreamName,
+        mode: StrategyMode,
+        order: Order,
+    ) -> Result<(), OrderUpdateEvent>;
+
+    async fn sell_market_order(
+        &self,
+        stream_name: StreamName,
+        mode: StrategyMode,
+        order: Order,
+    ) -> Result<(), OrderUpdateEvent>;
 }

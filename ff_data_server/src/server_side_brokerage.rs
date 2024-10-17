@@ -13,7 +13,7 @@ use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
 
-const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
+pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
 // Responses
 /// return `DataServerResponse::PaperAccountInit` or `DataServerResponse::Error(FundForgeError)`.

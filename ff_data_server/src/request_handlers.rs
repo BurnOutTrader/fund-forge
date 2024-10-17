@@ -307,18 +307,16 @@ async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteH
     }
 }
 
-
 async fn handle_callback<F, Fut>(
     callback: F,
     sender: tokio::sync::mpsc::Sender<DataServerResponse>,
-    timeout_duration: Duration,
 )
 where
     F: FnOnce() -> Fut,
     Fut: Future<Output = DataServerResponse>,
 {
     // Wrap the callback future with a timeout
-    match timeout(timeout_duration, callback()).await {
+    match timeout(TIMEOUT_DURATION, callback()).await {
         Ok(response) => {
             // Successfully received response, try sending it to the stream handler
             if let Err(e) = sender.send(response).await {
@@ -328,7 +326,7 @@ where
         }
         Err(_) => {
             // Handle timeout (e.g., log it or take recovery action)
-            println!("Operation timed out after {:?}", timeout_duration);
+            println!("Operation timed out after {:?}", TIMEOUT_DURATION);
         }
     }
 }

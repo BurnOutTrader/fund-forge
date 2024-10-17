@@ -316,4 +316,14 @@ impl BrokerApiResponse for RithmicClient {
         self.send_message(&SysInfraType::OrderPlant, req).await;
         Ok(())
     }
+
+    async fn buy_market_order(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        todo!()
+    }
+
+    async fn sell_market_order(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        todo!()
+    }
 }
+
+

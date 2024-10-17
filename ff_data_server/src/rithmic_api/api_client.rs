@@ -10,6 +10,7 @@ use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::{RequestFrontMonthContract, RequestHeartbeat, RequestShowOrders, RequestSubscribeForOrderUpdates, ResponseHeartbeat};
+use ff_rithmic_api::rithmic_proto_objects::rti::rithmic_order_notification::TransactionType;
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::{SinkExt, StreamExt};
 use futures::stream::{SplitSink, SplitStream};
@@ -21,8 +22,8 @@ use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundF
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide};
-use ff_standard_lib::standardized_types::orders::{Order, OrderId};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use ff_standard_lib::standardized_types::symbol_info::{FrontMonthInfo, SymbolInfo};
 use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
@@ -30,6 +31,7 @@ use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo};
 use ff_standard_lib::StreamName;
 use prost::Message as ProstMessage;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use tokio::net::TcpStream;
 use tokio::{select, task};
 use tokio::task::JoinHandle;
@@ -38,7 +40,8 @@ use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use crate::subscribe_server_shutdown;
+use crate::{get_shutdown_sender, subscribe_server_shutdown};
+use crate::rithmic_api::products::get_exchange_by_code;
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
@@ -480,4 +483,119 @@ impl RithmicClient {
             }
         }
     }
+
+
+    pub async fn rithmic_order_details(&self, mode: StrategyMode, stream_name: StreamName, order: &Order) -> Result<CommonRithmicOrderDetails, OrderUpdateEvent> {
+        if mode != StrategyMode::Live {
+            get_shutdown_sender().send(()).unwrap();
+            panic!("This should never happen, Live order sent by Backtest")
+        }
+
+        match self.is_valid_order(&order) {
+            Err(e) =>
+                return Err(OrderUpdateEvent::OrderRejected {
+                    brokerage: order.brokerage,
+                    account_id: order.account_id.clone(),
+                    order_id: order.id.clone(),
+                    reason: e,
+                    tag: order.tag.clone(),
+                    time: Utc::now().to_string() }),
+
+            Ok(_) => {}
+        }
+
+        let quantity = match order.quantity_open.to_i32() {
+            None => {
+                return Err(OrderUpdateEvent::OrderRejected {
+                    brokerage: order.brokerage,
+                    account_id: order.account_id.clone(),
+                    order_id: order.id.clone(),
+                    reason: "Invalid Quantity".to_string(),
+                    tag: order.tag.clone(),
+                    time: Utc::now().to_string() })
+            }
+            Some(q) => q
+        };
+
+        let (symbol, exchange): (SymbolName, FuturesExchange) = match &order.exchange {
+            None => {
+                match get_exchange_by_code(&order.symbol_name) {
+                    None => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            brokerage: order.brokerage,
+                            account_id: order.account_id.clone(),
+                            order_id: order.id.clone(),
+                            reason: format!("Exchange Not found with {} for {}",order.brokerage, order.symbol_name),
+                            tag: order.tag.clone(),
+                            time: Utc::now().to_string() })
+                    }
+                    Some(exchange) => {
+                        let front_month = match self.front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
+                            Ok(info) => info,
+                            Err(e) => {
+                                return Err(OrderUpdateEvent::OrderRejected {
+                                    brokerage: order.brokerage,
+                                    account_id: order.account_id.clone(),
+                                    order_id: order.id.clone(),
+                                    reason: e,
+                                    tag: order.tag.clone(),
+                                    time: Utc::now().to_string() })
+                            }
+                        };
+                        (front_month.trade_symbol, exchange)
+                    }
+                }
+            }
+            Some(exchange_string) => {
+                match FuturesExchange::from_string(&exchange_string) {
+                    Ok(exchange) => {
+                        (order.symbol_name.clone(), exchange)
+                    },
+                    Err(e) => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            brokerage: order.brokerage,
+                            account_id: order.account_id.clone(),
+                            order_id: order.id.clone(),
+                            reason: e,
+                            tag: order.tag.clone(),
+                            time: Utc::now().to_string() })
+                    }
+                }
+            }
+        };
+
+        let route = match self.default_trade_route.get(&exchange) {
+            None => {
+                return Err(OrderUpdateEvent::OrderRejected {
+                    brokerage: order.brokerage,
+                    account_id: order.account_id.clone(),
+                    order_id: order.id.clone(),
+                    reason: format!("Order Route Not found with {} for {}",order.brokerage, order.symbol_name),
+                    tag: order.tag.clone(),
+                    time: Utc::now().to_string() })
+            }
+            Some(route) => route.value().clone(),
+        };
+
+        let transaction_type = match order.side {
+            OrderSide::Buy => TransactionType::Buy,
+            OrderSide::Sell => TransactionType::Sell,
+        };
+
+        Ok(CommonRithmicOrderDetails {
+            symbol,
+            exchange,
+            transaction_type,
+            route,
+            quantity,
+        })
+    }
+}
+
+pub(crate) struct CommonRithmicOrderDetails {
+    symbol: SymbolName,
+    exchange: FuturesExchange,
+    transaction_type: TransactionType,
+    route: String,
+    quantity: i32
 }
