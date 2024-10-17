@@ -102,7 +102,7 @@ pub async fn on_data_received(
                                             && candle.close > candle.open
                                             && last_side != LastSide::Long
                                         {
-                                            let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!(7), String::from("Enter Long")).await;
+                                            let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage,None, dec!(7), String::from("Enter Long")).await;
                                             println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                             last_side = LastSide::Long;
                                         }
@@ -116,20 +116,20 @@ pub async fn on_data_received(
                                             && long_pnl < dec!(300.0)
                                             && position_size < dec!(21)
                                         {
-                                            let _add_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, dec!( 7), String::from("Add Long")).await;
+                                            let _add_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage,None, dec!( 7), String::from("Add Long")).await;
                                             println!("Strategy: Add Long, Time {}", strategy.time_local());
                                         }
 
                                         // LONG SL+TP
                                         if is_long && long_pnl > dec!(500.0)
                                         {
-                                            let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Profit")).await;
+                                            let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage,None, position_size, String::from("Exit Long Take Profit")).await;
                                             println!("Strategy: Add Short, Time {}", strategy.time_local());
                                         }
                                         else if is_long
                                             && long_pnl <= dec!(-500.0)
                                         {
-                                            let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage, position_size, String::from("Exit Long Take Loss")).await;
+                                            let _exit_order_id = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage,None, position_size, String::from("Exit Long Take Loss")).await;
                                             println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
                                         }
                                     }
@@ -143,7 +143,7 @@ pub async fn on_data_received(
                                             && candle.close < candle.open
                                             && last_side != LastSide::Short
                                         {
-                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(7), String::from("Enter Short")).await;
+                                            let _entry_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage,None, dec!(7), String::from("Enter Short")).await;
                                             println!("Strategy: Enter Short, Time {}", strategy.time_local());
                                             last_side = LastSide::Short;
                                         }
@@ -157,7 +157,7 @@ pub async fn on_data_received(
                                             && short_pnl < dec!(300.0)
                                             && position_size_short < dec!(21)
                                         {
-                                            let _add_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, dec!(7), String::from("Add Short")).await;
+                                            let _add_order_id = strategy.enter_short(&candle.symbol.name, &account_1, &brokerage, None,dec!(7), String::from("Add Short")).await;
                                             println!("Strategy: Add Short, Time {}", strategy.time_local());
                                         }
 
@@ -166,13 +166,13 @@ pub async fn on_data_received(
                                         if is_short
                                             && short_pnl > dec!(500.0)
                                         {
-                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage, position_size_short, String::from("Exit Short Take Profit")).await;
+                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage,None, position_size_short, String::from("Exit Short Take Profit")).await;
                                             println!("Strategy: Exit Short Take Profit, Time {}", strategy.time_local());
                                         }
                                         else if is_short
                                             && short_pnl < dec!(-500.0)
                                         {
-                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage, position_size_short, String::from("Exit Short Take Loss")).await;
+                                            let _exit_order_id = strategy.exit_short(&candle.symbol.name, &account_1, &brokerage,None, position_size_short, String::from("Exit Short Take Loss")).await;
                                             println!("Strategy: Exit Short Take Loss, Time {}", strategy.time_local());
                                         }
                                     }
