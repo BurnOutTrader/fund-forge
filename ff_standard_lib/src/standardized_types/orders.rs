@@ -568,6 +568,18 @@ impl OrderUpdateEvent {
         }
     }
 
+    pub fn brokerage(&self) -> &Brokerage {
+        match self {
+            OrderUpdateEvent::OrderAccepted { brokerage, .. } => brokerage,
+            OrderUpdateEvent::OrderFilled { brokerage, .. } => brokerage,
+            OrderUpdateEvent::OrderPartiallyFilled { brokerage, .. } => brokerage,
+            OrderUpdateEvent::OrderCancelled { brokerage, .. } => brokerage,
+            OrderUpdateEvent::OrderRejected { brokerage, .. } => brokerage,
+            OrderUpdateEvent::OrderUpdated { brokerage, .. } => brokerage,
+            OrderUpdateEvent::OrderUpdateRejected { brokerage, .. } => brokerage,
+        }
+    }
+
     /// If the event had changed the order state this will return Some(OrderState)
     /// Order Updates and Update Rejections do not change the orders state, they simply change the order, so they return None here
     pub fn state_change(&self) -> Option<OrderState> {

@@ -201,11 +201,13 @@ pub async fn on_data_received(
                     println!("Strategy: Open Quantity: {}", quantity);
                 }
                 StrategyEvent::OrderEvents(event) => {
+                    strategy.print_ledger(event.brokerage(), event.order_id());
                     let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                     match event {
                         OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => println!("{}", msg.as_str().on_bright_magenta().on_bright_red()),
                         _ =>  println!("{}", msg.as_str().bright_yellow())
                     }
+
                 }
                 StrategyEvent::TimedEvent(name) => {
                     println!("{} has triggered", name);

@@ -24,6 +24,8 @@ use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
+use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
+use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::plant_handlers::handle_history_plant::match_history_plant_id;
 use crate::rithmic_api::plant_handlers::handle_order_plant::match_order_plant_id;
 use crate::rithmic_api::plant_handlers::handle_pnl_plant::match_pnl_plant_id;
@@ -153,3 +155,11 @@ pub async fn shutdown_plant(
     }
 }
 
+pub async fn send_updates(event: DataServerResponse) {
+    for stream_name in RESPONSE_SENDERS.iter() {
+        match stream_name.value().send(event.clone()).await {
+            Ok(_) => {}
+            Err(e) => eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e)
+        }
+    }
+}

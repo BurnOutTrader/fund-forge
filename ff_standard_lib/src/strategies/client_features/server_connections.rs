@@ -21,7 +21,7 @@ use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::handlers::market_handler::market_handlers::{MarketMessageEnum};
+use crate::strategies::handlers::market_handler::market_handlers::{MarketMessageEnum, LIVE_LEDGERS};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent, StrategyEventBuffer};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
@@ -31,6 +31,7 @@ use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
 use crate::strategies::handlers::market_handler::live_order_matching::live_order_update;
 use crate::strategies::historical_time::update_backtest_time;
+use crate::strategies::ledgers::Ledger;
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
@@ -320,6 +321,22 @@ pub async fn response_handler(
                                 }
                                 DataServerResponse::OrderUpdates(update_event) => {
                                     live_order_update(update_event);
+                                }
+                                DataServerResponse::AccountSnapShot {account_info} => {
+                                    println!("{:?}", response);
+                                    LIVE_LEDGERS
+                                        .entry(account_info.brokerage.clone())
+                                        .or_insert_with(DashMap::new)
+                                        .entry(account_info.account_id.clone())
+                                        .or_insert_with(|| Ledger::new(account_info, mode));
+                                }
+                                DataServerResponse::LiveAccountUpdates { brokerage, account_id, cash_value, cash_available, cash_used } => {
+                                    println!("{:?}", response);
+                                    if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+                                        if let Some(mut account_map) = broker_map.get_mut(&account_id) {
+                                            account_map.value_mut().update(cash_value, cash_available, cash_used);
+                                        }
+                                    }
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {

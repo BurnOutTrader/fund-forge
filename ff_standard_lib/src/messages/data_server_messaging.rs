@@ -319,7 +319,9 @@ DataServerResponse {
     SessionMarketHours{callback_id: u64, session_market_hours: SessionMarketHours},
     PaperAccountInit{callback_id: u64, account_info: AccountInfo},
 
-    LiveAccountSnapShot{brokerage: Brokerage, account_id: AccountId, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal}
+    LiveAccountUpdates {brokerage: Brokerage, account_id: AccountId, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
+
+    AccountSnapShot{account_info: AccountInfo}
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -365,7 +367,8 @@ impl DataServerResponse {
             DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::PaperAccountInit { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
-            DataServerResponse::LiveAccountSnapShot { .. } => None
+            DataServerResponse::LiveAccountUpdates { .. } => None,
+            DataServerResponse::AccountSnapShot { .. } => None
         }
     }
 }

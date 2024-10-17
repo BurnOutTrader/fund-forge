@@ -23,6 +23,8 @@ use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent, Ord
 use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::plant_handlers::handler_loop;
+
 type BasketId = String;
 lazy_static! {
     pub static ref BASKET_ID_TO_ID_MAP: DashMap<BasketId , OrderId> = DashMap::new();
@@ -126,10 +128,9 @@ pub async fn match_order_plant_id(
                     if let Some(ref max_loss) = msg.loss_limit {
                         account_info.daily_max_loss = Some(Decimal::from_u32(max_loss.clone() as u32).unwrap());
                     }
-                    tokio::spawn(async move {
-                        client.account_info.insert(id.clone(), account_info);
-                        client.request_updates().await;
-                    });
+                    handler_loop::send_updates(DataServerResponse::AccountSnapShot {account_info: account_info.clone()}).await;
+                    client.account_info.insert(id.clone(), account_info);
+                    client.request_updates().await;
                 }
             }
         },
@@ -360,6 +361,7 @@ pub async fn match_order_plant_id(
             ssboe: Some(1729085413), usecs: Some(477767) }
             */
             if let Ok(msg) = RithmicOrderNotification::decode(&message_buf[..]) {
+                //todo I think these are only for historical, when you login, rithmic runs the previous orders.
                 //println!("Rithmic Order Notification (Template ID: 351) from Server: {:?}", msg);
                /* if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(order_id)) =
                     (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {
@@ -448,7 +450,7 @@ pub async fn match_order_plant_id(
             // From Server
             //println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
             if let Ok(msg) = ExchangeOrderNotification::decode(&message_buf[..]) {
-                println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
+                //println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
                 if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(user_tag)) =
                     (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();
@@ -456,7 +458,7 @@ pub async fn match_order_plant_id(
                     let order_id = match BASKET_ID_TO_ID_MAP.get(&basket_id) {
                         Some(id) => id.clone(),
                         None => {
-                            eprintln!("Order ID not found for basket: {}", basket_id);
+                            //eprintln!("Order ID not found for basket: {}", basket_id);
                             return;
                         },
                     };
@@ -480,8 +482,8 @@ pub async fn match_order_plant_id(
                             }
                         },
                         5 => {
-                            if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size)) =
-                                (msg.fill_price, msg.fill_size, msg.total_unfilled_size) {
+                            if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size), Some(symbol)) =
+                                (msg.fill_price, msg.fill_size, msg.total_unfilled_size, msg.symbol) {
                                 let price = match Price::from_f64_retain(fill_price) {
                                     Some(p) => p,
                                     None => return,
@@ -491,7 +493,6 @@ pub async fn match_order_plant_id(
                                     None => return,
                                 };
                                 if total_unfilled_size == 0 {
-
                                     OrderUpdateEvent::OrderFilled {
                                         brokerage: client.brokerage.clone(),
                                         account_id: AccountId::from(account_id),
@@ -644,3 +645,4 @@ async fn send_order_update(order_id: &OrderId, event: OrderUpdateEvent) {
         }
     }
 }
+

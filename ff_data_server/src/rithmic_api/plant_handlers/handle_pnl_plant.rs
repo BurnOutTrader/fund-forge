@@ -8,9 +8,11 @@ use ff_rithmic_api::rithmic_proto_objects::rti::Reject;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use prost::{Message as ProstMessage};
 use rust_decimal::{Decimal};
+use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 
 #[allow(dead_code, unused)]
 pub async fn match_pnl_plant_id(
@@ -96,16 +98,16 @@ pub async fn match_pnl_plant_id(
                     day_closed_pnl_offset: Some("0.00"), ssboe: Some(1729085252), usecs: Some(932000) }
                 */
 
-                if let Some(fill_quantity_sell) = msg.fill_sell_qty {
+            /*    if let (Some(account_balance), )= (msg.account_balance, ) {
 
-                }
+                }*/
             }
         },
         451 => {
             if let Ok(msg) = AccountPnLPositionUpdate::decode(&message_buf[..]) {
                 // Account PnL Position Update
                 // From Server
-                println!("Account PnL Position Update (Template ID: 451) from Server: {:?}", msg);
+                //println!("Account PnL Position Update (Template ID: 451) from Server: {:?}", msg);
                 /*Account PnL Position Update (Template ID: 451) from Server: AccountPnLPositionUpdate {
                 template_id: 451, is_snapshot: Some(true), fcm_id: Some("TopstepTrader"),
                 ib_id: Some("TopstepTrader"), account_id: Some("S1Sep246906077"), fill_buy_qty: Some(0),
@@ -196,6 +198,23 @@ pub async fn match_pnl_plant_id(
                         }
                     }
                 };
+                if let (Some(cash_value), Some(cash_available)) = (
+                    client.account_balance.get(&id).map(|r| *r),
+                    client.account_cash_available.get(&id).map(|r| *r)
+                ) {
+                    let cash_used = cash_value - cash_available;
+
+                    // Update the cash_used in the DashMap
+                    client.account_cash_used.insert(id.clone(), cash_used);
+
+                    send_updates(DataServerResponse::LiveAccountUpdates {
+                        brokerage: client.brokerage.clone(),
+                        account_id: id,
+                        cash_value,
+                        cash_available,
+                        cash_used,
+                    }).await;
+                }
             }
         },
         _ => println!("No match for template_id: {}", template_id)

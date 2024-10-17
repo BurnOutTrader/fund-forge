@@ -74,6 +74,12 @@ impl Ledger {
         ledger
     }
 
+    pub fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
+        self.cash_value += cash_value;
+        self.cash_used += cash_used;
+        self.cash_available += cash_available;
+    }
+
     pub fn user_initiated(account_setup: AccountSetup, strategy_mode: StrategyMode) -> Self {
         //todo, add daily max loss, max order size etc to ledger
         let leverage = account_setup.leverage.unwrap_or_else(|| 1);
