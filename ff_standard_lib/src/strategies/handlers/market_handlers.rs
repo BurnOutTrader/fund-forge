@@ -20,9 +20,7 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_str};
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::standardized_types::base_data::traits::BaseData;
 use crate::messages::data_server_messaging::{FundForgeError};
-use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -45,17 +43,6 @@ impl BookLevel {
             volume
         }
     }
-
-    pub fn into_quote(symbol: Symbol, best_offer: Self, best_bid: Self, time: DateTime<Utc>) -> Quote {
-        Quote {
-            symbol,
-            ask: best_offer.price,
-            bid: best_bid.price,
-            ask_volume: best_offer.volume,
-            bid_volume: best_bid.volume,
-            time: time.to_string(),
-        }
-    }
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
@@ -63,7 +50,6 @@ impl BookLevel {
 #[archive_attr(derive(Debug))]
 pub enum MarketMessageEnum {
     RegisterSymbol(Symbol),
-    BaseDataUpdate(BaseDataEnum),
     TimeSliceUpdate(TimeSlice),
     OrderRequest(OrderRequest),
     OrderBookSnapShot{symbol: Symbol, bid_book: BTreeMap<u16, BookLevel>, ask_book: BTreeMap<u16, BookLevel>},
@@ -93,15 +79,7 @@ lazy_static!(
 fn historical_time_slice_ledger_updates(time_slice: TimeSlice, time: DateTime<Utc>) {
     for broker_map in BACKTEST_LEDGERS.iter() {
         for mut account_map in broker_map.iter_mut() {
-            account_map.value_mut().on_historical_timeslice_update(time_slice.clone(), time);
-        }
-    }
-}
-
-fn historical_base_data_updates(base_data_enum: BaseDataEnum, time: DateTime<Utc>) {
-    for broker_map in BACKTEST_LEDGERS.iter() {
-        if let Some(mut account_map) = broker_map.get_mut(&base_data_enum.symbol().name) {
-            account_map.value_mut().on_base_data_update(base_data_enum.clone(), time);
+            account_map.value_mut().timeslice_update(time_slice.clone(), time);
         }
     }
 }
@@ -127,13 +105,6 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                 MarketMessageEnum::RegisterSymbol(symbol) => {
                     BID_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
                     ASK_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
-                }
-                MarketMessageEnum::BaseDataUpdate(base_data ) => {
-                    update_base_data(base_data.clone());
-                    if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
-                        backtest_matching_engine(time).await;
-                    }
-                    historical_base_data_updates(base_data, time);
                 }
                 MarketMessageEnum::TimeSliceUpdate(time_slice) => {
                     for base_data in time_slice.iter() {
@@ -663,7 +634,7 @@ async fn fill_order(
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
-                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), order.quantity_open, order.side.clone(), time, market_price, order.tag.clone()).await {
+                match account_map.value_mut().update_or_create_position(&order.symbol_name, order_id.clone(), order.quantity_open, order.side.clone(), time, market_price, order.tag.clone()).await {
                     Ok(events) => {
                         order.state = OrderState::Filled;
                         order.average_fill_price = Some(market_price);
@@ -700,7 +671,7 @@ async fn partially_fill_order(
     if let Some(mut order) = BACKTEST_OPEN_ORDER_CACHE.get_mut(order_id) {
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
-                match account_map.value_mut().update_or_create_paper_position(&order.symbol_name, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
+                match account_map.value_mut().update_or_create_position(&order.symbol_name, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
                     Ok(events) => {
                         order.time_filled_utc = Some(time.to_string());
                         order.state = OrderState::PartiallyFilled;
