@@ -117,7 +117,7 @@ use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::enums::FuturesExchange;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
-use ff_standard_lib::strategies::ledgers::Currency;
+use ff_standard_lib::standardized_types::accounts::Currency;
 lazy_static! {
     static ref CODE_TO_EXCHANGE_MAP: HashMap<&'static str, FuturesExchange> = {
         let mut map = HashMap::new();

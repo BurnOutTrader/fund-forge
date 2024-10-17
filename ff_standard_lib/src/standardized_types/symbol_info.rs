@@ -2,7 +2,7 @@ use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal::Decimal;
-use crate::strategies::ledgers::Currency;
+use crate::standardized_types::accounts::Currency;
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::SymbolName;
 use serde_derive::{Deserialize, Serialize};

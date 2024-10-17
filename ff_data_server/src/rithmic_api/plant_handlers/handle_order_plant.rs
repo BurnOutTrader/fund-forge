@@ -13,7 +13,7 @@ use ff_standard_lib::standardized_types::accounts::AccountInfo;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::FuturesExchange;
-use ff_standard_lib::strategies::ledgers::Currency;
+use ff_standard_lib::standardized_types::accounts::Currency;
 use crate::rithmic_api::api_client::RithmicClient;
 
 

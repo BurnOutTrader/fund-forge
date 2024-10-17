@@ -5,7 +5,7 @@ use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::Volume;
 use crate::standardized_types::orders::{Order, OrderUpdateEvent};
 use crate::standardized_types::subscriptions::SymbolName;
-use crate::strategies::ledgers::AccountId;
+use crate::standardized_types::accounts::AccountId;
 use crate::StreamName;
 
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.

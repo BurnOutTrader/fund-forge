@@ -6,7 +6,7 @@ use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
-use ff_standard_lib::strategies::ledgers::AccountId;
+use ff_standard_lib::standardized_types::accounts::AccountId;
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};

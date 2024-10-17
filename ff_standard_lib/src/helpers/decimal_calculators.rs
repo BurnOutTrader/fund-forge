@@ -5,7 +5,7 @@ use rust_decimal_macros::dec;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use crate::strategies::ledgers::Currency;
+use crate::standardized_types::accounts::Currency;
 
 pub fn calculate_theoretical_pnl(
     side: PositionSide,

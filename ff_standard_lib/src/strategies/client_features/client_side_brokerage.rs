@@ -6,7 +6,7 @@ use rust_decimal_macros::dec;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
-use crate::standardized_types::accounts::AccountInfo;
+use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::{Price, Volume};
@@ -14,7 +14,7 @@ use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
-use crate::strategies::ledgers::{AccountId, Currency, Ledger};
+use crate::strategies::ledgers::Ledger;
 
 impl Brokerage {
     pub async fn paper_account_init(&self, mode: StrategyMode, starting_balance: Decimal, currency: Currency, account_id: AccountId) -> Result<Ledger, FundForgeError> {

@@ -6,10 +6,10 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
 use crate::helpers::converters::format_duration;
+use crate::standardized_types::accounts::{AccountId, Currency};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::SymbolName;
-use crate::strategies::ledgers::{AccountId, Currency};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
@@ -277,7 +277,7 @@ pub(crate) mod historical_position {
     use crate::standardized_types::enums::PositionSide;
     use crate::standardized_types::position::{Position, PositionUpdateEvent};
     use crate::standardized_types::new_types::{Price, Volume};
-    use crate::strategies::ledgers::Currency;
+    use crate::standardized_types::accounts::Currency;
 
     impl Position {
 

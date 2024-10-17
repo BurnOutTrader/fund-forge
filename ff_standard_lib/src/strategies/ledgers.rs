@@ -1,60 +1,22 @@
 use std::fs::create_dir_all;
 use std::path::Path;
-use chrono::{DateTime, TimeZone, Utc};
-use chrono_tz::Tz;
+use chrono::{DateTime, Utc};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::SymbolName;
 use dashmap::DashMap;
-use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use csv::Writer;
-use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use serde_derive::{Deserialize, Serialize};
-use crate::standardized_types::accounts::AccountInfo;
+use crate::standardized_types::accounts::{AccountId, AccountInfo, AccountSetup, Currency};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::market_handlers::SYMBOL_INFO;
-
-lazy_static! {
-    //todo get low res historical data and build currency conversion api
-    static ref EARLIEST_CURRENCY_CONVERSIONS: DateTime<Utc> = Utc.with_ymd_and_hms(2010, 1, 1, 0, 0, 0).unwrap();
-}
-
-pub type AccountId = String;
-pub type AccountName = String;
-
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize, PartialOrd, Copy)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
-pub enum Currency {
-    AUD,
-    USD,
-    CAD,
-    EUR,
-    JPY,
-    USDT
-}
-
-impl Currency {
-    pub fn from_str(string: &str) -> Self {
-        match string {
-            "AUD" => Currency::AUD,
-            "USD" => Currency::USD,
-            "CAD" => Currency::CAD,
-            "EUR" => Currency::EUR,
-            "JPY" => Currency::JPY,
-            "USDT" => Currency::USDT,
-            _ => panic!("No currency matching string, please implement")
-        }
-    }
-}
 
 /*todo,
    Make ledger take functions as params, create_order_reduce_position, increase_position, reduce_position, we will pass these in based on the type of positions we want.
@@ -64,18 +26,6 @@ impl Currency {
    To achieve this ledgers will need to be able to hold multiple sub position details or positions themselves generate 'trade' objects
  */
 
-pub struct AccountSetup {
-    pub account_id: AccountId,
-    pub brokerage: Brokerage,
-    pub cash_value: Price,
-    pub currency: Currency,
-    pub size_limit: Option<Volume>,
-    pub max_orders: Option<Volume>,
-    pub daily_max_loss: Option<Price>,
-    pub daily_max_loss_reset_hour: Option<u32>, //the hour of the day that the dail max loss resets
-    pub daily_max_loss_reset_time_zone: Tz,
-    leverage: Option<u32>
-}
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
 #[derive(Debug)]
 pub struct Ledger {
@@ -590,8 +540,9 @@ pub(crate) mod historical_ledgers {
     use rust_decimal::prelude::FromPrimitive;
     use rust_decimal_macros::dec;
     use crate::standardized_types::broker_enum::Brokerage;
-    use crate::strategies::ledgers::{AccountId, Currency, Ledger};
+    use crate::strategies::ledgers::Ledger;
     use crate::messages::data_server_messaging::FundForgeError;
+    use crate::standardized_types::accounts::{AccountId, Currency};
     use crate::standardized_types::enums::StrategyMode;
     use crate::standardized_types::new_types::{Price, Volume};
     use crate::standardized_types::subscriptions::SymbolName;
