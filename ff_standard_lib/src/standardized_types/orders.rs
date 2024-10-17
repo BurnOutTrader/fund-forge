@@ -104,9 +104,7 @@ pub enum OrderType {
     //UpdateBrackets(Brokerage, AccountId, SymbolName, Vec<ProtectiveOrder>)
 }
 
-#[derive(
-    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
-)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum OrderState {
@@ -118,9 +116,7 @@ pub enum OrderState {
     Rejected(String),
 }
 
-#[derive(
-    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
-)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub struct Order {
@@ -527,8 +523,10 @@ pub enum OrderUpdateType {
 pub enum OrderUpdateEvent {
     OrderAccepted {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
 
+    ///Quantity should only represent the quantity filled on this event.
     OrderFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
+    ///Quantity should only represent the quantity filled on this event.
     OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
     OrderCancelled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},

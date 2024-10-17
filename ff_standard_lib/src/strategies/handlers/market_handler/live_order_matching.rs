@@ -17,6 +17,8 @@ pub fn live_order_update(order_update_event: OrderUpdateEvent) {
             OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id, price, quantity, tag, time } => {
                 if let Some((order_id, mut order)) = LIVE_ORDER_CACHE.remove(&order_id) {
                     order.state = OrderState::Filled;
+                    order.quantity_filled += quantity;
+                    order.time_filled_utc = Some(time.clone());
                     let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order_id.clone(), price, account_id: account_id.clone(), brokerage, tag, time, quantity });
                     add_buffer(Utc::now(), event).await;
                     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
@@ -37,7 +39,9 @@ pub fn live_order_update(order_update_event: OrderUpdateEvent) {
             }
             OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id, price, quantity, tag, time } => {
                 if let Some(mut order) = LIVE_ORDER_CACHE.get_mut(&order_id) {
-                    order.value_mut().state = OrderState::PartiallyFilled;
+                    order.state = OrderState::PartiallyFilled;
+                    order.quantity_filled += quantity;
+                    order.time_filled_utc = Some(time.clone());
                     let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order_id.clone(), price, account_id: account_id.clone(), brokerage, tag, time, quantity });
                     add_buffer(Utc::now(), event).await;
                     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
