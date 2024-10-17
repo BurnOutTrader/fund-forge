@@ -29,6 +29,7 @@ use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptio
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
+use crate::strategies::handlers::market_handler::live_order_matching::live_order_update;
 use crate::strategies::historical_time::update_backtest_time;
 
 lazy_static! {
@@ -317,12 +318,9 @@ pub async fn response_handler(
                                         }
                                     }
                                 }
-                        /*        DataServerResponse::OrderUpdates(event) => {
-                                    match market_update_sender.send(MarketMessageEnum::LiveOrderUpdates {event}).await {
-                                        Ok(_) => {}
-                                        Err(e) => eprintln!("Failed to forward order update to market handler: {}", e)
-                                    }
-                                }*/
+                                DataServerResponse::OrderUpdates(update_event) => {
+                                    live_order_update(update_event);
+                                }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {
                                         handle_live_data(settings.clone(), port, buffer_duration, market_update_sender.clone()).await;
