@@ -41,14 +41,7 @@ use crate::strategies::historical_time::get_backtest_time;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
-///
-/// In Backtest the data stream is parsed from bytes, sorted into time slices and wrapped in StrategyEvent to be sent by the broadcaster to the passed in Receiver, where it needs to be converted using StrategyEvent::from_bytes() to be used.
-///
-/// In Live mode the objects are parsed from bytes, wrapped in a StrategyEvent to be sent by the broadcaster to the passed in Receiver, where it needs to be converted using StrategyEvent::from_bytes() to be used.
-///
-/// All to_bytes() and from_bytes() conversions are 0 cost, as they are just a wrapper around rkyv, there is negligible difference in speed between sending the object or the bytes and so it is decided to just use to and from bytes.
-/// By using bytes rather than the object we are able to use the same Subscriber pattern for all data sent between different machines or internal processes or even both at the same time using the same BroadCaster
-/// This allows a high level of flexibility and scalability for the FundForge system, allowing infinite internal and external subscribers to subscribe to StrategyEvents.
+
 /// # Properties
 #[allow(dead_code)]
 pub struct FundForgeStrategy {
@@ -75,26 +68,39 @@ impl FundForgeStrategy {
     /// Initializes a new `FundForgeStrategy` instance with the provided parameters.
     ///
     /// # Arguments
-    /// `notify: Arc<Notify>`: The notification mechanism for the strategy, this is useful to slow the message sender channel until we have processed the last message. \
-    /// `strategy_mode: StrategyMode`: The mode of the strategy (Backtest, Live, LivePaperTrading). \
-    /// `interaction_mode: StrategyInteractionMode`: The interaction mode for the strategy. SemiAutomated allows the Gui to send and modify drawing tools \
-    /// `start_date: NaiveDateTime`: The start date of the strategy. In the local time_zone that you pass in. \
-    /// `end_date: NaiveDateTime`: The end date of the strategy. In the local time_zone that you pass in\
-    /// `time_zone: Tz`: The time zone of the strategy, you can use Utc for default. \
-    /// `warmup_duration: chrono::Duration`: The warmup duration for the strategy. \
-    /// `subscriptions: Vec<DataSubscription>`: The initial data subscriptions for the strategy. \
-    /// `fill_forward: bool`: If true we will fill forward with flat bars based on the last close when there is no data, this is only for consolidated data and applies to the initial subscriptions. \
-    /// `retain_history: usize`: The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions. \
-    /// `strategy_event_sender: mpsc::Sender<EventTimeSlice>`: The sender for strategy events. \
+    /// `strategy_mode: StrategyMode`: The mode of the strategy (Backtest, Live, LivePaperTrading).
+    ///
+    /// `backtest_accounts_starting_cash: Decimal` use dec!(number) to easily initialize decimals, this will set the default starting balance of backtest accounts.
+    ///
+    /// `start_date: NaiveDateTime`: The start date of the strategy. In the local time_zone that you pass in.
+    ///
+    /// `end_date: NaiveDateTime`: The end date of the strategy. In the local time_zone that you pass in
+    ///
+    /// `time_zone: Tz`: The time zone of the strategy, you can use Utc for default.
+    ///
+    /// `warmup_duration: chrono::Duration`: The warmup duration for the strategy.
+    ///
+    /// `subscriptions: Vec<DataSubscription>`: The initial data subscriptions for the strategy.
+    ///
+    /// `fill_forward: bool`: If true we will fill forward with flat bars based on the last close when there is no data, this is only for consolidated data and applies to the initial subscriptions.
+    ///
+    /// `retain_history: usize`: The number of bars to retain in memory for the strategy. This is useful for strategies that need to reference previous bars for calculations, this is only for our initial subscriptions.
+    ///
+    /// `strategy_event_sender: mpsc::Sender<EventTimeSlice>`: The sender for strategy events.
+    ///
     /// `replay_delay_ms: Option<u64>`: The delay in milliseconds between time slices for market replay style backtesting. \
     ///  any additional subscriptions added later will be able to specify their own history requirements.
+    ///
     /// `buffering_resolution: u64`: The buffering resolution of the strategy in milliseconds. If we are backtesting, any data of a lower granularity will be consolidated into a single time slice.
     /// If out base data source is tick data, but we are trading only on 15min bars, then we can just consolidate the tick data and ignore it in on_data_received().
     /// In live trading our strategy will capture the tick stream in a buffer and pass it to the strategy in the correct resolution/durations, this helps to prevent spamming our on_data_received() fn.
     /// If we don't need to make strategy decisions on every tick, we can just consolidate the tick stream into buffered time slice events.
     /// This also helps us get consistent results between backtesting and live trading.
     /// If 0 then it will default to a 1-millisecond buffer.
+    ///
     /// `gui_enabled: bool`: If true the engine will forward all StrategyEventSlice's sent to the strategy, to the strategy registry so they can be used by GUI implementations.
+    ///
+    /// ` tick_over_no_data: bool`: If true the Backtest engine will tick at buffer resolution speed over weekends or other no data periods.
     pub async fn initialize(
         strategy_mode: StrategyMode,
         backtest_accounts_starting_cash: Decimal,
