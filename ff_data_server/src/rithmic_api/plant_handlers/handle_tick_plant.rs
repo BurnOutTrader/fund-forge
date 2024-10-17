@@ -23,7 +23,7 @@ use ff_standard_lib::standardized_types::base_data::tick::{Aggressor, Tick};
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType};
 use ff_standard_lib::standardized_types::subscriptions::Symbol;
 use ff_standard_lib::standardized_types::symbol_info::FrontMonthInfo;
-use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
+use ff_standard_lib::standardized_types::books::BookLevel;
 use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicClient;
 

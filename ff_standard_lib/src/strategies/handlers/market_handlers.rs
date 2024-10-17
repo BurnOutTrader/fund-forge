@@ -20,30 +20,12 @@ use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_str};
 use crate::helpers::decimal_calculators::round_to_tick_size;
-use crate::messages::data_server_messaging::{FundForgeError};
+use crate::messages::data_server_messaging::FundForgeError;
+use crate::standardized_types::books::BookLevel;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::strategies::historical_time::get_backtest_time;
-
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
-#[archive(compare(PartialEq), check_bytes)]
-#[archive_attr(derive(Debug))]
-pub struct BookLevel {
-    level: u16,
-    pub price: Price,
-    pub volume: Volume
-}
-
-impl BookLevel {
-    pub fn new(level: u16, price: Price, volume: Volume) -> Self {
-        BookLevel {
-            level,
-            price,
-            volume
-        }
-    }
-}
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -76,20 +58,20 @@ lazy_static!(
     pub(crate) static ref BACKTEST_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
 );
 
-fn historical_time_slice_ledger_updates(time_slice: TimeSlice, time: DateTime<Utc>) {
-    for broker_map in BACKTEST_LEDGERS.iter() {
-        for mut account_map in broker_map.iter_mut() {
-            account_map.value_mut().timeslice_update(time_slice.clone(), time);
+fn time_slice_ledger_updates(mode: StrategyMode, time_slice: TimeSlice, time: DateTime<Utc>) {
+    if mode != StrategyMode::Live {
+        for broker_map in BACKTEST_LEDGERS.iter() {
+            for mut account_map in broker_map.iter_mut() {
+                account_map.value_mut().timeslice_update(time_slice.clone(), time);
+            }
+        }
+    } else {
+        for broker_map in LIVE_LEDGERS.iter() {
+            for mut account_map in broker_map.iter_mut() {
+                account_map.value_mut().timeslice_update(time_slice.clone(), time);
+            }
         }
     }
-}
-
-pub(crate) fn add_account(mode: StrategyMode, account_setup: AccountSetup) {
-    let map = BACKTEST_LEDGERS.entry(account_setup.brokerage).or_insert(DashMap::new());
-    if map.contains_key(&account_setup.account_id) {
-        return;
-    }
-    map.insert(account_setup.account_id.clone() ,Ledger::user_initiated(account_setup, mode));
 }
 
 pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decimal, account_currency: Currency) -> Sender<MarketMessageEnum> {
@@ -110,7 +92,7 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                     for base_data in time_slice.iter() {
                         update_base_data(base_data.clone());
                     }
-                    historical_time_slice_ledger_updates(time_slice.clone(), time);
+                    time_slice_ledger_updates(mode, time_slice.clone(), time);
                     if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Backtest {
                         backtest_matching_engine(time).await;
                     }
@@ -130,9 +112,7 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
                         continue;
                     }
                     match mode {
-                        StrategyMode::Live => {
-                            panic!("Live orders do not get sent via market handler");
-                        }
+                        StrategyMode::Live => panic!("Live orders do not get sent via market handler"),
                         StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
                             simulated_order_matching(mode, starting_balances, account_currency, order_request, time).await;
                         }
@@ -1150,14 +1130,6 @@ pub(crate) fn is_flat_paper(brokerage: &Brokerage, account_id: &AccountId, symbo
     true
 }
 
-/*async fn flatten_all_paper(time: DateTime<Utc>) {
-    for broker_map in BACKTEST_LEDGERS.iter() {
-        for account in broker_map.iter() {
-            flatten_all_paper_for(broker_map.key(), account.key(), time).await;
-        }
-    }
-}*/
-
 async fn flatten_all_paper_for(brokerage: &Brokerage, account_id: &AccountId, time: DateTime<Utc>) {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
         if let Some(mut account_map) = broker_map.get_mut(account_id) {
@@ -1173,6 +1145,14 @@ async fn flatten_all_paper_for(brokerage: &Brokerage, account_id: &AccountId, ti
             }
         }
     }
+}
+
+pub(crate) fn add_account(mode: StrategyMode, account_setup: AccountSetup) {
+    let map = BACKTEST_LEDGERS.entry(account_setup.brokerage).or_insert(DashMap::new());
+    if map.contains_key(&account_setup.account_id) {
+        return;
+    }
+    map.insert(account_setup.account_id.clone() ,Ledger::user_initiated(account_setup, mode));
 }
 
 
