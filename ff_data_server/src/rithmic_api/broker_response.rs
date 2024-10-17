@@ -202,14 +202,17 @@ impl BrokerApiResponse for RithmicClient {
             Ok(_) => {}
         }
 
-       let quantity: i32 = match order.side {
-           OrderSide::Buy => {
-               //todo match this and return invalid quantity rejection on fail
-               order.quantity_open.to_i32().unwrap()
+       let quantity = match order.quantity_open.to_i32() {
+           None => {
+               return Err(OrderUpdateEvent::OrderRejected {
+                   brokerage: order.brokerage,
+                   account_id: order.account_id,
+                   order_id: order.id,
+                   reason: "Invalid Quantity".to_string(),
+                   tag: order.tag,
+                   time: Utc::now().to_string() })
            }
-           OrderSide::Sell => {
-               -order.quantity_open.to_i32().unwrap()
-           }
+           Some(q) => q
        };
 
         let (symbol, exchange): (SymbolName, FuturesExchange) = match &order.exchange {
