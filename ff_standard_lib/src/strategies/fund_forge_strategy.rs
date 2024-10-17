@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
 use rust_decimal::Decimal;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc};
 use tokio::sync::mpsc::Sender;
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc};
 use crate::standardized_types::broker_enum::Brokerage;
@@ -69,8 +69,6 @@ pub struct FundForgeStrategy {
     orders_count: DashMap<Brokerage, i64>,
 
     market_event_sender: Sender<MarketMessageEnum>,
-
-    orders: RwLock<AHashMap<OrderId, (Brokerage, AccountId)>>,
 }
 
 impl FundForgeStrategy {
@@ -144,7 +142,6 @@ impl FundForgeStrategy {
             drawing_objects_handler,
             orders_count: Default::default(),
             market_event_sender: market_event_sender.clone(),
-            orders: Default::default(),
         };
 
         match strategy_mode {
@@ -266,7 +263,6 @@ impl FundForgeStrategy {
                 send_request(request).await;
             }
         }
-        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -304,7 +300,6 @@ impl FundForgeStrategy {
                 send_request(request).await;
             }
         }
-        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -342,7 +337,6 @@ impl FundForgeStrategy {
                 send_request(request).await;
             }
         }
-        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -380,7 +374,6 @@ impl FundForgeStrategy {
                 send_request(request).await;
             }
         }
-        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -419,7 +412,6 @@ impl FundForgeStrategy {
                 send_request(request).await;
             }
         }
-        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -454,11 +446,10 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
+                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;
             }
         }
-        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -490,7 +481,6 @@ impl FundForgeStrategy {
                 send_request(request).await;
             }
         }
-        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -522,7 +512,6 @@ impl FundForgeStrategy {
                 send_request(request).await;
             }
         }
-        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -554,7 +543,6 @@ impl FundForgeStrategy {
                 send_request(request).await;
             }
         }
-        self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
         order_id
     }
 
@@ -578,7 +566,6 @@ impl FundForgeStrategy {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 self.market_event_sender.send(MarketMessageEnum::OrderRequest(request)).await.unwrap();
-                self.orders.write().await.insert(order_id.clone(), (brokerage.clone(), account_id.clone()));
             }
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
@@ -592,43 +579,67 @@ impl FundForgeStrategy {
 
     /// Cancels the order if it is not filled, cancelled or rejected.
     pub async fn cancel_order(&self, order_id: OrderId) {
-        let orders = self.orders.read().await;
-        if let Some((brokerage, account_id)) = orders.get(&order_id) {
-            let order_request = OrderRequest::Cancel { order_id, brokerage: brokerage.clone(), account_id: account_id.clone() };
-            match self.mode {
-                StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                    let request = MarketMessageEnum::OrderRequest(order_request);
-                    self.market_event_sender.send(request).await.unwrap();
-                }
-                StrategyMode::Live => {
-                    let connection_type = ConnectionType::Broker(brokerage.clone());
-                    let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
-                    send_request(request).await;
-                }
+        let map: Arc<DashMap<OrderId, Order>> = match self.mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => BACKTEST_OPEN_ORDER_CACHE.clone(),
+            StrategyMode::Live => LIVE_ORDER_CACHE.clone(),
+        };
+
+        // Clone the necessary data from the Ref
+        let (brokerage, account_id) = if let Some(id_order_ref) = map.get(&order_id) {
+            (id_order_ref.brokerage.clone(), id_order_ref.account_id.clone())
+        } else {
+            return; // Order not found, exit the function
+        };
+
+        let order_request = OrderRequest::Cancel {
+            order_id,
+            brokerage: brokerage.clone(),
+            account_id: account_id.clone()
+        };
+
+        match self.mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
+                let request = MarketMessageEnum::OrderRequest(order_request);
+                self.market_event_sender.send(request).await.unwrap();
+            }
+            StrategyMode::Live => {
+                let connection_type = ConnectionType::Broker(brokerage);
+                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
+                send_request(request).await;
             }
         }
     }
 
     /// Updates the order if it is not filled, cancelled or rejected.
     pub async fn update_order(&self, order_id: OrderId, order_update_type: OrderUpdateType) {
-        let orders = self.orders.read().await;
-        if let Some((brokerage, account_id)) = orders.get(&order_id) {
-            let order_request = OrderRequest::Update {
-                brokerage: brokerage.clone(),
-                order_id,
-                account_id: account_id.clone(),
-                update: order_update_type,
-            };
-            match self.mode {
-                StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                    let update_msg =  MarketMessageEnum::OrderRequest(order_request);
-                    self.market_event_sender.send(update_msg).await.unwrap();
-                }
-                StrategyMode::Live => {
-                    let connection_type = ConnectionType::Broker(brokerage.clone());
-                    let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
-                    send_request(request).await;
-                }
+        let map = match self.mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => BACKTEST_OPEN_ORDER_CACHE.clone(),
+            StrategyMode::Live => LIVE_ORDER_CACHE.clone(),
+        };
+
+        // Clone the necessary data from the Ref
+        let (brokerage, account_id) = if let Some(id_order_ref) = map.get(&order_id) {
+            (id_order_ref.brokerage.clone(), id_order_ref.account_id.clone())
+        } else {
+            return; // Order not found, exit the function
+        };
+
+        let order_request = OrderRequest::Update {
+            brokerage: brokerage.clone(),
+            order_id,
+            account_id,
+            update: order_update_type,
+        };
+
+        match self.mode {
+            StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
+                let update_msg = MarketMessageEnum::OrderRequest(order_request);
+                self.market_event_sender.send(update_msg).await.unwrap();
+            }
+            StrategyMode::Live => {
+                let connection_type = ConnectionType::Broker(brokerage);
+                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
+                send_request(request).await;
             }
         }
     }
