@@ -20,12 +20,13 @@ use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 
+// TODO WARNING THIS IS LIVE TRADING
 // to launch on separate machine
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::LivePaperTrading,
+        StrategyMode::Live,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
@@ -139,14 +140,14 @@ pub async fn on_data_received(
                                     }
 
                                     count += 1;
-                                    if count == 5 {
+                                    if count == 5 || count == 15 {
                                         let account: AccountId = "S1Sep246906077".to_string();
-                                        let entry_id = strategy.buy_market(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
+                                        let entry_id = strategy.enter_long(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
                                     }
 
-                                    if count == 10 {
+                                    if count == 10 || count == 20 || count == 25 {
                                         let account: AccountId = "S1Sep246906077".to_string();
-                                        let exit_id = strategy.sell_market(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
+                                        let exit_id = strategy.enter_short(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
                                     }
                                 }
                             }
