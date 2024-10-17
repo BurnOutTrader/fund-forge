@@ -322,18 +322,18 @@ pub async fn response_handler(
                                 DataServerResponse::OrderUpdates(update_event) => {
                                     live_order_update(update_event);
                                 }
-                                DataServerResponse::AccountSnapShot {account_info} => {
+                                DataServerResponse::AccountSnapShot {ref account_info} => {
                                     println!("{:?}", response);
                                     LIVE_LEDGERS
                                         .entry(account_info.brokerage.clone())
                                         .or_insert_with(DashMap::new)
                                         .entry(account_info.account_id.clone())
-                                        .or_insert_with(|| Ledger::new(account_info, mode));
+                                        .or_insert_with(|| Ledger::new(account_info.clone(), mode));
                                 }
-                                DataServerResponse::LiveAccountUpdates { brokerage, account_id, cash_value, cash_available, cash_used } => {
+                                DataServerResponse::LiveAccountUpdates { brokerage, ref account_id, cash_value, cash_available, cash_used } => {
                                     println!("{:?}", response);
                                     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-                                        if let Some(mut account_map) = broker_map.get_mut(&account_id) {
+                                        if let Some(mut account_map) = broker_map.get_mut(account_id) {
                                             account_map.value_mut().update(cash_value, cash_available, cash_used);
                                         }
                                     }

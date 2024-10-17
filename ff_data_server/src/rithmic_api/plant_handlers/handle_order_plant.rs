@@ -24,6 +24,7 @@ use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::plant_handlers::handler_loop;
+use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 
 type BasketId = String;
 lazy_static! {
@@ -475,7 +476,7 @@ pub async fn match_order_plant_id(
                         1 => {
                             OrderUpdateEvent::OrderAccepted {
                                 brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id),
+                                account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
                                 tag,
                                 time,
@@ -495,7 +496,7 @@ pub async fn match_order_plant_id(
                                 if total_unfilled_size == 0 {
                                     OrderUpdateEvent::OrderFilled {
                                         brokerage: client.brokerage.clone(),
-                                        account_id: AccountId::from(account_id),
+                                        account_id: AccountId::from(account_id.clone()),
                                         order_id: order_id.clone(),
                                         price,
                                         quantity,
@@ -505,7 +506,7 @@ pub async fn match_order_plant_id(
                                 } else {
                                     OrderUpdateEvent::OrderPartiallyFilled {
                                         brokerage: client.brokerage.clone(),
-                                        account_id: AccountId::from(account_id),
+                                        account_id: AccountId::from(account_id.clone()),
                                         order_id: order_id.clone(),
                                         price,
                                         quantity,
@@ -520,7 +521,7 @@ pub async fn match_order_plant_id(
                         3 => {
                             OrderUpdateEvent::OrderCancelled {
                                 brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id),
+                                account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
                                 tag,
                                 time,
@@ -529,7 +530,7 @@ pub async fn match_order_plant_id(
                         6 => {
                             OrderUpdateEvent::OrderRejected {
                                 brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id),
+                                account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
                                 reason: msg.status.unwrap_or_default(),
                                 tag,
@@ -540,7 +541,7 @@ pub async fn match_order_plant_id(
                             if let Some((_, update_type)) = ID_UPDATE_TYPE.remove(&order_id) {
                                 OrderUpdateEvent::OrderUpdated {
                                     brokerage: client.brokerage.clone(),
-                                    account_id: AccountId::from(account_id),
+                                    account_id: AccountId::from(account_id.clone()),
                                     order_id: order_id.clone(),
                                     update_type,
                                     tag,
@@ -553,7 +554,7 @@ pub async fn match_order_plant_id(
                         7 | 8 => {
                             OrderUpdateEvent::OrderUpdateRejected {
                                 brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id),
+                                account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
                                 reason: msg.status.unwrap_or_default(),
                                 time,
@@ -563,6 +564,24 @@ pub async fn match_order_plant_id(
                     };
 
                     send_order_update(&order_id, event).await;
+
+                    if let (Some(cash_value), Some(cash_available)) = (
+                        client.account_balance.get(&account_id).map(|r| *r),
+                        client.account_cash_available.get(&account_id).map(|r| *r)
+                    ) {
+                        let cash_used = cash_value - cash_available;
+
+                        // Update the cash_used in the DashMap
+                        client.account_cash_used.insert(account_id.clone(), cash_used);
+
+                        send_updates(DataServerResponse::LiveAccountUpdates {
+                            brokerage: client.brokerage.clone(),
+                            account_id: account_id,
+                            cash_value,
+                            cash_available,
+                            cash_used,
+                        }).await;
+                    }
                 }
             }
         },
