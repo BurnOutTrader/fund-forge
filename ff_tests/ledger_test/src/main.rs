@@ -23,7 +23,7 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::LivePaperTrading,
+        StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
@@ -34,7 +34,7 @@ async fn main() {
             DataSubscription::new_custom(
                 SymbolName::from("EUR-USD"),
                 DataVendor::Test,
-                Resolution::Seconds(1),
+                Resolution::Minutes(3),
                 MarketType::Forex,
                 CandleType::HeikinAshi
             ),
