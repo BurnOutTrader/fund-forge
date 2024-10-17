@@ -14,13 +14,14 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
 use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
+use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::database::HybridStorage;
 use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, send_market_order, symbol_info_response, symbol_names_response};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, session_market_hours_response, symbols_response, tick_size_response};
 use crate::stream_tasks::{deregister_streamer};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::orders::{OrderRequest, OrderType};
+use ff_standard_lib::standardized_types::orders::{OrderRequest, OrderType, OrderUpdateEvent};
 use ff_standard_lib::StreamName;
 use crate::{get_shutdown_sender, stream_listener};
 
@@ -258,7 +259,7 @@ pub async fn manage_async_requests(
                             return;
                         }
                         println!("{:?}", request);
-                        order_response(mode, request).await;
+                        order_response(stream_name, mode, request, sender.clone()).await;
                     },
 
                     DataServerRequest::PrimarySubscriptionFor { .. } => {
@@ -327,8 +328,9 @@ where
     }
 }
 
+const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 #[allow(dead_code, unused)]
-async fn order_response(mode: StrategyMode, request: OrderRequest) -> DataServerResponse {
+async fn order_response(stream_name: StreamName, mode: StrategyMode, request: OrderRequest, sender: tokio::sync::mpsc::Sender<DataServerResponse>) {
     if mode != StrategyMode::Live {
         get_shutdown_sender().send(()).unwrap();
         panic!("Attempt to send Live order from: {:?}", mode);
@@ -340,7 +342,32 @@ async fn order_response(mode: StrategyMode, request: OrderRequest) -> DataServer
                     todo!()
                 }
                 OrderType::Market => {
-                    send_market_order(mode, order).await
+                    let send_order_result = timeout(TIMEOUT_DURATION, send_market_order(stream_name.clone(), mode, order.clone())).await;
+                    match send_order_result {
+                        Ok(result) => match result {
+                            Ok(_) => {}
+                            Err(e) => {
+                                let event = DataServerResponse::OrderUpdates(e);
+                                if let Err(_) = sender.send(event).await {
+                                    eprintln!("Failed to send order rejection response to: {}", stream_name);
+                                }
+                            }
+                        },
+                        Err(_) => {
+                            let timeout_error = OrderUpdateEvent::OrderRejected {
+                                brokerage: order.brokerage.clone(),
+                                account_id: order.account_id,
+                                order_id: order.id,
+                                reason: "Order placement timed out".to_string(),
+                                tag: order.tag,
+                                time: Utc::now().to_string(),
+                            };
+                            let event = DataServerResponse::OrderUpdates(timeout_error);
+                            if let Err(_) = sender.send(event).await {
+                                eprintln!("Failed to send order timeout response to: {}", order.brokerage);
+                            }
+                        }
+                    }
                 }
                 OrderType::MarketIfTouched => {
                     todo!()

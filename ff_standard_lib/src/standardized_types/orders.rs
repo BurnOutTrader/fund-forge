@@ -142,6 +142,7 @@ pub struct Order {
     pub fees: Price,
     pub value: Price,
     pub account_id: AccountId,
+    pub exchange: Option<String>
 }
 
 impl Order {
@@ -159,7 +160,8 @@ impl Order {
         order_id: OrderId,
         time: DateTime<Utc>,
         limit_price: Price,
-        tif: TimeInForce
+        tif: TimeInForce,
+        exchange: Option<String>
     ) -> Self {
         Self {
             symbol_name,
@@ -180,6 +182,7 @@ impl Order {
             fees: dec!(0.0),
             value: dec!(0.0),
             account_id,
+            exchange
         }
     }
 
@@ -193,7 +196,8 @@ impl Order {
         order_id: OrderId,
         time: DateTime<Utc>,
         trigger_price: Price,
-        tif: TimeInForce
+        tif: TimeInForce,
+        exchange: Option<String>
     ) -> Self {
         Self {
             symbol_name,
@@ -214,6 +218,7 @@ impl Order {
             fees: dec!(0.0),
             value: dec!(0.0),
             account_id,
+            exchange
         }
     }
 
@@ -227,7 +232,8 @@ impl Order {
         order_id: OrderId,
         time: DateTime<Utc>,
         trigger_price: Price,
-        tif: TimeInForce
+        tif: TimeInForce,
+        exchange: Option<String>
     ) -> Self {
         Self {
             symbol_name,
@@ -248,6 +254,7 @@ impl Order {
             fees: dec!(0.0),
             value: dec!(0.0),
             account_id,
+            exchange
         }
     }
 
@@ -262,7 +269,8 @@ impl Order {
         time: DateTime<Utc>,
         limit_price: Price,
         trigger_price: Price,
-        tif: TimeInForce
+        tif: TimeInForce,
+        exchange: Option<String>
     ) -> Self {
         Self {
             symbol_name,
@@ -283,6 +291,7 @@ impl Order {
             fees: dec!(0.0),
             value: dec!(0.0),
             account_id,
+            exchange
         }
     }
 
@@ -295,6 +304,7 @@ impl Order {
         account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
+        exchange: Option<String>
     ) -> Self {
         Order {
             id:order_id,
@@ -315,6 +325,7 @@ impl Order {
             fees: dec!(0.0),
             value: dec!(0.0),
             account_id,
+            exchange
         }
     }
 
@@ -326,6 +337,7 @@ impl Order {
         account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
+        exchange: Option<String>
     ) -> Self {
         Order {
             id: order_id,
@@ -346,6 +358,7 @@ impl Order {
             fees: dec!(0.0),
             value: dec!(0.0),
             account_id,
+            exchange
         }
     }
 
@@ -357,6 +370,7 @@ impl Order {
         account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
+        exchange: Option<String>
     ) -> Self {
         Order {
             id: order_id,
@@ -377,6 +391,7 @@ impl Order {
             fees: dec!(0.0),
             value: dec!(0.0),
             account_id,
+            exchange
         }
     }
 
@@ -388,6 +403,7 @@ impl Order {
         account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
+        exchange: Option<String>
     ) -> Self {
         Order {
             id: order_id,
@@ -408,6 +424,7 @@ impl Order {
             fees: dec!(0.0),
             value: dec!(0.0),
             account_id,
+            exchange
         }
     }
 
@@ -419,6 +436,7 @@ impl Order {
         account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
+        exchange: Option<String>
     ) -> Self {
         Order {
             id: order_id,
@@ -439,6 +457,7 @@ impl Order {
             fees: dec!(0.0),
             value: dec!(0.0),
             account_id,
+            exchange
         }
     }
 

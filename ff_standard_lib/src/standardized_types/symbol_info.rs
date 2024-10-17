@@ -6,6 +6,8 @@ use crate::strategies::ledgers::Currency;
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::SymbolName;
 use serde_derive::{Deserialize, Serialize};
+use crate::standardized_types::enums::FuturesExchange;
+
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd,)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
@@ -68,4 +70,13 @@ impl SessionMarketHours {
         }
         None
     }
+}
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, Debug, PartialEq, Serialize, Deserialize, PartialOrd)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct FrontMonthInfo {
+    pub exchange: FuturesExchange,
+    pub symbol: String,
+    pub trade_symbol: String
 }

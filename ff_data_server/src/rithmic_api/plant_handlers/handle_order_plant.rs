@@ -10,6 +10,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
+use ff_standard_lib::standardized_types::enums::FuturesExchange;
 use ff_standard_lib::strategies::ledgers::{AccountInfo, Currency};
 use crate::rithmic_api::api_client::RithmicClient;
 
@@ -128,6 +129,16 @@ pub async fn match_order_plant_id(
                 // Trade Routes Response
                 // From Server
                 println!("Trade Routes Response (Template ID: 311) from Server: {:?}", msg);
+
+                if let Some(route) = msg.trade_route {
+                    if let Some(exchange) = msg.exchange {
+                        let exchange = match FuturesExchange::from_string(&exchange) {
+                            Ok(exchange) => exchange,
+                            Err(_) => return,
+                        };
+                        client.default_trade_route.insert(exchange, route);
+                    }
+                }
             }
         },
         313 => {

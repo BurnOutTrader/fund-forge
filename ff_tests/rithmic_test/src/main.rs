@@ -25,7 +25,7 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::LivePaperTrading,
+        StrategyMode::Live,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
@@ -47,13 +47,6 @@ async fn main() {
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
-          DataSubscription::new(
-                SymbolName::from("MES"),
-                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(5),
-                BaseDataType::Candles,
-                MarketType::Futures(FuturesExchange::CME)
-            ),
             DataSubscription::new(
                 SymbolName::from("MNQ"),
                 DataVendor::Rithmic(RithmicSystem::TopstepTrader),
@@ -73,6 +66,7 @@ async fn main() {
     on_data_received(strategy, strategy_event_receiver).await;
 }
 
+#[allow(dead_code, unused)]
 #[derive(Clone, PartialEq, Debug)]
 enum LastSide {
     Long,
@@ -80,6 +74,7 @@ enum LastSide {
     Short
 }
 
+#[allow(dead_code, unused)]
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
@@ -144,18 +139,14 @@ pub async fn on_data_received(
                                     }
 
                                     count += 1;
-
                                     if count == 5 {
-                                        println!("Subscribing to YM On Another Rithmic API");
-                                        let sub = DataSubscription::new(
-                                            SymbolName::from("YM"),
-                                            DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
-                                            Resolution::Seconds(15),
-                                            BaseDataType::Candles,
-                                            MarketType::Futures(FuturesExchange::CBOT)
-                                        );
-                                        strategy.subscribe(sub, 1, true).await;
-                                        println!("Subscribed to YM On Another Rithmic API");
+                                        let account: AccountId = "S1Sep246906077".to_string();
+                                        let entry_id = strategy.buy_market(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
+                                    }
+
+                                    if count == 10 {
+                                        let account: AccountId = "S1Sep246906077".to_string();
+                                        let exit_id = strategy.sell_market(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
                                     }
                                 }
                             }

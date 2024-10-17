@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestHeartbeat, RequestShowOrders, RequestSubscribeForOrderUpdates, ResponseHeartbeat};
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestFrontMonthContract, RequestHeartbeat, RequestShowOrders, RequestSubscribeForOrderUpdates, ResponseHeartbeat};
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::{SinkExt, StreamExt};
 use futures::stream::{SplitSink, SplitStream};
@@ -21,10 +21,10 @@ use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundF
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::enums::{MarketType, OrderSide};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide};
 use ff_standard_lib::standardized_types::orders::{Order, OrderId};
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
-use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
+use ff_standard_lib::standardized_types::symbol_info::{FrontMonthInfo, SymbolInfo};
 use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
 use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo};
 use ff_standard_lib::StreamName;
@@ -33,9 +33,9 @@ use rust_decimal::Decimal;
 use tokio::net::TcpStream;
 use tokio::{select, task};
 use tokio::task::JoinHandle;
-use tokio::time::interval;
+use tokio::time::{interval, timeout};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
-use tungstenite::{Message};
+use tungstenite::Message;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use crate::subscribe_server_shutdown;
@@ -62,6 +62,7 @@ pub struct RithmicClient {
     pub credentials: RithmicCredentials,
 
     pub callbacks: DashMap<StreamName, AHashMap<u64, oneshot::Sender<DataServerResponse>>>,
+    pub callback_id: Arc<Mutex<u64>>,
     pub writers: DashMap<SysInfraType, Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
     pub heartbeat_times: Arc<DashMap<SysInfraType, DateTime<Utc>>>,
     pub heartbeat_tasks: Arc<DashMap<SysInfraType, JoinHandle<()>>>,
@@ -69,6 +70,7 @@ pub struct RithmicClient {
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
     pub symbol_info: DashMap<SymbolName, SymbolInfo>,
+    pub front_month_info: DashMap<SymbolName, FrontMonthInfo>,
 
     // accounts
     pub account_info: DashMap<AccountId, AccountInfo>,
@@ -95,6 +97,8 @@ pub struct RithmicClient {
     pub tick_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
     pub candle_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
+
+    pub default_trade_route: DashMap<FuturesExchange, String>,
 
     pub bid_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
@@ -129,12 +133,14 @@ impl RithmicClient {
             user_type: credentials.user_type.clone(),
             credentials,
             callbacks: Default::default(),
+            callback_id: Arc::new(Mutex::new(0)),
             writers: DashMap::with_capacity(5),
             heartbeat_times: Arc::new(DashMap::with_capacity(5)),
             heartbeat_tasks: Arc::new(DashMap::with_capacity(5)),
             latency: Arc::new(DashMap::with_capacity(5)),
             client: Arc::new(client),
             symbol_info: Default::default(),
+            front_month_info: Default::default(),
             account_info: Default::default(),
             account_balance: Default::default(),
             account_cash_available: Default::default(),
@@ -158,6 +164,7 @@ impl RithmicClient {
             total_open_size: Default::default(),
             long_quantity: Default::default(),
             short_quantity: Default::default(),
+            default_trade_route: DashMap::new(),
         };
         Ok(client)
     }
@@ -218,16 +225,22 @@ impl RithmicClient {
         }
     }
 
-    pub async fn register_callback(&self, stream_name: StreamName, callback_id: u64, sender: oneshot::Sender<DataServerResponse>) {
+    pub async fn register_callback_and_send<T: ProstMessage>(&self, plant: &SysInfraType, stream_name: StreamName, callback_id: u64, sender: oneshot::Sender<DataServerResponse>, request: T) {
         if let Some(mut stream_map) = self.callbacks.get_mut(&stream_name) {
             stream_map.value_mut().insert(callback_id, sender);
         } else {
             let mut map = AHashMap::new();
             map.insert(callback_id, sender);
             self.callbacks.insert(stream_name.clone(), map);
+            self.send_message(plant, request).await;
         }
     }
 
+    pub async fn generate_callback_id(&self) -> u64 {
+        let mut callback_id= self.callback_id.lock().await;
+        *callback_id = callback_id.wrapping_add(1);
+        callback_id.clone()
+    }
 
     fn rithmic_credentials(broker: &Brokerage) -> Result<RithmicCredentials, FundForgeError> {
         match broker {
@@ -434,5 +447,37 @@ impl RithmicClient {
             }
         }
         Ok(())
+    }
+
+    pub async fn front_month(&self, stream_name: StreamName, symbol_name: SymbolName, exchange: FuturesExchange) -> Result<FrontMonthInfo, String> {
+        const PLANT: SysInfraType = SysInfraType::TickerPlant;
+        if let Some(info) = self.front_month_info.get(&symbol_name) {
+            Ok(info.clone())
+        } else {
+            let id = self.generate_callback_id().await;
+            let request = RequestFrontMonthContract {
+                template_id: 113,
+                user_msg: vec![stream_name.to_string(), id.to_string()],
+                symbol: Some(symbol_name),
+                exchange: Some(exchange.to_string()),
+                need_updates: Some(true),
+            };
+            let (sender, receiver) = oneshot::channel();
+            self.register_callback_and_send(&PLANT, stream_name, id, sender, request).await;
+
+            match timeout(Duration::from_secs(10), receiver).await {
+                Ok(receiver_result) => match receiver_result {
+                    Ok(response) => match response {
+                        DataServerResponse::FrontMonthInfo { info, .. } => {
+                            self.front_month_info.insert(info.symbol.clone(), info.clone());
+                            Ok(info)
+                        },
+                        _ => Err("Incorrect response received at server callback".to_string())
+                    },
+                    Err(e) => Err(format!("Receiver error at api callback recv: {}", e))
+                },
+                Err(_) => Err("Operation timed out after 10 seconds".to_string())
+            }
+        }
     }
 }

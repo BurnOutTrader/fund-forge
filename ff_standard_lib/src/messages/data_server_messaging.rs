@@ -12,7 +12,7 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
-use crate::standardized_types::symbol_info::{CommissionInfo, SessionMarketHours, SymbolInfo};
+use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SessionMarketHours, SymbolInfo};
 use crate::standardized_types::time_slices::TimeSlice;
 
 /// An Api key String
@@ -299,6 +299,11 @@ DataServerResponse {
         reason: Option<String>
     },
 
+    FrontMonthInfo{
+        callback_id: u64,
+        info: FrontMonthInfo
+    },
+
     SymbolNames{callback_id: u64, symbol_names: Vec<SymbolName>},
 
     Accounts{callback_id: u64, accounts: Vec<AccountId>},
@@ -357,6 +362,7 @@ impl DataServerResponse {
             DataServerResponse::SessionMarketHours { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::PaperAccountInit { callback_id, .. } => Some(callback_id.clone()),
+            DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
         }
     }
 }

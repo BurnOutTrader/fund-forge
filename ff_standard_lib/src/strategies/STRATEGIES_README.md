@@ -1039,6 +1039,21 @@ In backtesting a new ledger will be instantiated for each AccountId and Brokerag
 This is in its infancy, market handlers are very raw and untested and the way they are instantiated and interact with the engine will change in future updates.
 The backtesting engine pnl is not accurate at this moment.
 
+The exchange field is an `Option<String>`, this can be used for advanced order routing. \
+For futures trading the Rithmic Api will try to find the best contract using information from Rithmic. \
+If no information is found it will use the front month contract automatically.
+
+The exchange field can be used to override this behaviour: if for example you are trading a "MNQZ4" specifically instead of "MNQ" front month, you will need to specify the exchange.
+You can use `FuturesExchange` enums for this.
+```rust
+let exchange: FuturesExchange  = FuturesExchange::CME;
+let exchange: String = Some(CME.to_string());
+```
+
+If you want the server to make the decision, just `use exchange: None`
+This field is currently irrelevant in backtesting, you will need to use "MNQ" as the symbol.
+This logic will be improved in the future.
+
 ```rust
 async fn example() {
     let strategy = FundForgeStrategy::default();
@@ -1062,6 +1077,7 @@ async fn example() {
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
+        exchange: Option<String>,
         quantity: Volume,
         brackets: Option<Vec<ProtectiveOrder>>,
         tag: String
@@ -1072,6 +1088,7 @@ async fn example() {
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
+        exchange: Option<String>,
         quantity: Volume,
         brackets: Option<Vec<ProtectiveOrder>>,
         tag: String
@@ -1096,6 +1113,7 @@ async fn example() {
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
+        exchange: Option<String>,
         quantity: Volume,
         tag: String
     ).await;
@@ -1105,6 +1123,7 @@ async fn example() {
         account_id: &AccountId,
        symbol_name: &SymbolName,
        brokerage: &Brokerage,
+        exchange: Option<String>,
        quantity: Volume,
        tag: String
     ).await;
@@ -1114,6 +1133,7 @@ async fn example() {
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
+        exchange: Option<String>,
         quantity: Volume, 
         tag: String
     ).await;
@@ -1123,6 +1143,7 @@ async fn example() {
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
+        exchange: Option<String>,
         quantity: Volume,
         tag: String
     ).await;
@@ -1131,7 +1152,8 @@ async fn example() {
     let order_id: OrderId = strategy.limit_order(
         account_id: &AccountId, 
         symbol_name: &SymbolName, 
-        brokerage: &Brokerage, 
+        brokerage: &Brokerage,
+        exchange: Option<String>,
         quantity: Volume, 
         side: OrderSide, 
         limit_price: Price, 
@@ -1143,7 +1165,8 @@ async fn example() {
     let order_id: OrderId = strategy.market_if_touched (
         account_id: &AccountId, 
         symbol_name: &SymbolName, 
-        brokerage: &Brokerage, 
+        brokerage: &Brokerage,
+        exchange: Option<String>,
         quantity: Volume, 
         side: OrderSide, 
         trigger_price: Price, 
@@ -1156,6 +1179,7 @@ async fn example() {
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
+        exchange: Option<String>,
         quantity: Volume,
         side: OrderSide,
         trigger_price: Price,
@@ -1168,6 +1192,7 @@ async fn example() {
         account_id: &AccountId,
         symbol_name: &SymbolName,
         brokerage: &Brokerage,
+        exchange: Option<String>,
         quantity: Volume,
         side: OrderSide,
         tag: String,

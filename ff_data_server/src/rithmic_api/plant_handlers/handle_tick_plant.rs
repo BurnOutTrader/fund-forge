@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::sync::Arc;
 #[allow(unused_imports)]
 use std::time::Duration;
@@ -13,6 +14,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 #[allow(unused_imports)]
 use tokio::time::sleep;
+use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -20,7 +22,9 @@ use ff_standard_lib::standardized_types::base_data::quote::Quote;
 use ff_standard_lib::standardized_types::base_data::tick::{Aggressor, Tick};
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType};
 use ff_standard_lib::standardized_types::subscriptions::Symbol;
+use ff_standard_lib::standardized_types::symbol_info::FrontMonthInfo;
 use ff_standard_lib::strategies::handlers::market_handlers::BookLevel;
+use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicClient;
 
 #[allow(unused, dead_code)]
@@ -127,7 +131,39 @@ pub async fn match_ticker_plant_id(
             if let Ok(msg) = ResponseFrontMonthContract::decode(&message_buf[..]) {
                 // Front Month Contract Response
                 // From Server
-                println!("Front Month Contract Response (Template ID: 114) from Server: {:?}", msg);
+                //println!("Front Month Contract Response (Template ID: 114) from Server: {:?}", msg);
+                if let Some(symbol) =  msg.symbol {
+                    if let Some(exchange) = msg.exchange {
+                        let exchange = match FuturesExchange::from_string(&exchange) {
+                            Ok(exchange) => exchange,
+                            Err(e) => {
+                                eprintln!("{}", e);
+                                return;
+                            }
+                        };
+                        if let Some(trade_symbol) = msg.trading_symbol {
+                            let front_month_info = FrontMonthInfo {
+                                exchange,
+                                symbol: symbol.clone(),
+                                trade_symbol,
+                            };
+                            if let Some(stream_name) = msg.user_msg.get(0) {
+                                let stream_name = match StreamName::from_str(&stream_name) {
+                                    Ok(name) => name,
+                                    Err(_) => return
+                                };
+                                if let Some(callback_id) = msg.user_msg.get(1) {
+                                    let id = match u64::from_str(callback_id) {
+                                        Ok(callback_id) => callback_id,
+                                        Err(_) => return
+                                    };
+                                    let response = DataServerResponse::FrontMonthInfo {callback_id: id.clone(), info: front_month_info.clone()};
+                                    client.send_callback(stream_name, id, response).await;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         116 => {

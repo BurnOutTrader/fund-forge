@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::RequestAccountRmsInfo;
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestTradeRoutes};
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::future::join_all;
 use once_cell::sync::Lazy;
@@ -175,6 +175,13 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
             user_type: api.credentials.user_type.clone(),
         };
         api.send_message(&SysInfraType::OrderPlant, rms_req).await;
+        
+        let routes = RequestTradeRoutes {
+            template_id: 310,
+            user_msg: vec![],
+            subscribe_for_updates: Some(true),
+        };
+        api.send_message(&SysInfraType::OrderPlant, routes).await;
     }
 }
 
