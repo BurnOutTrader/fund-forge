@@ -25,7 +25,7 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Live,
+        StrategyMode::LivePaperTrading,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
