@@ -593,9 +593,9 @@ impl RithmicClient {
 }
 
 pub(crate) struct CommonRithmicOrderDetails {
-    symbol: SymbolName,
-    exchange: FuturesExchange,
-    transaction_type: TransactionType,
-    route: String,
-    quantity: i32
+    pub symbol: SymbolName,
+    pub exchange: FuturesExchange,
+    pub transaction_type: TransactionType,
+    pub route: String,
+    pub quantity: i32
 }

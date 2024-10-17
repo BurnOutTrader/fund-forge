@@ -171,11 +171,11 @@ impl BrokerApiResponse for TestApiClient {
     async fn live_market_order(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
         todo!()
     }
-
+    #[allow(unused)]
     async fn buy_market_order(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
         todo!()
     }
-
+    #[allow(unused)]
     async fn sell_market_order(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
         todo!()
     }
