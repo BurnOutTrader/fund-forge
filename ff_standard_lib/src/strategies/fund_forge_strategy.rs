@@ -592,7 +592,8 @@ impl FundForgeStrategy {
 
     /// Cancels the order if it is not filled, cancelled or rejected.
     pub async fn cancel_order(&self, order_id: OrderId) {
-        if let Some((brokerage, account_id)) = self.orders.read().await.get(&order_id) {
+        let orders = self.orders.read().await;
+        if let Some((brokerage, account_id)) = orders.get(&order_id) {
             let order_request = OrderRequest::Cancel { order_id, brokerage: brokerage.clone(), account_id: account_id.clone() };
             match self.mode {
                 StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
@@ -610,7 +611,8 @@ impl FundForgeStrategy {
 
     /// Updates the order if it is not filled, cancelled or rejected.
     pub async fn update_order(&self, order_id: OrderId, order_update_type: OrderUpdateType) {
-        if let Some((brokerage, account_id)) = self.orders.read().await.get(&order_id) {
+        let orders = self.orders.read().await;
+        if let Some((brokerage, account_id)) = orders.get(&order_id) {
             let order_request = OrderRequest::Update {
                 brokerage: brokerage.clone(),
                 order_id,
