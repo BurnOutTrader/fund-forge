@@ -1,8 +1,10 @@
+use std::time::Duration;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use tokio::sync::oneshot;
+use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::StrategyMode;
@@ -23,11 +25,12 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match receiver.await {
-            Ok(response) => {
-                match response {
+        //todo, we need reconnect and resend callback logic for time outs and disconnects
+        match timeout(Duration::from_secs(10), receiver).await {
+            Ok(receiver_result) => match receiver_result {
+                Ok(response) => match response {
                     DataServerResponse::PaperAccountInit { account_info, .. } => {
-                         Ok(Ledger {
+                        Ok(Ledger {
                             account_id: account_info.account_id,
                             brokerage: account_info.brokerage,
                             cash_value: starting_balance,
@@ -47,11 +50,13 @@ impl Brokerage {
                     },
                     DataServerResponse::Error { error, .. } => Err(error),
                     _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
         }
     }
+
     pub async fn intraday_margin_required(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Option<Price>, FundForgeError> {
         let request = DataServerRequest::IntradayMarginRequired {
             callback_id: 0,
@@ -62,15 +67,16 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match receiver.await {
-            Ok(response) => {
-                match response {
+        match timeout(Duration::from_secs(10), receiver).await {
+            Ok(receiver_result) => match receiver_result {
+                Ok(response) => match response {
                     DataServerResponse::IntradayMarginRequired { price, .. } => Ok(price),
                     DataServerResponse::Error { error, .. } => Err(error),
                     _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
         }
     }
 
@@ -83,15 +89,16 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match receiver.await {
-            Ok(response) => {
-                match response {
+        match timeout(Duration::from_secs(10), receiver).await {
+            Ok(receiver_result) => match receiver_result {
+                Ok(response) => match response {
                     DataServerResponse::SymbolInfo { symbol_info, .. } => Ok(symbol_info),
                     DataServerResponse::Error { error, .. } => Err(error),
                     _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
         }
     }
 
@@ -103,15 +110,16 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match receiver.await {
-            Ok(response) => {
-                match response {
+        match timeout(Duration::from_secs(10), receiver).await {
+            Ok(receiver_result) => match receiver_result {
+                Ok(response) => match response {
                     DataServerResponse::Accounts { accounts, .. } => Ok(accounts),
                     DataServerResponse::Error { error, .. } => Err(error),
                     _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
         }
     }
 
@@ -128,15 +136,16 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match receiver.await {
-            Ok(response) => {
-                match response {
+        match timeout(Duration::from_secs(10), receiver).await {
+            Ok(receiver_result) => match receiver_result {
+                Ok(response) => match response {
                     DataServerResponse::SymbolNames { symbol_names, .. } => Ok(symbol_names),
                     DataServerResponse::Error { error, .. } => Err(error),
                     _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
         }
     }
 
@@ -149,15 +158,16 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match receiver.await {
-            Ok(response) => {
-                match response {
+        match timeout(Duration::from_secs(10), receiver).await {
+            Ok(receiver_result) => match receiver_result {
+                Ok(response) => match response {
                     DataServerResponse::CommissionInfo { commission_info, .. } => Ok(commission_info),
                     DataServerResponse::Error { error, .. } => Err(error),
                     _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
         }
     }
 }

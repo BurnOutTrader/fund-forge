@@ -10,10 +10,9 @@ use rust_decimal::prelude::ToPrimitive;
 use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
-use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
-use ff_standard_lib::standardized_types::orders::OrderUpdateEvent::OrderAccepted;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::strategies::ledgers::{AccountId, AccountInfo, Currency};
 use ff_standard_lib::StreamName;
@@ -180,9 +179,10 @@ impl BrokerApiResponse for RithmicClient {
 
     async fn live_market_order(
         &self,
+        stream_name: StreamName,
         mode: StrategyMode,
         order: Order,
-    ) -> DataServerResponse
+    ) -> Result<(), OrderUpdateEvent>
     {
         if mode != StrategyMode::Live {
             get_shutdown_sender().send(()).unwrap();
@@ -190,15 +190,15 @@ impl BrokerApiResponse for RithmicClient {
         }
 
         match self.is_valid_order(&order) {
-            Err(e) => return {
-                DataServerResponse::OrderUpdates(OrderUpdateEvent::OrderRejected {
+            Err(e) =>
+                return Err(OrderUpdateEvent::OrderRejected {
                     brokerage: order.brokerage,
                     account_id: order.account_id,
                     order_id: order.id,
                     reason: e,
                     tag: order.tag,
-                    time: Utc::now().to_string() })
-            },
+                    time: Utc::now().to_string() }),
+
             Ok(_) => {}
         }
 
@@ -212,19 +212,64 @@ impl BrokerApiResponse for RithmicClient {
            }
        };
 
-        let exchange = match get_exchange_by_code(&order.symbol_name) {
+        let (symbol, exchange): (SymbolName, FuturesExchange) = match &order.exchange {
             None => {
-                return {
-                    DataServerResponse::OrderUpdates(OrderUpdateEvent::OrderRejected {
-                        brokerage: order.brokerage,
-                        account_id: order.account_id,
-                        order_id: order.id,
-                        reason: format!("Exchange Not found with {} for {}",order.brokerage, order.symbol_name),
-                        tag: order.tag,
-                        time: Utc::now().to_string() })
+                match get_exchange_by_code(&order.symbol_name) {
+                    None => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            brokerage: order.brokerage,
+                            account_id: order.account_id,
+                            order_id: order.id,
+                            reason: format!("Exchange Not found with {} for {}",order.brokerage, order.symbol_name),
+                            tag: order.tag,
+                            time: Utc::now().to_string() })
+                    }
+                    Some(exchange) => {
+                        let front_month = match self.front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
+                            Ok(info) => info,
+                            Err(e) => {
+                                return Err(OrderUpdateEvent::OrderRejected {
+                                    brokerage: order.brokerage,
+                                    account_id: order.account_id,
+                                    order_id: order.id,
+                                    reason: e,
+                                    tag: order.tag,
+                                    time: Utc::now().to_string() })
+                            }
+                        };
+                        (front_month.trade_symbol, exchange)
+                    }
                 }
             }
-            Some(exchange) => exchange
+            Some(exchange_string) => {
+                match FuturesExchange::from_string(&exchange_string) {
+                    Ok(exchange) => {
+                        (order.symbol_name.clone(), exchange)
+                    },
+                    Err(e) => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            brokerage: order.brokerage,
+                            account_id: order.account_id,
+                            order_id: order.id,
+                            reason: e,
+                            tag: order.tag,
+                            time: Utc::now().to_string() })
+                    }
+                }
+            }
+        };
+
+        let route = match self.default_trade_route.get(&exchange) {
+            None => {
+                return Err(OrderUpdateEvent::OrderRejected {
+                    brokerage: order.brokerage,
+                    account_id: order.account_id,
+                    order_id: order.id,
+                    reason: format!("Order Route Not found with {} for {}",order.brokerage, order.symbol_name),
+                    tag: order.tag,
+                    time: Utc::now().to_string() })
+            }
+            Some(route) => route.value().clone(),
         };
 
         let transaction_type = match order.side {
@@ -240,7 +285,7 @@ impl BrokerApiResponse for RithmicClient {
            fcm_id: self.fcm_id.clone(),
            ib_id: self.ib_id.clone(),
            account_id: Some(order.account_id.clone()),
-           symbol: Some(order.symbol_name.clone()),
+           symbol: Some(symbol),
            exchange: Some(exchange.to_string()),
            quantity: Some(quantity),
            price: None,
@@ -248,7 +293,7 @@ impl BrokerApiResponse for RithmicClient {
            transaction_type: Some(transaction_type.into()),
            duration: Some(Duration::Fok.into()),
            price_type: Some(PriceType::Market.into()),
-           trade_route: None,
+           trade_route: Some(route),
            manual_or_auto: Some(OrderPlacement::Auto.into()),
            trailing_stop: None,
            trail_by_ticks: None,
@@ -266,12 +311,6 @@ impl BrokerApiResponse for RithmicClient {
        };
 
         self.send_message(&SysInfraType::OrderPlant, req).await;
-        DataServerResponse::OrderUpdates(OrderAccepted {
-            brokerage: self.brokerage.clone(),
-            account_id: order.account_id,
-            order_id: order.id,
-            tag: order.tag,
-            time: Utc::now().to_string(),
-        })
+        Ok(())
     }
 }

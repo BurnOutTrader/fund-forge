@@ -9,29 +9,35 @@ use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
+use tokio::time::{timeout, Duration};
+
+const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
 // Responses
-
 /// return `DataServerResponse::SessionMarketHours` or `DataServerResponse::Error(FundForgeError)`.
 pub async fn session_market_hours_response(mode: StrategyMode, data_vendor: DataVendor, symbol_name: SymbolName, date: String, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
-    let time = match DateTime::<Utc>::from_str(&date) {
-        Ok(time) => time,
-        Err(e) => return DataServerResponse::Error {error: FundForgeError::ClientSideErrorDebug(format!("{}", e)), callback_id}
-    };
-    match data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                return client.value().session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
-            }
-        },
-        DataVendor::Test => return TEST_CLIENT.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                return client.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
+    let operation = async {
+        let time = match DateTime::<Utc>::from_str(&date) {
+            Ok(time) => time,
+            Err(e) => return DataServerResponse::Error {error: FundForgeError::ClientSideErrorDebug(format!("{}", e)), callback_id}
+        };
+        match data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                    return client.value().session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
+                }
             }
         }
-    }
-    DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
 }
 
 /// return `DataServerResponse::Symbols` or `DataServerResponse::Error(FundForgeError)`
@@ -45,20 +51,24 @@ pub async fn symbols_response(
     time: Option<DateTime<Utc>>,
     callback_id: u64
 ) -> DataServerResponse {
-    match data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = get_rithmic_client(&system) {
-                return client.symbols_response(mode, stream_name, market_type, time, callback_id).await
-            }
-        },
-        DataVendor::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, time, callback_id).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                return client.symbols_response(mode, stream_name, market_type, time, callback_id).await;
+    let operation = async {
+        match data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = get_rithmic_client(&system) {
+                    return client.symbols_response(mode, stream_name, market_type, time, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, time, callback_id).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.symbols_response(mode, stream_name, market_type, time, callback_id).await;
+                }
             }
         }
-    }
-    DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
 }
 
 /// return `DataServerResponse::Resolutions` or `DataServerResponse::Error(FundForgeError)`
@@ -74,20 +84,24 @@ pub async fn resolutions_response(
     market_type: MarketType,
     callback_id: u64
 ) -> DataServerResponse {
-    match data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = get_rithmic_client(&system) {
-                return client.resolutions_response(mode, stream_name, market_type, callback_id).await
-            }
-        },
-        DataVendor::Test => return TEST_CLIENT.resolutions_response(mode, stream_name, market_type, callback_id).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                return client.resolutions_response(mode, stream_name, market_type, callback_id).await;
+    let operation = async {
+        match data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = get_rithmic_client(&system) {
+                    return client.resolutions_response(mode, stream_name, market_type, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.resolutions_response(mode, stream_name, market_type, callback_id).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.resolutions_response(mode, stream_name, market_type, callback_id).await;
+                }
             }
         }
-    }
-    DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
 }
 
 /// return `DataServerResponse::Markets` or `DataServerResponse::Error(FundForgeError)`
@@ -98,20 +112,24 @@ pub async fn markets_response(
     stream_name: StreamName,
     callback_id: u64
 ) -> DataServerResponse {
-    match data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = get_rithmic_client(&system) {
-                return client.markets_response(mode, stream_name, callback_id).await
-            }
-        },
-        DataVendor::Test => return TEST_CLIENT.markets_response(mode, stream_name, callback_id).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                return client.markets_response(mode, stream_name, callback_id).await;
+    let operation = async {
+        match data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = get_rithmic_client(&system) {
+                    return client.markets_response(mode, stream_name, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.markets_response(mode, stream_name, callback_id).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.markets_response(mode, stream_name, callback_id).await;
+                }
             }
         }
-    }
-    DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
 }
 
 /// return `DataServerResponse::DecimalAccuracy` or `DataServerResponse::Error(FundForgeError)`
@@ -124,20 +142,24 @@ pub async fn decimal_accuracy_response(
     symbol_name: SymbolName,
     callback_id: u64
 ) -> DataServerResponse {
-    match data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = get_rithmic_client(&system) {
-                return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await
-            }
-        },
-        DataVendor::Test => return TEST_CLIENT.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await;
+    let operation = async {
+        match data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = get_rithmic_client(&system) {
+                    return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await;
+                }
             }
         }
-    }
-    DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
 }
 
 /// return `DataServerResponse::TickSize` or `DataServerResponse::Error(FundForgeError)`
@@ -149,20 +171,24 @@ pub async fn tick_size_response(
     symbol_name: SymbolName,
     callback_id: u64
 ) -> DataServerResponse {
-    match data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = get_rithmic_client(&system) {
-                return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await
-            }
-        },
-        DataVendor::Test => return TEST_CLIENT.tick_size_response(mode, stream_name, symbol_name, callback_id).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await;
+    let operation = async {
+        match data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = get_rithmic_client(&system) {
+                    return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.tick_size_response(mode, stream_name, symbol_name, callback_id).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await;
+                }
             }
         }
-    }
-    DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
 }
 
 /// return `DataServerResponse::SubscribeResponse` or `DataServerResponse::Error(FundForgeError)`
@@ -172,20 +198,28 @@ pub async fn data_feed_subscribe(
     stream_name: StreamName,
     subscription: DataSubscription
 ) -> DataServerResponse {
-    match &subscription.symbol.data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = get_rithmic_client(system) {
-                return client.data_feed_subscribe(stream_name, subscription).await
-            }
-        },
-        DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                return client.data_feed_subscribe(stream_name, subscription).await;
+    let operation = async {
+        match &subscription.symbol.data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = get_rithmic_client(system) {
+                    return client.data_feed_subscribe(stream_name, subscription.clone()).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription.clone()).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.data_feed_subscribe(stream_name, subscription.clone()).await;
+                }
             }
         }
-    }
-    DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("Unable to find api client instance for: {}", subscription.symbol.data_vendor))}
+        DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("Unable to find api client instance for: {}", subscription.symbol.data_vendor))}
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::SubscribeResponse {
+        success: false,
+        subscription: subscription.clone(),
+        reason: Some("Operation timed out".to_string())
+    })
 }
 
 /// return `DataServerResponse::UnSubscribeResponse` or `DataServerResponse::Error(FundForgeError)`
@@ -197,20 +231,28 @@ pub async fn data_feed_unsubscribe(
     stream_name: StreamName,
     subscription: DataSubscription
 ) -> DataServerResponse {
-    match data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = get_rithmic_client(&system) {
-                return client.data_feed_unsubscribe(mode, stream_name, subscription).await
-            }
-        },
-        DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(mode, stream_name, subscription).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                return client.data_feed_unsubscribe(mode, stream_name, subscription).await;
+    let operation = async {
+        match data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = get_rithmic_client(&system) {
+                    return client.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await;
+                }
             }
         }
-    }
-    DataServerResponse::UnSubscribeResponse{ success: false, subscription, reason: Some(format!("Unable to find api client instance for: {}", data_vendor))}
+        DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("Unable to find api client instance for: {}", data_vendor))}
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::UnSubscribeResponse {
+        success: false,
+        subscription,
+        reason: Some("Operation timed out".to_string())
+    })
 }
 
 /// return `DataServerResponse::BaseData` or `DataServerResponse::Error(FundForgeError)`
@@ -221,37 +263,48 @@ pub async fn base_data_types_response(
     stream_name: StreamName,
     callback_id: u64
 ) -> DataServerResponse {
-    match data_vendor {
-        DataVendor::Rithmic(system) => {
-            if let Some(client) = get_rithmic_client(&system) {
-                return client.base_data_types_response(mode, stream_name, callback_id).await
-            }
-        },
-        DataVendor::Test => return TEST_CLIENT.base_data_types_response(mode, stream_name, callback_id).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                return client.base_data_types_response(mode, stream_name, callback_id).await;
+    let operation = async {
+        match data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = get_rithmic_client(&system) {
+                    return client.base_data_types_response(mode, stream_name, callback_id).await
+                }
+            },
+            DataVendor::Test => return TEST_CLIENT.base_data_types_response(mode, stream_name, callback_id).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    return client.base_data_types_response(mode, stream_name, callback_id).await;
+                }
             }
         }
-    }
-    DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
+    };
+
+    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
 }
 
 /// This command doesn't require a response,
 /// it is sent when a connection is dropped so that we can remove any items associated with the stream
 /// (strategy that is connected to this port)
 pub async fn logout_command_vendors(data_vendor: DataVendor, stream_name: StreamName) {
-    match data_vendor {
-    DataVendor::Rithmic(system) => {
-        if let Some(client) = get_rithmic_client(&system) {
-            client.logout_command_vendors(stream_name).await
-        }
-    },
-        DataVendor::Test => TEST_CLIENT.logout_command_vendors(stream_name).await,
-        DataVendor::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                client.logout_command_vendors(stream_name).await;
+    let operation = async {
+        match data_vendor {
+            DataVendor::Rithmic(system) => {
+                if let Some(client) = get_rithmic_client(&system) {
+                    client.logout_command_vendors(stream_name).await
+                }
+            },
+            DataVendor::Test => TEST_CLIENT.logout_command_vendors(stream_name).await,
+            DataVendor::Bitget => {
+                if let Some(client) = BITGET_CLIENT.get() {
+                    client.logout_command_vendors(stream_name).await;
+                }
             }
         }
+    };
+
+    match timeout(TIMEOUT_DURATION, operation).await {
+        Ok(_) => {},
+        Err(_) => eprintln!("Logout command for {} timed out after {} seconds", stream_name, TIMEOUT_DURATION.as_secs()),
     }
 }
