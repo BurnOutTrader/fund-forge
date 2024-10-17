@@ -142,12 +142,12 @@ pub async fn on_data_received(
                                     count += 1;
                                     if count == 5 || count == 15 {
                                         let account: AccountId = "S1Sep246906077".to_string();
-                                        let entry_id = strategy.enter_long(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
+                                        let entry_id = strategy.buy_market(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
                                     }
 
                                     if count == 10 || count == 20 || count == 25 {
                                         let account: AccountId = "S1Sep246906077".to_string();
-                                        let exit_id = strategy.enter_short(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
+                                        let exit_id = strategy.sell_market(&"MNQ".to_string(), &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
                                     }
                                 }
                             }
