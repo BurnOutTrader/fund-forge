@@ -335,7 +335,7 @@ impl Ledger {
                     continue
                 }
                 //returns booked pnl if exit on brackets
-                position.backtest_update_base_data(&base_data_enum, time, self.currency);
+                position.update_base_data(&base_data_enum, time, self.currency);
                 self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
 
                 if position.is_closed {
@@ -376,7 +376,7 @@ impl Ledger {
 
             if is_reducing {
                 remaining_quantity -= existing_position.quantity_open;
-                let event= existing_position.reduce_paper_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
+                let event= existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
 
                 if self.mode != StrategyMode::Live {
                     self.release_margin_used(&symbol_name).await;
@@ -508,7 +508,7 @@ impl Ledger {
 
             // Calculate booked profit by reducing the position size
             self.release_margin_used(&symbol_name).await;
-            let event = existing_position.reduce_paper_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
+            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
             match &event {
                 PositionUpdateEvent::PositionClosed { booked_pnl,.. } => {
                     self.booked_pnl += booked_pnl;

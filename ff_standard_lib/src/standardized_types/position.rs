@@ -3,10 +3,13 @@ use std::str::FromStr;
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
+use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
 use crate::helpers::converters::format_duration;
+use crate::helpers::decimal_calculators::calculate_theoretical_pnl;
 use crate::standardized_types::accounts::{AccountId, Currency};
+use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::PositionSide;
 use crate::standardized_types::subscriptions::SymbolName;
@@ -266,165 +269,150 @@ impl Position {
             tag: self.tag.clone()
         }
     }
-}
 
-pub(crate) mod historical_position {
-    use chrono::{DateTime, Utc};
-    use rust_decimal::Decimal;
-    use rust_decimal_macros::dec;
-    use crate::helpers::decimal_calculators::calculate_theoretical_pnl;
-    use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-    use crate::standardized_types::enums::PositionSide;
-    use crate::standardized_types::position::{Position, PositionUpdateEvent};
-    use crate::standardized_types::new_types::{Price, Volume};
-    use crate::standardized_types::accounts::Currency;
-
-    impl Position {
-
-        /// Reduces paper position size a position event, this event will include a booked_pnl property
-        pub(crate) async fn reduce_paper_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
-            if quantity > self.quantity_open {
-                panic!("Something wrong with logic, ledger should know this not to be possible")
-            }
-            // Calculate booked PnL
-            let booked_pnl = calculate_theoretical_pnl(
-                self.side,
-                self.average_price,
-                market_price,
-                quantity,
-                account_currency,
-                time,
-                &self.symbol_info
-            );
-
-            // Update position
-            self.booked_pnl += booked_pnl;
-            self.open_pnl -= booked_pnl;
-
-            self.average_exit_price = match self.average_exit_price {
-                Some(existing_exit_price) => {
-                    let exited_quantity = Decimal::from(self.quantity_closed);
-                    let new_exit_price = market_price;
-                    let new_exit_quantity = quantity;
-                    // Calculate the weighted average of the existing exit price and the new exit price
-                    let total_exit_quantity = exited_quantity + new_exit_quantity;
-                    let weighted_existing_exit = existing_exit_price * exited_quantity;
-                    let weighted_new_exit = new_exit_price * new_exit_quantity;
-                    Some(((weighted_existing_exit + weighted_new_exit) / total_exit_quantity).round_dp(self.symbol_info.decimal_accuracy))
-                }
-                None => Some(market_price)
-            };
-
-            self.quantity_open -= quantity;
-            self.quantity_closed += quantity;
-            self.is_closed = self.quantity_open <= dec!(0.0);
-
-            // Reset open PnL if position is closed
-            if self.is_closed {
-                self.open_pnl = dec!(0);
-                self.close_time = Some(time.to_string());
-                PositionUpdateEvent::PositionClosed {
-                    position_id: self.position_id.clone(),
-                    total_quantity_open: self.quantity_open,
-                    total_quantity_closed: self.quantity_closed,
-                    average_price: self.average_price,
-                    booked_pnl: self.booked_pnl,
-                    average_exit_price: self.average_exit_price,
-                    account_id: self.account_id.clone(),
-                    brokerage: self.brokerage.clone(),
-                    originating_order_tag: tag,
-                    time: time.to_string()
-                }
-            } else {
-                PositionUpdateEvent::PositionReduced {
-                    position_id: self.position_id.clone(),
-                    total_quantity_open: self.quantity_open,
-                    total_quantity_closed: self.quantity_closed,
-                    average_price: self.average_price,
-                    open_pnl: self.open_pnl,
-                    booked_pnl: self.booked_pnl,
-                    average_exit_price: self.average_exit_price.unwrap(),
-                    account_id: self.account_id.clone(),
-                    brokerage: self.brokerage.clone(),
-                    originating_order_tag: tag,
-                    time: time.to_string()
-                }
-            }
+    /// Returns the open pnl for the paper position
+    pub(crate) fn update_base_data(&mut self, base_data: &BaseDataEnum, time: DateTime<Utc>, account_currency: Currency) -> Decimal {
+        if self.is_closed {
+            return dec!(0)
         }
 
-        /// Adds to the paper position
-        pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
-            // Correct the average price calculation with proper parentheses
-            if self.quantity_open + quantity != Decimal::ZERO {
-                self.average_price = ((self.quantity_open * self.average_price + quantity * market_price) / (self.quantity_open + quantity)).round_dp(self.symbol_info.decimal_accuracy);
-            } else {
-                panic!("Average price should not be 0");
+        // Extract market price, highest price, and lowest price from base data
+        let (market_price, highest_price, lowest_price) = match base_data {
+            BaseDataEnum::Candle(candle) => (candle.close, candle.high, candle.low),
+            BaseDataEnum::Tick(tick) => (tick.price, tick.price, tick.price),
+            BaseDataEnum::QuoteBar(bar) => match self.side {
+                PositionSide::Long => (bar.ask_close, bar.ask_high, bar.ask_low),
+                PositionSide::Short => (bar.bid_close, bar.bid_high, bar.bid_low),
+            },
+            BaseDataEnum::Quote(quote) => match self.side {
+                PositionSide::Long => (quote.ask, quote.ask, quote.ask),
+                PositionSide::Short => (quote.bid, quote.bid, quote.bid),
+            },
+            BaseDataEnum::Fundamental(_) => panic!("Fundamentals should not be here"),
+        };
+
+        // Update highest and lowest recorded prices
+        self.highest_recoded_price = self.highest_recoded_price.max(highest_price);
+        self.lowest_recoded_price = self.lowest_recoded_price.min(lowest_price);
+
+        // Calculate the open PnL
+        self.open_pnl = calculate_theoretical_pnl(
+            self.side,
+            self.average_price,
+            market_price,
+            self.quantity_open,
+            account_currency,
+            time,
+            &self.symbol_info
+        );
+
+        self.open_pnl.clone()
+    }
+
+    /// Reduces position size a position event, this event will include a booked_pnl property
+    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
+        if quantity > self.quantity_open {
+            panic!("Something wrong with logic, ledger should know this not to be possible")
+        }
+        // Calculate booked PnL
+        let booked_pnl = calculate_theoretical_pnl(
+            self.side,
+            self.average_price,
+            market_price,
+            quantity,
+            account_currency,
+            time,
+            &self.symbol_info
+        );
+
+        // Update position
+        self.booked_pnl += booked_pnl;
+        self.open_pnl -= booked_pnl;
+
+        self.average_exit_price = match self.average_exit_price {
+            Some(existing_exit_price) => {
+                let exited_quantity = Decimal::from(self.quantity_closed);
+                let new_exit_price = market_price;
+                let new_exit_quantity = quantity;
+                // Calculate the weighted average of the existing exit price and the new exit price
+                let total_exit_quantity = exited_quantity + new_exit_quantity;
+                let weighted_existing_exit = existing_exit_price * exited_quantity;
+                let weighted_new_exit = new_exit_price * new_exit_quantity;
+                Some(((weighted_existing_exit + weighted_new_exit) / total_exit_quantity).round_dp(self.symbol_info.decimal_accuracy))
             }
+            None => Some(market_price)
+        };
 
-            // Update the total quantity
-            self.quantity_open += quantity;
+        self.quantity_open -= quantity;
+        self.quantity_closed += quantity;
+        self.is_closed = self.quantity_open <= dec!(0.0);
 
-            // Recalculate open PnL
-            self.open_pnl = calculate_theoretical_pnl(
-                self.side,
-                self.average_price,
-                market_price,
-                self.quantity_open,
-                account_currency,
-                time,
-                &self.symbol_info
-            );
-
-            PositionUpdateEvent::Increased {
+        // Reset open PnL if position is closed
+        if self.is_closed {
+            self.open_pnl = dec!(0);
+            self.close_time = Some(time.to_string());
+            PositionUpdateEvent::PositionClosed {
                 position_id: self.position_id.clone(),
                 total_quantity_open: self.quantity_open,
+                total_quantity_closed: self.quantity_closed,
+                average_price: self.average_price,
+                booked_pnl: self.booked_pnl,
+                average_exit_price: self.average_exit_price,
+                account_id: self.account_id.clone(),
+                brokerage: self.brokerage.clone(),
+                originating_order_tag: tag,
+                time: time.to_string()
+            }
+        } else {
+            PositionUpdateEvent::PositionReduced {
+                position_id: self.position_id.clone(),
+                total_quantity_open: self.quantity_open,
+                total_quantity_closed: self.quantity_closed,
                 average_price: self.average_price,
                 open_pnl: self.open_pnl,
                 booked_pnl: self.booked_pnl,
+                average_exit_price: self.average_exit_price.unwrap(),
                 account_id: self.account_id.clone(),
                 brokerage: self.brokerage.clone(),
                 originating_order_tag: tag,
                 time: time.to_string()
             }
         }
+    }
 
-        /// Returns the open pnl for the paper position
-        pub(crate) fn backtest_update_base_data(&mut self, base_data: &BaseDataEnum, time: DateTime<Utc>, account_currency: Currency) -> Decimal {
-            if self.is_closed {
-                return dec!(0)
-            }
+    /// Adds to the paper position
+    pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
+        // Correct the average price calculation with proper parentheses
+        if self.quantity_open + quantity != Decimal::ZERO {
+            self.average_price = ((self.quantity_open * self.average_price + quantity * market_price) / (self.quantity_open + quantity)).round_dp(self.symbol_info.decimal_accuracy);
+        } else {
+            panic!("Average price should not be 0");
+        }
 
-            // Extract market price, highest price, and lowest price from base data
-            let (market_price, highest_price, lowest_price) = match base_data {
-                BaseDataEnum::Candle(candle) => (candle.close, candle.high, candle.low),
-                BaseDataEnum::Tick(tick) => (tick.price, tick.price, tick.price),
-                BaseDataEnum::QuoteBar(bar) => match self.side {
-                    PositionSide::Long => (bar.ask_close, bar.ask_high, bar.ask_low),
-                    PositionSide::Short => (bar.bid_close, bar.bid_high, bar.bid_low),
-                },
-                BaseDataEnum::Quote(quote) => match self.side {
-                    PositionSide::Long => (quote.ask, quote.ask, quote.ask),
-                    PositionSide::Short => (quote.bid, quote.bid, quote.bid),
-                },
-                BaseDataEnum::Fundamental(_) => panic!("Fundamentals should not be here"),
-            };
+        // Update the total quantity
+        self.quantity_open += quantity;
 
-            // Update highest and lowest recorded prices
-            self.highest_recoded_price = self.highest_recoded_price.max(highest_price);
-            self.lowest_recoded_price = self.lowest_recoded_price.min(lowest_price);
+        // Recalculate open PnL
+        self.open_pnl = calculate_theoretical_pnl(
+            self.side,
+            self.average_price,
+            market_price,
+            self.quantity_open,
+            account_currency,
+            time,
+            &self.symbol_info
+        );
 
-            // Calculate the open PnL
-            self.open_pnl = calculate_theoretical_pnl(
-                self.side,
-                self.average_price,
-                market_price,
-                self.quantity_open,
-                account_currency,
-                time,
-                &self.symbol_info
-            );
-
-            self.open_pnl.clone()
+        PositionUpdateEvent::Increased {
+            position_id: self.position_id.clone(),
+            total_quantity_open: self.quantity_open,
+            average_price: self.average_price,
+            open_pnl: self.open_pnl,
+            booked_pnl: self.booked_pnl,
+            account_id: self.account_id.clone(),
+            brokerage: self.brokerage.clone(),
+            originating_order_tag: tag,
+            time: time.to_string()
         }
     }
 }
