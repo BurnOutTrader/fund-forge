@@ -385,7 +385,6 @@ pub(crate) mod historical_ledgers {
     use crate::messages::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
     use crate::standardized_types::position::{Position, PositionUpdateEvent};
-    use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::base_data::traits::BaseData;
     use crate::standardized_types::new_types::{Price, Volume};
     use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
@@ -456,7 +455,7 @@ pub(crate) mod historical_ledgers {
             }
         }
 
-        pub fn on_historical_timeslice_update(&mut self, time_slice: TimeSlice, time: DateTime<Utc>) {
+        pub fn timeslice_update(&mut self, time_slice: TimeSlice, time: DateTime<Utc>) {
             for base_data_enum in time_slice.iter() {
                 let data_symbol_name = &base_data_enum.symbol().name;
                 if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
@@ -477,42 +476,22 @@ pub(crate) mod historical_ledgers {
                     }
                 }
             }
-            self.cash_value = self.cash_used + self.cash_available;
-        }
-
-        pub fn on_base_data_update(&mut self, base_data_enum: BaseDataEnum, time: DateTime<Utc>) {
-            //todo match time to market close and update overnight or intraday margin requirements
-                let data_symbol_name = &base_data_enum.symbol().name;
-                if let Some(mut position) = self.positions.get_mut(data_symbol_name) {
-                if position.is_closed {
-                    return
-                }
-                //returns booked pnl if exit on brackets
-                position.backtest_update_base_data(&base_data_enum, time, self.currency);
-                    self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
+            if self.mode != StrategyMode::Live {
                 self.cash_value = self.cash_used + self.cash_available;
-                if position.is_closed {
-                    // Move the position to the closed positions map
-                    let (symbol_name, position) = self.positions.remove(data_symbol_name).unwrap();
-                    self.positions_closed
-                        .entry(symbol_name)
-                        .or_insert_with(Vec::new)
-                        .push(position);
-                }
             }
         }
 
         /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
         /// todo Need to handle creating a new opposing position when
         ///todo, check ledger max order etc before placing orders
-        pub async fn update_or_create_paper_position(
+        pub async fn update_or_create_position(
             &mut self,
             symbol_name: &SymbolName,
             order_id: OrderId,
             quantity: Volume,
             side: OrderSide,
             time: DateTime<Utc>,
-            market_price: Price, // we use the passed in price because we dont know what sort of order was filled, limit or market
+            market_fill_price: Price, // we use the passed in price because we dont know what sort of order was filled, limit or market
             tag: String
         ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
             let mut updates = vec![];
@@ -525,16 +504,26 @@ pub(crate) mod historical_ledgers {
 
                 if is_reducing {
                     remaining_quantity -= existing_position.quantity_open;
-                    let event= existing_position.reduce_paper_position_size(market_price, quantity, time, tag.clone(), self.currency).await;
-                    self.release_margin_used(&symbol_name).await;
+                    let event= existing_position.reduce_paper_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
+
+                    if self.mode != StrategyMode::Live {
+                        self.release_margin_used(&symbol_name).await;
+                    }
 
                     match &event {
                         PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                             self.positions.insert(symbol_name, existing_position);
-                            self.cash_available += booked_pnl;
+
+                            if self.mode != StrategyMode::Live {
+                                self.cash_available += booked_pnl;
+                            }
                         }
                         PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
-                            self.cash_available += booked_pnl;
+                            self.booked_pnl += booked_pnl;
+
+                            if self.mode != StrategyMode::Live {
+                                self.cash_available += booked_pnl;
+                            }
                             if !self.positions_closed.contains_key(&symbol_name) {
                                 self.positions_closed.insert(symbol_name.clone(), vec![]);
                             }
@@ -545,10 +534,12 @@ pub(crate) mod historical_ledgers {
                         _ => panic!("This shouldn't happen")
                     }
 
-                    self.cash_value = self.cash_used + self.cash_available;
+                    if self.mode != StrategyMode::Live {
+                        self.cash_value = self.cash_used + self.cash_available;
+                    }
                     updates.push(event);
                 } else {
-                    match self.commit_margin(&symbol_name, quantity, market_price).await {
+                    match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                         Ok(_) => {}
                         Err(e) => {
                             return Err(OrderUpdateEvent::OrderRejected {
@@ -561,15 +552,19 @@ pub(crate) mod historical_ledgers {
                             })
                         }
                     }
-                    let event = existing_position.add_to_position(market_price, quantity, time, tag.clone(), self.currency).await;
+                    let event = existing_position.add_to_position(market_fill_price, quantity, time, tag.clone(), self.currency).await;
                     self.positions.insert(existing_position.symbol_name.clone(), existing_position);
-                    self.cash_value = self.cash_used + self.cash_available;
+
+                    if self.mode != StrategyMode::Live {
+                        self.cash_value = self.cash_used + self.cash_available;
+                    }
+
                     updates.push(event);
                     remaining_quantity = dec!(0.0);
                 }
             }
             if remaining_quantity > dec!(0.0) {
-                match self.commit_margin(&symbol_name, quantity, market_price).await {
+                match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                     Ok(_) => {}
                     Err(e) => {
                         return Err(OrderUpdateEvent::OrderRejected {
@@ -598,7 +593,7 @@ pub(crate) mod historical_ledgers {
                     self.account_id.clone(),
                     position_side,
                     remaining_quantity,
-                    market_price,
+                    market_fill_price,
                     id.clone(),
                     info.clone(),
                     info.pnl_currency,
@@ -619,7 +614,10 @@ pub(crate) mod historical_ledgers {
                     originating_order_tag: tag,
                     time: time.to_string()
                 };
-                self.cash_value = self.cash_used + self.cash_available;
+
+                if self.mode != StrategyMode::Live {
+                    self.cash_value = self.cash_used + self.cash_available;
+                }
                 updates.push(event);
             }
             Ok(updates)
