@@ -14,6 +14,8 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 Live order functionality is being implemented, and any active strategy may send real orders directly to the market.
 If I make any mistakes, and leave a test strategy in live mode, it will trade your live accounts!.
 
+Order logic is incomplete, updates not yet forwarded to strategies. 
+
 Make sure to:
 - Test your strategies thoroughly before deploying live.
 - Double-check your configurations to avoid unintended trades.
