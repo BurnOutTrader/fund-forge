@@ -272,7 +272,7 @@ pub(crate) mod historical_position {
     use chrono::{DateTime, Utc};
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
-    use crate::helpers::decimal_calculators::{calculate_historical_pnl};
+    use crate::helpers::decimal_calculators::calculate_theoretical_pnl;
     use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
     use crate::standardized_types::enums::PositionSide;
     use crate::standardized_types::position::{Position, PositionUpdateEvent};
@@ -287,7 +287,7 @@ pub(crate) mod historical_position {
                 panic!("Something wrong with logic, ledger should know this not to be possible")
             }
             // Calculate booked PnL
-            let booked_pnl = calculate_historical_pnl(
+            let booked_pnl = calculate_theoretical_pnl(
                 self.side,
                 self.average_price,
                 market_price,
@@ -365,7 +365,7 @@ pub(crate) mod historical_position {
             self.quantity_open += quantity;
 
             // Recalculate open PnL
-            self.open_pnl = calculate_historical_pnl(
+            self.open_pnl = calculate_theoretical_pnl(
                 self.side,
                 self.average_price,
                 market_price,
@@ -414,7 +414,7 @@ pub(crate) mod historical_position {
             self.lowest_recoded_price = self.lowest_recoded_price.min(lowest_price);
 
             // Calculate the open PnL
-            self.open_pnl = calculate_historical_pnl(
+            self.open_pnl = calculate_theoretical_pnl(
                 self.side,
                 self.average_price,
                 market_price,
