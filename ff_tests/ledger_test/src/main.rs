@@ -27,7 +27,7 @@ async fn main() {
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2024, 08, 28).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 06, 28).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(5),
         vec![
