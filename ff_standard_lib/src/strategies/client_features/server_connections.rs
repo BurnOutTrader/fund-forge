@@ -21,7 +21,7 @@ use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::handlers::market_handlers::{live_order_update, MarketMessageEnum};
+use crate::strategies::handlers::market_handlers::{MarketMessageEnum};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent, StrategyEventBuffer};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
@@ -317,9 +317,12 @@ pub async fn response_handler(
                                         }
                                     }
                                 }
-                                DataServerResponse::OrderUpdates(event) => {
-                                    live_order_update(event).await;
-                                }
+                        /*        DataServerResponse::OrderUpdates(event) => {
+                                    match market_update_sender.send(MarketMessageEnum::LiveOrderUpdates {event}).await {
+                                        Ok(_) => {}
+                                        Err(e) => eprintln!("Failed to forward order update to market handler: {}", e)
+                                    }
+                                }*/
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {
                                         handle_live_data(settings.clone(), port, buffer_duration, market_update_sender.clone()).await;
