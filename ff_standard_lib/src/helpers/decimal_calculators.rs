@@ -7,7 +7,7 @@ use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::strategies::ledgers::Currency;
 
-pub fn calculate_historical_pnl(
+pub fn calculate_theoretical_pnl(
     side: PositionSide,
     entry_price: Price,
     market_price: Price,
