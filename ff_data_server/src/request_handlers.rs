@@ -90,7 +90,7 @@ pub async fn manage_async_requests(
                     continue;
                 }
             };
-            println!("{:?}", request);
+            //println!("{:?}", request);
             let stream_name = stream_name.clone();
             let mode =strategy_mode.clone();
             let sender = response_sender.clone();

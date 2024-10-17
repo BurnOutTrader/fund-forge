@@ -56,6 +56,26 @@ lazy_static!(
     pub(crate) static ref BACKTEST_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
 );
 
+pub(crate) async fn initialize_live_account(brokerage: Brokerage, account_id: &AccountId) {
+    if !LIVE_LEDGERS.contains_key(&brokerage) {
+        LIVE_LEDGERS.insert(brokerage.clone(), DashMap::new());
+    }
+    if let Some(mut broker_map) = LIVE_LEDGERS.get_mut(&brokerage) {
+        if !broker_map.contains_key(account_id) {
+            let account_info = match brokerage.account_info(account_id.clone()).await {
+                Ok(info) => info,
+                Err(e) => {
+                    eprintln!("Unable to get account info for: {} {}: error: {}", brokerage, account_id, e);
+                    return;
+                }
+            };
+
+            let ledger = Ledger::new(account_info, StrategyMode::Live);
+            broker_map.value_mut().insert(account_id.clone(), ledger);
+        }
+    }
+}
+
 fn time_slice_ledger_updates(mode: StrategyMode, time_slice: TimeSlice, time: DateTime<Utc>) {
     if mode != StrategyMode::Live {
         for broker_map in BACKTEST_LEDGERS.iter() {
@@ -280,6 +300,11 @@ pub(crate) fn export_trades(directory: &str) {
 
 pub(crate) fn print_ledger(brokerage: &Brokerage, account_id: &AccountId) -> Option<String>  {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(brokerage) {
+        if let Some(account_map) = broker_map.get(account_id) {
+            return Some(account_map.value().print())
+        }
+    }
+    if let Some(broker_map) = LIVE_LEDGERS.get(brokerage) {
         if let Some(account_map) = broker_map.get(account_id) {
             return Some(account_map.value().print())
         }
