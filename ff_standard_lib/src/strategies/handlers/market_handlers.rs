@@ -172,7 +172,6 @@ fn update_base_data(base_data_enum: BaseDataEnum) {
     }
 }
 
-// need to rethink this.. do we have ledgers or just static properties linked to account id's and positions and orders linked to account ids
 pub async fn simulated_order_matching(
     mode: StrategyMode,
     starting_balance: Decimal,
@@ -269,9 +268,6 @@ pub async fn backtest_matching_engine(
     if BACKTEST_OPEN_ORDER_CACHE.len() == 0 {
         return;
     }
-    //todo need a better way to simulate stop limits, use custom market price fn
-    // need to handle partial fills for data sets will volume. at-least partial fill stop limits and limits.
-
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
     let mut filled = Vec::new();
