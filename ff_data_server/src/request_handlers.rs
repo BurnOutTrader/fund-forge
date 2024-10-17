@@ -307,24 +307,29 @@ async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteH
     }
 }
 
+
 async fn handle_callback<F, Fut>(
     callback: F,
-    sender: tokio::sync::mpsc::Sender<DataServerResponse>
+    sender: tokio::sync::mpsc::Sender<DataServerResponse>,
+    timeout_duration: Duration,
 )
 where
     F: FnOnce() -> Fut,
     Fut: Future<Output = DataServerResponse>,
 {
-    // Call the closure to get the future, then await the future to get the response
-    let response = callback().await;
-
-    // Send the response through the channel to the stream handler
-    match sender.send(response).await {
-        Err(e) => {
-            // Handle the error (log it or take some other action)
-            println!("Failed to send response to stream handler: {:?}", e);
+    // Wrap the callback future with a timeout
+    match timeout(timeout_duration, callback()).await {
+        Ok(response) => {
+            // Successfully received response, try sending it to the stream handler
+            if let Err(e) = sender.send(response).await {
+                // Handle send error (e.g., log it)
+                println!("Failed to send response to stream handler: {:?}", e);
+            }
         }
-        Ok(_) => {}
+        Err(_) => {
+            // Handle timeout (e.g., log it or take recovery action)
+            println!("Operation timed out after {:?}", timeout_duration);
+        }
     }
 }
 
