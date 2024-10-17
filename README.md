@@ -8,7 +8,18 @@ Focused on backtesting, charting, live trading. With an emphasis for semi-automa
 fund-forge is built to allow simple abstractions for common strategy functionality: trade multiple symbols, with multiple indicators and data streams.
 
 <span style="color: red;">***For development and testing purposes only. live trading is in development. repo is currently unstable.***</span>
-#### <span style="color: red;">Data Serialization is being overhauled, if you suddenly have trouble running between git pulls, then try re-parsing the test data.</span>
+
+⚠️ Warning
+: If you are using Rithmic, proceed with extreme caution!
+Live order functionality is being implemented, and any active strategy may send real orders directly to the market.
+If I make any mistakes, and leave a test strategy in live mode, it will trade your live accounts!.
+
+Make sure to:
+- Test your strategies thoroughly before deploying live.
+- Double-check your configurations to avoid unintended trades.
+
+Once `StrategyMode::Live`, the system will not differentiate between test and real orders!
+
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
 - [Example Strategy](example_test_strategy/src/main.rs)
