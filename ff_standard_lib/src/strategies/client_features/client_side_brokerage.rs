@@ -13,7 +13,7 @@ use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
-use crate::strategies::ledgers::{AccountId, Currency, Ledger};
+use crate::strategies::ledgers::{AccountId, AccountInfo, Currency, Ledger};
 
 impl Brokerage {
     pub async fn paper_account_init(&self, mode: StrategyMode, starting_balance: Decimal, currency: Currency, account_id: AccountId) -> Result<Ledger, FundForgeError> {
@@ -149,9 +149,9 @@ impl Brokerage {
         }
     }
 
-    pub async fn commission_info(&self, callback_id: u64, symbol_name: SymbolName) -> Result<CommissionInfo, FundForgeError> {
+    pub async fn commission_info(&self, symbol_name: SymbolName) -> Result<CommissionInfo, FundForgeError> {
         let request = DataServerRequest::CommissionInfo {
-            callback_id,
+            callback_id: 0,
             brokerage: self.clone(),
             symbol_name,
         };
@@ -162,6 +162,28 @@ impl Brokerage {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => match response {
                     DataServerResponse::CommissionInfo { commission_info, .. } => Ok(commission_info),
+                    DataServerResponse::Error { error, .. } => Err(error),
+                    _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            },
+            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
+        }
+    }
+
+    pub async fn account_info(&self, account_id: AccountId) -> Result<AccountInfo, FundForgeError> {
+        let request = DataServerRequest::AccountInfo {
+            callback_id: 0,
+            brokerage: self.clone(),
+            account_id
+        };
+        let (sender, receiver) = oneshot::channel();
+        let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
+        send_request(msg).await;
+        match timeout(Duration::from_secs(10), receiver).await {
+            Ok(receiver_result) => match receiver_result {
+                Ok(response) => match response {
+                    DataServerResponse::AccountInfo { account_info, .. } => Ok(account_info),
                     DataServerResponse::Error { error, .. } => Err(error),
                     _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
                 },
