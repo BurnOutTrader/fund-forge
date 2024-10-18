@@ -1,13 +1,17 @@
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use rust_decimal_macros::dec;
+use rust_decimal::Decimal;
+use dashmap::DashMap;
+use std::str::FromStr;
 use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_str};
 use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::messages::data_server_messaging::FundForgeError;
+use crate::standardized_types::accounts::Currency;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::enums::OrderSide;
+use crate::standardized_types::enums::{OrderSide, StrategyMode};
 use crate::standardized_types::new_types::{Price, Volume};
-use crate::standardized_types::orders::{OrderId, OrderState, OrderType, OrderUpdateEvent, TimeInForce};
+use crate::standardized_types::orders::{OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::strategies::client_features::server_connections::add_buffer;
 use crate::strategies::handlers::market_handler::market_handlers;
@@ -634,4 +638,94 @@ pub(crate) async fn get_market_price (
     }
 
     Err(FundForgeError::ClientSideErrorDebug(String::from("No market price found for symbol")))
+}
+
+pub async fn simulated_order_matching(
+    mode: StrategyMode,
+    starting_balance: Decimal,
+    currency: Currency,
+    order_request: OrderRequest,
+    time: DateTime<Utc>
+) {
+    match order_request {
+        OrderRequest::Create { order, .. } => {
+            let time = DateTime::from_str(&order.time_created_utc).unwrap();
+            if !BACKTEST_LEDGERS.contains_key(&order.brokerage) {
+                let broker_map = DashMap::new();
+                BACKTEST_LEDGERS.insert(order.brokerage, broker_map);
+            }
+            if !BACKTEST_LEDGERS.get(&order.brokerage).unwrap().contains_key(&order.account_id) {
+                let ledger = match order.brokerage.paper_account_init(mode, starting_balance, currency, order.account_id.clone()).await {
+                    Ok(ledger) => ledger,
+                    Err(e) => {
+                        panic!("Order Matching Engine: Error Initializing Account: {}", e);
+                    }
+                };
+                BACKTEST_LEDGERS.get(&order.brokerage).unwrap().insert(order.account_id.clone(), ledger);
+            }
+            BACKTEST_OPEN_ORDER_CACHE.insert(order.id.clone(), order);
+            backtest_matching_engine(time.clone()).await;
+        }
+        OrderRequest::Cancel{brokerage, order_id, account_id } => {
+            let existing_order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
+            if let Some((existing_order_id, order)) = existing_order {
+                let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage, account_id: order.account_id.clone(), order_id: existing_order_id, tag: order.tag.clone(), time: time.to_string()});
+                add_buffer(time, cancel_event).await;
+                BACKTEST_CLOSED_ORDER_CACHE.insert(order_id, order);
+            } else {
+                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found"), time: time.to_string()});
+                add_buffer(time, fail_event).await;
+            }
+        }
+        OrderRequest::Update{ brokerage, order_id, account_id, update } => {
+            if let Some((order_id, mut order)) = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id) {
+                match &update {
+                    OrderUpdateType::LimitPrice(price) => {
+                        if let Some(ref mut limit_price) = order.limit_price {
+                            *limit_price = price.clone();
+                        }
+                    }
+                    OrderUpdateType::TriggerPrice(price) => {
+                        if let Some(ref mut trigger_price) = order.trigger_price {
+                            *trigger_price = price.clone();
+                        }
+                    }
+                    OrderUpdateType::TimeInForce(tif) => {
+                        order.time_in_force = tif.clone();
+                    }
+                    OrderUpdateType::Quantity(quantity) => {
+                        order.quantity_open = quantity.clone();
+                    }
+                    OrderUpdateType::Tag(tag) => {
+                        order.tag = tag.clone();
+                    }
+                }
+                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone(), update_type: update, tag: order.tag.clone(), time: time.to_string()});
+                BACKTEST_OPEN_ORDER_CACHE.insert(order_id, order);
+                add_buffer(time, update_event).await;
+            } else {
+                let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason: String::from("No pending order found"), time: time.to_string() });
+                add_buffer(time, fail_event).await;
+            }
+        }
+        OrderRequest::CancelAll { brokerage, account_id, symbol_name } => {
+            let mut remove = vec![];
+            for order in BACKTEST_OPEN_ORDER_CACHE.iter() {
+                if order.brokerage == brokerage && order.account_id == account_id && order.symbol_name == symbol_name {
+                    remove.push(order.id.clone());
+                }
+            }
+            for order_id in remove {
+                let order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
+                if let Some((order_id, order)) = order {
+                    let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order_id: order.id.clone(), tag: order.tag.clone(), time: time.to_string()});
+                    add_buffer(time.clone(), cancel_event).await;
+                    BACKTEST_CLOSED_ORDER_CACHE.insert(order_id, order);
+                }
+            }
+        }
+        OrderRequest::FlattenAllFor { brokerage, account_id } => {
+             market_handlers::flatten_all_paper_for(&brokerage, &account_id, time).await;
+        }
+    }
 }

@@ -76,9 +76,9 @@ impl Ledger {
     }
 
     pub fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
-        self.cash_value += cash_value;
-        self.cash_used += cash_used;
-        self.cash_available += cash_available;
+        self.cash_value = cash_value;
+        self.cash_used = cash_used;
+        self.cash_available = cash_available;
     }
 
     pub fn user_initiated(account_setup: AccountSetup, strategy_mode: StrategyMode) -> Self {

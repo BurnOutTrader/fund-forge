@@ -16,7 +16,7 @@ use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 use ff_standard_lib::standardized_types::accounts::{AccountId, AccountInfo};
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use ff_standard_lib::standardized_types::enums::FuturesExchange;
+use ff_standard_lib::standardized_types::enums::{FuturesExchange};
 use ff_standard_lib::standardized_types::accounts::Currency;
 use ff_standard_lib::standardized_types::new_types::{Price, Volume};
 use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent, OrderUpdateType};
@@ -28,11 +28,11 @@ use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 
 type BasketId = String;
 lazy_static! {
-    pub static ref BASKET_ID_TO_ID_MAP: DashMap<BasketId , OrderId> = DashMap::new();
-    pub static ref BASKET_TO_STREAM_NAME_MAP: DashMap<BasketId , StreamName> = DashMap::new();
-    pub static ref ID_TO_STREAM_NAME_MAP: DashMap<OrderId , u16> = DashMap::new();
-    pub static ref ID_TO_TAG: DashMap<OrderId , String> = DashMap::new();
-    pub static ref ID_UPDATE_TYPE: DashMap<OrderId , OrderUpdateType> = DashMap::new();
+    pub static ref BASKET_ID_TO_ID_MAP: DashMap<Brokerage, DashMap<BasketId , OrderId>> = DashMap::new();
+    pub static ref BASKET_TO_STREAM_NAME_MAP: DashMap<Brokerage, DashMap<BasketId , StreamName>> = DashMap::new();
+    pub static ref ID_TO_STREAM_NAME_MAP: DashMap<Brokerage, DashMap<OrderId , u16>> = DashMap::new();
+    pub static ref ID_TO_TAG: DashMap<Brokerage, DashMap<OrderId , String>> = DashMap::new();
+    pub static ref ID_UPDATE_TYPE: DashMap<Brokerage, DashMap<OrderId , OrderUpdateType>> = DashMap::new();
 }
 
 #[allow(unused, dead_code)]
@@ -178,7 +178,7 @@ pub async fn match_order_plant_id(
                         None => return,
                         Some(order_id) => order_id
                     };
-                    BASKET_ID_TO_ID_MAP.insert(basket_id.clone(), order_id.clone());
+                    BASKET_ID_TO_ID_MAP.entry(client.brokerage.clone()).or_insert(DashMap::new()).insert(basket_id.clone(), order_id.clone());
 
                     let stream_name = match msg.user_msg.get(0) {
                         None => return,
@@ -187,14 +187,14 @@ pub async fn match_order_plant_id(
 
                     let stream_name = u16::from_str(&stream_name).unwrap_or_default();
 
-                    BASKET_TO_STREAM_NAME_MAP.insert(basket_id,stream_name );
-                    ID_TO_STREAM_NAME_MAP.insert(order_id.clone(), stream_name);
+                    BASKET_TO_STREAM_NAME_MAP.entry(client.brokerage.clone()).or_insert(DashMap::new()).insert(basket_id,stream_name );
+                    ID_TO_STREAM_NAME_MAP.entry(client.brokerage.clone()).or_insert(DashMap::new()).insert(order_id.clone(), stream_name);
 
                     let tag = match msg.user_msg.get(2) {
                         None => return,
                         Some(tag) => tag
                     };
-                    ID_TO_TAG.insert(order_id.clone(), tag.clone());
+                    ID_TO_TAG.entry(client.brokerage.clone()).or_insert(DashMap::new()).insert(order_id.clone(), tag.clone());
 
                     let account_id = match msg.user_msg.get(1) {
                         None => return,
@@ -209,7 +209,7 @@ pub async fn match_order_plant_id(
                         time,
                     };
 
-                    send_order_update(&order_id, event).await;
+                    send_order_update(client.brokerage, &order_id, event).await;
                 }
             }
         },
@@ -456,31 +456,42 @@ pub async fn match_order_plant_id(
                     (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();
 
-                    let order_id = match BASKET_ID_TO_ID_MAP.get(&basket_id) {
-                        Some(id) => id.clone(),
-                        None => {
-                            //eprintln!("Order ID not found for basket: {}", basket_id);
-                            return;
-                        },
+                    let order_id = if let Some(brokerage_map) = BASKET_ID_TO_ID_MAP.get(&client.brokerage) {
+                        match brokerage_map.get(&basket_id) {
+                            Some(id) => id.value().clone(),
+                            None => {
+                                //eprintln!("Order ID not found for basket: {}", basket_id);
+                                return;
+                            },
+                        }
+                    } else {
+                        //eprintln!("Brokerage map not found for client: {:?}", client.brokerage);
+                        return;
                     };
 
-                    let tag = match ID_TO_TAG.get(&order_id) {
-                        Some(tag) => tag.clone(),
-                        None => {
-                            eprintln!("Tag not found for order: {}", user_tag);
-                            return;
-                        },
+                    let tag = if let Some(brokerage_map) = ID_TO_TAG.get(&client.brokerage) {
+                        match brokerage_map.value().get(&order_id) {
+                            Some(tag) => tag.clone(),
+                            None => {
+                                //eprintln!("Tag not found for order: {}", order_id);
+                                return;
+                            },
+                        }
+                    } else {
+                        //eprintln!("Brokerage map not found for client: {:?}", client.brokerage);
+                        return;
                     };
 
-                    let event = match notify_type {
+                    match notify_type {
                         1 => {
-                            OrderUpdateEvent::OrderAccepted {
+                            let event = OrderUpdateEvent::OrderAccepted {
                                 brokerage: client.brokerage.clone(),
                                 account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
                                 tag,
                                 time,
-                            }
+                            };
+                            send_order_update(client.brokerage, &order_id, event).await;
                         },
                         5 => {
                             if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size), Some(symbol)) =
@@ -494,7 +505,7 @@ pub async fn match_order_plant_id(
                                     None => return,
                                 };
                                 if total_unfilled_size == 0 {
-                                    OrderUpdateEvent::OrderFilled {
+                                    let event = OrderUpdateEvent::OrderFilled {
                                         brokerage: client.brokerage.clone(),
                                         account_id: AccountId::from(account_id.clone()),
                                         order_id: order_id.clone(),
@@ -502,9 +513,10 @@ pub async fn match_order_plant_id(
                                         quantity,
                                         tag,
                                         time,
-                                    }
+                                    };
+                                    send_order_update(client.brokerage, &order_id, event).await;
                                 } else {
-                                    OrderUpdateEvent::OrderPartiallyFilled {
+                                    let event = OrderUpdateEvent::OrderPartiallyFilled {
                                         brokerage: client.brokerage.clone(),
                                         account_id: AccountId::from(account_id.clone()),
                                         order_id: order_id.clone(),
@@ -512,58 +524,65 @@ pub async fn match_order_plant_id(
                                         quantity,
                                         tag,
                                         time,
-                                    }
+                                    };
+                                    send_order_update(client.brokerage, &order_id, event).await;
                                 }
                             } else {
                                 return;
                             }
                         },
                         3 => {
-                            OrderUpdateEvent::OrderCancelled {
+                            let event = OrderUpdateEvent::OrderCancelled {
                                 brokerage: client.brokerage.clone(),
                                 account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
                                 tag,
                                 time,
-                            }
+                            };
+                            send_order_update(client.brokerage, &order_id, event).await;
                         },
                         6 => {
-                            OrderUpdateEvent::OrderRejected {
+                            let event = OrderUpdateEvent::OrderRejected {
                                 brokerage: client.brokerage.clone(),
                                 account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
                                 reason: msg.status.unwrap_or_default(),
                                 tag,
                                 time,
-                            }
+                            };
+                            send_order_update(client.brokerage, &order_id, event).await;
                         },
                        2 => {
-                            if let Some((_, update_type)) = ID_UPDATE_TYPE.remove(&order_id) {
-                                OrderUpdateEvent::OrderUpdated {
-                                    brokerage: client.brokerage.clone(),
-                                    account_id: AccountId::from(account_id.clone()),
-                                    order_id: order_id.clone(),
-                                    update_type,
-                                    tag,
-                                    time,
-                                }
-                            } else {
-                                return;
-                            }
+                           if let Some(broker_map) = ID_UPDATE_TYPE.get(&client.brokerage) {
+                               if let Some((_, update_type)) = broker_map.remove(&order_id) {
+                                   let event = OrderUpdateEvent::OrderUpdated {
+                                       brokerage: client.brokerage.clone(),
+                                       account_id: AccountId::from(account_id.clone()),
+                                       order_id: order_id.clone(),
+                                       update_type,
+                                       tag,
+                                       time,
+                                   };
+                                   send_order_update(client.brokerage, &order_id, event).await;
+                               } else {
+                                   return;
+                               }
+                           }
                         },
                         7 | 8 => {
-                            OrderUpdateEvent::OrderUpdateRejected {
+                            let event =OrderUpdateEvent::OrderUpdateRejected {
                                 brokerage: client.brokerage.clone(),
                                 account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
                                 reason: msg.status.unwrap_or_default(),
                                 time,
-                            }
+                            };
+                            send_order_update(client.brokerage, &order_id, event).await;
                         },
                         _ => return,  // Ignore other notification types
                     };
 
-                    send_order_update(&order_id, event).await;
+
 
                     if let (Some(cash_value), Some(cash_available)) = (
                         client.account_balance.get(&account_id).map(|r| *r),
@@ -576,7 +595,7 @@ pub async fn match_order_plant_id(
 
                         send_updates(DataServerResponse::LiveAccountUpdates {
                             brokerage: client.brokerage.clone(),
-                            account_id: account_id,
+                            account_id,
                             cash_value,
                             cash_available,
                             cash_used,
@@ -653,13 +672,15 @@ pub async fn match_order_plant_id(
     }
 }
 
-async fn send_order_update(order_id: &OrderId, event: OrderUpdateEvent) {
-    if let Some(stream_name) = ID_TO_STREAM_NAME_MAP.get(order_id) {
-        let order_event = DataServerResponse::OrderUpdates(event);
-        if let Some(sender) = RESPONSE_SENDERS.get(&stream_name) {
-            match sender.send(order_event).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e)
+async fn send_order_update(brokerage: Brokerage, order_id: &OrderId, event: OrderUpdateEvent) {
+    if let Some(broker_map) = ID_TO_STREAM_NAME_MAP.get(&brokerage) {
+        if let Some(stream_name) = broker_map.value().get(order_id) {
+            let order_event = DataServerResponse::OrderUpdates(event);
+            if let Some(sender) = RESPONSE_SENDERS.get(&stream_name.value()) {
+                match sender.send(order_event).await {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e)
+                }
             }
         }
     }

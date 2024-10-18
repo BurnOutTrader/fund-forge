@@ -323,8 +323,7 @@ pub async fn response_handler(
                                     live_order_update(update_event);
                                 }
                                 DataServerResponse::AccountSnapShot {ref account_info} => {
-                                    //todo, these are never being sent.
-                                    println!("{:?}", response);
+                                    //println!("{:?}", response);
                                     LIVE_LEDGERS
                                         .entry(account_info.brokerage.clone())
                                         .or_insert_with(DashMap::new)

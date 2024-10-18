@@ -83,7 +83,7 @@ pub async fn match_pnl_plant_id(
             if let Ok(msg) = InstrumentPnLPositionUpdate::decode(&message_buf[..]) {
                 // Instrument PnL Position Update
                 // From Server
-                //println!("Instrument PnL Position Update (Template ID: 450) from Server: {:?}", msg);
+                println!("Instrument PnL Position Update (Template ID: 450) from Server: {:?}", msg);
 
                 /*
                     Account PnL Position Update (Template ID: 451) from Server: AccountPnLPositionUpdate { template_id: 451, is_snapshot: None, fcm_id: Some("TopstepTrader"),
@@ -98,9 +98,7 @@ pub async fn match_pnl_plant_id(
                     day_closed_pnl_offset: Some("0.00"), ssboe: Some(1729085252), usecs: Some(932000) }
                 */
 
-            /*    if let (Some(account_balance), )= (msg.account_balance, ) {
 
-                }*/
             }
         },
         451 => {
@@ -126,6 +124,8 @@ pub async fn match_pnl_plant_id(
                     None => return,
                     Some(id) => id
                 };
+
+                //match msg.
 
                 match msg.account_balance {
                     None => {},

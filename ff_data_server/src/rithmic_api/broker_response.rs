@@ -263,8 +263,10 @@ impl BrokerApiResponse for RithmicClient {
 
         //check if we are short and add to quantity
         if let Some(account_short_map) = self.short_quantity.get(&order.account_id) {
-            if let Some(symbol_volume) = account_short_map.get(&details.symbol) {
-                let volume = match symbol_volume.to_i32() {
+            println!("{:?}", account_short_map);
+            println!("{:?}", details.symbol);
+            if let Some(symbol_volume) = account_short_map.value().get(&details.symbol) {
+                let volume = match symbol_volume.value().to_i32() {
                     None => {
                         return reject_order("Server Error: Unable to Parse Existing Position Size".to_string())
                     }
@@ -300,8 +302,10 @@ impl BrokerApiResponse for RithmicClient {
 
         //check if we are short and add to quantity
         if let Some(account_long_map) = self.long_quantity.get(&order.account_id) {
-            if let Some(symbol_volume) = account_long_map.get(&details.symbol) {
-                let volume = match symbol_volume.to_i32() {
+            println!("{:?}", account_long_map);
+            println!("{:?}", details.symbol);
+            if let Some(symbol_volume) = account_long_map.value().get(&details.symbol) {
+                let volume = match symbol_volume.value().to_i32() {
                     None => {
                         return reject_order("Server Error: Unable to Parse Existing Position Size".to_string())
                     }

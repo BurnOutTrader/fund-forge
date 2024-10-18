@@ -9,7 +9,7 @@ use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestShowOrders, RequestSubscribeForOrderUpdates, ResponseHeartbeat};
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, ResponseHeartbeat};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::OrderPlacement;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_new_order::PriceType;
 use ff_rithmic_api::rithmic_proto_objects::rti::rithmic_order_notification::TransactionType;
@@ -25,7 +25,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
-use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use ff_standard_lib::standardized_types::symbol_info::{FrontMonthInfo, SymbolInfo};
 use ff_standard_lib::standardized_types::books::BookLevel;
@@ -419,6 +419,15 @@ impl RithmicClient {
                 account_id: Some(id_account_info_kvp.key().clone()),
             };
             self.send_message(&SysInfraType::OrderPlant, req).await;
+            let req = RequestPnLPositionUpdates {
+                template_id: 400,
+                user_msg: vec![],
+                request: Some(1),
+                fcm_id: self.fcm_id.clone(),
+                ib_id: self.ib_id.clone(),
+                account_id: Some(id_account_info_kvp.key().clone()),
+            };
+            self.send_message(&SysInfraType::PnlPlant, req).await;
         }
     }
 
@@ -601,6 +610,11 @@ impl RithmicClient {
     }
 
     pub async fn submit_market_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) {
+        let duration = match order.time_in_force {
+            TimeInForce::IOC => ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Ioc.into(),
+            TimeInForce::FOK => ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into(),
+            _ => ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into()
+        };
         let req = RequestNewOrder {
             template_id: 312,
             user_msg: vec![stream_name.to_string(), order.account_id.clone(), order.tag.clone()],
@@ -615,7 +629,7 @@ impl RithmicClient {
             price: None,
             trigger_price: None,
             transaction_type: Some(details.transaction_type.into()),
-            duration: Some(ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into()),
+            duration: Some(duration),
             price_type: Some(PriceType::Market.into()),
             trade_route: Some(details.route),
             manual_or_auto: Some(OrderPlacement::Auto.into()),

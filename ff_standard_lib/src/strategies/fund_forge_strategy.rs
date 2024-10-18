@@ -345,7 +345,7 @@ impl FundForgeStrategy {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 initialize_live_account(brokerage.clone(), &account_id).await;
-                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
+                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;
             }
         }
