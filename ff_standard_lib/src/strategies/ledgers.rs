@@ -142,6 +142,7 @@ impl Ledger {
         if let Some((_symbol_name, mut existing_position)) = self.positions.remove(&symbol_name) {
             match existing_position.side {
                 PositionSide::Long => {
+
                 }
                 PositionSide::Short => {
 

@@ -99,4 +99,8 @@ impl BrokerApiResponse for BitgetClient {
     async fn live_exit_long(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
         todo!()
     }
+    #[allow(unused)]
+    async fn other_orders(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        todo!()
+    }
 }

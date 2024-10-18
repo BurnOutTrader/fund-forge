@@ -147,7 +147,7 @@ impl HybridStorage {
                 d.symbol().clone(),
                 d.resolution(),
                 d.base_data_type(),
-                d.time_closed_utc().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap()
+                d.time_closed_utc().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap()  //todo[Remove Unwrap]
             );
             grouped_data.entry(key).or_insert_with(Vec::new).push(d);
         }

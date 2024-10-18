@@ -330,11 +330,19 @@ pub async fn response_handler(
                                 DataServerResponse::AccountSnapShot {account_info} => {
                                     //tokio::task::spawn(async move {
                                         //println!("{:?}", response);
+                                    if !LIVE_LEDGERS
+                                        .entry(account_info.brokerage.clone())
+                                        .or_insert_with(DashMap::new)
+                                        .contains_key(&account_info.account_id)
+                                    {
                                         LIVE_LEDGERS
                                             .entry(account_info.brokerage.clone())
                                             .or_insert_with(DashMap::new)
-                                            .entry(account_info.account_id.clone())
-                                            .or_insert_with(|| Ledger::new(account_info.clone(), mode, is_simulating_pnl));
+                                            .insert(
+                                                account_info.account_id.clone(),
+                                                Ledger::new(account_info.clone(), mode, is_simulating_pnl),
+                                            );
+                                    }
                                     //});
                                 }
                                 DataServerResponse::LiveAccountUpdates { brokerage, account_id, cash_value, cash_available, cash_used } => {
@@ -349,7 +357,7 @@ pub async fn response_handler(
                                 }
                                 #[allow(unused)]
                                 DataServerResponse::LivePositionUpdates { brokerage, account_id, symbol_name, symbol_code, open_pnl, open_quantity, side } => {
-                                    /*tokio::task::spawn(async move {
+                                    if synchronise_accounts {
                                         if !LIVE_LEDGERS.contains_key(&brokerage) {
                                             LIVE_LEDGERS.insert(brokerage, DashMap::new());
                                         }
@@ -362,14 +370,14 @@ pub async fn response_handler(
                                                         return;
                                                     }
                                                 };
-                                                let ledger = Ledger::new(account_info, mode);
+                                                let ledger = Ledger::new(account_info, mode, false);
                                                 broker_map.insert(account_id.clone(), ledger);
                                             }
                                             if let Some(ledger) = broker_map.get(&account_id) {
-
+                                                //ledger.update_live_position()
                                             }
                                         }
-                                    });*/
+                                    }
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {

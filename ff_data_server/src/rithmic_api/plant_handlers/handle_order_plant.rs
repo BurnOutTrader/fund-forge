@@ -211,7 +211,8 @@ pub async fn match_order_plant_id(
                         None => return,
                         Some(symbol_code) => symbol_code.clone()
                     };
-
+                    // on sim accounts we don't need to do this, not sure about live.
+                    /*
                     let event = OrderUpdateEvent::OrderAccepted {
                         brokerage: client.brokerage.clone(),
                         account_id: account_id.to_owned(),
@@ -222,7 +223,7 @@ pub async fn match_order_plant_id(
                         time,
                     };
 
-                    send_order_update(client.brokerage, &order_id, event).await;
+                    send_order_update(client.brokerage, &order_id, event).await;*/
                 }
             }
         },
@@ -375,7 +376,7 @@ pub async fn match_order_plant_id(
             ssboe: Some(1729085413), usecs: Some(477767) }
             */
             if let Ok(msg) = RithmicOrderNotification::decode(&message_buf[..]) {
-                //todo I think these are only for historical, when you login, rithmic runs the previous orders.
+                //todo I think these are only for rithmic web or r trader orders
                 //println!("Rithmic Order Notification (Template ID: 351) from Server: {:?}", msg);
                /* if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(order_id)) =
                     (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {

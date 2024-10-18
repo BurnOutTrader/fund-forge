@@ -18,7 +18,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::database::HybridStorage;
-use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short};
+use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, session_market_hours_response, symbols_response, tick_size_response};
 use crate::stream_tasks::{deregister_streamer};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
@@ -369,9 +369,6 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
     match request {
         OrderRequest::Create { brokerage, order, order_type } => {
             match order_type {
-                OrderType::Limit => {
-                    todo!()
-                }
                 OrderType::Market => {
                     let send_order_result = timeout(TIMEOUT_DURATION, live_market_order(stream_name.clone(), mode, order.clone())).await;
                     match send_order_result {
@@ -385,14 +382,18 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
                         }
                     }
                 }
-                OrderType::MarketIfTouched => {
-                    todo!()
-                }
-                OrderType::StopMarket => {
-                    todo!()
-                }
-                OrderType::StopLimit => {
-                    todo!()
+                OrderType::MarketIfTouched |  OrderType::StopMarket | OrderType::StopLimit | OrderType::Limit => {
+                    let send_order_result = timeout(TIMEOUT_DURATION, other_orders(stream_name.clone(), mode, order.clone())).await;
+                    match send_order_result {
+                        Ok(Ok(_)) => {} // Order placed successfully
+                        Ok(Err(e)) => {
+                            send_error_response(&sender, e, &stream_name).await;
+                        }
+                        Err(_) => {
+                            let timeout_error = create_order_rejected(&order, "Order placement timed out".to_string());
+                            send_error_response(&sender, timeout_error, &stream_name).await;
+                        }
+                    }
                 }
                 OrderType::EnterLong => {
                     let send_order_result = timeout(TIMEOUT_DURATION, live_enter_long(stream_name.clone(), mode, order.clone())).await;

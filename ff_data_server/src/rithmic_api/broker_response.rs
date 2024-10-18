@@ -6,10 +6,10 @@ use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::accounts::{AccountId, AccountInfo, Currency};
-use ff_standard_lib::standardized_types::enums::StrategyMode;
+use ff_standard_lib::standardized_types::enums::{StrategyMode};
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
-use ff_standard_lib::standardized_types::subscriptions::SymbolName;
+use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::products::{find_base_symbol, get_available_symbol_names, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
@@ -339,6 +339,15 @@ impl BrokerApiResponse for RithmicClient {
         } else {
             reject_order(format!("No Long Position To Exit: {}", details.symbol_code))
         }
+    }
+
+    async fn other_orders(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        let details = match self.rithmic_order_details(mode, stream_name, &order).await {
+            Ok(details) => details,
+            Err(e) => return Err(e)
+        };
+        self.submit_order(stream_name, order, details).await;
+        Ok(())
     }
 }
 

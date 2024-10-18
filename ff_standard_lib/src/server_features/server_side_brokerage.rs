@@ -223,4 +223,12 @@ pub trait BrokerApiResponse: Sync + Send {
         mode: StrategyMode,
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
+
+    // Handle other order types, Limit, Stop Limit, Stop Market, MIT etc
+    async fn other_orders(
+        &self,
+        stream_name: StreamName,
+        mode: StrategyMode,
+        order: Order,
+    ) -> Result<(), OrderUpdateEvent>;
 }

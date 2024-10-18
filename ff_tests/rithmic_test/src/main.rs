@@ -1,24 +1,34 @@
 use std::cmp::PartialEq;
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, Utc};
 use chrono_tz::Australia;
+use chrono_tz::Tz::UTC;
 use colored::Colorize;
 use ff_rithmic_api::systems::RithmicSystem;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent, StrategyEventBuffer};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
+#[allow(unused_imports)]
+use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::standardized_types::accounts::{AccountId, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::OrderUpdateEvent;
+use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
+#[allow(unused_imports)]
+use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
+#[allow(unused_imports)]
+use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
+#[allow(unused_imports)]
+use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
+
 
 // TODO WARNING THIS IS LIVE TRADING
 // to launch on separate machine
@@ -48,13 +58,13 @@ async fn main() {
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
             ),*/
-            DataSubscription::new(
-                SymbolName::from("MNQ"),
-                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(5),
-                BaseDataType::Candles,
-                MarketType::Futures(FuturesExchange::CME)
-            ),
+           DataSubscription::new(
+               SymbolName::from("MNQ"),
+               DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+               Resolution::Seconds(5),
+               BaseDataType::Candles,
+               MarketType::Futures(FuturesExchange::CME)
+           )
         ],
         false,
         100,
@@ -81,17 +91,19 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEventBuffer>,
 ) {
- /*   let atr_5 = IndicatorEnum::AverageTrueRange(
+    let subscription = DataSubscription::new(
+        SymbolName::from("MNQ"),
+        DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+        Resolution::Seconds(5),
+        BaseDataType::Candles,
+        MarketType::Futures(FuturesExchange::CME)
+    );
+    /*
+    let atr_5 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(
             IndicatorName::from("atr_5"),
             // The subscription for the indicator
-            DataSubscription::new(
-                SymbolName::from("MNQ"),
-                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Seconds(1),
-                BaseDataType::Candles,
-                MarketType::Futures(FuturesExchange::CME)
-            ),
+            subscription.clone(),
 
             // history to retain
             10,
@@ -102,10 +114,10 @@ pub async fn on_data_received(
             // Plot color for GUI or println!()
             Color::new (128, 0, 128)
         ).await,
-    );
+    );*/
 
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
-    strategy.subscribe_indicator(atr_5, true).await;*/
+    //strategy.subscribe_indicator(atr_5, true).await;
 
     let mut warmup_complete = false;
     let mut last_side = LastSide::Flat;
@@ -115,6 +127,8 @@ pub async fn on_data_received(
     println!("Staring Strategy Loop");
     let symbol = "MNQ".to_string();
     let mut count = 0;
+    let mut bars_since_entry = 0;
+    let mut entry_order_id = None;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -143,38 +157,44 @@ pub async fn on_data_received(
                                     }
 
                                     count += 1;
-                                    /*
-                                    // test markets Long
-                                    if count == 5
-                                    {
-                                        let entry_id = strategy.buy_market(&symbol,None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long Market")).await;
-                                    }
-                                    else if count == 10 && strategy.is_long(&Brokerage::Rithmic(RithmicSystem::TopstepTrader), &account, &symbol) {
-                                        let exit_id = strategy.sell_market(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long Market")).await;
+
+                                    let last_candle = strategy.candle_index(&subscription, 1);
+
+                                    if last_candle.is_none() {
+                                        println!("Last Candle Is None");
+                                        continue;
                                     }
 
-                                    if count == 15
-                                    {
-                                        let entry_id = strategy.sell_market(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Short Market")).await;
+                                    let last_candle = last_candle.unwrap();
+                                    // entry orders
+                                    if candle.close > last_candle.close && bars_since_entry == 0 {
+                                        println!("Submitting long limit");
+                                        let cancel_order_time = Utc::now() + Duration::seconds(30);
+                                        let order_id = strategy.limit_order(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), OrderSide::Buy, last_candle.low, TimeInForce::Time(cancel_order_time.naive_utc().to_string(), UTC.to_string()), String::from("Enter Long Limit")).await;
+                                        entry_order_id = Some(order_id);
+                                    } else if candle.close < last_candle.close && entry_order_id == None && bars_since_entry == 0  {
+                                        println!("Submitting short limit");
+                                        let cancel_order_time = Utc::now() + Duration::seconds(30);
+                                        let order_id = strategy.limit_order(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), OrderSide::Sell, last_candle.high, TimeInForce::Time(cancel_order_time.naive_utc().to_string(), UTC.to_string()), String::from("Enter Short Limit")).await;
+                                        entry_order_id = Some(order_id);
                                     }
-                                    else if count == 20 && strategy.is_short(&Brokerage::Rithmic(RithmicSystem::TopstepTrader), &account, &symbol) {
-                                        let exit_id = strategy.buy_market(&symbol,None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Short Market")).await;
-                                    }*/
 
-                                    // test Enter Long
-                                    if count == 5 || count == 15 {
-                                        let entry_id = strategy.enter_long(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
+
+                                    // exit orders
+                                    let is_long = strategy.is_long(&brokerage, &account, &symbol_code);
+                                    let is_short = strategy.is_short(&brokerage, &account, &symbol_code);
+                                    if is_long || is_short {
+                                        bars_since_entry +=1;
                                     }
-                                    else if count == 10 || count == 20 {
+
+                                    if is_long && bars_since_entry > 5 {
                                         let exit_id = strategy.exit_long(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
-                                    }
-
-                                    // test enter short
-                                    if count == 25 || count == 35 {
-                                        let entry_id = strategy.enter_short(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Short")).await;
-                                    }
-                                    else if count == 30 || count == 40 {
+                                        bars_since_entry = 0;
+                                        entry_order_id = None;
+                                    } else if is_short && bars_since_entry > 5 {
                                         let exit_id = strategy.exit_short(&symbol,None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Short")).await;
+                                        bars_since_entry= 0;
+                                        entry_order_id = None;
                                     }
                                 }
                             }
@@ -241,7 +261,22 @@ pub async fn on_data_received(
                     strategy.print_ledger(event.brokerage(), event.order_id());
                     let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                     match event {
-                        OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => println!("{}", msg.as_str().on_bright_magenta().on_bright_red()),
+                        OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => {
+                            println!("{}", msg.as_str().on_bright_magenta().on_bright_red());
+                            entry_order_id = None;
+                        },
+                        OrderUpdateEvent::OrderCancelled {order_id, ..} => {
+                            println!("{}", msg.as_str().bright_cyan());
+                            let mut cancelled = false;
+                            if let Some(mut entry_order_id) =  &entry_order_id {
+                                if *order_id == *entry_order_id {
+                                    cancelled = true;
+                                }
+                            }
+                            if cancelled {
+                                entry_order_id = None;
+                            }
+                        }
                         _ =>  println!("{}", msg.as_str().bright_yellow())
                     }
 

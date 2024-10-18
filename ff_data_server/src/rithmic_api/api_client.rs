@@ -1,10 +1,12 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono_tz::{Tz};
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
@@ -25,7 +27,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
-use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, TimeInForce};
+use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderType, OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use ff_standard_lib::standardized_types::symbol_info::{FrontMonthInfo, SymbolInfo};
 use ff_standard_lib::standardized_types::books::BookLevel;
@@ -34,6 +36,7 @@ use ff_standard_lib::StreamName;
 use prost::Message as ProstMessage;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
+use rust_decimal_macros::dec;
 use tokio::net::TcpStream;
 use tokio::{select, task};
 use tokio::task::JoinHandle;
@@ -90,7 +93,6 @@ pub struct RithmicClient {
     pub day_open_pnl: DashMap<AccountId, Decimal>,
     pub day_closed_pnl: DashMap<AccountId, Decimal>,
     pub max_size: DashMap<AccountId, Volume>,
-    pub total_open_size: DashMap<AccountId, Volume>,
     pub long_quantity: DashMap<AccountId, DashMap<SymbolName, Volume>>,
     pub short_quantity: DashMap<AccountId, DashMap<SymbolName, Volume>>,
 
@@ -167,12 +169,31 @@ impl RithmicClient {
             candle_feed_broadcasters: Arc::new(Default::default()),
             ask_book: Default::default(),
             order_broadcaster: sender,
-            total_open_size: Default::default(),
             long_quantity: Default::default(),
             short_quantity: Default::default(),
             default_trade_route: DashMap::new(),
         };
         Ok(client)
+    }
+
+    pub fn total_open_size(&self) -> Volume {
+        let mut size = dec!(0);
+
+        // Sum up long positions
+        for account_map in self.long_quantity.iter() {
+            for symbol_map in account_map.value().iter() {
+                size += *symbol_map.value();
+            }
+        }
+
+        // Sum up short positions
+        for account_map in self.short_quantity.iter() {
+            for symbol_map in account_map.value().iter() {
+                size += *symbol_map.value();
+            }
+        }
+
+        size
     }
 
 
@@ -429,40 +450,58 @@ impl RithmicClient {
         }
     }
 
+    /// Checks that an order will not go over max size
     pub fn is_valid_order(&self, order: &Order) -> Result<(), String> {
         if let Some(max_size) = self.max_size.get(&order.account_id) {
-            match order.side {
+            let max_size = *max_size.value();
+            let current_total_long = self.long_quantity
+                .get(&order.account_id)
+                .map(|account_map| account_map.iter().fold(dec!(0), |acc, item| acc + *item.value()))
+                .unwrap_or_else(|| dec!(0));
+            let current_total_short = self.short_quantity
+                .get(&order.account_id)
+                .map(|account_map| account_map.iter().fold(dec!(0), |acc, item| acc + *item.value()))
+                .unwrap_or_else(|| dec!(0));
+
+            let new_total = match order.side {
                 OrderSide::Buy => {
-                    if let Some(account_long_quantity) = self.long_quantity.get(&order.id) {
-                        if let Some(symbol_long_quantity) = account_long_quantity.value().get(&order.symbol_name) {
-                            if symbol_long_quantity.value() + order.quantity_open.clone() > *max_size.value() {
-                                return Err(format!("Order Would Exceed Max Position Size: {}", order.tag))
-                            }
-                        }
+                    let account_short = self.short_quantity
+                        .entry(order.account_id.clone())
+                        .or_insert_with(DashMap::new);
+                    let current_symbol_short = account_short
+                        .entry(order.symbol_name.clone())
+                        .or_insert(dec!(0));
+                    let current_symbol_short_value = *current_symbol_short.value();
+
+                    if order.quantity_open <= current_symbol_short_value {
+                        // Closing short position
+                        current_total_long + current_total_short - order.quantity_open
+                    } else {
+                        // Opening long position or flipping from short to long
+                        current_total_long + current_total_short + (order.quantity_open - current_symbol_short_value)
                     }
-                    else if let Some(account_short_quantity) = self.short_quantity.get(&order.id) {
-                        if let Some(symbol_short_quantity) = account_short_quantity.get(&order.symbol_name) {
-                            if (order.quantity_open - symbol_short_quantity.value()).abs() > *max_size.value() {
-                                return Err(format!("Order Would Exceed Max Position Size: {}", order.tag))
-                            }
-                        }
-                    }
-                }
+                },
                 OrderSide::Sell => {
-                    if let Some(account_short_quantity) = self.short_quantity.get(&order.id) {
-                        if let Some(symbol_short_quantity) = account_short_quantity.value().get(&order.symbol_name) {
-                            if symbol_short_quantity.value() + order.quantity_open > *max_size.value() {
-                                return Err(format!("Order Would Exceed Max Position Size: {}", order.tag))
-                            }
-                        }
-                    } else if let Some(account_long_quantity) = self.long_quantity.get(&order.id) {
-                        if let Some(symbol_long_quantity) = account_long_quantity.get(&order.symbol_name) {
-                            if (order.quantity_open - symbol_long_quantity.value().clone()).abs() > *max_size.value() {
-                                return Err(format!("Order Would Exceed Max Position Size: {}", order.tag))
-                            }
-                        }
+                    let account_long = self.long_quantity
+                        .entry(order.account_id.clone())
+                        .or_insert_with(DashMap::new);
+                    let current_symbol_long = account_long
+                        .entry(order.symbol_name.clone())
+                        .or_insert(dec!(0));
+                    let current_symbol_long_value = *current_symbol_long.value();
+
+                    if order.quantity_open <= current_symbol_long_value {
+                        // Closing long position
+                        current_total_long + current_total_short - order.quantity_open
+                    } else {
+                        // Opening short position or flipping from long to short
+                        current_total_long + current_total_short + (order.quantity_open - current_symbol_long_value)
                     }
                 }
+            };
+
+            if new_total > max_size {
+                return Err(format!("Order would exceed max total position size of {}: {}", max_size, order.tag));
             }
         }
         Ok(())
@@ -614,6 +653,129 @@ impl RithmicClient {
             route,
             quantity,
         })
+    }
+
+    pub async fn submit_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) {
+        let (duration, cancel_at_ssboe, cancel_at_usecs) = match order.time_in_force {
+            TimeInForce::IOC => (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Ioc.into(), None, None),
+            TimeInForce::FOK => (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into(), None, None),
+            TimeInForce::GTC => (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(), None, None),
+            TimeInForce::Day(ref tz_string) => {
+                let time_zone = match Tz::from_str(tz_string) {
+                    Ok(time_zone) => time_zone,
+                    Err(e) => {
+                        eprintln!("Failed to parse TZ in rithmic submit_order(): {}", e);
+                        return;
+                    }
+                };
+                let now = Utc::now();
+                let end_of_day = match time_zone.from_utc_datetime(&now.naive_utc())
+                    .date_naive()
+                    .and_hms_opt(23, 59, 59)
+                    .and_then(|naive_dt| naive_dt.and_local_timezone(time_zone).single())
+                    .map(|tz_dt| tz_dt.with_timezone(&Utc))
+                {
+                    Some(dt) => dt,
+                    None => return eprintln!("Failed to calculate end of day for timezone: {}", tz_string),
+                };
+
+                (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
+                 Some(end_of_day.timestamp() as i32),
+                 Some(end_of_day.timestamp_subsec_micros() as i32))
+            }
+            TimeInForce::Time(ref time_string, ref tz_string) => {
+                let time_zone = match Tz::from_str(tz_string) {
+                    Ok(tz) => tz,
+                    Err(e) => {
+                        eprintln!("Failed to parse time zone in rithmic submit_order(): {}", e);
+                        return;
+                    }
+                };
+                let cancel_time = match NaiveDateTime::parse_from_str(time_string, "%Y-%m-%d %H:%M:%S%.f") {
+                    Ok(naive_time) => time_zone.from_local_datetime(&naive_time).unwrap(),
+                    Err(e) => {
+                        eprintln!("Failed to parse time in rithmic submit_order(): {}", e);
+                        return;
+                    }
+                };
+
+                (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
+                 Some(cancel_time.timestamp() as i32),
+                 Some(cancel_time.timestamp_subsec_micros() as i32))
+            }
+        };
+
+        match order.side {
+            OrderSide::Buy => eprintln!("Buying {}" , order.quantity_open),
+            OrderSide::Sell => eprintln!("Selling {}" , order.quantity_open),
+        }
+
+        let trigger_price = match order.trigger_price {
+            None => None,
+            Some(price) => {
+                match price.to_f64() {
+                    None => return,
+                    Some(price) => Some(price)
+                }
+            }
+        };
+
+        let limit_price = match order.limit_price {
+            None => None,
+            Some(price) => {
+                match price.to_f64() {
+                    None => return,
+                    Some(price) => Some(price)
+                }
+            }
+        };
+
+        let order_type = match order.order_type {
+            OrderType::Limit => 1,
+            OrderType::Market => 2,
+            OrderType::MarketIfTouched => 5,
+            OrderType::StopMarket => 4,
+            OrderType::StopLimit => 3,
+            OrderType::EnterLong => 2,
+            OrderType::EnterShort => 2,
+            OrderType::ExitLong => 2,
+            OrderType::ExitShort => 2,
+        };
+
+        let req = RequestNewOrder {
+            template_id: 312,
+            user_msg: vec![stream_name.to_string(), order.account_id.clone(), order.tag.clone(), order.symbol_name, details.symbol_code.clone()],
+            user_tag: Some(order.id.clone()),
+            window_name: Some(stream_name.to_string()),
+            fcm_id: self.fcm_id.clone(),
+            ib_id: self.ib_id.clone(),
+            account_id: Some(order.account_id.clone()),
+            symbol: Some(details.symbol_code),
+            exchange: Some(details.exchange.to_string()),
+            quantity: Some(details.quantity),
+            price: limit_price,
+            trigger_price,
+            transaction_type: Some(details.transaction_type.into()),
+            duration: Some(duration),
+            price_type: Some(order_type),
+            trade_route: Some(details.route),
+            manual_or_auto: Some(OrderPlacement::Auto.into()),
+            trailing_stop: None,
+            trail_by_ticks: None,
+            trail_by_price_id: None,
+            release_at_ssboe: None,
+            release_at_usecs: None,
+            cancel_at_ssboe,
+            cancel_at_usecs,
+            cancel_after_secs: None,
+            if_touched_symbol: None,
+            if_touched_exchange: None,
+            if_touched_condition: None,
+            if_touched_price_field: None,
+            if_touched_price: None,
+        };
+
+        self.send_message(&SysInfraType::OrderPlant, req).await;
     }
 
     pub async fn submit_market_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) {

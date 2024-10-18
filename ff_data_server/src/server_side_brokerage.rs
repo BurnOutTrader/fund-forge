@@ -378,3 +378,31 @@ pub async fn live_exit_long(stream_name: StreamName, mode: StrategyMode, order: 
         Err(_) => Err(create_order_rejected(&order, "Operation timed out".to_string()))
     }
 }
+
+pub async fn other_orders(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+    let operation = async {
+        match order.brokerage {
+            Brokerage::Test => {
+                Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
+            }
+            Brokerage::Rithmic(system) => {
+                RITHMIC_CLIENTS.get(&system)
+                    .ok_or_else(|| create_order_rejected(&order, format!("Client Not found for Rithmic system: {}", system)))?
+                    .other_orders(stream_name, mode, order.clone())
+                    .await
+            }
+            Brokerage::Bitget => {
+                BITGET_CLIENT.get()
+                    .ok_or_else(|| create_order_rejected(&order, "Bitget client not found".to_string()))?
+                    .other_orders(stream_name, mode, order.clone())
+                    .await
+            }
+        }
+    };
+
+    match timeout(TIMEOUT_DURATION, operation).await {
+        Ok(result) => result,
+        Err(_) => Err(create_order_rejected(&order, "Operation timed out".to_string()))
+    }
+}
+

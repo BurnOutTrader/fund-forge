@@ -336,6 +336,29 @@ impl SubscriptionHandler {
             let symbol = base_data.symbol();
             let base_data = base_data.clone();
             let symbol_subscriptions = symbol_subscriptions.clone();
+            match &base_data {
+                BaseDataEnum::Candle(candle) => {
+                    if let Some(mut history) = self.candle_history.get_mut(&candle.subscription()) {
+                        history.add(candle.clone());
+                    }
+                }
+                BaseDataEnum::QuoteBar(qb) => {
+                    if let Some(mut history) = self.bar_history.get_mut(&qb.subscription()) {
+                        history.add(qb.clone());
+                    }
+                }
+                BaseDataEnum::Tick(tick) => {
+                    if let Some(mut history) = self.tick_history.get_mut(&tick.subscription()) {
+                        history.add(tick.clone());
+                    }
+                }
+                BaseDataEnum::Quote(q) => {
+                    if let Some(mut history) = self.quote_history.get_mut(&q.subscription()) {
+                        history.add(q.clone());
+                    }
+                }
+                BaseDataEnum::Fundamental(_) => {}
+            }
 
             update_futures.push(async move {
                 if let Some(handler) = symbol_subscriptions.get(&symbol) {
