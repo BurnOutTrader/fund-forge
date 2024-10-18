@@ -391,7 +391,7 @@ impl Ledger {
 
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
-                        self.positions.insert(symbol_name, existing_position);
+                        self.positions.insert(symbol_name.clone(), existing_position);
 
                         if self.mode != StrategyMode::Live {
                             self.cash_available += booked_pnl;
@@ -503,6 +503,7 @@ impl Ledger {
             if self.mode != StrategyMode::Live {
                 self.cash_value = self.cash_used + self.cash_available;
             }
+            //println!("Position Created: {}", symbol_name);
             updates.push(event);
         }
         Ok(updates)
