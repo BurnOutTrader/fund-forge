@@ -491,6 +491,11 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 }
 ```
 
+### Futures Subscriptions
+You can subscribe using the `SymbolName` eg "MNQ" or the `SymbolCode` eg "MNQZ4".
+If you are placing orders with SymbolCode instead of SymbolName you will also need to pass in the `FuturesExchange` as a string. Example `FuturesExchange::CME.to_string()`
+By passing in the exchange string we are telling the data server to specifically place a trade on the "Z4" Contract.
+
 ### Subscription Performance Impacts
 In back-testing using multiple symbols will slow down the engine only relative to the size of the primary data set, since the Subscription manager updates consolidators concurrently,
 adding additional subscriptions per symbol has a minimal impact on performance on multithreaded systems, if you are subscribed to 1 minute bars, you can subscribe to 10min, 15min, 60min simultaneously
@@ -857,7 +862,7 @@ The symbol code will be returned in order events, an example of a symbol code or
 Alternatively just use the symbol code as symbol name. \
 There will be functions built to make this effortless at a later date. \
 The reason it works this way is to enable the trading of calander spreads, where a trader might place trades on contracts with the same SymbolName. \
-Currently in Backtesting, you will need to use the SymbolName of your data, this will all be fixed in the future once the Live api's are stable.
+Currently in Backtesting, you will need to use the SymbolName of your data, this will all be fixed in the future once the Live api's are stable. \
 ```rust
   // A Note for Live Mode
    StrategyEvent::OrderEvents(event) => {
