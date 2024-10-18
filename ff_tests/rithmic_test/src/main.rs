@@ -129,6 +129,7 @@ pub async fn on_data_received(
     let mut count = 0;
     let mut bars_since_entry = 0;
     let mut entry_order_id = None;
+    let mut position_size = 0;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -170,7 +171,7 @@ pub async fn on_data_received(
                                     if candle.close > last_candle.high && entry_order_id == None && bars_since_entry == 0 {
                                         println!("Submitting long limit");
                                         let cancel_order_time = Utc::now() + Duration::seconds(30);
-                                        let order_id = strategy.limit_order(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), OrderSide::Buy, last_candle.low, TimeInForce::Time(cancel_order_time.naive_utc().to_string(), UTC.to_string()), String::from("Enter Long Limit")).await;
+                                        let order_id = strategy.limit_order(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), OrderSide::Buy, last_candle.low,  TimeInForce::Time(cancel_order_time.naive_utc().to_string(), UTC.to_string()), String::from("Enter Long Limit")).await;
                                         entry_order_id = Some(order_id);
                                     }
                                     else if candle.close < last_candle.low && entry_order_id == None && bars_since_entry == 0  {
@@ -180,20 +181,32 @@ pub async fn on_data_received(
                                         entry_order_id = Some(order_id);
                                     }
 
-
                                     // exit orders
                                     let is_long = strategy.is_long(&brokerage, &account, &symbol_code);
                                     let is_short = strategy.is_short(&brokerage, &account, &symbol_code);
                                     if is_long || is_short {
-                                        bars_since_entry +=1;
+                                        bars_since_entry += 1;
                                     }
 
-                                    if is_long && bars_since_entry > 5 {
-                                        let exit_id = strategy.exit_long(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
+                                    let open_profit = strategy.pnl(&brokerage, &account, &symbol_code);
+
+
+                                    if (is_long || is_short) && bars_since_entry < 10 && bars_since_entry > 3 && open_profit > dec!(30) {
+                                        if is_long {
+                                            strategy.enter_long(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(2), String::from("Add Long")).await;
+                                        } else if is_short {
+                                            strategy.enter_short(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(2), String::from("Add Short")).await;
+                                        }
+                                    }
+
+                                    if is_long && bars_since_entry > 12 {
+                                        let position_size = strategy.position_size(&brokerage, &account, &symbol_code);
+                                        let exit_id = strategy.exit_long(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,position_size, String::from("Exit Long")).await;
                                         bars_since_entry = 0;
                                         entry_order_id = None;
-                                    } else if is_short && bars_since_entry > 5 {
-                                        let exit_id = strategy.exit_short(&symbol,None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Short")).await;
+                                    } else if is_short && bars_since_entry > 12 {
+                                        let position_size = strategy.position_size(&brokerage, &account, &symbol_code);
+                                        let exit_id = strategy.exit_short(&symbol,None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,position_size, String::from("Exit Short")).await;
                                         bars_since_entry= 0;
                                         entry_order_id = None;
                                     }

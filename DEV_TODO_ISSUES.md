@@ -1,4 +1,6 @@
-
+## Add More info to updates
+- Add price and quantity to order fill events
+- Add price and quantity to position creation and reducing events
 ## Fix server
 - Need a better server architecture, consider using warp to manage server threads.
 - Need to fix thread management for Rithmic, currently it has problems.
