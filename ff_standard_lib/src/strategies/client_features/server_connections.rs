@@ -323,28 +323,28 @@ pub async fn response_handler(
                                     live_order_update(update_event);
                                 }
                                 DataServerResponse::AccountSnapShot {account_info} => {
-                                    tokio::task::spawn(async move {
+                                    //tokio::task::spawn(async move {
                                         //println!("{:?}", response);
                                         LIVE_LEDGERS
                                             .entry(account_info.brokerage.clone())
                                             .or_insert_with(DashMap::new)
                                             .entry(account_info.account_id.clone())
                                             .or_insert_with(|| Ledger::new(account_info.clone(), mode));
-                                    });
+                                    //});
                                 }
                                 DataServerResponse::LiveAccountUpdates { brokerage, account_id, cash_value, cash_available, cash_used } => {
-                                    tokio::task::spawn(async move {
+                                    //tokio::task::spawn(async move {
                                         //println!("{:?}", response);
                                         if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
                                             if let Some(mut account_map) = broker_map.get_mut(&account_id) {
                                                 account_map.value_mut().update(cash_value, cash_available, cash_used);
                                             }
                                         }
-                                    });
+                                    //});
                                 }
                                 #[allow(unused)]
                                 DataServerResponse::LivePositionUpdates { brokerage, account_id, symbol_name, product_code, open_pnl, open_quantity, side } => {
-                                    tokio::task::spawn(async move {
+                                    /*tokio::task::spawn(async move {
                                         if !LIVE_LEDGERS.contains_key(&brokerage) {
                                             LIVE_LEDGERS.insert(brokerage, DashMap::new());
                                         }
@@ -364,7 +364,7 @@ pub async fn response_handler(
 
                                             }
                                         }
-                                    });
+                                    });*/
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {
