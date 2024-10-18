@@ -80,13 +80,13 @@ struct ServerLaunchOptions {
         short = "r",
         long = "rithmic",
     )]
-    pub disable_rithmic_server: bool,
+    pub disable_rithmic_server: u64,
 }
 
 #[allow(dead_code)]
 async fn init_rithmic_apis(options: ServerLaunchOptions) {
     let options = options;
-    if options.disable_rithmic_server {
+    if options.disable_rithmic_server == 1 {
         return
     }
     let toml_files = RithmicClient::get_rithmic_tomls();
