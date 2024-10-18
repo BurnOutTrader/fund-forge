@@ -79,6 +79,7 @@ struct ServerLaunchOptions {
     #[structopt(
         short = "r",
         long = "rithmic",
+        default_value = "0"
     )]
     pub disable_rithmic_server: u64,
 }

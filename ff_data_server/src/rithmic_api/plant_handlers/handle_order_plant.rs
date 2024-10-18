@@ -171,7 +171,7 @@ pub async fn match_order_plant_id(
             if let Ok(msg) = ResponseNewOrder::decode(&message_buf[..]) {
                 // New Order Response
                 // From Server
-                println!("New Order Response (Template ID: 313) from Server: {:?}", msg);
+               // println!("New Order Response (Template ID: 313) from Server: {:?}", msg);
                 if let (Some(basket_id), Some(ssboe), Some(usecs)) = (msg.basket_id, msg.ssboe, msg.usecs) {
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();
 
@@ -481,7 +481,7 @@ pub async fn match_order_plant_id(
 
             */
             if let Ok(msg) = ExchangeOrderNotification::decode(&message_buf[..]) {
-                println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
+                //println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
                 if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(user_tag)) =
                     (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();

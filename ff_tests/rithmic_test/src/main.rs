@@ -111,6 +111,7 @@ pub async fn on_data_received(
     let mut last_side = LastSide::Flat;
     let account: AccountId = "S1Sep246906077".to_string();
     let brokerage = Brokerage::Rithmic(RithmicSystem::TopstepTrader);
+    let mut symbol_code = "".to_string();
     println!("Staring Strategy Loop");
     let symbol = "MNQ".to_string();
     let mut count = 0;
@@ -216,8 +217,8 @@ pub async fn on_data_received(
 
                 StrategyEvent::PositionEvents(event) => {
                     match event {
-                        PositionUpdateEvent::PositionOpened { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
-                        PositionUpdateEvent::Increased { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
+                        PositionUpdateEvent::PositionOpened { .. } => {},
+                        PositionUpdateEvent::Increased { .. } => {},
                         PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                         PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                     }
@@ -229,6 +230,14 @@ pub async fn on_data_received(
                     println!("Strategy: Open Quantity: {}", quantity);
                 }
                 StrategyEvent::OrderEvents(event) => {
+                    match event.symbol_code() {
+                        None => {}
+                        Some(code) => {
+                            if code.starts_with("MNQ") {
+                                symbol_code = code;
+                            }
+                        }
+                    }
                     strategy.print_ledger(event.brokerage(), event.order_id());
                     let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                     match event {

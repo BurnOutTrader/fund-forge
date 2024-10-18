@@ -571,6 +571,18 @@ impl OrderUpdateEvent {
         }
     }
 
+    pub fn symbol_code(&self) -> Option<String> {
+        match self {
+            OrderUpdateEvent::OrderAccepted { symbol_code, .. } => Some(symbol_code.clone()),
+            OrderUpdateEvent::OrderFilled { symbol_code, .. } => Some(symbol_code.clone()),
+            OrderUpdateEvent::OrderPartiallyFilled { symbol_code, .. } => Some(symbol_code.clone()),
+            OrderUpdateEvent::OrderCancelled { symbol_code, .. } => Some(symbol_code.clone()),
+            OrderUpdateEvent::OrderRejected { symbol_code, .. } => Some(symbol_code.clone()),
+            OrderUpdateEvent::OrderUpdated { symbol_code, .. } => Some(symbol_code.clone()),
+            OrderUpdateEvent::OrderUpdateRejected {  .. } => None,
+        }
+    }
+
     pub fn brokerage(&self) -> &Brokerage {
         match self {
             OrderUpdateEvent::OrderAccepted { brokerage, .. } => brokerage,
