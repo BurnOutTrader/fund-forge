@@ -173,6 +173,10 @@ This enables the ff_strategy_registry connection to connect to our gui, if false
 If true the historical engine will tick at buffer duration speed when there is no historical data available.
 This allows us to use timed events of fill forward over weekends, if no, the engine will skip days where no data was available and jump to the next time instantly.
 This does nothing in live.
+
+#### `synchronize_accounts: bool` 
+If true strategy positions and open + booked pnl will update in sync with the brokerage, if false the engine will simulate positions using the same logic as backtesting.
+the true option is not yet implemented.
 ```rust
 use std::time::Duration;
 
