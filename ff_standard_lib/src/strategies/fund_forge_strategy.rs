@@ -1062,7 +1062,7 @@ impl FundForgeStrategy {
     /// Returns true of the account is in profit on this symbol.
     ///
     /// Returns false if no position.
-    pub fn in_profit(&self,brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> bool {
+    pub fn in_profit(&self,brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => in_profit_paper(symbol_name, brokerage, account_id),
             StrategyMode::Live => in_profit_live(symbol_name, brokerage, account_id)
@@ -1072,7 +1072,7 @@ impl FundForgeStrategy {
     /// Returns true of the account is in drawdown on this symbol.
     ///
     /// Returns false if no position.
-    pub fn in_drawdown(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> bool {
+    pub fn in_drawdown(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => in_drawdown_paper(symbol_name, brokerage, account_id),
             StrategyMode::Live => in_drawdown_live(symbol_name, brokerage, account_id)
@@ -1082,7 +1082,7 @@ impl FundForgeStrategy {
     /// Returns the open pnl for the current position.
     ///
     /// Returns 0.0 if no position open
-    pub fn pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> Decimal {
+    pub fn pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => pnl_paper(symbol_name, brokerage, account_id),
             StrategyMode::Live => pnl_live(symbol_name, brokerage, account_id)
@@ -1094,14 +1094,14 @@ impl FundForgeStrategy {
     /// Returns 0.0 if no position open.
     ///
     /// does not return the total pnl for all closed positions on the symbol, just the current open one.
-    pub fn booked_pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> Decimal {
+    pub fn booked_pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => booked_pnl_paper(symbol_name, brokerage, account_id),
             StrategyMode::Live => booked_pnl_live(symbol_name, brokerage, account_id)
         }
     }
 
-    pub fn position_size(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName, ) -> Decimal {
+    pub fn position_size(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => position_size_paper(symbol_name, brokerage, account_id),
             StrategyMode::Live => position_size_live(symbol_name, brokerage, account_id)
