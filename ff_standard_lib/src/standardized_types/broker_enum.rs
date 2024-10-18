@@ -1,7 +1,6 @@
 use std::fmt;
 use serde_derive::{Deserialize, Serialize};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
-use strum_macros::Display;
 use std::str::FromStr;
 use ff_rithmic_api::systems::RithmicSystem;
 use crate::messages::data_server_messaging::FundForgeError;
