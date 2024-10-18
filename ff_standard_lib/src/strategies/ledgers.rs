@@ -385,7 +385,7 @@ impl Ledger {
             .or_insert(1).value().clone();
 
         // Return the generated position ID
-        format!("{}-{}-{}-{}-{}", self.brokerage, self.account_id, symbol_name, side, counter)
+        format!("{}-{}-{}-{}-{}", self.brokerage, self.account_id, counter, symbol_name, side)
     }
 
     pub fn timeslice_update(&mut self, time_slice: TimeSlice, time: DateTime<Utc>) {
@@ -419,7 +419,6 @@ impl Ledger {
     }
 
     /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
-    /// todo Need to handle creating a new opposing position when
     ///todo, check ledger max order etc before placing orders
     pub async fn update_or_create_position(
         &mut self,
@@ -443,7 +442,6 @@ impl Ledger {
                 remaining_quantity -= existing_position.quantity_open;
                 let event= existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
 
-                // TODO[Strategy]: Add option to mirror account position or use internal position curating.
                 if self.mode != StrategyMode::Live {
                     self.release_margin_used(&symbol_name).await;
                 }
@@ -549,6 +547,7 @@ impl Ledger {
                 OrderSide::Sell => PositionSide::Short,
             };
 
+            eprintln!("Symbol Name for info request: {}", symbol_name);
             let info = self.symbol_info(symbol_name).await;
             if !self.symbol_code_map.contains_key(symbol_name) && symbol_name != symbol_code  {
                 self.symbol_code_map
@@ -580,7 +579,7 @@ impl Ledger {
                 self.positions_closed.insert(symbol_code.clone(), vec![]);
             }
 
-            let event = PositionUpdateEvent::PositionOpened{
+            let event = PositionUpdateEvent::PositionOpened {
                 position_id: id,
                 account_id: self.account_id.clone(),
                 brokerage: self.brokerage.clone(),

@@ -162,18 +162,18 @@ pub async fn on_data_received(
                                     }*/
 
                                     // test Enter Long
-                                    if count == 5 {
+                                    if count == 5 || count == 15 {
                                         let entry_id = strategy.enter_long(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
                                     }
-                                    else if count == 10 || count == 15 {
+                                    else if count == 10 || count == 20 {
                                         let exit_id = strategy.exit_long(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
                                     }
 
                                     // test enter short
-                                    if count == 20 {
+                                    if count == 25 || count == 35 {
                                         let entry_id = strategy.enter_short(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Short")).await;
                                     }
-                                    else if count == 25 || count == 30 {
+                                    else if count == 30 || count == 40 {
                                         let exit_id = strategy.exit_short(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Short")).await;
                                     }
                                 }
@@ -226,7 +226,7 @@ pub async fn on_data_received(
                     let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                     println!("{}", msg.as_str().purple());
 
-                    let quantity = strategy.position_size(&brokerage, &account, &symbol);
+                    let quantity = strategy.position_size(&brokerage, &account, &symbol_code);
                     println!("Strategy: Open Quantity: {}", quantity);
                 }
                 StrategyEvent::OrderEvents(event) => {
