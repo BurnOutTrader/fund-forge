@@ -819,35 +819,57 @@ because an exit order should not create a position, it should close one.
 ```rust
 fn example(strategy: &FundForgeStrategy, brokerage: Brokerage, account_name: AccountName, candle: Candle) {
     
+   let symbol_code = "M6AZ4".to_string();
     // to find out if the broker and account is in profit on the symbol, returns false as default if no position
-    let in_profit: bool = strategy.in_profit(&brokerage, &account_name, &candle.symbol.name);
+    let in_profit: bool = strategy.in_profit(&brokerage, &account_name, &symbol_code);
 
     // to find out if the broker and account is in draw down on the symbol, returns false as default if no position
-    let in_drawdown: bool = strategy.in_drawdown(&brokerage, &account_name, &candle.symbol.name);
+    let in_drawdown: bool = strategy.in_drawdown(&brokerage, &account_name, &symbol_code);
 
     // to find out if the broker and account is long on the symbol, returns false as default if no position
-    let is_long: bool = strategy.is_long(&brokerage, &account_name, &candle.symbol.name);
+    let is_long: bool = strategy.is_long(&brokerage, &account_name, &symbol_code);
 
     // to find out if the broker and account is short on the symbol, returns false as default if no position
-    let is_short: bool = strategy.is_short(&brokerage, &account_name, &candle.symbol.name);
+    let is_short: bool = strategy.is_short(&brokerage, &account_name, &symbol_code);
 
     // to find out if the broker and account is flat on the symbol, returns true as default if no position
-    let is_flat: bool = strategy.is_flat(&brokerage, &account_name, &candle.symbol.name);
+    let is_flat: bool = strategy.is_flat(&brokerage, &account_name, &symbol_code);
 
     // returns the open pnl for the current position, returns 0.0 if there is no position
-    let open_profit: Decimal = strategy.pnl(&brokerage, &account_name, &candle.symbol.name);
+    let open_profit: Decimal = strategy.pnl(&brokerage, &account_name, &symbol_code);
 
     // returns the booked pnl for the current position, returns 0.0 if there is no position
     // does not return the total pnl for all closed positions on the symbol, just the current open one.
-    let booked_profit: Decimal = strategy.booked_pnl(&brokerage, &account_name, &candle.symbol.name);
+    let booked_profit: Decimal = strategy.booked_pnl(&brokerage, &account_name, &symbol_code);
 
     // returns the open quantity / size of our open position
     // if no position it returns dec!(0)
-    let position_size: Decimal = strategy.position_size(&brokerage, &account_name, &candle.symbol.name);
+    let position_size: Decimal = strategy.position_size(&brokerage, &account_name, &symbol_code);
 
     // to flatten an account, in live this will flatten all psotions, not just strategy positions.
     strategy.flatten_all_for(&self, brokerage.clone(), &account_id).await;
 }
+```
+
+### Note for Symbol Name with Futures and StrategyMode:: Live 
+When using the functions above with futures in live mode you might need to get the symbol code, if you are only placing orders using the symbol name. \
+The symbol code will be returned in order events, an example of a symbol code or futures 'symbol' == "M6AZ4". \
+Alternatively just use the symbol code as symbol name. \
+There will be functions built to make this effortless at a later date. \
+The reason it works this way is to enable the trading of calander spreads, where a trader might place trades on contracts with the same SymbolName. \
+Currently in Backtesting, you will need to use the SymbolName of your data, this will all be fixed in the future once the Live api's are stable.
+```rust
+  // A Note for Live Mode
+   StrategyEvent::OrderEvents(event) => {
+      match event.symbol_code() {
+         None => {}
+         Some(code) => {
+            if code.starts_with("M6") {
+               let symbol_code: String = code;
+            }
+         }
+      }
+   }
 ```
 
 ## Timed Events 
