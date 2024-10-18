@@ -103,6 +103,7 @@ pub(crate) async fn market_handler(mode: StrategyMode, starting_balances: Decima
             };
             match message {
                 MarketMessageEnum::RegisterSymbol(symbol) => {
+                    println!("symbol registered: {:?}", symbol);
                     BID_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
                     ASK_BOOKS.insert(symbol.name.clone(), BTreeMap::new());
                 }
