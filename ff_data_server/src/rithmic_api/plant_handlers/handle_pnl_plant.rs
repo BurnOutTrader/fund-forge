@@ -10,7 +10,6 @@ use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use prost::{Message as ProstMessage};
 use rust_decimal::{Decimal};
 use rust_decimal::prelude::FromPrimitive;
-use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
@@ -84,21 +83,18 @@ pub async fn match_pnl_plant_id(
             }
         },
         450 => {
+            /*
+            Instrument PnL Position Update (Template ID: 450) from Server: InstrumentPnLPositionUpdate { template_id: 450, is_snapshot: None,
+            fcm_id: Some("TopstepTrader"), ib_id: Some("TopstepTrader"), account_id: Some("S1Sep246906077"), symbol: Some("MNQZ4"),
+            exchange: Some("CME"), product_code: Some("MNQ"), instrument_type: Some("Future"), fill_buy_qty: Some(80), fill_sell_qty: Some(83),
+            order_buy_qty: Some(0), order_sell_qty: Some(0), buy_qty: Some(-3), sell_qty: Some(3), avg_open_fill_price: Some(20457.41666667),
+            day_open_pnl: Some(-11.0), day_closed_pnl: Some(-246.5), day_pnl: Some(-257.5), day_open_pnl_offset: Some(0.0), day_closed_pnl_offset: Some(0.0),
+            mtm_security: Some("-257.50"), open_long_options_value: Some("0.00"), open_short_options_value: Some("0.00"), closed_options_value: Some("0.00"),
+            option_cash_reserved: Some("0.00"), open_position_pnl: Some("-11.00"), open_position_quantity: Some(3), closed_position_pnl: Some("-246.50"),
+            closed_position_quantity: Some(160), net_quantity: Some(-3), ssboe: Some(1729238967), usecs: Some(596000) }
+            */
+            //println!("Instrument PnL Position Update (Template ID: 450) from Server: {:?}", msg);
             if let Ok(msg) = InstrumentPnLPositionUpdate::decode(&message_buf[..]) {
-                // Instrument PnL Position Update
-                // From Server
-                println!("Instrument PnL Position Update (Template ID: 450) from Server: {:?}", msg);
-                /*
-                Instrument PnL Position Update (Template ID: 450) from Server: InstrumentPnLPositionUpdate { template_id: 450, is_snapshot: Some(true),
-                fcm_id: Some("TopstepTrader"), ib_id: Some("TopstepTrader"), account_id: Some("S1Sep246906077"), symbol: Some("M6AZ4"), exchange: Some("CME"),
-                product_code: Some("M6A"), instrument_type: Some("Future"), fill_buy_qty: Some(1), fill_sell_qty: Some(2), order_buy_qty:
-                Some(0), order_sell_qty: Some(0), buy_qty: Some(-1), sell_qty: Some(1), avg_open_fill_price: Some(0.6741), day_open_pnl: Some(-1.0),
-                day_closed_pnl: Some(-2.0), day_pnl: Some(-3.0), day_open_pnl_offset: Some(0.0), day_closed_pnl_offset: Some(0.0), mtm_security: Some("-3.00"),
-                open_long_options_value: Some("0.00"), open_short_options_value: Some("0.00"), closed_options_value: Some("0.00"), option_cash_reserved: Some("0.00"),
-                open_position_pnl: Some("-1.00"), open_position_quantity: Some(1), closed_position_pnl: Some("-2.00"), closed_position_quantity: Some(2), net_quantity: Some(-1),
-                ssboe: Some(1728469740), usecs: Some(338000) }
-                */
-
                 let account_id = match msg.account_id {
                     None => return,
                     Some(id) => id
@@ -109,80 +105,60 @@ pub async fn match_pnl_plant_id(
                     Some(s) => s
                 };
 
-                if let Some(quantity) = msg.open_position_quantity {
-                    if quantity <= 0 {
-                        client.long_quantity.remove(&symbol);
-                    }
-                    if quantity >= 0 {
-                        client.short_quantity.remove(&symbol);
-                    }
-
-                    if quantity > 0 {
-                        let buy_quantity = match Decimal::from_i32(quantity) {
-                            None => return,
-                            Some(q) => q
-                        };
+                // Update long positions
+                if let Some(buy_qty) = msg.buy_qty {
+                    if buy_qty <= 0 {
                         client.long_quantity
                             .entry(account_id.clone())
                             .or_insert_with(DashMap::new)
-                            .entry(symbol.clone())
-                            .and_modify(|qty| *qty = buy_quantity.abs())
-                            .or_insert(buy_quantity);
+                            .remove(&symbol);
+                    } else {
+                        let buy_quantity = Decimal::from_i32(buy_qty).unwrap_or_default();
+                        client.long_quantity
+                            .entry(account_id.clone())
+                            .or_insert_with(DashMap::new)
+                            .insert(symbol.clone(), buy_quantity);
 
                         if let (Some(product_code), Some(open_pnl)) = (&msg.product_code, &msg.open_position_pnl) {
-                            let open_pnl = match Decimal::from_str(&open_pnl) {
-                                Err(_) => return,
-                                Ok(open_pnl) => open_pnl
-                            };
+                            let open_pnl = Decimal::from_str(open_pnl).unwrap_or_default();
                             let position_update = DataServerResponse::LivePositionUpdates {
                                 brokerage: client.brokerage,
                                 account_id: account_id.clone(),
-                                symbol_name: symbol.clone(),
-                                product_code: Some(product_code.clone()),
+                                symbol_name: product_code.clone(),
+                                symbol_code: symbol.clone(),
                                 open_pnl,
                                 open_quantity: buy_quantity,
                                 side: Some(PositionSide::Long),
                             };
                             send_updates(position_update);
                         }
-                    } else if quantity < 0 {
-                        let sell_quantity = match Decimal::from_i32(quantity.abs()) {
-                            None => return,
-                            Some(q) => q
-                        };
+                    }
+                }
+
+                // Update short positions
+                if let Some(sell_qty) = msg.sell_qty {
+                    if sell_qty <= 0 {
                         client.short_quantity
                             .entry(account_id.clone())
                             .or_insert_with(DashMap::new)
-                            .entry(symbol.clone())
-                            .and_modify(|qty| *qty += sell_quantity.abs())
-                            .or_insert(sell_quantity);
+                            .remove(&symbol);
+                    } else {
+                        let sell_quantity = Decimal::from_i32(sell_qty).unwrap_or_default();
+                        client.short_quantity
+                            .entry(account_id.clone())
+                            .or_insert_with(DashMap::new)
+                            .insert(symbol.clone(), sell_quantity);
 
-                        if let (Some(product_code), Some(open_pnl)) = (msg.product_code, msg.open_position_pnl) {
-                            let open_pnl = match Decimal::from_str(&open_pnl) {
-                                Err(_) => return,
-                                Ok(open_pnl) => open_pnl
-                            };
+                        if let (Some(product_code), Some(open_pnl)) = (&msg.product_code, &msg.open_position_pnl) {
+                            let open_pnl = Decimal::from_str(open_pnl).unwrap_or_default();
                             let position_update = DataServerResponse::LivePositionUpdates {
                                 brokerage: client.brokerage,
                                 account_id,
-                                symbol_name: symbol.clone(),
-                                product_code: Some(product_code),
+                                symbol_name: product_code.clone(),
+                                symbol_code: symbol.clone(),
                                 open_pnl,
                                 open_quantity: sell_quantity,
                                 side: Some(PositionSide::Short),
-                            };
-                            send_updates(position_update);
-                        }
-                    } else if quantity == 0 {
-                        if let Some(product_code) = msg.product_code {
-                            let position_update = DataServerResponse::LivePositionUpdates {
-                                brokerage: client.brokerage,
-                                account_id,
-                                symbol_name: symbol.clone(),
-                                product_code: Some(product_code),
-                                open_pnl: dec!(0),
-                                open_quantity: dec!(0),
-                                side: None,
                             };
                             send_updates(position_update);
                         }

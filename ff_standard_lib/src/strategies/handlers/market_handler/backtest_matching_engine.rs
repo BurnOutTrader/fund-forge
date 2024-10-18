@@ -297,7 +297,7 @@ pub async fn backtest_matching_engine(
                 if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
                     if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                         if account_map.value().is_short(&order.symbol_name) {
-                            account_map.value_mut().exit_position(&order.symbol_name, time, market_price, String::from("Reverse Position On Enter Long")).await;
+                            account_map.value_mut().paper_exit_position(&order.symbol_name, time, market_price, String::from("Reverse Position On Enter Long")).await;
                         }
                     }
                 }
@@ -311,7 +311,7 @@ pub async fn backtest_matching_engine(
                 if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
                     if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
                         if account_map.value().is_long(&order.symbol_name) {
-                            account_map.value_mut().exit_position(&order.symbol_name, time, market_price, String::from("Reverse Position On Enter Short")).await;
+                            account_map.value_mut().paper_exit_position(&order.symbol_name, time, market_price, String::from("Reverse Position On Enter Short")).await;
                         }
                     }
                 }
@@ -367,7 +367,7 @@ async fn fill_order(
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
-                match account_map.value_mut().update_or_create_position(&order.symbol_name, order_id.clone(), order.quantity_open, order.side.clone(), time, market_price, order.tag.clone()).await {
+                match account_map.value_mut().update_or_create_position(&order.symbol_name.clone(), &order.symbol_name, order_id.clone(), order.quantity_open, order.side.clone(), time, market_price, order.tag.clone()).await {
                     Ok(events) => {
                         order.state = OrderState::Filled;
                         order.average_fill_price = Some(market_price);
@@ -377,7 +377,7 @@ async fn fill_order(
                         for event in events {
                             add_buffer(time, StrategyEvent::PositionEvents(event)).await;
                         }
-                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), price: market_price, brokerage: order.brokerage, account_id: order.account_id.clone(), tag: order.tag.clone(),time: time.to_string(), quantity: order.quantity_filled })).await;
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order.id.clone(), price: market_price, brokerage: order.brokerage, account_id: order.account_id.clone(), symbol_name: order.symbol_name.clone(), tag: order.tag.clone(),time: time.to_string(), quantity: order.quantity_filled, symbol_code: order.symbol_name.clone() })).await;
                     }
                     Err(e) => {
                         match &e {
@@ -404,7 +404,7 @@ async fn partially_fill_order(
     if let Some(mut order) = BACKTEST_OPEN_ORDER_CACHE.get_mut(order_id) {
         if let Some(broker_map) = BACKTEST_LEDGERS.get(&order.brokerage) {
             if let Some(mut account_map) = broker_map.get_mut(&order.account_id) {
-                match account_map.value_mut().update_or_create_position(&order.symbol_name, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
+                match account_map.value_mut().update_or_create_position(&order.symbol_name, &order.symbol_name, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
                     Ok(events) => {
                         order.time_filled_utc = Some(time.to_string());
                         order.state = OrderState::PartiallyFilled;
@@ -415,7 +415,7 @@ async fn partially_fill_order(
                         for event in events {
                             add_buffer(time, StrategyEvent::PositionEvents(event)).await;
                         }
-                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderPartiallyFilled { order_id: order.id.clone(), price: fill_price, brokerage: order.brokerage, account_id: order.account_id.clone(), tag: order.tag.clone(), time: time.to_string(), quantity: fill_volume })).await;
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderPartiallyFilled { order_id: order.id.clone(), price: fill_price, brokerage: order.brokerage, account_id: order.account_id.clone(), symbol_name: order.symbol_name.clone(), tag: order.tag.clone(), time: time.to_string(), quantity: fill_volume, symbol_code: order.symbol_name.clone() })).await;
                     }
                     Err(e) => {
                         match &e {
@@ -448,9 +448,11 @@ async fn reject_order(
                 order_id: order.id.clone(),
                 brokerage: order.brokerage,
                 account_id: order.account_id.clone(),
+                symbol_name: order.symbol_name.clone(),
                 reason,
                 tag: order.tag.clone(),
-                time: time.to_string()
+                time: time.to_string(),
+                symbol_code: order.symbol_name.clone(),
             }),
         ).await;
         BACKTEST_CLOSED_ORDER_CACHE.insert(order.id.clone(), order.clone());
@@ -471,8 +473,10 @@ async fn accept_order(
                 order_id: order.id.clone(),
                 brokerage: order.brokerage.clone(),
                 account_id: order.account_id.clone(),
+                symbol_name: order.symbol_name.clone(),
                 tag: order.tag.clone(),
-                time: time.to_string()
+                time: time.to_string(),
+                symbol_code: order.symbol_name.clone(),
             }),
         ).await;
     }
@@ -669,7 +673,7 @@ pub async fn simulated_order_matching(
         OrderRequest::Cancel{brokerage, order_id, account_id } => {
             let existing_order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
             if let Some((existing_order_id, order)) = existing_order {
-                let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage, account_id: order.account_id.clone(), order_id: existing_order_id, tag: order.tag.clone(), time: time.to_string()});
+                let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage, account_id: order.account_id.clone(), symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(), order_id: existing_order_id, tag: order.tag.clone(), time: time.to_string()});
                 add_buffer(time, cancel_event).await;
                 BACKTEST_CLOSED_ORDER_CACHE.insert(order_id, order);
             } else {
@@ -700,7 +704,7 @@ pub async fn simulated_order_matching(
                         order.tag = tag.clone();
                     }
                 }
-                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), order_id: order.id.clone(), update_type: update, tag: order.tag.clone(), time: time.to_string()});
+                let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { brokerage, account_id: order.account_id.clone(), symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(), order_id: order.id.clone(), update_type: update, tag: order.tag.clone(), time: time.to_string()});
                 BACKTEST_OPEN_ORDER_CACHE.insert(order_id, order);
                 add_buffer(time, update_event).await;
             } else {
@@ -718,7 +722,7 @@ pub async fn simulated_order_matching(
             for order_id in remove {
                 let order = BACKTEST_OPEN_ORDER_CACHE.remove(&order_id);
                 if let Some((order_id, order)) = order {
-                    let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order_id: order.id.clone(), tag: order.tag.clone(), time: time.to_string()});
+                    let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(), order_id: order.id.clone(), tag: order.tag.clone(), time: time.to_string()});
                     add_buffer(time.clone(), cancel_event).await;
                     BACKTEST_CLOSED_ORDER_CACHE.insert(order_id, order);
                 }

@@ -40,6 +40,7 @@ impl Brokerage {
                             currency,
                             cash_used: dec!(0.0),
                             positions: DashMap::new(),
+                            symbol_code_map: Default::default(),
                             margin_used: DashMap::new(),
                             positions_closed: DashMap::new(),
                             symbol_closed_pnl: Default::default(),
@@ -48,7 +49,8 @@ impl Brokerage {
                             open_pnl: DashMap::new(),
                             total_booked_pnl: dec!(0.0),
                             mode,
-                            leverage: account_info.leverage
+                            leverage: account_info.leverage,
+                            is_simulating_pnl: true
                         })
                     },
                     DataServerResponse::Error { error, .. } => Err(error),
@@ -56,7 +58,7 @@ impl Brokerage {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -79,7 +81,7 @@ impl Brokerage {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -101,7 +103,7 @@ impl Brokerage {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -122,7 +124,7 @@ impl Brokerage {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -148,7 +150,7 @@ impl Brokerage {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -170,7 +172,7 @@ impl Brokerage {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -192,7 +194,7 @@ impl Brokerage {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out after 10 seconds".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 }

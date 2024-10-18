@@ -33,7 +33,7 @@ impl Symbol {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 }
@@ -64,7 +64,7 @@ impl DataVendor {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -87,7 +87,7 @@ impl DataVendor {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -111,7 +111,7 @@ impl DataVendor {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -134,7 +134,7 @@ impl DataVendor {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -158,7 +158,7 @@ impl DataVendor {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -182,7 +182,7 @@ impl DataVendor {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 
@@ -207,7 +207,7 @@ impl DataVendor {
                 },
                 Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
             },
-            Err(_) => Err(FundForgeError::ClientSideErrorDebug("Operation timed out".to_string()))
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
         }
     }
 }

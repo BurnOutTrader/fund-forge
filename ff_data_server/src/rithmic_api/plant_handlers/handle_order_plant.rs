@@ -25,6 +25,7 @@ use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::plant_handlers::handler_loop;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
+use crate::rithmic_api::products::find_base_symbol;
 
 type BasketId = String;
 lazy_static! {
@@ -170,7 +171,7 @@ pub async fn match_order_plant_id(
             if let Ok(msg) = ResponseNewOrder::decode(&message_buf[..]) {
                 // New Order Response
                 // From Server
-                //println!("New Order Response (Template ID: 313) from Server: {:?}", msg);
+                println!("New Order Response (Template ID: 313) from Server: {:?}", msg);
                 if let (Some(basket_id), Some(ssboe), Some(usecs)) = (msg.basket_id, msg.ssboe, msg.usecs) {
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();
 
@@ -201,9 +202,21 @@ pub async fn match_order_plant_id(
                         Some(id) => id
                     };
 
+                    let symbol_name = match msg.user_msg.get(3) {
+                        None => return,
+                        Some(name) => name.clone()
+                    };
+
+                    let symbol_code = match msg.user_msg.get(4) {
+                        None => return,
+                        Some(symbol_code) => symbol_code.clone()
+                    };
+
                     let event = OrderUpdateEvent::OrderAccepted {
                         brokerage: client.brokerage.clone(),
                         account_id: account_id.to_owned(),
+                        symbol_name,
+                        symbol_code,
                         order_id: order_id.clone(),
                         tag: tag.to_owned(),
                         time,
@@ -449,13 +462,38 @@ pub async fn match_order_plant_id(
         352 => {
             // Exchange Order Notification
             // From Server
-            //println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
+            /*
+            Exchange Order Notification (Template ID: 352) from Server: ExchangeOrderNotification {
+            template_id: 352, user_tag: Some("Sell Market: Rithmic:S1Sep246906077, MNQ, 4"), notify_type: Some(Fill),
+            is_snapshot: Some(true), is_rithmic_internal_msg: None, report_type: Some("fill"), status: Some("complete"),
+            basket_id: Some("234556404"), original_basket_id: None, linked_basket_ids: None, fcm_id: Some("TopstepTrader"),
+            ib_id: Some("TopstepTrader"), user_id: Some("kevtaz"), account_id: Some("S1Sep246906077"), symbol: Some("MNQZ4"),
+            exchange: Some("CME"), trade_exchange: Some("CME"), trade_route: Some("simulator"), exchange_order_id: Some("234556404"),
+            tp_exchange_order_id: None, instrument_type: Some("Future"), quantity: Some(1), price: None, trigger_price: None,
+            transaction_type: Some(Sell), duration: Some(Fok), price_type: Some(Market), orig_price_type: Some(Market), manual_or_auto: Some(Auto),
+            bracket_type: None, confirmed_size: Some(1), confirmed_time: Some("02:34:50"), confirmed_date: Some("20241018"), confirmed_id: Some("1606359"),
+            modified_size: None, modified_time: None, modified_date: None, modify_id: None, cancelled_size: Some(0), cancelled_time: None, cancelled_date: None,
+            cancelled_id: None, fill_price: Some(20386.25), fill_size: Some(1), fill_time: Some("02:34:50"), fill_date: Some("20241018"), fill_id: Some("1606360"),
+            avg_fill_price: Some(20386.25), total_fill_size: Some(1), total_unfilled_size: Some(0), trigger_id: None, trail_by_ticks: None, trail_by_price_id: None,
+            sequence_number: Some("Z1XH2"), orig_sequence_number: Some("Z1XH2"), cor_sequence_number: Some("Z1XH2"), currency: Some("USD"), country_code: None, text: None,
+            report_text: None, remarks: None, window_name: Some(""), originator_window_name: None, cancel_at_ssboe: None, cancel_at_usecs: None, cancel_after_secs: None,
+            ssboe: Some(1729218890), usecs: Some(913270), exch_receipt_ssboe: None, exch_receipt_nsecs: None }
+
+            */
             if let Ok(msg) = ExchangeOrderNotification::decode(&message_buf[..]) {
-                //println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
+                println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
                 if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(user_tag)) =
                     (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();
-
+                    match msg.is_snapshot {
+                        None => {}
+                        Some(some) => {
+                            match some {
+                                true => return,
+                                false => {}
+                            }
+                        }
+                    }
                     let order_id = if let Some(brokerage_map) = BASKET_ID_TO_ID_MAP.get(&client.brokerage) {
                         match brokerage_map.get(&basket_id) {
                             Some(id) => id.value().clone(),
@@ -482,11 +520,25 @@ pub async fn match_order_plant_id(
                         return;
                     };
 
+                    let (symbol_name, symbol_code) = match msg.symbol {
+                        None => return,
+                        Some(code) => {
+                            let symbol_name = match find_base_symbol(code.clone()) {
+                                None => return,
+                                Some(symbol_name) => symbol_name
+                            };
+                            (symbol_name, code)
+                        }
+                    };
+
                     match notify_type {
                         1 => {
+
                             let event = OrderUpdateEvent::OrderAccepted {
                                 brokerage: client.brokerage.clone(),
                                 account_id: AccountId::from(account_id.clone()),
+                                symbol_name,
+                                symbol_code,
                                 order_id: order_id.clone(),
                                 tag,
                                 time,
@@ -494,8 +546,8 @@ pub async fn match_order_plant_id(
                             send_order_update(client.brokerage, &order_id, event).await;
                         },
                         5 => {
-                            if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size), Some(symbol)) =
-                                (msg.fill_price, msg.fill_size, msg.total_unfilled_size, msg.symbol) {
+                            if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size)) =
+                                (msg.fill_price, msg.fill_size, msg.total_unfilled_size) {
                                 let price = match Price::from_f64_retain(fill_price) {
                                     Some(p) => p,
                                     None => return,
@@ -508,6 +560,8 @@ pub async fn match_order_plant_id(
                                     let event = OrderUpdateEvent::OrderFilled {
                                         brokerage: client.brokerage.clone(),
                                         account_id: AccountId::from(account_id.clone()),
+                                        symbol_name,
+                                        symbol_code,
                                         order_id: order_id.clone(),
                                         price,
                                         quantity,
@@ -519,6 +573,8 @@ pub async fn match_order_plant_id(
                                     let event = OrderUpdateEvent::OrderPartiallyFilled {
                                         brokerage: client.brokerage.clone(),
                                         account_id: AccountId::from(account_id.clone()),
+                                        symbol_name,
+                                        symbol_code,
                                         order_id: order_id.clone(),
                                         price,
                                         quantity,
@@ -536,6 +592,8 @@ pub async fn match_order_plant_id(
                                 brokerage: client.brokerage.clone(),
                                 account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
+                                symbol_name,
+                                symbol_code,
                                 tag,
                                 time,
                             };
@@ -547,6 +605,8 @@ pub async fn match_order_plant_id(
                                 account_id: AccountId::from(account_id.clone()),
                                 order_id: order_id.clone(),
                                 reason: msg.status.unwrap_or_default(),
+                                symbol_name,
+                                symbol_code,
                                 tag,
                                 time,
                             };
@@ -560,6 +620,8 @@ pub async fn match_order_plant_id(
                                        account_id: AccountId::from(account_id.clone()),
                                        order_id: order_id.clone(),
                                        update_type,
+                                       symbol_name,
+                                       symbol_code,
                                        tag,
                                        time,
                                    };

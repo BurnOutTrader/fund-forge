@@ -36,6 +36,7 @@ pub struct Ledger {
     pub currency: Currency,
     pub cash_used: Price,
     pub positions: DashMap<SymbolName, Position>,
+    pub symbol_code_map: DashMap<SymbolName, Vec<String>>,
     pub margin_used: DashMap<SymbolName, Price>,
     pub positions_closed: DashMap<SymbolName, Vec<Position>>,
     pub symbol_closed_pnl: DashMap<SymbolName, Decimal>,
@@ -45,16 +46,25 @@ pub struct Ledger {
     pub total_booked_pnl: Price,
     pub mode: StrategyMode,
     pub leverage: u32,
+    pub is_simulating_pnl: bool,
     //todo, add daily max loss, max order size etc to ledger
 }
 impl Ledger {
-    pub fn new(account_info: AccountInfo, strategy_mode: StrategyMode) -> Self {
+    pub fn new(account_info: AccountInfo, strategy_mode: StrategyMode, is_simulating_pnl: bool) -> Self {
         println!("Ledger Created: {}", account_info.account_id);
-        let positions = account_info
+        let positions: DashMap<SymbolName, Position> = account_info
             .positions
             .into_iter()
-            .map(|position| (position.symbol_name.clone(), position))
+            .map(|position| (position.symbol_code.clone(), position))
             .collect();
+
+        let contract_map: DashMap<SymbolName, Vec<String>> = DashMap::new();
+        for position in positions.iter() {
+            contract_map
+                .entry(position.value().symbol_name.clone())
+                .or_insert_with(Vec::new)
+                .push(position.value().symbol_code.clone());
+        }
 
         let ledger = Self {
             account_id: account_info.account_id,
@@ -64,6 +74,7 @@ impl Ledger {
             currency: account_info.currency,
             cash_used: account_info.cash_used,
             positions,
+            symbol_code_map: contract_map,
             margin_used: Default::default(),
             positions_closed: DashMap::new(),
             symbol_closed_pnl: Default::default(),
@@ -72,7 +83,8 @@ impl Ledger {
             open_pnl: DashMap::new(),
             total_booked_pnl: dec!(0.0),
             mode: strategy_mode,
-            leverage: account_info.leverage
+            leverage: account_info.leverage,
+            is_simulating_pnl
         };
         ledger
     }
@@ -83,7 +95,7 @@ impl Ledger {
         self.cash_available = cash_available;
     }
 
-    pub fn user_initiated(account_setup: AccountSetup, strategy_mode: StrategyMode) -> Self {
+    pub fn user_initiated(account_setup: AccountSetup, strategy_mode: StrategyMode, is_simulating_pnl: bool) -> Self {
         //todo, add daily max loss, max order size etc to ledger
         let leverage = account_setup.leverage.unwrap_or_else(|| 1);
         let ledger = Self {
@@ -94,6 +106,7 @@ impl Ledger {
             currency: account_setup.currency,
             cash_used: dec!(0.0),
             positions: DashMap::new(),
+            symbol_code_map: Default::default(),
             margin_used: DashMap::new(),
             positions_closed: DashMap::new(),
             positions_counter: DashMap::new(),
@@ -102,7 +115,8 @@ impl Ledger {
             symbol_closed_pnl: DashMap::new(),
             total_booked_pnl: dec!(0.0),
             mode: strategy_mode,
-            leverage
+            leverage,
+            is_simulating_pnl
         };
         ledger
     }
@@ -243,6 +257,7 @@ impl Ledger {
             None => {
                 match SYMBOL_INFO.get(symbol_name) {
                     None => {
+                        //println!("Ledger symbol info: {}", symbol_name);
                         let info = self.brokerage.symbol_info(symbol_name.clone()).await.unwrap();
                         self.symbol_info.insert(symbol_name.clone(), info.clone());
                         SYMBOL_INFO.insert(symbol_name.clone(), info.clone());
@@ -384,7 +399,7 @@ impl Ledger {
                 position.update_base_data(&base_data_enum, time, self.currency);
 
                 // TODO[Strategy]: Add option to mirror account position or use internal position curating.
-                if self.mode != StrategyMode::Live {
+                if self.mode != StrategyMode::Live || self.is_simulating_pnl {
                     self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
                 }
 
@@ -409,6 +424,7 @@ impl Ledger {
     pub async fn update_or_create_position(
         &mut self,
         symbol_name: &SymbolName,
+        symbol_code: &String,
         order_id: OrderId,
         quantity: Volume,
         side: OrderSide,
@@ -419,8 +435,7 @@ impl Ledger {
         let mut updates = vec![];
         // Check if there's an existing position for the given symbol
         let mut remaining_quantity = quantity;
-        if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
-
+        if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_code) {
             let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell)
                 || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 
@@ -439,34 +454,36 @@ impl Ledger {
                             //this should never panic since we just freed the margin temp
                             self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price).await.unwrap();
                         }
-                        self.positions.insert(symbol_name.clone(), existing_position);
+                        self.positions.insert(symbol_code.clone(), existing_position);
 
                         // TODO[Strategy]: Add option to mirror account position or use internal position curating.
-                        if self.mode != StrategyMode::Live {
+                        if self.mode != StrategyMode::Live || self.is_simulating_pnl {
                             self.symbol_closed_pnl
-                                .entry(symbol_name.clone())
+                                .entry(symbol_code.clone())
                                 .and_modify(|pnl| *pnl += booked_pnl)
                                 .or_insert(booked_pnl.clone());
-
+                        }
+                        if self.mode != StrategyMode::Live {
                             self.cash_available += booked_pnl;
                         }
                         //println!("Reduced Position: {}", symbol_name);
                     }
                     PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
                         // TODO[Strategy]: Add option to mirror account position or use internal position curating.
-                        if self.mode != StrategyMode::Live {
+                        if self.mode != StrategyMode::Live || self.is_simulating_pnl {
                             self.symbol_closed_pnl
-                                .entry(symbol_name.clone())
+                                .entry(symbol_code.clone())
                                 .and_modify(|pnl| *pnl += booked_pnl)
                                 .or_insert(booked_pnl.clone());
-
-                            self.cash_available += booked_pnl;
                             self.total_booked_pnl += booked_pnl;
                         }
-                        if !self.positions_closed.contains_key(&symbol_name) {
-                            self.positions_closed.insert(symbol_name.clone(), vec![]);
+                        if self.mode != StrategyMode::Live {
+                            self.cash_available += booked_pnl;
                         }
-                        if let Some(mut positions_closed) = self.positions_closed.get_mut(&symbol_name){
+                        if !self.positions_closed.contains_key(symbol_code) {
+                            self.positions_closed.insert(symbol_code.clone(), vec![]);
+                        }
+                        if let Some(mut positions_closed) = self.positions_closed.get_mut(symbol_code){
                             positions_closed.value_mut().push(existing_position);
                         }
                         //println!("Closed Position: {}", symbol_name);
@@ -486,6 +503,8 @@ impl Ledger {
                             return Err(OrderUpdateEvent::OrderRejected {
                                 brokerage: self.brokerage,
                                 account_id: self.account_id.clone(),
+                                symbol_name: symbol_name.clone(),
+                                symbol_code: symbol_code.clone(),
                                 order_id,
                                 reason: e.to_string(),
                                 tag,
@@ -495,7 +514,7 @@ impl Ledger {
                     }
                 }
                 let event = existing_position.add_to_position(market_fill_price, quantity, time, tag.clone(), self.currency).await;
-                self.positions.insert(existing_position.symbol_name.clone(), existing_position);
+                self.positions.insert(symbol_code.clone(), existing_position);
 
                 if self.mode != StrategyMode::Live {
                     self.cash_value = self.cash_used + self.cash_available;
@@ -513,6 +532,8 @@ impl Ledger {
                         return Err(OrderUpdateEvent::OrderRejected {
                             brokerage: self.brokerage,
                             account_id: self.account_id.clone(),
+                            symbol_name: symbol_name.clone(),
+                            symbol_code: symbol_code.clone(),
                             order_id,
                             reason: e.to_string(),
                             tag,
@@ -529,10 +550,18 @@ impl Ledger {
             };
 
             let info = self.symbol_info(symbol_name).await;
+            if !self.symbol_code_map.contains_key(symbol_name) && symbol_name != symbol_code  {
+                self.symbol_code_map
+                    .entry(symbol_name.clone())
+                    .or_insert_with(Vec::new)
+                    .push(symbol_code.clone());
+            };
+
             let id = self.generate_id(symbol_name, position_side);
             // Create a new position
             let position = Position::new(
-                symbol_name.clone(),
+                symbol_code.clone(),
+                symbol_code.clone(),
                 self.brokerage.clone(),
                 self.account_id.clone(),
                 position_side,
@@ -546,9 +575,9 @@ impl Ledger {
             );
 
             // Insert the new position into the positions map
-            self.positions.insert(symbol_name.clone(), position);
-            if !self.positions_closed.contains_key(symbol_name) {
-                self.positions_closed.insert(symbol_name.clone(), vec![]);
+            self.positions.insert(symbol_code.clone(), position);
+            if !self.positions_closed.contains_key(symbol_code) {
+                self.positions_closed.insert(symbol_code.clone(), vec![]);
             }
 
             let event = PositionUpdateEvent::PositionOpened{
@@ -568,53 +597,11 @@ impl Ledger {
         Ok(updates)
     }
 
-    pub async fn exit_position(
-        &mut self,
-        symbol_name: &SymbolName,
-        time: DateTime<Utc>,
-        market_price: Price,
-        tag: String
-    ) -> Option<PositionUpdateEvent>  {
-        if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
-            // Mark the position as closed
-            existing_position.is_closed = true;
 
-            // Calculate booked profit by reducing the position size
-            if self.mode != StrategyMode::Live {
-                self.release_margin_used(&symbol_name).await;
-            }
-            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
-            match &event {
-                PositionUpdateEvent::PositionClosed { booked_pnl,.. } => {
-                    // TODO[Strategy]: Add option to mirror account position or use internal position curating.
-                    if self.mode != StrategyMode::Live {
-                        self.symbol_closed_pnl
-                            .entry(symbol_name.clone())
-                            .and_modify(|pnl| *pnl += booked_pnl)
-                            .or_insert(booked_pnl.clone());
-                        self.total_booked_pnl += booked_pnl;
-                        self.cash_available += booked_pnl;
-                    }
-                }
-                _ => panic!("this shouldn't happen")
-            }
-
-            if self.mode != StrategyMode::Live {
-                self.cash_value = self.cash_used + self.cash_available;
-            }
-            // Add the closed position to the positions_closed DashMap
-            self.positions_closed
-                .entry(symbol_name.clone())                  // Access the entry for the symbol name
-                .or_insert_with(Vec::new)                    // If no entry exists, create a new Vec
-                .push(existing_position);     // Push the closed position to the Vec
-
-            return Some(event)
-        }
-        None
-    }
 }
 
 pub(crate) mod historical_ledgers {
+    use chrono::{DateTime, Utc};
     use dashmap::DashMap;
     use rust_decimal::Decimal;
     use rust_decimal::prelude::FromPrimitive;
@@ -625,6 +612,7 @@ pub(crate) mod historical_ledgers {
     use crate::standardized_types::accounts::{AccountId, Currency};
     use crate::standardized_types::enums::StrategyMode;
     use crate::standardized_types::new_types::{Price, Volume};
+    use crate::standardized_types::position::PositionUpdateEvent;
     use crate::standardized_types::subscriptions::SymbolName;
 
     impl Ledger {
@@ -678,8 +666,57 @@ pub(crate) mod historical_ledgers {
                 open_pnl: DashMap::new(),
                 total_booked_pnl: dec!(0.0),
                 mode: strategy_mode,
+                is_simulating_pnl: true,
+                symbol_code_map: Default::default(),
             };
             account
+        }
+
+        pub async fn paper_exit_position(
+            &mut self,
+            symbol_name: &SymbolName,
+            time: DateTime<Utc>,
+            market_price: Price,
+            tag: String
+        ) -> Option<PositionUpdateEvent>  {
+            if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
+                // Mark the position as closed
+                existing_position.is_closed = true;
+
+                // Calculate booked profit by reducing the position size
+                if self.mode != StrategyMode::Live {
+                    self.release_margin_used(&symbol_name).await;
+                }
+                let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
+                match &event {
+                    PositionUpdateEvent::PositionClosed { booked_pnl,.. } => {
+                        // TODO[Strategy]: Add option to mirror account position or use internal position curating.
+                        if self.mode != StrategyMode::Live || self.is_simulating_pnl {
+                            self.symbol_closed_pnl
+                                .entry(symbol_name.clone())
+                                .and_modify(|pnl| *pnl += booked_pnl)
+                                .or_insert(booked_pnl.clone());
+                            self.total_booked_pnl += booked_pnl;
+                        }
+                        if self.mode != StrategyMode::Live {
+                            self.cash_available += booked_pnl;
+                        }
+                    }
+                    _ => panic!("this shouldn't happen")
+                }
+
+                if self.mode != StrategyMode::Live {
+                    self.cash_value = self.cash_used + self.cash_available;
+                }
+                // Add the closed position to the positions_closed DashMap
+                self.positions_closed
+                    .entry(symbol_name.clone())                  // Access the entry for the symbol name
+                    .or_insert_with(Vec::new)                    // If no entry exists, create a new Vec
+                    .push(existing_position);     // Push the closed position to the Vec
+
+                return Some(event)
+            }
+            None
         }
     }
 }

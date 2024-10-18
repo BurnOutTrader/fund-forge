@@ -12,7 +12,7 @@ use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicClient;
-use crate::rithmic_api::products::{get_available_symbol_names, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
+use crate::rithmic_api::products::{find_base_symbol, get_available_symbol_names, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
@@ -36,7 +36,7 @@ impl BrokerApiResponse for RithmicClient {
         //todo use match mode to create sim account
         match mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                todo!("Not implemented for backtest")
+                self.paper_account_init(account_id, callback_id).await
             }
             StrategyMode::Live => {
                 match self.account_info.get(&account_id) {
@@ -86,7 +86,18 @@ impl BrokerApiResponse for RithmicClient {
     ) -> DataServerResponse {
         match get_symbol_info(&symbol_name) {
             Ok(symbol_info) => DataServerResponse::SymbolInfo {callback_id, symbol_info},
-            Err(e) => DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{}", e))}
+            Err(e) => {
+                match find_base_symbol(symbol_name) {
+                    None => {}
+                    Some(symbol) => {
+                        match get_symbol_info(&symbol) {
+                            Ok(info) => return DataServerResponse::SymbolInfo {callback_id, symbol_info: info},
+                            Err(_) => {}
+                        }
+                    }
+                };
+                DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{}", e))}
+            }
         }
     }
 
@@ -194,12 +205,14 @@ impl BrokerApiResponse for RithmicClient {
 
         //check if we are short and add to quantity
         if let Some(account_short_map) = self.short_quantity.get(&order.account_id) {
-            if let Some(symbol_volume) = account_short_map.get(&details.symbol) {
+            if let Some(symbol_volume) = account_short_map.get(&details.symbol_code) {
                 let additional_volume = match symbol_volume.to_i32() {
                     None => {
                         return Err(OrderUpdateEvent::OrderRejected {
                             brokerage: order.brokerage,
                             account_id: order.account_id,
+                            symbol_name: order.symbol_name,
+                            symbol_code:  details.symbol_code,
                             order_id: order.id.clone(),
                             reason: "Server Error: Unable to Parse Existing Position Size".to_string(),
                             tag: order.tag,
@@ -223,12 +236,14 @@ impl BrokerApiResponse for RithmicClient {
 
         //check if we are short and add to quantity
         if let Some(account_long_map) = self.long_quantity.get(&order.account_id) {
-            if let Some(symbol_volume) = account_long_map.get(&details.symbol) {
+            if let Some(symbol_volume) = account_long_map.get(&details.symbol_code) {
                 let additional_volume = match symbol_volume.to_i32() {
                     None => {
                         return Err(OrderUpdateEvent::OrderRejected {
                             brokerage: order.brokerage,
                             account_id: order.account_id,
+                            symbol_name: order.symbol_name,
+                            symbol_code:  details.symbol_code.clone(),
                             order_id: order.id.clone(),
                             reason: "Server Error: Unable to Parse Existing Position Size".to_string(),
                             tag: order.tag,
@@ -253,6 +268,8 @@ impl BrokerApiResponse for RithmicClient {
         let reject_order = |reason: String| -> Result<(), OrderUpdateEvent> {
             Err(OrderUpdateEvent::OrderRejected {
                 brokerage: order.brokerage.clone(),
+                symbol_name: order.symbol_name.clone(),
+                symbol_code:  details.symbol_code.clone(),
                 account_id: order.account_id.clone(),
                 order_id: order.id.clone(),
                 reason,
@@ -263,9 +280,7 @@ impl BrokerApiResponse for RithmicClient {
 
         //check if we are short and add to quantity
         if let Some(account_short_map) = self.short_quantity.get(&order.account_id) {
-            println!("{:?}", account_short_map);
-            println!("{:?}", details.symbol);
-            if let Some(symbol_volume) = account_short_map.value().get(&details.symbol) {
+            if let Some(symbol_volume) = account_short_map.value().get(&details.symbol_code) {
                 let volume = match symbol_volume.value().to_i32() {
                     None => {
                         return reject_order("Server Error: Unable to Parse Existing Position Size".to_string())
@@ -276,13 +291,13 @@ impl BrokerApiResponse for RithmicClient {
                     details.quantity = volume;
                 }
                 self.submit_market_order(stream_name, order, details).await;
+                Ok(())
             } else {
-                return reject_order(format!("No Short Position To Exit: {}", details.symbol))
+                reject_order(format!("No Short Position To Exit: {}", details.symbol_code))
             }
         } else {
-            return reject_order(format!("No Short Position To Exit: {}", details.symbol))
+            reject_order(format!("No Short Position To Exit: {}", details.symbol_code))
         }
-        Ok(())
     }
 
     async fn live_exit_long(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
@@ -294,6 +309,8 @@ impl BrokerApiResponse for RithmicClient {
         let reject_order = |reason: String| -> Result<(), OrderUpdateEvent> {
             Err(OrderUpdateEvent::OrderRejected {
                 brokerage: order.brokerage.clone(),
+                symbol_name: order.symbol_name.clone(),
+                symbol_code: details.symbol_code.clone(),
                 account_id: order.account_id.clone(),
                 order_id: order.id.clone(),
                 reason,
@@ -304,7 +321,7 @@ impl BrokerApiResponse for RithmicClient {
 
         //check if we are short and add to quantity
         if let Some(account_long_map) = self.long_quantity.get(&order.account_id) {
-            if let Some(symbol_volume) = account_long_map.value().get(&details.symbol) {
+            if let Some(symbol_volume) = account_long_map.value().get(&details.symbol_code) {
                 let volume = match symbol_volume.value().to_i32() {
                     None => {
                         return reject_order("Server Error: Unable to Parse Existing Position Size".to_string())
@@ -315,13 +332,13 @@ impl BrokerApiResponse for RithmicClient {
                     details.quantity = volume;
                 }
                 self.submit_market_order(stream_name, order, details).await;
+                Ok(())
             } else {
-                return reject_order(format!("No Long Position To Exit: {}", details.symbol))
+                reject_order(format!("No Long Position To Exit: {}", details.symbol_code))
             }
         } else {
-            return reject_order(format!("No Long Position To Exit: {}", details.symbol))
+            reject_order(format!("No Long Position To Exit: {}", details.symbol_code))
         }
-        Ok(())
     }
 }
 

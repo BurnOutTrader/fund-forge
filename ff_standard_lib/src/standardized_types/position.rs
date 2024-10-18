@@ -19,7 +19,7 @@ use crate::standardized_types::symbol_info::SymbolInfo;
 pub type PositionId = String;
 #[derive(Serialize)]
 pub(crate) struct PositionExport {
-    symbol_name: String,
+    symbol_code: String,
     position_side: String,
     tag: String,
     quantity: Volume,
@@ -191,6 +191,7 @@ impl fmt::Display for PositionUpdateEvent {
 #[archive_attr(derive(Debug))]
 pub struct Position {
     pub symbol_name: SymbolName,
+    pub symbol_code: String,
     pub brokerage: Brokerage,
     pub account_id: AccountId,
     pub side: PositionSide,
@@ -214,6 +215,7 @@ pub struct Position {
 impl Position {
     pub fn new (
         symbol_name: SymbolName,
+        symbol_code: String,
         brokerage: Brokerage,
         account_id: AccountId,
         side: PositionSide,
@@ -227,6 +229,7 @@ impl Position {
     ) -> Self {
         Self {
             symbol_name,
+            symbol_code,
             brokerage,
             account_id,
             side,
@@ -254,7 +257,7 @@ impl Position {
             Some(time) => (time.to_string(), format_duration(DateTime::<Utc>::from_str(time).unwrap() - DateTime::<Utc>::from_str(&self.open_time).unwrap()))
         };
         PositionExport {
-            symbol_name: self.symbol_name.to_string(),
+            symbol_code: self.symbol_code.to_string(),
             position_side: self.side.to_string(),
             quantity: self.quantity_closed,
             average_entry_price: self.average_price,

@@ -62,6 +62,7 @@ async fn main() {
         core::time::Duration::from_millis(500),
         false,
         true,
+        false
     ).await;
 
     on_data_received(strategy, strategy_event_receiver).await;
@@ -141,6 +142,7 @@ pub async fn on_data_received(
                                     }
 
                                     count += 1;
+                                    /*
                                     // test markets Long
                                     if count == 5
                                     {
@@ -156,21 +158,21 @@ pub async fn on_data_received(
                                     }
                                     else if count == 20 && strategy.is_short(&Brokerage::Rithmic(RithmicSystem::TopstepTrader), &account, &symbol) {
                                         let exit_id = strategy.buy_market(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Short Market")).await;
-                                    }
+                                    }*/
 
                                     // test Enter Long
-                                    if count == 25 {
+                                    if count == 5 {
                                         let entry_id = strategy.enter_long(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Long")).await;
                                     }
-                                    else if count == 30 || count == 35 {
+                                    else if count == 10 || count == 15 {
                                         let exit_id = strategy.exit_long(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Long")).await;
                                     }
 
                                     // test enter short
-                                    if count == 40 {
+                                    if count == 20 {
                                         let entry_id = strategy.enter_short(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Enter Short")).await;
                                     }
-                                    else if count == 45 || count == 50 {
+                                    else if count == 25 || count == 30 {
                                         let exit_id = strategy.exit_short(&symbol, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), String::from("Exit Short")).await;
                                     }
                                 }

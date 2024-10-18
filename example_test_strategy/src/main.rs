@@ -78,6 +78,7 @@ async fn main() {
 
         //tick over no data, strategy will run at buffer resolution speed to simulate weekends and holidays, if false we will just skip over them to the next data point.
         false,
+        false
     ).await;
 
     // we can subscribe to indicators here or in our event loop at run time.

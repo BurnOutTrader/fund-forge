@@ -24,6 +24,30 @@ lazy_static! {
     .collect();
 }
 
+pub fn find_base_symbol(symbol: SymbolName) -> Option<String> {
+    // Check if the full symbol is in the list
+    if AVAILABLE_SYMBOL_NAMES.contains(&symbol) {
+        return Some(symbol.to_string());
+    }
+
+    // Check if the first three characters of the symbol are in the list
+    if symbol.len() >= 3 {
+        let first_three = &symbol[..3];
+        if AVAILABLE_SYMBOL_NAMES.iter().any(|s| s.as_str() == first_three) {
+            return Some(first_three.to_string());
+        }
+    }
+
+    // Check if the symbol without the last two characters is in the list
+    if symbol.len() > 2 {
+        let without_last_two = &symbol[..symbol.len() - 2];
+        if AVAILABLE_SYMBOL_NAMES.iter().any(|s| s.as_str() == without_last_two) {
+            return Some(without_last_two.to_string());
+        }
+    }
+
+    None
+}
 pub fn get_available_symbol_names() -> &'static Vec<String> {
     &AVAILABLE_SYMBOL_NAMES
 }

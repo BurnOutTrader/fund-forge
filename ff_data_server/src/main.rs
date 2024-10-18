@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestPnLPositionUpdates, RequestTradeRoutes};
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestTradeRoutes};
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::future::join_all;
 use once_cell::sync::Lazy;
@@ -140,16 +140,6 @@ async fn init_rithmic_apis(options: ServerLaunchOptions) {
                             Ok(receiver) => {
                                 RITHMIC_CLIENTS.insert(system, client.clone());
                                 handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant, running.clone());
-
-                                let req = RequestPnLPositionUpdates {
-                                    template_id: 400,
-                                    user_msg: vec![],
-                                    request: Some(1),
-                                    fcm_id: client.credentials.fcm_id.clone(),
-                                    ib_id: client.credentials.ib_id.clone(),
-                                    account_id: None,
-                                };
-                                client.send_message(&SysInfraType::PnlPlant, req).await;
                             }
                             Err(e) => {
                                 eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);

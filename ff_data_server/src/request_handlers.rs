@@ -90,7 +90,7 @@ pub async fn manage_async_requests(
                     continue;
                 }
             };
-            //println!("{:?}", request);
+            println!("{:?}", request);
             let stream_name = stream_name.clone();
             let mode =strategy_mode.clone();
             let sender = response_sender.clone();
@@ -357,6 +357,8 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
         OrderUpdateEvent::OrderRejected {
             brokerage: order.brokerage.clone(),
             account_id: order.account_id.clone(),
+            symbol_name: order.symbol_name.clone(),
+            symbol_code: "".to_string(),
             order_id: order.id.clone(),
             reason,
             tag: order.tag.clone(),

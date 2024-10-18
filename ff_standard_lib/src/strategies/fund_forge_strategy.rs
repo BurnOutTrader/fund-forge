@@ -63,6 +63,8 @@ pub struct FundForgeStrategy {
     orders_count: DashMap<Brokerage, i64>,
 
     market_event_sender: Sender<MarketMessageEnum>,
+
+    synchronize_accounts: bool,
 }
 
 impl FundForgeStrategy {
@@ -102,6 +104,8 @@ impl FundForgeStrategy {
     /// `gui_enabled: bool`: If true the engine will forward all StrategyEventSlice's sent to the strategy, to the strategy registry so they can be used by GUI implementations.
     ///
     /// ` tick_over_no_data: bool`: If true the Backtest engine will tick at buffer resolution speed over weekends or other no data periods.
+    ///
+    /// `synchronize_accounts: bool` If true strategy positions will update in sync with the brokerage, if false the engine will simulate positions using the same logic as backtesting. //todo[ReadMe], explain in more detail
     pub async fn initialize(
         strategy_mode: StrategyMode,
         backtest_accounts_starting_cash: Decimal,
@@ -117,6 +121,7 @@ impl FundForgeStrategy {
         buffering_duration: Duration,
         gui_enabled: bool,
         tick_over_no_data: bool,
+        synchronize_accounts: bool
     ) -> FundForgeStrategy {
 
         let timed_event_handler = Arc::new(TimedEventHandler::new());
@@ -134,7 +139,7 @@ impl FundForgeStrategy {
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
 
         init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
-        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), market_event_sender.clone()).await;
+        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), market_event_sender.clone(), synchronize_accounts).await;
 
         subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
 
@@ -149,6 +154,7 @@ impl FundForgeStrategy {
             drawing_objects_handler,
             orders_count: Default::default(),
             market_event_sender: market_event_sender.clone(),
+            synchronize_accounts
         };
 
         match strategy_mode {
@@ -267,7 +273,7 @@ impl FundForgeStrategy {
             }
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: market_request});
                 send_request(request).await;
@@ -305,7 +311,7 @@ impl FundForgeStrategy {
             }
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let connection_type = ConnectionType::Broker(brokerage.clone());
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;
@@ -344,7 +350,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;
             }
@@ -382,7 +388,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: request});
                 send_request(request).await;
             }
@@ -421,7 +427,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;
             }
@@ -460,7 +466,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;
             }
@@ -492,7 +498,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
                 send_request(request).await;
             }
@@ -524,7 +530,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
                 send_request(request).await;
             }
@@ -556,7 +562,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request: order_request});
                 send_request(request).await;
             }
@@ -588,7 +594,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => {
                 LIVE_ORDER_CACHE.insert(order.id.clone(), order);
                 let connection_type = ConnectionType::Broker(brokerage.clone());
-                initialize_live_account(brokerage.clone(), &account_id).await;
+                initialize_live_account(brokerage.clone(), &account_id, self.synchronize_accounts).await;
                 let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest {request});
                 send_request(request).await;
             }

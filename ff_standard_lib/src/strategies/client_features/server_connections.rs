@@ -251,8 +251,13 @@ pub async fn response_handler(
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
-    market_update_sender: Sender<MarketMessageEnum>
+    market_update_sender: Sender<MarketMessageEnum>,
+    synchronise_accounts: bool
 ) {
+    let is_simulating_pnl = match synchronise_accounts {
+        true => false,
+        false => true
+    };
     for (connection, settings) in &settings_map {
         if let Some((connection, stream)) = server_receivers.remove(connection) {
             let register_message = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));
@@ -329,7 +334,7 @@ pub async fn response_handler(
                                             .entry(account_info.brokerage.clone())
                                             .or_insert_with(DashMap::new)
                                             .entry(account_info.account_id.clone())
-                                            .or_insert_with(|| Ledger::new(account_info.clone(), mode));
+                                            .or_insert_with(|| Ledger::new(account_info.clone(), mode, is_simulating_pnl));
                                     //});
                                 }
                                 DataServerResponse::LiveAccountUpdates { brokerage, account_id, cash_value, cash_available, cash_used } => {
@@ -343,7 +348,7 @@ pub async fn response_handler(
                                     //});
                                 }
                                 #[allow(unused)]
-                                DataServerResponse::LivePositionUpdates { brokerage, account_id, symbol_name, product_code, open_pnl, open_quantity, side } => {
+                                DataServerResponse::LivePositionUpdates { brokerage, account_id, symbol_name, symbol_code, open_pnl, open_quantity, side } => {
                                     /*tokio::task::spawn(async move {
                                         if !LIVE_LEDGERS.contains_key(&brokerage) {
                                             LIVE_LEDGERS.insert(brokerage, DashMap::new());
@@ -529,7 +534,7 @@ pub async fn initialize_static(
     }).clone();
 }
 
-pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode, market_update_sender: Sender<MarketMessageEnum>) {
+pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode, market_update_sender: Sender<MarketMessageEnum>, synchronise_accounts: bool) {
     let settings_map = initialise_settings().unwrap();
     let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
     let server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());
@@ -559,5 +564,5 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode
 
     let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     request_handler(rx, settings_map.clone(), server_senders, callbacks.clone()).await;
-    response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, market_update_sender).await;
+    response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, market_update_sender, synchronise_accounts).await;
 }

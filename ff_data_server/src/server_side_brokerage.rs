@@ -234,6 +234,8 @@ fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
         brokerage: order.brokerage,
         account_id: order.account_id.clone(),
         order_id: order.id.clone(),
+        symbol_name: order.symbol_name.clone(),
+        symbol_code: "".to_string(),
         reason,
         tag: order.tag.clone(),
         time: Utc::now().to_string(),

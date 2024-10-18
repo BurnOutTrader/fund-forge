@@ -8,6 +8,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use serde_derive::{Deserialize, Serialize};
 use std::str::FromStr;
 use rust_decimal_macros::dec;
+use strum_macros::Display;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::new_types::{Price, TimeString, TzString, Volume};
 
@@ -502,7 +503,7 @@ impl Order {
 pub type OrderId = String;
 
 #[derive(
-    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
+    Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize, Display
 )]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
@@ -521,21 +522,23 @@ pub enum OrderUpdateType {
 ///
 /// This enum is used to communicate changes in order status between the trading strategy, the user interface, and the brokerage connection. Each variant represents a specific type of update or state change that an order can experience.
 pub enum OrderUpdateEvent {
-    OrderAccepted {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
+
+    /// Example, product: MNQZ4,
+    OrderAccepted {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: String, order_id: OrderId, tag: String, time: String},
 
     ///Quantity should only represent the quantity filled on this event.
-    OrderFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
+    OrderFilled {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: String, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
     ///Quantity should only represent the quantity filled on this event.
-    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
+    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: String, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
-    OrderCancelled {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, tag: String, time: String},
+    OrderCancelled {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: String, order_id: OrderId, tag: String, time: String},
 
-    OrderRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String, tag: String, time: String},
+    OrderRejected {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: String, order_id: OrderId, reason: String, tag: String, time: String},
 
-    OrderUpdated {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, update_type: OrderUpdateType, tag: String, time: String},
+    OrderUpdated {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: String, order_id: OrderId, update_type: OrderUpdateType, tag: String, time: String},
 
-    OrderUpdateRejected {brokerage:Brokerage, account_id: AccountId, order_id: OrderId, reason: String, time: String},
+    OrderUpdateRejected {brokerage:Brokerage, account_id: AccountId,  order_id: OrderId, reason: String, time: String},
 }
 
 impl OrderUpdateEvent {
@@ -597,26 +600,26 @@ impl OrderUpdateEvent {
 impl fmt::Display for OrderUpdateEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OrderUpdateEvent::OrderAccepted { brokerage, account_id, order_id,tag,.. } => {
-                write!(f, "Order Accepted: Brokerage: {}, Account ID: {}, Order ID: {}, Tag: {}", brokerage, account_id, order_id, tag)
+            OrderUpdateEvent::OrderAccepted { brokerage, account_id,symbol_name, symbol_code: product,order_id,tag,.. } => {
+                write!(f, "Order Accepted: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, tag)
             }
-            OrderUpdateEvent::OrderFilled { brokerage, account_id, order_id,tag,.. } => {
-                write!(f, "Order Filled: Brokerage: {}, Account ID: {}, Order ID: {}, Tag: {}", brokerage, account_id, order_id, tag)
+            OrderUpdateEvent::OrderFilled { brokerage, account_id,symbol_name, symbol_code: product, order_id,tag,.. } => {
+                write!(f, "Order Filled: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, tag)
             }
-            OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id, order_id,tag,.. } => {
-                write!(f, "Order Partially Filled: Brokerage: {}, Account ID: {}, Order ID: {}, Tag: {}", brokerage, account_id, order_id, tag)
+            OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id,symbol_name, symbol_code: product, order_id,tag,.. } => {
+                write!(f, "Order Partially Filled: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, tag)
             }
-            OrderUpdateEvent::OrderCancelled { brokerage, account_id, order_id,tag,.. } => {
-                write!(f, "Order Cancelled: Brokerage: {}, Account ID: {}, Order ID: {}, Tag: {}", brokerage, account_id, order_id, tag)
+            OrderUpdateEvent::OrderCancelled { brokerage, account_id,symbol_name, symbol_code: product, order_id,tag,.. } => {
+                write!(f, "Order Cancelled: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {},Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, tag)
             }
-            OrderUpdateEvent::OrderRejected { brokerage, account_id, order_id, reason,tag,.. } => {
-                write!(f, "Order Rejected: Brokerage: {}, Account ID: {}, Order ID: {}. Reason: {}, Tag: {}", brokerage, account_id, order_id, reason, tag)
+            OrderUpdateEvent::OrderRejected { brokerage, account_id,symbol_name, symbol_code: product, order_id, reason,tag,.. } => {
+                write!(f, "Order Rejected: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}. Reason: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, reason, tag)
             }
-            OrderUpdateEvent::OrderUpdated { brokerage, account_id, order_id, update_type, tag, ..} => {
-                write!(f, "Order Updated: Brokerage: {}, Account ID: {}, UpdateType: {:?}, Order ID: {}, Tag: {}", brokerage, account_id, update_type, order_id, tag)
+            OrderUpdateEvent::OrderUpdated { brokerage, account_id,symbol_name, symbol_code: product, order_id, update_type, tag, ..} => {
+                write!(f, "Order Updated: Brokerage: {}, Account ID: {}, UpdateType: {:?}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, update_type, order_id, tag)
             }
             OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason,.. } => {
-                write!(f, "Order Update Rejected: Brokerage: {}, Account ID: {}, Order ID: {}. Reason: {}", brokerage, account_id, order_id, reason)
+                write!(f, "Order Update Rejected: Brokerage: {}, Account ID: {}, Order ID: {}. Reason: {}", brokerage, account_id,  order_id, reason)
             }
         }
     }

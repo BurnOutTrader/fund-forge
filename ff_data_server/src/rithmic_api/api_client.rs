@@ -514,6 +514,8 @@ impl RithmicClient {
                 return Err(OrderUpdateEvent::OrderRejected {
                     brokerage: order.brokerage,
                     account_id: order.account_id.clone(),
+                    symbol_name: order.symbol_name.clone(),
+                    symbol_code: order.symbol_name.clone(),
                     order_id: order.id.clone(),
                     reason: e,
                     tag: order.tag.clone(),
@@ -527,6 +529,8 @@ impl RithmicClient {
                 return Err(OrderUpdateEvent::OrderRejected {
                     brokerage: order.brokerage,
                     account_id: order.account_id.clone(),
+                    symbol_name: order.symbol_name.clone(),
+                    symbol_code: order.symbol_name.clone(),
                     order_id: order.id.clone(),
                     reason: "Invalid Quantity".to_string(),
                     tag: order.tag.clone(),
@@ -535,13 +539,15 @@ impl RithmicClient {
             Some(q) => q
         };
 
-        let (symbol, exchange): (SymbolName, FuturesExchange) = match &order.exchange {
+        let (symbol_code, exchange): (SymbolName, FuturesExchange) = match &order.exchange {
             None => {
                 match get_exchange_by_code(&order.symbol_name) {
                     None => {
                         return Err(OrderUpdateEvent::OrderRejected {
                             brokerage: order.brokerage,
                             account_id: order.account_id.clone(),
+                            symbol_name: order.symbol_name.clone(),
+                            symbol_code: order.symbol_name.clone(),
                             order_id: order.id.clone(),
                             reason: format!("Exchange Not found with {} for {}",order.brokerage, order.symbol_name),
                             tag: order.tag.clone(),
@@ -554,6 +560,8 @@ impl RithmicClient {
                                 return Err(OrderUpdateEvent::OrderRejected {
                                     brokerage: order.brokerage,
                                     account_id: order.account_id.clone(),
+                                    symbol_name: order.symbol_name.clone(),
+                                    symbol_code: "No Front Month Found".to_string(),
                                     order_id: order.id.clone(),
                                     reason: e,
                                     tag: order.tag.clone(),
@@ -573,6 +581,8 @@ impl RithmicClient {
                         return Err(OrderUpdateEvent::OrderRejected {
                             brokerage: order.brokerage,
                             account_id: order.account_id.clone(),
+                            symbol_name: order.symbol_name.clone(),
+                            symbol_code: order.symbol_name.clone(),
                             order_id: order.id.clone(),
                             reason: e,
                             tag: order.tag.clone(),
@@ -587,6 +597,8 @@ impl RithmicClient {
                 return Err(OrderUpdateEvent::OrderRejected {
                     brokerage: order.brokerage,
                     account_id: order.account_id.clone(),
+                    symbol_name: order.symbol_name.clone(),
+                    symbol_code: order.symbol_name.clone(),
                     order_id: order.id.clone(),
                     reason: format!("Order Route Not found with {} for {}",order.brokerage, order.symbol_name),
                     tag: order.tag.clone(),
@@ -601,7 +613,7 @@ impl RithmicClient {
         };
 
         Ok(CommonRithmicOrderDetails {
-            symbol,
+            symbol_code,
             exchange,
             transaction_type,
             route,
@@ -615,15 +627,20 @@ impl RithmicClient {
             TimeInForce::FOK => ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into(),
             _ => ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into()
         };
+
+        match order.side {
+            OrderSide::Buy => eprintln!("Buying {}" , order.quantity_open),
+            OrderSide::Sell => eprintln!("Selling {}" , order.quantity_open),
+        }
         let req = RequestNewOrder {
             template_id: 312,
-            user_msg: vec![stream_name.to_string(), order.account_id.clone(), order.tag.clone()],
+            user_msg: vec![stream_name.to_string(), order.account_id.clone(), order.tag.clone(), order.symbol_name, details.symbol_code.clone()],
             user_tag: Some(order.id.clone()),
             window_name: None,
             fcm_id: self.fcm_id.clone(),
             ib_id: self.ib_id.clone(),
             account_id: Some(order.account_id.clone()),
-            symbol: Some(details.symbol),
+            symbol: Some(details.symbol_code),
             exchange: Some(details.exchange.to_string()),
             quantity: Some(details.quantity),
             price: None,
@@ -653,7 +670,7 @@ impl RithmicClient {
 }
 
 pub struct CommonRithmicOrderDetails {
-    pub symbol: SymbolName,
+    pub symbol_code: String,
     pub exchange: FuturesExchange,
     pub transaction_type: TransactionType,
     pub route: String,

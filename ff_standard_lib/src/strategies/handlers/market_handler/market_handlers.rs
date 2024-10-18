@@ -55,7 +55,7 @@ lazy_static!(
     pub(crate) static ref BACKTEST_LEDGERS: Arc<DashMap<Brokerage, DashMap<AccountId, Ledger>>> = Arc::new(DashMap::new());
 );
 
-pub(crate) async fn initialize_live_account(brokerage: Brokerage, account_id: &AccountId) {
+pub(crate) async fn initialize_live_account(brokerage: Brokerage, account_id: &AccountId, synchronize_accounts: bool) {
     if !LIVE_LEDGERS.contains_key(&brokerage) {
         LIVE_LEDGERS.insert(brokerage.clone(), DashMap::new());
     }
@@ -68,8 +68,11 @@ pub(crate) async fn initialize_live_account(brokerage: Brokerage, account_id: &A
                     return;
                 }
             };
-
-            let ledger = Ledger::new(account_info, StrategyMode::Live);
+            let is_simulating_pnl = match synchronize_accounts {
+                true => false,
+                false => true
+            };
+            let ledger = Ledger::new(account_info, StrategyMode::Live, is_simulating_pnl);
             broker_map.value_mut().insert(account_id.clone(), ledger);
         }
     }
@@ -376,7 +379,7 @@ pub(crate) async fn flatten_all_paper_for(brokerage: &Brokerage, account_id: &Ac
                     PositionSide::Short => OrderSide::Buy
                 };
                 let market_price = backtest_matching_engine::get_market_fill_price_estimate(side, &symbol_name, position.quantity_open, position.brokerage).await.unwrap();
-                if let Some(event) = account_map.exit_position(&symbol_name, time, market_price, String::from("Flatten Account")).await {
+                if let Some(event) = account_map.paper_exit_position(&symbol_name, time, market_price, String::from("Flatten Account")).await {
                     add_buffer(time, StrategyEvent::PositionEvents(event)).await;
                 }
             }
@@ -389,7 +392,7 @@ pub(crate) fn add_account(mode: StrategyMode, account_setup: AccountSetup) {
     if map.contains_key(&account_setup.account_id) {
         return;
     }
-    map.insert(account_setup.account_id.clone() ,Ledger::user_initiated(account_setup, mode));
+    map.insert(account_setup.account_id.clone() ,Ledger::user_initiated(account_setup, mode, true));
 }
 
 
