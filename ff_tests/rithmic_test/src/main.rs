@@ -195,7 +195,7 @@ pub async fn on_data_received(
                         PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                         PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                     }
-                    let quantity = strategy.position_size(&brokerage, &account_1, &"MNQ".to_string());
+                    let quantity = strategy.position_size(&brokerage, &account_1, &symbol);
                     let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                     println!("{}", msg.as_str().purple());
                     println!("Strategy: Open Quantity: {}", quantity);
