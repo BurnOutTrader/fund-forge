@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, PositionSide, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -321,6 +321,8 @@ DataServerResponse {
 
     LiveAccountUpdates {brokerage: Brokerage, account_id: AccountId, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
 
+    LivePositionUpdates {brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName, product_code: Option<String>, open_pnl: Decimal, open_quantity: Volume, side: Option<PositionSide>},
+
     AccountSnapShot{account_info: AccountInfo}
 }
 
@@ -368,7 +370,8 @@ impl DataServerResponse {
             DataServerResponse::PaperAccountInit { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
-            DataServerResponse::AccountSnapShot { .. } => None
+            DataServerResponse::AccountSnapShot { .. } => None,
+            DataServerResponse::LivePositionUpdates { .. } => None
         }
     }
 }

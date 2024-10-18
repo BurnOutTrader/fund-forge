@@ -272,14 +272,16 @@ impl BrokerApiResponse for RithmicClient {
                     }
                     Some(volume) => volume
                 };
-                details.quantity = volume;
+                if details.quantity > volume {
+                    details.quantity = volume;
+                }
+                self.submit_market_order(stream_name, order, details).await;
             } else {
                 return reject_order(format!("No Short Position To Exit: {}", details.symbol))
             }
         } else {
             return reject_order(format!("No Short Position To Exit: {}", details.symbol))
         }
-        self.submit_market_order(stream_name, order, details).await;
         Ok(())
     }
 
@@ -302,8 +304,6 @@ impl BrokerApiResponse for RithmicClient {
 
         //check if we are short and add to quantity
         if let Some(account_long_map) = self.long_quantity.get(&order.account_id) {
-            println!("{:?}", account_long_map);
-            println!("{:?}", details.symbol);
             if let Some(symbol_volume) = account_long_map.value().get(&details.symbol) {
                 let volume = match symbol_volume.value().to_i32() {
                     None => {
@@ -311,14 +311,16 @@ impl BrokerApiResponse for RithmicClient {
                     }
                     Some(volume) => volume
                 };
-                details.quantity = volume;
+                if details.quantity > volume {
+                    details.quantity = volume;
+                }
+                self.submit_market_order(stream_name, order, details).await;
             } else {
                 return reject_order(format!("No Long Position To Exit: {}", details.symbol))
             }
         } else {
             return reject_order(format!("No Long Position To Exit: {}", details.symbol))
         }
-        self.submit_market_order(stream_name, order, details).await;
         Ok(())
     }
 }

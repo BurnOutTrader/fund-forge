@@ -10,9 +10,11 @@ use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use prost::{Message as ProstMessage};
 use rust_decimal::{Decimal};
 use rust_decimal::prelude::FromPrimitive;
+use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
+use ff_standard_lib::standardized_types::enums::PositionSide;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 
@@ -107,11 +109,16 @@ pub async fn match_pnl_plant_id(
                     Some(s) => s
                 };
 
-                if let Some(buy_quantity) = msg.open_position_quantity {
-                    if buy_quantity <= 0 {
+                if let Some(quantity) = msg.open_position_quantity {
+                    if quantity <= 0 {
                         client.long_quantity.remove(&symbol);
-                    } else {
-                        let buy_quantity = match Decimal::from_i32(buy_quantity) {
+                    }
+                    if quantity >= 0 {
+                        client.short_quantity.remove(&symbol);
+                    }
+
+                    if quantity > 0 {
+                        let buy_quantity = match Decimal::from_i32(quantity) {
                             None => return,
                             Some(q) => q
                         };
@@ -119,17 +126,27 @@ pub async fn match_pnl_plant_id(
                             .entry(account_id.clone())
                             .or_insert_with(DashMap::new)
                             .entry(symbol.clone())
-                            .and_modify(|qty| *qty = buy_quantity)
+                            .and_modify(|qty| *qty = buy_quantity.abs())
                             .or_insert(buy_quantity);
-                    }
-                }
 
-                // Update sell quantity
-                if let Some(sell_quantity) = msg.open_position_quantity {
-                    if sell_quantity >= 0 {
-                        client.short_quantity.remove(&symbol);
-                    } else {
-                        let sell_quantity = match Decimal::from_i32(sell_quantity.abs()) {
+                        if let (Some(product_code), Some(open_pnl)) = (&msg.product_code, &msg.open_position_pnl) {
+                            let open_pnl = match Decimal::from_str(&open_pnl) {
+                                Err(_) => return,
+                                Ok(open_pnl) => open_pnl
+                            };
+                            let position_update = DataServerResponse::LivePositionUpdates {
+                                brokerage: client.brokerage,
+                                account_id: account_id.clone(),
+                                symbol_name: symbol.clone(),
+                                product_code: Some(product_code.clone()),
+                                open_pnl,
+                                open_quantity: buy_quantity,
+                                side: Some(PositionSide::Long),
+                            };
+                            send_updates(position_update);
+                        }
+                    } else if quantity < 0 {
+                        let sell_quantity = match Decimal::from_i32(quantity.abs()) {
                             None => return,
                             Some(q) => q
                         };
@@ -137,8 +154,38 @@ pub async fn match_pnl_plant_id(
                             .entry(account_id.clone())
                             .or_insert_with(DashMap::new)
                             .entry(symbol.clone())
-                            .and_modify(|qty| *qty += sell_quantity)
+                            .and_modify(|qty| *qty += sell_quantity.abs())
                             .or_insert(sell_quantity);
+
+                        if let (Some(product_code), Some(open_pnl)) = (msg.product_code, msg.open_position_pnl) {
+                            let open_pnl = match Decimal::from_str(&open_pnl) {
+                                Err(_) => return,
+                                Ok(open_pnl) => open_pnl
+                            };
+                            let position_update = DataServerResponse::LivePositionUpdates {
+                                brokerage: client.brokerage,
+                                account_id,
+                                symbol_name: symbol.clone(),
+                                product_code: Some(product_code),
+                                open_pnl,
+                                open_quantity: sell_quantity,
+                                side: Some(PositionSide::Short),
+                            };
+                            send_updates(position_update);
+                        }
+                    } else if quantity == 0 {
+                        if let Some(product_code) = msg.product_code {
+                            let position_update = DataServerResponse::LivePositionUpdates {
+                                brokerage: client.brokerage,
+                                account_id,
+                                symbol_name: symbol.clone(),
+                                product_code: Some(product_code),
+                                open_pnl: dec!(0),
+                                open_quantity: dec!(0),
+                                side: None,
+                            };
+                            send_updates(position_update);
+                        }
                     }
                 }
             }

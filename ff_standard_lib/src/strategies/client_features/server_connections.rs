@@ -322,21 +322,49 @@ pub async fn response_handler(
                                 DataServerResponse::OrderUpdates(update_event) => {
                                     live_order_update(update_event);
                                 }
-                                DataServerResponse::AccountSnapShot {ref account_info} => {
-                                    //println!("{:?}", response);
-                                    LIVE_LEDGERS
-                                        .entry(account_info.brokerage.clone())
-                                        .or_insert_with(DashMap::new)
-                                        .entry(account_info.account_id.clone())
-                                        .or_insert_with(|| Ledger::new(account_info.clone(), mode));
+                                DataServerResponse::AccountSnapShot {account_info} => {
+                                    tokio::task::spawn(async move {
+                                        //println!("{:?}", response);
+                                        LIVE_LEDGERS
+                                            .entry(account_info.brokerage.clone())
+                                            .or_insert_with(DashMap::new)
+                                            .entry(account_info.account_id.clone())
+                                            .or_insert_with(|| Ledger::new(account_info.clone(), mode));
+                                    });
                                 }
-                                DataServerResponse::LiveAccountUpdates { brokerage, ref account_id, cash_value, cash_available, cash_used } => {
-                                    //println!("{:?}", response);
-                                    if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-                                        if let Some(mut account_map) = broker_map.get_mut(account_id) {
-                                            account_map.value_mut().update(cash_value, cash_available, cash_used);
+                                DataServerResponse::LiveAccountUpdates { brokerage, account_id, cash_value, cash_available, cash_used } => {
+                                    tokio::task::spawn(async move {
+                                        //println!("{:?}", response);
+                                        if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+                                            if let Some(mut account_map) = broker_map.get_mut(&account_id) {
+                                                account_map.value_mut().update(cash_value, cash_available, cash_used);
+                                            }
                                         }
-                                    }
+                                    });
+                                }
+                                #[allow(unused)]
+                                DataServerResponse::LivePositionUpdates { brokerage, account_id, symbol_name, product_code, open_pnl, open_quantity, side } => {
+                                    tokio::task::spawn(async move {
+                                        if !LIVE_LEDGERS.contains_key(&brokerage) {
+                                            LIVE_LEDGERS.insert(brokerage, DashMap::new());
+                                        }
+                                        if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
+                                            if !broker_map.contains_key(&account_id) {
+                                                let account_info = match brokerage.account_info(account_id.clone()).await {
+                                                    Ok(info) => info,
+                                                    Err(e) => {
+                                                        eprintln!("Failed to get account info for: {}, {}: {}", brokerage, account_id, e);
+                                                        return;
+                                                    }
+                                                };
+                                                let ledger = Ledger::new(account_info, mode);
+                                                broker_map.insert(account_id.clone(), ledger);
+                                            }
+                                            if let Some(ledger) = broker_map.get(&account_id) {
+
+                                            }
+                                        }
+                                    });
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {
