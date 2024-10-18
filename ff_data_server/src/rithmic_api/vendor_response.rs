@@ -152,7 +152,6 @@ impl VendorApiResponse for RithmicClient {
             _ => todo!()
         };
 
-        //todo if not working try resolution Instant
         let symbols = get_available_symbol_names();
         if !symbols.contains(&subscription.symbol.name) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
@@ -225,18 +224,13 @@ impl VendorApiResponse for RithmicClient {
                     request: Some(1), //1 subscribe 2 unsubscribe
                     update_bits: Some(bits), //1 for ticks 2 for quotes
                 };
-                //todo Fix ff_rithmic_api switch heartbeat fn. this causes a lock.
-                /*     match self.client.switch_heartbeat_required(SysInfraType::TickerPlant, false).await {
-                         Ok(_) => {}
-                         Err(_) => {}
-                     }*/
+
                 const PLANT: SysInfraType = SysInfraType::TickerPlant;
                 self.send_message(&PLANT, req).await;
             } else if subscription.base_data_type == BaseDataType::Candles {
                 let (num, res_type) = match subscription.resolution {
                     Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
                     Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
-                    Resolution::Hours(num) => ((num * 60) as i32, BarType::MinuteBar),
                     _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", self.data_vendor,subscription)) }
                 };
                 let req =RequestTimeBarUpdate {
