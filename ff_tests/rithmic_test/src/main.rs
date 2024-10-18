@@ -190,14 +190,16 @@ pub async fn on_data_received(
 
                 StrategyEvent::PositionEvents(event) => {
                     match event {
-                        PositionUpdateEvent::PositionOpened { .. } => {}
-                        PositionUpdateEvent::Increased { .. } => {}
+                        PositionUpdateEvent::PositionOpened { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
+                        PositionUpdateEvent::Increased { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                         PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                         PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
                     }
-                    let quantity = strategy.position_size(&brokerage, &account_1, &symbol);
+
                     let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                     println!("{}", msg.as_str().purple());
+
+                    let quantity = strategy.position_size(&brokerage, &account_1, &symbol);
                     println!("Strategy: Open Quantity: {}", quantity);
                 }
                 StrategyEvent::OrderEvents(event) => {
