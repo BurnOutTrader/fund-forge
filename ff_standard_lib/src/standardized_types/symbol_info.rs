@@ -4,7 +4,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use rust_decimal::Decimal;
 use crate::standardized_types::accounts::Currency;
 use crate::standardized_types::new_types::Price;
-use crate::standardized_types::subscriptions::SymbolName;
+use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use serde_derive::{Deserialize, Serialize};
 use crate::standardized_types::enums::FuturesExchange;
 
@@ -77,6 +77,6 @@ impl SessionMarketHours {
 #[archive_attr(derive(Debug))]
 pub struct FrontMonthInfo {
     pub exchange: FuturesExchange,
-    pub symbol: String,
-    pub trade_symbol: String
+    pub symbol_name: SymbolName,
+    pub symbol_code: SymbolCode
 }

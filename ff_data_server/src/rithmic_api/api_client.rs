@@ -46,8 +46,6 @@ use ff_standard_lib::standardized_types::new_types::Volume;
 use crate::{get_shutdown_sender, subscribe_server_shutdown};
 use crate::rithmic_api::products::get_exchange_by_code;
 
-
-
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
 }
@@ -490,7 +488,7 @@ impl RithmicClient {
                 Ok(receiver_result) => match receiver_result {
                     Ok(response) => match response {
                         DataServerResponse::FrontMonthInfo { info, .. } => {
-                            self.front_month_info.insert(info.symbol.clone(), info.clone());
+                            self.front_month_info.insert(info.symbol_name.clone(), info.clone());
                             Ok(info)
                         },
                         _ => Err("Incorrect response received at server callback".to_string())
@@ -539,54 +537,51 @@ impl RithmicClient {
             Some(q) => q
         };
 
-        let (symbol_code, exchange): (SymbolName, FuturesExchange) = match &order.exchange {
-            None => {
-                match get_exchange_by_code(&order.symbol_name) {
-                    None => {
-                        return Err(OrderUpdateEvent::OrderRejected {
-                            brokerage: order.brokerage,
-                            account_id: order.account_id.clone(),
-                            symbol_name: order.symbol_name.clone(),
-                            symbol_code: order.symbol_name.clone(),
-                            order_id: order.id.clone(),
-                            reason: format!("Exchange Not found with {} for {}",order.brokerage, order.symbol_name),
-                            tag: order.tag.clone(),
-                            time: Utc::now().to_string() })
-                    }
-                    Some(exchange) => {
-                        let front_month = match self.front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
-                            Ok(info) => info,
-                            Err(e) => {
-                                return Err(OrderUpdateEvent::OrderRejected {
-                                    brokerage: order.brokerage,
-                                    account_id: order.account_id.clone(),
-                                    symbol_name: order.symbol_name.clone(),
-                                    symbol_code: "No Front Month Found".to_string(),
-                                    order_id: order.id.clone(),
-                                    reason: e,
-                                    tag: order.tag.clone(),
-                                    time: Utc::now().to_string() })
-                            }
-                        };
-                        (front_month.trade_symbol, exchange)
-                    }
+        let (symbol_code, exchange): (SymbolName, FuturesExchange) = {
+            match get_exchange_by_code(&order.symbol_name) {
+                None => {
+                    return Err(OrderUpdateEvent::OrderRejected {
+                        brokerage: order.brokerage,
+                        account_id: order.account_id.clone(),
+                        symbol_name: order.symbol_name.clone(),
+                        symbol_code: order.symbol_name.clone(),
+                        order_id: order.id.clone(),
+                        reason: format!("Exchange Not found with {} for {}",order.brokerage, order.symbol_name),
+                        tag: order.tag.clone(),
+                        time: Utc::now().to_string() })
                 }
-            }
-            Some(exchange_string) => {
-                match FuturesExchange::from_string(&exchange_string) {
-                    Ok(exchange) => {
-                        (order.symbol_name.clone(), exchange)
-                    },
-                    Err(e) => {
-                        return Err(OrderUpdateEvent::OrderRejected {
-                            brokerage: order.brokerage,
-                            account_id: order.account_id.clone(),
-                            symbol_name: order.symbol_name.clone(),
-                            symbol_code: order.symbol_name.clone(),
-                            order_id: order.id.clone(),
-                            reason: e,
-                            tag: order.tag.clone(),
-                            time: Utc::now().to_string() })
+                Some(mut exchange) => {
+                    exchange = match &order.exchange {
+                        None => exchange,
+                        Some(_preset) => {
+                            exchange
+                            //todo[Rithmic Api] Set this up to parse from string
+                            /*match preset {
+
+                            }*/
+                        }
+                    };
+                    match &order.symbol_code {
+                        None => {
+                            let front_month = match self.front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
+                                Ok(info) => info,
+                                Err(e) => {
+                                    return Err(OrderUpdateEvent::OrderRejected {
+                                        brokerage: order.brokerage,
+                                        account_id: order.account_id.clone(),
+                                        symbol_name: order.symbol_name.clone(),
+                                        symbol_code: "No Front Month Found".to_string(),
+                                        order_id: order.id.clone(),
+                                        reason: e,
+                                        tag: order.tag.clone(),
+                                        time: Utc::now().to_string() })
+                                }
+                            };
+                            (front_month.symbol_code, exchange)
+                        }
+                        Some(code) => {
+                            (code.clone(), exchange)
+                        }
                     }
                 }
             }
@@ -632,11 +627,12 @@ impl RithmicClient {
             OrderSide::Buy => eprintln!("Buying {}" , order.quantity_open),
             OrderSide::Sell => eprintln!("Selling {}" , order.quantity_open),
         }
+
         let req = RequestNewOrder {
             template_id: 312,
             user_msg: vec![stream_name.to_string(), order.account_id.clone(), order.tag.clone(), order.symbol_name, details.symbol_code.clone()],
             user_tag: Some(order.id.clone()),
-            window_name: None,
+            window_name: Some(stream_name.to_string()),
             fcm_id: self.fcm_id.clone(),
             ib_id: self.ib_id.clone(),
             account_id: Some(order.account_id.clone()),

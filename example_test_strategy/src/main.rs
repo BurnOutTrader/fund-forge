@@ -169,7 +169,7 @@ pub async fn on_data_received(
                                             && candle.close > last_candle.close
                                             && other_account_is_long_euro_and_in_profit
                                         {
-                                            let _entry_order_id = strategy.enter_long(&candle.symbol.name, &account_1, &brokerage, None, dec!(30), String::from("Enter Long")).await;
+                                            let _entry_order_id = strategy.enter_long(&candle.symbol.name, None, &account_1, &brokerage, None, dec!(30), String::from("Enter Long")).await;
                                             bars_since_entry_1 = 0;
                                         }
 
@@ -181,7 +181,7 @@ pub async fn on_data_received(
                                             && bars_since_entry_1 >= 3
                                             && in_profit
                                         {
-                                            let _exit_order_id: OrderId = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage,None, position_size, String::from("Exit Long Take Profit")).await;
+                                            let _exit_order_id: OrderId = strategy.exit_long(&candle.symbol.name, None, &account_1, &brokerage,None, position_size, String::from("Exit Long Take Profit")).await;
                                             bars_since_entry_1 = 0;
                                         }
 
@@ -191,7 +191,7 @@ pub async fn on_data_received(
                                             && bars_since_entry_1 >= 3
                                             && in_drawdown
                                         {
-                                            let _exit_order_id: OrderId = strategy.exit_long(&candle.symbol.name, &account_1, &brokerage,None, position_size, String::from("Exit Long Stop Loss")).await;
+                                            let _exit_order_id: OrderId = strategy.exit_long(&candle.symbol.name, None, &account_1, &brokerage,None, position_size, String::from("Exit Long Stop Loss")).await;
                                             bars_since_entry_1 = 0;
                                         }
                                     }
@@ -261,7 +261,7 @@ pub async fn on_data_received(
                                             let limit_price = last_bar.ask_low;
                                             // we will set the time in force to Day, based on the strategy Tz of Australia::Sydney, I am not sure how this will work in live trading, TIF might be handled by manually sending cancel order on data server.
                                             let time_in_force = TimeInForce::Day(strategy.time_zone().to_string());
-                                            entry_order_id_2 = Some(strategy.limit_order(&quotebar.symbol.name, &account_2, &brokerage, None,dec!(200), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
+                                            entry_order_id_2 = Some(strategy.limit_order(&quotebar.symbol.name, None, &account_2, &brokerage, None,dec!(200), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
                                             bars_since_entry_2 = 0;
                                         }
 
@@ -277,7 +277,7 @@ pub async fn on_data_received(
                                             if bars_since_entry_2 > 5
                                                 && in_profit
                                             {
-                                                let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage,None, position_size, String::from("Exit Take Profit")).await;
+                                                let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, None, &account_2, &brokerage,None, position_size, String::from("Exit Take Profit")).await;
                                                 bars_since_entry_2 = 0;
                                                 entry_order_id_2 = None;
                                                 entry_2_order_state = OrderState::Cancelled;
@@ -288,7 +288,7 @@ pub async fn on_data_received(
                                             if bars_since_entry_2 >= 10
                                                 && in_drawdown
                                             {
-                                                let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, &account_2, &brokerage,None, position_size, String::from("Exit Long Stop Loss")).await;
+                                                let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, None, &account_2, &brokerage,None, position_size, String::from("Exit Long Stop Loss")).await;
                                                 bars_since_entry_2 = 0;
                                                 entry_order_id_2 = None;
                                                 entry_2_order_state = OrderState::Cancelled;
@@ -302,7 +302,7 @@ pub async fn on_data_received(
                                                 && bars_since_entry_2 == 3
                                                 && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
                                             {
-                                                entry_order_id_2 = Some(strategy.enter_long(&quotebar.symbol.name, &account_2, &brokerage, None,dec!(200), String::from("Add Long")).await);
+                                                entry_order_id_2 = Some(strategy.enter_long(&quotebar.symbol.name, None, &account_2, &brokerage, None,dec!(200), String::from("Add Long")).await);
                                             }
                                         }
                                     }

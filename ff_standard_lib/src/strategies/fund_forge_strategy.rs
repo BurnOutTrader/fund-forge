@@ -13,7 +13,7 @@ use crate::standardized_types::enums::{OrderSide, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::strategies::strategy_events::StrategyEventBuffer;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
-use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
+use crate::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
 use crate::strategies::handlers::timed_events_handler::{TimedEvent, TimedEventHandler};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -242,12 +242,17 @@ impl FundForgeStrategy {
         )
     }
 
+    //todo[Strategy]
+    pub async fn custom_order(&self, _order: Order, _order_type: OrderType) -> OrderId {
+        todo!("Make a fn that takes an order and figures out what to do with it")
+    }
 
 
     /// Enters a long position and closes any short positions open for the account and symbol
     pub async fn enter_long(
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -257,6 +262,7 @@ impl FundForgeStrategy {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &"Enter Long").await;
         let order = Order::enter_long(
             symbol_name.clone(),
+            symbol_code,
             brokerage.clone(),
             quantity,
             tag,
@@ -286,6 +292,7 @@ impl FundForgeStrategy {
     pub async fn enter_short(
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -295,6 +302,7 @@ impl FundForgeStrategy {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &"Enter Short").await;
         let order = Order::enter_short(
             symbol_name.clone(),
+            symbol_code,
             brokerage.clone(),
             quantity,
             tag,
@@ -324,6 +332,7 @@ impl FundForgeStrategy {
     pub async fn exit_long(
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -333,6 +342,7 @@ impl FundForgeStrategy {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &"Exit Long").await;
         let order = Order::exit_long(
             symbol_name.clone(),
+            symbol_code,
             brokerage.clone(),
             quantity,
             tag,
@@ -362,6 +372,7 @@ impl FundForgeStrategy {
     pub async fn exit_short(
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -371,6 +382,7 @@ impl FundForgeStrategy {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &"Exit Short").await;
         let order = Order::exit_short(
             symbol_name.clone(),
+            symbol_code,
             brokerage.clone(),
             quantity,
             tag,
@@ -400,6 +412,7 @@ impl FundForgeStrategy {
     pub async fn buy_market(
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -409,6 +422,7 @@ impl FundForgeStrategy {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &"Buy Market").await;
         let order = Order::market_order(
             symbol_name.clone(),
+            symbol_code,
             brokerage.clone(),
             quantity,
             OrderSide::Buy,
@@ -439,6 +453,7 @@ impl FundForgeStrategy {
     pub async fn sell_market(
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -448,6 +463,7 @@ impl FundForgeStrategy {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &"Sell Market").await;
         let order = Order::market_order(
             symbol_name.clone(),
+            symbol_code,
             brokerage.clone(),
             quantity,
             OrderSide::Sell,
@@ -478,6 +494,7 @@ impl FundForgeStrategy {
     pub async fn limit_order(
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -488,7 +505,7 @@ impl FundForgeStrategy {
         tag: String,
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Limit", side)).await;
-        let order = Order::limit_order(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(), limit_price, tif, exchange);
+        let order = Order::limit_order(symbol_name.clone(), symbol_code, brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(), limit_price, tif, exchange);
         let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::Limit};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
@@ -510,6 +527,7 @@ impl FundForgeStrategy {
     pub async fn market_if_touched (
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -520,7 +538,7 @@ impl FundForgeStrategy {
         tag: String,
     ) -> OrderId {
         let order_id = self.order_id(&symbol_name, account_id, brokerage, &format!("{} MIT", side)).await;
-        let order = Order::market_if_touched(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
+        let order = Order::market_if_touched(symbol_name.clone(), symbol_code, brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
         let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::MarketIfTouched};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
@@ -542,6 +560,7 @@ impl FundForgeStrategy {
     pub async fn stop_order (
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -552,7 +571,7 @@ impl FundForgeStrategy {
         tag: String,
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop", side)).await;
-        let order = Order::stop(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
+        let order = Order::stop(symbol_name.clone(), symbol_code, brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
         let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::StopMarket};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
@@ -574,6 +593,7 @@ impl FundForgeStrategy {
     pub async fn stop_limit (
         &self,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         account_id: &AccountId,
         brokerage: &Brokerage,
         exchange: Option<String>,
@@ -585,7 +605,7 @@ impl FundForgeStrategy {
         tif: TimeInForce
     ) -> OrderId {
         let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop Limit", side)).await;
-        let order = Order::stop_limit(symbol_name.clone(), brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),limit_price, trigger_price, tif, exchange);
+        let order = Order::stop_limit(symbol_name.clone(), symbol_code, brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),limit_price, trigger_price, tif, exchange);
         let request = OrderRequest::Create{ brokerage: order.brokerage.clone(), order: order.clone(), order_type: OrderType::StopLimit};
         match self.mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {

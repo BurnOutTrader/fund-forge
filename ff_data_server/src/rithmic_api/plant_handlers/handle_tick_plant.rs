@@ -144,8 +144,8 @@ pub async fn match_ticker_plant_id(
                         if let Some(trade_symbol) = msg.trading_symbol {
                             let front_month_info = FrontMonthInfo {
                                 exchange,
-                                symbol: symbol.clone(),
-                                trade_symbol,
+                                symbol_name: symbol.clone(),
+                                symbol_code: trade_symbol,
                             };
                             if let Some(stream_name) = msg.user_msg.get(0) {
                                 let stream_name = match StreamName::from_str(&stream_name) {

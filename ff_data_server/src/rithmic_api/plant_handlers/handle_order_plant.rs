@@ -485,7 +485,9 @@ pub async fn match_order_plant_id(
                 if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(user_tag)) =
                     (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();
-                    match msg.is_snapshot {
+
+                    //todo[Rithmic Api] Not sure if i should do this or not
+                  /*  match msg.is_snapshot {
                         None => {}
                         Some(some) => {
                             match some {
@@ -493,7 +495,7 @@ pub async fn match_order_plant_id(
                                 false => {}
                             }
                         }
-                    }
+                    }*/
                     let order_id = if let Some(brokerage_map) = BASKET_ID_TO_ID_MAP.get(&client.brokerage) {
                         match brokerage_map.get(&basket_id) {
                             Some(id) => id.value().clone(),
@@ -639,6 +641,7 @@ pub async fn match_order_plant_id(
                                 reason: msg.status.unwrap_or_default(),
                                 time,
                             };
+
                             send_order_update(client.brokerage, &order_id, event).await;
                         },
                         _ => return,  // Ignore other notification types

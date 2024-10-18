@@ -1,7 +1,7 @@
 use std::fmt;
 use crate::standardized_types::accounts::AccountId;
 use crate::standardized_types::enums::OrderSide;
-use crate::standardized_types::subscriptions::SymbolName;
+use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -122,6 +122,7 @@ pub enum OrderState {
 #[archive_attr(derive(Debug))]
 pub struct Order {
     pub symbol_name: SymbolName,
+    pub symbol_code: Option<SymbolCode>,
     pub brokerage: Brokerage,
     pub quantity_open: Volume,
     pub quantity_filled: Volume,
@@ -149,6 +150,7 @@ impl Order {
 
     pub fn limit_order(
         symbol_name: SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: Brokerage,
         quantity: Volume,
         side: OrderSide,
@@ -160,8 +162,10 @@ impl Order {
         tif: TimeInForce,
         exchange: Option<String>
     ) -> Self {
+
         Self {
             symbol_name,
+            symbol_code,
             brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
@@ -185,6 +189,7 @@ impl Order {
 
     pub fn market_if_touched (
         symbol_name: SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: Brokerage,
         quantity: Volume,
         side: OrderSide,
@@ -198,6 +203,7 @@ impl Order {
     ) -> Self {
         Self {
             symbol_name,
+            symbol_code,
             brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
@@ -221,6 +227,7 @@ impl Order {
 
     pub fn stop (
         symbol_name: SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: Brokerage,
         quantity: Volume,
         side: OrderSide,
@@ -234,6 +241,7 @@ impl Order {
     ) -> Self {
         Self {
             symbol_name,
+            symbol_code,
             brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
@@ -257,6 +265,7 @@ impl Order {
 
     pub fn stop_limit (
         symbol_name: SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: Brokerage,
         quantity: Volume,
         side: OrderSide,
@@ -271,6 +280,7 @@ impl Order {
     ) -> Self {
         Self {
             symbol_name,
+            symbol_code,
             brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
@@ -294,6 +304,7 @@ impl Order {
 
     pub fn market_order(
         symbol_name: SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: Brokerage,
         quantity: Volume,
         side: OrderSide,
@@ -306,6 +317,7 @@ impl Order {
         Order {
             id:order_id,
             symbol_name,
+            symbol_code,
             brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
@@ -328,6 +340,7 @@ impl Order {
 
     pub fn exit_long(
         symbol_name: SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: Brokerage,
         quantity: Volume,
         tag: String,
@@ -339,6 +352,7 @@ impl Order {
         Order {
             id: order_id,
             symbol_name,
+            symbol_code,
             brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
@@ -361,6 +375,7 @@ impl Order {
 
     pub fn exit_short(
         symbol_name: SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: Brokerage,
         quantity: Volume,
         tag: String,
@@ -372,6 +387,7 @@ impl Order {
         Order {
             id: order_id,
             symbol_name,
+            symbol_code,
             brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
@@ -394,6 +410,7 @@ impl Order {
 
     pub fn enter_long(
         symbol_name: SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: Brokerage,
         quantity: Volume,
         tag: String,
@@ -405,6 +422,7 @@ impl Order {
         Order {
             id: order_id,
             symbol_name,
+            symbol_code,
             brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
@@ -427,6 +445,7 @@ impl Order {
 
     pub fn enter_short(
         symbol_name: SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: Brokerage,
         quantity: Volume,
         tag: String,
@@ -438,6 +457,7 @@ impl Order {
         Order {
             id: order_id,
             symbol_name,
+            symbol_code,
             brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
@@ -524,19 +544,19 @@ pub enum OrderUpdateType {
 pub enum OrderUpdateEvent {
 
     /// Example, product: MNQZ4,
-    OrderAccepted {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: String, order_id: OrderId, tag: String, time: String},
+    OrderAccepted {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, tag: String, time: String},
 
     ///Quantity should only represent the quantity filled on this event.
-    OrderFilled {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: String, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
+    OrderFilled {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
     ///Quantity should only represent the quantity filled on this event.
-    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: String, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
+    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
-    OrderCancelled {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: String, order_id: OrderId, tag: String, time: String},
+    OrderCancelled {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, tag: String, time: String},
 
-    OrderRejected {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: String, order_id: OrderId, reason: String, tag: String, time: String},
+    OrderRejected {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, reason: String, tag: String, time: String},
 
-    OrderUpdated {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: String, order_id: OrderId, update_type: OrderUpdateType, tag: String, time: String},
+    OrderUpdated {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, update_type: OrderUpdateType, tag: String, time: String},
 
     OrderUpdateRejected {brokerage:Brokerage, account_id: AccountId,  order_id: OrderId, reason: String, time: String},
 }

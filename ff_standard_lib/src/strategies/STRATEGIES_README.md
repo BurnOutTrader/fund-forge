@@ -1061,9 +1061,7 @@ fn example() {
 - The engine updates best bid, best offer, order book levels and last prices using `SymbolName` if we have more than 1 data feed per SymbolName, those streams will be combined into the same maps.
 - The best bid and best offer will always replace  == order book level 0
 - The order books are split into BID_BOOK and ASK_BOOK
-- There is no point in having 2 feeds for the same SymbolName from multiple `DataVendors`, just use the most accurate or fastest updating vendor. 
-
-
+- There is no point in having 2 feeds for the same SymbolName from multiple `DataVendors`, just use the most accurate or fastest updating vendor.
 
 ## Placing Orders
 In backtesting a new ledger will be instantiated for each AccountId and Brokerage combination to simulate any number of accounts.
@@ -1071,15 +1069,14 @@ This is in its infancy, market handlers are very raw and untested and the way th
 The backtesting engine pnl is not accurate at this moment.
 
 The exchange field is an `Option<String>`, this can be used for advanced order routing. \
-For futures trading the Rithmic Api will try to find the best contract using information from Rithmic. \
-If no information is found it will use the front month contract automatically.
-
-The exchange field can be used to override this behaviour: if for example you are trading a "MNQZ4" specifically instead of "MNQ" front month, you will need to specify the exchange.
-You can use `FuturesExchange` enums for this.
 ```rust
-let exchange: FuturesExchange  = FuturesExchange::CME;
+let exchange: FuturesExchange = FuturesExchange::CME;
 let exchange: String = Some(CME.to_string());
 ```
+
+When trading futures using Rithmic, the Rithmic Api will try to find the best contract using information from Rithmic. \
+If no information is found it will use the front month contract automatically.
+To override this behaviour we can pass in `symbol_code: Some("specific_symbol_code)`
 
 If you want the server to make the decision, just `use exchange: None`
 This field is currently irrelevant in backtesting, you will need to use "MNQ" as the symbol.
@@ -1112,6 +1109,7 @@ async fn example() {
     let order_id: OrderId = strategy.enter_long(
         account_id: &AccountId,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
@@ -1123,6 +1121,7 @@ async fn example() {
     let order_id: OrderId = strategy.enter_short(
         account_id: &AccountId,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
@@ -1148,6 +1147,7 @@ async fn example() {
     let order_id: OrderId = strategy.exit_long(
         account_id: &AccountId,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
@@ -1158,6 +1158,7 @@ async fn example() {
     let order_id: OrderId = strategy.exit_short(
         account_id: &AccountId,
        symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
        brokerage: &Brokerage,
         exchange: Option<String>,
        quantity: Volume,
@@ -1168,6 +1169,7 @@ async fn example() {
     let order_id: OrderId = strategy.buy_market(
         account_id: &AccountId,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume, 
@@ -1178,6 +1180,7 @@ async fn example() {
     let order_id: OrderId = strategy.sell_market(
         account_id: &AccountId,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
@@ -1187,7 +1190,8 @@ async fn example() {
     // Place a limit order and get back the order_id
     let order_id: OrderId = strategy.limit_order(
         account_id: &AccountId, 
-        symbol_name: &SymbolName, 
+        symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume, 
@@ -1200,7 +1204,8 @@ async fn example() {
     // Enter a market if touched order
     let order_id: OrderId = strategy.market_if_touched (
         account_id: &AccountId, 
-        symbol_name: &SymbolName, 
+        symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume, 
@@ -1214,6 +1219,7 @@ async fn example() {
     let order_id: OrderId = strategy.stop_order (
         account_id: &AccountId,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
@@ -1227,6 +1233,7 @@ async fn example() {
     let order_id: OrderId = strategy.stop_limit (
         account_id: &AccountId,
         symbol_name: &SymbolName,
+        symbol_code: Option<SymbolCode>,
         brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
