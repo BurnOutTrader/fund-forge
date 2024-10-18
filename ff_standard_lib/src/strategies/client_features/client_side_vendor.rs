@@ -1,4 +1,3 @@
-use std::time::Duration;
 use chrono::{DateTime, Utc};
 use tokio::sync::oneshot;
 use tokio::time::timeout;
@@ -9,34 +8,9 @@ use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SessionMarketHours;
+use crate::strategies::client_features::client_side_brokerage::TIME_OUT;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
-const TIMEOUT_DURATION: Duration = Duration::from_secs(30);
-impl Symbol {
-    pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
-        let request = DataServerRequest::TickSize {
-            callback_id: 0,
-            data_vendor: self.data_vendor.clone(),
-            symbol_name: self.name.clone(),
-        };
-        let (sender, receiver) = oneshot::channel();
-        let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.data_vendor.clone()), request, sender);
-        send_request(msg).await;
-        match timeout(TIMEOUT_DURATION, receiver).await {
-            Ok(receiver_result) => match receiver_result {
-                Ok(response) => {
-                    match response {
-                        DataServerResponse::TickSize { tick_size, .. } => Ok(tick_size),
-                        DataServerResponse::Error { error, .. } => Err(error),
-                        _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                    }
-                },
-                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
-            },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
-        }
-    }
-}
 
 impl DataVendor {
     pub async fn symbols(&self, market_type: MarketType, time: Option<DateTime<Utc>>) -> Result<Vec<Symbol>, FundForgeError> {
@@ -53,7 +27,7 @@ impl DataVendor {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
         send_request(msg).await;
-        match timeout(TIMEOUT_DURATION, receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => {
                     match response {
@@ -76,7 +50,7 @@ impl DataVendor {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
         send_request(msg).await;
-        match timeout(TIMEOUT_DURATION, receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => {
                     match response {
@@ -100,7 +74,7 @@ impl DataVendor {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
         send_request(msg).await;
-        match timeout(TIMEOUT_DURATION, receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => {
                     match response {
@@ -123,7 +97,7 @@ impl DataVendor {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
         send_request(msg).await;
-        match timeout(TIMEOUT_DURATION, receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => {
                     match response {
@@ -147,7 +121,7 @@ impl DataVendor {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
         send_request(msg).await;
-        match timeout(TIMEOUT_DURATION, receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => {
                     match response {
@@ -171,7 +145,7 @@ impl DataVendor {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
         send_request(msg).await;
-        match timeout(TIMEOUT_DURATION, receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => {
                     match response {
@@ -196,7 +170,7 @@ impl DataVendor {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
         send_request(msg).await;
-        match timeout(TIMEOUT_DURATION, receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => {
                     match response {

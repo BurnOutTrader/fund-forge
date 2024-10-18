@@ -10,6 +10,7 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::resolution::Resolution;
 
 pub type SymbolName = String;
+pub type SymbolCode = String;
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Eq, PartialOrd, Ord, Debug, Hash, )]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]

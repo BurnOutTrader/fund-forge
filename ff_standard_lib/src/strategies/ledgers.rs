@@ -2,7 +2,7 @@ use std::fs::create_dir_all;
 use std::path::Path;
 use chrono::{DateTime, Utc};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
-use crate::standardized_types::subscriptions::SymbolName;
+use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use dashmap::DashMap;
 use csv::Writer;
 use rust_decimal::Decimal;
@@ -258,7 +258,12 @@ impl Ledger {
                 match SYMBOL_INFO.get(symbol_name) {
                     None => {
                         //println!("Ledger symbol info: {}", symbol_name);
-                        let info = self.brokerage.symbol_info(symbol_name.clone()).await.unwrap();
+                        let info = match self.brokerage.symbol_info(symbol_name.clone()).await {
+                            Ok(info) => info,
+                            Err(e) => {
+                                panic!("Unable to get symbol info for: {}, {}", symbol_name, e);
+                            }
+                        };
                         self.symbol_info.insert(symbol_name.clone(), info.clone());
                         SYMBOL_INFO.insert(symbol_name.clone(), info.clone());
                         info
@@ -423,7 +428,7 @@ impl Ledger {
     pub async fn update_or_create_position(
         &mut self,
         symbol_name: &SymbolName,
-        symbol_code: &String,
+        symbol_code: &SymbolCode,
         order_id: OrderId,
         quantity: Volume,
         side: OrderSide,
@@ -460,6 +465,7 @@ impl Ledger {
                                 .entry(symbol_code.clone())
                                 .and_modify(|pnl| *pnl += booked_pnl)
                                 .or_insert(booked_pnl.clone());
+                            self.total_booked_pnl += booked_pnl;
                         }
                         if self.mode != StrategyMode::Live {
                             self.cash_available += booked_pnl;

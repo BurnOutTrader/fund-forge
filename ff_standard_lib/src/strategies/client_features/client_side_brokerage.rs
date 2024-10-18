@@ -16,7 +16,7 @@ use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
 use crate::strategies::ledgers::Ledger;
 
-const TIME_OUT: Duration = Duration::from_secs(30);
+pub(crate) const TIME_OUT: Duration = Duration::from_secs(15);
 impl Brokerage {
     pub async fn paper_account_init(&self, mode: StrategyMode, starting_balance: Decimal, currency: Currency, account_id: AccountId) -> Result<Ledger, FundForgeError> {
         let request = DataServerRequest::PaperAccountInit {
