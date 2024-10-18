@@ -2289,6 +2289,7 @@ dependencies = [
  "colored",
  "ff_rithmic_api",
  "ff_standard_lib",
+ "futures",
  "rust_decimal",
  "rust_decimal_macros",
  "tokio",

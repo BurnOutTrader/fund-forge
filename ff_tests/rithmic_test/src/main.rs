@@ -145,7 +145,7 @@ pub async fn on_data_received(
                             }
                             BaseDataEnum::Candle(candle) => {
                                 // Place trades based on the AUD-CAD Heikin Ashi Candles
-                                if candle.is_closed == true {
+                                if candle.is_closed == true  {
                                     let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
                                     if candle.close == candle.open {
                                         println!("{}", msg.as_str().blue())
@@ -160,19 +160,20 @@ pub async fn on_data_received(
 
                                     let last_candle = strategy.candle_index(&subscription, 1);
 
-                                    if last_candle.is_none() {
+                                    if last_candle.is_none() || candle.resolution != Resolution::Seconds(5) {
                                         println!("Last Candle Is None");
                                         continue;
                                     }
 
                                     let last_candle = last_candle.unwrap();
                                     // entry orders
-                                    if candle.close > last_candle.close && bars_since_entry == 0 {
+                                    if candle.close > last_candle.high && entry_order_id == None && bars_since_entry == 0 {
                                         println!("Submitting long limit");
                                         let cancel_order_time = Utc::now() + Duration::seconds(30);
                                         let order_id = strategy.limit_order(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), OrderSide::Buy, last_candle.low, TimeInForce::Time(cancel_order_time.naive_utc().to_string(), UTC.to_string()), String::from("Enter Long Limit")).await;
                                         entry_order_id = Some(order_id);
-                                    } else if candle.close < last_candle.close && entry_order_id == None && bars_since_entry == 0  {
+                                    }
+                                    else if candle.close < last_candle.low && entry_order_id == None && bars_since_entry == 0  {
                                         println!("Submitting short limit");
                                         let cancel_order_time = Utc::now() + Duration::seconds(30);
                                         let order_id = strategy.limit_order(&symbol, None, &account, &Brokerage::Rithmic(RithmicSystem::TopstepTrader), None,dec!(1), OrderSide::Sell, last_candle.high, TimeInForce::Time(cancel_order_time.naive_utc().to_string(), UTC.to_string()), String::from("Enter Short Limit")).await;
