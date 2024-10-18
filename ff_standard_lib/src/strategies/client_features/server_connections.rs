@@ -331,7 +331,7 @@ pub async fn response_handler(
                                         .or_insert_with(|| Ledger::new(account_info.clone(), mode));
                                 }
                                 DataServerResponse::LiveAccountUpdates { brokerage, ref account_id, cash_value, cash_available, cash_used } => {
-                                    println!("{:?}", response);
+                                    //println!("{:?}", response);
                                     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
                                         if let Some(mut account_map) = broker_map.get_mut(account_id) {
                                             account_map.value_mut().update(cash_value, cash_available, cash_used);

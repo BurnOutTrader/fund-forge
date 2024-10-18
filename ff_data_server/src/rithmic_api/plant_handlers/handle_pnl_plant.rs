@@ -1,5 +1,6 @@
 use std::str::FromStr;
 use std::sync::Arc;
+use dashmap::DashMap;
 #[allow(unused_imports)]
 use ff_rithmic_api::credentials::RithmicCredentials;
 #[allow(unused_imports)]
@@ -8,6 +9,7 @@ use ff_rithmic_api::rithmic_proto_objects::rti::Reject;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use prost::{Message as ProstMessage};
 use rust_decimal::{Decimal};
+use rust_decimal::prelude::FromPrimitive;
 use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
@@ -84,21 +86,61 @@ pub async fn match_pnl_plant_id(
                 // Instrument PnL Position Update
                 // From Server
                 println!("Instrument PnL Position Update (Template ID: 450) from Server: {:?}", msg);
-
                 /*
-                    Account PnL Position Update (Template ID: 451) from Server: AccountPnLPositionUpdate { template_id: 451, is_snapshot: None, fcm_id: Some("TopstepTrader"),
-                    ib_id: Some("TopstepTrader"), account_id: Some("S1Sep246906077"), fill_buy_qty: Some(1), fill_sell_qty: Some(0), order_buy_qty: Some(0), order_sell_qty: Some(0),
-                    buy_qty: Some(1), sell_qty: Some(-1), open_long_options_value: Some("0.00"), open_short_options_value: Some("0.00"), closed_options_value: Some("0.00"),
-                    option_cash_reserved: Some("0.00"), rms_account_commission: None, open_position_pnl: Some("-2.00"), open_position_quantity: Some(1),
-                    closed_position_pnl: Some("0.00"), closed_position_quantity: Some(0), net_quantity: Some(1), excess_buy_margin: Some(""), margin_balance: Some(""),
-                    min_margin_balance: Some(""), min_account_balance: Some("0.00"), account_balance: Some("49989.80"), cash_on_hand: Some("49992.40"),
-                    option_closed_pnl: Some("0.00"), percent_maximum_allowable_loss: Some("0.26"), option_open_pnl: Some("0.00"), mtm_account: Some("-2.60"),
-                    available_buying_power: Some(""), used_buying_power: Some(""), reserved_buying_power: Some(""), excess_sell_margin: Some(""),
-                    day_open_pnl: Some("-2.00"), day_closed_pnl: Some("0.00"), day_pnl: Some("-2.60"), day_open_pnl_offset: Some("0.00"),
-                    day_closed_pnl_offset: Some("0.00"), ssboe: Some(1729085252), usecs: Some(932000) }
+                Instrument PnL Position Update (Template ID: 450) from Server: InstrumentPnLPositionUpdate { template_id: 450, is_snapshot: Some(true),
+                fcm_id: Some("TopstepTrader"), ib_id: Some("TopstepTrader"), account_id: Some("S1Sep246906077"), symbol: Some("M6AZ4"), exchange: Some("CME"),
+                product_code: Some("M6A"), instrument_type: Some("Future"), fill_buy_qty: Some(1), fill_sell_qty: Some(2), order_buy_qty:
+                Some(0), order_sell_qty: Some(0), buy_qty: Some(-1), sell_qty: Some(1), avg_open_fill_price: Some(0.6741), day_open_pnl: Some(-1.0),
+                day_closed_pnl: Some(-2.0), day_pnl: Some(-3.0), day_open_pnl_offset: Some(0.0), day_closed_pnl_offset: Some(0.0), mtm_security: Some("-3.00"),
+                open_long_options_value: Some("0.00"), open_short_options_value: Some("0.00"), closed_options_value: Some("0.00"), option_cash_reserved: Some("0.00"),
+                open_position_pnl: Some("-1.00"), open_position_quantity: Some(1), closed_position_pnl: Some("-2.00"), closed_position_quantity: Some(2), net_quantity: Some(-1),
+                ssboe: Some(1728469740), usecs: Some(338000) }
                 */
 
+                let account_id = match msg.account_id {
+                    None => return,
+                    Some(id) => id
+                };
 
+                let symbol = match msg.symbol {
+                    None => return,
+                    Some(s) => s
+                };
+
+                if let Some(buy_quantity) = msg.open_position_quantity {
+                    if buy_quantity <= 0 {
+                        client.long_quantity.remove(&symbol);
+                    } else {
+                        let buy_quantity = match Decimal::from_i32(buy_quantity) {
+                            None => return,
+                            Some(q) => q
+                        };
+                        client.long_quantity
+                            .entry(account_id.clone())
+                            .or_insert_with(DashMap::new)
+                            .entry(symbol.clone())
+                            .and_modify(|qty| *qty = buy_quantity)
+                            .or_insert(buy_quantity);
+                    }
+                }
+
+                // Update sell quantity
+                if let Some(sell_quantity) = msg.open_position_quantity {
+                    if sell_quantity >= 0 {
+                        client.short_quantity.remove(&symbol);
+                    } else {
+                        let sell_quantity = match Decimal::from_i32(sell_quantity.abs()) {
+                            None => return,
+                            Some(q) => q
+                        };
+                        client.short_quantity
+                            .entry(account_id.clone())
+                            .or_insert_with(DashMap::new)
+                            .entry(symbol.clone())
+                            .and_modify(|qty| *qty += sell_quantity)
+                            .or_insert(sell_quantity);
+                    }
+                }
             }
         },
         451 => {
