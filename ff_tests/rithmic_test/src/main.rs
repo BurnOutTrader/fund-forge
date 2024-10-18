@@ -268,7 +268,7 @@ pub async fn on_data_received(
                         OrderUpdateEvent::OrderCancelled {order_id, ..} => {
                             println!("{}", msg.as_str().bright_cyan());
                             let mut cancelled = false;
-                            if let Some(mut entry_order_id) =  &entry_order_id {
+                            if let Some(entry_order_id) = &entry_order_id {
                                 if *order_id == *entry_order_id {
                                     cancelled = true;
                                 }
