@@ -1101,6 +1101,11 @@ async fn example() {
         If you are already long and the new enter long position has brackets, those brackets will replace the existing brackets.
         
         More sophisticated brackets will be added in future versions.
+        
+        ### Futures Subscriptions
+      You can subscribe using the `SymbolName` eg "MNQ" or the `SymbolCode` eg "MNQZ4".
+      If you are placing orders with SymbolCode instead of SymbolName you will also need to pass in the `FuturesExchange` as a string. Example `FuturesExchange::CME.to_string()`
+      By passing in the exchange string we are telling the data server to specifically place a trade on the "Z4" Contract.
     */
 
     // Enter a long position and close any existing short position on the same account / symbol
