@@ -106,11 +106,10 @@ pub async fn on_data_received(
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
     strategy.subscribe_indicator(atr_5, true).await;*/
 
-    let brokerage = Brokerage::Test;
     let mut warmup_complete = false;
-    let account_1 = AccountId::from("Test_Account_1");
     let mut last_side = LastSide::Flat;
     let account: AccountId = "S1Sep246906077".to_string();
+    let brokerage = Brokerage::Rithmic(RithmicSystem::TopstepTrader);
     println!("Staring Strategy Loop");
     let symbol = "MNQ".to_string();
     let mut count = 0;
@@ -173,7 +172,7 @@ pub async fn on_data_received(
                     }
                 }
                 StrategyEvent::ShutdownEvent(event) => {
-                    strategy.flatten_all_for(brokerage, &account_1).await;
+                    strategy.flatten_all_for(brokerage, &account).await;
                     let msg = format!("{}",event);
                     println!("{}", msg.as_str().bright_magenta());
                     strategy.export_trades(&String::from("./trades exports"));
@@ -199,7 +198,7 @@ pub async fn on_data_received(
                     let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                     println!("{}", msg.as_str().purple());
 
-                    let quantity = strategy.position_size(&brokerage, &account_1, &symbol);
+                    let quantity = strategy.position_size(&brokerage, &account, &symbol);
                     println!("Strategy: Open Quantity: {}", quantity);
                 }
                 StrategyEvent::OrderEvents(event) => {
