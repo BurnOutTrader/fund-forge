@@ -378,7 +378,7 @@ pub(crate) fn pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_
 
 pub(crate) fn booked_pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-        if let Some(account_map) = broker_map.get(account_id) {
+        if let Some(account_map) = broker_map.value().get(account_id) {
             return account_map.value().booked_pnl(symbol_name)
         }
     }
@@ -387,7 +387,7 @@ pub(crate) fn booked_pnl_live(symbol_name: &SymbolName, brokerage: &Brokerage, a
 
 pub(crate) fn position_size_live(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-        if let Some(account_map) = broker_map.get(account_id) {
+        if let Some(account_map) = broker_map.value().get(account_id) {
             return account_map.value().position_size(symbol_name)
         }
     }
@@ -396,7 +396,7 @@ pub(crate) fn position_size_live(symbol_name: &SymbolName, brokerage: &Brokerage
 
 pub(crate) fn position_size_paper(symbol_name: &SymbolName, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
-        if let Some(account_map) = broker_map.get(account_id) {
+        if let Some(account_map) = broker_map.value().get(account_id) {
             return account_map.value().position_size(symbol_name)
         }
     }
@@ -406,7 +406,7 @@ pub(crate) fn position_size_paper(symbol_name: &SymbolName, brokerage: &Brokerag
 
 pub(crate) fn is_long_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-        if let Some(account_map) = broker_map.get(account_id) {
+        if let Some(account_map) = broker_map.value().get(account_id) {
             return account_map.value().is_long(symbol_name)
         }
     }
@@ -415,7 +415,7 @@ pub(crate) fn is_long_live(brokerage: &Brokerage, account_id: &AccountId, symbol
 
 pub(crate) fn is_short_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-        if let Some(account_map) = broker_map.get(account_id) {
+        if let Some(account_map) = broker_map.value().get(account_id) {
             return account_map.value().is_short(symbol_name)
         }
     }
@@ -424,7 +424,7 @@ pub(crate) fn is_short_live(brokerage: &Brokerage, account_id: &AccountId, symbo
 
 pub(crate) fn is_flat_live(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-        if let Some(account_map) = broker_map.get(account_id) {
+        if let Some(account_map) = broker_map.value().get(account_id) {
             return account_map.value().is_flat(symbol_name)
         }
     }
@@ -433,7 +433,7 @@ pub(crate) fn is_flat_live(brokerage: &Brokerage, account_id: &AccountId, symbol
 
 pub(crate) fn is_long_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
-        if let Some(account_map) = broker_map.get(account_id) {
+        if let Some(account_map) = broker_map.value().get(account_id) {
             return account_map.value().is_long(symbol_name)
         }
     }
@@ -442,7 +442,7 @@ pub(crate) fn is_long_paper(brokerage: &Brokerage, account_id: &AccountId, symbo
 
 pub(crate) fn is_short_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
-        if let Some(account_map) = broker_map.get(account_id) {
+        if let Some(account_map) = broker_map.value().get(account_id) {
             return account_map.value().is_short(symbol_name)
         }
     }
@@ -451,7 +451,7 @@ pub(crate) fn is_short_paper(brokerage: &Brokerage, account_id: &AccountId, symb
 
 pub(crate) fn is_flat_paper(brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
-        if let Some(account_map) = broker_map.get(account_id) {
+        if let Some(account_map) = broker_map.value().get(account_id) {
             return account_map.value().is_flat(symbol_name)
         }
     }
@@ -460,7 +460,7 @@ pub(crate) fn is_flat_paper(brokerage: &Brokerage, account_id: &AccountId, symbo
 
 async fn flatten_all_paper_for(brokerage: &Brokerage, account_id: &AccountId, time: DateTime<Utc>) {
     if let Some(broker_map) = BACKTEST_LEDGERS.get(&brokerage) {
-        if let Some(mut account_map) = broker_map.get_mut(account_id) {
+        if let Some(mut account_map) = broker_map.value().get_mut(account_id) {
             for (symbol_name, position) in account_map.positions.clone() {
                 let side = match position.side {
                     PositionSide::Long => OrderSide::Sell,
