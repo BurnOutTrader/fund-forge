@@ -132,16 +132,6 @@ pub async fn match_order_plant_id(
                     handler_loop::send_updates(DataServerResponse::AccountSnapShot {account_info: account_info.clone()}).await;
                     client.account_info.insert(id.clone(), account_info);
                     client.request_updates().await;
-
-                    let req = RequestPnLPositionUpdates {
-                        template_id: 400,
-                        user_msg: vec![],
-                        request: Some(1),
-                        fcm_id: client.credentials.fcm_id.clone(),
-                        ib_id: client.credentials.ib_id.clone(),
-                        account_id: None,
-                    };
-                    client.send_message(&SysInfraType::PnlPlant, req).await;
                 }
             }
         },
