@@ -48,6 +48,7 @@ pub struct Ledger {
 }
 impl Ledger {
     pub fn new(account_info: AccountInfo, strategy_mode: StrategyMode) -> Self {
+        println!("Ledger Created: {}", account_info.account_id);
         let positions = account_info
             .positions
             .into_iter()
@@ -395,6 +396,7 @@ impl Ledger {
                         if self.mode != StrategyMode::Live {
                             self.cash_available += booked_pnl;
                         }
+                        //println!("Reduced Position: {}", symbol_name);
                     }
                     PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
                         self.booked_pnl += booked_pnl;
@@ -408,6 +410,7 @@ impl Ledger {
                         if let Some(mut positions_closed) = self.positions_closed.get_mut(&symbol_name){
                             positions_closed.value_mut().push(existing_position);
                         }
+                        //println!("Closed Position: {}", symbol_name);
                     }
                     _ => panic!("This shouldn't happen")
                 }
@@ -417,17 +420,19 @@ impl Ledger {
                 }
                 updates.push(event);
             } else {
-                match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
-                    Ok(_) => {}
-                    Err(e) => {
-                        return Err(OrderUpdateEvent::OrderRejected {
-                            brokerage: self.brokerage,
-                            account_id: self.account_id.clone(),
-                            order_id,
-                            reason: e.to_string(),
-                            tag,
-                            time: time.to_string()
-                        })
+                if self.mode != StrategyMode::Live {
+                    match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            return Err(OrderUpdateEvent::OrderRejected {
+                                brokerage: self.brokerage,
+                                account_id: self.account_id.clone(),
+                                order_id,
+                                reason: e.to_string(),
+                                tag,
+                                time: time.to_string()
+                            })
+                        }
                     }
                 }
                 let event = existing_position.add_to_position(market_fill_price, quantity, time, tag.clone(), self.currency).await;
@@ -442,17 +447,19 @@ impl Ledger {
             }
         }
         if remaining_quantity > dec!(0.0) {
-            match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
-                Ok(_) => {}
-                Err(e) => {
-                    return Err(OrderUpdateEvent::OrderRejected {
-                        brokerage: self.brokerage,
-                        account_id: self.account_id.clone(),
-                        order_id,
-                        reason: e.to_string(),
-                        tag,
-                        time: time.to_string()
-                    })
+            if self.mode != StrategyMode::Live {
+                match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            brokerage: self.brokerage,
+                            account_id: self.account_id.clone(),
+                            order_id,
+                            reason: e.to_string(),
+                            tag,
+                            time: time.to_string()
+                        })
+                    }
                 }
             }
 
