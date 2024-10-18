@@ -16,9 +16,7 @@ If I make any mistakes, and leave a test strategy in live mode, it will trade yo
 
 Order logic is incomplete, updates not yet forwarded to strategies. 
 
-Make sure to:
-- Test your strategies thoroughly before deploying live.
-- Double-check your configurations to avoid unintended trades.
+Make sure to double-check your configurations to avoid unintended trades.
 
 Once `StrategyMode::Live`, the system will not differentiate between test and real orders!
 
