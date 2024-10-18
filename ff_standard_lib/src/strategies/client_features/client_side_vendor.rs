@@ -11,7 +11,7 @@ use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::standardized_types::symbol_info::SessionMarketHours;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
-const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
+const TIMEOUT_DURATION: Duration = Duration::from_secs(30);
 impl Symbol {
     pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
         let request = DataServerRequest::TickSize {

@@ -16,6 +16,7 @@ use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
 use crate::strategies::ledgers::Ledger;
 
+const TIME_OUT: Duration = Duration::from_secs(30);
 impl Brokerage {
     pub async fn paper_account_init(&self, mode: StrategyMode, starting_balance: Decimal, currency: Currency, account_id: AccountId) -> Result<Ledger, FundForgeError> {
         let request = DataServerRequest::PaperAccountInit {
@@ -27,7 +28,7 @@ impl Brokerage {
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
         //todo, we need reconnect and resend callback logic for time outs and disconnects
-        match timeout(Duration::from_secs(10), receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => match response {
                     DataServerResponse::PaperAccountInit { account_info, .. } => {
@@ -41,10 +42,11 @@ impl Brokerage {
                             positions: DashMap::new(),
                             margin_used: DashMap::new(),
                             positions_closed: DashMap::new(),
+                            symbol_closed_pnl: Default::default(),
                             positions_counter: DashMap::new(),
                             symbol_info: DashMap::new(),
                             open_pnl: DashMap::new(),
-                            booked_pnl: dec!(0.0),
+                            total_booked_pnl: dec!(0.0),
                             mode,
                             leverage: account_info.leverage
                         })
@@ -68,7 +70,7 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match timeout(Duration::from_secs(10), receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => match response {
                     DataServerResponse::IntradayMarginRequired { price, .. } => Ok(price),
@@ -90,7 +92,7 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match timeout(Duration::from_secs(10), receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => match response {
                     DataServerResponse::SymbolInfo { symbol_info, .. } => Ok(symbol_info),
@@ -111,7 +113,7 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match timeout(Duration::from_secs(10), receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => match response {
                     DataServerResponse::Accounts { accounts, .. } => Ok(accounts),
@@ -137,7 +139,7 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match timeout(Duration::from_secs(10), receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => match response {
                     DataServerResponse::SymbolNames { symbol_names, .. } => Ok(symbol_names),
@@ -159,7 +161,7 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match timeout(Duration::from_secs(10), receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => match response {
                     DataServerResponse::CommissionInfo { commission_info, .. } => Ok(commission_info),
@@ -181,7 +183,7 @@ impl Brokerage {
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
-        match timeout(Duration::from_secs(10), receiver).await {
+        match timeout(TIME_OUT, receiver).await {
             Ok(receiver_result) => match receiver_result {
                 Ok(response) => match response {
                     DataServerResponse::AccountInfo { account_info, .. } => Ok(account_info),
