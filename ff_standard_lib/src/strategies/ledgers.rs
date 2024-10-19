@@ -293,6 +293,7 @@ impl Ledger {
         tokio::task::spawn(async move{
             let mut ledger = ledger;
             while let Some(request) = request_receiver.recv().await {
+                //println!("Ledger request: {:?}", request);
                 match request {
                     LedgerMessage::TimeSlice(time, slice) =>  {
                         ledger.timeslice_update(slice, time);
