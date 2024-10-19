@@ -18,6 +18,9 @@ use once_cell::sync::Lazy;
 static MARKET_PRICE_SERVICE: Lazy<MarketPriceService> = Lazy::new(|| {
     MarketPriceService::new()
 });
+pub(crate) fn get_price_service_sender() -> mpsc::Sender<PriceServiceMessage> {
+    MARKET_PRICE_SERVICE.sender.clone()
+}
 
 pub(crate) async fn price_service_request_market_price(order_side: OrderSide, symbol_name: SymbolName) -> Result<PriceServiceResponse, FundForgeError> {
     let callback_id = MARKET_PRICE_SERVICE.next_id.fetch_add(1, Ordering::SeqCst);
@@ -73,6 +76,7 @@ pub(crate) async fn price_service_request_limit_fill_price_quantity(order_side: 
     Ok(response)
 }
 
+#[derive(Debug)]
 pub enum PriceServiceMessage {
     TimeSliceUpdate(TimeSlice),
     FillPriceEstimate{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName, volume: Volume},
@@ -81,6 +85,7 @@ pub enum PriceServiceMessage {
 }
 
 /// Returned values to be rounded to symbol decimal accuracy
+#[derive(Debug)]
 pub enum PriceServiceResponse {
     FillPriceEstimate(Option<Decimal>),
     LimitFillPriceEstimate{fill_price: Option<Decimal>, fill_volume: Option<Decimal>},
@@ -260,6 +265,7 @@ impl MarketPriceService {
                                 if let Some(bool_level) = book_price_volume_map.get(&level) {
                                     if bool_level.volume == dec!(0.0) && total_volume_filled == dec!(0.0) && level == 0 {
                                         let message = PriceServiceResponse::LimitFillPriceEstimate{fill_price: Some(bool_level.price.clone()), fill_volume: Some(volume)};
+                                        println!("{:?}", message);
                                         if let Err(_e) = callback_sender.send(message) {
                                             eprintln!("Market Price Service: Failed to send response");
                                         }

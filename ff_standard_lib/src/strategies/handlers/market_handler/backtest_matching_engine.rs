@@ -28,6 +28,7 @@ pub async fn backtest_matching_engine(
                 BackTestEngineMessage::OrderRequest(time, order_request) => {
                     match order_request {
                         OrderRequest::Create { order, .. } => {
+                            println!("Order received: {:?}", order);
                             open_order_cache.insert(order.id.clone(), order);
                             simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache).await;
                         }
@@ -138,6 +139,7 @@ pub async fn simulated_order_matching (
     let mut filled = Vec::new();
     let mut partially_filled = Vec::new();
     for order in open_order_cache.iter() {
+        //println!("Order matching: {:?}", order.value());
         match &order.time_in_force {
             TimeInForce::GTC => {},
             TimeInForce::Day(time_zone_string) => {
@@ -176,11 +178,15 @@ pub async fn simulated_order_matching (
             OrderType::Limit => {
                 let market_price = match price_service_request_market_price(order.side, order.symbol_name.clone()).await {
                     Ok(price) => match price.price() {
-                        None => continue,
+                        None => {
+                            println!("No Price");
+                            continue
+                        },
                         Some(price) => price
                     }
                     Err(_) => continue
                 };
+                println!("Market price: {}", market_price);
                 let limit_price = order.limit_price.unwrap();
                 match order.side {
                     // Buy Stop Limit logic

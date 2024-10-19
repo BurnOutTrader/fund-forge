@@ -61,7 +61,9 @@ impl LedgerService {
     }
 
     pub fn get_next_id(&self) -> u64 {
-        self.id.fetch_add(1, Ordering::SeqCst)
+        self.id.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |x| {
+            Some((x + 1) % u64::MAX)
+        }).unwrap_or(0)
     }
 
     pub async fn request_callback(&self, brokerage: Brokerage, account_id: &AccountId, ledger_request: LedgerRequest) -> oneshot::Receiver<LedgerResponse> {

@@ -9,10 +9,12 @@ use crate::standardized_types::broker_enum::Brokerage;
 use crate::strategies::client_features::server_connections::{is_warmup_complete};
 use crate::standardized_types::time_slices::TimeSlice;
 use rust_decimal::Decimal;
+use tokio::sync::mpsc::error::SendError;
 use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest};
 use crate::strategies::handlers::market_handler::backtest_matching_engine;
 use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
+use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::historical_time::get_backtest_time;
 
 #[derive(Clone, Debug)]
@@ -37,7 +39,7 @@ pub(crate) async fn market_handler(
                 Some(sender)
             }
         };
-
+        let market_price_sender = get_price_service_sender();
         while let Some(message) = market_event_receiver.recv().await {
             let time = match mode {
                 StrategyMode::Backtest => get_backtest_time(),
@@ -45,18 +47,22 @@ pub(crate) async fn market_handler(
             };
             match message {
                 MarketMessageEnum::TimeSliceUpdate(time_slice) => {
+                    match market_price_sender.send(PriceServiceMessage::TimeSliceUpdate(time_slice.clone())).await {
+                        Ok(_) => {}
+                        Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
+                    }
                     LEDGER_SERVICE.timeslice_updates(time, time_slice).await;
                     if let Some(backtest_engine_sender) = &backtest_order_sender {
                         let message = BackTestEngineMessage::Time(time);
                         match backtest_engine_sender.send(message).await {
                             Ok(_) => {}
-                            Err(e) => panic!("Error sending backtest message: {}", e)
+                            Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
                         }
                     }
                 }
                 MarketMessageEnum::OrderRequest(order_request) => {
                     if !is_warmup_complete() {
-                        panic!("Warning: Attempted to place order during warm up!");
+                        panic!("Market Handler: Warning: Attempted to place order during warm up!");
                     }
                     match mode {
                         StrategyMode::Live => {
@@ -64,9 +70,10 @@ pub(crate) async fn market_handler(
                         },
                         StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
                             if let Some(order_sender) = &backtest_order_sender {
+                                //println!("sending order: {:?}", order_request);
                                 match order_sender.send(BackTestEngineMessage::OrderRequest(time, order_request)).await {
                                     Ok(_) => {}
-                                    Err(e) => panic!("Error sending order to backtest matching engine: {}", e)
+                                    Err(e) => panic!("Market Handler: Error sending order to backtest matching engine: {}", e)
                                 }
                             }
                         }
