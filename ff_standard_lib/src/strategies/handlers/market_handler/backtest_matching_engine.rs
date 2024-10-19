@@ -178,15 +178,12 @@ pub async fn simulated_order_matching (
             OrderType::Limit => {
                 let market_price = match price_service_request_market_price(order.side, order.symbol_name.clone()).await {
                     Ok(price) => match price.price() {
-                        None => {
-                            println!("No Price");
-                            continue
-                        },
+                        None => continue,
                         Some(price) => price
                     }
                     Err(_) => continue
                 };
-                println!("Market price: {}", market_price);
+
                 let limit_price = order.limit_price.unwrap();
                 match order.side {
                     // Buy Stop Limit logic

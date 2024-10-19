@@ -13,6 +13,7 @@ use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::sync::oneshot;
+use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -534,9 +535,12 @@ impl Ledger {
         }
     }
 
-    pub async fn symbol_info(&self, symbol_name: &SymbolName) -> SymbolInfo {
+    pub async fn symbol_info(&self, brokerage: Brokerage, symbol_name: &SymbolName) -> SymbolInfo {
         match self.symbol_info.get(symbol_name) {
-            None => panic!("this should be here before orders or positions exist"),
+            None => match brokerage.symbol_info(symbol_name.clone()).await {
+                Ok(info) => info,
+                Err(e) => panic!("Ledgers: Error getting symbol infor: {}, {}: {}", brokerage, symbol_name, e)
+            }
             Some(info) => {
                 info.value().clone()
             }
@@ -819,7 +823,7 @@ impl Ledger {
             };
 
             eprintln!("Symbol Name for info request: {}", symbol_name);
-            let info = self.symbol_info(&symbol_name).await;
+            let info = self.symbol_info(self.brokerage, &symbol_name).await;
             if !self.symbol_code_map.contains_key(&symbol_name) && symbol_name != symbol_code  {
                 self.symbol_code_map
                     .entry(symbol_name.clone())
