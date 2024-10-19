@@ -265,7 +265,6 @@ impl MarketPriceService {
                                 if let Some(bool_level) = book_price_volume_map.get(&level) {
                                     if bool_level.volume == dec!(0.0) && total_volume_filled == dec!(0.0) && level == 0 {
                                         let message = PriceServiceResponse::LimitFillPriceEstimate{fill_price: Some(bool_level.price.clone()), fill_volume: Some(volume)};
-                                        println!("{:?}", message);
                                         if let Err(_e) = callback_sender.send(message) {
                                             eprintln!("Market Price Service: Failed to send response");
                                         }
