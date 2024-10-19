@@ -27,7 +27,7 @@ async fn main() {
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2024, 06, 28).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(5),
         vec![
@@ -97,7 +97,7 @@ pub async fn on_data_received(
                                     //LONG CONDITIONS
                                     {
                                         // ENTER LONG
-                                        let is_flat = strategy.is_flat(&brokerage, &account_1, &candle.symbol.name);
+                                        let is_flat = strategy.is_flat(&brokerage, &account_1, &candle.symbol.name).await;
                                         // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
                                         if is_flat
                                             && candle.close > candle.open
@@ -109,9 +109,9 @@ pub async fn on_data_received(
                                         }
 
                                         // ADD LONG
-                                        let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name);
-                                        let long_pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
-                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
+                                        let is_long = strategy.is_long(&brokerage, &account_1, &candle.symbol.name).await;
+                                        let long_pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name).await;
+                                        let position_size: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name).await;
                                         if is_long
                                             && long_pnl > dec!(150.0)
                                             && long_pnl < dec!(300.0)
@@ -138,7 +138,7 @@ pub async fn on_data_received(
                                     //SHORT CONDITIONS
                                     {
                                         // ENTER SHORT
-                                        let is_flat = strategy.is_flat(&brokerage, &account_1, &candle.symbol.name);
+                                        let is_flat = strategy.is_flat(&brokerage, &account_1, &candle.symbol.name).await;
                                         // test short ledger
                                         if is_flat
                                             && candle.close < candle.open
@@ -150,9 +150,9 @@ pub async fn on_data_received(
                                         }
 
                                         // ADD SHORT
-                                        let is_short = strategy.is_short(&brokerage, &account_1, &candle.symbol.name);
-                                        let short_pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name);
-                                        let position_size_short: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
+                                        let is_short = strategy.is_short(&brokerage, &account_1, &candle.symbol.name).await;
+                                        let short_pnl = strategy.pnl(&brokerage, &account_1, &candle.symbol.name).await;
+                                        let position_size_short: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name).await;
                                         if is_short
                                             && short_pnl > dec!(150.0)
                                             && short_pnl < dec!(300.0)
@@ -163,7 +163,7 @@ pub async fn on_data_received(
                                         }
 
                                         // SHORT SL+TP
-                                        let position_size_short: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name);
+                                        let position_size_short: Decimal = strategy.position_size(&brokerage, &account_1, &candle.symbol.name).await;
                                         if is_short
                                             && short_pnl > dec!(500.0)
                                         {
@@ -187,8 +187,8 @@ pub async fn on_data_received(
                     strategy.flatten_all_for(brokerage, &account_1).await;
                     let msg = format!("{}",event);
                     println!("{}", msg.as_str().bright_magenta());
-                    strategy.export_trades(&String::from("./trades exports"));
-                    strategy.print_ledgers();
+                    strategy.export_trades(&String::from("./trades exports")).await;
+                    strategy.print_ledgers().await;
                     //we should handle shutdown gracefully by first ending the strategy loop.
                     break 'strategy_loop
                 },
@@ -203,10 +203,10 @@ pub async fn on_data_received(
                     match event {
                         PositionUpdateEvent::PositionOpened { .. } => {}
                         PositionUpdateEvent::Increased { .. } => {}
-                        PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
-                        PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.brokerage(), event.account_id()),
+                        PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.brokerage(), event.account_id()).await,
+                        PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.brokerage(), event.account_id()).await,
                     }
-                    let quantity = strategy.position_size(&brokerage, &account_1, &"EUR-USD".to_string());
+                    let quantity = strategy.position_size(&brokerage, &account_1, &"EUR-USD".to_string()).await;
                     let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                     println!("{}", msg.as_str().purple());
                     println!("Strategy: Open Quantity: {}", quantity);

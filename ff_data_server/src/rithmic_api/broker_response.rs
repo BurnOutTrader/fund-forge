@@ -90,9 +90,9 @@ impl BrokerApiResponse for RithmicClient {
                 match find_base_symbol(symbol_name) {
                     None => {}
                     Some(symbol) => {
-                        match get_symbol_info(&symbol) {
-                            Ok(info) => return DataServerResponse::SymbolInfo {callback_id, symbol_info: info},
-                            Err(_) => {}
+                        return match get_symbol_info(&symbol) {
+                            Ok(info) => DataServerResponse::SymbolInfo { callback_id, symbol_info: info },
+                            Err(e) => DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(format!("{}", e)) }
                         }
                     }
                 };
@@ -234,6 +234,7 @@ impl BrokerApiResponse for RithmicClient {
             Err(e) => return Err(e)
         };
 
+        //todo, we need to send the exit order first, so that the strategy engine does not use the order size as the new positions size.
         //check if we are short and add to quantity
         if let Some(account_long_map) = self.long_quantity.get(&order.account_id) {
             if let Some(symbol_volume) = account_long_map.get(&details.symbol_code) {

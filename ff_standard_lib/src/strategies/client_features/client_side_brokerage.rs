@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
@@ -18,7 +19,14 @@ use crate::strategies::ledgers::Ledger;
 
 pub(crate) const TIME_OUT: Duration = Duration::from_secs(15);
 impl Brokerage {
-    pub async fn paper_account_init(&self, mode: StrategyMode, starting_balance: Decimal, currency: Currency, account_id: AccountId) -> Result<Ledger, FundForgeError> {
+    pub async fn paper_account_init(
+        &self,
+        mode: StrategyMode,
+        starting_balance: Decimal,
+        currency: Currency,
+        account_id: AccountId,
+        symbol_info: Arc<DashMap<SymbolName, SymbolInfo>>,
+    ) -> Result<Ledger, FundForgeError> {
         let request = DataServerRequest::PaperAccountInit {
             account_id,
             callback_id: 0,
@@ -45,12 +53,12 @@ impl Brokerage {
                             positions_closed: DashMap::new(),
                             symbol_closed_pnl: Default::default(),
                             positions_counter: DashMap::new(),
-                            symbol_info: DashMap::new(),
                             open_pnl: DashMap::new(),
                             total_booked_pnl: dec!(0.0),
                             mode,
                             leverage: account_info.leverage,
-                            is_simulating_pnl: true
+                            is_simulating_pnl: true,
+                            symbol_info,
                         })
                     },
                     DataServerResponse::Error { error, .. } => Err(error),

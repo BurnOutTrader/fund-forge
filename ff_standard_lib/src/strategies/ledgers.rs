@@ -1,23 +1,29 @@
 use std::fs::create_dir_all;
 use std::path::Path;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use chrono::{DateTime, Utc};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use dashmap::DashMap;
 use csv::Writer;
+use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
+use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::oneshot;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use crate::standardized_types::accounts::{AccountId, AccountInfo, AccountSetup, Currency};
+use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::strategies::handlers::market_handler::market_handlers::SYMBOL_INFO;
-
+use crate::strategies::client_features::server_connections::add_buffer;
+use crate::strategies::handlers::market_handler::price_service::price_service_request_market_fill_price;
+use crate::strategies::strategy_events::StrategyEvent;
 /*todo,
    Make ledger take functions as params, create_order_reduce_position, increase_position, reduce_position, we will pass these in based on the type of positions we want.
    1. we can have a cumulative model, like we have now, for position building.
@@ -25,6 +31,188 @@ use crate::strategies::handlers::market_handler::market_handlers::SYMBOL_INFO;
    3. FILO: Each time we open a position, it is kept until we are flat or reversed and each counter order closes the order entry directly before.
    To achieve this ledgers will need to be able to hold multiple sub position details or positions themselves generate 'trade' objects
  */
+
+lazy_static! {
+    pub(crate) static ref LEDGER_SERVICE: LedgerService = LedgerService::new();
+}
+
+pub(crate) struct LedgerService {
+    callback_senders: DashMap<u64, oneshot::Sender<LedgerResponse>>,
+    pub(crate) ledger_senders: DashMap<Brokerage, DashMap<AccountId, Sender<LedgerMessage>>>,
+    symbol_info: Arc<DashMap<SymbolName, SymbolInfo>>,
+    id: AtomicU64,
+    strategy_mode: StrategyMode,
+    synchronize_accounts: bool,
+    starting_cash: Decimal,
+    currency: Currency
+}
+impl LedgerService {
+    pub fn new() -> Self {
+        LedgerService {
+            callback_senders: Default::default(),
+            ledger_senders: Default::default(),
+            symbol_info: Arc::new(Default::default()),
+            id: AtomicU64::new(0),
+            strategy_mode: StrategyMode::Backtest,
+            synchronize_accounts: false,
+            starting_cash: dec!(100000),
+            currency: Currency::USD,
+        }
+    }
+
+    pub fn get_next_id(&self) -> u64 {
+        self.id.fetch_add(1, Ordering::SeqCst)
+    }
+
+    pub async fn request_callback(&self, brokerage: Brokerage, account_id: &AccountId, ledger_request: LedgerRequest) -> oneshot::Receiver<LedgerResponse> {
+        let callback_id = self.get_next_id();
+        let (sender, receiver) = oneshot::channel();
+        self.callback_senders.insert(callback_id, sender);
+        self.send_message(brokerage, account_id, LedgerMessage::LedgerCallBackRequest(callback_id, ledger_request)).await;
+        receiver
+    }
+
+    pub async fn send_message(&self, brokerage: Brokerage, account_id: &AccountId, ledger_message: LedgerMessage) {
+        if let Some(broker_map) = self.ledger_senders.get(&brokerage) {
+            if let Some(account_sender) = broker_map.get(account_id) {
+                match account_sender.send(ledger_message).await {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("LEDGER_SERVICE: Failed to send message: {}", e)
+                }
+            }
+        }
+    }
+
+    pub async fn handle_response(&self, callback_id: u64, response: LedgerResponse) {
+        if let Some((_, sender)) = self.callback_senders.remove(&callback_id) {
+            let _ = sender.send(response);
+        }
+    }
+
+    pub async fn timeslice_updates(&self, time: DateTime<Utc>, time_slice: TimeSlice) {
+        let request = LedgerMessage::TimeSlice(time, time_slice);
+        for broker_map in self.ledger_senders.iter() {
+            for account_map in broker_map.iter() {
+                match account_map.value().send(request.clone()).await {
+                    Ok(_) => {}
+                    Err(_e) => panic!("LEDGER_SERVICE: Ledger timeSlice update request failed")
+                }
+            }
+        }
+    }
+
+    pub fn has_ledger(&self, brokerage: Brokerage, account_id: &AccountId) -> bool {
+        if let Some(broker_map) = self.ledger_senders.get(&brokerage) {
+           return broker_map.contains_key(account_id)
+        }
+        false
+    }
+
+    pub async fn init_ledger(&self, brokerage: Brokerage, account_id: AccountId, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency) {
+        if !self.ledger_senders.contains_key(&brokerage) {
+            let broker_map = DashMap::new();
+            self.ledger_senders.insert(brokerage.clone(), broker_map);
+        }
+        if !self.ledger_senders.get(&brokerage).unwrap().contains_key(&account_id) {
+            let ledger: Ledger = match strategy_mode {
+                StrategyMode::Live => {
+                    let account_info = match brokerage.account_info(account_id.clone()).await {
+                        Ok(ledger) => ledger,
+                        Err(e) => {
+                            panic!("LEDGER_SERVICE: Error initializing account: {}", e);
+                        }
+                    };
+                    Ledger::new(account_info, strategy_mode, synchronize_accounts, self.symbol_info.clone())
+                },
+                StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
+                    match brokerage.paper_account_init(strategy_mode, starting_cash, currency, account_id.clone(), self.symbol_info.clone()).await {
+                        Ok(ledger) => ledger,
+                        Err(e) => {
+                            panic!("LEDGER_SERVICE: Error initializing account: {}", e);
+                        }
+                    }
+                }
+            };
+            let (sender, receiver) = tokio::sync::mpsc::channel(100);
+            Ledger::start_receive(ledger, receiver);
+            self.ledger_senders.get(&brokerage).unwrap().insert(account_id.clone(), sender);
+        }
+    }
+
+    pub async fn account_snapshot(&self, brokerage: Brokerage, account_id: AccountId, synchronize_accounts: bool, account_info: AccountInfo, strategy_mode: StrategyMode) {
+        if !self.ledger_senders.contains_key(&brokerage) {
+            let broker_map = DashMap::new();
+            self.ledger_senders.insert(brokerage.clone(), broker_map);
+        }
+        if !self.ledger_senders.get(&brokerage).unwrap().contains_key(&account_id) {
+            let ledger: Ledger = match strategy_mode {
+                StrategyMode::Live => {
+                    Ledger::new(account_info, strategy_mode, synchronize_accounts, self.symbol_info.clone())
+                },
+                _ => panic!("LEDGER_SERVICE: should not update accounts with snapshots")
+            };
+            let (sender, receiver) = tokio::sync::mpsc::channel(100);
+            Ledger::start_receive(ledger, receiver);
+            self.ledger_senders.get(&brokerage).unwrap().insert(account_id.clone(), sender);
+        }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub(crate) enum LedgerRequest {
+    IsLongRequest(SymbolName),
+    IsShortRequest(SymbolName),
+    IsFlatRequest(SymbolName),
+    PositionSizeRequest(SymbolName),
+    BookedPnlRequest(SymbolName),
+    OpenPnlRequest(SymbolName),
+    InDrawDownRequest(SymbolName),
+    InProfitRequest(SymbolName),
+    PaperExitPosition {
+        symbol_name: SymbolName,
+        side: PositionSide,
+        symbol_code: Option<SymbolCode>,
+        order_id: OrderId,
+        time: DateTime<Utc>,
+        tag: String
+    },
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub(crate) enum LedgerResponse {
+    IsLongResponse(bool),
+    IsShortResponse(bool),
+    IsFlatResponse(bool),
+    PositionSizeResponse(Decimal),
+    BookedPnlResponse(Decimal),
+    OpenPnlResponse(Decimal),
+    InDrawDownResponse(bool),
+    InProfitResponse(bool),
+    ProcessLedgerResponse(String),
+    FlattenAccount(bool),
+    PaperExitPosition{had_position: bool}
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub(crate) enum LedgerMessage {
+    TimeSlice(DateTime<Utc>, TimeSlice),
+    LedgerCallBackRequest(u64, LedgerRequest),
+    PrintLedgerRequest,
+    ExportTrades(String),
+    UpdateOrCreatePosition {
+        symbol_name: SymbolName,
+        symbol_code: SymbolCode,
+        order_id: OrderId,
+        quantity: Volume,
+        side: OrderSide,
+        time: DateTime<Utc>,
+        market_fill_price: Price,
+        tag: String
+    },
+    FlattenAccount(DateTime<Utc>),
+    LiveAccountUpdates { brokerage: Brokerage, account_id: AccountId, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal },
+    LivePositionUpdates { brokerage: Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: SymbolCode, open_pnl: Decimal, open_quantity: Decimal, side: Option<PositionSide> }
+}
 
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
 #[derive(Debug)]
@@ -41,7 +229,7 @@ pub struct Ledger {
     pub positions_closed: DashMap<SymbolName, Vec<Position>>,
     pub symbol_closed_pnl: DashMap<SymbolName, Decimal>,
     pub positions_counter: DashMap<SymbolName, u64>,
-    pub symbol_info: DashMap<SymbolName, SymbolInfo>,
+    pub(crate) symbol_info: Arc<DashMap<SymbolName, SymbolInfo>>,
     pub open_pnl: DashMap<SymbolName, Price>,
     pub total_booked_pnl: Price,
     pub mode: StrategyMode,
@@ -50,7 +238,16 @@ pub struct Ledger {
     //todo, add daily max loss, max order size etc to ledger
 }
 impl Ledger {
-    pub fn new(account_info: AccountInfo, strategy_mode: StrategyMode, is_simulating_pnl: bool) -> Self {
+    pub fn new(
+        account_info: AccountInfo,
+        mode: StrategyMode,
+        synchronise_accounts: bool,
+        symbol_info: Arc<DashMap<SymbolName, SymbolInfo>>
+    ) -> Self {
+        let is_simulating_pnl = match synchronise_accounts {
+            true => false,
+            false => true
+        };
         println!("Ledger Created: {}", account_info.account_id);
         let positions: DashMap<SymbolName, Position> = account_info
             .positions
@@ -79,46 +276,128 @@ impl Ledger {
             positions_closed: DashMap::new(),
             symbol_closed_pnl: Default::default(),
             positions_counter: DashMap::new(),
-            symbol_info: DashMap::new(),
+            symbol_info,
             open_pnl: DashMap::new(),
             total_booked_pnl: dec!(0.0),
-            mode: strategy_mode,
+            mode,
             leverage: account_info.leverage,
             is_simulating_pnl
         };
         ledger
     }
 
+    pub(crate) fn start_receive(ledger: Ledger, mut request_receiver: Receiver<LedgerMessage>) {
+        tokio::task::spawn(async move{
+            let mut ledger = ledger;
+            while let Some(request) = request_receiver.recv().await {
+                match request {
+                    LedgerMessage::TimeSlice(time, slice) =>  {
+                        ledger.timeslice_update(slice, time);
+                    },
+                    LedgerMessage::LedgerCallBackRequest(callback_id, request) => {
+                        match request {
+                            LedgerRequest::IsLongRequest(symbol) => {
+                                LEDGER_SERVICE.handle_response(callback_id, LedgerResponse::IsLongResponse(ledger.is_long(&symbol))).await;
+                            }
+                            LedgerRequest::IsShortRequest(symbol) => {
+                                LEDGER_SERVICE.handle_response(callback_id, LedgerResponse::IsShortResponse(ledger.is_short(&symbol))).await;
+                            }
+                            LedgerRequest::IsFlatRequest(symbol) => {
+                                LEDGER_SERVICE.handle_response(callback_id, LedgerResponse::IsFlatResponse(ledger.is_flat(&symbol))).await;
+                            }
+                            LedgerRequest::PositionSizeRequest(symbol) => {
+                                LEDGER_SERVICE.handle_response(callback_id, LedgerResponse::PositionSizeResponse(ledger.position_size(&symbol))).await;
+                            }
+                            LedgerRequest::BookedPnlRequest(symbol) => {
+                                LEDGER_SERVICE.handle_response(callback_id, LedgerResponse::BookedPnlResponse(ledger.booked_pnl(&symbol))).await;
+                            }
+                            LedgerRequest::OpenPnlRequest(symbol) => {
+                                let open_pnl = match ledger.open_pnl.get(&symbol) {
+                                    None => dec!(0),
+                                    Some(pnl) => pnl.value().clone()
+                                };
+                                LEDGER_SERVICE.handle_response(callback_id, LedgerResponse::OpenPnlResponse(open_pnl)).await;
+                            }
+                            LedgerRequest::InDrawDownRequest(symbol) => {
+                                LEDGER_SERVICE.handle_response(callback_id, LedgerResponse::InDrawDownResponse(ledger.in_drawdown(&symbol))).await;
+                            }
+                            LedgerRequest::InProfitRequest(symbol) => {
+                                LEDGER_SERVICE.handle_response(callback_id, LedgerResponse::InProfitResponse(ledger.in_profit(&symbol))).await;
+                            }
+                            LedgerRequest::PaperExitPosition { symbol_name, symbol_code: _, order_id: _, side, time, tag: _ } => {
+                                if ledger.mode == StrategyMode::Backtest || ledger.mode == StrategyMode::LivePaperTrading {
+                                    if let Some((symbol_name, position)) = ledger.positions.remove(&symbol_name) {
+                                        if position.side == side {
+                                            let side = match position.side {
+                                                PositionSide::Long => OrderSide::Sell,
+                                                PositionSide::Short => OrderSide::Buy
+                                            };
+                                            let market_price = match price_service_request_market_fill_price(side, symbol_name.clone(), position.quantity_open).await {
+                                                Ok(price) => price.price(),
+                                                Err(e) => panic!("Unable to get fill price for {}: {}", position.symbol_name, e) //todo, we shou
+                                            };
+                                            ledger.paper_exit_position(&position.symbol_name, time, market_price.unwrap(), "Flatten All".to_string()).await;
+                                            ledger.positions_closed.entry(symbol_name.clone()).or_insert(vec![]).push(position.clone());
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    LedgerMessage::PrintLedgerRequest => {
+                        ledger.print();
+                    },
+                    LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag } => {
+                        ledger.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await;
+                    }
+                    LedgerMessage::FlattenAccount(time) => {
+                        if ledger.mode == StrategyMode::Backtest || ledger.mode == StrategyMode::LivePaperTrading {
+                            // Collect keys (symbol names) to process
+                            let symbols_to_process: Vec<String> = ledger.positions.iter()
+                                .map(|entry| entry.key().clone())
+                                .collect();
+
+                            for symbol_name in symbols_to_process {
+                                if let Some((_, position)) = ledger.positions.remove(&symbol_name) {
+                                    let side = match position.side {
+                                        PositionSide::Long => OrderSide::Sell,
+                                        PositionSide::Short => OrderSide::Buy
+                                    };
+                                    let market_price = match price_service_request_market_fill_price(
+                                        side,
+                                        symbol_name.clone(),
+                                        position.quantity_open,
+                                    ).await {
+                                        Ok(price) => price,
+                                        Err(e) => {
+                                            eprintln!("Unable to get fill price for {}: {}. Skipping this position.", position.symbol_name, e);
+                                            continue;
+                                        }
+                                    };
+                                    ledger.paper_exit_position(&position.symbol_name, time, market_price.price().unwrap(), "Flatten All".to_string()).await;
+                                    ledger.positions_closed.entry(symbol_name).or_insert(vec![]).push(position);
+                                }
+                            }
+                        }
+                    }
+                    LedgerMessage::ExportTrades(directory) => {
+                        ledger.export_positions_to_csv(&directory);
+                    }
+                    LedgerMessage::LiveAccountUpdates { .. } => {
+                        todo!()
+                    }
+                    LedgerMessage::LivePositionUpdates { .. } => {
+                        todo!()
+                    }
+                }
+            }
+        });
+    }
+
     pub fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
         self.cash_value = cash_value;
         self.cash_used = cash_used;
         self.cash_available = cash_available;
-    }
-
-    pub fn user_initiated(account_setup: AccountSetup, strategy_mode: StrategyMode, is_simulating_pnl: bool) -> Self {
-        //todo, add daily max loss, max order size etc to ledger
-        let leverage = account_setup.leverage.unwrap_or_else(|| 1);
-        let ledger = Self {
-            account_id: account_setup.account_id,
-            brokerage: account_setup.brokerage,
-            cash_value: account_setup.cash_value,
-            cash_available: account_setup.cash_value,
-            currency: account_setup.currency,
-            cash_used: dec!(0.0),
-            positions: DashMap::new(),
-            symbol_code_map: Default::default(),
-            margin_used: DashMap::new(),
-            positions_closed: DashMap::new(),
-            positions_counter: DashMap::new(),
-            symbol_info: DashMap::new(),
-            open_pnl: DashMap::new(),
-            symbol_closed_pnl: DashMap::new(),
-            total_booked_pnl: dec!(0.0),
-            mode: strategy_mode,
-            leverage,
-            is_simulating_pnl
-        };
-        ledger
     }
 
     pub fn add_live_position(&self, mut position: Position) {
@@ -255,26 +534,7 @@ impl Ledger {
 
     pub async fn symbol_info(&self, symbol_name: &SymbolName) -> SymbolInfo {
         match self.symbol_info.get(symbol_name) {
-            None => {
-                match SYMBOL_INFO.get(symbol_name) {
-                    None => {
-                        //println!("Ledger symbol info: {}", symbol_name);
-                        let info = match self.brokerage.symbol_info(symbol_name.clone()).await {
-                            Ok(info) => info,
-                            Err(e) => {
-                                panic!("Unable to get symbol info for: {}, {}", symbol_name, e);
-                            }
-                        };
-                        self.symbol_info.insert(symbol_name.clone(), info.clone());
-                        SYMBOL_INFO.insert(symbol_name.clone(), info.clone());
-                        info
-                    }
-                    Some(info) => {
-                        self.symbol_info.insert(symbol_name.clone(), info.clone());
-                        info.value().clone()
-                    }
-                }
-            }
+            None => panic!("this should be here before orders or positions exist"),
             Some(info) => {
                 info.value().clone()
             }
@@ -301,18 +561,17 @@ impl Ledger {
     pub fn is_short(&self, symbol_name: &SymbolName) -> bool {
         if let Some(position) = self.positions.get(symbol_name) {
             if position.value().side == PositionSide::Short {
-                return true;
+                return true
             }
         }
-        false
+       false
     }
 
     pub fn is_flat(&self, symbol_name: &SymbolName) -> bool {
         if let Some(_) = self.positions.get(symbol_name) {
-            false
-        } else {
-            true
+            return false;
         }
+        true
     }
 
     pub fn print(&self) -> String {
@@ -428,19 +687,19 @@ impl Ledger {
     ///todo, check ledger max order etc before placing orders
     pub async fn update_or_create_position(
         &mut self,
-        symbol_name: &SymbolName,
-        symbol_code: &SymbolCode,
+        symbol_name: SymbolName,
+        symbol_code: SymbolCode,
         order_id: OrderId,
         quantity: Volume,
         side: OrderSide,
         time: DateTime<Utc>,
         market_fill_price: Price, // we use the passed in price because we dont know what sort of order was filled, limit or market
         tag: String
-    ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
+    ) {
         let mut updates = vec![];
         // Check if there's an existing position for the given symbol
         let mut remaining_quantity = quantity;
-        if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_code) {
+        if let Some((symbol_name, mut existing_position)) = self.positions.remove(&symbol_code) {
             let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell)
                 || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 
@@ -485,10 +744,10 @@ impl Ledger {
                         if self.mode != StrategyMode::Live {
                             self.cash_available += booked_pnl;
                         }
-                        if !self.positions_closed.contains_key(symbol_code) {
+                        if !self.positions_closed.contains_key(&symbol_code) {
                             self.positions_closed.insert(symbol_code.clone(), vec![]);
                         }
-                        if let Some(mut positions_closed) = self.positions_closed.get_mut(symbol_code){
+                        if let Some(mut positions_closed) = self.positions_closed.get_mut(&symbol_code){
                             positions_closed.value_mut().push(existing_position);
                         }
                         //println!("Closed Position: {}", symbol_name);
@@ -505,7 +764,8 @@ impl Ledger {
                     match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                         Ok(_) => {}
                         Err(e) => {
-                            return Err(OrderUpdateEvent::OrderRejected {
+                            //todo this now gets added directly to buffer
+                            add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
                                 brokerage: self.brokerage,
                                 account_id: self.account_id.clone(),
                                 symbol_name: symbol_name.clone(),
@@ -514,7 +774,8 @@ impl Ledger {
                                 reason: e.to_string(),
                                 tag,
                                 time: time.to_string()
-                            })
+                            })).await;
+                            return
                         }
                     }
                 }
@@ -534,7 +795,7 @@ impl Ledger {
                 match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                     Ok(_) => {}
                     Err(e) => {
-                        return Err(OrderUpdateEvent::OrderRejected {
+                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
                             brokerage: self.brokerage,
                             account_id: self.account_id.clone(),
                             symbol_name: symbol_name.clone(),
@@ -543,7 +804,8 @@ impl Ledger {
                             reason: e.to_string(),
                             tag,
                             time: time.to_string()
-                        })
+                        })).await;
+                        return
                     }
                 }
             }
@@ -555,15 +817,15 @@ impl Ledger {
             };
 
             eprintln!("Symbol Name for info request: {}", symbol_name);
-            let info = self.symbol_info(symbol_name).await;
-            if !self.symbol_code_map.contains_key(symbol_name) && symbol_name != symbol_code  {
+            let info = self.symbol_info(&symbol_name).await;
+            if !self.symbol_code_map.contains_key(&symbol_name) && symbol_name != symbol_code  {
                 self.symbol_code_map
                     .entry(symbol_name.clone())
                     .or_insert_with(Vec::new)
                     .push(symbol_code.clone());
             };
 
-            let id = self.generate_id(symbol_name, position_side);
+            let id = self.generate_id(&symbol_name, position_side);
             // Create a new position
             let position = Position::new(
                 symbol_code.clone(),
@@ -582,7 +844,7 @@ impl Ledger {
 
             // Insert the new position into the positions map
             self.positions.insert(symbol_code.clone(), position);
-            if !self.positions_closed.contains_key(symbol_code) {
+            if !self.positions_closed.contains_key(&symbol_code) {
                 self.positions_closed.insert(symbol_code.clone(), vec![]);
             }
 
@@ -600,26 +862,25 @@ impl Ledger {
             //println!("Position Created: {}", symbol_name);
             updates.push(event);
         }
-        Ok(updates)
+        //todo this now gets added directly to buffer
+        for event in updates {
+            add_buffer(time, StrategyEvent::PositionEvents(event)).await;
+        }
     }
-
-
 }
 
 pub(crate) mod historical_ledgers {
     use chrono::{DateTime, Utc};
-    use dashmap::DashMap;
     use rust_decimal::Decimal;
     use rust_decimal::prelude::FromPrimitive;
-    use rust_decimal_macros::dec;
-    use crate::standardized_types::broker_enum::Brokerage;
     use crate::strategies::ledgers::Ledger;
     use crate::messages::data_server_messaging::FundForgeError;
-    use crate::standardized_types::accounts::{AccountId, Currency};
     use crate::standardized_types::enums::StrategyMode;
     use crate::standardized_types::new_types::{Price, Volume};
     use crate::standardized_types::position::PositionUpdateEvent;
     use crate::standardized_types::subscriptions::SymbolName;
+    use crate::strategies::client_features::server_connections::add_buffer;
+    use crate::strategies::strategy_events::StrategyEvent;
 
     impl Ledger {
         pub async fn release_margin_used(&mut self, symbol_name: &SymbolName) {
@@ -647,44 +908,13 @@ pub(crate) mod historical_ledgers {
             Ok(())
         }
 
-        pub fn paper_account_init(
-            strategy_mode: StrategyMode,
-            account_id: AccountId,
-            brokerage: Brokerage,
-            cash_value: Price,
-            currency: Currency,
-            leverage: u32
-        ) -> Self {
-            let account = Self {
-                account_id,
-                brokerage,
-                cash_value,
-                cash_available: cash_value,
-                currency,
-                leverage,
-                cash_used: dec!(0.0),
-                positions: DashMap::new(),
-                positions_closed: DashMap::new(),
-                symbol_closed_pnl: Default::default(),
-                positions_counter: DashMap::new(),
-                margin_used: DashMap::new(),
-                symbol_info: DashMap::new(),
-                open_pnl: DashMap::new(),
-                total_booked_pnl: dec!(0.0),
-                mode: strategy_mode,
-                is_simulating_pnl: true,
-                symbol_code_map: Default::default(),
-            };
-            account
-        }
-
         pub async fn paper_exit_position(
             &mut self,
             symbol_name: &SymbolName,
             time: DateTime<Utc>,
             market_price: Price,
             tag: String
-        ) -> Option<PositionUpdateEvent>  {
+        ) {
             if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
                 // Mark the position as closed
                 existing_position.is_closed = true;
@@ -720,9 +950,8 @@ pub(crate) mod historical_ledgers {
                     .or_insert_with(Vec::new)                    // If no entry exists, create a new Vec
                     .push(existing_position);     // Push the closed position to the Vec
 
-                return Some(event)
+                add_buffer(time, StrategyEvent::PositionEvents(event)).await;
             }
-            None
         }
     }
 }

@@ -14,9 +14,7 @@ use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
-use crate::strategies::handlers::market_handler::market_handlers::MarketMessageEnum;
 use crate::strategies::client_features::server_connections::{add_buffer, is_warmup_complete};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
@@ -31,7 +29,6 @@ use crate::standardized_types::base_data::history::get_historical_data;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
 pub struct SubscriptionHandler {
-    market_event_sender: Sender<MarketMessageEnum>,
     /// Manages the consolidators of specific symbols
     symbol_subscriptions: Arc<DashMap<Symbol, SymbolSubscriptionHandler>>,
     /// fundamental data is not consolidated and so it does not need special handlers
@@ -50,10 +47,9 @@ pub struct SubscriptionHandler {
 }
 
 impl SubscriptionHandler {
-    pub async fn new(strategy_mode: StrategyMode, market_event_sender: Sender<MarketMessageEnum>) -> Self {
+    pub async fn new(strategy_mode: StrategyMode) -> Self {
         let (tx, _) = broadcast::channel(16);
         SubscriptionHandler {
-            market_event_sender,
             fundamental_subscriptions: Default::default(),
             symbol_subscriptions: Default::default(),
             strategy_mode,
@@ -119,8 +115,6 @@ impl SubscriptionHandler {
                 new_subscription.symbol.clone(),
             ).await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
-            let register_msg = MarketMessageEnum::RegisterSymbol(new_subscription.symbol.clone());
-            self.market_event_sender.send(register_msg).await.unwrap();
         }
 
         let symbol_subscriptions = self.symbol_subscriptions.get(&new_subscription.symbol).unwrap();
@@ -269,8 +263,6 @@ impl SubscriptionHandler {
         strategy_subscriptions.retain(|x| x != &subscription);
         if self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count() == 0 {
             self.symbol_subscriptions.remove(&subscription.symbol);
-            let register_msg = MarketMessageEnum::DeregisterSymbol(subscription.symbol.clone());
-            self.market_event_sender.send(register_msg).await.unwrap();
         }
         match subscription.base_data_type {
             BaseDataType::Ticks => {

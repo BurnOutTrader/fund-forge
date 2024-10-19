@@ -18,7 +18,7 @@ use crate::standardized_types::new_types::{Price, TimeString, TzString, Volume};
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum OrderRequest {
-    Create{brokerage: Brokerage, order: Order, order_type: OrderType},
+    Create{brokerage: Brokerage, account_id: AccountId, order: Order, order_type: OrderType},
     Cancel{brokerage: Brokerage, order_id: OrderId, account_id: AccountId},
     Update{brokerage: Brokerage, order_id: OrderId, account_id: AccountId, update: OrderUpdateType },
     CancelAll{brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName},
@@ -33,6 +33,16 @@ impl OrderRequest {
             OrderRequest::Update { brokerage,.. } => brokerage.clone(),
             OrderRequest::CancelAll { brokerage,.. } => brokerage.clone(),
             OrderRequest::FlattenAllFor { brokerage,.. } => brokerage.clone(),
+        }
+    }
+
+    pub fn account_id(&self) -> AccountId {
+        match self {
+            OrderRequest::Create { account_id, .. } => account_id.clone(),
+            OrderRequest::Cancel { account_id, .. } => account_id.clone(),
+            OrderRequest::Update { account_id,.. } => account_id.clone(),
+            OrderRequest::CancelAll { account_id,.. } => account_id.clone(),
+            OrderRequest::FlattenAllFor { account_id,.. } => account_id.clone(),
         }
     }
 }

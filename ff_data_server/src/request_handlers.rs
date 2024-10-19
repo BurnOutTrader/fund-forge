@@ -367,7 +367,7 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
     }
 
     match request {
-        OrderRequest::Create { brokerage, order, order_type } => {
+        OrderRequest::Create { brokerage, account_id, order, order_type } => {
             match order_type {
                 OrderType::Market => {
                     let send_order_result = timeout(TIMEOUT_DURATION, live_market_order(stream_name.clone(), mode, order.clone())).await;

@@ -16,12 +16,12 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt, ReadHalf};
 use tokio::net::TcpStream;
 use tokio::runtime::Runtime;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
-use tokio::sync::mpsc::{Sender};
+use tokio::sync::mpsc::Sender;
 use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::handlers::market_handler::market_handlers::{MarketMessageEnum, LIVE_LEDGERS};
+use crate::strategies::handlers::market_handler::market_handlers::{MarketMessageEnum};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent, StrategyEventBuffer};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
@@ -29,9 +29,9 @@ use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptio
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
-use crate::strategies::handlers::market_handler::live_order_matching::live_order_update;
+use crate::standardized_types::orders::OrderUpdateEvent;
 use crate::strategies::historical_time::update_backtest_time;
-use crate::strategies::ledgers::Ledger;
+use crate::strategies::ledgers::{LedgerMessage, LEDGER_SERVICE};
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
@@ -252,13 +252,11 @@ pub async fn response_handler(
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
     market_update_sender: Sender<MarketMessageEnum>,
-    synchronise_accounts: bool
+    order_updates_sender: Sender<OrderUpdateEvent>,
+    synchronise_accounts: bool,
 ) {
-    let is_simulating_pnl = match synchronise_accounts {
-        true => false,
-        false => true
-    };
     for (connection, settings) in &settings_map {
+        let order_updates_sender = order_updates_sender.clone();
         if let Some((connection, stream)) = server_receivers.remove(connection) {
             let register_message = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));
             send_request(register_message).await;
@@ -267,116 +265,73 @@ pub async fn response_handler(
             let callbacks = callbacks.clone();
             let market_update_sender = market_update_sender.clone();
             let settings = settings.clone();
+
             tokio::task::spawn(async move {
                 const LENGTH: usize = 8;
-                //println!("{:?}: response handler start", incoming.key());
                 let mut length_bytes = [0u8; LENGTH];
                 while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
-                    // Parse the length from the header
                     let msg_length = u64::from_be_bytes(length_bytes) as usize;
                     let mut message_body = vec![0u8; msg_length];
 
-                    // Read the message body based on the length
                     match receiver.read_exact(&mut message_body).await {
-                        Ok(_) => {
-                            //eprintln!("Ok reading message body");
-                        },
+                        Ok(_) => {},
                         Err(e) => {
                             eprintln!("Error reading message body: {}", e);
                             continue;
                         }
                     }
-                    // these will be buffered eventually into an EventTimeSlice
+
                     let response = DataServerResponse::from_bytes(&message_body).unwrap();
-                    //todo handle responses async on a per response type basis
                     match response.get_callback_id() {
-                        // if there is no callback id then we add it to the strategy event buffer
                         None => {
                             match response {
                                 DataServerResponse::SubscribeResponse { success, subscription, reason } => {
-                                    //determine success or fail and add to the strategy event buffer
-                                    match success {
-                                        true => {
-                                            let event = DataSubscriptionEvent::Subscribed(subscription.clone());
-                                            let event_slice = StrategyEvent::DataSubscriptionEvent(event);
-                                            add_buffer(Utc::now(), event_slice).await;
-                                        }
-                                        false => {
-                                            eprintln!("Failed to subscribe to {}, {:?}", subscription, reason);
-                                            let event = DataSubscriptionEvent::FailedToSubscribe(subscription.clone(), reason.unwrap());
-                                            let event_slice = StrategyEvent::DataSubscriptionEvent(event);
-                                            add_buffer(Utc::now(), event_slice).await;
-                                        }
-                                    }
+                                    let event = if success {
+                                        DataSubscriptionEvent::Subscribed(subscription.clone())
+                                    } else {
+                                        DataSubscriptionEvent::FailedToSubscribe(subscription.clone(), reason.unwrap())
+                                    };
+                                    let event_slice = StrategyEvent::DataSubscriptionEvent(event);
+                                    add_buffer(Utc::now(), event_slice).await;
                                 }
                                 DataServerResponse::UnSubscribeResponse { success, subscription, reason } => {
-                                    match success {
-                                        true => {
-                                            let event = DataSubscriptionEvent::Unsubscribed(subscription);
-                                            let event_slice = StrategyEvent::DataSubscriptionEvent(event);
-                                            add_buffer(Utc::now(), event_slice).await;
-                                        }
-                                        false => {
-                                            eprintln!("Failed to unsubscribe from {}, {:?}", subscription, reason);
-                                            let event = DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap());
-                                            let event_slice = StrategyEvent::DataSubscriptionEvent(event);
-                                            add_buffer(Utc::now(), event_slice).await;
-                                        }
-                                    }
+                                    let event = if success {
+                                        DataSubscriptionEvent::Unsubscribed(subscription)
+                                    } else {
+                                        DataSubscriptionEvent::FailedUnSubscribed(subscription, reason.unwrap())
+                                    };
+                                    let event_slice = StrategyEvent::DataSubscriptionEvent(event);
+                                    add_buffer(Utc::now(), event_slice).await;
                                 }
                                 DataServerResponse::OrderUpdates(update_event) => {
-                                    live_order_update(update_event);
+                                    order_updates_sender.send(update_event).await.unwrap()
                                 }
-                                DataServerResponse::AccountSnapShot {account_info} => {
+                                DataServerResponse::AccountSnapShot { account_info } => {
                                     //tokio::task::spawn(async move {
-                                        //println!("{:?}", response);
-                                    if !LIVE_LEDGERS
-                                        .entry(account_info.brokerage.clone())
-                                        .or_insert_with(DashMap::new)
-                                        .contains_key(&account_info.account_id)
-                                    {
-                                        LIVE_LEDGERS
-                                            .entry(account_info.brokerage.clone())
-                                            .or_insert_with(DashMap::new)
-                                            .insert(
-                                                account_info.account_id.clone(),
-                                                Ledger::new(account_info.clone(), mode, is_simulating_pnl),
-                                            );
-                                    }
+                                        let brokerage = account_info.brokerage.clone();
+                                            let msg = MarketMessageEnum::InitLedger {
+                                                brokerage,
+                                                account_id: account_info.account_id,
+                                                strategy_mode: mode,
+                                                synchronize_accounts: synchronise_accounts,
+                                                starting_cash: account_info.cash_available,
+                                                currency: account_info.currency,
+                                            };
+                                            market_update_sender.send(msg).await.unwrap()
                                     //});
                                 }
                                 DataServerResponse::LiveAccountUpdates { brokerage, account_id, cash_value, cash_available, cash_used } => {
-                                    //tokio::task::spawn(async move {
-                                        //println!("{:?}", response);
-                                        if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-                                            if let Some(mut account_map) = broker_map.get_mut(&account_id) {
-                                                account_map.value_mut().update(cash_value, cash_available, cash_used);
-                                            }
-                                        }
-                                    //});
+                                    tokio::task::spawn(async move {
+                                        let message = LedgerMessage::LiveAccountUpdates { brokerage, account_id: account_id.clone(), cash_value, cash_available, cash_used };
+                                        LEDGER_SERVICE.send_message(brokerage, &account_id, message).await;
+                                    });
                                 }
-                                #[allow(unused)]
                                 DataServerResponse::LivePositionUpdates { brokerage, account_id, symbol_name, symbol_code, open_pnl, open_quantity, side } => {
                                     if synchronise_accounts {
-                                        if !LIVE_LEDGERS.contains_key(&brokerage) {
-                                            LIVE_LEDGERS.insert(brokerage, DashMap::new());
-                                        }
-                                        if let Some(broker_map) = LIVE_LEDGERS.get(&brokerage) {
-                                            if !broker_map.contains_key(&account_id) {
-                                                let account_info = match brokerage.account_info(account_id.clone()).await {
-                                                    Ok(info) => info,
-                                                    Err(e) => {
-                                                        eprintln!("Failed to get account info for: {}, {}: {}", brokerage, account_id, e);
-                                                        return;
-                                                    }
-                                                };
-                                                let ledger = Ledger::new(account_info, mode, false);
-                                                broker_map.insert(account_id.clone(), ledger);
-                                            }
-                                            if let Some(ledger) = broker_map.get(&account_id) {
-                                                //ledger.update_live_position()
-                                            }
-                                        }
+                                        tokio::task::spawn(async move {
+                                            let message = LedgerMessage::LivePositionUpdates { brokerage, account_id: account_id.clone(), symbol_name, symbol_code, open_pnl, open_quantity, side };
+                                            LEDGER_SERVICE.send_message(brokerage, &account_id, message).await;
+                                        });
                                     }
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
@@ -387,7 +342,6 @@ pub async fn response_handler(
                                 _ => panic!("Incorrect response here: {:?}", response)
                             }
                         }
-                        // if there is a callback id we just send it to the awaiting oneshot receiver
                         Some(id) => {
                             if let Some((_, callback)) = callbacks.remove(&id) {
                                 let _ = callback.send(response);
@@ -542,7 +496,14 @@ pub async fn initialize_static(
     }).clone();
 }
 
-pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode: StrategyMode, market_update_sender: Sender<MarketMessageEnum>, synchronise_accounts: bool) {
+pub async fn init_connections(
+    gui_enabled: bool,
+    buffer_duration: Duration,
+    mode: StrategyMode,
+    market_update_sender: Sender<MarketMessageEnum>,
+    order_updates_sender: Sender<OrderUpdateEvent>,
+    synchronise_accounts: bool,
+) {
     let settings_map = initialise_settings().unwrap();
     let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
     let server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());
@@ -572,5 +533,5 @@ pub async fn init_connections(gui_enabled: bool, buffer_duration: Duration, mode
 
     let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     request_handler(rx, settings_map.clone(), server_senders, callbacks.clone()).await;
-    response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, market_update_sender, synchronise_accounts).await;
+    response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, market_update_sender, order_updates_sender, synchronise_accounts).await;
 }

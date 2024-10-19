@@ -95,6 +95,7 @@ pub async fn match_pnl_plant_id(
             */
             //println!("Instrument PnL Position Update (Template ID: 450) from Server: {:?}", msg);
             if let Ok(msg) = InstrumentPnLPositionUpdate::decode(&message_buf[..]) {
+                println!("Instrument Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
                 let account_id = match msg.account_id {
                     None => return,
                     Some(id) => id
