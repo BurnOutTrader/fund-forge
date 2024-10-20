@@ -134,7 +134,7 @@ pub async fn on_data_received(
                                     }
                                 }
 
-                                //SHORT CONDITIONS
+                                /*//SHORT CONDITIONS
                                 {
                                     // ENTER SHORT
                                     let is_flat = strategy.is_flat(&account_1, &candle.symbol.name).await;
@@ -175,7 +175,7 @@ pub async fn on_data_received(
                                         let _exit_order_id = strategy.exit_short(&candle.symbol.name, None, &account_1, None, position_size_short, String::from("Exit Short Take Loss")).await;
                                         println!("Strategy: Exit Short Take Loss, Time {}", strategy.time_local());
                                     }
-                                }
+                                }*/
                             }
                         }
                         _ => {}

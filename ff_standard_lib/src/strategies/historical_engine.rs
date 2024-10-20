@@ -12,6 +12,7 @@ use tokio::sync::mpsc::{Sender};
 use crate::strategies::handlers::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
 use tokio::sync::{broadcast, mpsc};
+use crate::strategies::historical_time::update_backtest_time;
 
 #[allow(dead_code)]
 pub struct HistoricalEngine {
@@ -176,6 +177,7 @@ impl HistoricalEngine {
                     }
                     Err(_) => {}
                 }
+                update_backtest_time(time);
                 timed_event_handler.update_time(time.clone()).await;
                 // Collect data from the primary feeds simulating a buffering range
                 let time_slice: TimeSlice = time_slices
