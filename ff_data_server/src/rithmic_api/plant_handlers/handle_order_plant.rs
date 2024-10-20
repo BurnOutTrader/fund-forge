@@ -13,7 +13,7 @@ use prost::Message as ProstMessage;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
-use ff_standard_lib::standardized_types::accounts::{AccountId, AccountInfo};
+use ff_standard_lib::standardized_types::accounts::{Account, AccountInfo};
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange};
@@ -23,7 +23,6 @@ use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent, Ord
 use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
-use crate::rithmic_api::plant_handlers::handler_loop;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 use crate::rithmic_api::products::find_base_symbol;
 
@@ -130,7 +129,6 @@ pub async fn match_order_plant_id(
                     if let Some(ref max_loss) = msg.loss_limit {
                         account_info.daily_max_loss = Some(Decimal::from_u32(max_loss.clone() as u32).unwrap());
                     }
-                    handler_loop::send_updates(DataServerResponse::AccountSnapShot {account_info: account_info.clone()}).await;
                     client.account_info.insert(id.clone(), account_info);
                     client.request_updates().await;
                 }
@@ -538,8 +536,7 @@ pub async fn match_order_plant_id(
                         1 => {
 
                             let event = OrderUpdateEvent::OrderAccepted {
-                                brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id.clone()),
+                                account: Account::new(client.brokerage, account_id.clone()),
                                 symbol_name,
                                 symbol_code,
                                 order_id: order_id.clone(),
@@ -561,8 +558,7 @@ pub async fn match_order_plant_id(
                                 };
                                 if total_unfilled_size == 0 {
                                     let event = OrderUpdateEvent::OrderFilled {
-                                        brokerage: client.brokerage.clone(),
-                                        account_id: AccountId::from(account_id.clone()),
+                                        account: Account::new(client.brokerage, account_id.clone()),
                                         symbol_name,
                                         symbol_code,
                                         order_id: order_id.clone(),
@@ -574,8 +570,7 @@ pub async fn match_order_plant_id(
                                     send_order_update(client.brokerage, &order_id, event).await;
                                 } else {
                                     let event = OrderUpdateEvent::OrderPartiallyFilled {
-                                        brokerage: client.brokerage.clone(),
-                                        account_id: AccountId::from(account_id.clone()),
+                                        account: Account::new(client.brokerage, account_id.clone()),
                                         symbol_name,
                                         symbol_code,
                                         order_id: order_id.clone(),
@@ -592,8 +587,7 @@ pub async fn match_order_plant_id(
                         },
                         3 => {
                             let event = OrderUpdateEvent::OrderCancelled {
-                                brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id.clone()),
+                                account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),
                                 symbol_name,
                                 symbol_code,
@@ -604,8 +598,7 @@ pub async fn match_order_plant_id(
                         },
                         6 => {
                             let event = OrderUpdateEvent::OrderRejected {
-                                brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id.clone()),
+                                account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),
                                 reason: msg.status.unwrap_or_default(),
                                 symbol_name,
@@ -619,8 +612,7 @@ pub async fn match_order_plant_id(
                            if let Some(broker_map) = ID_UPDATE_TYPE.get(&client.brokerage) {
                                if let Some((_, update_type)) = broker_map.remove(&order_id) {
                                    let event = OrderUpdateEvent::OrderUpdated {
-                                       brokerage: client.brokerage.clone(),
-                                       account_id: AccountId::from(account_id.clone()),
+                                       account: Account::new(client.brokerage, account_id.clone()),
                                        order_id: order_id.clone(),
                                        update_type,
                                        symbol_name,
@@ -636,8 +628,7 @@ pub async fn match_order_plant_id(
                         },
                         7 | 8 => {
                             let event =OrderUpdateEvent::OrderUpdateRejected {
-                                brokerage: client.brokerage.clone(),
-                                account_id: AccountId::from(account_id.clone()),
+                                account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),
                                 reason: msg.status.unwrap_or_default(),
                                 time,
@@ -660,8 +651,7 @@ pub async fn match_order_plant_id(
                         client.account_cash_used.insert(account_id.clone(), cash_used);
 
                         send_updates(DataServerResponse::LiveAccountUpdates {
-                            brokerage: client.brokerage.clone(),
-                            account_id,
+                            account: Account::new(client.brokerage, account_id),
                             cash_value,
                             cash_available,
                             cash_used,

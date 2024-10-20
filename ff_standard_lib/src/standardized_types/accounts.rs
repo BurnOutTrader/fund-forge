@@ -1,3 +1,4 @@
+use std::fmt;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal::Decimal;
 use serde_derive::{Deserialize, Serialize};
@@ -31,6 +32,28 @@ pub struct AccountInfo {
 
 pub type AccountId = String;
 pub type AccountName = String;
+
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize, PartialOrd, Eq, Ord, Hash)]
+#[archive(compare(PartialEq), check_bytes)]
+#[archive_attr(derive(Debug))]
+pub struct Account {
+    pub brokerage: Brokerage,
+    pub account_id: AccountId
+}
+impl Account {
+    pub fn new(brokerage: Brokerage, account_id: AccountId) -> Self {
+        Account {
+            brokerage,
+            account_id
+        }
+    }
+}
+// Implement Display for Account
+impl fmt::Display for Account {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} - {}", self.brokerage, self.account_id)
+    }
+}
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize, PartialOrd, Copy)]
 #[archive(compare(PartialEq), check_bytes)]

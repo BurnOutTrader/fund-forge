@@ -306,17 +306,17 @@ pub async fn response_handler(
                                 DataServerResponse::OrderUpdates(update_event) => {
                                     order_updates_sender.send(update_event).await.unwrap()
                                 }
-                                DataServerResponse::LiveAccountUpdates { brokerage, account_id, cash_value, cash_available, cash_used } => {
+                                DataServerResponse::LiveAccountUpdates { account, cash_value, cash_available, cash_used } => {
                                     tokio::task::spawn(async move {
-                                        let message = LedgerMessage::LiveAccountUpdates { brokerage, account_id: account_id.clone(), cash_value, cash_available, cash_used };
-                                        LEDGER_SERVICE.send_message(brokerage, &account_id, message).await;
+                                        let message = LedgerMessage::LiveAccountUpdates { account: account.clone(), cash_value, cash_available, cash_used };
+                                        LEDGER_SERVICE.send_message(&account, message).await;
                                     });
                                 }
-                                DataServerResponse::LivePositionUpdates { brokerage, account_id, symbol_name, symbol_code, open_pnl, open_quantity, side } => {
+                                DataServerResponse::LivePositionUpdates { account, symbol_name, symbol_code, open_pnl, open_quantity, side } => {
                                     if synchronise_accounts {
                                         tokio::task::spawn(async move {
-                                            let message = LedgerMessage::LivePositionUpdates { brokerage, account_id: account_id.clone(), symbol_name, symbol_code, open_pnl, open_quantity, side };
-                                            LEDGER_SERVICE.send_message(brokerage, &account_id, message).await;
+                                            let message = LedgerMessage::LivePositionUpdates { account: account.clone(), symbol_name, symbol_code, open_pnl, open_quantity, side };
+                                            LEDGER_SERVICE.send_message(&account, message).await;
                                         });
                                     }
                                 }

@@ -30,23 +30,23 @@ pub async fn backtest_matching_engine(
                             open_order_cache.insert(order.id.clone(), order);
                             simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache).await;
                         }
-                        OrderRequest::Cancel { brokerage, order_id, account_id } => {
+                        OrderRequest::Cancel { account,order_id } => {
                             let existing_order = open_order_cache.remove(&order_id);
                             if let Some((existing_order_id, order)) = existing_order {
                                 let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {
-                                    brokerage, account_id: order.account_id.clone(), symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(),
+                                    account, symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(),
                                     order_id: existing_order_id, tag: order.tag.clone(), time: time.to_string()
                                 });
                                 add_buffer(time, cancel_event).await;
                                 closed_order_cache.insert(order_id, order);
                             } else {
                                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected {
-                                    brokerage, account_id, order_id, reason: String::from("No pending order found"), time: time.to_string()
+                                    account, order_id, reason: String::from("No pending order found"), time: time.to_string()
                                 });
                                 add_buffer(time, fail_event).await;
                             }
                         }
-                        OrderRequest::Update { brokerage, order_id, account_id, update } => {
+                        OrderRequest::Update { account, order_id, update } => {
                             if let Some((order_id, mut order)) = open_order_cache.remove(&order_id) {
                                 match &update {
                                     OrderUpdateType::LimitPrice(price) => {
@@ -70,22 +70,22 @@ pub async fn backtest_matching_engine(
                                     }
                                 }
                                 let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated {
-                                    brokerage, account_id: order.account_id.clone(), symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(),
+                                    account, symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(),
                                     order_id: order.id.clone(), update_type: update, tag: order.tag.clone(), time: time.to_string()
                                 });
                                 open_order_cache.insert(order_id, order);
                                 add_buffer(time, update_event).await;
                             } else {
                                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected {
-                                    brokerage, account_id, order_id, reason: String::from("No pending order found"), time: time.to_string()
+                                    account, order_id, reason: String::from("No pending order found"), time: time.to_string()
                                 });
                                 add_buffer(time, fail_event).await;
                             }
                         }
-                        OrderRequest::CancelAll { brokerage, account_id, symbol_name } => {
+                        OrderRequest::CancelAll { account, symbol_name } => {
                             let mut remove = vec![];
                             for order in open_order_cache.iter() {
-                                if order.brokerage == brokerage && order.account_id == account_id && order.symbol_name == symbol_name {
+                                if order.account == account && order.symbol_name == symbol_name {
                                     remove.push(order.id.clone());
                                 }
                             }
@@ -94,7 +94,7 @@ pub async fn backtest_matching_engine(
                                 if let Some((order_id, order)) = order {
                                     let cancel_event = StrategyEvent::OrderEvents(
                                         OrderUpdateEvent::OrderCancelled {
-                                            brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), symbol_name: order.symbol_name.clone(),
+                                            account: account.clone(), symbol_name: order.symbol_name.clone(),
                                             symbol_code: order.symbol_name.clone(), order_id: order.id.clone(), tag: order.tag.clone(), time: time.to_string()
                                         });
                                     add_buffer(time.clone(), cancel_event).await;
@@ -102,7 +102,7 @@ pub async fn backtest_matching_engine(
                                 }
                             }
                         }
-                        OrderRequest::FlattenAllFor { brokerage: _, account_id: _ } => {
+                        OrderRequest::FlattenAllFor { account: _} => {
                             //Todo
                         /*    if let Some(broker_map) = ledger_senders.get(&brokerage) {
                                 if let Some(account_map) = broker_map.get(&account_id) {
@@ -452,7 +452,7 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue
                 };
-                if LEDGER_SERVICE.is_short(&order.brokerage, &order.account_id, &order.symbol_name) {
+                if LEDGER_SERVICE.is_short(&order.account, &order.symbol_name) {
                     let request = LedgerMessage::ExitPaperPosition {
                         symbol_name: order.symbol_name.clone(),
                         side: PositionSide::Short,
@@ -461,7 +461,7 @@ pub async fn simulated_order_matching (
                         time,
                         tag: "Force Exit: By Enter Long".to_string(),
                     };
-                    LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, request).await;
+                    LEDGER_SERVICE.send_message(&order.account, request).await;
                 }
                 filled.push((order.id.clone(), market_fill_price))
             }
@@ -473,7 +473,7 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue,
                 };
-                if LEDGER_SERVICE.is_long(&order.brokerage, &order.account_id, &order.symbol_name) {
+                if LEDGER_SERVICE.is_long(&order.account, &order.symbol_name) {
                     let request = LedgerMessage::ExitPaperPosition {
                         symbol_name: order.symbol_name.clone(),
                         side: PositionSide::Long,
@@ -482,7 +482,7 @@ pub async fn simulated_order_matching (
                         time,
                         tag: "Force Exit: By Enter Short".to_string(),
                     };
-                    LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, request).await;
+                    LEDGER_SERVICE.send_message(&order.account, request).await;
                 }
                 filled.push((order.id.clone(), market_fill_price));
             }
@@ -494,7 +494,7 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue,
                 };
-                if LEDGER_SERVICE.is_long(&order.brokerage, &order.account_id, &order.symbol_name) {
+                if LEDGER_SERVICE.is_long(&order.account, &order.symbol_name) {
                     let request = LedgerMessage::ExitPaperPosition {
                         symbol_name: order.symbol_name.clone(),
                         side: PositionSide::Long,
@@ -503,7 +503,7 @@ pub async fn simulated_order_matching (
                         time,
                         tag: order.tag.clone(),
                     };
-                    LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, request).await;
+                    LEDGER_SERVICE.send_message(&order.account, request).await;
                     filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Long Position To Exit".to_string();
@@ -518,7 +518,7 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue,
                 };
-                if LEDGER_SERVICE.is_short(&order.brokerage, &order.account_id, &order.symbol_name) {
+                if LEDGER_SERVICE.is_short(&order.account, &order.symbol_name) {
                     let request = LedgerMessage::ExitPaperPosition {
                         symbol_name: order.symbol_name.clone(),
                         side: PositionSide::Short,
@@ -527,7 +527,7 @@ pub async fn simulated_order_matching (
                         time,
                         tag: order.tag.clone(),
                     };
-                    LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, request).await;
+                    LEDGER_SERVICE.send_message(&order.account, request).await;
                     filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Short Position To Exit".to_string();
@@ -565,7 +565,7 @@ async fn fill_order(
             Some(code) => code.clone()
         };
         let ledger_message = LedgerMessage::UpdateOrCreatePosition {symbol_name: order.symbol_name.clone(), symbol_code, order_id: order_id.clone(), quantity: order.quantity_open.clone(), side: order.side.clone(), time, market_fill_price: market_price,tag: order.tag.clone()};
-        LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, ledger_message).await;
+        LEDGER_SERVICE.send_message(&order.account, ledger_message).await;
         closed_order_cache.insert(order.id.clone(), order);
     }
 }
@@ -583,7 +583,7 @@ async fn partially_fill_order(
             Some(code) => code.clone()
         };
         let ledger_message = LedgerMessage::UpdateOrCreatePosition {symbol_name: order.symbol_name.clone(), symbol_code, order_id: order_id.clone(), quantity: fill_volume, side: order.side.clone(), time, market_fill_price: fill_price,tag: order.tag.clone()};
-        LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, ledger_message).await;
+        LEDGER_SERVICE.send_message(&order.account, ledger_message).await;
     }
 }
 
@@ -602,8 +602,7 @@ async fn reject_order(
             time,
             StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
                 order_id: order.id.clone(),
-                brokerage: order.brokerage,
-                account_id: order.account_id.clone(),
+                account: order.account.clone(),
                 symbol_name: order.symbol_name.clone(),
                 reason,
                 tag: order.tag.clone(),
@@ -628,8 +627,7 @@ async fn accept_order(
             time,
             StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
                 order_id: order.id.clone(),
-                brokerage: order.brokerage.clone(),
-                account_id: order.account_id.clone(),
+                account: order.account.clone(),
                 symbol_name: order.symbol_name.clone(),
                 tag: order.tag.clone(),
                 time: time.to_string(),

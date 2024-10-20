@@ -11,6 +11,7 @@ use prost::{Message as ProstMessage};
 use rust_decimal::{Decimal};
 use rust_decimal::prelude::FromPrimitive;
 use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
+use ff_standard_lib::standardized_types::accounts::Account;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::PositionSide;
@@ -123,8 +124,7 @@ pub async fn match_pnl_plant_id(
                         if let (Some(product_code), Some(open_pnl)) = (&msg.product_code, &msg.open_position_pnl) {
                             let open_pnl = Decimal::from_str(open_pnl).unwrap_or_default();
                             let position_update = DataServerResponse::LivePositionUpdates {
-                                brokerage: client.brokerage,
-                                account_id: account_id.clone(),
+                                account: Account::new(client.brokerage, account_id.clone()),
                                 symbol_name: product_code.clone(),
                                 symbol_code: symbol.clone(),
                                 open_pnl,
@@ -153,8 +153,7 @@ pub async fn match_pnl_plant_id(
                         if let (Some(product_code), Some(open_pnl)) = (&msg.product_code, &msg.open_position_pnl) {
                             let open_pnl = Decimal::from_str(open_pnl).unwrap_or_default();
                             let position_update = DataServerResponse::LivePositionUpdates {
-                                brokerage: client.brokerage,
-                                account_id,
+                                account: Account::new(client.brokerage, account_id),
                                 symbol_name: product_code.clone(),
                                 symbol_code: symbol.clone(),
                                 open_pnl,
@@ -274,8 +273,7 @@ pub async fn match_pnl_plant_id(
                     client.account_cash_used.insert(id.clone(), cash_used);
 
                     send_updates(DataServerResponse::LiveAccountUpdates {
-                        brokerage: client.brokerage.clone(),
-                        account_id: id,
+                        account: Account::new(client.brokerage, id),
                         cash_value,
                         cash_available,
                         cash_used,

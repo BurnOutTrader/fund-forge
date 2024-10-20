@@ -177,6 +177,15 @@ This does nothing in live.
 #### `synchronize_accounts: bool` 
 If true strategy positions and open + booked pnl will update in sync with the brokerage, if false the engine will simulate positions using the same logic as backtesting.
 the true option is not yet implemented.
+
+#### `accounts: Vec<Account`
+Example of initializing accounts.
+```rust
+let account_1 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
+let account_2 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
+let accounts = vec![account_1, account_2];
+```
+
 ```rust
 use std::time::Duration;
 
@@ -239,6 +248,9 @@ async fn main() {
         // This allows us to use timed events of fill forward over weekends, if no, the engine will skip days where no data was available and jump to the next time instantly.
         // This does nothing in live.
         true,
+
+        // The accounts we will be trading, there will also be a fn to initialize at run time.
+        vec![Account::new(Brokerage::Test, "Test_Account_1".to_string()), Account::new(Brokerage::Test, "Test_Account_2".to_string())]
     ).await;
 
    // You don't have to pass in accounts, but if you want to customise accounts you can do it like this.
@@ -277,7 +289,8 @@ Similarly, when we `iter()` a `TimeSlice` we receive the `BaseDataEnum`'s in the
 ```rust
 pub async fn on_data_received(strategy: FundForgeStrategy, mut event_receiver: mpsc::Receiver<StrategyEventBuffer>)  {
     let mut warmup_complete = false;
-    
+
+    let account_1 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
     // we can handle our events directly in the `strategy_loop` or we can divert them to other functions or threads.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         // when we iterate the buffer the events are returned in the exact order they occured, the time property is the time the event was captured in the buffer, not the current strategy time.
@@ -823,36 +836,38 @@ This can provide hints to bugs in your strategy, for example if you have a posit
 because an exit order should not create a position, it should close one.
 ```rust
 fn example(strategy: &FundForgeStrategy, brokerage: Brokerage, account_name: AccountName, candle: Candle) {
-    
+
+   let account_1 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
+   
    let symbol_code = "M6AZ4".to_string();
     // to find out if the broker and account is in profit on the symbol, returns false as default if no position
-    let in_profit: bool = strategy.in_profit(&brokerage, &account_name, &symbol_code);
+    let in_profit: bool = strategy.in_profit(&account_1, &symbol_code);
 
     // to find out if the broker and account is in draw down on the symbol, returns false as default if no position
-    let in_drawdown: bool = strategy.in_drawdown(&brokerage, &account_name, &symbol_code);
+    let in_drawdown: bool = strategy.in_drawdown(&account_1, &symbol_code);
 
     // to find out if the broker and account is long on the symbol, returns false as default if no position
-    let is_long: bool = strategy.is_long(&brokerage, &account_name, &symbol_code);
+    let is_long: bool = strategy.is_long(&account_1, &symbol_code);
 
     // to find out if the broker and account is short on the symbol, returns false as default if no position
-    let is_short: bool = strategy.is_short(&brokerage, &account_name, &symbol_code);
+    let is_short: bool = strategy.is_short(&account_1, &symbol_code);
 
     // to find out if the broker and account is flat on the symbol, returns true as default if no position
-    let is_flat: bool = strategy.is_flat(&brokerage, &account_name, &symbol_code);
+    let is_flat: bool = strategy.is_flat(&account_1, &symbol_code);
 
     // returns the open pnl for the current position, returns 0.0 if there is no position
-    let open_profit: Decimal = strategy.pnl(&brokerage, &account_name, &symbol_code);
+    let open_profit: Decimal = strategy.pnl(&account_1, &symbol_code);
 
     // returns the booked pnl for the current position, returns 0.0 if there is no position
     // does not return the total pnl for all closed positions on the symbol, just the current open one.
-    let booked_profit: Decimal = strategy.booked_pnl(&brokerage, &account_name, &symbol_code);
+    let booked_profit: Decimal = strategy.booked_pnl(&account_1, &symbol_code);
 
     // returns the open quantity / size of our open position
     // if no position it returns dec!(0)
-    let position_size: Decimal = strategy.position_size(&brokerage, &account_name, &symbol_code);
+    let position_size: Decimal = strategy.position_size(&account_1, &symbol_code);
 
     // to flatten an account, in live this will flatten all psotions, not just strategy positions.
-    strategy.flatten_all_for(&self, brokerage.clone(), &account_id).await;
+    strategy.flatten_all_for(&self, account_1).await;
 }
 ```
 
@@ -1042,7 +1057,7 @@ fn example() {
     let volume: Volume = dec!(0.0);
     let brokerage: Brokerage = Brokerage::Test;
     
-    // we can get the best estimate based on our intended trade volume
+    // we can get the best estimate based on our intended trade volume //todo this needs to be changed, it currently wont work.
     let estimated_fill_price: Result<Price, FundForgeError> = get_market_fill_price_estimate(order_side, symbol_name, volume, brokerage).await;
     let price: Price = estimated_fill_price.unwrap();
     
@@ -1087,9 +1102,8 @@ async fn example() {
     let strategy = FundForgeStrategy::default();
 
     // Example inputs for account_id, symbol_name, brokerage, etc.
-    let account_id: AccountId = AccountId::from("account123");
+    let account_1 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
     let symbol_name: SymbolName = SymbolName::from("AAPL");
-    let brokerage: Brokerage = Brokerage.Test;
     let quantity: Volume = dec!(100.0); //Decimal to allow crypto
     let tag = String::from("Example Trade");
     
@@ -1107,10 +1121,9 @@ async fn example() {
 
     // Enter a long position and close any existing short position on the same account / symbol
     let order_id: OrderId = strategy.enter_long(
-        account_id: &AccountId,
+        account: &account_1,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
         brackets: Option<Vec<ProtectiveOrder>>,
@@ -1119,10 +1132,8 @@ async fn example() {
 
     // Enter a short position and close any existing long position on the same account / symbol
     let order_id: OrderId = strategy.enter_short(
-        account_id: &AccountId,
-        symbol_name: &SymbolName,
+        account: &account_1,
         symbol_code: Option<SymbolCode>,
-        brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
         brackets: Option<Vec<ProtectiveOrder>>,
@@ -1145,10 +1156,9 @@ async fn example() {
 
     // Exit a long position and get back the order_id
     let order_id: OrderId = strategy.exit_long(
-        account_id: &AccountId,
+        account: &account_1,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
         tag: String
@@ -1156,21 +1166,19 @@ async fn example() {
 
     // Exit a short position and get back the order_id
     let order_id: OrderId = strategy.exit_short(
-        account_id: &AccountId,
-       symbol_name: &SymbolName,
+        account: &account_1,
+        symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-       brokerage: &Brokerage,
         exchange: Option<String>,
-       quantity: Volume,
-       tag: String
+        quantity: Volume,
+        tag: String
     ).await;
 
     // Place a market buy order and get back the order_id
     let order_id: OrderId = strategy.buy_market(
-        account_id: &AccountId,
+        account: &account_1,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume, 
         tag: String
@@ -1178,10 +1186,9 @@ async fn example() {
 
     // Place a market sell order and get back the order_id
     let order_id: OrderId = strategy.sell_market(
-        account_id: &AccountId,
+        account: &account_1,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
         tag: String
@@ -1189,10 +1196,9 @@ async fn example() {
 
     // Place a limit order and get back the order_id
     let order_id: OrderId = strategy.limit_order(
-        account_id: &AccountId, 
+        account: &account_1,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume, 
         side: OrderSide, 
@@ -1203,10 +1209,9 @@ async fn example() {
 
     // Enter a market if touched order
     let order_id: OrderId = strategy.market_if_touched (
-        account_id: &AccountId, 
+        account: &account_1,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume, 
         side: OrderSide, 
@@ -1217,10 +1222,9 @@ async fn example() {
 
     // Enter a stop order (this is not a protective order)
     let order_id: OrderId = strategy.stop_order (
-        account_id: &AccountId,
+        account: &account_1,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
         side: OrderSide,
@@ -1231,10 +1235,9 @@ async fn example() {
 
     // Enter a stop limit order
     let order_id: OrderId = strategy.stop_limit (
-        account_id: &AccountId,
+        account: &account_1,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: &Brokerage,
         exchange: Option<String>,
         quantity: Volume,
         side: OrderSide,

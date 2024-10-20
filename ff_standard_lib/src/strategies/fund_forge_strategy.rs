@@ -22,7 +22,6 @@ use rust_decimal::Decimal;
 use tokio::sync::{mpsc};
 use tokio::sync::mpsc::{Sender};
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc};
-use crate::standardized_types::broker_enum::Brokerage;
 use crate::strategies::handlers::market_handler::market_handlers::{market_handler, MarketMessageEnum};
 use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, send_request, StrategyRequest};
 use crate::standardized_types::base_data::candle::Candle;
@@ -30,7 +29,7 @@ use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
 use crate::messages::data_server_messaging::{DataServerRequest};
-use crate::standardized_types::accounts::{AccountId, Currency};
+use crate::standardized_types::accounts::{Account, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderType, OrderUpdateType, TimeInForce};
@@ -61,7 +60,7 @@ pub struct FundForgeStrategy {
 
     drawing_objects_handler: Arc<DrawingObjectHandler>,
 
-    orders_count: DashMap<Brokerage, i64>,
+    orders_count: DashMap<Account, i64>,
 
     market_request_sender: Sender<MarketMessageEnum>,
 
@@ -131,7 +130,8 @@ impl FundForgeStrategy {
         buffering_duration: Duration,
         gui_enabled: bool,
         tick_over_no_data: bool,
-        synchronize_accounts: bool
+        synchronize_accounts: bool,
+        accounts: Vec<Account>
     ) -> FundForgeStrategy {
 
         let timed_event_handler = Arc::new(TimedEventHandler::new());
@@ -187,6 +187,10 @@ impl FundForgeStrategy {
                 live_subscription_handler(strategy_mode.clone()).await;
             },
         }
+
+        for account in accounts {
+            LEDGER_SERVICE.init_ledger(&account,strategy_mode, synchronize_accounts,backtest_accounts_starting_cash, backtest_account_currency).await;
+        }
         strategy
     }
 
@@ -215,28 +219,27 @@ impl FundForgeStrategy {
     }
 
     /// true if long, false if flat or short.
-    pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.is_long(brokerage, account_id, symbol_name)
+    pub async fn is_long(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        LEDGER_SERVICE.is_long(account, symbol_name)
     }
 
-    pub async fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.is_flat(brokerage, account_id, symbol_name)
+    pub async fn is_flat(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        LEDGER_SERVICE.is_flat(account, symbol_name)
     }
 
-    pub async fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.is_short(brokerage, account_id, symbol_name)
+    pub async fn is_short(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        LEDGER_SERVICE.is_short(account, symbol_name)
     }
 
     async fn order_id(
         &self,
         symbol_name: &SymbolName,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         order_string: &str
     ) -> OrderId {
-        let num = match self.orders_count.get_mut(brokerage) {
+        let num = match self.orders_count.get_mut(account) {
             None => {
-                self.orders_count.insert(brokerage.clone(), 1);
+                self.orders_count.insert(account.clone(), 1);
                 1
             }
             Some(mut broker_order_number) => {
@@ -245,12 +248,11 @@ impl FundForgeStrategy {
             }
         };
         format!(
-            "{}: {}:{}, {}, {}",
+            "{}: {}:{}, {}",
+            num,
             order_string,
-            brokerage,
-            account_id,
+            account,
             symbol_name,
-            num
         )
     }
 
@@ -265,25 +267,23 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Enter Long").await;
+        let order_id = self.order_id(symbol_name, account, &"Enter Long").await;
         let order = Order::enter_long(
             symbol_name.clone(),
             symbol_code,
-            brokerage.clone(),
+            account,
             quantity,
             tag,
-            account_id.clone(),
             order_id.clone(),
             self.time_utc(),
             exchange
         );
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::EnterLong };
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::EnterLong };
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -299,25 +299,23 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Enter Short").await;
+        let order_id = self.order_id(symbol_name, account, &"Enter Short").await;
         let order = Order::enter_short(
             symbol_name.clone(),
             symbol_code,
-            brokerage.clone(),
+            account,
             quantity,
             tag,
-            account_id.clone(),
             order_id.clone(),
             self.time_utc(),
             exchange
         );
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::EnterShort};
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::EnterShort};
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -333,25 +331,23 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Exit Long").await;
+        let order_id = self.order_id(symbol_name, account, &"Exit Long").await;
         let order = Order::exit_long(
             symbol_name.clone(),
             symbol_code,
-            brokerage.clone(),
+            account,
             quantity,
             tag,
-            account_id.clone(),
             order_id.clone(),
             self.time_utc(),
             exchange
         );
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::ExitLong};
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::ExitLong};
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -367,25 +363,23 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Exit Short").await;
+        let order_id = self.order_id(symbol_name, account, &"Exit Short").await;
         let order = Order::exit_short(
             symbol_name.clone(),
             symbol_code,
-            brokerage.clone(),
+            account,
             quantity,
             tag,
-            account_id.clone(),
             order_id.clone(),
             self.time_utc(),
             exchange
         );
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::ExitShort};
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::ExitShort};
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -401,26 +395,24 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Buy Market").await;
+        let order_id = self.order_id(symbol_name, account, &"Buy Market").await;
         let order = Order::market_order(
             symbol_name.clone(),
             symbol_code,
-            brokerage.clone(),
+            account,
             quantity,
             OrderSide::Buy,
             tag,
-            account_id.clone(),
             order_id.clone(),
             self.time_utc(),
             exchange
         );
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::Market};
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::Market};
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -436,26 +428,24 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, &"Sell Market").await;
+        let order_id = self.order_id(symbol_name, account, &"Sell Market").await;
         let order = Order::market_order(
             symbol_name.clone(),
             symbol_code,
-            brokerage.clone(),
+            account,
             quantity,
             OrderSide::Sell,
             tag,
-            account_id.clone(),
             order_id.clone(),
             self.time_utc(),
             exchange
         );
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::Market};
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::Market};
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -471,8 +461,7 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         side: OrderSide,
@@ -480,9 +469,9 @@ impl FundForgeStrategy {
         tif: TimeInForce,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Limit", side)).await;
-        let order = Order::limit_order(symbol_name.clone(), symbol_code, brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(), limit_price, tif, exchange);
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::Limit};
+        let order_id = self.order_id(symbol_name, account, &format!("{} Limit", side)).await;
+        let order = Order::limit_order(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(), limit_price, tif, exchange);
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::Limit};
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -498,8 +487,7 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         side: OrderSide,
@@ -507,9 +495,9 @@ impl FundForgeStrategy {
         tif: TimeInForce,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(&symbol_name, account_id, brokerage, &format!("{} MIT", side)).await;
-        let order = Order::market_if_touched(symbol_name.clone(), symbol_code, brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::MarketIfTouched};
+        let order_id = self.order_id(&symbol_name, account, &format!("{} MIT", side)).await;
+        let order = Order::market_if_touched(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::MarketIfTouched};
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -525,8 +513,7 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         side: OrderSide,
@@ -534,9 +521,9 @@ impl FundForgeStrategy {
         tif: TimeInForce,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop", side)).await;
-        let order = Order::stop(symbol_name.clone(), symbol_code, brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::StopMarket};
+        let order_id = self.order_id(symbol_name, account, &format!("{} Stop", side)).await;
+        let order = Order::stop(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::StopMarket};
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -552,8 +539,7 @@ impl FundForgeStrategy {
         &self,
         symbol_name: &SymbolName,
         symbol_code: Option<SymbolCode>,
-        account_id: &AccountId,
-        brokerage: &Brokerage,
+        account: &Account,
         exchange: Option<String>,
         quantity: Volume,
         side: OrderSide,
@@ -562,9 +548,9 @@ impl FundForgeStrategy {
         trigger_price: Price,
         tif: TimeInForce
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account_id, brokerage, &format!("{} Stop Limit", side)).await;
-        let order = Order::stop_limit(symbol_name.clone(), symbol_code, brokerage.clone(), quantity, side, tag, account_id.clone(), order_id.clone(), self.time_utc(),limit_price, trigger_price, tif, exchange);
-        let order_request = OrderRequest::Create{ brokerage: order.brokerage.clone(), account_id: order.account_id.clone(), order: order.clone(), order_type: OrderType::StopLimit};
+        let order_id = self.order_id(symbol_name, account, &format!("{} Stop Limit", side)).await;
+        let order = Order::stop_limit(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(),limit_price, trigger_price, tif, exchange);
+        let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::StopLimit};
         if self.mode == StrategyMode::Live {
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
@@ -579,16 +565,15 @@ impl FundForgeStrategy {
     pub async fn cancel_order(&self, order_id: OrderId) {
         // Clone the necessary data from the Ref
         // need a market handler callback fn for this
-        let (brokerage, account_id) = if let Some(id_order_ref) = self.open_order_cache.get(&order_id) {
-            (id_order_ref.brokerage.clone(), id_order_ref.account_id.clone())
+        let account = if let Some(id_order_ref) = self.open_order_cache.get(&order_id) {
+            id_order_ref.account.clone()
         } else {
             return; // Order not found, exit the function
         };
 
         let order_request = OrderRequest::Cancel {
             order_id,
-            brokerage: brokerage.clone(),
-            account_id: account_id.clone()
+            account
         };
 
         let request = MarketMessageEnum::OrderRequest(order_request);
@@ -599,16 +584,15 @@ impl FundForgeStrategy {
     pub async fn update_order(&self, order_id: OrderId, order_update_type: OrderUpdateType) {
         // Clone the necessary data from the Ref
         //todo need a market handler update for this
-        let (brokerage, account_id) = if let Some(id_order_ref) = self.open_order_cache.get(&order_id) {
-            (id_order_ref.brokerage.clone(), id_order_ref.account_id.clone())
+        let account = if let Some(id_order_ref) = self.open_order_cache.get(&order_id) {
+            id_order_ref.account.clone()
         } else {
             return; // Order not found, exit the function
         };
 
         let order_request = OrderRequest::Update {
-            brokerage: brokerage.clone(),
             order_id,
-            account_id,
+            account,
             update: order_update_type,
         };
 
@@ -617,14 +601,14 @@ impl FundForgeStrategy {
     }
 
     /// Cancel all pending orders on the account for the symbol_name
-    pub async fn cancel_orders(&self, brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName) {
-        let cancel_msg =  MarketMessageEnum::OrderRequest(OrderRequest::CancelAll{brokerage, account_id, symbol_name});
+    pub async fn cancel_orders(&self, account: Account, symbol_name: SymbolName) {
+        let cancel_msg =  MarketMessageEnum::OrderRequest(OrderRequest::CancelAll{account, symbol_name});
         self.market_request_sender.send(cancel_msg).await.unwrap();
     }
 
     /// Flatten all positions on the account.
-    pub async fn flatten_all_for(&self, brokerage: Brokerage, account_id: &AccountId) {
-        let order = MarketMessageEnum::OrderRequest(OrderRequest::FlattenAllFor {brokerage, account_id: account_id.clone()});
+    pub async fn flatten_all_for(&self, account: Account) {
+        let order = MarketMessageEnum::OrderRequest(OrderRequest::FlattenAllFor {account});
         self.market_request_sender.send(order).await.unwrap();
     }
 
@@ -973,48 +957,44 @@ impl FundForgeStrategy {
         range_history_data(start_date.to_utc(), end_date, subscription.clone(), self.mode).await
     }
 
-    pub async fn print_ledger(&self, brokerage: &Brokerage, account_id: &AccountId) {
+    pub async fn print_ledger(&self, account: &Account) {
         let request = LedgerMessage::PrintLedgerRequest;
-        LEDGER_SERVICE.send_message(brokerage.clone(), account_id, request).await;
+        LEDGER_SERVICE.send_message(account, request).await;
     }
 
     pub async fn print_ledgers(&self) {
         let request = LedgerMessage::PrintLedgerRequest;
-        for broker_entry in LEDGER_SERVICE.ledger_senders.iter() {
-            for account_entry in broker_entry.value().iter() {
-                LEDGER_SERVICE.send_message(broker_entry.key().clone(), account_entry.key(), request.clone()).await;
-            }
+        for account in LEDGER_SERVICE.ledger_senders.iter() {
+            LEDGER_SERVICE.send_message(account.key(), request.clone()).await;
         }
     }
 
     pub async fn export_trades(&self, directory: &str) {
         let request = LedgerMessage::ExportTrades(directory.to_string());
-        for broker_entry in LEDGER_SERVICE.ledger_senders.iter() {
-            for account_entry in broker_entry.value().iter() {
-                LEDGER_SERVICE.send_message(broker_entry.key().clone(), account_entry.key(), request.clone()).await;
-            }
+        for account_entry in LEDGER_SERVICE.ledger_senders.iter() {
+            LEDGER_SERVICE.send_message(account_entry.key(), request.clone()).await;
         }
     }
 
     // Updated position query functions
 
-    pub async fn in_profit(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.in_profit(brokerage, account_id, symbol_name)
+    pub async fn in_profit(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        LEDGER_SERVICE.in_profit(account, symbol_name)
     }
 
-    pub async fn in_drawdown(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.in_drawdown(brokerage, account_id, symbol_name)
+    pub async fn in_drawdown(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        LEDGER_SERVICE.in_drawdown(account, symbol_name)
     }
 
-    pub async fn pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
-        LEDGER_SERVICE.open_pnl_symbol(brokerage, account_id, symbol_name)
+    pub async fn pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
+        LEDGER_SERVICE.open_pnl_symbol(account, symbol_name)
     }
 
-    pub async fn booked_pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
-        LEDGER_SERVICE.booked_pnl(brokerage, account_id, symbol_name)
+    pub async fn booked_pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
+        LEDGER_SERVICE.booked_pnl(account, symbol_name)
     }
 
-    pub async fn position_size(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
-        LEDGER_SERVICE.position_size(brokerage, account_id, symbol_name)
+    pub async fn position_size(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
+        LEDGER_SERVICE.position_size(account, symbol_name)
     }
 }

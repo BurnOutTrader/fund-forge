@@ -204,13 +204,12 @@ impl BrokerApiResponse for RithmicClient {
         };
 
         //check if we are short and add to quantity
-        if let Some(account_short_map) = self.short_quantity.get(&order.account_id) {
+        if let Some(account_short_map) = self.short_quantity.get(&order.account.account_id) {
             if let Some(symbol_volume) = account_short_map.get(&details.symbol_code) {
                 let additional_volume = match symbol_volume.to_i32() {
                     None => {
                         return Err(OrderUpdateEvent::OrderRejected {
-                            brokerage: order.brokerage,
-                            account_id: order.account_id,
+                            account: order.account,
                             symbol_name: order.symbol_name,
                             symbol_code:  details.symbol_code,
                             order_id: order.id.clone(),
@@ -236,13 +235,12 @@ impl BrokerApiResponse for RithmicClient {
 
         //todo, we need to send the exit order first, so that the strategy engine does not use the order size as the new positions size.
         //check if we are short and add to quantity
-        if let Some(account_long_map) = self.long_quantity.get(&order.account_id) {
+        if let Some(account_long_map) = self.long_quantity.get(&order.account.account_id) {
             if let Some(symbol_volume) = account_long_map.get(&details.symbol_code) {
                 let additional_volume = match symbol_volume.to_i32() {
                     None => {
                         return Err(OrderUpdateEvent::OrderRejected {
-                            brokerage: order.brokerage,
-                            account_id: order.account_id,
+                            account: order.account,
                             symbol_name: order.symbol_name,
                             symbol_code:  details.symbol_code.clone(),
                             order_id: order.id.clone(),
@@ -268,10 +266,9 @@ impl BrokerApiResponse for RithmicClient {
 
         let reject_order = |reason: String| -> Result<(), OrderUpdateEvent> {
             Err(OrderUpdateEvent::OrderRejected {
-                brokerage: order.brokerage.clone(),
+                account: order.account.clone(),
                 symbol_name: order.symbol_name.clone(),
                 symbol_code:  details.symbol_code.clone(),
-                account_id: order.account_id.clone(),
                 order_id: order.id.clone(),
                 reason,
                 tag: order.tag.clone(),
@@ -280,7 +277,7 @@ impl BrokerApiResponse for RithmicClient {
         };
 
         //check if we are short and add to quantity
-        if let Some(account_short_map) = self.short_quantity.get(&order.account_id) {
+        if let Some(account_short_map) = self.short_quantity.get(&order.account.account_id) {
             if let Some(symbol_volume) = account_short_map.value().get(&details.symbol_code) {
                 let volume = match symbol_volume.value().to_i32() {
                     None => {
@@ -309,10 +306,9 @@ impl BrokerApiResponse for RithmicClient {
 
         let reject_order = |reason: String| -> Result<(), OrderUpdateEvent> {
             Err(OrderUpdateEvent::OrderRejected {
-                brokerage: order.brokerage.clone(),
                 symbol_name: order.symbol_name.clone(),
                 symbol_code: details.symbol_code.clone(),
-                account_id: order.account_id.clone(),
+                account: order.account.clone(),
                 order_id: order.id.clone(),
                 reason,
                 tag: order.tag.clone(),
@@ -321,7 +317,7 @@ impl BrokerApiResponse for RithmicClient {
         };
 
         //check if we are short and add to quantity
-        if let Some(account_long_map) = self.long_quantity.get(&order.account_id) {
+        if let Some(account_long_map) = self.long_quantity.get(&order.account.account_id) {
             if let Some(symbol_volume) = account_long_map.value().get(&details.symbol_code) {
                 let volume = match symbol_volume.value().to_i32() {
                     None => {

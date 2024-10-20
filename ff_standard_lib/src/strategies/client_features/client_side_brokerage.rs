@@ -6,7 +6,7 @@ use rust_decimal_macros::dec;
 use tokio::sync::{oneshot, Mutex};
 use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
-use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
+use crate::standardized_types::accounts::{Account, AccountId, AccountInfo, Currency};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::{Price, Volume};
@@ -26,10 +26,11 @@ impl Brokerage {
         account_id: AccountId,
     ) -> Result<Ledger, FundForgeError> {
         let request = DataServerRequest::PaperAccountInit {
-            account_id,
+            account_id: account_id.clone(),
             callback_id: 0,
             brokerage: self.clone(),
         };
+        let account = Account::new(self.clone(), account_id.clone());
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
@@ -39,8 +40,7 @@ impl Brokerage {
                 Ok(response) => match response {
                     DataServerResponse::PaperAccountInit { account_info, .. } => {
                         Ok(Ledger {
-                            account_id: account_info.account_id,
-                            brokerage: account_info.brokerage,
+                            account,
                             cash_value: Mutex::new(starting_balance),
                             cash_available: Mutex::new(starting_balance),
                             currency,

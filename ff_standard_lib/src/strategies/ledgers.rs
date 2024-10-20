@@ -15,7 +15,7 @@ use tokio::sync::{Mutex};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
+use crate::standardized_types::accounts::{Account, AccountInfo, Currency};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
@@ -36,8 +36,8 @@ lazy_static! {
 }
 
 pub(crate) struct LedgerService {
-    pub(crate) ledger_senders: DashMap<Brokerage, DashMap<AccountId, Sender<LedgerMessage>>>,
-    pub (crate) ledgers: DashMap<Brokerage, DashMap<AccountId, Arc<Ledger>>>,
+    pub(crate) ledger_senders: DashMap<Account, Sender<LedgerMessage>>,
+    pub (crate) ledgers: DashMap<Account, Arc<Ledger>>,
 }
 impl LedgerService {
     pub fn new() -> Self {
@@ -46,39 +46,30 @@ impl LedgerService {
             ledgers: Default::default(),
         }
     }
-    pub async fn send_message(&self, brokerage: Brokerage, account_id: &AccountId, ledger_message: LedgerMessage) {
-        if let Some(broker_map) = self.ledger_senders.get(&brokerage) {
-            if let Some(account_sender) = broker_map.get(account_id) {
-                match account_sender.send(ledger_message).await {
-                    Ok(_) => {}
-                    Err(e) => eprintln!("LEDGER_SERVICE: Failed to send message: {}", e)
-                }
+    pub async fn send_message(&self, account: &Account, ledger_message: LedgerMessage) {
+        if let Some(account_sender) = self.ledger_senders.get(account) {
+            match account_sender.send(ledger_message).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("LEDGER_SERVICE: Failed to send message: {}", e)
             }
         }
     }
 
     pub async fn timeslice_updates(&self, time: DateTime<Utc>, time_slice: Arc<TimeSlice>) {
         let request = LedgerMessage::TimeSlice(time, time_slice);
-        for broker_map in self.ledger_senders.iter() {
-            for account_map in broker_map.iter() {
-                match account_map.value().send(request.clone()).await {
-                    Ok(_) => {}
-                    Err(_e) => panic!("LEDGER_SERVICE: Ledger timeSlice update request failed")
-                }
+        for account_sender in self.ledger_senders.iter() {
+            match account_sender.value().send(request.clone()).await {
+                Ok(_) => {}
+                Err(_e) => panic!("LEDGER_SERVICE: Ledger timeSlice update request failed")
             }
         }
     }
 
-    pub async fn init_ledger(&self, brokerage: Brokerage, account_id: AccountId, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency) {
-        if !self.ledger_senders.contains_key(&brokerage) {
-            let broker_map = DashMap::new();
-            self.ledger_senders.insert(brokerage.clone(), broker_map);
-            self.ledgers.insert(brokerage, DashMap::new());
-        }
-        if !self.ledger_senders.get(&brokerage).unwrap().contains_key(&account_id) {
+    pub async fn init_ledger(&self, account: &Account, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency) {
+        if !self.ledger_senders.contains_key(account) {
             let ledger: Ledger = match strategy_mode {
                 StrategyMode::Live => {
-                    let account_info = match brokerage.account_info(account_id.clone()).await {
+                    let account_info = match account.brokerage.account_info(account.account_id.clone()).await {
                         Ok(ledger) => ledger,
                         Err(e) => {
                             panic!("LEDGER_SERVICE: Error initializing account: {}", e);
@@ -87,7 +78,7 @@ impl LedgerService {
                     Ledger::new(account_info, strategy_mode, synchronize_accounts)
                 },
                 StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                    match brokerage.paper_account_init(strategy_mode, starting_cash, currency, account_id.clone()).await {
+                    match account.brokerage.paper_account_init(strategy_mode, starting_cash, currency, account.account_id.clone()).await {
                         Ok(ledger) => ledger,
                         Err(e) => {
                             panic!("LEDGER_SERVICE: Error initializing account: {}", e);
@@ -98,61 +89,62 @@ impl LedgerService {
             let (sender, receiver) = tokio::sync::mpsc::channel(100);
             let ledger = Arc::new(ledger);
             Ledger::start_receive(ledger.clone(), receiver);
-            self.ledger_senders.get(&brokerage).unwrap().insert(account_id.clone(), sender);
-            self.ledgers.get(&brokerage).unwrap().insert(account_id, ledger);
+            self.ledger_senders.insert(account.clone(), sender);
+            self.ledgers.insert(account.clone(), ledger);
         }
     }
-    pub fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        self.ledgers.get(brokerage)
-            .and_then(|account_map| account_map.get(account_id).map(|ledger| ledger.is_long(symbol_name)))
+    pub fn is_long(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        self.ledgers.get(account)
+             .map(|ledger| ledger.is_long(symbol_name))
             .unwrap_or(false)
     }
 
-    pub fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        self.ledgers.get(brokerage)
-            .and_then(|account_map| account_map.get(account_id).map(|ledger| ledger.is_short(symbol_name)))
+    pub fn is_short(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        self.ledgers.get(account)
+             .map(|ledger| ledger.is_short(symbol_name))
             .unwrap_or(false)
     }
 
-    pub fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        self.ledgers.get(brokerage)
-            .and_then(|account_map| account_map.get(account_id).map(|ledger| ledger.is_flat(symbol_name)))
+    pub fn is_flat(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        self.ledgers.get(account)
+            .map(|ledger| ledger.is_flat(symbol_name))
             .unwrap_or(true)
     }
 
-    pub fn position_size(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
-        self.ledgers.get(brokerage)
-            .and_then(|account_map| account_map.get(account_id).map(|ledger| ledger.position_size(symbol_name)))
+    pub fn position_size(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
+        self.ledgers.get(account)
+             .map(|ledger| ledger.position_size(symbol_name))
             .unwrap_or_else(|| dec!(0))
     }
 
-    pub fn open_pnl(&self, brokerage: &Brokerage, account_id: &AccountId) -> Decimal {
-        self.ledgers.get(brokerage)
-            .and_then(|account_map| account_map.get(account_id).map(|ledger| ledger.get_open_pnl()))
+    #[allow(unused)]
+    pub fn open_pnl(&self, account: &Account) -> Decimal {
+        self.ledgers.get(account)
+             .map(|ledger| ledger.get_open_pnl())
             .unwrap_or_else(|| dec!(0))
     }
 
-    pub fn open_pnl_symbol(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
-        self.ledgers.get(brokerage)
-            .and_then(|account_map| account_map.get(account_id).map(|ledger| ledger.pnl(symbol_name)))
+    pub fn open_pnl_symbol(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
+        self.ledgers.get(account)
+             .map(|ledger| ledger.pnl(symbol_name))
             .unwrap_or_else(|| dec!(0))
     }
 
-    pub fn booked_pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
-        self.ledgers.get(brokerage)
-            .and_then(|account_map| account_map.get(account_id).map(|ledger| ledger.booked_pnl(symbol_name)))
+    pub fn booked_pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
+        self.ledgers.get(account)
+             .map(|ledger| ledger.booked_pnl(symbol_name))
             .unwrap_or_else(|| dec!(0))
     }
 
-    pub fn in_profit(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        self.ledgers.get(brokerage)
-            .and_then(|account_map| account_map.get(account_id).map(|ledger| ledger.in_profit(symbol_name)))
+    pub fn in_profit(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        self.ledgers.get(account)
+             .map(|ledger| ledger.in_profit(symbol_name))
             .unwrap_or(false)
     }
 
-    pub fn in_drawdown(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        self.ledgers.get(brokerage)
-            .and_then(|account_map| account_map.get(account_id).map(|ledger| ledger.in_drawdown(symbol_name)))
+    pub fn in_drawdown(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+        self.ledgers.get(account)
+             .map(|ledger| ledger.in_drawdown(symbol_name))
             .unwrap_or(false)
     }
 }
@@ -174,8 +166,8 @@ pub(crate) enum LedgerMessage {
     },
     #[allow(unused)]
     FlattenAccount(DateTime<Utc>),
-    LiveAccountUpdates { brokerage: Brokerage, account_id: AccountId, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal },
-    LivePositionUpdates { brokerage: Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: SymbolCode, open_pnl: Decimal, open_quantity: Decimal, side: Option<PositionSide> },
+    LiveAccountUpdates { account: Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal },
+    LivePositionUpdates { account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, open_pnl: Decimal, open_quantity: Decimal, side: Option<PositionSide> },
     ExitPaperPosition {
         symbol_name: SymbolName,
         side: PositionSide,
@@ -189,8 +181,7 @@ pub(crate) enum LedgerMessage {
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
 #[derive(Debug)]
 pub struct Ledger {
-    pub account_id: AccountId,
-    pub brokerage: Brokerage,
+    pub account: Account,
     pub cash_value: Mutex<Price>,
     pub cash_available: Mutex<Price>,
     pub currency: Currency,
@@ -210,7 +201,7 @@ pub struct Ledger {
     //todo, add daily max loss, max order size etc to ledger
 }
 impl Ledger {
-    pub fn new(
+    fn new(
         account_info: AccountInfo,
         mode: StrategyMode,
         synchronise_accounts: bool,
@@ -235,8 +226,7 @@ impl Ledger {
         }
 
         let ledger = Self {
-            account_id: account_info.account_id,
-            brokerage: account_info.brokerage,
+            account: Account::new(account_info.brokerage, account_info.account_id),
             cash_value: Mutex::new(account_info.cash_value),
             cash_available: Mutex::new(account_info.cash_available),
             currency: account_info.currency,
@@ -447,8 +437,8 @@ impl Ledger {
         let date = Utc::now().format("%Y%m%d_%H%M").to_string();
 
         // Use brokerage and account ID to format the filename
-        let brokerage = self.brokerage.to_string(); // Assuming brokerage can be formatted as string
-        let file_name = format!("{}/{:?}_Results_{}_{}_{}.csv", folder, self.mode ,brokerage, self.account_id, date);
+        let brokerage = self.account.brokerage.to_string(); // Assuming brokerage can be formatted as string
+        let file_name = format!("{}/{:?}_Results_{}_{}_{}.csv", folder, self.mode ,brokerage, self.account.account_id, date);
 
         // Create a writer for the CSV file
         let file_path = Path::new(&file_name);
@@ -586,8 +576,8 @@ impl Ledger {
         let cash_value = self.cash_value.lock().await.clone();
         let cash_used = self.cash_used.lock().await.clone();
         let cash_available = self.cash_available.lock().await.clone();
-        format!("Brokerage: {}, Account: {}, Balance: {}, Win Rate: {}%, Average Risk Reward: {}, Profit Factor {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}",
-                self.brokerage, self.account_id, cash_value.round_dp(2), win_rate.round_dp(2), risk_reward.round_dp(2), profit_factor.round_dp(2), pnl.round_dp(2), wins, losses, break_even, total_trades, self.positions.len(), cash_used.round_dp(2), cash_available.round_dp(2))
+        format!("Account: {}, Balance: {}, Win Rate: {}%, Average Risk Reward: {}, Profit Factor {}, Total profit: {}, Total Wins: {}, Total Losses: {}, Break Even: {}, Total Trades: {}, Open Positions: {}, Cash Used: {}, Cash Available: {}",
+                self.account, cash_value.round_dp(2), win_rate.round_dp(2), risk_reward.round_dp(2), profit_factor.round_dp(2), pnl.round_dp(2), wins, losses, break_even, total_trades, self.positions.len(), cash_used.round_dp(2), cash_available.round_dp(2))
     }
 
     pub fn generate_id(
@@ -601,7 +591,7 @@ impl Ledger {
             .or_insert(1).value().clone();
 
         // Return the generated position ID
-        format!("{}-{}-{}-{}-{}", self.brokerage, self.account_id, counter, symbol_name, side)
+        format!("{}-{}-{}-{}-{}", self.account.brokerage, self.account.account_id, counter, symbol_name, side)
     }
 
     pub async fn timeslice_update(&self, time_slice: Arc<TimeSlice>, time: DateTime<Utc>) {
@@ -639,7 +629,7 @@ impl Ledger {
 
     /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
     ///todo, check ledger max order etc before placing orders
-    pub async fn update_or_create_position(
+    async fn update_or_create_position(
         &self,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,
@@ -728,8 +718,7 @@ impl Ledger {
                         Err(e) => {
                             //todo this now gets added directly to buffer
                             add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                                brokerage: self.brokerage,
-                                account_id: self.account_id.clone(),
+                                account: self.account.clone(),
                                 symbol_name: symbol_name.clone(),
                                 symbol_code: symbol_code.clone(),
                                 order_id,
@@ -761,8 +750,7 @@ impl Ledger {
                     Ok(_) => {}
                     Err(e) => {
                         add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
-                            brokerage: self.brokerage,
-                            account_id: self.account_id.clone(),
+                            account: self.account.clone(),
                             symbol_name: symbol_name.clone(),
                             symbol_code: symbol_code.clone(),
                             order_id,
@@ -782,7 +770,7 @@ impl Ledger {
             };
 
             eprintln!("Symbol Name for info request: {}", symbol_name);
-            let info = self.symbol_info(self.brokerage, &symbol_name).await;
+            let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
             if !self.symbol_code_map.contains_key(&symbol_name) && symbol_name != symbol_code  {
                 self.symbol_code_map
                     .entry(symbol_name.clone())
@@ -795,8 +783,7 @@ impl Ledger {
             let position = Position::new(
                 symbol_code.clone(),
                 symbol_code.clone(),
-                self.brokerage.clone(),
-                self.account_id.clone(),
+                self.account.clone(),
                 position_side,
                 remaining_quantity,
                 market_fill_price,
@@ -815,8 +802,7 @@ impl Ledger {
 
             let event = PositionUpdateEvent::PositionOpened {
                 position_id: id,
-                account_id: self.account_id.clone(),
-                brokerage: self.brokerage.clone(),
+                account: self.account.clone(),
                 originating_order_tag: tag,
                 time: time.to_string()
             };
@@ -837,7 +823,7 @@ impl Ledger {
     }
 }
 
-pub(crate) mod historical_ledgers {
+mod historical_ledgers {
     use chrono::{DateTime, Utc};
     use rust_decimal::Decimal;
     use rust_decimal::prelude::FromPrimitive;
@@ -851,7 +837,7 @@ pub(crate) mod historical_ledgers {
     use crate::strategies::strategy_events::StrategyEvent;
 
     impl Ledger {
-        pub async fn release_margin_used(&self, symbol_name: &SymbolName) {
+        pub(crate) async fn release_margin_used(&self, symbol_name: &SymbolName) {
             //todo, this will have to be done based on position size, how much size are we releasing
             if let Some((_, margin_used)) = self.margin_used.remove(symbol_name) {
                 let mut account_cash_used= self.cash_used.lock().await;
@@ -862,9 +848,9 @@ pub(crate) mod historical_ledgers {
             }
         }
 
-        pub async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price) -> Result<(), FundForgeError> {
+        pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price) -> Result<(), FundForgeError> {
             //todo match time to market close and choose between intraday or overnight margin request.
-            let margin = self.brokerage.intraday_margin_required(symbol_name.clone(), quantity).await?;
+            let margin = self.account.brokerage.intraday_margin_required(symbol_name.clone(), quantity).await?;
             let margin =match margin {
                 None => {
                     (quantity * market_price) / Decimal::from_u32(self.leverage).unwrap()
@@ -886,7 +872,7 @@ pub(crate) mod historical_ledgers {
             Ok(())
         }
 
-        pub async fn paper_exit_position(
+        pub(crate) async fn paper_exit_position(
             &self,
             symbol_name: &SymbolName,
             time: DateTime<Utc>,
