@@ -12,6 +12,7 @@ use crate::strategies::handlers::market_handler::backtest_matching_engine;
 use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::historical_time::get_backtest_time;
+use crate::strategies::strategy_events::StrategyEvent;
 
 #[derive(Clone, Debug)]
 pub enum MarketMessageEnum {
@@ -23,13 +24,14 @@ pub(crate) async fn market_handler(
     mode: StrategyMode,
     open_order_cache: Arc<DashMap<OrderId, Order>>,
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
+    strategy_event_sender: mpsc::Sender<StrategyEvent>,
 ) -> Sender<MarketMessageEnum> {
     let (market_event_sender, mut market_event_receiver) = mpsc::channel(1000);
     tokio::task::spawn(async move{
         let backtest_order_sender = match mode {
             StrategyMode::Live => None,
             StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
-                let sender = backtest_matching_engine::backtest_matching_engine(open_order_cache.clone(), closed_order_cache.clone()).await;
+                let sender = backtest_matching_engine::backtest_matching_engine(open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender).await;
                 Some(sender)
             }
         };

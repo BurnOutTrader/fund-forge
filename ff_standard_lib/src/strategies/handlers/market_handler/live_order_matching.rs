@@ -1,9 +1,8 @@
 use std::sync::Arc;
-use chrono::{Utc};
 use dashmap::DashMap;
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
 use crate::standardized_types::orders::{Order, OrderId, OrderState, OrderUpdateEvent, OrderUpdateType};
-use crate::strategies::client_features::server_connections::add_buffer;
 use crate::strategies::strategy_events::StrategyEvent;
 
 //todo, this probably isnt needed
@@ -11,7 +10,8 @@ use crate::strategies::strategy_events::StrategyEvent;
 pub fn live_order_update(
     open_order_cache: Arc<DashMap<OrderId, Order>>, //todo, make these static or lifetimes if possible.. might not be optimal though, look it up!
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
-    mut order_event_receiver: Receiver<OrderUpdateEvent>
+    mut order_event_receiver: Receiver<OrderUpdateEvent>,
+    strategy_event_sender: mpsc::Sender<StrategyEvent>
 ) {
     tokio::task::spawn(async move {
         while let Some(order_update_event) = order_event_receiver.recv().await {
@@ -21,7 +21,10 @@ pub fn live_order_update(
                         order.value_mut().state = OrderState::Accepted;
                         order.symbol_code = Some(symbol_code.clone());
                         let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted { symbol_name, symbol_code, order_id, account, tag, time });
-                        add_buffer(Utc::now(), event).await;
+                        match strategy_event_sender.send(event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Live Order Handler: Failed to send event: {}", e)
+                        }
                     }
                 }
                 OrderUpdateEvent::OrderFilled { account: _, symbol_name: _, symbol_code: _, order_id: _, price: _, quantity: _, tag: _, time: _ } => {
@@ -77,8 +80,11 @@ pub fn live_order_update(
                         order.state = OrderState::Cancelled;
                         order.symbol_code = Some(symbol_code.clone());
                         let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled { order_id: order_id.clone(), account, symbol_name, tag, time, symbol_code });
-                        add_buffer(Utc::now(), event).await;
                         closed_order_cache.insert(order_id.clone(), order);
+                        match strategy_event_sender.send(event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Live Order Handler: Failed to send event: {}", e)
+                        }
                     }
                 }
                 OrderUpdateEvent::OrderRejected { account, symbol_name, symbol_code, order_id, reason, tag, time } => {
@@ -86,8 +92,11 @@ pub fn live_order_update(
                         order.state = OrderState::Rejected(reason.clone());
                         order.symbol_code = Some(symbol_code.clone());
                         let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected { order_id: order_id.clone(), account, symbol_name, reason, tag, time, symbol_code: symbol_code });
-                        add_buffer(Utc::now(), event).await;
                         closed_order_cache.insert(order_id.clone(), order);
+                        match strategy_event_sender.send(event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Live Order Handler: Failed to send event: {}", e)
+                        }
                     }
                 }
                 OrderUpdateEvent::OrderUpdated { account, symbol_name, symbol_code, order_id, update_type, tag, time } => {
@@ -103,14 +112,20 @@ pub fn live_order_update(
                         open_order_cache.insert(id, order);
                     }
                     let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated { order_id, account, tag, time, update_type, symbol_code, symbol_name });
-                    add_buffer(Utc::now(), event).await;
+                    match strategy_event_sender.send(event).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Live Order Handler: Failed to send event: {}", e)
+                    }
                 }
                 OrderUpdateEvent::OrderUpdateRejected { account, order_id, reason, time } => {
                     if let Some((order_id, order)) = open_order_cache.remove(&order_id) {
                         closed_order_cache.insert(order_id.clone(), order);
                     }
                     let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected {order_id, account, reason, time});
-                    add_buffer(Utc::now(), event).await;
+                    match strategy_event_sender.send(event).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Live Order Handler: Failed to send event: {}", e)
+                    }
                 }
             }
         }

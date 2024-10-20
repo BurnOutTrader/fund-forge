@@ -11,7 +11,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Receiver, Sender};
-use tokio::sync::{Mutex};
+use tokio::sync::{mpsc, Mutex};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -20,7 +20,6 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::strategies::client_features::server_connections::add_buffer;
 use crate::strategies::handlers::market_handler::price_service::price_service_request_market_fill_price;
 use crate::strategies::strategy_events::StrategyEvent;
 /*todo,
@@ -65,7 +64,7 @@ impl LedgerService {
         }
     }
 
-    pub async fn init_ledger(&self, account: &Account, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency) {
+    pub async fn init_ledger(&self, account: &Account, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency, strategy_event_sender: Sender<StrategyEvent>) {
         if !self.ledger_senders.contains_key(account) {
             let ledger: Ledger = match strategy_mode {
                 StrategyMode::Live => {
@@ -75,10 +74,10 @@ impl LedgerService {
                             panic!("LEDGER_SERVICE: Error initializing account: {}", e);
                         }
                     };
-                    Ledger::new(account_info, strategy_mode, synchronize_accounts)
+                    Ledger::new(account_info, strategy_mode, synchronize_accounts, strategy_event_sender)
                 },
                 StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                    match account.brokerage.paper_account_init(strategy_mode, starting_cash, currency, account.account_id.clone()).await {
+                    match account.brokerage.paper_account_init(strategy_mode, starting_cash, currency, account.account_id.clone(), strategy_event_sender).await {
                         Ok(ledger) => ledger,
                         Err(e) => {
                             panic!("LEDGER_SERVICE: Error initializing account: {}", e);
@@ -198,6 +197,7 @@ pub struct Ledger {
     pub mode: StrategyMode,
     pub leverage: u32,
     pub is_simulating_pnl: bool,
+    pub(crate) strategy_event_sender: mpsc::Sender<StrategyEvent>
     //todo, add daily max loss, max order size etc to ledger
 }
 impl Ledger {
@@ -205,6 +205,7 @@ impl Ledger {
         account_info: AccountInfo,
         mode: StrategyMode,
         synchronise_accounts: bool,
+        strategy_event_sender: Sender<StrategyEvent>
     ) -> Self {
         let is_simulating_pnl = match synchronise_accounts {
             true => false,
@@ -226,6 +227,7 @@ impl Ledger {
         }
 
         let ledger = Self {
+            strategy_event_sender,
             account: Account::new(account_info.brokerage, account_info.account_id),
             cash_value: Mutex::new(account_info.cash_value),
             cash_available: Mutex::new(account_info.cash_available),
@@ -717,7 +719,7 @@ impl Ledger {
                         Ok(_) => {}
                         Err(e) => {
                             //todo this now gets added directly to buffer
-                            add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                            let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
                                 account: self.account.clone(),
                                 symbol_name: symbol_name.clone(),
                                 symbol_code: symbol_code.clone(),
@@ -725,7 +727,11 @@ impl Ledger {
                                 reason: e.to_string(),
                                 tag,
                                 time: time.to_string()
-                            })).await;
+                            });
+                            match self.strategy_event_sender.send(event).await {
+                                Ok(_) => {}
+                                Err(e) => eprintln!("Ledger: Failed to send event: {}", e)
+                            }
                             return
                         }
                     }
@@ -749,7 +755,7 @@ impl Ledger {
                 match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                     Ok(_) => {}
                     Err(e) => {
-                        add_buffer(time, StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
                             account: self.account.clone(),
                             symbol_name: symbol_name.clone(),
                             symbol_code: symbol_code.clone(),
@@ -757,7 +763,11 @@ impl Ledger {
                             reason: e.to_string(),
                             tag,
                             time: time.to_string()
-                        })).await;
+                        });
+                        match self.strategy_event_sender.send(event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Ledger: Failed to send event: {}", e)
+                        }
                         return
                     }
                 }
@@ -818,7 +828,11 @@ impl Ledger {
         }
         //todo this now gets added directly to buffer
         for event in updates {
-            add_buffer(time, StrategyEvent::PositionEvents(event)).await;
+            let event = StrategyEvent::PositionEvents(event);
+            match self.strategy_event_sender.send(event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Ledger: Failed to send event: {}", e)
+            }
         }
     }
 }
@@ -833,7 +847,6 @@ mod historical_ledgers {
     use crate::standardized_types::new_types::{Price, Volume};
     use crate::standardized_types::position::PositionUpdateEvent;
     use crate::standardized_types::subscriptions::SymbolName;
-    use crate::strategies::client_features::server_connections::add_buffer;
     use crate::strategies::strategy_events::StrategyEvent;
 
     impl Ledger {
@@ -916,7 +929,11 @@ mod historical_ledgers {
                     .or_insert_with(Vec::new)                    // If no entry exists, create a new Vec
                     .push(existing_position);     // Push the closed position to the Vec
 
-                add_buffer(time, StrategyEvent::PositionEvents(event)).await;
+                let event = StrategyEvent::PositionEvents(event);
+                match self.strategy_event_sender.send(event).await {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("Ledger: Failed to send event: {}", e)
+                }
             }
         }
     }

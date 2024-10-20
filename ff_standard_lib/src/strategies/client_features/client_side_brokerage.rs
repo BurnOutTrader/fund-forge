@@ -4,6 +4,7 @@ use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use tokio::sync::{oneshot, Mutex};
+use tokio::sync::mpsc::Sender;
 use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::standardized_types::accounts::{Account, AccountId, AccountInfo, Currency};
@@ -15,6 +16,7 @@ use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
 use crate::strategies::ledgers::Ledger;
+use crate::strategies::strategy_events::StrategyEvent;
 
 pub(crate) const TIME_OUT: Duration = Duration::from_secs(15);
 impl Brokerage {
@@ -24,6 +26,7 @@ impl Brokerage {
         starting_balance: Decimal,
         currency: Currency,
         account_id: AccountId,
+        strategy_event_sender: Sender<StrategyEvent>
     ) -> Result<Ledger, FundForgeError> {
         let request = DataServerRequest::PaperAccountInit {
             account_id: account_id.clone(),
@@ -40,6 +43,7 @@ impl Brokerage {
                 Ok(response) => match response {
                     DataServerResponse::PaperAccountInit { account_info, .. } => {
                         Ok(Ledger {
+                            strategy_event_sender,
                             account,
                             cash_value: Mutex::new(starting_balance),
                             cash_available: Mutex::new(starting_balance),

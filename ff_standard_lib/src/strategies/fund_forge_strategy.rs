@@ -10,7 +10,7 @@ use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::standardized_types::base_data::history::range_history_data;
 use crate::standardized_types::enums::{OrderSide, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
-use crate::strategies::strategy_events::StrategyEventBuffer;
+use crate::strategies::strategy_events::{StrategyEvent};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
 use crate::strategies::handlers::timed_events_handler::{TimedEvent, TimedEventHandler};
@@ -126,7 +126,7 @@ impl FundForgeStrategy {
         subscriptions: Vec<DataSubscription>,
         fill_forward: bool,
         retain_history: usize,
-        strategy_event_sender: mpsc::Sender<StrategyEventBuffer>,
+        strategy_event_sender: mpsc::Sender<StrategyEvent>,
         buffering_duration: Duration,
         gui_enabled: bool,
         tick_over_no_data: bool,
@@ -134,7 +134,7 @@ impl FundForgeStrategy {
         accounts: Vec<Account>
     ) -> FundForgeStrategy {
 
-        let timed_event_handler = Arc::new(TimedEventHandler::new());
+        let timed_event_handler = Arc::new(TimedEventHandler::new(strategy_event_sender.clone()));
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
         initialize_static(
             timed_event_handler.clone(),
@@ -148,16 +148,16 @@ impl FundForgeStrategy {
         let open_order_cache: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
         let closed_order_cache: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
 
-        let market_event_sender = market_handler(strategy_mode, open_order_cache.clone(), closed_order_cache.clone()).await;
-        let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode).await);
-        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone()).await);
+        let market_event_sender = market_handler(strategy_mode, open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender.clone()).await;
+        let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode, strategy_event_sender.clone()).await);
+        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone(), strategy_event_sender.clone()).await);
 
-        init_sub_handler(subscription_handler.clone(), strategy_event_sender, indicator_handler.clone()).await;
+        init_sub_handler(subscription_handler.clone(), indicator_handler.clone()).await;
         let (sender, receiver) = tokio::sync::mpsc::channel(50);
         if strategy_mode == StrategyMode::Live {
-            live_order_update(open_order_cache.clone(), closed_order_cache.clone(), receiver);
+            live_order_update(open_order_cache.clone(), closed_order_cache.clone(), receiver, strategy_event_sender.clone());
         }
-        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), market_event_sender.clone(), sender, synchronize_accounts).await;
+        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), market_event_sender.clone(), sender, synchronize_accounts, strategy_event_sender.clone()).await;
 
         subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
 
@@ -180,7 +180,7 @@ impl FundForgeStrategy {
 
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_duration.clone(), gui_enabled.clone(), market_event_sender, tick_over_no_data).await;
+                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_duration.clone(), gui_enabled.clone(), market_event_sender, tick_over_no_data, strategy_event_sender.clone()).await;
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
@@ -189,7 +189,7 @@ impl FundForgeStrategy {
         }
 
         for account in accounts {
-            LEDGER_SERVICE.init_ledger(&account,strategy_mode, synchronize_accounts,backtest_accounts_starting_cash, backtest_account_currency).await;
+            LEDGER_SERVICE.init_ledger(&account,strategy_mode, synchronize_accounts,backtest_accounts_starting_cash, backtest_account_currency, strategy_event_sender.clone()).await;
         }
         strategy
     }
@@ -816,7 +816,7 @@ impl FundForgeStrategy {
     /// Unsubscribes from a subscription.
     pub async fn unsubscribe(&self,subscription: DataSubscription) {
         self.subscription_handler
-            .unsubscribe(self.time_utc(), subscription.clone(), true)
+            .unsubscribe(subscription.clone(), true)
             .await;
 
         self.indicator_handler

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use chrono::{DateTime, Utc, Duration as ChronoDuration, TimeZone, NaiveTime};
-use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, backtest_forward_buffer, TIMED_EVENT_HANDLER};
+use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, TIMED_EVENT_HANDLER};
 use crate::standardized_types::base_data::history::{get_historical_data};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent};
@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::{Sender};
 use crate::strategies::handlers::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
-use tokio::sync::{broadcast};
+use tokio::sync::{broadcast, mpsc};
 
 #[allow(dead_code)]
 pub struct HistoricalEngine {
@@ -23,7 +23,8 @@ pub struct HistoricalEngine {
     gui_enabled: bool,
     primary_subscription_updates: broadcast::Receiver<Vec<DataSubscription>>,
     market_event_sender: Sender<MarketMessageEnum>,
-    tick_over_no_data: bool
+    tick_over_no_data: bool,
+    strategy_event_sender: mpsc::Sender<StrategyEvent>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -36,7 +37,8 @@ impl HistoricalEngine {
         buffer_resolution: Duration,
         gui_enabled: bool,
         market_event_sender: Sender<MarketMessageEnum>,
-        tick_over_no_data: bool
+        tick_over_no_data: bool,
+        strategy_event_sender: mpsc::Sender<StrategyEvent>
     ) -> Self {
         let rx = subscribe_primary_subscription_updates();
         let engine = HistoricalEngine {
@@ -48,7 +50,8 @@ impl HistoricalEngine {
             gui_enabled,
             primary_subscription_updates: rx,
             market_event_sender,
-            tick_over_no_data
+            tick_over_no_data,
+            strategy_event_sender,
         };
         engine
     }
@@ -73,8 +76,11 @@ impl HistoricalEngine {
 
                 match self.mode {
                     StrategyMode::Backtest => {
-                        add_buffer(end_time, StrategyEvent::ShutdownEvent("Backtest Complete".to_string()) ).await;
-                        backtest_forward_buffer(warm_up_start_time).await;
+                        let event = StrategyEvent::ShutdownEvent("Backtest Complete".to_string());
+                        match self.strategy_event_sender.send(event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                        }
                     }
                     StrategyMode::Live => {}
                     StrategyMode::LivePaperTrading => {}
@@ -148,8 +154,11 @@ impl HistoricalEngine {
                     if time >= self.start_time {
                         warm_up_complete = true;
                         set_warmup_complete();
-                        add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
-                        backtest_forward_buffer(time).await;
+                        let event = StrategyEvent::WarmUpComplete;
+                        match self.strategy_event_sender.send(event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                        }
                         if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
                             break 'main_loop
                         }
@@ -194,15 +203,15 @@ impl HistoricalEngine {
 
                 if !strategy_time_slice.is_empty() {
                     // Update indicators and get any generated events.
-                    indicator_handler.update_time_slice(time, &strategy_time_slice).await;
-
-                    // add the strategy time slice to the new events.
-                    let slice_event = StrategyEvent::TimeSlice(
-                        strategy_time_slice,
-                    );
-                    add_buffer(time, slice_event).await;
+                    indicator_handler.update_time_slice(&strategy_time_slice).await;
                 }
-                backtest_forward_buffer(time).await;
+                let slice_event = StrategyEvent::TimeSlice(
+                    strategy_time_slice,
+                );
+                match self.strategy_event_sender.send(slice_event).await {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                }
                 last_time = time.clone();
             }
         }

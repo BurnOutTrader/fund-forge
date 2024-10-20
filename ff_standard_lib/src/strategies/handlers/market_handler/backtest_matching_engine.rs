@@ -7,7 +7,6 @@ use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_
 use crate::standardized_types::enums::{OrderSide, PositionSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
-use crate::strategies::client_features::server_connections::add_buffer;
 use crate::strategies::handlers::market_handler::price_service::{price_service_request_limit_fill_price_quantity, price_service_request_market_fill_price, price_service_request_market_price, PriceServiceResponse};
 use crate::strategies::ledgers::{LedgerMessage, LEDGER_SERVICE};
 use crate::strategies::strategy_events::StrategyEvent;
@@ -19,6 +18,7 @@ pub enum BackTestEngineMessage {
 pub async fn backtest_matching_engine(
     open_order_cache: Arc<DashMap<OrderId, Order>>, //todo, make these static or lifetimes if possible.. might not be optimal though, look it up!
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
+    strategy_event_sender: Sender<StrategyEvent>
 ) -> Sender<BackTestEngineMessage> {
     let (sender, mut receiver) = tokio::sync::mpsc::channel(100);
     tokio::task::spawn(async move {
@@ -28,7 +28,7 @@ pub async fn backtest_matching_engine(
                     match order_request {
                         OrderRequest::Create { order, .. } => {
                             open_order_cache.insert(order.id.clone(), order);
-                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache).await;
+                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {
                             let existing_order = open_order_cache.remove(&order_id);
@@ -37,13 +37,19 @@ pub async fn backtest_matching_engine(
                                     account, symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(),
                                     order_id: existing_order_id, tag: order.tag.clone(), time: time.to_string()
                                 });
-                                add_buffer(time, cancel_event).await;
+                                match strategy_event_sender.send(cancel_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
                                 closed_order_cache.insert(order_id, order);
                             } else {
                                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected {
                                     account, order_id, reason: String::from("No pending order found"), time: time.to_string()
                                 });
-                                add_buffer(time, fail_event).await;
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
                             }
                         }
                         OrderRequest::Update { account, order_id, update } => {
@@ -74,12 +80,18 @@ pub async fn backtest_matching_engine(
                                     order_id: order.id.clone(), update_type: update, tag: order.tag.clone(), time: time.to_string()
                                 });
                                 open_order_cache.insert(order_id, order);
-                                add_buffer(time, update_event).await;
+                                match strategy_event_sender.send(update_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
                             } else {
                                 let fail_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdateRejected {
                                     account, order_id, reason: String::from("No pending order found"), time: time.to_string()
                                 });
-                                add_buffer(time, fail_event).await;
+                                match strategy_event_sender.send(fail_event).await {
+                                    Ok(_) => {}
+                                    Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                }
                             }
                         }
                         OrderRequest::CancelAll { account, symbol_name } => {
@@ -97,7 +109,10 @@ pub async fn backtest_matching_engine(
                                             account: account.clone(), symbol_name: order.symbol_name.clone(),
                                             symbol_code: order.symbol_name.clone(), order_id: order.id.clone(), tag: order.tag.clone(), time: time.to_string()
                                         });
-                                    add_buffer(time.clone(), cancel_event).await;
+                                    match strategy_event_sender.send(cancel_event).await {
+                                        Ok(_) => {}
+                                        Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                                    }
                                     closed_order_cache.insert(order_id, order);
                                 }
                             }
@@ -116,7 +131,7 @@ pub async fn backtest_matching_engine(
                     }
                 }
                 BackTestEngineMessage::Time(time) => {
-                    simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache).await;
+                    simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
                 }
             }
         }
@@ -128,6 +143,7 @@ pub async fn simulated_order_matching (
     time: DateTime<Utc>,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
+    strategy_event_sender: Sender<StrategyEvent>
 ) {
     if open_order_cache.len() == 0 {
         return;
@@ -538,10 +554,22 @@ pub async fn simulated_order_matching (
     }
 
     for (order_id, reason) in rejected {
-        reject_order(reason, &order_id, time, &open_order_cache, closed_order_cache).await
+        let event = reject_order(reason, &order_id, time, &open_order_cache, closed_order_cache).await;
+        if let Some(event) = event {
+            match strategy_event_sender.send(event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+            }
+        }
     }
     for (order_id , time)in accepted {
-        accept_order(&order_id, time, &open_order_cache).await;
+        let event = accept_order(&order_id, time, &open_order_cache).await;
+        if let Some(event) = event {
+            match strategy_event_sender.send(event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+            }
+        }
     }
     for (order_id, price) in filled {
         fill_order(&order_id, time, price, &open_order_cache, &closed_order_cache).await;
@@ -593,14 +621,12 @@ async fn reject_order(
     time: DateTime<Utc>,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
-) {
+) -> Option<StrategyEvent> {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {
         order.state = OrderState::Rejected(reason.clone());
         order.time_created_utc = time.to_string();
 
-        add_buffer(
-            time,
-            StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
                 order_id: order.id.clone(),
                 account: order.account.clone(),
                 symbol_name: order.symbol_name.clone(),
@@ -608,31 +634,31 @@ async fn reject_order(
                 tag: order.tag.clone(),
                 time: time.to_string(),
                 symbol_code: order.symbol_name.clone(),
-            }),
-        ).await;
+            });
         closed_order_cache.insert(order.id.clone(), order.clone());
+        return Some(event)
     }
+    None
 }
 
 async fn accept_order(
     order_id: &OrderId,
     time: DateTime<Utc>,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
-) {
+) -> Option<StrategyEvent>{
     if let Some(mut order) = open_order_cache.get_mut(order_id) {
         order.state = OrderState::Accepted;
         order.time_created_utc = time.to_string();
 
-        add_buffer(
-            time,
-            StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
+        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
                 order_id: order.id.clone(),
                 account: order.account.clone(),
                 symbol_name: order.symbol_name.clone(),
                 tag: order.tag.clone(),
                 time: time.to_string(),
                 symbol_code: order.symbol_name.clone(),
-            }),
-        ).await;
+        });
+        return Some(event)
     }
+    None
 }

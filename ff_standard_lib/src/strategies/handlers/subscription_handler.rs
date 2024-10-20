@@ -15,7 +15,7 @@ use dashmap::DashMap;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use tokio::sync::RwLock;
-use crate::strategies::client_features::server_connections::{add_buffer, is_warmup_complete};
+use crate::strategies::client_features::server_connections::{is_warmup_complete};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::fundamental::Fundamental;
 use crate::standardized_types::base_data::quote::Quote;
@@ -25,6 +25,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::resolution::Resolution;
 use crate::strategies::strategy_events::StrategyEvent;
 use tokio::sync::broadcast;
+use tokio::sync::mpsc::Sender;
 use crate::standardized_types::base_data::history::get_historical_data;
 
 /// Manages all subscriptions for a strategy. each strategy has its own subscription handler.
@@ -43,13 +44,15 @@ pub struct SubscriptionHandler {
     quote_history: DashMap<DataSubscription, RollingWindow<Quote>>,
     fundamental_history: DashMap<DataSubscription, RollingWindow<Fundamental>>,
     open_candles: DashMap<DataSubscription, Candle>,
-    open_bars: DashMap<DataSubscription, QuoteBar>
+    open_bars: DashMap<DataSubscription, QuoteBar>,
+    strategy_event_sender: Sender<StrategyEvent>
 }
 
 impl SubscriptionHandler {
-    pub async fn new(strategy_mode: StrategyMode) -> Self {
+    pub async fn new(strategy_mode: StrategyMode, strategy_event_sender: Sender<StrategyEvent>) -> Self {
         let (tx, _) = broadcast::channel(16);
         SubscriptionHandler {
+            strategy_event_sender,
             fundamental_subscriptions: Default::default(),
             symbol_subscriptions: Default::default(),
             strategy_mode,
@@ -113,13 +116,13 @@ impl SubscriptionHandler {
         if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
             let symbol_handler = SymbolSubscriptionHandler::new(
                 new_subscription.symbol.clone(),
+                self.strategy_event_sender.clone(),
             ).await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
         }
 
         let symbol_subscriptions = self.symbol_subscriptions.get(&new_subscription.symbol).unwrap();
         let windows = symbol_subscriptions.value().subscribe(
-                current_time,
                 new_subscription.clone(),
                 current_time,
                 history_to_retain,
@@ -215,7 +218,7 @@ impl SubscriptionHandler {
         let current_subscriptions = self.subscriptions().await;
         for sub in current_subscriptions {
             if !new_subscription.contains(&sub) {
-                self.unsubscribe(current_time.clone(), sub.clone(), false).await;
+                self.unsubscribe(sub.clone(), false).await;
             }
         }
         for sub in new_subscription {
@@ -238,7 +241,7 @@ impl SubscriptionHandler {
     /// 'subscription: DataSubscription' The subscription to unsubscribe from.
     /// 'current_time: DateTime<Utc>' The current time is used to change our base data subscription and warm up any new consolidators if we are adjusting our base resolution.
     /// 'strategy_mode: StrategyMode' The strategy mode is used to determine how to warm up the history, in live mode we may not yet have a serialized history to the current time.
-    pub async fn unsubscribe(&self, current_time: DateTime<Utc>,subscription: DataSubscription, broadcast: bool) {
+    pub async fn unsubscribe(&self, subscription: DataSubscription, broadcast: bool) {
         if subscription.base_data_type == BaseDataType::Fundamentals {
             let mut fundamental_subscriptions = self.fundamental_subscriptions.write().await;
             if fundamental_subscriptions.contains(&subscription) {
@@ -258,7 +261,7 @@ impl SubscriptionHandler {
             return;
         }
 
-        self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(current_time, &subscription).await;
+        self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         strategy_subscriptions.retain(|x| x != &subscription);
         if self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count() == 0 {
@@ -577,15 +580,18 @@ pub struct SymbolSubscriptionHandler {
     secondary_subscriptions: DashMap<SubscriptionResolutionType, AHashMap<DataSubscription, ConsolidatorEnum>>,
     vendor_primary_resolutions: Vec<SubscriptionResolutionType>,
     vendor_data_types: Vec<BaseDataType>,
+    strategy_event_sender: Sender<StrategyEvent>
 }
 
 impl SymbolSubscriptionHandler {
     pub async fn new(
         symbol: Symbol,
+        strategy_event_sender: Sender<StrategyEvent>
     ) -> Self {
         let vendor_primary_resolutions = symbol.data_vendor.resolutions(symbol.market_type.clone()).await.unwrap();
         let vendor_data_types = symbol.data_vendor.base_data_types().await.unwrap();
         let handler = SymbolSubscriptionHandler {
+            strategy_event_sender,
             primary_subscriptions: DashMap::new(),
             secondary_subscriptions: DashMap::new(),
             vendor_primary_resolutions,
@@ -648,7 +654,6 @@ impl SymbolSubscriptionHandler {
     /// todo simplify live subscribing by just sending base subscription request to data server, and await callback for primary feed.
     async fn subscribe(
         &self,
-        current_time: DateTime<Utc>,
         new_subscription: DataSubscription,
         warm_up_to_time: DateTime<Utc>,
         history_to_retain: usize,
@@ -843,7 +848,11 @@ impl SymbolSubscriptionHandler {
                         map.value_mut().insert(consolidator.subscription().clone(), consolidator);
                     }
                     returned_windows.insert(new_subscription.clone(), window);
-                    add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()))).await;
+                    let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+                    match self.strategy_event_sender.send(event).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
+                    }
                     Ok(returned_windows)
                 } else {
                     let mut returned_windows = AHashMap::new();
@@ -895,7 +904,7 @@ impl SymbolSubscriptionHandler {
         }
     }
 
-    async fn unsubscribe(&self, current_time: DateTime<Utc>, subscription: &DataSubscription) {
+    async fn unsubscribe(&self, subscription: &DataSubscription) {
         let sub_res_type = subscription.subscription_resolution_type();
         if self.primary_subscriptions.contains_key(&sub_res_type) {
             //determine if we have secondaries for this
@@ -905,15 +914,27 @@ impl SymbolSubscriptionHandler {
                 }
                 self.secondary_subscriptions.remove(&sub_res_type);
             }
-            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()))).await;
+            let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
+            match self.strategy_event_sender.send(event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
+            }
         } else if let Some(mut map) = self.secondary_subscriptions.get_mut(&sub_res_type) {
             let sub = map.remove(&subscription);
-            match sub {
-                None => add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedUnSubscribed(subscription.clone(), "No subscription to unsubscribe".to_string()))).await,
-                Some(_consolidator) => add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()))).await,
+            let event = match sub {
+                None => StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedUnSubscribed(subscription.clone(), "No subscription to unsubscribe".to_string())),
+                Some(_consolidator) => StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone())),
+            };
+            match self.strategy_event_sender.send(event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
             }
         } else {
-            add_buffer(current_time, StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()))).await;
+            let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
+            match self.strategy_event_sender.send(event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
+            }
         }
     }
 

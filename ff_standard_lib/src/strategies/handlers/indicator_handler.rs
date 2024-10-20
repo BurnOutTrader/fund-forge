@@ -8,12 +8,13 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use tokio::sync::mpsc;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
 use crate::strategies::indicators::indicator_enum::IndicatorEnum;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
-use crate::strategies::client_features::server_connections::{add_buffer, is_warmup_complete, SUBSCRIPTION_HANDLER};
+use crate::strategies::client_features::server_connections::{is_warmup_complete, SUBSCRIPTION_HANDLER};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
@@ -22,14 +23,16 @@ pub struct IndicatorHandler {
     indicators: Arc<DashMap<DataSubscription, DashMap<IndicatorName, IndicatorEnum>>>,
     strategy_mode: StrategyMode,
     subscription_map: DashMap<IndicatorName, DataSubscription>, //used to quickly find the subscription of an indicator by name.
+    strategy_event_sender: mpsc::Sender<StrategyEvent>
 }
 
 impl IndicatorHandler {
-    pub async fn new(strategy_mode: StrategyMode) -> Self {
+    pub async fn new(strategy_mode: StrategyMode, strategy_event_sender: mpsc::Sender<StrategyEvent>) -> Self {
         let handler =Self {
             indicators: Default::default(),
             strategy_mode,
             subscription_map: Default::default(),
+            strategy_event_sender
         };
         handler
     }
@@ -83,7 +86,7 @@ impl IndicatorHandler {
         }
     }
 
-    pub async fn update_time_slice(&self, time: DateTime<Utc>, time_slice: &TimeSlice) {
+    pub async fn update_time_slice(&self, time_slice: &TimeSlice) {
         let mut results: BTreeMap<IndicatorName, Vec<IndicatorValues>> = BTreeMap::new();
         let indicators = self.indicators.clone();
 
@@ -102,11 +105,14 @@ impl IndicatorHandler {
 
         if !results.is_empty() {
             let results_vec: Vec<IndicatorValues> = results.into_values().flatten().collect();
-            add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await;
+            match self.strategy_event_sender.send(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
     }
 
-    pub async fn update_base_data(&self, time: DateTime<Utc>, base_data: &BaseDataEnum) {
+    pub async fn update_base_data(&self, base_data: &BaseDataEnum) {
         let mut results: BTreeMap<IndicatorName, Vec<IndicatorValues>> = BTreeMap::new();
         let indicators = self.indicators.clone();
 
@@ -124,7 +130,10 @@ impl IndicatorHandler {
 
         if !results.is_empty() {
             let results_vec: Vec<IndicatorValues> = results.into_values().flatten().collect();
-            add_buffer(time, StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await;
+            match self.strategy_event_sender.send(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
     }
 

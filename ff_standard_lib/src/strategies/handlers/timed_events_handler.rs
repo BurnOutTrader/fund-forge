@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc, Weekday};
+use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
-use crate::strategies::client_features::server_connections::add_buffer;
 use crate::strategies::strategy_events::StrategyEvent;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -125,14 +125,16 @@ pub struct TimedEventHandler {
     pub(crate) schedule: Arc<RwLock<Vec<TimedEvent>>>,
     is_warmed_up: RwLock<bool>,
     last_fired: Arc<RwLock<HashMap<String, DateTime<Utc>>>>,
+    strategy_event_sender: Sender<StrategyEvent>
 }
 
 impl TimedEventHandler {
-    pub fn new() -> Self {
+    pub fn new(strategy_event_sender: Sender<StrategyEvent>) -> Self {
         TimedEventHandler {
             schedule: Default::default(),
             is_warmed_up: RwLock::new(false),
             last_fired: Arc::new(RwLock::new(HashMap::new())),
+            strategy_event_sender
         }
     }
 
@@ -180,7 +182,11 @@ impl TimedEventHandler {
                 };
 
                 if should_fire {
-                    add_buffer(current_time, StrategyEvent::TimedEvent(event.name.clone())).await;
+                    let strategy_event = StrategyEvent::TimedEvent(event.name.clone());
+                    match self.strategy_event_sender.send(strategy_event).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
+                    }
                     last_fired.insert(event.name.clone(), current_time);
 
                     if let EventTimeEnum::DateTime { .. } = event.time {
