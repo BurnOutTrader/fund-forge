@@ -82,7 +82,7 @@ impl SubscriptionHandler {
     /// 'history_to_retain: usize' The number of bars to retain in the history.
     /// 'current_time: DateTime<Utc>' The current time is used to warm up consolidator history if we have already done our initial strategy warm up.
     /// 'strategy_mode: StrategyMode' The strategy mode is used to determine how to warm up the history, in live mode we may not yet have a serialized history to the current time.
-    pub async fn subscribe( //todo, when subscribing to data, if we already have a lower resolution subscribed for a symbol and it has a history window big enough to warm up, we could pass it in to speed warm ups
+    pub async fn subscribe(
         &self,
         new_subscription: DataSubscription,
         current_time: DateTime<Utc>,
