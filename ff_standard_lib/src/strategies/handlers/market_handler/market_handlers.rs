@@ -5,12 +5,8 @@ use std::sync::Arc;
 use dashmap::DashMap;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc;
-use crate::standardized_types::broker_enum::Brokerage;
 use crate::strategies::client_features::server_connections::{is_warmup_complete};
 use crate::standardized_types::time_slices::TimeSlice;
-use rust_decimal::Decimal;
-use tokio::sync::mpsc::error::SendError;
-use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest};
 use crate::strategies::handlers::market_handler::backtest_matching_engine;
 use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
@@ -19,10 +15,8 @@ use crate::strategies::historical_time::get_backtest_time;
 
 #[derive(Clone, Debug)]
 pub enum MarketMessageEnum {
-    TimeSliceUpdate(TimeSlice),
+    TimeSliceUpdate(Arc<TimeSlice>),
     OrderRequest(OrderRequest),
-    InitLedger{ brokerage: Brokerage, account_id: AccountId, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency },
-    LiveLedgerSnapShot{ brokerage: Brokerage, account_id: AccountId, synchronize_accounts: bool, account_info: AccountInfo, strategy_mode: StrategyMode}
 }
 
 pub(crate) async fn market_handler(
@@ -78,12 +72,6 @@ pub(crate) async fn market_handler(
                             }
                         }
                     }
-                }
-                MarketMessageEnum::InitLedger { brokerage, account_id, strategy_mode, synchronize_accounts, starting_cash, currency } => {
-                    LEDGER_SERVICE.init_ledger(brokerage, account_id, strategy_mode, synchronize_accounts, starting_cash, currency).await;
-                }
-                MarketMessageEnum::LiveLedgerSnapShot { brokerage, account_id, synchronize_accounts, account_info, strategy_mode} => {
-                    LEDGER_SERVICE.account_snapshot(brokerage, account_id, synchronize_accounts, account_info, strategy_mode).await;
                 }
             }
         };

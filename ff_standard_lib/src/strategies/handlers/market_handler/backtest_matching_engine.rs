@@ -3,14 +3,13 @@ use chrono_tz::Tz;
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender};
-use tokio::sync::oneshot;
 use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_str};
 use crate::standardized_types::enums::{OrderSide, PositionSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::strategies::client_features::server_connections::add_buffer;
 use crate::strategies::handlers::market_handler::price_service::{price_service_request_limit_fill_price_quantity, price_service_request_market_fill_price, price_service_request_market_price, PriceServiceResponse};
-use crate::strategies::ledgers::{LedgerMessage, LedgerRequest, LedgerResponse, LEDGER_SERVICE};
+use crate::strategies::ledgers::{LedgerMessage, LEDGER_SERVICE};
 use crate::strategies::strategy_events::StrategyEvent;
 
 pub enum BackTestEngineMessage {
@@ -453,28 +452,16 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue
                 };
-                let request = LedgerRequest::PaperExitPosition {
-                    symbol_name: order.symbol_name.clone(),
-                    side: PositionSide::Short,
-                    symbol_code: order.symbol_code.clone(),
-                    order_id: order.id.clone(),
-                    time,
-                    tag: "Force Exit: By Enter Long".to_string(),
-                };
-                let receiver: oneshot::Receiver<LedgerResponse> = LEDGER_SERVICE.request_callback(order.brokerage, &order.account_id, request).await;
-                match receiver.await {
-                    Ok(response) => {
-                        match response {
-                            LedgerResponse::PaperExitPosition { had_position } => {
-                                match had_position {
-                                    true => {}
-                                    false => {}
-                                }
-                            }
-                            _ => eprintln!("Incorrect response at callback: {:?}", response)
-                        }
-                    },
-                    Err(_) => {}
+                if LEDGER_SERVICE.is_short(&order.brokerage, &order.account_id, &order.symbol_name) {
+                    let request = LedgerMessage::ExitPaperPosition {
+                        symbol_name: order.symbol_name.clone(),
+                        side: PositionSide::Short,
+                        symbol_code: order.symbol_code.clone(),
+                        order_id: order.id.clone(),
+                        time,
+                        tag: "Force Exit: By Enter Long".to_string(),
+                    };
+                    LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, request).await;
                 }
                 filled.push((order.id.clone(), market_fill_price))
             }
@@ -486,95 +473,65 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue,
                 };
-                let request = LedgerRequest::PaperExitPosition {
-                    symbol_name: order.symbol_name.clone(),
-                    side: PositionSide::Long,
-                    symbol_code: order.symbol_code.clone(),
-                    order_id: order.id.clone(),
-                    time,
-                    tag: "Force Exit: By Enter Short".to_string(),
-                };
-                let receiver: oneshot::Receiver<LedgerResponse> = LEDGER_SERVICE.request_callback(order.brokerage, &order.account_id, request).await;
-                // the result makes no difference here
-                match receiver.await {
-                    Ok(_response) => {},
-                    Err(_) => {}
+                if LEDGER_SERVICE.is_long(&order.brokerage, &order.account_id, &order.symbol_name) {
+                    let request = LedgerMessage::ExitPaperPosition {
+                        symbol_name: order.symbol_name.clone(),
+                        side: PositionSide::Long,
+                        symbol_code: order.symbol_code.clone(),
+                        order_id: order.id.clone(),
+                        time,
+                        tag: "Force Exit: By Enter Short".to_string(),
+                    };
+                    LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, request).await;
                 }
-
                 filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::ExitLong => {
-                let request = LedgerRequest::PaperExitPosition {
-                    symbol_name: order.symbol_name.clone(),
-                    side: PositionSide::Long,
-                    symbol_code: order.symbol_code.clone(),
-                    order_id: order.id.clone(),
-                    time,
-                    tag: order.tag.clone(),
+                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
+                    Ok(price) => match price.price() {
+                        None => continue,
+                        Some(price) => price
+                    }
+                    Err(_) => continue,
                 };
-                let receiver: oneshot::Receiver<LedgerResponse> = LEDGER_SERVICE.request_callback(order.brokerage, &order.account_id, request).await;
-                match receiver.await {
-                    Ok(response) => {
-                        match response {
-                            LedgerResponse::PaperExitPosition { had_position } => {
-                                match had_position {
-                                    true => {
-                                        let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
-                                            Ok(price) => match price.price() {
-                                                None => continue,
-                                                Some(price) => price
-                                            }
-                                            Err(_) => continue
-                                        };
-                                        filled.push((order.id.clone(), market_fill_price));
-                                    }
-                                    false => {
-                                        let reason = "No Long Position To Exit".to_string();
-                                        rejected.push((order.id.clone(), reason));
-                                    }
-                                }
-                            }
-                            _ => eprintln!("Incorrect response at callback: {:?}", response)
-                        }
-                    },
-                    Err(e) => eprintln!("Error on callback: {:?}", e)
+                if LEDGER_SERVICE.is_long(&order.brokerage, &order.account_id, &order.symbol_name) {
+                    let request = LedgerMessage::ExitPaperPosition {
+                        symbol_name: order.symbol_name.clone(),
+                        side: PositionSide::Long,
+                        symbol_code: order.symbol_code.clone(),
+                        order_id: order.id.clone(),
+                        time,
+                        tag: order.tag.clone(),
+                    };
+                    LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, request).await;
+                    filled.push((order.id.clone(), market_fill_price));
+                } else {
+                    let reason = "No Long Position To Exit".to_string();
+                    rejected.push((order.id.clone(), reason));
                 }
             }
             OrderType::ExitShort => {
-                let request = LedgerRequest::PaperExitPosition {
-                    symbol_name: order.symbol_name.clone(),
-                    side: PositionSide::Short,
-                    symbol_code: order.symbol_code.clone(),
-                    order_id: order.id.clone(),
-                    time,
-                    tag: order.tag.clone(),
+                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
+                    Ok(price) => match price.price() {
+                        None => continue,
+                        Some(price) => price
+                    }
+                    Err(_) => continue,
                 };
-                let receiver: oneshot::Receiver<LedgerResponse> = LEDGER_SERVICE.request_callback(order.brokerage, &order.account_id, request).await;
-                match receiver.await {
-                    Ok(response) => {
-                        match response {
-                            LedgerResponse::PaperExitPosition { had_position } => {
-                                match had_position {
-                                    true => {
-                                        let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
-                                            Ok(price) => match price.price() {
-                                                None => continue,
-                                                Some(price) => price
-                                            }
-                                            Err(_) => continue
-                                        };
-                                        filled.push((order.id.clone(), market_fill_price));
-                                    }
-                                    false => {
-                                        let reason = "No Short Position To Exit".to_string();
-                                        rejected.push((order.id.clone(), reason));
-                                    }
-                                }
-                            }
-                            _ => eprintln!("Incorrect response at callback: {:?}", response)
-                        }
-                    },
-                    Err(e) => eprintln!("Error on callback: {:?}", e)
+                if LEDGER_SERVICE.is_short(&order.brokerage, &order.account_id, &order.symbol_name) {
+                    let request = LedgerMessage::ExitPaperPosition {
+                        symbol_name: order.symbol_name.clone(),
+                        side: PositionSide::Short,
+                        symbol_code: order.symbol_code.clone(),
+                        order_id: order.id.clone(),
+                        time,
+                        tag: order.tag.clone(),
+                    };
+                    LEDGER_SERVICE.send_message(order.brokerage, &order.account_id, request).await;
+                    filled.push((order.id.clone(), market_fill_price));
+                } else {
+                    let reason = "No Short Position To Exit".to_string();
+                    rejected.push((order.id.clone(), reason));
                 }
             }
         }

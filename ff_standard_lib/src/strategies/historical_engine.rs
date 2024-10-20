@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use chrono::{DateTime, Utc, Duration as ChronoDuration, TimeZone, NaiveTime};
 use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, backtest_forward_buffer, TIMED_EVENT_HANDLER};
 use crate::standardized_types::base_data::history::{get_historical_data};
@@ -176,9 +177,10 @@ impl HistoricalEngine {
                 let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                 // update our consolidators and create the strategies time slice with any new data or just create empty slice.
                 if !time_slice.is_empty() {
-                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
+                    let arc_slice = Arc::new(time_slice.clone());
+                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(arc_slice.clone())).await.unwrap();
                     // Add only primary data which the strategy has subscribed to into the strategies time slice
-                    if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
+                    if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
                         strategy_time_slice.extend(consolidated_data);
                     }
 

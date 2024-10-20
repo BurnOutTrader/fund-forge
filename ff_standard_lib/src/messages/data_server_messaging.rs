@@ -322,8 +322,6 @@ DataServerResponse {
     LiveAccountUpdates {brokerage: Brokerage, account_id: AccountId, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
 
     LivePositionUpdates {brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: String, open_pnl: Decimal, open_quantity: Volume, side: Option<PositionSide>},
-
-    AccountSnapShot{account_info: AccountInfo}
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -370,7 +368,6 @@ impl DataServerResponse {
             DataServerResponse::PaperAccountInit { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
-            DataServerResponse::AccountSnapShot { .. } => None,
             DataServerResponse::LivePositionUpdates { .. } => None
         }
     }

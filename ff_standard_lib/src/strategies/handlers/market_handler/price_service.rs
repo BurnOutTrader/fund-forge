@@ -78,7 +78,7 @@ pub(crate) async fn price_service_request_limit_fill_price_quantity(order_side: 
 
 #[derive(Debug)]
 pub enum PriceServiceMessage {
-    TimeSliceUpdate(TimeSlice),
+    TimeSliceUpdate(Arc<TimeSlice>),
     FillPriceEstimate{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName, volume: Volume},
     LimitFillPriceEstimate{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName, volume: Volume, limit: Price},
     MarketPrice{callback_id: u64, order_side: OrderSide, symbol_name: SymbolName}

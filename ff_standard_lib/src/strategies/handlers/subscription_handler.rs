@@ -317,7 +317,7 @@ impl SubscriptionHandler {
     }
 
     /// Updates any consolidators with primary data
-    pub async fn update_time_slice(&self, time_slice: TimeSlice) -> Option<TimeSlice> {
+    pub async fn update_time_slice(&self, time_slice: Arc<TimeSlice>) -> Option<TimeSlice> {
         let symbol_subscriptions = self.symbol_subscriptions.clone();
         let mut open_bars: BTreeMap<DataSubscription, BaseDataEnum> = BTreeMap::new();
         let mut time_slice_bars = TimeSlice::new();

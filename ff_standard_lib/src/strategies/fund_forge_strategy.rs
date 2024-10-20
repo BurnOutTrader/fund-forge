@@ -40,7 +40,7 @@ use crate::strategies::handlers::market_handler::price_service::{price_service_r
 use crate::strategies::historical_engine::HistoricalEngine;
 use crate::strategies::historical_time::get_backtest_time;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
-use crate::strategies::ledgers::{LedgerMessage, LedgerRequest, LedgerResponse, LEDGER_SERVICE};
+use crate::strategies::ledgers::{LedgerMessage, LEDGER_SERVICE};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 
@@ -216,72 +216,15 @@ impl FundForgeStrategy {
 
     /// true if long, false if flat or short.
     pub async fn is_long(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        if !LEDGER_SERVICE.has_ledger(brokerage.clone(), account_id) {
-            LEDGER_SERVICE.init_ledger(brokerage.clone(), account_id.clone(), self.mode, self.synchronize_accounts, self.backtest_accounts_starting_cash, self.backtest_account_currency).await;
-        }
-        let response_receiver = LEDGER_SERVICE.request_callback(
-            brokerage.clone(),
-            account_id,
-            LedgerRequest::IsLongRequest(symbol_name.clone())
-        ).await;
-
-        match response_receiver.await {
-            Ok(LedgerResponse::IsLongResponse(is_long)) => is_long,
-            Ok(_) => {
-                eprintln!("Incorrect ledger response received");
-                false
-            },
-            Err(e) => {
-                eprintln!("Failed to receive response from ledger: {}", e);
-                false
-            },
-        }
+        LEDGER_SERVICE.is_long(brokerage, account_id, symbol_name)
     }
 
     pub async fn is_flat(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        if !LEDGER_SERVICE.has_ledger(brokerage.clone(), account_id) {
-            LEDGER_SERVICE.init_ledger(brokerage.clone(), account_id.clone(), self.mode, self.synchronize_accounts, self.backtest_accounts_starting_cash, self.backtest_account_currency).await;
-        }
-        let response_receiver = LEDGER_SERVICE.request_callback(
-            brokerage.clone(),
-            account_id,
-            LedgerRequest::IsFlatRequest(symbol_name.clone())
-        ).await;
-
-        match response_receiver.await {
-            Ok(LedgerResponse::IsFlatResponse(is_flat)) => is_flat,
-            Ok(_) => {
-                eprintln!("Incorrect ledger response received");
-                true
-            },
-            Err(e) => {
-                eprintln!("Failed to receive response from ledger: {}", e);
-                true
-            },
-        }
+        LEDGER_SERVICE.is_flat(brokerage, account_id, symbol_name)
     }
 
     pub async fn is_short(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        if !LEDGER_SERVICE.has_ledger(brokerage.clone(), account_id) {
-            LEDGER_SERVICE.init_ledger(brokerage.clone(), account_id.clone(), self.mode, self.synchronize_accounts, self.backtest_accounts_starting_cash, self.backtest_account_currency).await;
-        }
-        let response_receiver = LEDGER_SERVICE.request_callback(
-            brokerage.clone(),
-            account_id,
-            LedgerRequest::IsShortRequest(symbol_name.clone())
-        ).await;
-
-        match response_receiver.await {
-            Ok(LedgerResponse::IsShortResponse(is_short)) => is_short,
-            Ok(_) => {
-                eprintln!("Incorrect ledger response received");
-                false
-            },
-            Err(e) => {
-                eprintln!("Failed to receive response from ledger: {}", e);
-                false
-            },
-        }
+        LEDGER_SERVICE.is_short(brokerage, account_id, symbol_name)
     }
 
     async fn order_id(
@@ -686,7 +629,7 @@ impl FundForgeStrategy {
     }
 
     /// get the last price for the symbol name
-    pub async fn last_price(&self, symbol_name: &SymbolName) -> Option<Price> {
+    pub async fn last_price(&self, _symbol_name: &SymbolName) -> Option<Price> {
         todo!("send callback to price service")
     }
 
@@ -1056,72 +999,22 @@ impl FundForgeStrategy {
     // Updated position query functions
 
     pub async fn in_profit(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        if !LEDGER_SERVICE.has_ledger(brokerage.clone(), account_id) {
-            LEDGER_SERVICE.init_ledger(brokerage.clone(), account_id.clone(), self.mode, self.synchronize_accounts, self.backtest_accounts_starting_cash, self.backtest_account_currency).await;
-        }
-        let request = LedgerRequest::InProfitRequest(symbol_name.clone());
-        let response_receiver = LEDGER_SERVICE.request_callback(brokerage.clone(), account_id, request).await;
-
-        match response_receiver.await {
-            Ok(LedgerResponse::InProfitResponse(response)) => response,
-            Ok(_) => panic!("Incorrect ledger response received"),
-            Err(e) => panic!("Failed to receive response from ledger: {}", e),
-        }
+        LEDGER_SERVICE.in_profit(brokerage, account_id, symbol_name)
     }
 
     pub async fn in_drawdown(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> bool {
-        if !LEDGER_SERVICE.has_ledger(brokerage.clone(), account_id) {
-            LEDGER_SERVICE.init_ledger(brokerage.clone(), account_id.clone(), self.mode, self.synchronize_accounts, self.backtest_accounts_starting_cash, self.backtest_account_currency).await;
-        }
-        let request = LedgerRequest::InDrawDownRequest(symbol_name.clone());
-        let response_receiver = LEDGER_SERVICE.request_callback(brokerage.clone(), account_id, request).await;
-
-        match response_receiver.await {
-            Ok(LedgerResponse::InDrawDownResponse(response)) => response,
-            Ok(_) => panic!("Incorrect ledger response received"),
-            Err(e) => panic!("Failed to receive response from ledger: {}", e),
-        }
+        LEDGER_SERVICE.in_drawdown(brokerage, account_id, symbol_name)
     }
 
     pub async fn pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
-        if !LEDGER_SERVICE.has_ledger(brokerage.clone(), account_id) {
-            LEDGER_SERVICE.init_ledger(brokerage.clone(), account_id.clone(), self.mode, self.synchronize_accounts, self.backtest_accounts_starting_cash, self.backtest_account_currency).await;
-        }
-        let request = LedgerRequest::OpenPnlRequest(symbol_name.clone());
-        let response_receiver = LEDGER_SERVICE.request_callback(brokerage.clone(), account_id, request).await;
-
-        match response_receiver.await {
-            Ok(LedgerResponse::OpenPnlResponse(response)) => response,
-            Ok(_) => panic!("Incorrect ledger response received"),
-            Err(e) => panic!("Failed to receive response from ledger: {}", e),
-        }
+        LEDGER_SERVICE.open_pnl_symbol(brokerage, account_id, symbol_name)
     }
 
     pub async fn booked_pnl(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
-        if !LEDGER_SERVICE.has_ledger(brokerage.clone(), account_id) {
-            LEDGER_SERVICE.init_ledger(brokerage.clone(), account_id.clone(), self.mode, self.synchronize_accounts, self.backtest_accounts_starting_cash, self.backtest_account_currency).await;
-        }
-        let request = LedgerRequest::BookedPnlRequest(symbol_name.clone());
-        let response_receiver = LEDGER_SERVICE.request_callback(brokerage.clone(), account_id, request).await;
-
-        match response_receiver.await {
-            Ok(LedgerResponse::BookedPnlResponse(response)) => response,
-            Ok(_) => panic!("Incorrect ledger response received"),
-            Err(e) => panic!("Failed to receive response from ledger: {}", e),
-        }
+        LEDGER_SERVICE.booked_pnl(brokerage, account_id, symbol_name)
     }
 
     pub async fn position_size(&self, brokerage: &Brokerage, account_id: &AccountId, symbol_name: &SymbolName) -> Decimal {
-        if !LEDGER_SERVICE.has_ledger(brokerage.clone(), account_id) {
-            LEDGER_SERVICE.init_ledger(brokerage.clone(), account_id.clone(), self.mode, self.synchronize_accounts, self.backtest_accounts_starting_cash, self.backtest_account_currency).await;
-        }
-        let request = LedgerRequest::PositionSizeRequest(symbol_name.clone());
-        let response_receiver = LEDGER_SERVICE.request_callback(brokerage.clone(), account_id, request).await;
-
-        match response_receiver.await {
-            Ok(LedgerResponse::PositionSizeResponse(response)) => response,
-            Ok(_) => panic!("Incorrect ledger response received"),
-            Err(e) => panic!("Failed to receive response from ledger: {}", e),
-        }
+        LEDGER_SERVICE.position_size(brokerage, account_id, symbol_name)
     }
 }

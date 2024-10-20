@@ -306,20 +306,6 @@ pub async fn response_handler(
                                 DataServerResponse::OrderUpdates(update_event) => {
                                     order_updates_sender.send(update_event).await.unwrap()
                                 }
-                                DataServerResponse::AccountSnapShot { account_info } => {
-                                    //tokio::task::spawn(async move {
-                                        let brokerage = account_info.brokerage.clone();
-                                            let msg = MarketMessageEnum::InitLedger {
-                                                brokerage,
-                                                account_id: account_info.account_id,
-                                                strategy_mode: mode,
-                                                synchronize_accounts: synchronise_accounts,
-                                                starting_cash: account_info.cash_available,
-                                                currency: account_info.currency,
-                                            };
-                                            market_update_sender.send(msg).await.unwrap()
-                                    //});
-                                }
                                 DataServerResponse::LiveAccountUpdates { brokerage, account_id, cash_value, cash_available, cash_used } => {
                                     tokio::task::spawn(async move {
                                         let message = LedgerMessage::LiveAccountUpdates { brokerage, account_id: account_id.clone(), cash_value, cash_available, cash_used };
@@ -443,8 +429,9 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
 
                                 let mut strategy_time_slice = TimeSlice::new();
                                 if !time_slice.is_empty() {
-                                    market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
-                                    if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
+                                    let arc_slice = Arc::new(time_slice.clone());
+                                    market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(arc_slice.clone())).await.unwrap();
+                                    if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
                                         strategy_time_slice.extend(consolidated_data);
                                     }
                                     strategy_time_slice.extend(time_slice);
