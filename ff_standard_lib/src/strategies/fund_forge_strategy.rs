@@ -210,7 +210,7 @@ impl FundForgeStrategy {
         }
 
         for account in accounts {
-            LEDGER_SERVICE.init_ledger(&account,strategy_mode, synchronize_accounts,backtest_accounts_starting_cash, backtest_account_currency).await;
+            LEDGER_SERVICE.init_ledger(&account,strategy_mode, synchronize_accounts, backtest_accounts_starting_cash, backtest_account_currency).await;
         }
         strategy
     }

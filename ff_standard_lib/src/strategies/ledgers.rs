@@ -6,13 +6,11 @@ use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use dashmap::DashMap;
 use csv::Writer;
-use futures::future::join_all;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use tokio::sync::{Mutex};
-use tokio::task::JoinHandle;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -108,22 +106,9 @@ impl LedgerService {
     }
 
     pub async fn timeslice_updates(&self, time: DateTime<Utc>, time_slice: Arc<TimeSlice>) {
-        let mut tasks: Vec<JoinHandle<()>> = Vec::new();
-
         for ledger in self.ledgers.iter() {
-            let ledger_clone = ledger.value().clone();
-
-            let time_slice = time_slice.clone();
-            let time = time.clone();
-            let task = tokio::spawn(async move {
-                ledger_clone.timeslice_update(time_slice, time).await;
-            });
-
-            tasks.push(task);
+            ledger.timeslice_update(time_slice.clone(), time).await;
         }
-
-        // Wait for all tasks to complete
-        join_all(tasks).await;
     }
 
     pub async fn init_ledger(&self, account: &Account, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency) {
@@ -176,7 +161,6 @@ impl LedgerService {
             .unwrap_or_else(|| dec!(0))
     }
 
-    #[allow(unused)]
     pub fn open_pnl(&self, account: &Account) -> Decimal {
         self.ledgers.get(account)
              .map(|ledger| ledger.get_open_pnl())
@@ -582,12 +566,19 @@ impl Ledger {
                 if position.is_closed {
                     continue
                 }
-                //returns booked pnl if exit on brackets
-                position.update_base_data(&base_data_enum, time, self.currency);
 
-                // TODO[Strategy]: Add option to mirror account position or use internal position curating.
                 if self.mode != StrategyMode::Live || self.is_simulating_pnl {
-                    self.open_pnl.insert(data_symbol_name.clone(), position.open_pnl.clone());
+                    let open_pnl = position.update_base_data(&base_data_enum, time, self.currency);
+                    self.open_pnl.insert(data_symbol_name.clone(), open_pnl);
+
+                    if let Some(codes) = self.symbol_code_map.get(data_symbol_name) {
+                        for code in codes.value() {
+                            if let Some(mut position) = self.positions.get_mut(code) {
+                                let open_pnl = position.update_base_data(&base_data_enum, time, self.currency);
+                                self.open_pnl.insert(data_symbol_name.clone(), open_pnl);
+                            }
+                        }
+                    }
                 }
 
                 if position.is_closed {
@@ -749,12 +740,16 @@ impl Ledger {
             };
 
             let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
-            if !self.symbol_code_map.contains_key(&symbol_name) && symbol_name != symbol_code  {
-                self.symbol_code_map
-                    .entry(symbol_name.clone())
-                    .or_insert_with(Vec::new)
-                    .push(symbol_code.clone());
+            if symbol_name != symbol_code && !self.symbol_code_map.contains_key(&symbol_name)   {
+               self.symbol_code_map.insert(symbol_name.clone(), vec![]);
             };
+            if symbol_name != symbol_code {
+                if let Some(mut code_map) = self.symbol_code_map.get_mut(&symbol_name) {
+                    if !code_map.contains(&symbol_code) {
+                        code_map.value_mut().push(symbol_code.clone());
+                    }
+                }
+            }
 
             let id = self.generate_id(&symbol_name, position_side);
             // Create a new position
@@ -777,6 +772,9 @@ impl Ledger {
             self.positions.insert(symbol_code.clone(), position);
             if !self.positions_closed.contains_key(&symbol_code) {
                 self.positions_closed.insert(symbol_code.clone(), vec![]);
+            }
+            if symbol_name != symbol_code {
+                self.symbol_code_map.entry(symbol_name).or_insert(vec![]).push(symbol_code);
             }
 
             let event = PositionUpdateEvent::PositionOpened {

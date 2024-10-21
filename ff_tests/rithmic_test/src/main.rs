@@ -5,7 +5,7 @@ use colored::Colorize;
 use ff_rithmic_api::systems::RithmicSystem;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -17,7 +17,7 @@ use ff_standard_lib::standardized_types::accounts::{Account, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
+use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 #[allow(unused_imports)]
@@ -199,12 +199,10 @@ pub async fn on_data_received(
                                 //todo THIS WORKS I WAS CHECKING WRONG BROKERAGE
                                 let open_profit = strategy.pnl(&account,  &symbol_code).await;
                                 let position_size = strategy.position_size(&account, &symbol_code).await;
-                                if bars_since_entry % 15 == 0 {
-                                    println!(
-                                        "Bars: {}, Open Profit: {}, Position Size: {}",
-                                        bars_since_entry, open_profit, position_size
-                                    );
-                                }
+                                println!(
+                                    "Bars: {}, Open Profit: {}, Position Size: {}",
+                                    bars_since_entry, open_profit, position_size
+                                );
 
                             /*    if (is_long || is_short) && bars_since_entry > 1 && open_profit > dec!(5) && position_size < dec!(15) {
                                     let cancel_order_time = Utc::now() + Duration::seconds(5);
