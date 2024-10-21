@@ -501,7 +501,18 @@ pub async fn simulated_order_matching (
                 filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::ExitLong => {
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
+                let long_quantity = LEDGER_SERVICE.position_size(&order.account, &order.symbol_name);
+                let is_long = LEDGER_SERVICE.is_long(&order.account, &order.symbol_name);
+                if long_quantity == dec!(0.0) && is_long {
+                    let reason = "No Long Position To Exit".to_string();
+                    rejected.push((order.id.clone(), reason));
+                    continue;
+                };
+                let adjusted_size = match order.quantity_open > long_quantity && is_long {
+                    true => long_quantity,
+                    false => order.quantity_open
+                };
+                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), adjusted_size).await {
                     Ok(price) => match price.price() {
                         None => continue,
                         Some(price) => price
@@ -510,29 +521,48 @@ pub async fn simulated_order_matching (
                 };
                 if LEDGER_SERVICE.is_long(&order.account, &order.symbol_name) {
                     match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, order.tag.clone()).await {
-                        Ok(_) => {}
-                        Err(_) => {}
+                        Ok(event) => {
+                            strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap()
+                        }
+                        Err(s) => {
+                            //strategy_event_sender.send(StrategyEvent::OrderEvents()).unwrap()
+                        }
                     }
-                    filled.push((order.id.clone(), market_fill_price));
+                    //filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Long Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
                 }
             }
             OrderType::ExitShort => {
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
+                let short_quantity = LEDGER_SERVICE.position_size(&order.account, &order.symbol_name);
+                let is_short = LEDGER_SERVICE.is_short(&order.account, &order.symbol_name);
+                if short_quantity == dec!(0.0) && is_short {
+                    let reason = "No Short Position To Exit".to_string();
+                    rejected.push((order.id.clone(), reason));
+                    continue;
+                };
+                let adjusted_size = match order.quantity_open > short_quantity && is_short {
+                    true => short_quantity,
+                    false => order.quantity_open
+                };
+                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), adjusted_size).await {
                     Ok(price) => match price.price() {
                         None => continue,
                         Some(price) => price
                     }
                     Err(_) => continue,
                 };
-                if LEDGER_SERVICE.is_short(&order.account, &order.symbol_name) {
+                if is_short {
                     match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, order.tag.clone()).await {
-                        Ok(_) => {}
-                        Err(_) => {}
+                        Ok(event) => {
+                            strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap()
+                        }
+                        Err(s) => {
+                            //strategy_event_sender.send(StrategyEvent::OrderEvents()).unwrap()
+                        }
                     }
-                    filled.push((order.id.clone(), market_fill_price));
+                   // filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Short Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
