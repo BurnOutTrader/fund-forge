@@ -1,8 +1,10 @@
 use std::sync::Arc;
+use chrono::Utc;
 use dashmap::DashMap;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
 use crate::standardized_types::orders::{Order, OrderId, OrderState, OrderUpdateEvent, OrderUpdateType};
+use crate::strategies::ledgers::LEDGER_SERVICE;
 use crate::strategies::strategy_events::StrategyEvent;
 
 //todo, this probably isnt needed
@@ -15,6 +17,10 @@ pub fn live_order_update(
 ) {
     tokio::task::spawn(async move {
         while let Some(order_update_event) = order_event_receiver.recv().await {
+            match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("{}", e)
+            }
             match order_update_event {
                 OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time } => {
                     if let Some(mut order) = open_order_cache.get_mut(&order_id) {
@@ -27,53 +33,45 @@ pub fn live_order_update(
                         }
                     }
                 }
-                OrderUpdateEvent::OrderFilled { account: _, symbol_name: _, symbol_code: _, order_id: _, price: _, quantity: _, tag: _, time: _ } => {
+                OrderUpdateEvent::OrderFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time } => {
                    //todo send direct via LEDGER_SERVICE
-                    /* if let Some((order_id, mut order)) = open_order_cache.remove(&order_id) {
+                     if let Some((order_id, mut order)) = open_order_cache.remove(&order_id) {
                         order.symbol_code = Some(symbol_code.clone());
                         order.state = OrderState::Filled;
                         order.quantity_filled += quantity;
                         order.time_filled_utc = Some(time.clone());
-                        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order_id.clone(), price, account_id: account_id.clone(), symbol_name, brokerage, tag, time: time.clone(), quantity, symbol_code: symbol_code.clone() });
-                        add_buffer(Utc::now(), event).await;
-                        if let Some(broker_map) = ledger_senders.get(&order.brokerage) {
-                            if let Some(account_map) = broker_map.get_mut(&order.account_id) {
-                                let symbol_code = match &order.symbol_code {
-                                    None => order.symbol_name.clone(),
-                                    Some(code) => code.clone()
-                                };
-                                let ledger_message = LedgerMessage::UpdateOrCreatePosition {symbol_name: order.symbol_name.clone(), symbol_code, order_id: order_id.clone(), quantity: order.quantity_filled, side: order.side.clone(), time: Utc::now(), market_fill_price: order.average_fill_price.unwrap(), tag: order.tag.clone()};
-                                match account_map.value().send(ledger_message).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Error Sender Ledger Message in backtest_matching_engine::fill_order(), {}", e)
-                                }
-                            }
-                        }
+                         match LEDGER_SERVICE.update_or_create_position(&account, symbol_name.clone(), symbol_code, order_id.clone(), quantity, order.side.clone(), Utc::now(), price, tag).await {
+                             Ok(events) => {
+                                 for event in events {
+                                     match strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await {
+                                         Ok(_) => {}
+                                         Err(e) => eprintln!("{}", e)
+                                     }
+                                 }
+                             }
+                             Err(_) => {}
+                         }
                         closed_order_cache.insert(order_id.clone(), order);
-                    }*/
+                    }
                 }
-                OrderUpdateEvent::OrderPartiallyFilled { account: _, symbol_name: _, symbol_code: _, order_id: _, price: _, quantity: _, tag: _, time: _ } => {
-               /*     if let Some(mut order) = open_order_cache.get_mut(&order_id) {
+                OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time } => {
+                   if let Some(mut order) = open_order_cache.get_mut(&order_id) {
                         order.state = OrderState::PartiallyFilled;
                         order.symbol_code = Some(symbol_code.clone());
                         order.quantity_filled += quantity;
                         order.time_filled_utc = Some(time.clone());
-                        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled { order_id: order_id.clone(), price, account_id: account_id.clone(), symbol_name: symbol_name.clone(), brokerage, tag, time: time.clone(), quantity, symbol_code: symbol_code.clone() });
-                        add_buffer(Utc::now(), event).await;
-                        if let Some(broker_map) = ledger_senders.get(&order.brokerage) {
-                            if let Some(account_map) = broker_map.get_mut(&order.account_id) {
-                                let symbol_code = match &order.symbol_code {
-                                    None => order.symbol_name.clone(),
-                                    Some(code) => code.clone()
-                                };
-                                let ledger_message = LedgerMessage::UpdateOrCreatePosition {symbol_name: order.symbol_name.clone(), symbol_code, order_id: order_id.clone(), quantity: order.quantity_filled, side: order.side.clone(), time: Utc::now(), market_fill_price: order.average_fill_price.unwrap(), tag: order.tag.clone()};
-                                match account_map.value().send(ledger_message).await {
-                                    Ok(_) => {}
-                                    Err(e) => eprintln!("Error Sender Ledger Message in backtest_matching_engine::fill_order(), {}", e)
+                        match LEDGER_SERVICE.update_or_create_position(&account, symbol_name.clone(), symbol_code, order_id, quantity, order.side.clone(), Utc::now(), price, tag).await {
+                            Ok(events) => {
+                                for event in events {
+                                    match strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await {
+                                        Ok(_) => {}
+                                        Err(e) => eprintln!("{}", e)
+                                    }
                                 }
                             }
+                            Err(_) => {}
                         }
-                    }*/
+                    }
                 }
                 OrderUpdateEvent::OrderCancelled { account, symbol_name, symbol_code, order_id, tag, time } => {
                     if let Some((order_id, mut order)) = open_order_cache.remove(&order_id) {

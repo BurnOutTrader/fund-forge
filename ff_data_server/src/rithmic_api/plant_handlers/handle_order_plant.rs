@@ -210,10 +210,9 @@ pub async fn match_order_plant_id(
                         Some(symbol_code) => symbol_code.clone()
                     };
                     // on sim accounts we don't need to do this, not sure about live.
-                    /*
-                    let event = OrderUpdateEvent::OrderAccepted {
-                        brokerage: client.brokerage.clone(),
-                        account_id: account_id.to_owned(),
+
+                    /*let event = OrderUpdateEvent::OrderAccepted {
+                        account: Account{brokerage: client.brokerage, account_id: account_id.clone()},
                         symbol_name,
                         symbol_code,
                         order_id: order_id.clone(),
@@ -486,7 +485,7 @@ pub async fn match_order_plant_id(
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();
 
                     //todo[Rithmic Api] Not sure if i should do this or not
-                  /*  match msg.is_snapshot {
+                    match msg.is_snapshot {
                         None => {}
                         Some(some) => {
                             match some {
@@ -494,7 +493,7 @@ pub async fn match_order_plant_id(
                                 false => {}
                             }
                         }
-                    }*/
+                    }
                     let order_id = if let Some(brokerage_map) = BASKET_ID_TO_ID_MAP.get(&client.brokerage) {
                         match brokerage_map.get(&basket_id) {
                             Some(id) => id.value().clone(),
@@ -534,7 +533,6 @@ pub async fn match_order_plant_id(
 
                     match notify_type {
                         1 => {
-
                             let event = OrderUpdateEvent::OrderAccepted {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 symbol_name,
@@ -638,8 +636,6 @@ pub async fn match_order_plant_id(
                         },
                         _ => return,  // Ignore other notification types
                     };
-
-
 
                     if let (Some(cash_value), Some(cash_available)) = (
                         client.account_balance.get(&account_id).map(|r| *r),

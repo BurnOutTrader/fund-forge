@@ -304,30 +304,6 @@ impl Ledger {
         ledger
     }
 
-    //todo, this fn will be changed into individual fns and a message que will be added for live to prevent race conditions on position updates
- /*   pub(crate) async fn process_message(&self, request: LedgerMessage) {
-        match request {
-            LedgerMessage::PrintLedgerRequest => {
-                self.print().await;
-            },
-            LedgerMessage::ExportTrades(directory) => {
-                self.export_positions_to_csv(&directory);
-            }
-            LedgerMessage::LiveAccountUpdates {  cash_value, cash_available, cash_used,.. } => {
-                let mut ledger_cash_value = self.cash_value.lock().await;
-                *ledger_cash_value = cash_value;
-                let mut  ledger_cash_available = self.cash_available.lock().await;
-                *ledger_cash_available = cash_available;
-                let mut  ledger_cash_used = self.cash_used.lock().await;
-                *ledger_cash_used = cash_used;
-            }
-            LedgerMessage::LivePositionUpdates { .. } => {
-                todo!()
-            }
-        }
-        None
-    }*/
-
     pub async fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
         let mut account_cash_value= self.cash_value.lock().await;
         *account_cash_value = cash_value;

@@ -166,7 +166,7 @@ impl FundForgeStrategy {
             StrategyMode::Live => None,
             StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
                 let sender = backtest_matching_engine::backtest_matching_engine(open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender.clone(), notify.clone()).await;
-                Some(sender)
+                Some(sender) //todo, live paper wont update orders unless we update time in the backtest engine.
             }
         };
 

@@ -7,14 +7,14 @@ use ff_rithmic_api::systems::RithmicSystem;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
-use ff_standard_lib::strategies::strategy_events::{StrategyEvent, StrategyEventBuffer};
+use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 #[allow(unused_imports)]
 use ff_standard_lib::gui_types::settings::Color;
-use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
+use ff_standard_lib::standardized_types::accounts::{Account, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -36,7 +36,7 @@ use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::LivePaperTrading,
+        StrategyMode::Live,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
