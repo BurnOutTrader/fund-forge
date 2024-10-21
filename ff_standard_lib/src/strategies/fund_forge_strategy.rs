@@ -210,7 +210,7 @@ impl FundForgeStrategy {
         }
 
         for account in accounts {
-            LEDGER_SERVICE.init_ledger(&account,strategy_mode, synchronize_accounts,backtest_accounts_starting_cash, backtest_account_currency, strategy_event_sender.clone()).await;
+            LEDGER_SERVICE.init_ledger(&account,strategy_mode, synchronize_accounts,backtest_accounts_starting_cash, backtest_account_currency).await;
         }
         strategy
     }
@@ -1030,20 +1030,20 @@ impl FundForgeStrategy {
 
     pub async fn print_ledger(&self, account: &Account) {
         let request = LedgerMessage::PrintLedgerRequest;
-        LEDGER_SERVICE.send_message(account, request).await;
+        LEDGER_SERVICE.process_message(account, request).await;
     }
 
     pub async fn print_ledgers(&self) {
         let request = LedgerMessage::PrintLedgerRequest;
         for account in LEDGER_SERVICE.ledgers.iter() {
-            LEDGER_SERVICE.send_message(account.key(), request.clone()).await;
+            LEDGER_SERVICE.process_message(account.key(), request.clone()).await;
         }
     }
 
     pub async fn export_trades(&self, directory: &str) {
         let request = LedgerMessage::ExportTrades(directory.to_string());
         for account_entry in LEDGER_SERVICE.ledgers.iter() {
-            LEDGER_SERVICE.send_message(account_entry.key(), request.clone()).await;
+            LEDGER_SERVICE.process_message(account_entry.key(), request.clone()).await;
         }
     }
 

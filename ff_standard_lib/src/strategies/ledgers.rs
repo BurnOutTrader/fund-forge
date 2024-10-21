@@ -11,8 +11,7 @@ use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
-use tokio::sync::mpsc::{Sender};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex};
 use tokio::task::JoinHandle;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
@@ -23,7 +22,6 @@ use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::market_handler::price_service::price_service_request_market_fill_price;
-use crate::strategies::strategy_events::StrategyEvent;
 /*todo,
    Make ledger take functions as params, create_order_reduce_position, increase_position, reduce_position, we will pass these in based on the type of positions we want.
    1. we can have a cumulative model, like we have now, for position building.
@@ -45,21 +43,23 @@ impl LedgerService {
             ledgers: Default::default(),
         }
     }
-    pub async fn send_message(&self, account: &Account, ledger_message: LedgerMessage) {
+    pub async fn process_message(&self, account: &Account, ledger_message: LedgerMessage) -> Option<Result<Vec<PositionUpdateEvent>, OrderUpdateEvent>> {
         if let Some(ledger_ref) = self.ledgers.get(account) {
-            ledger_ref.process_message(ledger_message).await;
+            return ledger_ref.process_message(ledger_message).await
         }
+        None
     }
 
     pub async fn timeslice_updates(&self, time: DateTime<Utc>, time_slice: Arc<TimeSlice>) {
         let mut tasks: Vec<JoinHandle<()>> = Vec::new();
 
         for ledger in self.ledgers.iter() {
-            let message = LedgerMessage::TimeSlice(time.clone(), time_slice.clone());
             let ledger_clone = ledger.value().clone();
 
+            let time_slice = time_slice.clone();
+            let time = time.clone();
             let task = tokio::spawn(async move {
-                ledger_clone.process_message(message).await;
+                ledger_clone.timeslice_update(time_slice, time).await;
             });
 
             tasks.push(task);
@@ -69,7 +69,7 @@ impl LedgerService {
         join_all(tasks).await;
     }
 
-    pub async fn init_ledger(&self, account: &Account, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency, strategy_event_sender: Sender<StrategyEvent>) {
+    pub async fn init_ledger(&self, account: &Account, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency) {
         if !self.ledgers.contains_key(account) {
             let ledger: Ledger = match strategy_mode {
                 StrategyMode::Live => {
@@ -79,10 +79,10 @@ impl LedgerService {
                             panic!("LEDGER_SERVICE: Error initializing account: {}", e);
                         }
                     };
-                    Ledger::new(account_info, strategy_mode, synchronize_accounts, strategy_event_sender)
+                    Ledger::new(account_info, strategy_mode, synchronize_accounts)
                 },
                 StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                    match account.brokerage.paper_account_init(strategy_mode, starting_cash, currency, account.account_id.clone(), strategy_event_sender).await {
+                    match account.brokerage.paper_account_init(strategy_mode, starting_cash, currency, account.account_id.clone()).await {
                         Ok(ledger) => ledger,
                         Err(e) => {
                             panic!("LEDGER_SERVICE: Error initializing account: {}", e);
@@ -153,7 +153,6 @@ impl LedgerService {
 
 #[derive(Clone, PartialEq, Debug)]
 pub(crate) enum LedgerMessage {
-    TimeSlice(DateTime<Utc>, Arc<TimeSlice>),
     PrintLedgerRequest,
     ExportTrades(String),
     UpdateOrCreatePosition {
@@ -200,7 +199,6 @@ pub struct Ledger {
     pub mode: StrategyMode,
     pub leverage: u32,
     pub is_simulating_pnl: bool,
-    pub(crate) strategy_event_sender: mpsc::Sender<StrategyEvent>
     //todo, add daily max loss, max order size etc to ledger
 }
 impl Ledger {
@@ -208,7 +206,6 @@ impl Ledger {
         account_info: AccountInfo,
         mode: StrategyMode,
         synchronise_accounts: bool,
-        strategy_event_sender: Sender<StrategyEvent>
     ) -> Self {
         let is_simulating_pnl = match synchronise_accounts {
             true => false,
@@ -230,7 +227,6 @@ impl Ledger {
         }
 
         let ledger = Self {
-            strategy_event_sender,
             account: Account::new(account_info.brokerage, account_info.account_id),
             cash_value: Mutex::new(account_info.cash_value),
             cash_available: Mutex::new(account_info.cash_available),
@@ -252,12 +248,10 @@ impl Ledger {
         ledger
     }
 
-    pub(crate) async fn process_message(&self, request: LedgerMessage) {
+    //todo, this fn will be changed into individual fns and a message que will be added for live to prevent race conditions on position updates
+    pub(crate) async fn process_message(&self, request: LedgerMessage) -> Option<Result<Vec<PositionUpdateEvent>, OrderUpdateEvent>> {
         match request {
-            LedgerMessage::TimeSlice(time, slice) =>  {
-                self.timeslice_update(slice, time).await;
-            },
-            LedgerMessage::ExitPaperPosition { symbol_name, symbol_code: _, order_id: _, side, time, tag: _ } => {
+            LedgerMessage::ExitPaperPosition { symbol_name, symbol_code: _, order_id: _, side, time, tag } => {
                 if self.mode == StrategyMode::Backtest || self.mode == StrategyMode::LivePaperTrading {
                     if let Some((symbol_name, position)) = self.positions.remove(&symbol_name) {
                         if position.side == side {
@@ -266,20 +260,27 @@ impl Ledger {
                                 PositionSide::Short => OrderSide::Buy
                             };
                             let market_price = match price_service_request_market_fill_price(side, symbol_name.clone(), position.quantity_open).await {
-                                Ok(price) => price.price(),
+                                Ok(price) => price.price().unwrap(),
                                 Err(e) => panic!("Unable to get fill price for {}: {}", position.symbol_name, e) //todo, we shou
                             };
-                            self.paper_exit_position(&position.symbol_name, time, market_price.unwrap(), "Flatten All".to_string()).await;
-                            self.positions_closed.entry(symbol_name.clone()).or_insert(vec![]).push(position.clone());
+                            match self.paper_exit_position(&symbol_name, time, market_price, tag).await {
+                                Ok(event) => {
+                                    return Some(Ok(vec![event]));
+                                }
+                                Err(e) => panic!("Ledgers: This shouldn't happen: {}", e)
+                            }
                         }
                     }
                 }
             }
             LedgerMessage::PrintLedgerRequest => {
-                //ledger.print().await;
+                self.print().await;
             },
             LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag } => {
-                self.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await;
+                return match self.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await {
+                    Ok(events) => Some(Ok(events)),
+                    Err(e) => Some(Err(e)),
+                }
             }
             LedgerMessage::FlattenAccount(time) => {
                 if self.mode == StrategyMode::Backtest || self.mode == StrategyMode::LivePaperTrading {
@@ -305,7 +306,10 @@ impl Ledger {
                                     continue;
                                 }
                             };
-                            self.paper_exit_position(&position.symbol_name, time, market_price.price().unwrap(), "Flatten All".to_string()).await;
+                            match self.paper_exit_position(&position.symbol_name, time, market_price.price().unwrap(), "Flatten All".to_string()).await {
+                                Ok(e) => return Some(Ok(vec![e])),
+                                Err(_) => {}
+                            }
                             self.positions_closed.entry(symbol_name).or_insert(vec![]).push(position);
                         }
                     }
@@ -326,6 +330,7 @@ impl Ledger {
                 todo!()
             }
         }
+        None
     }
 
     pub async fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
@@ -643,8 +648,7 @@ impl Ledger {
         time: DateTime<Utc>,
         market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
         tag: String
-    ) {
-        println!("Started");
+    ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
         let mut updates = vec![];
         // Check if there's an existing position for the given symbol
         let mut remaining_quantity = quantity;
@@ -663,7 +667,6 @@ impl Ledger {
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         if self.mode != StrategyMode::Live {
-                            //this should never panic since we just freed the margin temp
                             self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price).await.unwrap();
                         }
                         self.positions.insert(symbol_code.clone(), existing_position);
@@ -718,12 +721,11 @@ impl Ledger {
                 updates.push(event);
             } else {
                 if self.mode != StrategyMode::Live {
-                    println!("Margin");
                     match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                         Ok(_) => {}
                         Err(e) => {
                             //todo this now gets added directly to buffer
-                            let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                            let event = OrderUpdateEvent::OrderRejected {
                                 account: self.account.clone(),
                                 symbol_name: symbol_name.clone(),
                                 symbol_code: symbol_code.clone(),
@@ -731,15 +733,10 @@ impl Ledger {
                                 reason: e.to_string(),
                                 tag,
                                 time: time.to_string()
-                            });
-                            match self.strategy_event_sender.send(event).await {
-                                Ok(_) => {}
-                                Err(e) => eprintln!("Ledger: Failed to send event: {}", e)
-                            }
-                            return
+                            };
+                            return Err(event)
                         }
                     }
-                    println!("Margin Completed");
                 }
                 let event = existing_position.add_to_position(market_fill_price, quantity, time, tag.clone(), self.currency).await;
                 self.positions.insert(symbol_code.clone(), existing_position);
@@ -760,7 +757,7 @@ impl Ledger {
                 match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                     Ok(_) => {}
                     Err(e) => {
-                        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderRejected {
+                        let event = OrderUpdateEvent::OrderRejected {
                             account: self.account.clone(),
                             symbol_name: symbol_name.clone(),
                             symbol_code: symbol_code.clone(),
@@ -768,12 +765,8 @@ impl Ledger {
                             reason: e.to_string(),
                             tag,
                             time: time.to_string()
-                        });
-                        match self.strategy_event_sender.send(event).await {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Ledger: Failed to send event: {}", e)
-                        }
-                        return
+                        };
+                        return Err(event)
                     }
                 }
             }
@@ -784,7 +777,6 @@ impl Ledger {
                 OrderSide::Sell => PositionSide::Short,
             };
 
-            eprintln!("Symbol Name for info request: {}", symbol_name);
             let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
             if !self.symbol_code_map.contains_key(&symbol_name) && symbol_name != symbol_code  {
                 self.symbol_code_map
@@ -831,15 +823,7 @@ impl Ledger {
             //println!("Position Created: {}", symbol_name);
             updates.push(event);
         }
-        //todo this now gets added directly to buffer
-        for event in updates {
-            let event = StrategyEvent::PositionEvents(event);
-            match self.strategy_event_sender.send(event).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Ledger: Failed to send event: {}", e)
-            }
-        }
-        println!("Completed")
+        Ok(updates)
     }
 }
 
@@ -853,7 +837,6 @@ mod historical_ledgers {
     use crate::standardized_types::new_types::{Price, Volume};
     use crate::standardized_types::position::PositionUpdateEvent;
     use crate::standardized_types::subscriptions::SymbolName;
-    use crate::strategies::strategy_events::StrategyEvent;
 
     impl Ledger {
         pub(crate) async fn release_margin_used(&self, symbol_name: &SymbolName) {
@@ -906,7 +889,7 @@ mod historical_ledgers {
             time: DateTime<Utc>,
             market_price: Price,
             tag: String
-        ) {
+        ) -> Result<PositionUpdateEvent, String> {
             if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
                 // Mark the position as closed
                 existing_position.is_closed = true;
@@ -944,12 +927,9 @@ mod historical_ledgers {
                     .or_insert_with(Vec::new)                    // If no entry exists, create a new Vec
                     .push(existing_position);     // Push the closed position to the Vec
 
-                let event = StrategyEvent::PositionEvents(event);
-                match self.strategy_event_sender.send(event).await {
-                    Ok(_) => {}
-                    Err(e) => eprintln!("Ledger: Failed to send event: {}", e)
-                }
+                return Ok(event)
             }
+            Err("No position to exit".to_string())
         }
     }
 }

@@ -264,14 +264,14 @@ pub async fn response_handler(
                                 DataServerResponse::LiveAccountUpdates { account, cash_value, cash_available, cash_used } => {
                                     tokio::task::spawn(async move {
                                         let message = LedgerMessage::LiveAccountUpdates { account: account.clone(), cash_value, cash_available, cash_used };
-                                        LEDGER_SERVICE.send_message(&account, message).await;
+                                        LEDGER_SERVICE.process_message(&account, message).await;
                                     });
                                 }
                                 DataServerResponse::LivePositionUpdates { account, symbol_name, symbol_code, open_pnl, open_quantity, side } => {
                                     if synchronise_accounts {
                                         tokio::task::spawn(async move {
                                             let message = LedgerMessage::LivePositionUpdates { account: account.clone(), symbol_name, symbol_code, open_pnl, open_quantity, side };
-                                            LEDGER_SERVICE.send_message(&account, message).await;
+                                            LEDGER_SERVICE.process_message(&account, message).await;
                                         });
                                     }
                                 }

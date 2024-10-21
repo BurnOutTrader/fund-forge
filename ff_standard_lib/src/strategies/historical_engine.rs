@@ -210,12 +210,13 @@ impl HistoricalEngine {
                     strategy_time_slice.extend(time_slice);
                 }
 
-                if let Some(backtest_order_sender) = &self.historical_message_sender {
+                if let Some(backtest_message_sender) = &self.historical_message_sender {
                     let message = BackTestEngineMessage::Time(time);
-                    match backtest_order_sender.send(message).await {
+                    match backtest_message_sender.send(message).await {
                         Ok(_) => {}
                         Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
                     }
+                    self.notified.notified().await;
                 }
 
                 // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
@@ -233,9 +234,6 @@ impl HistoricalEngine {
                 match self.strategy_event_sender.send(slice_event).await {
                     Ok(_) => {}
                     Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
-                }
-                if self.mode == StrategyMode::Backtest {
-                    self.notified.notified().await;
                 }
                 last_time = time.clone();
             }

@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -486,7 +486,7 @@ pub async fn simulated_order_matching (
                         time,
                         tag: "Force Exit: By Enter Long".to_string(),
                     };
-                    LEDGER_SERVICE.send_message(&order.account, request).await;
+                    LEDGER_SERVICE.process_message(&order.account, request).await;
                 }
                 filled.push((order.id.clone(), market_fill_price));
             }
@@ -507,7 +507,7 @@ pub async fn simulated_order_matching (
                         time,
                         tag: "Force Exit: By Enter Short".to_string(),
                     };
-                    LEDGER_SERVICE.send_message(&order.account, request).await;
+                    LEDGER_SERVICE.process_message(&order.account, request).await;
                 }
                 filled.push((order.id.clone(), market_fill_price));
             }
@@ -528,7 +528,7 @@ pub async fn simulated_order_matching (
                         time,
                         tag: order.tag.clone(),
                     };
-                    LEDGER_SERVICE.send_message(&order.account, request).await;
+                    LEDGER_SERVICE.process_message(&order.account, request).await;
                     filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Long Position To Exit".to_string();
@@ -552,7 +552,7 @@ pub async fn simulated_order_matching (
                         time,
                         tag: order.tag.clone(),
                     };
-                    LEDGER_SERVICE.send_message(&order.account, request).await;
+                    LEDGER_SERVICE.process_message(&order.account, request).await;
                     filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Short Position To Exit".to_string();
@@ -563,28 +563,16 @@ pub async fn simulated_order_matching (
     }
 
     for (order_id, reason) in rejected {
-        let event = reject_order(reason, &order_id, time, &open_order_cache, closed_order_cache).await;
-        if let Some(event) = event {
-            match strategy_event_sender.send(event).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
-            }
-        }
+        reject_order(reason, &order_id, time, &open_order_cache, closed_order_cache, &strategy_event_sender).await;
     }
     for (order_id , time)in accepted {
-        let event = accept_order(&order_id, time, &open_order_cache).await;
-        if let Some(event) = event {
-            match strategy_event_sender.send(event).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
-            }
-        }
+        accept_order(&order_id, time, &open_order_cache, &strategy_event_sender).await;
     }
     for (order_id, price) in filled {
-        fill_order(&order_id, time, price, &open_order_cache, &closed_order_cache).await;
+        fill_order(&order_id, time, price, &open_order_cache, &closed_order_cache, &strategy_event_sender).await;
     }
     for (order_id, price, volume) in partially_filled {
-        partially_fill_order(&order_id, time, price, volume, &open_order_cache).await;
+        partially_fill_order(&order_id, time, price, volume, &open_order_cache, &strategy_event_sender).await;
     }
 }
 
@@ -594,12 +582,33 @@ async fn fill_order(
     market_price: Price,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
+    strategy_event_sender: &Sender<StrategyEvent>
 ) {
-    if let Some((_, order)) = open_order_cache.remove(order_id) {  // Remove the order here
+    if let Some((_, mut order)) = open_order_cache.remove(order_id) {  // Remove the order here
         let symbol_code = match &order.symbol_code {
             None => order.symbol_name.clone(),
             Some(code) => code.clone()
         };
+
+        order.quantity_filled = order.quantity_open;
+        order.quantity_open = dec!(0);
+
+        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {
+            order_id: order.id.clone(),
+            account: order.account.clone(),
+            symbol_name: order.symbol_name.clone(),
+            tag: order.tag.clone(),
+            time: time.to_string(),
+            symbol_code: order.symbol_name.clone(),
+            quantity: order.quantity_filled,
+            price: market_price
+        });
+
+        match strategy_event_sender.send(event).await {
+            Ok(_) => {}
+            Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+        }
+
         let ledger_message = LedgerMessage::UpdateOrCreatePosition {
             symbol_name: order.symbol_name.clone(),
             symbol_code,
@@ -610,7 +619,8 @@ async fn fill_order(
             market_fill_price: market_price,
             tag: order.tag.clone()
         };
-        LEDGER_SERVICE.send_message(&order.account, ledger_message).await;
+        LEDGER_SERVICE.process_message(&order.account, ledger_message).await;
+
         closed_order_cache.insert(order.id.clone(), order);
     }
 }
@@ -620,12 +630,48 @@ async fn partially_fill_order(
     fill_price: Price,
     fill_volume: Volume,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
+    strategy_event_sender: &Sender<StrategyEvent>
 ) {
     if let Some(mut order) = open_order_cache.get_mut(order_id) {
         let symbol_code = match &order.symbol_code {
             None => order.symbol_name.clone(),
             Some(code) => code.clone()
         };
+
+        // If the order is now fully filled, remove it from open_order_cache
+        if order.quantity_open <= dec!(0) {
+            open_order_cache.remove(order_id);
+            let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {
+                order_id: order.id.clone(),
+                account: order.account.clone(),
+                symbol_name: order.symbol_name.clone(),
+                tag: order.tag.clone(),
+                time: time.to_string(),
+                symbol_code: order.symbol_name.clone(),
+                quantity: fill_volume,
+                price: fill_price
+            });
+            match strategy_event_sender.send(event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+            }
+        } else if fill_volume > dec!(0) {
+            let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderPartiallyFilled {
+                order_id: order.id.clone(),
+                account: order.account.clone(),
+                symbol_name: order.symbol_name.clone(),
+                tag: order.tag.clone(),
+                time: time.to_string(),
+                symbol_code: order.symbol_name.clone(),
+                quantity: fill_volume,
+                price: fill_price
+            });
+            match strategy_event_sender.send(event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+            }
+        }
+
         let ledger_message = LedgerMessage::UpdateOrCreatePosition {
             symbol_name: order.symbol_name.clone(),
             symbol_code,
@@ -636,15 +682,10 @@ async fn partially_fill_order(
             market_fill_price: fill_price,
             tag: order.tag.clone()
         };
-        LEDGER_SERVICE.send_message(&order.account, ledger_message).await;
+        LEDGER_SERVICE.process_message(&order.account, ledger_message).await;
 
         // Update the remaining quantity
         order.quantity_open -= fill_volume;
-
-        // If the order is now fully filled, remove it from open_order_cache
-        if order.quantity_open <= dec!(0) {
-            open_order_cache.remove(order_id);
-        }
     }
 }
 
@@ -654,7 +695,8 @@ async fn reject_order(
     time: DateTime<Utc>,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
-) -> Option<StrategyEvent> {
+    strategy_event_sender: &Sender<StrategyEvent>
+) {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {
         order.state = OrderState::Rejected(reason.clone());
         order.time_created_utc = time.to_string();
@@ -669,16 +711,19 @@ async fn reject_order(
                 symbol_code: order.symbol_name.clone(),
             });
         closed_order_cache.insert(order.id.clone(), order.clone());
-        return Some(event)
+        match strategy_event_sender.send(event).await {
+            Ok(_) => {}
+            Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+        }
     }
-    None
 }
 
 async fn accept_order(
     order_id: &OrderId,
     time: DateTime<Utc>,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
-) -> Option<StrategyEvent>{
+    strategy_event_sender: &Sender<StrategyEvent>
+) {
     if let Some(mut order) = open_order_cache.get_mut(order_id) {
         order.state = OrderState::Accepted;
         order.time_created_utc = time.to_string();
@@ -691,7 +736,9 @@ async fn accept_order(
                 time: time.to_string(),
                 symbol_code: order.symbol_name.clone(),
         });
-        return Some(event)
+        match strategy_event_sender.send(event).await {
+            Ok(_) => {}
+            Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+        }
     }
-    None
 }
