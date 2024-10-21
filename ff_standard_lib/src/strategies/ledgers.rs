@@ -757,7 +757,6 @@ impl Ledger {
         }
         if remaining_quantity > dec!(0.0) {
             if self.mode != StrategyMode::Live {
-                println!("Margin");
                 match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                     Ok(_) => {}
                     Err(e) => {
@@ -777,7 +776,6 @@ impl Ledger {
                         return
                     }
                 }
-                println!("Margin Completed");
             }
 
             // Determine the side of the position based on the order side
@@ -861,11 +859,14 @@ mod historical_ledgers {
         pub(crate) async fn release_margin_used(&self, symbol_name: &SymbolName) {
             //todo, this will have to be done based on position size, how much size are we releasing
             if let Some((_, margin_used)) = self.margin_used.remove(symbol_name) {
-                let mut account_cash_used= self.cash_used.lock().await;
-                *account_cash_used -= margin_used;
-
-                let mut account_cash_available= self.cash_available.lock().await;
-                *account_cash_available += margin_used;
+                {
+                    let mut account_cash_used = self.cash_used.lock().await;
+                    *account_cash_used -= margin_used;
+                }
+                {
+                    let mut account_cash_available = self.cash_available.lock().await;
+                    *account_cash_available += margin_used;
+                }
             }
         }
 
