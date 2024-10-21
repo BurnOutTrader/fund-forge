@@ -21,7 +21,6 @@ use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::strategies::handlers::market_handler::price_service::price_service_request_market_fill_price;
 /*todo,
    Make ledger take functions as params, create_order_reduce_position, increase_position, reduce_position, we will pass these in based on the type of positions we want.
    1. we can have a cumulative model, like we have now, for position building.
@@ -43,11 +42,68 @@ impl LedgerService {
             ledgers: Default::default(),
         }
     }
-    pub async fn process_message(&self, account: &Account, ledger_message: LedgerMessage) -> Option<Result<Vec<PositionUpdateEvent>, OrderUpdateEvent>> {
+
+    pub(crate) async fn update_or_create_position(
+        &self,
+        account: &Account,
+        symbol_name: SymbolName,
+        symbol_code: SymbolCode,
+        order_id: OrderId,
+        quantity: Volume,
+        side: OrderSide,
+        time: DateTime<Utc>,
+        market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
+        tag: String
+    ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
         if let Some(ledger_ref) = self.ledgers.get(account) {
-            return ledger_ref.process_message(ledger_message).await
+            ledger_ref.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await
+        } else {
+            panic!("No ledger for account: {}", account);
         }
-        None
+    }
+
+    pub(crate) async fn paper_exit_position(
+        &self,
+        account: &Account,
+        symbol_name: &SymbolName,
+        time: DateTime<Utc>,
+        market_price: Price,
+        tag: String
+    ) -> Result<PositionUpdateEvent, String> {
+        if let Some(ledger_ref) = self.ledgers.get(account) {
+            ledger_ref.paper_exit_position(symbol_name, time, market_price, tag).await
+        } else {
+            panic!("No ledger for account: {}", account);
+        }
+    }
+
+    pub async fn live_account_updates(&self, account: &Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
+        if let Some(ledger_ref) = self.ledgers.get(account) {
+            let mut ledger_cash_value = ledger_ref.cash_value.lock().await;
+            *ledger_cash_value = cash_value;
+            let mut ledger_cash_available = ledger_ref.cash_available.lock().await;
+            *ledger_cash_available = cash_available;
+            let mut ledger_cash_used = ledger_ref.cash_used.lock().await;
+            *ledger_cash_used = cash_used;
+        }
+    }
+
+    pub async fn print_ledgers(&self) {
+        for ledger in self.ledgers.iter() {
+            ledger.value().print().await;
+        }
+    }
+
+    pub fn export_trades(&self, account: &Account, directory: &str) {
+        if let Some(ledger) = self.ledgers.get(account) {
+            ledger.export_positions_to_csv(directory);
+        }
+    }
+
+    pub async fn print_ledger(&self, account: &Account) {
+       if let Some(ledger) = self.ledgers.get(account) {
+           ledger.value().print().await;
+       }
     }
 
     pub async fn timeslice_updates(&self, time: DateTime<Utc>, time_slice: Arc<TimeSlice>) {
@@ -249,72 +305,11 @@ impl Ledger {
     }
 
     //todo, this fn will be changed into individual fns and a message que will be added for live to prevent race conditions on position updates
-    pub(crate) async fn process_message(&self, request: LedgerMessage) -> Option<Result<Vec<PositionUpdateEvent>, OrderUpdateEvent>> {
+ /*   pub(crate) async fn process_message(&self, request: LedgerMessage) {
         match request {
-            LedgerMessage::ExitPaperPosition { symbol_name, symbol_code: _, order_id: _, side, time, tag } => {
-                if self.mode == StrategyMode::Backtest || self.mode == StrategyMode::LivePaperTrading {
-                    if let Some((symbol_name, position)) = self.positions.remove(&symbol_name) {
-                        if position.side == side {
-                            let side = match position.side {
-                                PositionSide::Long => OrderSide::Sell,
-                                PositionSide::Short => OrderSide::Buy
-                            };
-                            let market_price = match price_service_request_market_fill_price(side, symbol_name.clone(), position.quantity_open).await {
-                                Ok(price) => price.price().unwrap(),
-                                Err(e) => panic!("Unable to get fill price for {}: {}", position.symbol_name, e) //todo, we shou
-                            };
-                            match self.paper_exit_position(&symbol_name, time, market_price, tag).await {
-                                Ok(event) => {
-                                    return Some(Ok(vec![event]));
-                                }
-                                Err(e) => panic!("Ledgers: This shouldn't happen: {}", e)
-                            }
-                        }
-                    }
-                }
-            }
             LedgerMessage::PrintLedgerRequest => {
                 self.print().await;
             },
-            LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag } => {
-                return match self.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await {
-                    Ok(events) => Some(Ok(events)),
-                    Err(e) => Some(Err(e)),
-                }
-            }
-            LedgerMessage::FlattenAccount(time) => {
-                if self.mode == StrategyMode::Backtest || self.mode == StrategyMode::LivePaperTrading {
-                    // Collect keys (symbol names) to process
-                    let symbols_to_process: Vec<String> = self.positions.iter()
-                        .map(|entry| entry.key().clone())
-                        .collect();
-
-                    for symbol_name in symbols_to_process {
-                        if let Some((_, position)) = self.positions.remove(&symbol_name) {
-                            let side = match position.side {
-                                PositionSide::Long => OrderSide::Sell,
-                                PositionSide::Short => OrderSide::Buy
-                            };
-                            let market_price = match price_service_request_market_fill_price(
-                                side,
-                                symbol_name.clone(),
-                                position.quantity_open,
-                            ).await {
-                                Ok(price) => price,
-                                Err(e) => {
-                                    eprintln!("Unable to get fill price for {}: {}. Skipping this position.", position.symbol_name, e);
-                                    continue;
-                                }
-                            };
-                            match self.paper_exit_position(&position.symbol_name, time, market_price.price().unwrap(), "Flatten All".to_string()).await {
-                                Ok(e) => return Some(Ok(vec![e])),
-                                Err(_) => {}
-                            }
-                            self.positions_closed.entry(symbol_name).or_insert(vec![]).push(position);
-                        }
-                    }
-                }
-            }
             LedgerMessage::ExportTrades(directory) => {
                 self.export_positions_to_csv(&directory);
             }
@@ -331,7 +326,7 @@ impl Ledger {
             }
         }
         None
-    }
+    }*/
 
     pub async fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
         let mut account_cash_value= self.cash_value.lock().await;
@@ -820,7 +815,6 @@ impl Ledger {
                 let cash_available = self.cash_available.lock().await;
                 *cash_value = *cash_used + *cash_available;
             }
-            //println!("Position Created: {}", symbol_name);
             updates.push(event);
         }
         Ok(updates)

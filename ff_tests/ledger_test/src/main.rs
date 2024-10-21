@@ -102,7 +102,7 @@ pub async fn on_data_received(
                                         && candle.close > candle.open
                                         && last_side != LastSide::Long
                                     {
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, None ,&account_1, None, dec!(7), String::from("Enter Long")).await;
+                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, None ,&account_1, None, dec!(100), String::from("Enter Long")).await;
                                         println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                         last_side = LastSide::Long;
                                     }
@@ -111,12 +111,13 @@ pub async fn on_data_received(
                                     let is_long = strategy.is_long(&account_1, &candle.symbol.name).await;
                                     let long_pnl = strategy.pnl(&account_1, &candle.symbol.name).await;
                                     let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name).await;
+                                    println!("Pnl: {}", long_pnl);
                                     if is_long
                                         && long_pnl > dec!(150.0)
                                         && long_pnl < dec!(300.0)
                                         && position_size < dec!(21)
                                     {
-                                        let _add_order_id = strategy.enter_long(&candle.symbol.name, None, &account_1, None, dec!( 7), String::from("Add Long")).await;
+                                        let _add_order_id = strategy.enter_long(&candle.symbol.name, None, &account_1, None, dec!( 100), String::from("Add Long")).await;
                                         println!("Strategy: Add Long, Time {}", strategy.time_local());
                                     }
 

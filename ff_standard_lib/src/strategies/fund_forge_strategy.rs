@@ -40,7 +40,7 @@ use crate::strategies::handlers::market_handler::price_service::{price_service_r
 use crate::strategies::historical_engine::HistoricalEngine;
 use crate::strategies::historical_time::get_backtest_time;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
-use crate::strategies::ledgers::{LedgerMessage, LEDGER_SERVICE};
+use crate::strategies::ledgers::{LEDGER_SERVICE};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 
@@ -1029,21 +1029,16 @@ impl FundForgeStrategy {
     }
 
     pub async fn print_ledger(&self, account: &Account) {
-        let request = LedgerMessage::PrintLedgerRequest;
-        LEDGER_SERVICE.process_message(account, request).await;
+        LEDGER_SERVICE.print_ledger(account).await;
     }
 
     pub async fn print_ledgers(&self) {
-        let request = LedgerMessage::PrintLedgerRequest;
-        for account in LEDGER_SERVICE.ledgers.iter() {
-            LEDGER_SERVICE.process_message(account.key(), request.clone()).await;
-        }
+        LEDGER_SERVICE.print_ledgers().await;
     }
 
     pub async fn export_trades(&self, directory: &str) {
-        let request = LedgerMessage::ExportTrades(directory.to_string());
         for account_entry in LEDGER_SERVICE.ledgers.iter() {
-            LEDGER_SERVICE.process_message(account_entry.key(), request.clone()).await;
+            LEDGER_SERVICE.export_trades(account_entry.key(), directory);
         }
     }
 

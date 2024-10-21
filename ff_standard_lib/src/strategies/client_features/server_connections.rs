@@ -29,7 +29,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
 use crate::standardized_types::orders::OrderUpdateEvent;
-use crate::strategies::ledgers::{LedgerMessage, LEDGER_SERVICE};
+use crate::strategies::ledgers::{LEDGER_SERVICE};
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
@@ -202,7 +202,7 @@ pub async fn response_handler(
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
     order_updates_sender: Sender<OrderUpdateEvent>,
-    synchronise_accounts: bool,
+    _synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>,
 ) {
     for (connection, settings) in &settings_map {
@@ -263,17 +263,16 @@ pub async fn response_handler(
                                 }
                                 DataServerResponse::LiveAccountUpdates { account, cash_value, cash_available, cash_used } => {
                                     tokio::task::spawn(async move {
-                                        let message = LedgerMessage::LiveAccountUpdates { account: account.clone(), cash_value, cash_available, cash_used };
-                                        LEDGER_SERVICE.process_message(&account, message).await;
+                                        LEDGER_SERVICE.live_account_updates(&account, cash_value, cash_available, cash_used).await;
                                     });
                                 }
-                                DataServerResponse::LivePositionUpdates { account, symbol_name, symbol_code, open_pnl, open_quantity, side } => {
-                                    if synchronise_accounts {
+                                DataServerResponse::LivePositionUpdates { account: _, symbol_name: _, symbol_code: _, open_pnl: _, open_quantity: _, side: _ } => {
+                                   /* if synchronise_accounts {
                                         tokio::task::spawn(async move {
                                             let message = LedgerMessage::LivePositionUpdates { account: account.clone(), symbol_name, symbol_code, open_pnl, open_quantity, side };
                                             LEDGER_SERVICE.process_message(&account, message).await;
                                         });
-                                    }
+                                    }*/
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {
