@@ -3,10 +3,10 @@ use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use tokio::sync::oneshot;
+use tokio::sync::{oneshot, Mutex};
 use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
-use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
+use crate::standardized_types::accounts::{Account, AccountId, AccountInfo, Currency};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::{Price, Volume};
@@ -18,12 +18,19 @@ use crate::strategies::ledgers::Ledger;
 
 pub(crate) const TIME_OUT: Duration = Duration::from_secs(15);
 impl Brokerage {
-    pub async fn paper_account_init(&self, mode: StrategyMode, starting_balance: Decimal, currency: Currency, account_id: AccountId) -> Result<Ledger, FundForgeError> {
+    pub async fn paper_account_init(
+        &self,
+        mode: StrategyMode,
+        starting_balance: Decimal,
+        currency: Currency,
+        account_id: AccountId,
+    ) -> Result<Ledger, FundForgeError> {
         let request = DataServerRequest::PaperAccountInit {
-            account_id,
+            account_id: account_id.clone(),
             callback_id: 0,
             brokerage: self.clone(),
         };
+        let account = Account::new(self.clone(), account_id.clone());
         let (sender, receiver) = oneshot::channel();
         let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
         send_request(msg).await;
@@ -33,24 +40,23 @@ impl Brokerage {
                 Ok(response) => match response {
                     DataServerResponse::PaperAccountInit { account_info, .. } => {
                         Ok(Ledger {
-                            account_id: account_info.account_id,
-                            brokerage: account_info.brokerage,
-                            cash_value: starting_balance,
-                            cash_available: starting_balance,
+                            account,
+                            cash_value: Mutex::new(starting_balance),
+                            cash_available: Mutex::new(starting_balance),
                             currency,
-                            cash_used: dec!(0.0),
+                            cash_used: Mutex::new(dec!(0.0)),
                             positions: DashMap::new(),
                             symbol_code_map: Default::default(),
                             margin_used: DashMap::new(),
                             positions_closed: DashMap::new(),
                             symbol_closed_pnl: Default::default(),
                             positions_counter: DashMap::new(),
-                            symbol_info: DashMap::new(),
                             open_pnl: DashMap::new(),
-                            total_booked_pnl: dec!(0.0),
+                            total_booked_pnl: Mutex::new(dec!(0.0)),
                             mode,
                             leverage: account_info.leverage,
-                            is_simulating_pnl: true
+                            is_simulating_pnl: true,
+                            symbol_info: DashMap::new(),
                         })
                     },
                     DataServerResponse::Error { error, .. } => Err(error),

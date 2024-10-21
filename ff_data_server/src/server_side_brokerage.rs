@@ -231,8 +231,7 @@ pub async fn logout_command(brokerage: Brokerage, stream_name: StreamName) {
 
 fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
     OrderUpdateEvent::OrderRejected {
-        brokerage: order.brokerage,
-        account_id: order.account_id.clone(),
+        account: order.account.clone(),
         order_id: order.id.clone(),
         symbol_name: order.symbol_name.clone(),
         symbol_code: "".to_string(),
@@ -245,7 +244,7 @@ fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
 pub async fn live_market_order(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
 
     let operation = async {
-        match order.brokerage {
+        match order.account.brokerage {
             Brokerage::Test => {
                 Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
             }
@@ -272,7 +271,7 @@ pub async fn live_market_order(stream_name: StreamName, mode: StrategyMode, orde
 
 pub async fn live_enter_long(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
     let operation = async {
-        match order.brokerage {
+        match order.account.brokerage {
             Brokerage::Test => {
                 Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
             }
@@ -299,7 +298,7 @@ pub async fn live_enter_long(stream_name: StreamName, mode: StrategyMode, order:
 
 pub async fn live_enter_short(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
     let operation = async {
-        match order.brokerage {
+        match order.account.brokerage {
             Brokerage::Test => {
                 Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
             }
@@ -326,7 +325,7 @@ pub async fn live_enter_short(stream_name: StreamName, mode: StrategyMode, order
 
 pub async fn live_exit_short(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
     let operation = async {
-        match order.brokerage {
+        match order.account.brokerage {
             Brokerage::Test => {
                 Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
             }
@@ -354,7 +353,7 @@ pub async fn live_exit_short(stream_name: StreamName, mode: StrategyMode, order:
 
 pub async fn live_exit_long(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
     let operation = async {
-        match order.brokerage {
+        match order.account.brokerage {
             Brokerage::Test => {
                 Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
             }
@@ -381,7 +380,7 @@ pub async fn live_exit_long(stream_name: StreamName, mode: StrategyMode, order: 
 
 pub async fn other_orders(stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
     let operation = async {
-        match order.brokerage {
+        match order.account.brokerage {
             Brokerage::Test => {
                 Err(create_order_rejected(&order, "Test Brokerage Can Not Place Live Orders".to_string()))
             }

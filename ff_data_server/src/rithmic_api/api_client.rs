@@ -452,21 +452,21 @@ impl RithmicClient {
 
     /// Checks that an order will not go over max size
     pub fn is_valid_order(&self, order: &Order) -> Result<(), String> {
-        if let Some(max_size) = self.max_size.get(&order.account_id) {
+        if let Some(max_size) = self.max_size.get(&order.account.account_id) {
             let max_size = *max_size.value();
             let current_total_long = self.long_quantity
-                .get(&order.account_id)
+                .get(&order.account.account_id)
                 .map(|account_map| account_map.iter().fold(dec!(0), |acc, item| acc + *item.value()))
                 .unwrap_or_else(|| dec!(0));
             let current_total_short = self.short_quantity
-                .get(&order.account_id)
+                .get(&order.account.account_id)
                 .map(|account_map| account_map.iter().fold(dec!(0), |acc, item| acc + *item.value()))
                 .unwrap_or_else(|| dec!(0));
 
             let new_total = match order.side {
                 OrderSide::Buy => {
                     let account_short = self.short_quantity
-                        .entry(order.account_id.clone())
+                        .entry(order.account.account_id.clone())
                         .or_insert_with(DashMap::new);
                     let current_symbol_short = account_short
                         .entry(order.symbol_name.clone())
@@ -483,7 +483,7 @@ impl RithmicClient {
                 },
                 OrderSide::Sell => {
                     let account_long = self.long_quantity
-                        .entry(order.account_id.clone())
+                        .entry(order.account.account_id.clone())
                         .or_insert_with(DashMap::new);
                     let current_symbol_long = account_long
                         .entry(order.symbol_name.clone())
@@ -549,8 +549,7 @@ impl RithmicClient {
         match self.is_valid_order(&order) {
             Err(e) =>
                 return Err(OrderUpdateEvent::OrderRejected {
-                    brokerage: order.brokerage,
-                    account_id: order.account_id.clone(),
+                    account: order.account.clone(),
                     symbol_name: order.symbol_name.clone(),
                     symbol_code: order.symbol_name.clone(),
                     order_id: order.id.clone(),
@@ -564,8 +563,7 @@ impl RithmicClient {
         let quantity = match order.quantity_open.to_i32() {
             None => {
                 return Err(OrderUpdateEvent::OrderRejected {
-                    brokerage: order.brokerage,
-                    account_id: order.account_id.clone(),
+                    account: order.account.clone(),
                     symbol_name: order.symbol_name.clone(),
                     symbol_code: order.symbol_name.clone(),
                     order_id: order.id.clone(),
@@ -580,12 +578,11 @@ impl RithmicClient {
             match get_exchange_by_code(&order.symbol_name) {
                 None => {
                     return Err(OrderUpdateEvent::OrderRejected {
-                        brokerage: order.brokerage,
-                        account_id: order.account_id.clone(),
+                        account: order.account.clone(),
                         symbol_name: order.symbol_name.clone(),
                         symbol_code: order.symbol_name.clone(),
                         order_id: order.id.clone(),
-                        reason: format!("Exchange Not found with {} for {}",order.brokerage, order.symbol_name),
+                        reason: format!("Exchange Not found with {} for {}",order.account.brokerage, order.symbol_name),
                         tag: order.tag.clone(),
                         time: Utc::now().to_string() })
                 }
@@ -606,8 +603,7 @@ impl RithmicClient {
                                 Ok(info) => info,
                                 Err(e) => {
                                     return Err(OrderUpdateEvent::OrderRejected {
-                                        brokerage: order.brokerage,
-                                        account_id: order.account_id.clone(),
+                                        account: order.account.clone(),
                                         symbol_name: order.symbol_name.clone(),
                                         symbol_code: "No Front Month Found".to_string(),
                                         order_id: order.id.clone(),
@@ -629,12 +625,11 @@ impl RithmicClient {
         let route = match self.default_trade_route.get(&exchange) {
             None => {
                 return Err(OrderUpdateEvent::OrderRejected {
-                    brokerage: order.brokerage,
-                    account_id: order.account_id.clone(),
+                    account: order.account.clone(),
                     symbol_name: order.symbol_name.clone(),
                     symbol_code: order.symbol_name.clone(),
                     order_id: order.id.clone(),
-                    reason: format!("Order Route Not found with {} for {}",order.brokerage, order.symbol_name),
+                    reason: format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name),
                     tag: order.tag.clone(),
                     time: Utc::now().to_string() })
             }
@@ -683,7 +678,7 @@ impl RithmicClient {
                  Some(end_of_day.timestamp() as i32),
                  Some(end_of_day.timestamp_subsec_micros() as i32))
             }
-            TimeInForce::Time(ref time_string, ref tz_string) => {
+            TimeInForce::Time(ref time_stamp, ref tz_string) => {
                 let time_zone = match Tz::from_str(tz_string) {
                     Ok(tz) => tz,
                     Err(e) => {
@@ -691,13 +686,7 @@ impl RithmicClient {
                         return;
                     }
                 };
-                let cancel_time = match NaiveDateTime::parse_from_str(time_string, "%Y-%m-%d %H:%M:%S%.f") {
-                    Ok(naive_time) => time_zone.from_local_datetime(&naive_time).unwrap(),
-                    Err(e) => {
-                        eprintln!("Failed to parse time in rithmic submit_order(): {}", e);
-                        return;
-                    }
-                };
+                let cancel_time = time_zone.timestamp_opt(*time_stamp, 0).unwrap();
 
                 (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
                  Some(cancel_time.timestamp() as i32),
@@ -744,12 +733,12 @@ impl RithmicClient {
 
         let req = RequestNewOrder {
             template_id: 312,
-            user_msg: vec![stream_name.to_string(), order.account_id.clone(), order.tag.clone(), order.symbol_name, details.symbol_code.clone()],
+            user_msg: vec![stream_name.to_string(), order.account.account_id.clone(), order.tag.clone(), order.symbol_name, details.symbol_code.clone()],
             user_tag: Some(order.id.clone()),
             window_name: Some(stream_name.to_string()),
             fcm_id: self.fcm_id.clone(),
             ib_id: self.ib_id.clone(),
-            account_id: Some(order.account_id.clone()),
+            account_id: Some(order.account.account_id.clone()),
             symbol: Some(details.symbol_code),
             exchange: Some(details.exchange.to_string()),
             quantity: Some(details.quantity),
@@ -792,12 +781,12 @@ impl RithmicClient {
 
         let req = RequestNewOrder {
             template_id: 312,
-            user_msg: vec![stream_name.to_string(), order.account_id.clone(), order.tag.clone(), order.symbol_name, details.symbol_code.clone()],
+            user_msg: vec![stream_name.to_string(), order.account.account_id.clone(), order.tag.clone(), order.symbol_name, details.symbol_code.clone()],
             user_tag: Some(order.id.clone()),
             window_name: Some(stream_name.to_string()),
             fcm_id: self.fcm_id.clone(),
             ib_id: self.ib_id.clone(),
-            account_id: Some(order.account_id.clone()),
+            account_id: Some(order.account.account_id.clone()),
             symbol: Some(details.symbol_code),
             exchange: Some(details.exchange.to_string()),
             quantity: Some(details.quantity),

@@ -355,8 +355,7 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
 
     fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
         OrderUpdateEvent::OrderRejected {
-            brokerage: order.brokerage.clone(),
-            account_id: order.account_id.clone(),
+            account: order.account.clone(),
             symbol_name: order.symbol_name.clone(),
             symbol_code: "".to_string(),
             order_id: order.id.clone(),
@@ -367,7 +366,7 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
     }
 
     match request {
-        OrderRequest::Create { brokerage, order, order_type } => {
+        OrderRequest::Create { account, order, order_type } => {
             match order_type {
                 OrderType::Market => {
                     let send_order_result = timeout(TIMEOUT_DURATION, live_market_order(stream_name.clone(), mode, order.clone())).await;

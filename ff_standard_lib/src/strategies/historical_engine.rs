@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 use chrono::{DateTime, Utc, Duration as ChronoDuration, TimeZone, NaiveTime};
-use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, add_buffer, backtest_forward_buffer, TIMED_EVENT_HANDLER};
+use crate::strategies::client_features::server_connections::{set_warmup_complete, SUBSCRIPTION_HANDLER, INDICATOR_HANDLER, subscribe_primary_subscription_updates, TIMED_EVENT_HANDLER};
 use crate::standardized_types::base_data::history::{get_historical_data};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent};
@@ -8,9 +9,12 @@ use crate::standardized_types::time_slices::TimeSlice;
 use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::{Sender};
-use crate::strategies::handlers::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
-use tokio::sync::{broadcast};
+use tokio::sync::{broadcast, mpsc, Notify};
+use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
+use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
+use crate::strategies::historical_time::update_backtest_time;
+use crate::strategies::ledgers::LEDGER_SERVICE;
 
 #[allow(dead_code)]
 pub struct HistoricalEngine {
@@ -21,8 +25,10 @@ pub struct HistoricalEngine {
     buffer_resolution: Duration,
     gui_enabled: bool,
     primary_subscription_updates: broadcast::Receiver<Vec<DataSubscription>>,
-    market_event_sender: Sender<MarketMessageEnum>,
-    tick_over_no_data: bool
+    tick_over_no_data: bool,
+    strategy_event_sender: mpsc::Sender<StrategyEvent>,
+    notified: Arc<Notify>,
+    historical_message_sender: Option<Sender<BackTestEngineMessage>>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -34,8 +40,10 @@ impl HistoricalEngine {
         warmup_duration: ChronoDuration,
         buffer_resolution: Duration,
         gui_enabled: bool,
-        market_event_sender: Sender<MarketMessageEnum>,
-        tick_over_no_data: bool
+        tick_over_no_data: bool,
+        strategy_event_sender: mpsc::Sender<StrategyEvent>,
+        notified: Arc<Notify>,
+        historical_message_sender: Option<Sender<BackTestEngineMessage>>
     ) -> Self {
         let rx = subscribe_primary_subscription_updates();
         let engine = HistoricalEngine {
@@ -46,8 +54,10 @@ impl HistoricalEngine {
             buffer_resolution,
             gui_enabled,
             primary_subscription_updates: rx,
-            market_event_sender,
-            tick_over_no_data
+            tick_over_no_data,
+            strategy_event_sender,
+            notified,
+            historical_message_sender
         };
         engine
     }
@@ -72,8 +82,11 @@ impl HistoricalEngine {
 
                 match self.mode {
                     StrategyMode::Backtest => {
-                        add_buffer(end_time, StrategyEvent::ShutdownEvent("Backtest Complete".to_string()) ).await;
-                        backtest_forward_buffer(warm_up_start_time).await;
+                        let event = StrategyEvent::ShutdownEvent("Backtest Complete".to_string());
+                        match self.strategy_event_sender.send(event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                        }
                     }
                     StrategyMode::Live => {}
                     StrategyMode::LivePaperTrading => {}
@@ -96,9 +109,11 @@ impl HistoricalEngine {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap().clone();
+        let market_price_sender = get_price_service_sender();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         let mut warm_up_complete = false;
         let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
+
         for subscription in &primary_subscriptions {
             println!("Historical Engine: Primary Subscription: {}", subscription);
         }
@@ -147,8 +162,11 @@ impl HistoricalEngine {
                     if time >= self.start_time {
                         warm_up_complete = true;
                         set_warmup_complete();
-                        add_buffer(time.clone(), StrategyEvent::WarmUpComplete).await;
-                        backtest_forward_buffer(time).await;
+                        let event = StrategyEvent::WarmUpComplete;
+                        match self.strategy_event_sender.send(event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                        }
                         if mode == StrategyMode::Live || mode == StrategyMode::LivePaperTrading {
                             break 'main_loop
                         }
@@ -166,6 +184,7 @@ impl HistoricalEngine {
                     }
                     Err(_) => {}
                 }
+                update_backtest_time(time);
                 timed_event_handler.update_time(time.clone()).await;
                 // Collect data from the primary feeds simulating a buffering range
                 let time_slice: TimeSlice = time_slices
@@ -176,13 +195,28 @@ impl HistoricalEngine {
                 let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                 // update our consolidators and create the strategies time slice with any new data or just create empty slice.
                 if !time_slice.is_empty() {
-                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time_slice.clone())).await.unwrap();
+                    let arc_slice = Arc::new(time_slice.clone());
+                    match market_price_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await {
+                        Ok(_) => {}
+                        Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
+                    }
+                    LEDGER_SERVICE.timeslice_updates(time, arc_slice.clone()).await;
+
                     // Add only primary data which the strategy has subscribed to into the strategies time slice
-                    if let Some(consolidated_data) = subscription_handler.update_time_slice(time_slice.clone()).await {
+                    if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
                         strategy_time_slice.extend(consolidated_data);
                     }
 
                     strategy_time_slice.extend(time_slice);
+                }
+
+                if let Some(backtest_message_sender) = &self.historical_message_sender {
+                    let message = BackTestEngineMessage::Time(time);
+                    match backtest_message_sender.send(message).await {
+                        Ok(_) => {}
+                        Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
+                    }
+                    self.notified.notified().await;
                 }
 
                 // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
@@ -192,15 +226,15 @@ impl HistoricalEngine {
 
                 if !strategy_time_slice.is_empty() {
                     // Update indicators and get any generated events.
-                    indicator_handler.update_time_slice(time, &strategy_time_slice).await;
-
-                    // add the strategy time slice to the new events.
-                    let slice_event = StrategyEvent::TimeSlice(
-                        strategy_time_slice,
-                    );
-                    add_buffer(time, slice_event).await;
+                    indicator_handler.update_time_slice(&strategy_time_slice).await;
                 }
-                backtest_forward_buffer(time).await;
+                let slice_event = StrategyEvent::TimeSlice(
+                    strategy_time_slice,
+                );
+                match self.strategy_event_sender.send(slice_event).await {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                }
                 last_time = time.clone();
             }
         }

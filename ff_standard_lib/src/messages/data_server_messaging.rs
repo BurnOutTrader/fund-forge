@@ -6,7 +6,7 @@ use rkyv::{Archive, Deserialize, Serialize};
 use serde::{Deserialize as SerdeDeserialize, Serialize as SerdeSerialize};
 use std::fmt::{Debug, Display};
 use rust_decimal::Decimal;
-use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
+use crate::standardized_types::accounts::{Account, AccountId, AccountInfo, Currency};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -319,11 +319,9 @@ DataServerResponse {
     SessionMarketHours{callback_id: u64, session_market_hours: SessionMarketHours},
     PaperAccountInit{callback_id: u64, account_info: AccountInfo},
 
-    LiveAccountUpdates {brokerage: Brokerage, account_id: AccountId, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
+    LiveAccountUpdates {account: Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
 
-    LivePositionUpdates {brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: String, open_pnl: Decimal, open_quantity: Volume, side: Option<PositionSide>},
-
-    AccountSnapShot{account_info: AccountInfo}
+    LivePositionUpdates {account: Account, symbol_name: SymbolName, symbol_code: String, open_pnl: Decimal, open_quantity: Volume, side: Option<PositionSide>},
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -370,7 +368,6 @@ impl DataServerResponse {
             DataServerResponse::PaperAccountInit { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
-            DataServerResponse::AccountSnapShot { .. } => None,
             DataServerResponse::LivePositionUpdates { .. } => None
         }
     }

@@ -1,5 +1,5 @@
 use std::fmt;
-use crate::standardized_types::accounts::AccountId;
+use crate::standardized_types::accounts::{Account, AccountId};
 use crate::standardized_types::enums::OrderSide;
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use chrono::{DateTime, TimeZone, Utc};
@@ -10,7 +10,7 @@ use std::str::FromStr;
 use rust_decimal_macros::dec;
 use strum_macros::Display;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::new_types::{Price, TimeString, TzString, Volume};
+use crate::standardized_types::new_types::{Price, TzString, Volume};
 
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
@@ -18,21 +18,41 @@ use crate::standardized_types::new_types::{Price, TimeString, TzString, Volume};
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum OrderRequest {
-    Create{brokerage: Brokerage, order: Order, order_type: OrderType},
-    Cancel{brokerage: Brokerage, order_id: OrderId, account_id: AccountId},
-    Update{brokerage: Brokerage, order_id: OrderId, account_id: AccountId, update: OrderUpdateType },
-    CancelAll{brokerage: Brokerage, account_id: AccountId, symbol_name: SymbolName},
-    FlattenAllFor{brokerage: Brokerage, account_id: AccountId},
+    Create{account: Account, order: Order, order_type: OrderType},
+    Cancel{account: Account, order_id: OrderId},
+    Update{account: Account, order_id: OrderId, update: OrderUpdateType },
+    CancelAll{account: Account, symbol_name: SymbolName},
+    FlattenAllFor{account: Account},
 }
 
 impl OrderRequest {
     pub fn brokerage(&self) -> Brokerage {
         match self {
-            OrderRequest::Create { brokerage, .. } => brokerage.clone(),
-            OrderRequest::Cancel { brokerage, .. } => brokerage.clone(),
-            OrderRequest::Update { brokerage,.. } => brokerage.clone(),
-            OrderRequest::CancelAll { brokerage,.. } => brokerage.clone(),
-            OrderRequest::FlattenAllFor { brokerage,.. } => brokerage.clone(),
+            OrderRequest::Create { account, .. } => account.brokerage.clone(),
+            OrderRequest::Cancel { account, .. } => account.brokerage.clone(),
+            OrderRequest::Update { account,.. } => account.brokerage.clone(),
+            OrderRequest::CancelAll { account,.. } => account.brokerage.clone(),
+            OrderRequest::FlattenAllFor { account,.. } => account.brokerage.clone(),
+        }
+    }
+
+    pub fn account_id(&self) -> &AccountId {
+        match self {
+            OrderRequest::Create { account, .. } => &account.account_id,
+            OrderRequest::Cancel { account, .. } => &account.account_id,
+            OrderRequest::Update { account,.. } => &account.account_id,
+            OrderRequest::CancelAll { account,.. } => &account.account_id,
+            OrderRequest::FlattenAllFor { account,.. } => &account.account_id,
+        }
+    }
+
+    pub fn account(&self) -> &AccountId {
+        match self {
+            OrderRequest::Create { account, .. } => &account.account_id,
+            OrderRequest::Cancel { account, .. } =>  &account.account_id,
+            OrderRequest::Update { account,.. } =>  &account.account_id,
+            OrderRequest::CancelAll { account,.. } =>  &account.account_id,
+            OrderRequest::FlattenAllFor { account,.. } =>  &account.account_id,
         }
     }
 }
@@ -63,7 +83,7 @@ pub enum TimeInForce {
     IOC,
     FOK,
     Day(TzString),
-    Time(TimeString, TzString)
+    Time(i64, TzString)
 }
 
 #[derive(Archive, Clone, rkyv::Serialize, rkyv::Deserialize, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
@@ -123,7 +143,7 @@ pub enum OrderState {
 pub struct Order {
     pub symbol_name: SymbolName,
     pub symbol_code: Option<SymbolCode>,
-    pub brokerage: Brokerage,
+    pub account: Account,
     pub quantity_open: Volume,
     pub quantity_filled: Volume,
     pub average_fill_price: Option<Price>,
@@ -139,7 +159,6 @@ pub struct Order {
     pub state: OrderState,
     pub fees: Price,
     pub value: Price,
-    pub account_id: AccountId,
     pub exchange: Option<String>
 }
 
@@ -151,11 +170,10 @@ impl Order {
     pub fn limit_order(
         symbol_name: SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: Brokerage,
+        account: &Account,
         quantity: Volume,
         side: OrderSide,
         tag: String,
-        account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
         limit_price: Price,
@@ -166,7 +184,7 @@ impl Order {
         Self {
             symbol_name,
             symbol_code,
-            brokerage,
+            account: account.clone(),
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
@@ -182,7 +200,6 @@ impl Order {
             state: OrderState::Created,
             fees: dec!(0.0),
             value: dec!(0.0),
-            account_id,
             exchange
         }
     }
@@ -190,11 +207,10 @@ impl Order {
     pub fn market_if_touched (
         symbol_name: SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: Brokerage,
+        account: &Account,
         quantity: Volume,
         side: OrderSide,
         tag: String,
-        account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
         trigger_price: Price,
@@ -204,7 +220,6 @@ impl Order {
         Self {
             symbol_name,
             symbol_code,
-            brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
@@ -220,7 +235,7 @@ impl Order {
             state: OrderState::Created,
             fees: dec!(0.0),
             value: dec!(0.0),
-            account_id,
+            account: account.clone(),
             exchange
         }
     }
@@ -228,11 +243,10 @@ impl Order {
     pub fn stop (
         symbol_name: SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: Brokerage,
+        account: &Account,
         quantity: Volume,
         side: OrderSide,
         tag: String,
-        account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
         trigger_price: Price,
@@ -242,7 +256,6 @@ impl Order {
         Self {
             symbol_name,
             symbol_code,
-            brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
@@ -258,7 +271,7 @@ impl Order {
             state: OrderState::Created,
             fees: dec!(0.0),
             value: dec!(0.0),
-            account_id,
+            account: account.clone(),
             exchange
         }
     }
@@ -266,11 +279,10 @@ impl Order {
     pub fn stop_limit (
         symbol_name: SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: Brokerage,
+        account: &Account,
         quantity: Volume,
         side: OrderSide,
         tag: String,
-        account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
         limit_price: Price,
@@ -281,7 +293,6 @@ impl Order {
         Self {
             symbol_name,
             symbol_code,
-            brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
@@ -297,7 +308,7 @@ impl Order {
             state: OrderState::Created,
             fees: dec!(0.0),
             value: dec!(0.0),
-            account_id,
+            account: account.clone(),
             exchange
         }
     }
@@ -305,11 +316,10 @@ impl Order {
     pub fn market_order(
         symbol_name: SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: Brokerage,
+        account: &Account,
         quantity: Volume,
         side: OrderSide,
         tag: String,
-        account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
         exchange: Option<String>
@@ -318,7 +328,6 @@ impl Order {
             id:order_id,
             symbol_name,
             symbol_code,
-            brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
@@ -333,7 +342,7 @@ impl Order {
             state: OrderState::Created,
             fees: dec!(0.0),
             value: dec!(0.0),
-            account_id,
+            account: account.clone(),
             exchange
         }
     }
@@ -341,10 +350,9 @@ impl Order {
     pub fn exit_long(
         symbol_name: SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: Brokerage,
+        account: &Account,
         quantity: Volume,
         tag: String,
-        account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
         exchange: Option<String>
@@ -353,7 +361,6 @@ impl Order {
             id: order_id,
             symbol_name,
             symbol_code,
-            brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
@@ -368,7 +375,7 @@ impl Order {
             state: OrderState::Created,
             fees: dec!(0.0),
             value: dec!(0.0),
-            account_id,
+            account: account.clone(),
             exchange
         }
     }
@@ -376,10 +383,9 @@ impl Order {
     pub fn exit_short(
         symbol_name: SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: Brokerage,
+        account: &Account,
         quantity: Volume,
         tag: String,
-        account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
         exchange: Option<String>
@@ -388,7 +394,6 @@ impl Order {
             id: order_id,
             symbol_name,
             symbol_code,
-            brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
@@ -403,7 +408,7 @@ impl Order {
             state: OrderState::Created,
             fees: dec!(0.0),
             value: dec!(0.0),
-            account_id,
+            account: account.clone(),
             exchange
         }
     }
@@ -411,10 +416,9 @@ impl Order {
     pub fn enter_long(
         symbol_name: SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: Brokerage,
+        account: &Account,
         quantity: Volume,
         tag: String,
-        account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
         exchange: Option<String>
@@ -423,7 +427,6 @@ impl Order {
             id: order_id,
             symbol_name,
             symbol_code,
-            brokerage,
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
@@ -438,7 +441,7 @@ impl Order {
             state: OrderState::Created,
             fees: dec!(0.0),
             value: dec!(0.0),
-            account_id,
+            account: account.clone(),
             exchange
         }
     }
@@ -446,10 +449,9 @@ impl Order {
     pub fn enter_short(
         symbol_name: SymbolName,
         symbol_code: Option<SymbolCode>,
-        brokerage: Brokerage,
+        account: &Account,
         quantity: Volume,
         tag: String,
-        account_id: AccountId,
         order_id: OrderId,
         time: DateTime<Utc>,
         exchange: Option<String>
@@ -458,7 +460,7 @@ impl Order {
             id: order_id,
             symbol_name,
             symbol_code,
-            brokerage,
+            account: account.clone(),
             quantity_open: quantity,
             quantity_filled: dec!(0.0),
             average_fill_price: None,
@@ -473,7 +475,6 @@ impl Order {
             state: OrderState::Created,
             fees: dec!(0.0),
             value: dec!(0.0),
-            account_id,
             exchange
         }
     }
@@ -544,21 +545,21 @@ pub enum OrderUpdateType {
 pub enum OrderUpdateEvent {
 
     /// Example, product: MNQZ4,
-    OrderAccepted {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, tag: String, time: String},
+    OrderAccepted {account: Account, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, tag: String, time: String},
 
     ///Quantity should only represent the quantity filled on this event.
-    OrderFilled {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
+    OrderFilled {account: Account, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
     ///Quantity should only represent the quantity filled on this event.
-    OrderPartiallyFilled {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
+    OrderPartiallyFilled {account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
-    OrderCancelled {brokerage:Brokerage, account_id: AccountId, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, tag: String, time: String},
+    OrderCancelled {account: Account, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, tag: String, time: String},
 
-    OrderRejected {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, reason: String, tag: String, time: String},
+    OrderRejected {account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, reason: String, tag: String, time: String},
 
-    OrderUpdated {brokerage:Brokerage, account_id: AccountId,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, update_type: OrderUpdateType, tag: String, time: String},
+    OrderUpdated {account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, update_type: OrderUpdateType, tag: String, time: String},
 
-    OrderUpdateRejected {brokerage:Brokerage, account_id: AccountId,  order_id: OrderId, reason: String, time: String},
+    OrderUpdateRejected {account: Account,  order_id: OrderId, reason: String, time: String},
 }
 
 impl OrderUpdateEvent {
@@ -605,13 +606,25 @@ impl OrderUpdateEvent {
 
     pub fn brokerage(&self) -> &Brokerage {
         match self {
-            OrderUpdateEvent::OrderAccepted { brokerage, .. } => brokerage,
-            OrderUpdateEvent::OrderFilled { brokerage, .. } => brokerage,
-            OrderUpdateEvent::OrderPartiallyFilled { brokerage, .. } => brokerage,
-            OrderUpdateEvent::OrderCancelled { brokerage, .. } => brokerage,
-            OrderUpdateEvent::OrderRejected { brokerage, .. } => brokerage,
-            OrderUpdateEvent::OrderUpdated { brokerage, .. } => brokerage,
-            OrderUpdateEvent::OrderUpdateRejected { brokerage, .. } => brokerage,
+            OrderUpdateEvent::OrderAccepted { account, .. } => &account.brokerage,
+            OrderUpdateEvent::OrderFilled  { account, .. } => &account.brokerage,
+            OrderUpdateEvent::OrderPartiallyFilled  { account, .. } => &account.brokerage,
+            OrderUpdateEvent::OrderCancelled  { account, .. } => &account.brokerage,
+            OrderUpdateEvent::OrderRejected { account, .. } => &account.brokerage,
+            OrderUpdateEvent::OrderUpdated  { account, .. } => &account.brokerage,
+            OrderUpdateEvent::OrderUpdateRejected  { account, .. } => &account.brokerage,
+        }
+    }
+
+    pub fn account(&self) -> &Account {
+        match self {
+            OrderUpdateEvent::OrderAccepted { account, .. } => &account,
+            OrderUpdateEvent::OrderFilled  { account, .. } => &account,
+            OrderUpdateEvent::OrderPartiallyFilled  { account, .. } => &account,
+            OrderUpdateEvent::OrderCancelled  { account, .. } => &account,
+            OrderUpdateEvent::OrderRejected { account, .. } => &account,
+            OrderUpdateEvent::OrderUpdated  { account, .. } => &account,
+            OrderUpdateEvent::OrderUpdateRejected  { account, .. } => &account,
         }
     }
 
@@ -632,26 +645,26 @@ impl OrderUpdateEvent {
 impl fmt::Display for OrderUpdateEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            OrderUpdateEvent::OrderAccepted { brokerage, account_id,symbol_name, symbol_code: product,order_id,tag,.. } => {
-                write!(f, "Order Accepted: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, tag)
+            OrderUpdateEvent::OrderAccepted { account,symbol_name, symbol_code: product,order_id,tag,.. } => {
+                write!(f, "Order Accepted: Account: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", account, symbol_name, product, order_id, tag)
             }
-            OrderUpdateEvent::OrderFilled { brokerage, account_id,symbol_name, symbol_code: product, order_id,tag,.. } => {
-                write!(f, "Order Filled: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, tag)
+            OrderUpdateEvent::OrderFilled { account,symbol_name, symbol_code: product, price, quantity, order_id,tag,.. } => {
+                write!(f, "Order Filled: Account: {}, Symbol Name: {}, Symbol Code: {}, Price: {}, Quantity: {}, Order ID: {}, Tag: {}", account, symbol_name, product, price, quantity, order_id, tag)
             }
-            OrderUpdateEvent::OrderPartiallyFilled { brokerage, account_id,symbol_name, symbol_code: product, order_id,tag,.. } => {
-                write!(f, "Order Partially Filled: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, tag)
+            OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code,price, quantity, order_id,tag,.. } => {
+                write!(f, "Order Partially Filled: Account: {}, Symbol Name: {}, Symbol Code: {},Price: {}, Quantity: {}, Order ID: {}, Tag: {}", account, symbol_name, symbol_code, price, quantity, order_id, tag)
             }
-            OrderUpdateEvent::OrderCancelled { brokerage, account_id,symbol_name, symbol_code: product, order_id,tag,.. } => {
-                write!(f, "Order Cancelled: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {},Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, tag)
+            OrderUpdateEvent::OrderCancelled { account,symbol_name, symbol_code: product, order_id,tag,.. } => {
+                write!(f, "Order Cancelled: Account: {}, Symbol Name: {}, Symbol Code: {},Order ID: {}, Tag: {}", account, symbol_name, product, order_id, tag)
             }
-            OrderUpdateEvent::OrderRejected { brokerage, account_id,symbol_name, symbol_code: product, order_id, reason,tag,.. } => {
-                write!(f, "Order Rejected: Brokerage: {}, Account ID: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}. Reason: {}, Tag: {}", brokerage, account_id, symbol_name, product, order_id, reason, tag)
+            OrderUpdateEvent::OrderRejected { account,symbol_name, symbol_code: product, order_id, reason,tag,.. } => {
+                write!(f, "Order Rejected: Account: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}. Reason: {}, Tag: {}", account, symbol_name, product, order_id, reason, tag)
             }
-            OrderUpdateEvent::OrderUpdated { brokerage, account_id,symbol_name, symbol_code: product, order_id, update_type, tag, ..} => {
-                write!(f, "Order Updated: Brokerage: {}, Account ID: {}, UpdateType: {:?}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", brokerage, account_id, symbol_name, product, update_type, order_id, tag)
+            OrderUpdateEvent::OrderUpdated { account,symbol_name, symbol_code: product, order_id, update_type, tag, ..} => {
+                write!(f, "Order Updated: Account: {}, UpdateType: {:?}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", account, symbol_name, product, update_type, order_id, tag)
             }
-            OrderUpdateEvent::OrderUpdateRejected { brokerage, account_id, order_id, reason,.. } => {
-                write!(f, "Order Update Rejected: Brokerage: {}, Account ID: {}, Order ID: {}. Reason: {}", brokerage, account_id,  order_id, reason)
+            OrderUpdateEvent::OrderUpdateRejected { account, order_id, reason,.. } => {
+                write!(f, "Order Update Rejected: Account: {}, Order ID: {}. Reason: {}", account,  order_id, reason)
             }
         }
     }

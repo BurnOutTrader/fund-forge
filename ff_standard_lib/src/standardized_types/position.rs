@@ -8,7 +8,7 @@ use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
 use crate::helpers::converters::format_duration;
 use crate::helpers::decimal_calculators::calculate_theoretical_pnl;
-use crate::standardized_types::accounts::{AccountId, Currency};
+use crate::standardized_types::accounts::{Account, AccountId, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::PositionSide;
@@ -40,8 +40,7 @@ pub(crate) struct PositionExport {
 pub enum PositionUpdateEvent {
     PositionOpened {
         position_id: PositionId,
-        account_id: AccountId,
-        brokerage: Brokerage,
+        account: Account,
         originating_order_tag: String,
         time: String
     },
@@ -51,8 +50,7 @@ pub enum PositionUpdateEvent {
         average_price: Price,
         open_pnl: Price,
         booked_pnl: Price,
-        account_id: AccountId,
-        brokerage: Brokerage,
+        account: Account,
         originating_order_tag: String,
         time: String
     },
@@ -64,8 +62,7 @@ pub enum PositionUpdateEvent {
         open_pnl: Price,
         booked_pnl: Price,
         average_exit_price: Price,
-        account_id: AccountId,
-        brokerage: Brokerage,
+        account: Account,
         originating_order_tag: String,
         time: String
     },
@@ -76,8 +73,7 @@ pub enum PositionUpdateEvent {
         average_price: Price,
         booked_pnl: Price,
         average_exit_price: Option<Price>,
-        account_id: AccountId,
-        brokerage: Brokerage,
+        account: Account,
         originating_order_tag: String,
         time: String
     },
@@ -86,19 +82,28 @@ pub enum PositionUpdateEvent {
 impl PositionUpdateEvent {
     pub fn brokerage(&self) -> &Brokerage {
         match self {
-            PositionUpdateEvent::PositionOpened{brokerage,..} => brokerage,
-            PositionUpdateEvent::Increased{brokerage,..} => brokerage,
-            PositionUpdateEvent::PositionReduced {brokerage,..} => brokerage,
-            PositionUpdateEvent::PositionClosed {brokerage,..} => brokerage,
+            PositionUpdateEvent::PositionOpened{account,..} =>  &account.brokerage,
+            PositionUpdateEvent::Increased{account,..} => &account.brokerage,
+            PositionUpdateEvent::PositionReduced {account,..} => &account.brokerage,
+            PositionUpdateEvent::PositionClosed {account,..} => &account.brokerage,
+        }
+    }
+
+    pub fn account(&self) -> &Account {
+        match self {
+            PositionUpdateEvent::PositionOpened{account,..} =>  &account,
+            PositionUpdateEvent::Increased{account,..} => &account,
+            PositionUpdateEvent::PositionReduced {account,..} => &account,
+            PositionUpdateEvent::PositionClosed {account,..} => &account,
         }
     }
 
     pub fn account_id(&self) -> &AccountId {
         match self {
-            PositionUpdateEvent::PositionOpened{account_id,..} => account_id,
-            PositionUpdateEvent::Increased{account_id,..} => account_id,
-            PositionUpdateEvent::PositionReduced {account_id,..} => account_id,
-            PositionUpdateEvent::PositionClosed {account_id,..} => account_id,
+            PositionUpdateEvent::PositionOpened{account,..} => &account.account_id,
+            PositionUpdateEvent::Increased{account,..} =>  &account.account_id,
+            PositionUpdateEvent::PositionReduced {account,..} => &account.account_id,
+            PositionUpdateEvent::PositionClosed {account,..} =>  &account.account_id,
         }
     }
 
@@ -120,8 +125,8 @@ impl PositionUpdateEvent {
 impl fmt::Display for PositionUpdateEvent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            PositionUpdateEvent::PositionOpened{position_id, brokerage, account_id, originating_order_tag: tag,.. } => {
-                write!(f, "PositionOpened: Position ID = {}, Brokerage: {}, Account: {}, Originating Order Tag: {}", position_id, brokerage, account_id, tag)
+            PositionUpdateEvent::PositionOpened{position_id, account, originating_order_tag: tag,.. } => {
+                write!(f, "PositionOpened: Position ID = {}, Account: {}, Originating Order Tag: {}", position_id, account, tag)
             }
             PositionUpdateEvent::Increased {
                 position_id,
@@ -129,15 +134,14 @@ impl fmt::Display for PositionUpdateEvent {
                 average_price,
                 open_pnl,
                 booked_pnl,
-                account_id,
-                brokerage,
+                account,
                 originating_order_tag: tag,
                 ..
             } => {
                 write!(
                     f,
-                    "PositionIncreased: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Originating Order Tag: {}",
-                    position_id, brokerage, account_id, total_quantity_open, average_price, open_pnl, booked_pnl, tag
+                    "PositionIncreased: Position ID = {}, Account: {}, Total Quantity Open = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Originating Order Tag: {}",
+                    position_id, account, total_quantity_open, average_price, open_pnl, booked_pnl, tag
                 )
             }
             PositionUpdateEvent::PositionReduced {
@@ -148,15 +152,14 @@ impl fmt::Display for PositionUpdateEvent {
                 open_pnl,
                 booked_pnl,
                 average_exit_price,
-                account_id,
-                brokerage,
+                account,
                 originating_order_tag: tag,
                 ..
             } => {
                 write!(
                     f,
-                    "PositionReduced: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Average Exit Price = {}, Originating Order Tag: {}",
-                    position_id, brokerage, account_id, total_quantity_open, total_quantity_closed, average_price, open_pnl, booked_pnl, average_exit_price, tag
+                    "PositionReduced: Position ID = {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Open PnL = {}, Booked PnL = {}, Average Exit Price = {}, Originating Order Tag: {}",
+                    position_id, account, total_quantity_open, total_quantity_closed, average_price, open_pnl, booked_pnl, average_exit_price, tag
                 )
             }
             PositionUpdateEvent::PositionClosed {
@@ -166,15 +169,14 @@ impl fmt::Display for PositionUpdateEvent {
                 average_price,
                 booked_pnl,
                 average_exit_price,
-                account_id,
-                brokerage,
+                account,
                 originating_order_tag: tag,
                 ..
             } => {
                 write!(
                     f,
-                    "PositionClosed: Position ID = {}, Brokerage: {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Booked PnL = {}, Average Exit Price = {}, Originating Order Tag: {}",
-                    position_id, brokerage, account_id, total_quantity_open, total_quantity_closed, average_price, booked_pnl,
+                    "PositionClosed: Position ID = {}, Account: {}, Total Quantity Open = {}, Total Quantity Closed = {}, Average Price = {}, Booked PnL = {}, Average Exit Price = {}, Originating Order Tag: {}",
+                    position_id, account, total_quantity_open, total_quantity_closed, average_price, booked_pnl,
                     match average_exit_price {
                         Some(price) => price.to_string(),
                         None => "None".to_string(),
@@ -192,8 +194,7 @@ impl fmt::Display for PositionUpdateEvent {
 pub struct Position {
     pub symbol_name: SymbolName,
     pub symbol_code: String,
-    pub brokerage: Brokerage,
-    pub account_id: AccountId,
+    pub account: Account,
     pub side: PositionSide,
     pub open_time: String,
     pub quantity_open: Volume,
@@ -216,8 +217,7 @@ impl Position {
     pub fn new (
         symbol_name: SymbolName,
         symbol_code: String,
-        brokerage: Brokerage,
-        account_id: AccountId,
+        account: Account,
         side: PositionSide,
         quantity: Volume,
         average_price: Price,
@@ -230,8 +230,7 @@ impl Position {
         Self {
             symbol_name,
             symbol_code,
-            brokerage,
-            account_id,
+            account,
             side,
             open_time: time.to_string(),
             quantity_open: quantity,
@@ -361,8 +360,7 @@ impl Position {
                 average_price: self.average_price,
                 booked_pnl: self.booked_pnl,
                 average_exit_price: self.average_exit_price,
-                account_id: self.account_id.clone(),
-                brokerage: self.brokerage.clone(),
+                account: self.account.clone(),
                 originating_order_tag: tag,
                 time: time.to_string()
             }
@@ -375,8 +373,7 @@ impl Position {
                 open_pnl: self.open_pnl,
                 booked_pnl: self.booked_pnl,
                 average_exit_price: self.average_exit_price.unwrap(),
-                account_id: self.account_id.clone(),
-                brokerage: self.brokerage.clone(),
+                account: self.account.clone(),
                 originating_order_tag: tag,
                 time: time.to_string()
             }
@@ -412,8 +409,7 @@ impl Position {
             average_price: self.average_price,
             open_pnl: self.open_pnl,
             booked_pnl: self.booked_pnl,
-            account_id: self.account_id.clone(),
-            brokerage: self.brokerage.clone(),
+            account: self.account.clone(),
             originating_order_tag: tag,
             time: time.to_string()
         }
