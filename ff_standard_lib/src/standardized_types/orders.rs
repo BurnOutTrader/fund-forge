@@ -648,11 +648,11 @@ impl fmt::Display for OrderUpdateEvent {
             OrderUpdateEvent::OrderAccepted { account,symbol_name, symbol_code: product,order_id,tag,.. } => {
                 write!(f, "Order Accepted: Account: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", account, symbol_name, product, order_id, tag)
             }
-            OrderUpdateEvent::OrderFilled { account,symbol_name, symbol_code: product, order_id,tag,.. } => {
-                write!(f, "Order Filled: Account: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", account, symbol_name, product, order_id, tag)
+            OrderUpdateEvent::OrderFilled { account,symbol_name, symbol_code: product, price, quantity, order_id,tag,.. } => {
+                write!(f, "Order Filled: Account: {}, Symbol Name: {}, Symbol Code: {}, Price: {}, Quantity: {}, Order ID: {}, Tag: {}", account, symbol_name, product, price, quantity, order_id, tag)
             }
-            OrderUpdateEvent::OrderPartiallyFilled { account,symbol_name, symbol_code: product, order_id,tag,.. } => {
-                write!(f, "Order Partially Filled: Account: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", account, symbol_name, product, order_id, tag)
+            OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code,price, quantity, order_id,tag,.. } => {
+                write!(f, "Order Partially Filled: Account: {}, Symbol Name: {}, Symbol Code: {},Price: {}, Quantity: {}, Order ID: {}, Tag: {}", account, symbol_name, symbol_code, price, quantity, order_id, tag)
             }
             OrderUpdateEvent::OrderCancelled { account,symbol_name, symbol_code: product, order_id,tag,.. } => {
                 write!(f, "Order Cancelled: Account: {}, Symbol Name: {}, Symbol Code: {},Order ID: {}, Tag: {}", account, symbol_name, product, order_id, tag)

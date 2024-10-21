@@ -55,8 +55,9 @@ impl LedgerService {
         market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
         tag: String
     ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
+        println!("Create Position: Ledger Service: {}, {}, {}, {}", account, symbol_name, market_fill_price, quantity);
         if let Some(ledger_ref) = self.ledgers.get(account) {
-            ledger_ref.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await
+            return ledger_ref.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await;
         } else {
             panic!("No ledger for account: {}", account);
         }
@@ -773,6 +774,7 @@ impl Ledger {
             );
 
             // Insert the new position into the positions map
+            eprintln!("Symbol Code {}", symbol_code);
             self.positions.insert(symbol_code.clone(), position);
             if !self.positions_closed.contains_key(&symbol_code) {
                 self.positions_closed.insert(symbol_code.clone(), vec![]);
@@ -791,6 +793,8 @@ impl Ledger {
                 let cash_available = self.cash_available.lock().await;
                 *cash_value = *cash_used + *cash_available;
             }
+
+            //println!("{:?}", event);
             updates.push(event);
         }
         Ok(updates)

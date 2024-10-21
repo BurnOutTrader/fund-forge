@@ -34,7 +34,6 @@ pub async fn backtest_matching_engine(
                     //println!("{:?}", order_request);
                     match order_request {
                         OrderRequest::Create { order, .. } => {
-                            open_order_cache.insert(order.id.clone(), order);
                             simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {

@@ -566,7 +566,7 @@ pub async fn match_order_plant_id(
                                         time,
                                     };
                                     send_order_update(client.brokerage, &order_id, event).await;
-                                } else {
+                                } else if total_unfilled_size > 0 {
                                     let event = OrderUpdateEvent::OrderPartiallyFilled {
                                         account: Account::new(client.brokerage, account_id.clone()),
                                         symbol_name,
