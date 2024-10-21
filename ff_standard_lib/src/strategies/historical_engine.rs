@@ -216,7 +216,7 @@ impl HistoricalEngine {
                         Ok(_) => {}
                         Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
                     }
-                    self.notified.notified().await;
+                    //self.notified.notified().await;
                 }
 
                 // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.

@@ -202,7 +202,7 @@ pub async fn response_handler(
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
     order_updates_sender: Sender<OrderUpdateEvent>,
-    synchronise_accounts: bool,
+    _synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>,
 ) {
     for (connection, settings) in &settings_map {

@@ -2,8 +2,6 @@ use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use dashmap::DashMap;
 use std::sync::Arc;
-use std::time::Duration;
-use async_std::task::sleep;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::Notify;
@@ -29,13 +27,13 @@ pub async fn backtest_matching_engine(
     notify.notify_waiters();
     let (sender, mut receiver) = tokio::sync::mpsc::channel(100);
     tokio::task::spawn(async move {
-        notify.notify_one();
+       // notify.notify_one();
         while let Some(backtest_message) = receiver.recv().await {
             match backtest_message {
                 BackTestEngineMessage::OrderRequest(time, order_request) => {
                     //println!("{:?}", order_request);
                     match order_request {
-                        OrderRequest::Create { order, .. } => {
+                        OrderRequest::Create {  .. } => {
                             simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {
@@ -145,7 +143,7 @@ pub async fn backtest_matching_engine(
 
                 }
             }
-            notify.notify_one();
+            //notify.notify_one();
         }
     });
     sender

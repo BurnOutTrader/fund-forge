@@ -55,7 +55,7 @@ impl LedgerService {
         market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
         tag: String
     ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
-        println!("Create Position: Ledger Service: {}, {}, {}, {}", account, symbol_name, market_fill_price, quantity);
+        //println!("Create Position: Ledger Service: {}, {}, {}, {}", account, symbol_name, market_fill_price, quantity);
         if let Some(ledger_ref) = self.ledgers.get(account) {
             return ledger_ref.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await;
         } else {
@@ -808,7 +808,6 @@ mod historical_ledgers {
     use crate::messages::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::StrategyMode;
     use crate::standardized_types::new_types::{Price, Volume};
-    use crate::standardized_types::orders::OrderUpdateEvent;
     use crate::standardized_types::position::PositionUpdateEvent;
     use crate::standardized_types::subscriptions::SymbolName;
 
