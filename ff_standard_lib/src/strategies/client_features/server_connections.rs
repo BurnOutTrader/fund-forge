@@ -29,6 +29,7 @@ use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
 use crate::standardized_types::orders::OrderUpdateEvent;
+use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::ledgers::{LEDGER_SERVICE};
 
 lazy_static! {
@@ -325,7 +326,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         rt.block_on(async {
             let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
             let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap();
-
+            let price_service_sender = get_price_service_sender();
             let mut length_bytes = [0u8; LENGTH];
             let mut interval = tokio::time::interval(Duration::from_secs(1));
 
@@ -369,6 +370,10 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                                 let mut strategy_time_slice = TimeSlice::new();
                                 if !time_slice.is_empty() {
                                     let arc_slice = Arc::new(time_slice.clone());
+                                    match price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await {
+                                        Ok(_) => {},
+                                        Err(_) => {}
+                                    }
                                     LEDGER_SERVICE.timeslice_updates(Utc::now(), arc_slice.clone()).await;
                                     if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
                                         strategy_time_slice.extend(consolidated_data);

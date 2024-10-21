@@ -1,7 +1,6 @@
 use std::cmp::PartialEq;
 use chrono::{Duration, NaiveDate, Utc};
 use chrono_tz::Australia;
-use chrono_tz::Tz::UTC;
 use colored::Colorize;
 use ff_rithmic_api::systems::RithmicSystem;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
