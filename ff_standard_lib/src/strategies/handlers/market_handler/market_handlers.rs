@@ -1,10 +1,10 @@
-use chrono::{Utc};
+use chrono::{DateTime, Utc};
 use crate::strategies::ledgers::{LEDGER_SERVICE};
 use crate::standardized_types::enums::{StrategyMode};
 use std::sync::Arc;
 use dashmap::DashMap;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 use crate::strategies::client_features::server_connections::{is_warmup_complete};
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest};
@@ -16,8 +16,9 @@ use crate::strategies::strategy_events::StrategyEvent;
 
 #[derive(Clone, Debug)]
 pub enum MarketMessageEnum {
-    TimeSliceUpdate(Arc<TimeSlice>),
-    OrderRequest(OrderRequest),
+    TimeSliceUpdate(DateTime<Utc>, Arc<TimeSlice>),
+    OrderRequest(DateTime<Utc>, OrderRequest),
+    Time(DateTime<Utc>)
 }
 
 pub(crate) async fn market_handler(
@@ -25,38 +26,40 @@ pub(crate) async fn market_handler(
     open_order_cache: Arc<DashMap<OrderId, Order>>,
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
+    notify: Arc<Notify>
 ) -> Sender<MarketMessageEnum> {
     let (market_event_sender, mut market_event_receiver) = mpsc::channel(1000);
     tokio::task::spawn(async move{
         let backtest_order_sender = match mode {
             StrategyMode::Live => None,
             StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
-                let sender = backtest_matching_engine::backtest_matching_engine(open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender).await;
+                let sender = backtest_matching_engine::backtest_matching_engine(open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender, notify).await;
                 Some(sender)
             }
         };
         let market_price_sender = get_price_service_sender();
         while let Some(message) = market_event_receiver.recv().await {
-            let time = match mode {
-                StrategyMode::Backtest => get_backtest_time(),
-                StrategyMode::Live | StrategyMode::LivePaperTrading => Utc::now()
-            };
             match message {
-                MarketMessageEnum::TimeSliceUpdate(time_slice) => {
+                MarketMessageEnum::TimeSliceUpdate(time, time_slice) => {
+                    //Todo, Obsolete this fn
+                    //todo, 1. update market price directly in live data handler and historical engine
                     match market_price_sender.send(PriceServiceMessage::TimeSliceUpdate(time_slice.clone())).await {
                         Ok(_) => {}
                         Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
                     }
+                    //todo, 2. Ledger service directly in live data handler and historical engine
                     LEDGER_SERVICE.timeslice_updates(time, time_slice).await;
-                    if let Some(backtest_engine_sender) = &backtest_order_sender {
+
+                    //todo, 3. update historical order matching directly in historical engine
+                    if let Some(backtest_order_sender) = &backtest_order_sender {
                         let message = BackTestEngineMessage::Time(time);
-                        match backtest_engine_sender.send(message).await {
+                        match backtest_order_sender.send(message).await {
                             Ok(_) => {}
                             Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
                         }
                     }
                 }
-                MarketMessageEnum::OrderRequest(order_request) => {
+                MarketMessageEnum::OrderRequest(time, order_request) => {
                     if !is_warmup_complete() {
                         panic!("Market Handler: Warning: Attempted to place order during warm up!");
                     }
@@ -72,6 +75,15 @@ pub(crate) async fn market_handler(
                                     Err(e) => panic!("Market Handler: Error sending order to backtest matching engine: {}", e)
                                 }
                             }
+                        }
+                    }
+                }
+                MarketMessageEnum::Time(time) => {
+                    if let Some(order_sender) = &backtest_order_sender {
+                        //println!("sending order: {:?}", order_request);
+                        match order_sender.send(BackTestEngineMessage::Time(time)).await {
+                            Ok(_) => {}
+                            Err(e) => panic!("Market Handler: Error sending order to backtest matching engine: {}", e)
                         }
                     }
                 }

@@ -11,7 +11,7 @@ use std::time::Duration;
 use tokio::sync::mpsc::{Sender};
 use crate::strategies::handlers::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, Notify};
 use crate::strategies::historical_time::update_backtest_time;
 
 #[allow(dead_code)]
@@ -25,7 +25,8 @@ pub struct HistoricalEngine {
     primary_subscription_updates: broadcast::Receiver<Vec<DataSubscription>>,
     market_event_sender: Sender<MarketMessageEnum>,
     tick_over_no_data: bool,
-    strategy_event_sender: mpsc::Sender<StrategyEvent>
+    strategy_event_sender: mpsc::Sender<StrategyEvent>,
+    notified: Arc<Notify>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -39,7 +40,8 @@ impl HistoricalEngine {
         gui_enabled: bool,
         market_event_sender: Sender<MarketMessageEnum>,
         tick_over_no_data: bool,
-        strategy_event_sender: mpsc::Sender<StrategyEvent>
+        strategy_event_sender: mpsc::Sender<StrategyEvent>,
+        notified: Arc<Notify>
     ) -> Self {
         let rx = subscribe_primary_subscription_updates();
         let engine = HistoricalEngine {
@@ -53,6 +55,7 @@ impl HistoricalEngine {
             market_event_sender,
             tick_over_no_data,
             strategy_event_sender,
+            notified
         };
         engine
     }
@@ -189,13 +192,15 @@ impl HistoricalEngine {
                 // update our consolidators and create the strategies time slice with any new data or just create empty slice.
                 if !time_slice.is_empty() {
                     let arc_slice = Arc::new(time_slice.clone());
-                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(arc_slice.clone())).await.unwrap();
+                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time, arc_slice.clone())).await.unwrap();
                     // Add only primary data which the strategy has subscribed to into the strategies time slice
                     if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
                         strategy_time_slice.extend(consolidated_data);
                     }
 
                     strategy_time_slice.extend(time_slice);
+                } else {
+                    self.market_event_sender.send(MarketMessageEnum::Time(time)).await.unwrap();
                 }
 
                 // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.
@@ -213,6 +218,9 @@ impl HistoricalEngine {
                 match self.strategy_event_sender.send(slice_event).await {
                     Ok(_) => {}
                     Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                }
+                if self.mode == StrategyMode::Backtest {
+                    self.notified.notified().await;
                 }
                 last_time = time.clone();
             }

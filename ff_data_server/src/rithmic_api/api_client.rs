@@ -678,7 +678,7 @@ impl RithmicClient {
                  Some(end_of_day.timestamp() as i32),
                  Some(end_of_day.timestamp_subsec_micros() as i32))
             }
-            TimeInForce::Time(ref time_string, ref tz_string) => {
+            TimeInForce::Time(ref time_stamp, ref tz_string) => {
                 let time_zone = match Tz::from_str(tz_string) {
                     Ok(tz) => tz,
                     Err(e) => {
@@ -686,13 +686,7 @@ impl RithmicClient {
                         return;
                     }
                 };
-                let cancel_time = match NaiveDateTime::parse_from_str(time_string, "%Y-%m-%d %H:%M:%S%.f") {
-                    Ok(naive_time) => time_zone.from_local_datetime(&naive_time).unwrap(),
-                    Err(e) => {
-                        eprintln!("Failed to parse time in rithmic submit_order(): {}", e);
-                        return;
-                    }
-                };
+                let cancel_time = time_zone.timestamp_opt(*time_stamp, 0).unwrap();
 
                 (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
                  Some(cancel_time.timestamp() as i32),

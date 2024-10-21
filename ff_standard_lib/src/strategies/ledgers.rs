@@ -253,7 +253,6 @@ impl Ledger {
         tokio::task::spawn(async move{
             let ledger = ledger;
             while let Some(request) = request_receiver.recv().await {
-                //println!("Ledger request: {:?}", request);
                 match request {
                     LedgerMessage::TimeSlice(time, slice) =>  {
                         ledger.timeslice_update(slice, time).await;
@@ -277,9 +276,10 @@ impl Ledger {
                         }
                     }
                     LedgerMessage::PrintLedgerRequest => {
-                        ledger.print().await;
+                        //ledger.print().await;
                     },
                     LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag } => {
+                        println!("Message received ledegrs");
                         ledger.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await;
                     }
                     LedgerMessage::FlattenAccount(time) => {
@@ -315,8 +315,13 @@ impl Ledger {
                     LedgerMessage::ExportTrades(directory) => {
                         ledger.export_positions_to_csv(&directory);
                     }
-                    LedgerMessage::LiveAccountUpdates { .. } => {
-                        todo!()
+                    LedgerMessage::LiveAccountUpdates { account, cash_value, cash_available, cash_used } => {
+                        let mut ledger_cash_value = ledger.cash_value.lock().await;
+                        *ledger_cash_value = cash_value;
+                        let mut  ledger_cash_available = ledger.cash_available.lock().await;
+                        *ledger_cash_available = cash_available;
+                        let mut  ledger_cash_used = ledger.cash_used.lock().await;
+                        *ledger_cash_used = cash_used;
                     }
                     LedgerMessage::LivePositionUpdates { .. } => {
                         todo!()

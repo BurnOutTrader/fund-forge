@@ -83,7 +83,7 @@ pub enum TimeInForce {
     IOC,
     FOK,
     Day(TzString),
-    Time(TimeString, TzString)
+    Time(i64, TzString)
 }
 
 #[derive(Archive, Clone, rkyv::Serialize, rkyv::Deserialize, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
@@ -613,6 +613,18 @@ impl OrderUpdateEvent {
             OrderUpdateEvent::OrderRejected { account, .. } => &account.brokerage,
             OrderUpdateEvent::OrderUpdated  { account, .. } => &account.brokerage,
             OrderUpdateEvent::OrderUpdateRejected  { account, .. } => &account.brokerage,
+        }
+    }
+
+    pub fn account(&self) -> &Account {
+        match self {
+            OrderUpdateEvent::OrderAccepted { account, .. } => &account,
+            OrderUpdateEvent::OrderFilled  { account, .. } => &account,
+            OrderUpdateEvent::OrderPartiallyFilled  { account, .. } => &account,
+            OrderUpdateEvent::OrderCancelled  { account, .. } => &account,
+            OrderUpdateEvent::OrderRejected { account, .. } => &account,
+            OrderUpdateEvent::OrderUpdated  { account, .. } => &account,
+            OrderUpdateEvent::OrderUpdateRejected  { account, .. } => &account,
         }
     }
 

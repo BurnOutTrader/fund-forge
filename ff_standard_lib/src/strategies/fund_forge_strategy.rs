@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
 use rust_decimal::Decimal;
-use tokio::sync::{mpsc};
+use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::{Sender};
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc};
 use crate::strategies::handlers::market_handler::market_handlers::{market_handler, MarketMessageEnum};
@@ -112,7 +112,7 @@ impl FundForgeStrategy {
     ///
     /// `gui_enabled: bool`: If true the engine will forward all StrategyEventSlice's sent to the strategy, to the strategy registry so they can be used by GUI implementations.
     ///
-    /// ` tick_over_no_data: bool`: If true the Backtest engine will tick at buffer resolution speed over weekends or other no data periods.
+    /// `tick_over_no_data: bool`: If true the Backtest engine will tick at buffer resolution speed over weekends or other no data periods.
     ///
     /// `synchronize_accounts: bool` If true strategy positions will update in sync with the brokerage, if false the engine will simulate positions using the same logic as backtesting. //todo[ReadMe], explain in more detail
     pub async fn initialize(
@@ -148,16 +148,17 @@ impl FundForgeStrategy {
         let open_order_cache: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
         let closed_order_cache: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());
 
-        let market_event_sender = market_handler(strategy_mode, open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender.clone()).await;
+        let notify = Arc::new(Notify::new());
+        let market_event_sender = market_handler(strategy_mode, open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender.clone(), notify.clone()).await;
         let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode, strategy_event_sender.clone()).await);
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone(), strategy_event_sender.clone()).await);
 
         init_sub_handler(subscription_handler.clone(), indicator_handler.clone()).await;
-        let (sender, receiver) = tokio::sync::mpsc::channel(50);
+        let (live_order_updates_sender, live_order_updates_receiver) = tokio::sync::mpsc::channel(50);
         if strategy_mode == StrategyMode::Live {
-            live_order_update(open_order_cache.clone(), closed_order_cache.clone(), receiver, strategy_event_sender.clone());
+            live_order_update(open_order_cache.clone(), closed_order_cache.clone(), live_order_updates_receiver, strategy_event_sender.clone());
         }
-        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), market_event_sender.clone(), sender, synchronize_accounts, strategy_event_sender.clone()).await;
+        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), market_event_sender.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone()).await;
 
         subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
 
@@ -180,7 +181,19 @@ impl FundForgeStrategy {
 
         match strategy_mode {
             StrategyMode::Backtest => {
-                let engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_duration.clone(), gui_enabled.clone(), market_event_sender, tick_over_no_data, strategy_event_sender.clone()).await;
+                let engine = HistoricalEngine::new(
+                    strategy_mode.clone(),
+                    start_time.to_utc(),
+                    end_time.to_utc(),
+                    warmup_duration.clone(),
+                    buffering_duration.clone(),
+                    gui_enabled.clone(),
+                    market_event_sender,
+                    tick_over_no_data,
+                    strategy_event_sender.clone(),
+                    notify
+                ).await;
+
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
@@ -289,7 +302,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -321,7 +334,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -353,7 +366,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -385,7 +398,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -418,7 +431,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -451,7 +464,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -477,7 +490,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -503,7 +516,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -529,7 +542,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -556,7 +569,7 @@ impl FundForgeStrategy {
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
-            self.market_request_sender.send(MarketMessageEnum::OrderRequest(order_request)).await.unwrap();
+            self.market_request_sender.send(MarketMessageEnum::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
         }
         order_id
     }
@@ -576,7 +589,7 @@ impl FundForgeStrategy {
             account
         };
 
-        let request = MarketMessageEnum::OrderRequest(order_request);
+        let request = MarketMessageEnum::OrderRequest(get_backtest_time(), order_request);
         self.market_request_sender.send(request).await.unwrap();
     }
 
@@ -596,19 +609,19 @@ impl FundForgeStrategy {
             update: order_update_type,
         };
 
-        let update_msg = MarketMessageEnum::OrderRequest(order_request);
+        let update_msg = MarketMessageEnum::OrderRequest(get_backtest_time(), order_request);
         self.market_request_sender.send(update_msg).await.unwrap();
     }
 
     /// Cancel all pending orders on the account for the symbol_name
     pub async fn cancel_orders(&self, account: Account, symbol_name: SymbolName) {
-        let cancel_msg =  MarketMessageEnum::OrderRequest(OrderRequest::CancelAll{account, symbol_name});
+        let cancel_msg =  MarketMessageEnum::OrderRequest(get_backtest_time(), OrderRequest::CancelAll{account, symbol_name});
         self.market_request_sender.send(cancel_msg).await.unwrap();
     }
 
     /// Flatten all positions on the account.
     pub async fn flatten_all_for(&self, account: Account) {
-        let order = MarketMessageEnum::OrderRequest(OrderRequest::FlattenAllFor {account});
+        let order = MarketMessageEnum::OrderRequest(get_backtest_time(), OrderRequest::FlattenAllFor {account});
         self.market_request_sender.send(order).await.unwrap();
     }
 

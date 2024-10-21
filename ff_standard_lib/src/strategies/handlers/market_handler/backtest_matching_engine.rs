@@ -1,8 +1,9 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc::{Sender};
+use tokio::sync::Notify;
 use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_str};
 use crate::standardized_types::enums::{OrderSide, PositionSide};
 use crate::standardized_types::new_types::{Price, Volume};
@@ -18,17 +19,21 @@ pub enum BackTestEngineMessage {
 pub async fn backtest_matching_engine(
     open_order_cache: Arc<DashMap<OrderId, Order>>, //todo, make these static or lifetimes if possible.. might not be optimal though, look it up!
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
-    strategy_event_sender: Sender<StrategyEvent>
+    strategy_event_sender: Sender<StrategyEvent>,
+    notify: Arc<Notify>
 ) -> Sender<BackTestEngineMessage> {
+    notify.notify_waiters();
     let (sender, mut receiver) = tokio::sync::mpsc::channel(100);
     tokio::task::spawn(async move {
+        notify.notify_one();
         while let Some(backtest_message) = receiver.recv().await {
             match backtest_message {
                 BackTestEngineMessage::OrderRequest(time, order_request) => {
+                    //println!("{:?}", order_request);
                     match order_request {
                         OrderRequest::Create { order, .. } => {
                             open_order_cache.insert(order.id.clone(), order);
-                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
+                            //simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {
                             let existing_order = open_order_cache.remove(&order_id);
@@ -131,9 +136,10 @@ pub async fn backtest_matching_engine(
                     }
                 }
                 BackTestEngineMessage::Time(time) => {
-                    simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
+                    //simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
                 }
             }
+            notify.notify_one();
         }
     });
     sender
@@ -180,7 +186,7 @@ pub async fn simulated_order_matching (
             TimeInForce::Time(cancel_time, time_zone_string) => {
                 let tz: Tz = time_zone_string.parse().unwrap();
                 let local_time = time_convert_utc_to_local(&tz, time);
-                let cancel_time = time_local_from_utc_str(&tz, cancel_time);
+                let cancel_time = tz.timestamp_opt(*cancel_time, 0).unwrap();
                 if local_time >= cancel_time {
                     let reason = "Time In Force Expired: TimeInForce::Time".to_string();
                     rejected.push((order.id.clone(), reason));
@@ -468,6 +474,7 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue
                 };
+                println!("{}", market_fill_price);
                 if LEDGER_SERVICE.is_short(&order.account, &order.symbol_name) {
                     let request = LedgerMessage::ExitPaperPosition {
                         symbol_name: order.symbol_name.clone(),
@@ -479,7 +486,7 @@ pub async fn simulated_order_matching (
                     };
                     LEDGER_SERVICE.send_message(&order.account, request).await;
                 }
-                filled.push((order.id.clone(), market_fill_price))
+                filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::EnterShort => {
                 let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {

@@ -35,7 +35,6 @@ use crate::strategies::ledgers::{LedgerMessage, LEDGER_SERVICE};
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
 }
-
 #[inline(always)]
 pub fn set_warmup_complete() {
     WARM_UP_COMPLETE.store(true, Ordering::SeqCst);
@@ -45,14 +44,19 @@ pub fn is_warmup_complete() -> bool {
     WARM_UP_COMPLETE.load(Ordering::SeqCst)
 }
 
+
+
 pub(crate) static SUBSCRIPTION_HANDLER: OnceCell<Arc<SubscriptionHandler>> = OnceCell::new();
 pub(crate) fn subscribe_primary_subscription_updates() -> broadcast::Receiver<Vec<DataSubscription>> {
     SUBSCRIPTION_HANDLER.get().unwrap().subscribe_primary_subscription_updates() // Return a clone of the Arc to avoid moving the value out of the OnceCell
 }
 
+
+
 pub(crate) static INDICATOR_HANDLER: OnceCell<Arc<IndicatorHandler>> = OnceCell::new();
 pub(crate) static TIMED_EVENT_HANDLER: OnceCell<Arc<TimedEventHandler>> = OnceCell::new();
 static DRAWING_OBJECTS_HANDLER: OnceCell<Arc<DrawingObjectHandler>> = OnceCell::new();
+
 
 pub(crate) enum StrategyRequest {
     CallBack(ConnectionType, DataServerRequest, oneshot::Sender<DataServerResponse>),
@@ -82,10 +86,6 @@ pub(crate) async fn live_subscription_handler(
     let settings_map_ref = settings_map.clone();
     println!("Handler: Start Live handler");
     tokio::task::spawn(async move {
-        {
-            //let mut engine = HistoricalEngine::new(strategy_mode.clone(), start_time.to_utc(),  end_time.to_utc(), warmup_duration.clone(), buffering_resolution.clone(), notify, gui_enabled.clone()).await;
-            //engine.warmup().await;
-        }
         let mut current_subscriptions = SUBSCRIPTION_HANDLER.get().unwrap().primary_subscriptions().await.clone();
         {
             let mut subscribed = vec![];
@@ -373,7 +373,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                                 let mut strategy_time_slice = TimeSlice::new();
                                 if !time_slice.is_empty() {
                                     let arc_slice = Arc::new(time_slice.clone());
-                                    market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(arc_slice.clone())).await.unwrap();
+                                    market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(Utc::now(), arc_slice.clone())).await.unwrap();
                                     if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
                                         strategy_time_slice.extend(consolidated_data);
                                     }
