@@ -9,10 +9,12 @@ use crate::standardized_types::time_slices::TimeSlice;
 use std::thread;
 use std::time::Duration;
 use tokio::sync::mpsc::{Sender};
-use crate::strategies::handlers::market_handler::market_handlers::MarketMessageEnum;
 use crate::standardized_types::subscriptions::DataSubscription;
 use tokio::sync::{broadcast, mpsc, Notify};
+use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
+use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::historical_time::update_backtest_time;
+use crate::strategies::ledgers::LEDGER_SERVICE;
 
 #[allow(dead_code)]
 pub struct HistoricalEngine {
@@ -23,10 +25,10 @@ pub struct HistoricalEngine {
     buffer_resolution: Duration,
     gui_enabled: bool,
     primary_subscription_updates: broadcast::Receiver<Vec<DataSubscription>>,
-    market_event_sender: Sender<MarketMessageEnum>,
     tick_over_no_data: bool,
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
-    notified: Arc<Notify>
+    notified: Arc<Notify>,
+    historical_message_sender: Option<Sender<BackTestEngineMessage>>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
@@ -38,10 +40,10 @@ impl HistoricalEngine {
         warmup_duration: ChronoDuration,
         buffer_resolution: Duration,
         gui_enabled: bool,
-        market_event_sender: Sender<MarketMessageEnum>,
         tick_over_no_data: bool,
         strategy_event_sender: mpsc::Sender<StrategyEvent>,
-        notified: Arc<Notify>
+        notified: Arc<Notify>,
+        historical_message_sender: Option<Sender<BackTestEngineMessage>>
     ) -> Self {
         let rx = subscribe_primary_subscription_updates();
         let engine = HistoricalEngine {
@@ -52,10 +54,10 @@ impl HistoricalEngine {
             buffer_resolution,
             gui_enabled,
             primary_subscription_updates: rx,
-            market_event_sender,
             tick_over_no_data,
             strategy_event_sender,
-            notified
+            notified,
+            historical_message_sender
         };
         engine
     }
@@ -107,9 +109,11 @@ impl HistoricalEngine {
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
         let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
         let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap().clone();
+        let market_price_sender = get_price_service_sender();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         let mut warm_up_complete = false;
         let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
+
         for subscription in &primary_subscriptions {
             println!("Historical Engine: Primary Subscription: {}", subscription);
         }
@@ -192,15 +196,26 @@ impl HistoricalEngine {
                 // update our consolidators and create the strategies time slice with any new data or just create empty slice.
                 if !time_slice.is_empty() {
                     let arc_slice = Arc::new(time_slice.clone());
-                    self.market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(time, arc_slice.clone())).await.unwrap();
+                    match market_price_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await {
+                        Ok(_) => {}
+                        Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
+                    }
+                    LEDGER_SERVICE.timeslice_updates(time, arc_slice.clone()).await;
+
                     // Add only primary data which the strategy has subscribed to into the strategies time slice
                     if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
                         strategy_time_slice.extend(consolidated_data);
                     }
 
                     strategy_time_slice.extend(time_slice);
-                } else {
-                    self.market_event_sender.send(MarketMessageEnum::Time(time)).await.unwrap();
+                }
+
+                if let Some(backtest_order_sender) = &self.historical_message_sender {
+                    let message = BackTestEngineMessage::Time(time);
+                    match backtest_order_sender.send(message).await {
+                        Ok(_) => {}
+                        Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
+                    }
                 }
 
                 // update the consolidators time and see if that generates new data, in case we didn't have primary data to update with.

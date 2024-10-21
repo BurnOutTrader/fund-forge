@@ -21,7 +21,6 @@ use tokio_rustls::TlsStream;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::handlers::drawing_object_handler::DrawingObjectHandler;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::handlers::market_handler::market_handlers::{MarketMessageEnum};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEvent};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
@@ -202,7 +201,6 @@ pub async fn response_handler(
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
-    market_update_sender: Sender<MarketMessageEnum>,
     order_updates_sender: Sender<OrderUpdateEvent>,
     synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>,
@@ -215,7 +213,6 @@ pub async fn response_handler(
 
             let mut receiver = stream;
             let callbacks = callbacks.clone();
-            let market_update_sender = market_update_sender.clone();
             let settings = settings.clone();
             let strategy_event_sender = strategy_event_sender.clone();
             tokio::task::spawn(async move {
@@ -280,7 +277,7 @@ pub async fn response_handler(
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {
-                                        handle_live_data(settings.clone(), port, buffer_duration, market_update_sender.clone(), strategy_event_sender.clone()).await;
+                                        handle_live_data(settings.clone(), port, buffer_duration, strategy_event_sender.clone()).await;
                                     }
                                 }
                                 _ => panic!("Incorrect response here: {:?}", response)
@@ -298,7 +295,7 @@ pub async fn response_handler(
     }
 }
 
-pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration ,  market_update_sender: Sender<MarketMessageEnum>, strategy_event_sender: Sender<StrategyEvent>) {
+pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration , strategy_event_sender: Sender<StrategyEvent>) {
     // set up async client
     let mut stream_client = match create_async_api_client(&connection_settings, true).await {
         Ok(client) => client,
@@ -327,7 +324,6 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
-            let market_event_sender = market_update_sender.clone();
             let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap();
 
             let mut length_bytes = [0u8; LENGTH];
@@ -373,7 +369,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                                 let mut strategy_time_slice = TimeSlice::new();
                                 if !time_slice.is_empty() {
                                     let arc_slice = Arc::new(time_slice.clone());
-                                    market_event_sender.send(MarketMessageEnum::TimeSliceUpdate(Utc::now(), arc_slice.clone())).await.unwrap();
+                                    LEDGER_SERVICE.timeslice_updates(Utc::now(), arc_slice.clone()).await;
                                     if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
                                         strategy_time_slice.extend(consolidated_data);
                                     }
@@ -428,7 +424,6 @@ pub async fn init_connections(
     gui_enabled: bool,
     buffer_duration: Duration,
     mode: StrategyMode,
-    market_update_sender: Sender<MarketMessageEnum>,
     order_updates_sender: Sender<OrderUpdateEvent>,
     synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>
@@ -462,5 +457,5 @@ pub async fn init_connections(
 
     let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     request_handler(rx, settings_map.clone(), server_senders, callbacks.clone()).await;
-    response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, market_update_sender, order_updates_sender, synchronise_accounts, strategy_event_sender).await;
+    response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, order_updates_sender, synchronise_accounts, strategy_event_sender).await;
 }

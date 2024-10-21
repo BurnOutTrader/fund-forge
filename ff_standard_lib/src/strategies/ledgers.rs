@@ -6,12 +6,14 @@ use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use dashmap::DashMap;
 use csv::Writer;
+use futures::future::join_all;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::{Sender};
 use tokio::sync::{mpsc, Mutex};
+use tokio::task::JoinHandle;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::position::{Position, PositionId, PositionUpdateEvent};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -35,37 +37,40 @@ lazy_static! {
 }
 
 pub(crate) struct LedgerService {
-    pub(crate) ledger_senders: DashMap<Account, Sender<LedgerMessage>>,
     pub (crate) ledgers: DashMap<Account, Arc<Ledger>>,
 }
 impl LedgerService {
     pub fn new() -> Self {
         LedgerService {
-            ledger_senders: Default::default(),
             ledgers: Default::default(),
         }
     }
     pub async fn send_message(&self, account: &Account, ledger_message: LedgerMessage) {
-        if let Some(account_sender) = self.ledger_senders.get(account) {
-            match account_sender.send(ledger_message).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("LEDGER_SERVICE: Failed to send message: {}", e)
-            }
+        if let Some(ledger_ref) = self.ledgers.get(account) {
+            ledger_ref.process_message(ledger_message).await;
         }
     }
 
     pub async fn timeslice_updates(&self, time: DateTime<Utc>, time_slice: Arc<TimeSlice>) {
-        let request = LedgerMessage::TimeSlice(time, time_slice);
-        for account_sender in self.ledger_senders.iter() {
-            match account_sender.value().send(request.clone()).await {
-                Ok(_) => {}
-                Err(_e) => panic!("LEDGER_SERVICE: Ledger timeSlice update request failed")
-            }
+        let mut tasks: Vec<JoinHandle<()>> = Vec::new();
+
+        for ledger in self.ledgers.iter() {
+            let message = LedgerMessage::TimeSlice(time.clone(), time_slice.clone());
+            let ledger_clone = ledger.value().clone();
+
+            let task = tokio::spawn(async move {
+                ledger_clone.process_message(message).await;
+            });
+
+            tasks.push(task);
         }
+
+        // Wait for all tasks to complete
+        join_all(tasks).await;
     }
 
     pub async fn init_ledger(&self, account: &Account, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency, strategy_event_sender: Sender<StrategyEvent>) {
-        if !self.ledger_senders.contains_key(account) {
+        if !self.ledgers.contains_key(account) {
             let ledger: Ledger = match strategy_mode {
                 StrategyMode::Live => {
                     let account_info = match account.brokerage.account_info(account.account_id.clone()).await {
@@ -85,10 +90,8 @@ impl LedgerService {
                     }
                 }
             };
-            let (sender, receiver) = tokio::sync::mpsc::channel(100);
             let ledger = Arc::new(ledger);
-            Ledger::start_receive(ledger.clone(), receiver);
-            self.ledger_senders.insert(account.clone(), sender);
+
             self.ledgers.insert(account.clone(), ledger);
         }
     }
@@ -249,86 +252,80 @@ impl Ledger {
         ledger
     }
 
-    pub(crate) fn start_receive(ledger: Arc<Ledger>, mut request_receiver: Receiver<LedgerMessage>) {
-        tokio::task::spawn(async move{
-            let ledger = ledger;
-            while let Some(request) = request_receiver.recv().await {
-                match request {
-                    LedgerMessage::TimeSlice(time, slice) =>  {
-                        ledger.timeslice_update(slice, time).await;
-                    },
-                    LedgerMessage::ExitPaperPosition { symbol_name, symbol_code: _, order_id: _, side, time, tag: _ } => {
-                        if ledger.mode == StrategyMode::Backtest || ledger.mode == StrategyMode::LivePaperTrading {
-                            if let Some((symbol_name, position)) = ledger.positions.remove(&symbol_name) {
-                                if position.side == side {
-                                    let side = match position.side {
-                                        PositionSide::Long => OrderSide::Sell,
-                                        PositionSide::Short => OrderSide::Buy
-                                    };
-                                    let market_price = match price_service_request_market_fill_price(side, symbol_name.clone(), position.quantity_open).await {
-                                        Ok(price) => price.price(),
-                                        Err(e) => panic!("Unable to get fill price for {}: {}", position.symbol_name, e) //todo, we shou
-                                    };
-                                    ledger.paper_exit_position(&position.symbol_name, time, market_price.unwrap(), "Flatten All".to_string()).await;
-                                    ledger.positions_closed.entry(symbol_name.clone()).or_insert(vec![]).push(position.clone());
-                                }
-                            }
+    pub(crate) async fn process_message(&self, request: LedgerMessage) {
+        match request {
+            LedgerMessage::TimeSlice(time, slice) =>  {
+                self.timeslice_update(slice, time).await;
+            },
+            LedgerMessage::ExitPaperPosition { symbol_name, symbol_code: _, order_id: _, side, time, tag: _ } => {
+                if self.mode == StrategyMode::Backtest || self.mode == StrategyMode::LivePaperTrading {
+                    if let Some((symbol_name, position)) = self.positions.remove(&symbol_name) {
+                        if position.side == side {
+                            let side = match position.side {
+                                PositionSide::Long => OrderSide::Sell,
+                                PositionSide::Short => OrderSide::Buy
+                            };
+                            let market_price = match price_service_request_market_fill_price(side, symbol_name.clone(), position.quantity_open).await {
+                                Ok(price) => price.price(),
+                                Err(e) => panic!("Unable to get fill price for {}: {}", position.symbol_name, e) //todo, we shou
+                            };
+                            self.paper_exit_position(&position.symbol_name, time, market_price.unwrap(), "Flatten All".to_string()).await;
+                            self.positions_closed.entry(symbol_name.clone()).or_insert(vec![]).push(position.clone());
                         }
-                    }
-                    LedgerMessage::PrintLedgerRequest => {
-                        //ledger.print().await;
-                    },
-                    LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag } => {
-                        println!("Message received ledegrs");
-                        ledger.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await;
-                    }
-                    LedgerMessage::FlattenAccount(time) => {
-                        if ledger.mode == StrategyMode::Backtest || ledger.mode == StrategyMode::LivePaperTrading {
-                            // Collect keys (symbol names) to process
-                            let symbols_to_process: Vec<String> = ledger.positions.iter()
-                                .map(|entry| entry.key().clone())
-                                .collect();
-
-                            for symbol_name in symbols_to_process {
-                                if let Some((_, position)) = ledger.positions.remove(&symbol_name) {
-                                    let side = match position.side {
-                                        PositionSide::Long => OrderSide::Sell,
-                                        PositionSide::Short => OrderSide::Buy
-                                    };
-                                    let market_price = match price_service_request_market_fill_price(
-                                        side,
-                                        symbol_name.clone(),
-                                        position.quantity_open,
-                                    ).await {
-                                        Ok(price) => price,
-                                        Err(e) => {
-                                            eprintln!("Unable to get fill price for {}: {}. Skipping this position.", position.symbol_name, e);
-                                            continue;
-                                        }
-                                    };
-                                    ledger.paper_exit_position(&position.symbol_name, time, market_price.price().unwrap(), "Flatten All".to_string()).await;
-                                    ledger.positions_closed.entry(symbol_name).or_insert(vec![]).push(position);
-                                }
-                            }
-                        }
-                    }
-                    LedgerMessage::ExportTrades(directory) => {
-                        ledger.export_positions_to_csv(&directory);
-                    }
-                    LedgerMessage::LiveAccountUpdates { account, cash_value, cash_available, cash_used } => {
-                        let mut ledger_cash_value = ledger.cash_value.lock().await;
-                        *ledger_cash_value = cash_value;
-                        let mut  ledger_cash_available = ledger.cash_available.lock().await;
-                        *ledger_cash_available = cash_available;
-                        let mut  ledger_cash_used = ledger.cash_used.lock().await;
-                        *ledger_cash_used = cash_used;
-                    }
-                    LedgerMessage::LivePositionUpdates { .. } => {
-                        todo!()
                     }
                 }
             }
-        });
+            LedgerMessage::PrintLedgerRequest => {
+                //ledger.print().await;
+            },
+            LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag } => {
+                self.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await;
+            }
+            LedgerMessage::FlattenAccount(time) => {
+                if self.mode == StrategyMode::Backtest || self.mode == StrategyMode::LivePaperTrading {
+                    // Collect keys (symbol names) to process
+                    let symbols_to_process: Vec<String> = self.positions.iter()
+                        .map(|entry| entry.key().clone())
+                        .collect();
+
+                    for symbol_name in symbols_to_process {
+                        if let Some((_, position)) = self.positions.remove(&symbol_name) {
+                            let side = match position.side {
+                                PositionSide::Long => OrderSide::Sell,
+                                PositionSide::Short => OrderSide::Buy
+                            };
+                            let market_price = match price_service_request_market_fill_price(
+                                side,
+                                symbol_name.clone(),
+                                position.quantity_open,
+                            ).await {
+                                Ok(price) => price,
+                                Err(e) => {
+                                    eprintln!("Unable to get fill price for {}: {}. Skipping this position.", position.symbol_name, e);
+                                    continue;
+                                }
+                            };
+                            self.paper_exit_position(&position.symbol_name, time, market_price.price().unwrap(), "Flatten All".to_string()).await;
+                            self.positions_closed.entry(symbol_name).or_insert(vec![]).push(position);
+                        }
+                    }
+                }
+            }
+            LedgerMessage::ExportTrades(directory) => {
+                self.export_positions_to_csv(&directory);
+            }
+            LedgerMessage::LiveAccountUpdates {  cash_value, cash_available, cash_used,.. } => {
+                let mut ledger_cash_value = self.cash_value.lock().await;
+                *ledger_cash_value = cash_value;
+                let mut  ledger_cash_available = self.cash_available.lock().await;
+                *ledger_cash_available = cash_available;
+                let mut  ledger_cash_used = self.cash_used.lock().await;
+                *ledger_cash_used = cash_used;
+            }
+            LedgerMessage::LivePositionUpdates { .. } => {
+                todo!()
+            }
+        }
     }
 
     pub async fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
@@ -644,9 +641,10 @@ impl Ledger {
         quantity: Volume,
         side: OrderSide,
         time: DateTime<Utc>,
-        market_fill_price: Price, // we use the passed in price because we dont know what sort of order was filled, limit or market
+        market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
         tag: String
     ) {
+        println!("Started");
         let mut updates = vec![];
         // Check if there's an existing position for the given symbol
         let mut remaining_quantity = quantity;
@@ -720,6 +718,7 @@ impl Ledger {
                 updates.push(event);
             } else {
                 if self.mode != StrategyMode::Live {
+                    println!("Margin");
                     match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                         Ok(_) => {}
                         Err(e) => {
@@ -740,6 +739,7 @@ impl Ledger {
                             return
                         }
                     }
+                    println!("Margin Completed");
                 }
                 let event = existing_position.add_to_position(market_fill_price, quantity, time, tag.clone(), self.currency).await;
                 self.positions.insert(symbol_code.clone(), existing_position);
@@ -757,6 +757,7 @@ impl Ledger {
         }
         if remaining_quantity > dec!(0.0) {
             if self.mode != StrategyMode::Live {
+                println!("Margin");
                 match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
                     Ok(_) => {}
                     Err(e) => {
@@ -776,6 +777,7 @@ impl Ledger {
                         return
                     }
                 }
+                println!("Margin Completed");
             }
 
             // Determine the side of the position based on the order side
@@ -839,6 +841,7 @@ impl Ledger {
                 Err(e) => eprintln!("Ledger: Failed to send event: {}", e)
             }
         }
+        println!("Completed")
     }
 }
 
@@ -876,17 +879,23 @@ mod historical_ledgers {
                 Some(margin) => margin
             };
 
-            let cash_available = self.cash_available.lock().await;
-            // Check if the available cash is sufficient to cover the margin
-            if *cash_available < margin {
-                return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
+            {
+                let cash_available = self.cash_available.lock().await;
+                // Check if the available cash is sufficient to cover the margin
+                if *cash_available < margin {
+                    return Err(FundForgeError::ClientSideErrorDebug("Insufficient funds".to_string()));
+                }
             }
 
-            let mut account_cash_used= self.cash_used.lock().await;
-            *account_cash_used += margin;
+            {
+                let mut account_cash_used = self.cash_used.lock().await;
+                *account_cash_used += margin;
+            }
 
-            let mut account_cash_available= self.cash_available.lock().await;
-            *account_cash_available -= margin;
+            {
+                let mut account_cash_available = self.cash_available.lock().await;
+                *account_cash_available -= margin;
+            }
             Ok(())
         }
 

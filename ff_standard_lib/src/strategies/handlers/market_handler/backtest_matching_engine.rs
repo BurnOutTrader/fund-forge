@@ -1,10 +1,11 @@
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Duration, TimeZone, Utc};
 use chrono_tz::Tz;
 use dashmap::DashMap;
 use std::sync::Arc;
+use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::Notify;
-use crate::helpers::converters::{time_convert_utc_to_local, time_local_from_utc_str};
+use crate::helpers::converters::{time_convert_utc_to_local};
 use crate::standardized_types::enums::{OrderSide, PositionSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
@@ -16,11 +17,12 @@ pub enum BackTestEngineMessage {
     Time(DateTime<Utc>),
     OrderRequest(DateTime<Utc>, OrderRequest)
 }
+
 pub async fn backtest_matching_engine(
     open_order_cache: Arc<DashMap<OrderId, Order>>, //todo, make these static or lifetimes if possible.. might not be optimal though, look it up!
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
     strategy_event_sender: Sender<StrategyEvent>,
-    notify: Arc<Notify>
+    notify: Arc<Notify>,
 ) -> Sender<BackTestEngineMessage> {
     notify.notify_waiters();
     let (sender, mut receiver) = tokio::sync::mpsc::channel(100);
@@ -33,7 +35,7 @@ pub async fn backtest_matching_engine(
                     match order_request {
                         OrderRequest::Create { order, .. } => {
                             open_order_cache.insert(order.id.clone(), order);
-                            //simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
+                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {
                             let existing_order = open_order_cache.remove(&order_id);
@@ -136,7 +138,10 @@ pub async fn backtest_matching_engine(
                     }
                 }
                 BackTestEngineMessage::Time(time) => {
-                    //simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
+                    if !open_order_cache.is_empty() {
+                        simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
+                    }
+
                 }
             }
             notify.notify_one();
@@ -151,9 +156,7 @@ pub async fn simulated_order_matching (
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
     strategy_event_sender: Sender<StrategyEvent>
 ) {
-    if open_order_cache.len() == 0 {
-        return;
-    }
+
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
     let mut filled = Vec::new();
@@ -172,16 +175,16 @@ pub async fn simulated_order_matching (
                 }
             }
             TimeInForce::IOC=> {
-                if time > order.time_created_utc() {
-                /*    let reason = "Time In Force Expired: TimeInForce::IOC".to_string();
-                    rejected.push((order.id.clone(), reason));*/
-                }
+               /* if time > order.time_created_utc() + Duration::seconds(1) {
+                    let reason = "Time In Force Expired: TimeInForce::IOC".to_string();
+                    rejected.push((order.id.clone(), reason));
+                }*/
             }
             TimeInForce::FOK => {
-                if time > order.time_created_utc() {
-                /*    let reason = "Time In Force Expired: TimeInForce::FOK".to_string();
-                    rejected.push((order.id.clone(), reason));*/
-                }
+                /*if time > order.time_created_utc() + buffer_resolution  {
+                   let reason = "Time In Force Expired: TimeInForce::FOK".to_string();
+                    rejected.push((order.id.clone(), reason));
+                }*/
             }
             TimeInForce::Time(cancel_time, time_zone_string) => {
                 let tz: Tz = time_zone_string.parse().unwrap();
@@ -474,7 +477,6 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue
                 };
-                println!("{}", market_fill_price);
                 if LEDGER_SERVICE.is_short(&order.account, &order.symbol_name) {
                     let request = LedgerMessage::ExitPaperPosition {
                         symbol_name: order.symbol_name.clone(),
@@ -593,18 +595,25 @@ async fn fill_order(
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
 ) {
-    if let Some((_, order)) = open_order_cache.remove(order_id) {
-        open_order_cache.insert(order.id.clone(), order.clone());
+    if let Some((_, order)) = open_order_cache.remove(order_id) {  // Remove the order here
         let symbol_code = match &order.symbol_code {
             None => order.symbol_name.clone(),
             Some(code) => code.clone()
         };
-        let ledger_message = LedgerMessage::UpdateOrCreatePosition {symbol_name: order.symbol_name.clone(), symbol_code, order_id: order_id.clone(), quantity: order.quantity_open.clone(), side: order.side.clone(), time, market_fill_price: market_price,tag: order.tag.clone()};
+        let ledger_message = LedgerMessage::UpdateOrCreatePosition {
+            symbol_name: order.symbol_name.clone(),
+            symbol_code,
+            order_id: order_id.clone(),
+            quantity: order.quantity_open.clone(),
+            side: order.side.clone(),
+            time,
+            market_fill_price: market_price,
+            tag: order.tag.clone()
+        };
         LEDGER_SERVICE.send_message(&order.account, ledger_message).await;
         closed_order_cache.insert(order.id.clone(), order);
     }
 }
-
 async fn partially_fill_order(
     order_id: &OrderId,
     time: DateTime<Utc>,
@@ -612,13 +621,30 @@ async fn partially_fill_order(
     fill_volume: Volume,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
 ) {
-    if let Some(order) = open_order_cache.get_mut(order_id) {
+    if let Some(mut order) = open_order_cache.get_mut(order_id) {
         let symbol_code = match &order.symbol_code {
             None => order.symbol_name.clone(),
             Some(code) => code.clone()
         };
-        let ledger_message = LedgerMessage::UpdateOrCreatePosition {symbol_name: order.symbol_name.clone(), symbol_code, order_id: order_id.clone(), quantity: fill_volume, side: order.side.clone(), time, market_fill_price: fill_price,tag: order.tag.clone()};
+        let ledger_message = LedgerMessage::UpdateOrCreatePosition {
+            symbol_name: order.symbol_name.clone(),
+            symbol_code,
+            order_id: order_id.clone(),
+            quantity: fill_volume,
+            side: order.side.clone(),
+            time,
+            market_fill_price: fill_price,
+            tag: order.tag.clone()
+        };
         LEDGER_SERVICE.send_message(&order.account, ledger_message).await;
+
+        // Update the remaining quantity
+        order.quantity_open -= fill_volume;
+
+        // If the order is now fully filled, remove it from open_order_cache
+        if order.quantity_open <= dec!(0) {
+            open_order_cache.remove(order_id);
+        }
     }
 }
 
