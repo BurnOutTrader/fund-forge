@@ -2,6 +2,8 @@ use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::Tz;
 use dashmap::DashMap;
 use std::sync::Arc;
+use std::time::Duration;
+use async_std::task::sleep;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Sender};
 use tokio::sync::Notify;
@@ -159,6 +161,7 @@ pub async fn simulated_order_matching (
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
     let mut filled = Vec::new();
+    let mut events= vec![];
     let mut partially_filled = Vec::new();
     for order in open_order_cache.iter() {
         //println!("Order matching: {:?}", order.value());
@@ -478,8 +481,10 @@ pub async fn simulated_order_matching (
                 };
                 if LEDGER_SERVICE.is_short(&order.account, &order.symbol_name) {
                     match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, String::from("Force Exit By Enter Long")).await {
-                        Ok(_) => {}
-                        Err(_) => {}
+                        Some(event) => {
+                            events.push(StrategyEvent::PositionEvents(event));
+                        }
+                        None => {}
                     }
                 }
                 filled.push((order.id.clone(), market_fill_price));
@@ -494,8 +499,10 @@ pub async fn simulated_order_matching (
                 };
                 if LEDGER_SERVICE.is_long(&order.account, &order.symbol_name) {
                     match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, String::from("Force Exit By Enter Short")).await {
-                        Ok(_) => {}
-                        Err(_) => {}
+                        Some(event) => {
+                            events.push(StrategyEvent::PositionEvents(event));
+                        }
+                        None => {}
                     }
                 }
                 filled.push((order.id.clone(), market_fill_price));
@@ -519,16 +526,14 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue,
                 };
-                if LEDGER_SERVICE.is_long(&order.account, &order.symbol_name) {
+                if is_long {
                     match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, order.tag.clone()).await {
-                        Ok(event) => {
-                            strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap()
+                        Some(event) => {
+                            events.push(StrategyEvent::PositionEvents(event));
                         }
-                        Err(s) => {
-                            //strategy_event_sender.send(StrategyEvent::OrderEvents()).unwrap()
-                        }
+                        None => {}
                     }
-                    //filled.push((order.id.clone(), market_fill_price));
+                    filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Long Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
@@ -555,14 +560,12 @@ pub async fn simulated_order_matching (
                 };
                 if is_short {
                     match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, order.tag.clone()).await {
-                        Ok(event) => {
-                            strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap()
+                        Some(event) => {
+                            events.push(StrategyEvent::PositionEvents(event));
                         }
-                        Err(s) => {
-                            //strategy_event_sender.send(StrategyEvent::OrderEvents()).unwrap()
-                        }
+                        None => {}
                     }
-                   // filled.push((order.id.clone(), market_fill_price));
+                   filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Short Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
@@ -582,6 +585,10 @@ pub async fn simulated_order_matching (
     }
     for (order_id, price, volume) in partially_filled {
         partially_fill_order(&order_id, time, price, volume, &open_order_cache, &closed_order_cache, &strategy_event_sender).await;
+    }
+
+    for event in events {
+        strategy_event_sender.send(event).await.unwrap();
     }
 }
 

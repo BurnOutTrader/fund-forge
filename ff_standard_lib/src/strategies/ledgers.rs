@@ -70,7 +70,7 @@ impl LedgerService {
         time: DateTime<Utc>,
         market_price: Price,
         tag: String
-    ) -> Result<PositionUpdateEvent, String> {
+    ) -> Option<PositionUpdateEvent> {
         if let Some(ledger_ref) = self.ledgers.get(account) {
             ledger_ref.paper_exit_position(symbol_name, time, market_price, tag).await
         } else {
@@ -809,6 +809,7 @@ mod historical_ledgers {
     use crate::messages::data_server_messaging::FundForgeError;
     use crate::standardized_types::enums::StrategyMode;
     use crate::standardized_types::new_types::{Price, Volume};
+    use crate::standardized_types::orders::OrderUpdateEvent;
     use crate::standardized_types::position::PositionUpdateEvent;
     use crate::standardized_types::subscriptions::SymbolName;
 
@@ -863,7 +864,7 @@ mod historical_ledgers {
             time: DateTime<Utc>,
             market_price: Price,
             tag: String
-        ) -> Result<PositionUpdateEvent, String> {
+        ) -> Option<PositionUpdateEvent> {
             if let Some((symbol_name, mut existing_position)) = self.positions.remove(symbol_name) {
                 // Mark the position as closed
                 existing_position.is_closed = true;
@@ -901,9 +902,9 @@ mod historical_ledgers {
                     .or_insert_with(Vec::new)                    // If no entry exists, create a new Vec
                     .push(existing_position);     // Push the closed position to the Vec
 
-                return Ok(event)
+                return Some(event)
             }
-            Err("No position to exit".to_string())
+            None
         }
     }
 }

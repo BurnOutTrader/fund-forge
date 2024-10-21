@@ -113,14 +113,14 @@ pub async fn on_data_received(
                                     println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
 
                                     // LONG SL+TP
-                                    if is_long && long_pnl > dec!(500.0)
+                                    if is_long && long_pnl > dec!(250.0)
                                     {
                                         let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name).await;
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, dec!(100), String::from("Exit Long Take Profit")).await;
                                         println!("Strategy: Add Short, Time {}", strategy.time_local());
                                     }
                                     else if is_long
-                                        && long_pnl <= dec!(-500.0)
+                                        && long_pnl <= dec!(-250.0)
                                     {
                                         let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name).await;
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, dec!(100), String::from("Exit Long Take Loss")).await;
