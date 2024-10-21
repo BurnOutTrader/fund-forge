@@ -527,12 +527,6 @@ pub async fn simulated_order_matching (
                     Err(_) => continue,
                 };
                 if is_long {
-                    match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, order.tag.clone()).await {
-                        Some(event) => {
-                            events.push(StrategyEvent::PositionEvents(event));
-                        }
-                        None => {}
-                    }
                     filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Long Position To Exit".to_string();
@@ -559,12 +553,6 @@ pub async fn simulated_order_matching (
                     Err(_) => continue,
                 };
                 if is_short {
-                    match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, order.tag.clone()).await {
-                        Some(event) => {
-                            events.push(StrategyEvent::PositionEvents(event));
-                        }
-                        None => {}
-                    }
                    filled.push((order.id.clone(), market_fill_price));
                 } else {
                     let reason = "No Short Position To Exit".to_string();

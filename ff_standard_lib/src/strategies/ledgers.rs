@@ -635,7 +635,6 @@ impl Ledger {
                 if self.mode != StrategyMode::Live {
                     self.release_margin_used(&symbol_name).await;
                 }
-
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         if self.mode != StrategyMode::Live {
