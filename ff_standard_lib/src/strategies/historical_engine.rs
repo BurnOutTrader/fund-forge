@@ -227,14 +227,16 @@ impl HistoricalEngine {
                 if !strategy_time_slice.is_empty() {
                     // Update indicators and get any generated events.
                     indicator_handler.update_time_slice(&strategy_time_slice).await;
+
+                    let slice_event = StrategyEvent::TimeSlice(
+                        strategy_time_slice,
+                    );
+                    match self.strategy_event_sender.send(slice_event).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                    }
                 }
-                let slice_event = StrategyEvent::TimeSlice(
-                    strategy_time_slice,
-                );
-                match self.strategy_event_sender.send(slice_event).await {
-                    Ok(_) => {}
-                    Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
-                }
+
                 last_time = time.clone();
             }
         }
