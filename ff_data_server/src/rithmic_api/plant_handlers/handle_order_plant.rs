@@ -130,7 +130,8 @@ pub async fn match_order_plant_id(
                         account_info.daily_max_loss = Some(Decimal::from_u32(max_loss.clone() as u32).unwrap());
                     }
                     client.account_info.insert(id.clone(), account_info);
-                    client.request_updates().await;
+                    client.request_updates(id.to_string()).await;
+                    println!("Account Info Added: {}", id);
                 }
             }
         },
