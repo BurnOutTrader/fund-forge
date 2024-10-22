@@ -85,6 +85,12 @@ enum LastSide {
     Flat,
     Short
 }
+#[derive(Clone, PartialEq, Debug)]
+enum TradeResult {
+    Win,
+    Loss,
+    BreakEven,
+}
 
 #[allow(dead_code, unused)]
 pub async fn on_data_received(
@@ -131,6 +137,7 @@ pub async fn on_data_received(
     let mut exit_order_id = None;
     let mut position_size = 0;
     let atr_plot = "atr".to_string();
+    let mut last_result = TradeResult::BreakEven;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -183,7 +190,7 @@ pub async fn on_data_received(
                                 let atr_increasing = current_atr > last_atr;
 
                                     // entry orders
-                                if last_side != LastSide::Long && quotebar.bid_close > last_candle.bid_high && is_flat && entry_order_id.is_none() &&  atr_increasing {
+                                if (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && quotebar.bid_close > last_candle.bid_high && is_flat && entry_order_id.is_none() &&  atr_increasing {
                                     println!("Submitting long entry");
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
@@ -192,7 +199,7 @@ pub async fn on_data_received(
                                     exit_order_id = None;
 
                                 }
-                                else if last_side != LastSide::Short && quotebar.bid_close < last_candle.bid_low && entry_order_id.is_none() && atr_increasing {
+                                else if (last_side != LastSide::Short || (last_side == LastSide::Short && last_result == TradeResult::Win)) && quotebar.bid_close < last_candle.bid_low && entry_order_id.is_none() && atr_increasing {
                                     println!("Submitting short limit");
                                     let cancel_order_time = Utc::now() + Duration::seconds(30);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(3), OrderSide::Sell, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Short Limit")).await;
@@ -278,11 +285,18 @@ pub async fn on_data_received(
                     PositionUpdateEvent::PositionOpened { .. } => {},
                     PositionUpdateEvent::Increased { .. } => {},
                     PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.account()).await,
-                    PositionUpdateEvent::PositionClosed { .. } => {
-                        strategy.print_ledger(event.account());
+                    PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
                         exit_order_id = None;
                         entry_order_id = None;
-                    },
+                        strategy.print_ledger(event.account());
+                        if booked_pnl > dec!(0) {
+                            last_result = TradeResult::Win
+                        } else if booked_pnl < dec!(0) {
+                            last_result = TradeResult::Loss
+                        } else if booked_pnl == dec!(0) {
+                            last_result = TradeResult::BreakEven
+                        }
+                    }
                 }
             }
             StrategyEvent::OrderEvents(event) => {
