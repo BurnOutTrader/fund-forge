@@ -36,6 +36,8 @@ When placing orders with rithmic you can pass in the exact product code you want
 
 The order events will return both the symbol_name and product_code, should you let the api find the front month for you.
 
+Currently, you can only subscribe to data using symbol_name, but this will be fixed to allow trading calendar spreads.
+
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
 - [Example Strategy](example_test_strategy/src/main.rs)
