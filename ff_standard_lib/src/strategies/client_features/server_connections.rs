@@ -327,6 +327,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
             let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
             let timed_event_handler = TIMED_EVENT_HANDLER.get().unwrap();
             let price_service_sender = get_price_service_sender();
+            let indicator_handler = INDICATOR_HANDLER.get().unwrap().clone();
             let mut length_bytes = [0u8; LENGTH];
             let mut interval = tokio::time::interval(Duration::from_secs(1));
 
@@ -382,6 +383,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                                 }
 
                                 if !strategy_time_slice.is_empty() {
+                                    indicator_handler.update_time_slice(&strategy_time_slice).await;
                                     match strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await {
                                         Ok(_) => {}
                                         Err(e) => eprintln!("Live Handler: {}", e)
