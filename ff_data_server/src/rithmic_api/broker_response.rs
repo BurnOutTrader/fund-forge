@@ -268,7 +268,7 @@ impl BrokerApiResponse for RithmicClient {
             Err(OrderUpdateEvent::OrderRejected {
                 account: order.account.clone(),
                 symbol_name: order.symbol_name.clone(),
-                symbol_code:  details.symbol_code.clone(),
+                symbol_code: details.symbol_code.clone(),
                 order_id: order.id.clone(),
                 reason,
                 tag: order.tag.clone(),
@@ -276,7 +276,7 @@ impl BrokerApiResponse for RithmicClient {
             })
         };
 
-        //check if we are short and add to quantity
+        //check if we are short and adjust quantity
         if let Some(account_short_map) = self.short_quantity.get(&order.account.account_id) {
             if let Some(symbol_volume) = account_short_map.value().get(&details.symbol_code) {
                 let volume = match symbol_volume.value().to_i32() {
@@ -285,8 +285,14 @@ impl BrokerApiResponse for RithmicClient {
                     }
                     Some(volume) => volume
                 };
-                if details.quantity > volume {
-                    details.quantity = volume;
+
+                if volume < 0 {
+                    return reject_order(format!("No Short Position To Exit: {}", details.symbol_code))
+                }
+
+                // Use absolute values for comparison and adjustment
+                if details.quantity.abs() > volume.abs() {
+                    details.quantity = volume.abs();  // Keep positive for the order
                 }
                 self.submit_market_order(stream_name, order, details).await;
                 Ok(())
@@ -316,7 +322,7 @@ impl BrokerApiResponse for RithmicClient {
             })
         };
 
-        //check if we are short and add to quantity
+        //check if we are long and adjust quantity
         if let Some(account_long_map) = self.long_quantity.get(&order.account.account_id) {
             if let Some(symbol_volume) = account_long_map.value().get(&details.symbol_code) {
                 let volume = match symbol_volume.value().to_i32() {
@@ -325,8 +331,14 @@ impl BrokerApiResponse for RithmicClient {
                     }
                     Some(volume) => volume
                 };
-                if details.quantity > volume {
-                    details.quantity = volume;
+
+                if volume < 0 {
+                    return reject_order(format!("No Short Position To Exit: {}", details.symbol_code))
+                }
+
+                // Use absolute values for comparison and adjustment
+                if details.quantity.abs() > volume.abs() {
+                    details.quantity = volume.abs();  // Keep positive for the order
                 }
                 self.submit_market_order(stream_name, order, details).await;
                 Ok(())

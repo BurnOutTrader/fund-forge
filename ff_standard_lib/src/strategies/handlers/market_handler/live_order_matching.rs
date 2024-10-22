@@ -1,6 +1,7 @@
 use std::sync::Arc;
 use chrono::Utc;
 use dashmap::DashMap;
+use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
 use crate::standardized_types::orders::{Order, OrderId, OrderState, OrderUpdateEvent, OrderUpdateType};
@@ -39,6 +40,7 @@ pub fn live_order_update(
                              order.symbol_code = Some(symbol_code.clone());
                              order.state = OrderState::Filled;
                              order.quantity_filled += quantity;
+                             order.quantity_open = dec!(0.0);
                              order.time_filled_utc = Some(time.clone());
                          }
                          let events = LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), order.side.clone(), Utc::now(), *price, tag.to_string()).await;
