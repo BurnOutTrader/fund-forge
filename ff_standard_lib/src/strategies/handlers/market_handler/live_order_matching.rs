@@ -39,7 +39,7 @@ pub fn live_order_update(
                          order.state = OrderState::Filled;
 
                          // todo, if we have problems change this to use the order filled quantity, but i think this makes more sense.
-                         order.quantity_filled += order.quantity_open;
+                         order.quantity_filled += quantity;
                          order.quantity_open = dec!(0.0);
                          order.time_filled_utc = Some(time.clone());
                          let events = LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), order.side.clone(), Utc::now(), *price, tag.to_string()).await;
