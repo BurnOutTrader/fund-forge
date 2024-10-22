@@ -1,16 +1,17 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::accounts::{AccountId, AccountInfo, Currency};
 use ff_standard_lib::standardized_types::enums::{StrategyMode};
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::StreamName;
+use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::products::{find_base_symbol, get_available_symbol_names, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
 
@@ -293,6 +294,22 @@ impl BrokerApiResponse for RithmicClient {
                 // For shorts, just ensure we don't exit more than we have
                 if details.quantity > volume {
                     details.quantity = volume;
+                    let order_update_event = OrderUpdateEvent::OrderUpdated {
+                        account: order.account.clone(),
+                        symbol_name: order.symbol_name.clone(),
+                        symbol_code: details.symbol_code.clone(),
+                        order_id: order.id.clone(),
+                        update_type: OrderUpdateType::Quantity(Decimal::from_i32(volume).unwrap()),
+                        tag: order.tag.clone().to_string(),
+                        time: Utc::now().to_string(),
+                    };
+                    let order_event = DataServerResponse::OrderUpdates(order_update_event);
+                    if let Some(sender) = RESPONSE_SENDERS.get(&stream_name) {
+                        match sender.send(order_event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e)
+                        }
+                    }
                 }
 
                 // For short exits, quantity should be positive
@@ -343,6 +360,23 @@ impl BrokerApiResponse for RithmicClient {
                 // Use absolute values for comparison and adjustment
                 if details.quantity.abs() > volume.abs() {
                     details.quantity = volume.abs();  // Keep positive for the order
+
+                    let order_update_event = OrderUpdateEvent::OrderUpdated {
+                        account: order.account.clone(),
+                        symbol_name: order.symbol_name.clone(),
+                        symbol_code: details.symbol_code.clone(),
+                        order_id: order.id.clone(),
+                        update_type: OrderUpdateType::Quantity(Decimal::from_i32(volume).unwrap()),
+                        tag: order.tag.clone().to_string(),
+                        time: Utc::now().to_string(),
+                    };
+                    let order_event = DataServerResponse::OrderUpdates(order_update_event);
+                    if let Some(sender) = RESPONSE_SENDERS.get(&stream_name) {
+                        match sender.send(order_event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e)
+                        }
+                    }
                 }
                 self.submit_market_order(stream_name, order, details).await;
                 Ok(())

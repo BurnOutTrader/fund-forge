@@ -36,15 +36,13 @@ pub fn live_order_update(
                    //todo send direct via LEDGER_SERVICE
                     #[allow(unused)]
                      if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
-                         {
-                             order.symbol_code = Some(symbol_code.clone());
-                             order.state = OrderState::Filled;
+                         order.symbol_code = Some(symbol_code.clone());
+                         order.state = OrderState::Filled;
 
-                             //todo, we cant update based on the open quantity, because in some circumstances the server adjusts our ordered quantity
-                             order.quantity_filled += quantity;
-                             order.quantity_open = dec!(0.0);
-                             order.time_filled_utc = Some(time.clone());
-                         }
+                         // todo, if we have problems change this to use the order filled quantity, but i think this makes more sense.
+                         order.quantity_filled += order.quantity_open;
+                         order.quantity_open = dec!(0.0);
+                         order.time_filled_utc = Some(time.clone());
                          let events = LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), order.side.clone(), Utc::now(), *price, tag.to_string()).await;
                          match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                              Ok(_) => {}
@@ -113,7 +111,7 @@ pub fn live_order_update(
                 }
                 #[allow(unused)]
                 OrderUpdateEvent::OrderUpdated { account, symbol_name, symbol_code, order_id, update_type, tag, time } => {
-                    if let Some((id, mut order)) = open_order_cache.remove(order_id) {
+                    if let Some(mut order) = open_order_cache.get_mut(order_id) {
                         order.symbol_code = Some(symbol_code.clone());
                         match &update_type {
                             OrderUpdateType::LimitPrice(price) => order.limit_price = Some(price.clone()),
@@ -122,7 +120,6 @@ pub fn live_order_update(
                             OrderUpdateType::Quantity(quantity) => order.quantity_open = quantity.clone(),
                             OrderUpdateType::Tag(tag) => order.tag = tag.clone()
                         }
-                        open_order_cache.insert(id, order);
                         match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                             Ok(_) => {}
                             Err(e) => eprintln!("{}", e)
