@@ -38,7 +38,7 @@ async fn main() {
     let subscription = DataSubscription::new(
         SymbolName::from("MNQ"),
         data_vendor.clone(),
-        Resolution::Seconds(3),
+        Resolution::Seconds(5),
         BaseDataType::QuoteBars,
         MarketType::Futures(FuturesExchange::CME));
 
@@ -171,7 +171,7 @@ pub async fn on_data_received(
                                 let current_atr = strategy.indicator_index(&atr_10.name(), 0);
 
 
-                                if last_candle.is_none() || quotebar.resolution != Resolution::Seconds(3) || last_atr.is_none() || current_atr.is_none() {
+                                if last_candle.is_none() || quotebar.resolution != subscription.resolution || last_atr.is_none() || current_atr.is_none() {
                                     println!("Last Candle or Indicator Values Is None");
                                     continue;
                                 }
@@ -215,7 +215,7 @@ pub async fn on_data_received(
                                 );
 
                                 //Add to winners up to 2x if we have momentum
-                                if (is_long || is_short) && bars_since_entry > 1 && open_profit >= dec!(10) && position_size <= dec!(5) && add_order_id.is_none() && exit_order_id.is_none() && entry_order_id.is_none() {
+                                if (is_long || is_short) && bars_since_entry > 2 && open_profit >= dec!(10) && position_size <= dec!(5) && add_order_id.is_none() && exit_order_id.is_none() && entry_order_id.is_none() {
 
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
 
