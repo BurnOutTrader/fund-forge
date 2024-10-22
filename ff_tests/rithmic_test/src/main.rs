@@ -174,9 +174,9 @@ pub async fn on_data_received(
 
                                 let last_candle = last_candle.unwrap();
                                 // entry orders
-                                if quotebar.bid_close > last_candle.bid_high && entry_order_id == None  && last_side != LastSide::Long {
+                                if quotebar.bid_close > last_candle.bid_high {
                                     println!("Submitting long entry");
-                                    let cancel_order_time = Utc::now() + Duration::seconds(5);
+                                    let cancel_order_time = Utc::now() + Duration::seconds(15);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(3), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
                                     entry_order_id = Some(order_id);
                                     last_side = LastSide::Long;
@@ -279,9 +279,17 @@ pub async fn on_data_received(
                 strategy.print_ledger(event.account());
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                 match event {
-                    OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => {
+                    OrderUpdateEvent::OrderRejected { order_id, .. } => {
                         println!("{}", msg.as_str().on_bright_magenta().on_bright_red());
-                        entry_order_id = None;
+                        let mut closed = false;
+                        if let Some(entry_order_id) = &entry_order_id {
+                            if *order_id == *entry_order_id {
+                                closed = true;
+                            }
+                        }
+                        if closed {
+                            entry_order_id = None;
+                        }
                     },
                     OrderUpdateEvent::OrderCancelled {order_id, ..} | OrderUpdateEvent::OrderFilled {order_id, ..} => {
                         println!("{}", msg.as_str().bright_cyan());
