@@ -60,7 +60,7 @@ async fn main() {
            DataSubscription::new(
                SymbolName::from("MNQ"),
                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-               Resolution::Seconds(1),
+               Resolution::Seconds(5),
                BaseDataType::QuoteBars,
                MarketType::Futures(FuturesExchange::CME)
            )
@@ -100,7 +100,7 @@ pub async fn on_data_received(
     let subscription = DataSubscription::new(
         SymbolName::from("MNQ"),
         DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-        Resolution::Seconds(1),
+        Resolution::Seconds(5),
         BaseDataType::QuoteBars,
         MarketType::Futures(FuturesExchange::CME)
     );
@@ -178,7 +178,7 @@ pub async fn on_data_received(
                                 let current_atr = strategy.indicator_index(&atr_10.name(), 0);
 
 
-                                if last_candle.is_none() || quotebar.resolution != Resolution::Seconds(1) || last_atr.is_none() || current_atr.is_none() {
+                                if last_candle.is_none() || quotebar.resolution != Resolution::Seconds(5) || last_atr.is_none() || current_atr.is_none() {
                                     println!("Last Candle or Indicator Values Is None");
                                     continue;
                                 }
