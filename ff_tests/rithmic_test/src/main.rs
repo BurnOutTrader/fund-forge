@@ -1,5 +1,5 @@
 use std::cmp::PartialEq;
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{Duration, NaiveDate, Timelike, Utc};
 use chrono_tz::{Australia, UTC};
 use colored::Colorize;
 use ff_rithmic_api::systems::RithmicSystem;
@@ -30,19 +30,22 @@ use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
 
 // TODO WARNING THIS IS LIVE TRADING
+
+const IS_LONG_STRATEGY: bool = true;
+const IS_SHORT_STRATEGY: bool = true;
 #[tokio::main]
 async fn main() {
-    //todo You will need to put in your paper account ID here or the strategy will crash on initialization
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string());
+    //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and mix and match data feeds.
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR ACCOUNT ID".to_string());
     let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
     let subscription = DataSubscription::new(
         SymbolName::from("MNQ"),
         data_vendor.clone(),
-        Resolution::Seconds(5),
+        Resolution::Seconds(1),
         BaseDataType::QuoteBars,
         MarketType::Futures(FuturesExchange::CME));
 
-    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
+    let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Live,
         dec!(100000),
@@ -61,7 +64,7 @@ async fn main() {
                 MarketType::Futures(FuturesExchange::CME)
             ),
             //subscribe to our subscription
-            subscription.clone()
+            subscription.clone() //todo, add any more data feeds you want into here.
         ],
         true,
         100,
@@ -70,7 +73,7 @@ async fn main() {
         false,
         true,
         false,
-        vec![account.clone()]
+        vec![account.clone()] //todo, add any more accounts you want into here.
     ).await;
 
     on_data_received(strategy, strategy_event_receiver, account, subscription).await;
@@ -180,21 +183,60 @@ pub async fn on_data_received(
                                 let last_candle = last_candle.unwrap();
                                 let last_atr = last_atr.unwrap().get_plot(&atr_plot).unwrap().value;
                                 let current_atr = current_atr.unwrap().get_plot(&atr_plot).unwrap().value;
-                                let min_atr = current_atr >= dec!(3);
+                                let min_atr = current_atr >= dec!(2);
                                 let atr_increasing = current_atr > last_atr;
+                                let booked_pnl = strategy.booked_pnl(&account, &symbol_code);
+                                let bar_time = quotebar.time_utc();
+
+                                // Check if time is between Chicago close (19:50) utc and NZ open (21:00) Utc or if we hit daily profit target or loss limit.
+                                if (bar_time.hour() == 19 && bar_time.minute() >= 50) || bar_time.hour() == 20 ||  booked_pnl >= dec!(2000) ||  booked_pnl <= dec!(-1000){
+                                    // Close any existing positions
+                                    if strategy.is_long(&account, &symbol_code) {
+                                        let position_size = strategy.position_size(&account, &symbol_code);
+                                        let exit_id = strategy.exit_long(&symbol, None, &account, None, position_size, String::from("Exit Long")).await;
+                                        exit_order_id = Some(exit_id);
+                                        bars_since_entry = 0;
+                                        last_side = LastSide::Long;
+                                    }
+                                    else if strategy.is_short(&account, &symbol_code) {
+                                        let position_size = strategy.position_size(&account, &symbol_code);
+                                        let exit_id = strategy.exit_short(&symbol, None, &account, None, position_size, String::from("Exit Short")).await;
+                                        exit_order_id = Some(exit_id);
+                                        bars_since_entry = 0;
+                                        last_side = LastSide::Short;
+                                    }
+                                    continue;
+                                }
+
+                                // Calculate 5% of the bar's range using the built-in property
+                                let five_percent_range = quotebar.range * dec!(0.5);
+
+                                // Check if close is within 5% of high or low
+                                let high_close = (quotebar.bid_high - quotebar.bid_close) <= five_percent_range;
+                                let low_close = (quotebar.bid_close - quotebar.bid_low) <= five_percent_range;
+
+                                // See if we have a clean bullish entry bar
+                                let high_1 = quotebar.bid_low <= last_candle.bid_open &&
+                                    quotebar.bid_close > last_candle.ask_high &&
+                                    high_close;
+
+                                // See if we have a clean bearish entry bar
+                                let low_1 = quotebar.ask_high >= last_candle.ask_open &&
+                                    quotebar.ask_close < last_candle.bid_low &&
+                                    low_close;
 
                                 // entry orders
-                                if (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && is_flat && quotebar.bid_close > last_candle.ask_high && entry_order_id.is_none() && atr_increasing && min_atr {
-                                    println!("Submitting long entry");
-                                    let cancel_order_time = Utc::now() + Duration::seconds(60);
+                                if IS_LONG_STRATEGY && (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && is_flat && high_1 && entry_order_id.is_none() && atr_increasing && min_atr {
+                                    //println!("Submitting long entry");
+                                    let cancel_order_time = Utc::now() + Duration::seconds(30);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
                                     entry_order_id = Some(order_id);
                                     exit_order_id = None;
 
                                 }
-                                else if (last_side != LastSide::Short || (last_side == LastSide::Short && last_result == TradeResult::Win)) && is_flat && quotebar.ask_close < last_candle.bid_low && entry_order_id.is_none() && atr_increasing && min_atr {
-                                    println!("Submitting short limit");
-                                    let cancel_order_time = Utc::now() + Duration::seconds(60);
+                                else if IS_SHORT_STRATEGY && (last_side != LastSide::Short || (last_side == LastSide::Short && last_result == TradeResult::Win)) && is_flat && low_1 && entry_order_id.is_none() && atr_increasing && min_atr {
+                                    //println!("Submitting short limit");
+                                    let cancel_order_time = Utc::now() + Duration::seconds(30);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Sell, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Short Limit")).await;
                                     entry_order_id = Some(order_id);
                                     exit_order_id = None;
@@ -210,8 +252,8 @@ pub async fn on_data_received(
                                 let open_profit = strategy.pnl(&account,  &symbol_code);
                                 let position_size = strategy.position_size(&account, &symbol_code);
                                 println!(
-                                    "Bars: {}, Open Profit: {}, Position Size: {}",
-                                    bars_since_entry, open_profit, position_size
+                                    "Bars: {}, Open Profit: {}, Position Size: {}, Last Trade Side: {:?}",
+                                    bars_since_entry, open_profit, position_size, last_side
                                 );
 
                                 //Add to winners up to 2x if we have momentum
@@ -219,13 +261,13 @@ pub async fn on_data_received(
 
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
 
-                                    if is_long && quotebar.ask_close < last_candle.ask_high {
+                                    if IS_LONG_STRATEGY && is_long && high_1 {
                                         let new_add_order_id = strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
                                         bars_since_entry = 0;
                                         exit_order_id = None;
                                         add_order_id = Some(new_add_order_id)
                                     }
-                                    else if is_short && quotebar.bid_close > last_candle.bid_low {
+                                    else if IS_SHORT_STRATEGY && is_short && low_1 {
                                         let new_add_order_id =strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Sell,  String::from("Add Short Stop Limit"), last_candle.bid_low - dec!(0.5), last_candle.bid_low - dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
                                         bars_since_entry = 0;
                                         exit_order_id = None;
