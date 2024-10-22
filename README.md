@@ -18,7 +18,27 @@ Order logic is incomplete, updates not yet forwarded to strategies.
 
 Make sure to double-check your configurations to avoid unintended trades.
 
+to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
+
+to run with only test api to run the server with rithmic apis connected use `cargo run -- --rithmic "1"`.
+
 Once `StrategyMode::Live`, the system will not differentiate between test and real orders!
+
+## Current State of Live Trading
+The platform is capable of live trading with rithmic, but it is not currently stable.
+
+No History functions have been built yet, so indicators and subscriptions will not auto warm up.
+
+Once a strategy disconnects, the server must be restarted.
+
+Many problem scenarios have not been tested, although the strategy seems to maintain good synchronisation with rithmic, even with `synchronise_accounts` disabled.
+The server will need to be stabilized in the future to better handle connecting and disconnecting of the live api's.
+
+Live trading with rithmic requires you to use the `product_code` in place of `symbol_name` for functions like `strategy.is_long()`.
+
+When placing orders with rithmic you can pass in the exact product code you want to trade, or you can use the symbol name and the rithmic api will choose the front month for you.
+
+The order events will return both the symbol_name and product_code, should you let the api find the front month for you.
 
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
