@@ -6,12 +6,12 @@ Then you just follow the information you will get from rithmic, which is essenti
 2. login with the api and stay connected to the rithmic test end point's while rithmic's engineers do some work approving your application name.
 3. receive back information required to complete the rithmic toml files in fund forge.
 
-***If you are using the data server to pass conformance, you will need to set up the `ff_data_server/data/rithmic_credentials/server_domains/servers.toml` file below, and input only the TEST domain name for now.***
+Rithmic conformance is easy to pass just put the test details given to you by rithmic into a new .toml file at `ff_data_server/data/rithmic_credentials/test.toml` (see below for toml file examples)
+You will need to set up the `ff_data_server/data/rithmic_credentials/server_domains/servers.toml` file below, and input only the TEST domain name for now
 
-Rithmic conformance is easy to pass just put your test details into a new .toml file at `ff_data_server/data/rithmic_credentials/test.toml` (see below for toml file examples)
 Then you will just need to start the data server and keep it running until rithmic passes you app (the server will keep itself connected to rithmic if your details are correct)
 
-Since Fund Forge is not a company, each user must do this and create their own unique app name to pass conformance. You can find more information at [Rithmic](https://yyy3.rithmic.com/?page_id=17).
+Since Fund Forge is not a company, each user must do this, you can find more information at [Rithmic](https://yyy3.rithmic.com/?page_id=17).
 
 ## File Structure
 You do not need the `not active` folder, this is where i put tomls that i dont want the server to activate or connect to
