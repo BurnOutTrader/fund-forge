@@ -232,7 +232,7 @@ pub async fn on_data_received(
                                     }
                                 }
 
-                                // Cut losses and take profits
+                                // Cut losses and take profits, we check entry order is none to prevent exiting while an entry order is unfilled, entry order will expire and go to none on the TIF expiry, or on fill.
                                 if open_profit > dec!(100) || (open_profit < dec!(-30) && bars_since_entry > 10) && add_order_id.is_none() && entry_order_id.is_none() {
                                     let is_long = strategy.is_long(&account, &symbol_code);
                                     let is_short = strategy.is_short(&account, &symbol_code);
@@ -253,7 +253,7 @@ pub async fn on_data_received(
                                 }
 
                                 //Take smaller profit if we add and dont get momentum
-                                if (add_order_id.is_some() && bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30)) {
+                                if bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30) && position_size > dec!(2) {
                                     let is_long = strategy.is_long(&account, &symbol_code);
                                     let is_short = strategy.is_short(&account, &symbol_code);
                                     if is_long && exit_order_id == None {
