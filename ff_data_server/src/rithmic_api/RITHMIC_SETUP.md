@@ -18,6 +18,54 @@ You do not need the `not active` folder, this is where i put tomls that i dont w
 
 ![img.png](misc/rithmic_structure.png)
 
+For each rithmic RithmicSystem you intend to use, you will need to create a rithmic .toml file for the credentials.
+
+You will need to use the following folder/file structure
+
+This is what you should call the files for each rithmic system.
+```rust
+pub enum RithmicSystem {
+    Rithmic01,
+    Rithmic04Colo,
+    RithmicPaperTrading,
+    TopstepTrader,
+    SpeedUp,
+    TradeFundrr,
+    UProfitTrader,
+    Apex,
+    MESCapital,
+    TheTradingPit,
+    FundedFuturesNetwork,
+    Bulenox,
+    PropShopTrader,
+    FourPropTrader,
+    FastTrackTrading,
+    Test
+}
+
+pub fn from_file_string(file_name: &str) -> Option<Self> {
+    match file_name {
+        "rithmic_01.toml" => Some(RithmicSystem::Rithmic01),
+        "rithmic_04_colo.toml" => Some(RithmicSystem::Rithmic04Colo),
+        "rithmic_paper_trading.toml" => Some(RithmicSystem::RithmicPaperTrading),
+        "topstep_trader.toml" => Some(RithmicSystem::TopstepTrader),
+        "speedup.toml" => Some(RithmicSystem::SpeedUp),
+        "tradefundrr.toml" => Some(RithmicSystem::TradeFundrr),
+        "uprofit_trader.toml" => Some(RithmicSystem::UProfitTrader),
+        "apex.toml" => Some(RithmicSystem::Apex),
+        "mes_capital.toml" => Some(RithmicSystem::MESCapital),
+        "the_trading_pit.toml" => Some(RithmicSystem::TheTradingPit),
+        "funded_futures_network.toml" => Some(RithmicSystem::FundedFuturesNetwork),
+        "bulenox.toml" => Some(RithmicSystem::Bulenox),
+        "propshop_trader.toml" => Some(RithmicSystem::PropShopTrader),
+        "4prop_trader.toml" => Some(RithmicSystem::FourPropTrader),
+        "fasttrack_trading.toml" => Some(RithmicSystem::FastTrackTrading),
+        "test.toml" => Some(RithmicSystem::Test),
+        _ => None,
+    }
+}
+```
+
 ***After passing conformance:***
 You will need to create a servers.toml file at ff_data_server/data/rithmic_credentials and fill in the server domains given to you by rithmic.
 this is to generate a BTreeMap for Servers where Key is RithmicServer (eg: RithmicServer::Chicago) and value is the domain (eg: wss://{DETAILS_FROM_RITHMIC})
@@ -39,11 +87,6 @@ Singapore = "You need to contact rithmic for this"
 Test = "You need to contact rithmic for this"
 ```
 
-For each rithmic RithmicSystem you intend to use, you will need to create a rithmic .toml file for the credentials.
-
-You will need to use the following folder/file structure
-
-![img.png](misc/img.png)
 
 for each RithmicSystem system you intend to use you will need  RithmicCredentials file in ff_data_server/data/rithmic_credentials.
 The file name is created using `credentials.system_name.file_string()`. This allows the credentials to be found by the data server.
