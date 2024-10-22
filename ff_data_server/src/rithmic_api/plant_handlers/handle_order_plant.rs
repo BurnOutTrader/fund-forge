@@ -549,13 +549,17 @@ pub async fn match_order_plant_id(
                             send_order_update(client.brokerage, &order_id, event).await;
                         },
                         5 => {
-                            if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size)) =
-                                (msg.fill_price, msg.fill_size, msg.total_unfilled_size) {
+                            if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size), Some(total_filled_size)) =
+                                (msg.fill_price, msg.fill_size, msg.total_unfilled_size, msg.total_fill_size) {
                                 let price = match Price::from_f64_retain(fill_price) {
                                     Some(p) => p,
                                     None => return,
                                 };
-                                let quantity = match Volume::from_f64_retain(fill_size as f64) {
+                                let fill_quantity = match Volume::from_f64_retain(fill_size as f64) {
+                                    Some(q) => q,
+                                    None => return,
+                                };
+                                let total_quantity = match Volume::from_f64_retain(total_filled_size as f64) {
                                     Some(q) => q,
                                     None => return,
                                 };
@@ -566,7 +570,7 @@ pub async fn match_order_plant_id(
                                         symbol_code,
                                         order_id: order_id.clone(),
                                         price,
-                                        quantity,
+                                        quantity: total_quantity,
                                         tag,
                                         time,
                                     };
@@ -578,7 +582,7 @@ pub async fn match_order_plant_id(
                                         symbol_code,
                                         order_id: order_id.clone(),
                                         price,
-                                        quantity,
+                                        quantity: fill_quantity,
                                         tag,
                                         time,
                                     };
