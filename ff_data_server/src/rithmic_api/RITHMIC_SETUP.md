@@ -69,11 +69,14 @@ pub fn example() {
 ```
 Rithmic Credentials toml file example
 user type 3 = Trader, this is important for prop firm connections.
+
+### For TopStep
+The file name should be rithmic_credentials/topstep_trader.toml
 ```toml
 user = ""  
 system_name = "TopstepTrader"  
-server_name = "Chicago"  
-app_name = ""  
+server_name = "Chicago"
+app_name = "{The app name you used for rithmic conformance}"
 app_version = "1.0"  
 password = ""  
 fcm_id = "TopstepTrader"  
@@ -81,4 +84,36 @@ ib_id = "TopstepTrader"
 user_type = 3
 subscribe_data = true
 aggregated_quotes = true
+```
+
+### For Apex Trader Funding
+The file name should be rithmic_credentials/apex.toml
+```toml
+user = ""
+system_name = "Apex"
+server_name = "Chicago"
+app_name = "{The app name you used for rithmic conformance}"
+app_version = "1.0"
+password = ""
+fcm_id = "Apex"
+ib_id = "Apex"
+user_type = 3
+subscribe_data = true
+aggregated_quotes = false
+```
+
+### For Take Profit Trader
+The file name should be rithmic_credentials/rithmic_paper_trading.toml
+```toml
+user = ""
+system_name = "RithmicPaperTrading"
+server_name = "Chicago"
+app_name = "{The app name you used for rithmic conformance}"
+app_version = "1.0"
+password = ""
+fcm_id = "TakeProfitTrader"
+ib_id = "TakeProfitTrader"
+user_type = 3
+subscribe_data = true
+aggregated_quotes = false
 ```
