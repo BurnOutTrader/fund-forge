@@ -195,16 +195,14 @@ pub async fn on_data_received(
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
                                     entry_order_id = Some(order_id);
-                                    last_side = LastSide::Long;
                                     exit_order_id = None;
 
                                 }
                                 else if (last_side != LastSide::Short || (last_side == LastSide::Short && last_result == TradeResult::Win)) && is_flat && quotebar.bid_close < last_candle.bid_low && entry_order_id.is_none() && atr_increasing {
                                     println!("Submitting short limit");
                                     let cancel_order_time = Utc::now() + Duration::seconds(30);
-                                    let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(3), OrderSide::Sell, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Short Limit")).await;
+                                    let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Sell, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Short Limit")).await;
                                     entry_order_id = Some(order_id);
-                                    last_side = LastSide::Short;
                                     exit_order_id = None;
                                 }
 
@@ -243,12 +241,14 @@ pub async fn on_data_received(
                                         exit_order_id = Some(exit_id);
                                         bars_since_entry = 0;
                                         entry_order_id = None;
+                                        last_side = LastSide::Long;
                                     }
                                     else if is_short && exit_order_id == None {
                                         let exit_id = strategy.exit_short(&symbol, None, &account, None, position_size, String::from("Exit Short")).await;
                                         exit_order_id = Some(exit_id);
                                         bars_since_entry = 0;
                                         entry_order_id = None;
+                                        last_side = LastSide::Short;
                                     }
                                 }
                             }
