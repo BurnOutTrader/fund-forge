@@ -190,15 +190,15 @@ pub async fn on_data_received(
                                 }*/
 
                                 // exit orders
-                                let is_long = strategy.is_long(&account, &symbol_code).await;
-                                let is_short = strategy.is_short(&account, &symbol_code).await;
+                                let is_long = strategy.is_long(&account, &symbol_code);
+                                let is_short = strategy.is_short(&account, &symbol_code);
                                 if is_long || is_short {
                                     bars_since_entry += 1;
                                 }
 
                                 //todo THIS WORKS I WAS CHECKING WRONG BROKERAGE
-                                let open_profit = strategy.pnl(&account,  &symbol_code).await;
-                                let position_size = strategy.position_size(&account, &symbol_code).await;
+                                let open_profit = strategy.pnl(&account,  &symbol_code);
+                                let position_size = strategy.position_size(&account, &symbol_code);
                                 println!(
                                     "Bars: {}, Open Profit: {}, Position Size: {}",
                                     bars_since_entry, open_profit, position_size
@@ -264,7 +264,7 @@ pub async fn on_data_received(
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                 println!("{}", msg.as_str().purple());
 
-                let quantity = strategy.position_size(&event.account(), &symbol_code).await;
+                let quantity = strategy.position_size(&event.account(), &symbol_code);
                 println!("Strategy: Open Quantity: {}", quantity);
             }
             StrategyEvent::OrderEvents(event) => {
