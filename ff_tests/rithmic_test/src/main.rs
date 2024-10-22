@@ -33,7 +33,7 @@ use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
 // to launch on separate machine
 #[tokio::main]
 async fn main() {
-
+    //todo You will need to put in your paper account ID here or the strategy will crash on initialization
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string());
     let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
     let subscription = DataSubscription::new(
