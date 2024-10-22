@@ -217,7 +217,9 @@ pub async fn on_data_received(
 
                                 //Add to winners up to 2x if we have momentum
                                 if (is_long || is_short) && bars_since_entry > 1 && open_profit >= dec!(10) && position_size <= dec!(5) && add_order_id.is_none() {
+
                                     let cancel_order_time = Utc::now() + Duration::seconds(5);
+
                                     if is_long && quotebar.ask_close < last_candle.ask_high {
                                         let new_add_order_id = strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
                                         bars_since_entry = 0;
@@ -234,18 +236,18 @@ pub async fn on_data_received(
 
                                 // Cut losses and take profits, we check entry order is none to prevent exiting while an entry order is unfilled, entry order will expire and go to none on the TIF expiry, or on fill.
                                 if open_profit > dec!(100) || (open_profit < dec!(-30) && bars_since_entry > 10) && add_order_id.is_none() && entry_order_id.is_none() && exit_order_id.is_none() {
+
                                     let is_long = strategy.is_long(&account, &symbol_code);
                                     let is_short = strategy.is_short(&account, &symbol_code);
-                                    if is_long
-                                    {
+
+                                    if is_long {
                                         let position_size = strategy.position_size(&account, &symbol_code);
                                         let exit_id = strategy.exit_long(&symbol, None, &account, None, position_size, String::from("Exit Long")).await;
                                         exit_order_id = Some(exit_id);
                                         bars_since_entry = 0;
                                         last_side = LastSide::Long;
                                     }
-                                    else if is_short
-                                    {
+                                    else if is_short {
                                         let position_size = strategy.position_size(&account, &symbol_code);
                                         let exit_id = strategy.exit_short(&symbol, None, &account, None, position_size, String::from("Exit Short")).await;
                                         exit_order_id = Some(exit_id);
@@ -256,8 +258,10 @@ pub async fn on_data_received(
 
                                 //Take smaller profit if we add and don't get momentum
                                 if bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30) && position_size > dec!(2) && add_order_id.is_none() && entry_order_id.is_none() && exit_order_id.is_none() {
+
                                     let is_long = strategy.is_long(&account, &symbol_code);
                                     let is_short = strategy.is_short(&account, &symbol_code);
+
                                     if is_long {
                                         let position_size = strategy.position_size(&account, &symbol_code);
                                         let exit_id = strategy.exit_long(&symbol, None, &account, None, position_size, String::from("No Momo Exit Long")).await;
