@@ -235,6 +235,7 @@ pub async fn on_data_received(
                                 }
 
                                 if open_profit > dec!(60) || (open_profit < dec!(-30) && bars_since_entry > 10) && entry_order_id.is_none() {
+                                    let position_size = strategy.position_size(&account, &symbol_code);
                                     let open_profit = strategy.pnl(&account, &symbol_code);
                                     if is_long && exit_order_id == None {
                                         let exit_id = strategy.exit_long(&symbol, None, &account, None, position_size, String::from("Exit Long")).await;
