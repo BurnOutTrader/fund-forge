@@ -179,7 +179,7 @@ pub async fn on_data_received(
                                 if quotebar.bid_close > last_candle.bid_high && is_flat {
                                     println!("Submitting long entry");
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
-                                    let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(3), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
+                                    let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
                                     entry_order_id = Some(order_id);
                                     last_side = LastSide::Long;
                                 }
@@ -206,7 +206,7 @@ pub async fn on_data_received(
                                     bars_since_entry, open_profit, position_size
                                 );
 
-                                if (is_long || is_short) && bars_since_entry > 1 && open_profit > dec!(20) && position_size < dec!(9) {
+                                if (is_long || is_short) && bars_since_entry > 1 && open_profit > dec!(20) && position_size < dec!(5) {
                                     let cancel_order_time = Utc::now() + Duration::seconds(5);
                                     if is_long && quotebar.ask_close < last_candle.ask_high {
                                         strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Enter Long Stop Limit"), last_candle.bid_high + dec!(0.25), last_candle.bid_high + dec!(0.50), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
