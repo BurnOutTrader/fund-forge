@@ -286,7 +286,7 @@ impl BrokerApiResponse for RithmicClient {
                     Some(volume) => volume
                 };
 
-                if volume < 0 {
+                if volume <= 0 {
                     return reject_order(format!("No Short Position To Exit: {}", details.symbol_code))
                 }
 
@@ -332,7 +332,7 @@ impl BrokerApiResponse for RithmicClient {
                     Some(volume) => volume
                 };
 
-                if volume < 0 {
+                if volume <= 0 {
                     return reject_order(format!("No Short Position To Exit: {}", details.symbol_code))
                 }
 
