@@ -20,8 +20,6 @@ Make sure to double-check your configurations to avoid unintended trades.
 
 Once `StrategyMode::Live`, the system will not differentiate between test and real orders!
 
-Currently Working on Live orders and Positions, Backtest Positions might be bugged for the next few days 22/10/2024 until I can go back and patch after some changes to other logic. 
-
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
 - [Example Strategy](example_test_strategy/src/main.rs)

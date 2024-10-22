@@ -153,8 +153,12 @@ pub async fn on_data_received(
                 match event {
                     PositionUpdateEvent::PositionOpened { .. } => {}
                     PositionUpdateEvent::Increased { .. } => {}
-                    PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.account()).await,
-                    PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.account()).await,
+                    PositionUpdateEvent::PositionReduced { .. } => {
+                        strategy.print_ledger(event.account()).await
+                    },
+                    PositionUpdateEvent::PositionClosed { .. } => {
+                        strategy.print_ledger(event.account()).await
+                    },
                 }
                 let quantity = strategy.position_size(&account_1, &"EUR-USD".to_string());
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
@@ -164,7 +168,10 @@ pub async fn on_data_received(
             StrategyEvent::OrderEvents(event) => {
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                 match event {
-                    OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => println!("{}", msg.as_str().on_bright_magenta().on_bright_red()),
+                    OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => {
+                        strategy.print_ledger(event.account()).await;
+                        println!("{}", msg.as_str().on_bright_magenta().on_bright_red())
+                    },
                     _ =>  println!("{}", msg.as_str().bright_yellow())
                 }
             }
