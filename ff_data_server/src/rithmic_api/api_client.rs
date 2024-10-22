@@ -5,7 +5,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::{Tz};
 use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;

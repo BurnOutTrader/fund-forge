@@ -591,6 +591,7 @@ pub async fn match_order_plant_id(
                                 symbol_code,
                                 tag,
                                 time,
+                                reason: "Cancelled".to_string(),
                             };
                             send_order_update(client.brokerage, &order_id, event).await;
                         },
