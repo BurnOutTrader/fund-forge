@@ -176,7 +176,7 @@ pub async fn on_data_received(
                                 let is_flat = strategy.is_flat(&account, &symbol_code);
                                 let last_candle = last_candle.unwrap();
                                 // entry orders
-                                if quotebar.bid_close > last_candle.bid_high && is_flat {
+                                if quotebar.bid_close > last_candle.bid_high && is_flat && entry_order_id.is_none() {
                                     println!("Submitting long entry");
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
