@@ -553,7 +553,7 @@ pub enum OrderUpdateEvent {
     ///Quantity should only represent the quantity filled on this event.
     OrderPartiallyFilled {account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, price: Price, quantity: Volume, tag: String, time: String},
 
-    OrderCancelled {account: Account, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, tag: String, time: String},
+    OrderCancelled {account: Account, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, reason: String, tag: String, time: String},
 
     OrderRejected {account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, reason: String, tag: String, time: String},
 
@@ -654,8 +654,8 @@ impl fmt::Display for OrderUpdateEvent {
             OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code,price, quantity, order_id,tag,.. } => {
                 write!(f, "Order Partially Filled: Account: {}, Symbol Name: {}, Symbol Code: {},Price: {}, Quantity: {}, Order ID: {}, Tag: {}", account, symbol_name, symbol_code, price, quantity, order_id, tag)
             }
-            OrderUpdateEvent::OrderCancelled { account,symbol_name, symbol_code: product, order_id,tag,.. } => {
-                write!(f, "Order Cancelled: Account: {}, Symbol Name: {}, Symbol Code: {},Order ID: {}, Tag: {}", account, symbol_name, product, order_id, tag)
+            OrderUpdateEvent::OrderCancelled { account,symbol_name, symbol_code, reason, order_id,tag,.. } => {
+                write!(f, "Order Cancelled: Account: {}, Symbol Name: {}, Symbol Code: {}, Reason: {}. Order ID: {}, Tag: {}", account, symbol_name, symbol_code, reason, order_id, tag)
             }
             OrderUpdateEvent::OrderRejected { account,symbol_name, symbol_code: product, order_id, reason,tag,.. } => {
                 write!(f, "Order Rejected: Account: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}. Reason: {}, Tag: {}", account, symbol_name, product, order_id, reason, tag)

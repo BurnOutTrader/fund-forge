@@ -59,7 +59,6 @@ impl LedgerService {
         account: &Account,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,
-        order_id: OrderId,
         quantity: Volume,
         side: OrderSide,
         time: DateTime<Utc>,
@@ -68,7 +67,7 @@ impl LedgerService {
     ) -> Vec<PositionUpdateEvent> {
         //println!("Create Position: Ledger Service: {}, {}, {}, {}", account, symbol_name, market_fill_price, quantity);
         if let Some(ledger_ref) = self.ledgers.get(account) {
-            return ledger_ref.update_or_create_live_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await;
+            ledger_ref.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await
         } else {
             panic!("No ledger for account: {}", account);
         }
@@ -175,6 +174,7 @@ impl LedgerService {
             .unwrap_or_else(|| dec!(0))
     }
 
+    #[allow(dead_code)]
     pub fn open_pnl(&self, account: &Account) -> Decimal {
         self.ledgers.get(account)
              .map(|ledger| ledger.get_open_pnl())
@@ -204,34 +204,6 @@ impl LedgerService {
              .map(|ledger| ledger.in_drawdown(symbol_name))
             .unwrap_or(false)
     }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub(crate) enum LedgerMessage {
-    PrintLedgerRequest,
-    ExportTrades(String),
-    UpdateOrCreatePosition {
-        symbol_name: SymbolName,
-        symbol_code: SymbolCode,
-        order_id: OrderId,
-        quantity: Volume,
-        side: OrderSide,
-        time: DateTime<Utc>,
-        market_fill_price: Price,
-        tag: String
-    },
-    #[allow(unused)]
-    FlattenAccount(DateTime<Utc>),
-    LiveAccountUpdates { account: Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal },
-    LivePositionUpdates { account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, open_pnl: Decimal, open_quantity: Decimal, side: Option<PositionSide> },
-    ExitPaperPosition {
-        symbol_name: SymbolName,
-        side: PositionSide,
-        symbol_code: Option<SymbolCode>,
-        order_id: OrderId,
-        time: DateTime<Utc>,
-        tag: String
-    },
 }
 
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
@@ -618,7 +590,6 @@ impl Ledger {
         &self,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,
-        order_id: OrderId,
         quantity: Volume,
         side: OrderSide,
         time: DateTime<Utc>,
@@ -631,7 +602,7 @@ impl Ledger {
         let mut position_events = vec![];
         // Check if there's an existing position for the given symbol
         let mut remaining_quantity = quantity;
-        if let Some((symbol_name, mut existing_position)) = self.positions.remove(&symbol_code) {
+        if let Some((_, mut existing_position)) = self.positions.remove(&symbol_code) {
             let is_reducing = (existing_position.side == PositionSide::Long && side == OrderSide::Sell)
                 || (existing_position.side == PositionSide::Short && side == OrderSide::Buy);
 

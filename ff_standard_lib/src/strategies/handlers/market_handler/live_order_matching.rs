@@ -18,6 +18,7 @@ pub fn live_order_update(
     tokio::task::spawn(async move {
         while let Some(ref order_update_event) = order_event_receiver.recv().await {
             match order_update_event {
+                #[allow(unused)]
                 OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time } => {
                     if let Some(mut order) = open_order_cache.get_mut(order_id) {
                         {
@@ -32,6 +33,7 @@ pub fn live_order_update(
                 }
                 OrderUpdateEvent::OrderFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time } => {
                    //todo send direct via LEDGER_SERVICE
+                    #[allow(unused)]
                      if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
                          {
                              order.symbol_code = Some(symbol_code.clone());
@@ -39,7 +41,7 @@ pub fn live_order_update(
                              order.quantity_filled += quantity;
                              order.time_filled_utc = Some(time.clone());
                          }
-                         let events = LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), order_id.clone(), quantity.clone(), order.side.clone(), Utc::now(), *price, tag.to_string()).await;
+                         let events = LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), order.side.clone(), Utc::now(), *price, tag.to_string()).await;
                          match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                              Ok(_) => {}
                              Err(e) => eprintln!("{}", e)
@@ -64,7 +66,7 @@ pub fn live_order_update(
                             new_fill_quantity
                        };
 
-                        let events = LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), order_id.clone(), new_fill_quantity, order.side.clone(), Utc::now(), price.clone(), tag.clone()).await;
+                        let events = LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), new_fill_quantity, order.side.clone(), Utc::now(), price.clone(), tag.clone()).await;
                        match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                            Ok(_) => {}
                            Err(e) => eprintln!("{}", e)
@@ -77,7 +79,8 @@ pub fn live_order_update(
                        }
                     }
                 }
-                OrderUpdateEvent::OrderCancelled { account, symbol_name, symbol_code, order_id, tag, time } => {
+                #[allow(unused)]
+                OrderUpdateEvent::OrderCancelled { account, symbol_name, symbol_code, order_id, reason, tag, time } => {
                     if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
                         order.state = OrderState::Cancelled;
                         order.symbol_code = Some(symbol_code.clone());
@@ -88,6 +91,7 @@ pub fn live_order_update(
                         }
                     }
                 }
+                #[allow(unused)]
                 OrderUpdateEvent::OrderRejected { account, symbol_name, symbol_code, order_id, reason, tag, time } => {
                     if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
                         order.state = OrderState::Rejected(reason.clone());
@@ -99,6 +103,7 @@ pub fn live_order_update(
                         }
                     }
                 }
+                #[allow(unused)]
                 OrderUpdateEvent::OrderUpdated { account, symbol_name, symbol_code, order_id, update_type, tag, time } => {
                     if let Some((id, mut order)) = open_order_cache.remove(order_id) {
                         order.symbol_code = Some(symbol_code.clone());
@@ -116,6 +121,7 @@ pub fn live_order_update(
                         }
                     }
                 }
+                #[allow(unused)]
                 OrderUpdateEvent::OrderUpdateRejected { account, order_id, reason, time } => {
                     //todo not sure if we remove here, depends if update id is its own order
                     if let Some((order_id, order)) = open_order_cache.remove(order_id) {

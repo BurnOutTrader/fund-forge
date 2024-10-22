@@ -40,8 +40,13 @@ pub async fn backtest_matching_engine(
                             let existing_order = open_order_cache.remove(&order_id);
                             if let Some((existing_order_id, order)) = existing_order {
                                 let cancel_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {
-                                    account, symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(),
-                                    order_id: existing_order_id, tag: order.tag.clone(), time: time.to_string()
+                                    account,
+                                    symbol_name: order.symbol_name.clone(),
+                                    symbol_code: order.symbol_name.clone(),
+                                    order_id: existing_order_id,
+                                    tag: order.tag.clone(), 
+                                    time: time.to_string(),
+                                    reason: "User Request".to_string()
                                 });
                                 match strategy_event_sender.send(cancel_event).await {
                                     Ok(_) => {}
@@ -113,7 +118,9 @@ pub async fn backtest_matching_engine(
                                     let cancel_event = StrategyEvent::OrderEvents(
                                         OrderUpdateEvent::OrderCancelled {
                                             account: account.clone(), symbol_name: order.symbol_name.clone(),
-                                            symbol_code: order.symbol_name.clone(), order_id: order.id.clone(), tag: order.tag.clone(), time: time.to_string()
+                                            symbol_code: order.symbol_name.clone(), order_id: order.id.clone(),
+                                            reason: "OrderRequest::CancelAll".to_string(),
+                                            tag: order.tag.clone(), time: time.to_string()
                                         });
                                     match strategy_event_sender.send(cancel_event).await {
                                         Ok(_) => {}
@@ -155,9 +162,9 @@ pub async fn simulated_order_matching (
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
     strategy_event_sender: Sender<StrategyEvent>
 ) {
-
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
+    let mut cancelled = Vec::new();
     let mut filled = Vec::new();
     let mut events= vec![];
     let mut partially_filled = Vec::new();
@@ -171,19 +178,19 @@ pub async fn simulated_order_matching (
                 let local_time = time_convert_utc_to_local(&tz, time);
                 if local_time.date_naive() != order_time.date_naive() {
                     let reason = "Time In Force Expired: TimeInForce::Day".to_string();
-                    rejected.push((order.id.clone(), reason));
+                    cancelled.push((order.id.clone(), reason));
                 }
             }
             TimeInForce::IOC=> {
                /* if time > order.time_created_utc() + Duration::seconds(1) {
                     let reason = "Time In Force Expired: TimeInForce::IOC".to_string();
-                    rejected.push((order.id.clone(), reason));
+                    cancelled.push((order.id.clone(), reason));
                 }*/
             }
             TimeInForce::FOK => {
                 /*if time > order.time_created_utc() + buffer_resolution  {
                    let reason = "Time In Force Expired: TimeInForce::FOK".to_string();
-                    rejected.push((order.id.clone(), reason));
+                    cancelled.push((order.id.clone(), reason));
                 }*/
             }
             TimeInForce::Time(cancel_time, time_zone_string) => {
@@ -192,7 +199,7 @@ pub async fn simulated_order_matching (
                 let cancel_time = tz.timestamp_opt(*cancel_time, 0).unwrap();
                 if local_time >= cancel_time {
                     let reason = "Time In Force Expired: TimeInForce::Time".to_string();
-                    rejected.push((order.id.clone(), reason));
+                    cancelled.push((order.id.clone(), reason));
                 }
             }
         }
@@ -573,6 +580,10 @@ pub async fn simulated_order_matching (
         partially_fill_order(&order_id, time, price, volume, &open_order_cache, &closed_order_cache, &strategy_event_sender).await;
     }
 
+    for (order_id, reason) in cancelled {
+        cancel_order(reason, &order_id, time, &open_order_cache, closed_order_cache, &strategy_event_sender).await;
+    }
+
     for event in events {
         strategy_event_sender.send(event).await.unwrap();
     }
@@ -725,6 +736,35 @@ async fn reject_order(
                 time: time.to_string(),
                 symbol_code: order.symbol_name.clone(),
             });
+        closed_order_cache.insert(order.id.clone(), order.clone());
+        match strategy_event_sender.send(event).await {
+            Ok(_) => {}
+            Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+        }
+    }
+}
+
+async fn cancel_order(
+    reason: String,
+    order_id: &OrderId,
+    time: DateTime<Utc>,
+    open_order_cache: &Arc<DashMap<OrderId, Order>>,
+    closed_order_cache: &Arc<DashMap<OrderId, Order>>,
+    strategy_event_sender: &Sender<StrategyEvent>
+) {
+    if let Some((_, mut order)) = open_order_cache.remove(order_id) {
+        order.state = OrderState::Rejected(reason.clone());
+        order.time_created_utc = time.to_string();
+
+        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderCancelled {
+            order_id: order.id.clone(),
+            account: order.account.clone(),
+            symbol_name: order.symbol_name.clone(),
+            reason,
+            tag: order.tag.clone(),
+            time: time.to_string(),
+            symbol_code: order.symbol_name.clone(),
+        });
         closed_order_cache.insert(order.id.clone(), order.clone());
         match strategy_event_sender.send(event).await {
             Ok(_) => {}
