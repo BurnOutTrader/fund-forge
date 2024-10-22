@@ -150,7 +150,6 @@ pub async fn on_data_received(
             }
 
             StrategyEvent::PositionEvents(event) => {
-                strategy.print_ledger(event.account()).await;
                 match event {
                     PositionUpdateEvent::PositionOpened { .. } => {}
                     PositionUpdateEvent::Increased { .. } => {}
