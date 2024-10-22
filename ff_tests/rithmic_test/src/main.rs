@@ -284,7 +284,7 @@ pub async fn on_data_received(
                 match event {
                     PositionUpdateEvent::PositionOpened { .. } => {},
                     PositionUpdateEvent::Increased { .. } => {},
-                    PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.account()).await,
+                    PositionUpdateEvent::PositionReduced { .. } => {},
                     PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
                         exit_order_id = None;
                         entry_order_id = None;
@@ -296,6 +296,7 @@ pub async fn on_data_received(
                         } else if booked_pnl == dec!(0) {
                             last_result = TradeResult::BreakEven
                         }
+                        strategy.print_ledger(event.account()).await
                     }
                 }
             }
