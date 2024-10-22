@@ -18,10 +18,6 @@ Order logic is incomplete, updates not yet forwarded to strategies.
 
 Make sure to double-check your configurations to avoid unintended trades.
 
-to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
-
-to run with only test api to run the server with rithmic apis connected use `cargo run -- --rithmic "1"`.
-
 Once `StrategyMode::Live`, the system will not differentiate between test and real orders!
 
 ## Current State of Live Trading
@@ -59,6 +55,8 @@ The order events will return both the symbol_name and product_code, should you l
 for more free testing data [Demonstration Testing Data](#demonstration-testing-data) below
 3. Get the testing data (instructions below)
 4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (dont run the server in your IDE, it will have issues (more issues than normal :) )
+   - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
+   - to run with only test api to run the server with rithmic apis connected use `cargo run -- --rithmic "1"`.
 5. Navigate to [example_test_strategy](./example_test_strategy) directory and `cargo build` then`cargo run`
 
 *When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](example_test_strategy/README.md)
