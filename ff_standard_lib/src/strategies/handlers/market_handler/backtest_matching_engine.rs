@@ -88,7 +88,7 @@ pub async fn backtest_matching_engine(
                                 }
                                 let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated {
                                     account, symbol_name: order.symbol_name.clone(), symbol_code: order.symbol_name.clone(),
-                                    order_id: order.id.clone(), update_type: update, tag: order.tag.clone(), time: time.to_string()
+                                    order_id: order.id.clone(), update_type: update, text: "User Request".to_string(), tag: order.tag.clone(), time: time.to_string()
                                 });
                                 open_order_cache.insert(order_id, order);
                                 match strategy_event_sender.send(update_event).await {

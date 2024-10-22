@@ -109,7 +109,7 @@ pub fn live_order_update(
                     }
                 }
                 #[allow(unused)]
-                OrderUpdateEvent::OrderUpdated { account, symbol_name, symbol_code, order_id, update_type, tag, time } => {
+                OrderUpdateEvent::OrderUpdated { account, symbol_name, symbol_code, order_id, update_type, text, tag, time } => {
                     if let Some(mut order) = open_order_cache.get_mut(order_id) {
                         order.symbol_code = Some(symbol_code.clone());
                         match &update_type {

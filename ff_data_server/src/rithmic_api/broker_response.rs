@@ -300,7 +300,8 @@ impl BrokerApiResponse for RithmicClient {
                         symbol_code: details.symbol_code.clone(),
                         order_id: order.id.clone(),
                         update_type: OrderUpdateType::Quantity(Decimal::from_i32(volume).unwrap()),
-                        tag: order.tag.clone().to_string(),
+                        tag: order.tag.clone(),
+                        text: String::from("ff_data_server Api adjusted exit quantity to prevent over fill"),
                         time: Utc::now().to_string(),
                     };
                     let order_event = DataServerResponse::OrderUpdates(order_update_event);
@@ -367,7 +368,8 @@ impl BrokerApiResponse for RithmicClient {
                         symbol_code: details.symbol_code.clone(),
                         order_id: order.id.clone(),
                         update_type: OrderUpdateType::Quantity(Decimal::from_i32(volume).unwrap()),
-                        tag: order.tag.clone().to_string(),
+                        tag: order.tag.clone(),
+                        text: String::from("ff_data_server Api adjusted exit quantity to prevent over fill"),
                         time: Utc::now().to_string(),
                     };
                     let order_event = DataServerResponse::OrderUpdates(order_update_event);

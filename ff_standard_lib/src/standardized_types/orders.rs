@@ -557,7 +557,7 @@ pub enum OrderUpdateEvent {
 
     OrderRejected {account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, reason: String, tag: String, time: String},
 
-    OrderUpdated {account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, update_type: OrderUpdateType, tag: String, time: String},
+    OrderUpdated {account: Account,  symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, update_type: OrderUpdateType, text: String, tag: String, time: String},
 
     OrderUpdateRejected {account: Account,  order_id: OrderId, reason: String, time: String},
 }
@@ -660,8 +660,8 @@ impl fmt::Display for OrderUpdateEvent {
             OrderUpdateEvent::OrderRejected { account,symbol_name, symbol_code: product, order_id, reason,tag,.. } => {
                 write!(f, "Order Rejected: Account: {}, Symbol Name: {}, Symbol Code: {}, Order ID: {}. Reason: {}, Tag: {}", account, symbol_name, product, order_id, reason, tag)
             }
-            OrderUpdateEvent::OrderUpdated { account,symbol_name, symbol_code: product, order_id, update_type, tag, ..} => {
-                write!(f, "Order Updated: Account: {}, UpdateType: {:?}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Tag: {}", account, symbol_name, product, update_type, order_id, tag)
+            OrderUpdateEvent::OrderUpdated { account,symbol_name, symbol_code: product, order_id, update_type, text, tag, ..} => {
+                write!(f, "Order Updated: Account: {}, UpdateType: {:?}, Symbol Name: {}, Symbol Code: {}, Order ID: {}, Text: {}, Tag: {}", account, symbol_name, product, update_type, order_id, text, tag)
             }
             OrderUpdateEvent::OrderUpdateRejected { account, order_id, reason,.. } => {
                 write!(f, "Order Update Rejected: Account: {}, Order ID: {}. Reason: {}", account,  order_id, reason)
