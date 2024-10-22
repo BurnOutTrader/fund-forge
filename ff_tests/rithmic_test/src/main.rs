@@ -30,7 +30,6 @@ use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
 
 // TODO WARNING THIS IS LIVE TRADING
-// to launch on separate machine
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization
@@ -39,7 +38,7 @@ async fn main() {
     let subscription = DataSubscription::new(
         SymbolName::from("MNQ"),
         data_vendor.clone(),
-        Resolution::Seconds(1),
+        Resolution::Seconds(3),
         BaseDataType::QuoteBars,
         MarketType::Futures(FuturesExchange::CME));
 
@@ -181,21 +180,21 @@ pub async fn on_data_received(
                                 let last_candle = last_candle.unwrap();
                                 let last_atr = last_atr.unwrap().get_plot(&atr_plot).unwrap().value;
                                 let current_atr = current_atr.unwrap().get_plot(&atr_plot).unwrap().value;
-                                let min_atr = current_atr >= dec!(0.75);
+                                let min_atr = current_atr >= dec!(3);
                                 let atr_increasing = current_atr > last_atr;
 
                                 // entry orders
-                                if (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && is_flat && quotebar.bid_close > last_candle.bid_high && entry_order_id.is_none() && atr_increasing && min_atr {
+                                if (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && is_flat && quotebar.bid_close > last_candle.ask_high && entry_order_id.is_none() && atr_increasing && min_atr {
                                     println!("Submitting long entry");
-                                    let cancel_order_time = Utc::now() + Duration::seconds(15);
+                                    let cancel_order_time = Utc::now() + Duration::seconds(60);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
                                     entry_order_id = Some(order_id);
                                     exit_order_id = None;
 
                                 }
-                                else if (last_side != LastSide::Short || (last_side == LastSide::Short && last_result == TradeResult::Win)) && is_flat && quotebar.bid_close < last_candle.bid_low && entry_order_id.is_none() && atr_increasing && min_atr {
+                                else if (last_side != LastSide::Short || (last_side == LastSide::Short && last_result == TradeResult::Win)) && is_flat && quotebar.ask_close < last_candle.bid_low && entry_order_id.is_none() && atr_increasing && min_atr {
                                     println!("Submitting short limit");
-                                    let cancel_order_time = Utc::now() + Duration::seconds(30);
+                                    let cancel_order_time = Utc::now() + Duration::seconds(60);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Sell, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Short Limit")).await;
                                     entry_order_id = Some(order_id);
                                     exit_order_id = None;
@@ -216,9 +215,9 @@ pub async fn on_data_received(
                                 );
 
                                 //Add to winners up to 2x if we have momentum
-                                if (is_long || is_short) && bars_since_entry > 1 && open_profit >= dec!(10) && position_size <= dec!(5) && add_order_id.is_none() {
+                                if (is_long || is_short) && bars_since_entry > 1 && open_profit >= dec!(10) && position_size <= dec!(5) && add_order_id.is_none() && exit_order_id.is_none() && entry_order_id.is_none() {
 
-                                    let cancel_order_time = Utc::now() + Duration::seconds(5);
+                                    let cancel_order_time = Utc::now() + Duration::seconds(15);
 
                                     if is_long && quotebar.ask_close < last_candle.ask_high {
                                         let new_add_order_id = strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
