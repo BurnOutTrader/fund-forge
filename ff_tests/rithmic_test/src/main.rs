@@ -1,7 +1,6 @@
 use std::cmp::PartialEq;
-use chrono::{Duration, NaiveDate, NaiveDateTime, TimeZone, Utc};
+use chrono::{Duration, NaiveDate, Utc};
 use chrono_tz::{Australia, UTC};
-use chrono_tz::Tz::America__Chicago;
 use colored::Colorize;
 use ff_rithmic_api::systems::RithmicSystem;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -34,6 +33,16 @@ use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
 // to launch on separate machine
 #[tokio::main]
 async fn main() {
+
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string());
+    let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
+    let subscription = DataSubscription::new(
+        SymbolName::from("MNQ"),
+        data_vendor.clone(),
+        Resolution::Seconds(1),
+        BaseDataType::QuoteBars,
+        MarketType::Futures(FuturesExchange::CME));
+
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
         StrategyMode::Live,
@@ -44,27 +53,16 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(5),
         vec![
-       /*     DataSubscription::new(
-                SymbolName::from("MNQ"),
-                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
-                Resolution::Ticks(1),
-                BaseDataType::Ticks,
-                MarketType::Futures(FuturesExchange::CME)
-            ),*/
+            //subscribe to a quote feed to ensure we use quotes
             DataSubscription::new(
                 SymbolName::from("MNQ"),
-                DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
+                data_vendor.clone(),
                 Resolution::Instant,
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
             ),
-           DataSubscription::new(
-               SymbolName::from("MNQ"),
-               DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
-               Resolution::Seconds(1),
-               BaseDataType::QuoteBars,
-               MarketType::Futures(FuturesExchange::CME)
-           )
+            //subscribe to our subscription
+            subscription.clone()
         ],
         true,
         100,
@@ -73,10 +71,10 @@ async fn main() {
         false,
         true,
         false,
-        vec![Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string())]
+        vec![account.clone()]
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver).await;
+    on_data_received(strategy, strategy_event_receiver, account, subscription).await;
 }
 
 #[allow(dead_code, unused)]
@@ -97,15 +95,9 @@ enum TradeResult {
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
+    account: Account,
+    subscription: DataSubscription
 ) {
-    let subscription = DataSubscription::new(
-        SymbolName::from("MNQ"),
-        DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
-        Resolution::Seconds(1),
-        BaseDataType::QuoteBars,
-        MarketType::Futures(FuturesExchange::CME)
-    );
-
     let atr_10 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(
             IndicatorName::from("atr_10"),
