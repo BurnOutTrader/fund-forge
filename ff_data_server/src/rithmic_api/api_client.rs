@@ -420,8 +420,8 @@ impl RithmicClient {
         }
     }
 
-    pub async fn request_updates(&self) {
-        for id_account_info_kvp in self.account_info.iter() {
+    pub async fn request_updates(&self, account_id: AccountId) {
+        if let Some(id_account_info_kvp) = self.account_info.get(&account_id) {
             let req = RequestShowOrders {
                 template_id: 320,
                 user_msg: vec![],

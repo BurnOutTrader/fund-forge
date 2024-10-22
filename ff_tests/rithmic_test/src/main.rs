@@ -1,6 +1,7 @@
 use std::cmp::PartialEq;
-use chrono::{Duration, NaiveDate, Utc};
+use chrono::{Duration, NaiveDate, NaiveDateTime, TimeZone, Utc};
 use chrono_tz::{Australia, UTC};
+use chrono_tz::Tz::America__Chicago;
 use colored::Colorize;
 use ff_rithmic_api::systems::RithmicSystem;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
@@ -52,14 +53,14 @@ async fn main() {
             ),*/
             DataSubscription::new(
                 SymbolName::from("MNQ"),
-                DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+                DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
                 Resolution::Instant,
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
             ),
            DataSubscription::new(
                SymbolName::from("MNQ"),
-               DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+               DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
                Resolution::Seconds(1),
                BaseDataType::QuoteBars,
                MarketType::Futures(FuturesExchange::CME)
@@ -72,7 +73,7 @@ async fn main() {
         false,
         true,
         false,
-        vec![Account::new(Brokerage::Rithmic(RithmicSystem::TopstepTrader), "S1Sep246906077".to_string())]
+        vec![Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string())]
     ).await;
 
     on_data_received(strategy, strategy_event_receiver).await;
@@ -99,7 +100,7 @@ pub async fn on_data_received(
 ) {
     let subscription = DataSubscription::new(
         SymbolName::from("MNQ"),
-        DataVendor::Rithmic(RithmicSystem::TopstepTrader),
+        DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading),
         Resolution::Seconds(1),
         BaseDataType::QuoteBars,
         MarketType::Futures(FuturesExchange::CME)
@@ -127,13 +128,14 @@ pub async fn on_data_received(
 
     let mut warmup_complete = false;
     let mut last_side = LastSide::Flat;
-    let account: Account = Account::new(Brokerage::Rithmic(RithmicSystem::TopstepTrader), "S1Sep246906077".to_string());
+    let account: Account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string());
     let mut symbol_code = "MNQZ4".to_string();
     println!("Staring Strategy Loop");
     let symbol = "MNQ".to_string();
     let mut count = 0;
     let mut bars_since_entry = 0;
     let mut entry_order_id = None;
+    let mut add_order_id = None;
     let mut exit_order_id = None;
     let mut position_size = 0;
     let atr_plot = "atr".to_string();
@@ -224,18 +226,20 @@ pub async fn on_data_received(
                                 if (is_long || is_short) && bars_since_entry > 1 && open_profit >= dec!(10) && position_size == dec!(2) {
                                     let cancel_order_time = Utc::now() + Duration::seconds(5);
                                     if is_long && quotebar.ask_close < last_candle.ask_high {
-                                        strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
+                                        let new_add_order_id = strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
                                         bars_since_entry = 0;
                                         exit_order_id = None;
+                                        add_order_id = Some(new_add_order_id)
                                     }
                                     else if is_short && quotebar.bid_close > last_candle.bid_low {
-                                        strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Sell,  String::from("Add Short Stop Limit"), last_candle.bid_low - dec!(0.5), last_candle.bid_low - dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
+                                        let new_add_order_id =strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Sell,  String::from("Add Short Stop Limit"), last_candle.bid_low - dec!(0.5), last_candle.bid_low - dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
                                         bars_since_entry = 0;
                                         exit_order_id = None;
+                                        add_order_id = Some(new_add_order_id)
                                     }
                                 }
 
-                                if open_profit > dec!(60) || (open_profit < dec!(-30) && bars_since_entry > 10) {
+                                if open_profit > dec!(100) || (open_profit < dec!(-30) && bars_since_entry > 10) && add_order_id.is_none() && entry_order_id.is_none() {
                                     let open_profit = strategy.pnl(&account, &symbol_code);
                                     let is_long = strategy.is_long(&account, &symbol_code);
                                     let is_short = strategy.is_short(&account, &symbol_code);
@@ -345,6 +349,15 @@ pub async fn on_data_received(
                         }
                         if closed {
                             exit_order_id = None;
+                        }
+
+                        if let Some( add_order_id) =  &add_order_id {
+                            if order_id == *add_order_id {
+                                closed = true;
+                            }
+                        }
+                        if closed {
+                            add_order_id = None;
                         }
                     }
                     _ =>  println!("{}", msg.as_str().bright_yellow())
