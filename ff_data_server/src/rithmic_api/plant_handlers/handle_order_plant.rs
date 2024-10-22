@@ -531,21 +531,9 @@ pub async fn match_order_plant_id(
                         }
                     };
 
-                    let reason = match msg.text {
-                        None => {
-                            match msg.remarks {
-                                None => {
-                                    "Cancelled".to_string()
-                                }
-                                Some(remarks) => {
-                                    remarks
-                                }
-                            }
-                        }
-                        Some(text) => {
-                            text
-                        }
-                    };
+                    let reason = msg.text
+                        .or(msg.remarks)
+                        .unwrap_or_else(|| "Cancelled".to_string());
 
                     match notify_type {
                         1 => {
