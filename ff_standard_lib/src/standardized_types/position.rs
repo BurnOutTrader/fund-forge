@@ -11,7 +11,7 @@ use crate::helpers::decimal_calculators::calculate_theoretical_pnl;
 use crate::standardized_types::accounts::{Account, AccountId, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::enums::PositionSide;
+use crate::standardized_types::enums::{PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -312,24 +312,27 @@ impl Position {
     }
 
     /// Reduces position size a position event, this event will include a booked_pnl property
-    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
+    pub(crate) async fn reduce_position_size(&mut self, mode: StrategyMode, simulate_pnl: bool, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
         if quantity > self.quantity_open {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
-        // Calculate booked PnL
-        let booked_pnl = calculate_theoretical_pnl(
-            self.side,
-            self.average_price,
-            market_price,
-            quantity,
-            account_currency,
-            time,
-            &self.symbol_info
-        );
 
-        // Update position
-        self.booked_pnl += booked_pnl;
-        self.open_pnl -= booked_pnl;
+        if mode != StrategyMode::Live || simulate_pnl {
+            // Calculate booked PnL
+            let booked_pnl = calculate_theoretical_pnl(
+                self.side,
+                self.average_price,
+                market_price,
+                quantity,
+                account_currency,
+                time,
+                &self.symbol_info
+            );
+
+            // Update position
+            self.booked_pnl += booked_pnl;
+            self.open_pnl -= booked_pnl;
+        }
 
         self.average_exit_price = match self.average_exit_price {
             Some(existing_exit_price) => {
@@ -381,27 +384,31 @@ impl Position {
     }
 
     /// Adds to the paper position
-    pub(crate) async fn add_to_position(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
+    pub(crate) async fn add_to_position(&mut self, mode: StrategyMode, is_simulating_pnl: bool, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
         // Correct the average price calculation with proper parentheses
-        if self.quantity_open + quantity != Decimal::ZERO {
-            self.average_price = ((self.quantity_open * self.average_price + quantity * market_price) / (self.quantity_open + quantity)).round_dp(self.symbol_info.decimal_accuracy);
-        } else {
-            panic!("Average price should not be 0");
+        if mode != StrategyMode::Live || is_simulating_pnl {
+            if self.quantity_open + quantity != Decimal::ZERO {
+                self.average_price = ((self.quantity_open * self.average_price + quantity * market_price) / (self.quantity_open + quantity)).round_dp(self.symbol_info.decimal_accuracy);
+            } else {
+                panic!("Average price should not be 0");
+            }
         }
 
         // Update the total quantity
         self.quantity_open += quantity;
 
-        // Recalculate open PnL
-        self.open_pnl = calculate_theoretical_pnl(
-            self.side,
-            self.average_price,
-            market_price,
-            self.quantity_open,
-            account_currency,
-            time,
-            &self.symbol_info
-        );
+        if mode != StrategyMode::Live || is_simulating_pnl {
+            // Recalculate open PnL
+            self.open_pnl = calculate_theoretical_pnl(
+                self.side,
+                self.average_price,
+                market_price,
+                self.quantity_open,
+                account_currency,
+                time,
+                &self.symbol_info
+            );
+        }
 
         PositionUpdateEvent::Increased {
             position_id: self.position_id.clone(),
