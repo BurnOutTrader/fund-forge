@@ -276,7 +276,7 @@ impl BrokerApiResponse for RithmicClient {
             })
         };
 
-        //check if we are short and adjust quantity
+        // Check if we have a short position
         if let Some(account_short_map) = self.short_quantity.get(&order.account.account_id) {
             if let Some(symbol_volume) = account_short_map.value().get(&details.symbol_code) {
                 let volume = match symbol_volume.value().to_i32() {
@@ -290,10 +290,14 @@ impl BrokerApiResponse for RithmicClient {
                     return reject_order(format!("No Short Position To Exit: {}", details.symbol_code))
                 }
 
-                // Use absolute values for comparison and adjustment
-                if details.quantity.abs() > volume.abs() {
-                    details.quantity = volume.abs();  // Keep positive for the order
+                // For shorts, just ensure we don't exit more than we have
+                if details.quantity > volume {
+                    details.quantity = volume;
                 }
+
+                // For short exits, quantity should be positive
+                details.quantity = details.quantity.abs();
+
                 self.submit_market_order(stream_name, order, details).await;
                 Ok(())
             } else {
