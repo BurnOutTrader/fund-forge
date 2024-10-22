@@ -479,7 +479,7 @@ pub async fn match_order_plant_id(
 
             */
             if let Ok(msg) = ExchangeOrderNotification::decode(&message_buf[..]) {
-                //println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
+                println!("Exchange Order Notification (Template ID: 352) from Server: {:?}", msg);
                 if let (Some(basket_id), Some(ssboe), Some(usecs), Some(account_id), Some(notify_type), Some(user_tag)) =
                     (msg.basket_id, msg.ssboe, msg.usecs, msg.account_id, msg.notify_type, msg.user_tag) {
                     let time = create_datetime(ssboe as i64, usecs as i64).to_string();
@@ -528,6 +528,22 @@ pub async fn match_order_plant_id(
                                 Some(symbol_name) => symbol_name
                             };
                             (symbol_name, code)
+                        }
+                    };
+
+                    let reason = match msg.text {
+                        None => {
+                            match msg.remarks {
+                                None => {
+                                    "Cancelled".to_string()
+                                }
+                                Some(remarks) => {
+                                    remarks
+                                }
+                            }
+                        }
+                        Some(text) => {
+                            text
                         }
                     };
 
@@ -584,21 +600,7 @@ pub async fn match_order_plant_id(
                             }
                         },
                         3 => {
-                            let reason = match msg.text {
-                                None => {
-                                    match msg.remarks {
-                                        None => {
-                                            "Cancelled".to_string()
-                                        }
-                                        Some(remarks) => {
-                                            remarks
-                                        }
-                                    }
-                                }
-                                Some(text) => {
-                                    text
-                                }
-                            };
+
                             let event = OrderUpdateEvent::OrderCancelled {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),
@@ -614,7 +616,7 @@ pub async fn match_order_plant_id(
                             let event = OrderUpdateEvent::OrderRejected {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),
-                                reason: msg.status.unwrap_or_default(),
+                                reason,
                                 symbol_name,
                                 symbol_code,
                                 tag,

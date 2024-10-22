@@ -206,16 +206,16 @@ pub async fn on_data_received(
                                     bars_since_entry, open_profit, position_size
                                 );
 
-                                if (is_long || is_short) && bars_since_entry > 1 && open_profit > dec!(20) && position_size < dec!(5) {
+                                if (is_long || is_short) && bars_since_entry > 1 && open_profit > dec!(10) && position_size < dec!(5) {
                                     let cancel_order_time = Utc::now() + Duration::seconds(5);
                                     if is_long && quotebar.ask_close < last_candle.ask_high {
-                                        strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Enter Long Stop Limit"), last_candle.bid_high + dec!(0.25), last_candle.bid_high + dec!(0.50), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
+                                        strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Enter Long Stop Limit"), last_candle.ask_high + dec!(0.25), last_candle.ask_high + dec!(0.50), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
                                     } /*else if is_short && quotebar.bid_close > last_candle.ask_low {
                                         strategy.stop_limit(&symbol, None, &account, &brokerage, None,dec!(3), OrderSide::Buy,  String::from("Enter Short Stop Limit"), last_candle.ask_low - dec!(0.25), last_candle.ask_low - dec!(0.50), TimeInForce::Time(cancel_order_time.naive_utc().to_string(), UTC.to_string())).await;
                                     }*/
                                 }
 
-                                if open_profit > dec!(50) || (open_profit < dec!(-100) && bars_since_entry > 15) {
+                                if open_profit > dec!(30) || (open_profit < dec!(-30) && bars_since_entry > 10) {
                                     let open_profit = strategy.pnl(&account, &symbol_code);
                                     if is_long && exit_order_id == None {
                                         let exit_id = strategy.exit_long(&symbol, None, &account, None, position_size, String::from("Exit Long")).await;
