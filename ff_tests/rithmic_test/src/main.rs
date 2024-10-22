@@ -227,14 +227,14 @@ pub async fn on_data_received(
                                         bars_since_entry = 0;
                                         exit_order_id = None;
                                     }
-                                    else if is_short && quotebar.bid_close > last_candle.ask_low {
-                                        strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Add Short Stop Limit"), last_candle.ask_low - dec!(0.5), last_candle.ask_low - dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
+                                    else if is_short && quotebar.bid_close > last_candle.bid_low {
+                                        strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Sell,  String::from("Add Short Stop Limit"), last_candle.bid_low - dec!(0.5), last_candle.bid_low - dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
                                         bars_since_entry = 0;
                                         exit_order_id = None;
                                     }
                                 }
 
-                                if open_profit > dec!(30) || (open_profit < dec!(-30) && bars_since_entry > 10) && entry_order_id.is_none() {
+                                if open_profit > dec!(60) || (open_profit < dec!(-30) && bars_since_entry > 10) && entry_order_id.is_none() {
                                     let open_profit = strategy.pnl(&account, &symbol_code);
                                     if is_long && exit_order_id == None {
                                         let exit_id = strategy.exit_long(&symbol, None, &account, None, position_size, String::from("Exit Long")).await;
