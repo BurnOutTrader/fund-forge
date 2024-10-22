@@ -235,7 +235,7 @@ pub async fn on_data_received(
                                 }
 
                                 // Cut losses and take profits, we check entry order is none to prevent exiting while an entry order is unfilled, entry order will expire and go to none on the TIF expiry, or on fill.
-                                if open_profit > dec!(100) || (open_profit < dec!(-30) && bars_since_entry > 10) && add_order_id.is_none() && entry_order_id.is_none() && exit_order_id.is_none() {
+                                if open_profit > dec!(150) || (open_profit < dec!(-100) && bars_since_entry > 10) && add_order_id.is_none() && entry_order_id.is_none() && exit_order_id.is_none() {
 
                                     let is_long = strategy.is_long(&account, &symbol_code);
                                     let is_short = strategy.is_short(&account, &symbol_code);
