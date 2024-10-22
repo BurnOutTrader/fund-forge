@@ -33,7 +33,6 @@ pub fn live_order_update(
                     }
                 }
                 OrderUpdateEvent::OrderFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time } => {
-                   //todo send direct via LEDGER_SERVICE
                     #[allow(unused)]
                      if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
                          order.symbol_code = Some(symbol_code.clone());
