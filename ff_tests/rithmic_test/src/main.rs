@@ -1,11 +1,11 @@
 use std::cmp::PartialEq;
 use chrono::{Duration, NaiveDate, Utc};
-use chrono_tz::Australia;
+use chrono_tz::{Australia, UTC};
 use colored::Colorize;
 use ff_rithmic_api::systems::RithmicSystem;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -17,7 +17,7 @@ use ff_standard_lib::standardized_types::accounts::{Account, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 #[allow(unused_imports)]
@@ -176,8 +176,8 @@ pub async fn on_data_received(
                                 // entry orders
                                 if quotebar.bid_close > last_candle.bid_high && entry_order_id == None  && last_side != LastSide::Long {
                                     println!("Submitting long entry");
-                                    let cancel_order_time = Utc::now() + Duration::seconds(30);
-                                    let order_id = strategy.enter_long(&symbol, None, &account, None,dec!(3), String::from("Enter Long")).await;
+                                    let cancel_order_time = Utc::now() + Duration::seconds(5);
+                                    let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(3), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
                                     entry_order_id = Some(order_id);
                                     last_side = LastSide::Long;
                                 }

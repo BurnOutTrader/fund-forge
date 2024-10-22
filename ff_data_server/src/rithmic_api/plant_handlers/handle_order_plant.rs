@@ -584,6 +584,21 @@ pub async fn match_order_plant_id(
                             }
                         },
                         3 => {
+                            let reason = match msg.text {
+                                None => {
+                                    match msg.remarks {
+                                        None => {
+                                            "Cancelled".to_string()
+                                        }
+                                        Some(remarks) => {
+                                            remarks
+                                        }
+                                    }
+                                }
+                                Some(text) => {
+                                    text
+                                }
+                            };
                             let event = OrderUpdateEvent::OrderCancelled {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),
@@ -591,7 +606,7 @@ pub async fn match_order_plant_id(
                                 symbol_code,
                                 tag,
                                 time,
-                                reason: "Cancelled".to_string(),
+                                reason,
                             };
                             send_order_update(client.brokerage, &order_id, event).await;
                         },

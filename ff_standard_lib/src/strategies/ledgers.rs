@@ -548,11 +548,9 @@ impl Ledger {
     pub async fn timeslice_update(&self, time_slice: Arc<TimeSlice>, time: DateTime<Utc>) {
         for base_data_enum in time_slice.iter() {
             let data_symbol_name = &base_data_enum.symbol().name;
-
             if let Some(codes) = self.symbol_code_map.get(data_symbol_name) {
                 for code in codes.value() {
                     if let Some(mut position) = self.positions.get_mut(code) {
-                        println!("Updating: {}", code); //todo, need to update codes from symbols
                         let open_pnl = position.update_base_data(&base_data_enum, time, self.currency);
                         self.open_pnl.insert(data_symbol_name.clone(), open_pnl);
                     }
