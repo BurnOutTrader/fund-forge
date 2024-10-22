@@ -234,21 +234,22 @@ pub async fn on_data_received(
                                     }
                                 }
 
-                                if open_profit > dec!(60) || (open_profit < dec!(-30) && bars_since_entry > 10) && entry_order_id.is_none() {
-                                    let position_size = strategy.position_size(&account, &symbol_code);
+                                if open_profit > dec!(60) || (open_profit < dec!(-30) && bars_since_entry > 10) {
                                     let open_profit = strategy.pnl(&account, &symbol_code);
+                                    let is_long = strategy.is_long(&account, &symbol_code);
+                                    let is_short = strategy.is_short(&account, &symbol_code);
                                     if is_long && exit_order_id == None {
+                                        let position_size = strategy.position_size(&account, &symbol_code);
                                         let exit_id = strategy.exit_long(&symbol, None, &account, None, position_size, String::from("Exit Long")).await;
                                         exit_order_id = Some(exit_id);
                                         bars_since_entry = 0;
-                                        entry_order_id = None;
                                         last_side = LastSide::Long;
                                     }
                                     else if is_short && exit_order_id == None {
+                                        let position_size = strategy.position_size(&account, &symbol_code);
                                         let exit_id = strategy.exit_short(&symbol, None, &account, None, position_size, String::from("Exit Short")).await;
                                         exit_order_id = Some(exit_id);
                                         bars_since_entry = 0;
-                                        entry_order_id = None;
                                         last_side = LastSide::Short;
                                     }
                                 }
