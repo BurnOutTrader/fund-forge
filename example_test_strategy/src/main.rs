@@ -155,15 +155,15 @@ pub async fn on_data_received(
                                 }
 
                                 if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test && candle.candle_type == CandleType::HeikinAshi {
-                                    if strategy.is_long(&account_1, &candle.symbol.name).await {
+                                    if strategy.is_long(&account_1, &candle.symbol.name) {
                                         bars_since_entry_1 += 1;
                                     }
 
-                                    let other_account_is_long_euro_and_in_profit: bool = strategy.is_long(&account_1, &SymbolName::from("EUR-USD")).await && strategy.in_profit(&account_1, &SymbolName::from("EUR-USD")).await;
+                                    let other_account_is_long_euro_and_in_profit: bool = strategy.is_long(&account_1, &SymbolName::from("EUR-USD")) && strategy.in_profit(&account_1, &SymbolName::from("EUR-USD"));
 
                                     let last_candle: Candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
                                     // buy AUD-CAD if higher close HA candle and if our other account is long on EUR
-                                    if strategy.is_flat(&account_1, &candle.symbol.name).await
+                                    if strategy.is_flat(&account_1, &candle.symbol.name)
                                         && candle.close > last_candle.close
                                         && other_account_is_long_euro_and_in_profit
                                     {
@@ -171,11 +171,11 @@ pub async fn on_data_received(
                                         bars_since_entry_1 = 0;
                                     }
 
-                                    let in_profit: bool = strategy.in_profit(&account_1, &candle.symbol.name).await;
-                                    let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name).await;
+                                    let in_profit: bool = strategy.in_profit(&account_1, &candle.symbol.name);
+                                    let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name);
 
                                     // take profit conditions
-                                    if strategy.is_long(&account_1, &candle.symbol.name).await
+                                    if strategy.is_long(&account_1, &candle.symbol.name)
                                         && bars_since_entry_1 >= 3
                                         && in_profit
                                     {
@@ -185,9 +185,9 @@ pub async fn on_data_received(
 
                                     let in_drawdown = strategy.in_drawdown(&account_1, &candle.symbol.name);
                                     //stop loss conditions
-                                    if strategy.is_long(&account_1, &candle.symbol.name).await
+                                    if strategy.is_long(&account_1, &candle.symbol.name)
                                         && bars_since_entry_1 >= 3
-                                        && in_drawdown.await
+                                        && in_drawdown
                                     {
                                         let _exit_order_id: OrderId = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Stop Loss")).await;
                                         bars_since_entry_1 = 0;
@@ -266,11 +266,11 @@ pub async fn on_data_received(
                                         continue;
                                     }
 
-                                    let position_size: Decimal = strategy.position_size(&account_2, &quotebar.symbol.name).await;
+                                    let position_size: Decimal = strategy.position_size(&account_2, &quotebar.symbol.name);
 
                                     // take profit conditions
                                     if let Some(_entry_order) = &entry_order_id_2 {
-                                        let in_profit = strategy.in_profit(&account_2, &quotebar.symbol.name).await;
+                                        let in_profit = strategy.in_profit(&account_2, &quotebar.symbol.name);
                                         if bars_since_entry_2 > 5
                                             && in_profit
                                         {
@@ -281,7 +281,7 @@ pub async fn on_data_received(
                                         }
 
                                     //stop loss conditions
-                                        let in_drawdown = strategy.in_drawdown(&account_2, &quotebar.symbol.name).await;
+                                        let in_drawdown = strategy.in_drawdown(&account_2, &quotebar.symbol.name);
                                         if bars_since_entry_2 >= 10
                                             && in_drawdown
                                         {
@@ -292,8 +292,8 @@ pub async fn on_data_received(
                                         }
 
                                     // Add to our winners when atr is increasing and we get a new signal
-                                        let in_profit = strategy.in_profit(&account_2, &quotebar.symbol.name).await;
-                                        let position_size: Decimal = strategy.position_size(&account_2, &quotebar.symbol.name).await;
+                                        let in_profit = strategy.in_profit(&account_2, &quotebar.symbol.name);
+                                        let position_size: Decimal = strategy.position_size(&account_2, &quotebar.symbol.name);
                                         if  in_profit
                                             && position_size < dec!(400)
                                             && bars_since_entry_2 == 3
@@ -422,7 +422,7 @@ pub async fn on_data_received(
             }
         }
     }
-    strategy.export_trades(&String::from("./trades exports")).await;
+    strategy.export_trades(&String::from("./trades exports"));
     strategy.print_ledgers().await;
     event_receiver.close();
     println!("Strategy: Event Loop Ended");
