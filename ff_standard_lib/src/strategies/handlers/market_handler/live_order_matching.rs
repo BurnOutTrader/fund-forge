@@ -39,7 +39,7 @@ pub fn live_order_update(
                          {
                              order.symbol_code = Some(symbol_code.clone());
                              order.state = OrderState::Filled;
-                             order.quantity_filled += quantity;
+                             order.quantity_filled += order.quantity_open;
                              order.quantity_open = dec!(0.0);
                              order.time_filled_utc = Some(time.clone());
                          }
@@ -58,17 +58,20 @@ pub fn live_order_update(
                 }
                 OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time } => {
                    if let Some(mut order) = open_order_cache.get_mut(order_id) {
+                       if order.quantity_open <= dec!(0) {
+                           continue;
+                       }
                        let new_fill_quantity = {
-                            order.state = OrderState::PartiallyFilled;
-                            order.symbol_code = Some(symbol_code.clone());
+                           order.state = OrderState::PartiallyFilled;
+                           order.symbol_code = Some(symbol_code.clone());
                            let new_fill_quantity = quantity - order.quantity_filled.clone();
-                            order.quantity_filled += quantity;
-                            order.quantity_open -= quantity;
-                            order.time_filled_utc = Some(time.clone());
-                            new_fill_quantity
+                           order.quantity_filled += quantity;
+                           order.quantity_open -= quantity;
+                           order.time_filled_utc = Some(time.clone());
+                           new_fill_quantity
                        };
 
-                        let events = LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), new_fill_quantity, order.side.clone(), Utc::now(), price.clone(), tag.clone()).await;
+                       let events = LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), new_fill_quantity, order.side.clone(), Utc::now(), price.clone(), tag.clone()).await;
                        match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                            Ok(_) => {}
                            Err(e) => eprintln!("{}", e)
@@ -79,7 +82,7 @@ pub fn live_order_update(
                                Err(e) => eprintln!("{}", e)
                            }
                        }
-                    }
+                   }
                 }
                 #[allow(unused)]
                 OrderUpdateEvent::OrderCancelled { account, symbol_name, symbol_code, order_id, reason, tag, time } => {
