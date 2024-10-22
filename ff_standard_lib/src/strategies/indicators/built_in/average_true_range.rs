@@ -130,11 +130,7 @@ impl AverageTrueRange {
             if sum == dec!(0.0) {
                 return dec!(0.0)
             }
-            self.market_type.round_price(
-                sum / Decimal::from_usize(true_ranges.len()).unwrap(),
-                self.tick_size,
-                self.decimal_accuracy
-            )
+            (sum / Decimal::from_usize(true_ranges.len()).unwrap()).round_dp(self.decimal_accuracy)
         } else {
             dec!(0.0)
         };
