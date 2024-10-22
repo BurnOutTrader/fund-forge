@@ -36,8 +36,8 @@ const IS_SHORT_STRATEGY: bool = true;
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR ACCOUNT ID".to_string());
-    let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string());
+    let data_vendor = DataVendor::Rithmic(RithmicSystem::Apex);
     let subscription = DataSubscription::new(
         SymbolName::from("MNQ"),
         data_vendor.clone(),
@@ -122,7 +122,6 @@ pub async fn on_data_received(
 
     let mut warmup_complete = false;
     let mut last_side = LastSide::Flat;
-    let account: Account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string());
     let mut symbol_code = "MNQZ4".to_string();
     println!("Staring Strategy Loop");
     let symbol = "MNQ".to_string();
