@@ -184,7 +184,7 @@ pub async fn on_data_received(
                                 let min_atr = current_atr >= dec!(0.75);
                                 let atr_increasing = current_atr > last_atr;
 
-                                    // entry orders
+                                // entry orders
                                 if (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && is_flat && quotebar.bid_close > last_candle.bid_high && entry_order_id.is_none() && atr_increasing && min_atr {
                                     println!("Submitting long entry");
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
@@ -215,6 +215,7 @@ pub async fn on_data_received(
                                     bars_since_entry, open_profit, position_size
                                 );
 
+                                //Add to winners if we have momentum
                                 if (is_long || is_short) && bars_since_entry > 1 && open_profit >= dec!(10) && position_size == dec!(2) {
                                     let cancel_order_time = Utc::now() + Duration::seconds(5);
                                     if is_long && quotebar.ask_close < last_candle.ask_high {
@@ -231,8 +232,8 @@ pub async fn on_data_received(
                                     }
                                 }
 
+                                // Cut losses and take profits
                                 if open_profit > dec!(100) || (open_profit < dec!(-30) && bars_since_entry > 10) && add_order_id.is_none() && entry_order_id.is_none() {
-                                    let open_profit = strategy.pnl(&account, &symbol_code);
                                     let is_long = strategy.is_long(&account, &symbol_code);
                                     let is_short = strategy.is_short(&account, &symbol_code);
                                     if is_long && exit_order_id == None {
@@ -245,6 +246,26 @@ pub async fn on_data_received(
                                     else if is_short && exit_order_id == None {
                                         let position_size = strategy.position_size(&account, &symbol_code);
                                         let exit_id = strategy.exit_short(&symbol, None, &account, None, position_size, String::from("Exit Short")).await;
+                                        exit_order_id = Some(exit_id);
+                                        bars_since_entry = 0;
+                                        last_side = LastSide::Short;
+                                    }
+                                }
+
+                                //Take smaller profit if we add and dont get momentum
+                                if (add_order_id.is_some() && bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30)) {
+                                    let is_long = strategy.is_long(&account, &symbol_code);
+                                    let is_short = strategy.is_short(&account, &symbol_code);
+                                    if is_long && exit_order_id == None {
+                                        let position_size = strategy.position_size(&account, &symbol_code);
+                                        let exit_id = strategy.exit_long(&symbol, None, &account, None, position_size, String::from("No Momo Exit Long")).await;
+                                        exit_order_id = Some(exit_id);
+                                        bars_since_entry = 0;
+                                        last_side = LastSide::Long;
+                                    }
+                                    else if is_short && exit_order_id == None {
+                                        let position_size = strategy.position_size(&account, &symbol_code);
+                                        let exit_id = strategy.exit_short(&symbol, None, &account, None, position_size, String::from("No Momo Exit Short")).await;
                                         exit_order_id = Some(exit_id);
                                         bars_since_entry = 0;
                                         last_side = LastSide::Short;
