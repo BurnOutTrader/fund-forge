@@ -6,8 +6,8 @@ Then you just follow the information you will get from rithmic, which is essenti
 2. login with the api and stay connected to the rithmic test end point's while rithmic's engineers do some work approving your application name.
 3. receive back information required to complete the rithmic toml files in fund forge.
 
-The conformance is easy to pass if you just build a simple program from [ff_rithmic_api](https://github.com/BurnOutTrader/ff_rithmic_api)
-this fund forge crate has its own RithmicClient which uses my other project [ff_rithmic_api](https://github.com/BurnOutTrader/ff_rithmic_api) as a dependency.
+The conformance is easy to pass just put your test details into a new .toml file at ff_data_server/data/rithmic_credentials/test.toml (see below for toml file examples)
+Then you will just need to start the data server and keep it running until rithmic passes you app (the server will keep itself connected to rithmic if your details are correct)
 
 Since Fund Forge is not a company, each user must do this and create their own unique app name to pass conformance. You can find more information at [Rithmic](https://yyy3.rithmic.com/?page_id=17).
 
