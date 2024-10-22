@@ -196,71 +196,72 @@ lazy_static! {
             };
         }
 
-    add_symbol!("XC", Currency::USD, 5.0, 0.25, 2);
-    add_symbol!("XK", Currency::USD, 5.0, 0.25, 2);
-    add_symbol!("XW", Currency::USD, 5.0, 0.25, 2);
-    add_symbol!("YM", Currency::USD, 5.0, 1.0, 0);
-    add_symbol!("ZB", Currency::USD, 31.25, 0.0625, 4);
-    add_symbol!("ZC", Currency::USD, 50.0, 0.25, 2);
-    add_symbol!("ZF", Currency::USD, 31.25, 0.0078125, 6);
-    add_symbol!("ZL", Currency::USD, 600.0, 0.01, 4);
-    add_symbol!("ZM", Currency::USD, 100.0, 0.1, 1);
-    add_symbol!("ZN", Currency::USD, 31.25, 0.015625, 5);
-    add_symbol!("ZO", Currency::USD, 50.0, 0.25, 2);
-    add_symbol!("ZR", Currency::USD, 50.0, 0.005, 4);
-    add_symbol!("ZS", Currency::USD, 50.0, 0.25, 2);
-    add_symbol!("ZT", Currency::USD, 31.25, 0.0078125, 6);
-    add_symbol!("ZW", Currency::USD, 50.0, 0.25, 2);
+        // Grains
+        add_symbol!("XC", Currency::USD, 1.25, 0.25, 2);  // 5.0/4
+        add_symbol!("XK", Currency::USD, 1.25, 0.25, 2);  // 5.0/4
+        add_symbol!("XW", Currency::USD, 1.25, 0.25, 2);  // 5.0/4
+        add_symbol!("YM", Currency::USD, 5.0, 1.0, 0);    // Already correct as 1 tick = 1 point
+        add_symbol!("ZB", Currency::USD, 1.953125, 0.0625, 4);  // 31.25/16
+        add_symbol!("ZC", Currency::USD, 12.5, 0.25, 2);  // 50.0/4
+        add_symbol!("ZF", Currency::USD, 0.244140625, 0.0078125, 6);  // 31.25/128
+        add_symbol!("ZL", Currency::USD, 6.0, 0.01, 4);   // 600.0/100
+        add_symbol!("ZM", Currency::USD, 10.0, 0.1, 1);   // 100.0/10
+        add_symbol!("ZN", Currency::USD, 0.48828125, 0.015625, 5);  // 31.25/64
+        add_symbol!("ZO", Currency::USD, 12.5, 0.25, 2);  // 50.0/4
+        add_symbol!("ZR", Currency::USD, 0.25, 0.005, 4); // 50.0/200
+        add_symbol!("ZS", Currency::USD, 12.5, 0.25, 2);  // 50.0/4
+        add_symbol!("ZT", Currency::USD, 0.244140625, 0.0078125, 6);  // 31.25/128
+        add_symbol!("ZW", Currency::USD, 12.5, 0.25, 2);  // 50.0/4
 
-    // CME Futures
-    add_symbol!("6A", Currency::USD, 10.0, 0.0001, 4);
-    add_symbol!("6B", Currency::USD, 6.25, 0.0001, 4);
-    add_symbol!("6C", Currency::USD, 10.0, 0.0001, 4);
-    add_symbol!("6E", Currency::USD, 12.5, 0.0001, 4);
-    add_symbol!("6J", Currency::USD, 12.5, 0.000001, 6);
-    add_symbol!("6M", Currency::USD, 10.0, 0.00001, 5);
-    add_symbol!("6N", Currency::USD, 10.0, 0.0001, 4);
-    add_symbol!("6S", Currency::USD, 12.5, 0.0001, 4);
-    add_symbol!("E7", Currency::USD, 6.25, 0.0001, 4);
-    add_symbol!("EMD", Currency::USD, 50.0, 0.05, 2);
-    add_symbol!("ES", Currency::USD, 50.0, 0.25, 2);
-    add_symbol!("GE", Currency::USD, 25.0, 0.0025, 4);
-    add_symbol!("GF", Currency::USD, 50.0, 0.025, 3);
-    add_symbol!("HE", Currency::USD, 40.0, 0.0025, 4);
-    add_symbol!("J7", Currency::USD, 6.25, 0.000001, 6);
-    add_symbol!("LE", Currency::USD, 40.0, 0.025, 3);
-    add_symbol!("NQ", Currency::USD, 20.0, 0.25, 2);
-    add_symbol!("RF", Currency::USD, 12.5, 0.0001, 4);
-    add_symbol!("SP", Currency::USD, 250.0, 0.1, 2);
+        // CME Futures
+        add_symbol!("6A", Currency::USD, 1.0, 0.0001, 4);  // 10.0/10
+        add_symbol!("6B", Currency::USD, 0.625, 0.0001, 4);  // 6.25/10
+        add_symbol!("6C", Currency::USD, 1.0, 0.0001, 4);  // 10.0/10
+        add_symbol!("6E", Currency::USD, 1.25, 0.0001, 4);  // 12.5/10
+        add_symbol!("6J", Currency::USD, 0.0125, 0.000001, 6);  // 12.5/1000
+        add_symbol!("6M", Currency::USD, 0.1, 0.00001, 5);  // 10.0/100
+        add_symbol!("6N", Currency::USD, 1.0, 0.0001, 4);  // 10.0/10
+        add_symbol!("6S", Currency::USD, 1.25, 0.0001, 4);  // 12.5/10
+        add_symbol!("E7", Currency::USD, 0.625, 0.0001, 4);  // 6.25/10
+        add_symbol!("EMD", Currency::USD, 2.5, 0.05, 2);  // 50.0/20
+        add_symbol!("ES", Currency::USD, 12.5, 0.25, 2);  // 50.0/4
+        add_symbol!("GE", Currency::USD, 0.0625, 0.0025, 4);  // 25.0/400
+        add_symbol!("GF", Currency::USD, 1.25, 0.025, 3);  // 50.0/40
+        add_symbol!("HE", Currency::USD, 0.1, 0.0025, 4);  // 40.0/400
+        add_symbol!("J7", Currency::USD, 0.00625, 0.000001, 6);  // 6.25/1000
+        add_symbol!("LE", Currency::USD, 1.0, 0.025, 3);  // 40.0/40
+        add_symbol!("NQ", Currency::USD, 5.0, 0.25, 2);  // 20.0/4
+        add_symbol!("RF", Currency::USD, 1.25, 0.0001, 4);  // 12.5/10
+        add_symbol!("SP", Currency::USD, 25.0, 0.1, 2);  // 250.0/10
 
-    // COMEX Futures
-    add_symbol!("GC", Currency::USD, 100.0, 0.1, 2);
-    add_symbol!("HG", Currency::USD, 25.0, 0.0005, 4);
-    add_symbol!("QI", Currency::USD, 12.5, 0.0025, 4);
-    add_symbol!("SI", Currency::USD, 25.0, 0.005, 3);
+        // COMEX Futures
+        add_symbol!("GC", Currency::USD, 10.0, 0.1, 2);  // 100.0/10
+        add_symbol!("HG", Currency::USD, 0.0125, 0.0005, 4);  // 25.0/2000
+        add_symbol!("QI", Currency::USD, 0.03125, 0.0025, 4);  // 12.5/400
+        add_symbol!("SI", Currency::USD, 0.125, 0.005, 3);  // 25.0/200
 
-    // NYMEX Futures
-    add_symbol!("CL", Currency::USD, 1000.0, 0.01, 2);
-    add_symbol!("HO", Currency::USD, 42000.0, 0.0001, 4);
-    add_symbol!("NG", Currency::USD, 10000.0, 0.001, 3);
-    add_symbol!("PA", Currency::USD, 100.0, 0.05, 2);
-    add_symbol!("PL", Currency::USD, 50.0, 0.1, 2);
-    add_symbol!("QM", Currency::USD, 500.0, 0.01, 2);
-    add_symbol!("RB", Currency::USD, 42000.0, 0.0001, 4);
+        // NYMEX Futures
+        add_symbol!("CL", Currency::USD, 10.0, 0.01, 2);  // 1000.0/100
+        add_symbol!("HO", Currency::USD, 4.2, 0.0001, 4);  // 42000.0/10000
+        add_symbol!("NG", Currency::USD, 10.0, 0.001, 3);  // 10000.0/1000
+        add_symbol!("PA", Currency::USD, 5.0, 0.05, 2);  // 100.0/20
+        add_symbol!("PL", Currency::USD, 5.0, 0.1, 2);  // 50.0/10
+        add_symbol!("QM", Currency::USD, 5.0, 0.01, 2);  // 500.0/100
+        add_symbol!("RB", Currency::USD, 4.2, 0.0001, 4);  // 42000.0/10000
 
-    // Micro Futures
-    add_symbol!("MES", Currency::USD, 5.0, 0.25, 2);
-    add_symbol!("MNQ", Currency::USD, 2.0, 0.25, 2);
-    add_symbol!("M2K", Currency::USD, 5.0, 0.1, 2);
-    add_symbol!("MYM", Currency::USD, 0.5, 1.0, 0);
-    add_symbol!("MGC", Currency::USD, 10.0, 0.1, 2);
-    add_symbol!("SIL", Currency::USD, 2.5, 0.005, 3);
-    add_symbol!("MCL", Currency::USD, 100.0, 0.01, 2);
-    add_symbol!("MBT", Currency::USD, 5.0, 0.25, 2);
-    add_symbol!("M6A", Currency::USD, 1.0, 0.0001, 4);
-    add_symbol!("M6B", Currency::USD, 0.625, 0.0001, 4);
-    add_symbol!("M6E", Currency::USD, 1.25, 0.0001, 4);
-    add_symbol!("MJY", Currency::USD, 1.25, 0.000001, 6);
+        // Micro Futures
+        add_symbol!("MES", Currency::USD, 1.25, 0.25, 2);  // 5.0/4
+        add_symbol!("MNQ", Currency::USD, 0.50, 0.25, 2);  // 2.0/4
+        add_symbol!("M2K", Currency::USD, 0.50, 0.1, 2);  // 5.0/10
+        add_symbol!("MYM", Currency::USD, 0.50, 1.0, 0);  // Already correct
+        add_symbol!("MGC", Currency::USD, 1.0, 0.1, 2);  // 10.0/10
+        add_symbol!("SIL", Currency::USD, 0.0125, 0.005, 3);  // 2.5/200
+        add_symbol!("MCL", Currency::USD, 1.0, 0.01, 2);  // 100.0/100
+        add_symbol!("MBT", Currency::USD, 1.25, 0.25, 2);  // 5.0/4
+        add_symbol!("M6A", Currency::USD, 0.1, 0.0001, 4);  // 1.0/10
+        add_symbol!("M6B", Currency::USD, 0.0625, 0.0001, 4);  // 0.625/10
+        add_symbol!("M6E", Currency::USD, 0.125, 0.0001, 4);  // 1.25/10
+        add_symbol!("MJY", Currency::USD, 0.00125, 0.000001, 6);  // 1.25/1000
 
         map
     };
