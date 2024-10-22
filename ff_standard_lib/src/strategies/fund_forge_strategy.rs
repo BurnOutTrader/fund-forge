@@ -744,7 +744,7 @@ impl FundForgeStrategy {
                 let handler = self.subscription_handler.clone();
                 let indicator_handler = self.indicator_handler.clone();
                 let subscriptions = self.subscriptions().await;
-                tokio::task::spawn(async move {
+               // tokio::task::spawn(async move {
                     if !subscriptions.contains(&indicator.subscription()) {
                         match auto_subscribe {
                             true => {
@@ -765,7 +765,7 @@ impl FundForgeStrategy {
                         .add_indicator(indicator, Utc::now())
                         .await;
                    // add_buffer(Utc::now(), StrategyEvent::IndicatorEvent(event)).await;
-                });
+               // });
             }
         }
     }

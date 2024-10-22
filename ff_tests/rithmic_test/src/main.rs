@@ -27,7 +27,7 @@ use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 #[allow(unused_imports)]
 use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
-
+use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
 
 // TODO WARNING THIS IS LIVE TRADING
 // to launch on separate machine
@@ -98,10 +98,10 @@ pub async fn on_data_received(
         BaseDataType::QuoteBars,
         MarketType::Futures(FuturesExchange::CME)
     );
-    /*
-    let atr_5 = IndicatorEnum::AverageTrueRange(
+
+    let atr_10 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(
-            IndicatorName::from("atr_5"),
+            IndicatorName::from("atr_10"),
             // The subscription for the indicator
             subscription.clone(),
 
@@ -109,15 +109,15 @@ pub async fn on_data_received(
             10,
 
             // atr period
-            5,
+            10,
 
             // Plot color for GUI or println!()
             Color::new (128, 0, 128)
         ).await,
-    );*/
+    );
 
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
-    //strategy.subscribe_indicator(atr_5, true).await;
+    strategy.subscribe_indicator(atr_10.clone(), false).await;
 
     let mut warmup_complete = false;
     let mut last_side = LastSide::Flat;
@@ -130,6 +130,7 @@ pub async fn on_data_received(
     let mut entry_order_id = None;
     let mut exit_order_id = None;
     let mut position_size = 0;
+    let atr_plot = "atr".to_string();
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -166,17 +167,20 @@ pub async fn on_data_received(
                                 count += 1;
 
                                 let last_candle = strategy.bar_index(&subscription, 1);
+                                let last_atr = strategy.indicator_index(&atr_10.name(), 1);
+                                let current_atr = strategy.indicator_index(&atr_10.name(), 0);
 
-
-                                if last_candle.is_none() || quotebar.resolution != Resolution::Seconds(1) {
-                                    println!("Last Candle Is None");
+                                if last_candle.is_none() || quotebar.resolution != Resolution::Seconds(1) || last_atr.is_none() || current_atr.is_none() {
+                                    println!("Last Candle or Indicator Values Is None");
                                     continue;
                                 }
 
                                 let is_flat = strategy.is_flat(&account, &symbol_code);
                                 let last_candle = last_candle.unwrap();
+                                let last_atr = last_atr.unwrap().get_plot(&atr_plot).unwrap().value;
+                                let current_atr = current_atr.unwrap().get_plot(&atr_plot).unwrap().value;
                                 // entry orders
-                                if quotebar.bid_close > last_candle.bid_high && is_flat && entry_order_id.is_none() {
+                                if quotebar.bid_close > last_candle.bid_high && is_flat && entry_order_id.is_none() &&  current_atr > last_atr {
                                     println!("Submitting long entry");
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
@@ -253,6 +257,12 @@ pub async fn on_data_received(
             }
 
             StrategyEvent::PositionEvents(event) => {
+                let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
+                println!("{}", msg.as_str().purple());
+
+                let quantity = strategy.position_size(&event.account(), &symbol_code);
+                println!("Strategy: Open Quantity: {}", quantity);
+
                 match event {
                     PositionUpdateEvent::PositionOpened { .. } => {},
                     PositionUpdateEvent::Increased { .. } => {},
@@ -263,12 +273,6 @@ pub async fn on_data_received(
                         entry_order_id = None;
                     },
                 }
-
-                let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
-                println!("{}", msg.as_str().purple());
-
-                let quantity = strategy.position_size(&event.account(), &symbol_code);
-                println!("Strategy: Open Quantity: {}", quantity);
             }
             StrategyEvent::OrderEvents(event) => {
                 match event.symbol_code() {
