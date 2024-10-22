@@ -35,7 +35,7 @@ const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 #[tokio::main]
 async fn main() {
-    //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and mix and match data feeds.
+    //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOU ACCOUNT ID HERE".to_string());
     let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
     let subscription = DataSubscription::new(
