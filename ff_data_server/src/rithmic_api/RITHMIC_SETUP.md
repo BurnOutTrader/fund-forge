@@ -15,6 +15,7 @@ Since Fund Forge is not a company, each user must do this and create their own u
 
 ## File Structure
 You do not need the `not active` folder, this is where i put tomls that i dont want the server to activate or connect to
+
 ![img.png](misc/rithmic_structure.png)
 
 ***After passing conformance:***
