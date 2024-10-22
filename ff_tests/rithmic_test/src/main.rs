@@ -221,7 +221,7 @@ pub async fn on_data_received(
                                     bars_since_entry, open_profit, position_size
                                 );
 
-                                if (is_long || is_short) && bars_since_entry > 1 && open_profit >= dec!(10) && position_size < dec!(5) {
+                                if (is_long || is_short) && bars_since_entry > 1 && open_profit >= dec!(10) && position_size == dec!(2) {
                                     let cancel_order_time = Utc::now() + Duration::seconds(5);
                                     if is_long && quotebar.ask_close < last_candle.ask_high {
                                         strategy.stop_limit(&symbol, None, &account, None,dec!(3), OrderSide::Buy,  String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
