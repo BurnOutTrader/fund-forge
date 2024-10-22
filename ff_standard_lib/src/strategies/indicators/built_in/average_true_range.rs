@@ -73,16 +73,52 @@ impl AverageTrueRange {
         for i in 1..base_data.len() {
             match (&base_data[i - 1], &base_data[i]) {
                 (BaseDataEnum::QuoteBar(prev_bar), BaseDataEnum::QuoteBar(curr_bar)) => {
+                    // Basic true range calculation
                     let high_low = curr_bar.bid_high - curr_bar.bid_low;
                     let high_close = (curr_bar.bid_high - prev_bar.bid_close).abs();
                     let low_close = (curr_bar.bid_low - prev_bar.bid_close).abs();
-                    true_ranges.push(high_low.max(high_close).max(low_close));
+
+                    // Consider gap between bars
+                    let gap = if curr_bar.bid_open > prev_bar.bid_close {
+                        // Gap up
+                        curr_bar.bid_open - prev_bar.bid_close
+                    } else if curr_bar.bid_open < prev_bar.bid_close {
+                        // Gap down
+                        prev_bar.bid_close - curr_bar.bid_open
+                    } else {
+                        dec!(0.0)
+                    };
+
+                    let tr = high_low
+                        .max(high_close)
+                        .max(low_close)
+                        .max(gap);
+
+                    true_ranges.push(tr);
                 }
                 (BaseDataEnum::Candle(prev_candle), BaseDataEnum::Candle(curr_candle)) => {
+                    // Basic true range calculation
                     let high_low = curr_candle.high - curr_candle.low;
                     let high_close = (curr_candle.high - prev_candle.close).abs();
                     let low_close = (curr_candle.low - prev_candle.close).abs();
-                    true_ranges.push(high_low.max(high_close).max(low_close));
+
+                    // Consider gap between bars
+                    let gap = if curr_candle.open > prev_candle.close {
+                        // Gap up
+                        curr_candle.open - prev_candle.close
+                    } else if curr_candle.open < prev_candle.close {
+                        // Gap down
+                        prev_candle.close - curr_candle.open
+                    } else {
+                        dec!(0.0)
+                    };
+
+                    let tr = high_low
+                        .max(high_close)
+                        .max(low_close)
+                        .max(gap);
+
+                    true_ranges.push(tr);
                 }
                 _ => panic!("Unsupported data type for AverageTrueRange"),
             }
@@ -94,7 +130,11 @@ impl AverageTrueRange {
             if sum == dec!(0.0) {
                 return dec!(0.0)
             }
-            self.market_type.round_price(sum / Decimal::from_usize(true_ranges.len()).unwrap(), self.tick_size, self.decimal_accuracy)
+            self.market_type.round_price(
+                sum / Decimal::from_usize(true_ranges.len()).unwrap(),
+                self.tick_size,
+                self.decimal_accuracy
+            )
         } else {
             dec!(0.0)
         };
