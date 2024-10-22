@@ -57,10 +57,6 @@ pub fn live_order_update(
                 }
                 OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time } => {
                    if let Some(mut order) = open_order_cache.get_mut(order_id) {
-                       //todo, possibly better to do this check so that our orders aren't being modified multiple times
-                       if order.quantity_open <= dec!(0) {
-                           continue;
-                       }
                        order.state = OrderState::PartiallyFilled;
                        order.symbol_code = Some(symbol_code.clone());
                        order.quantity_filled += quantity;
@@ -84,6 +80,7 @@ pub fn live_order_update(
                 OrderUpdateEvent::OrderCancelled { account, symbol_name, symbol_code, order_id, reason, tag, time } => {
                     if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
                         order.state = OrderState::Cancelled;
+                        order.quantity_open = dec!(0);
                         order.symbol_code = Some(symbol_code.clone());
                         closed_order_cache.insert(order_id.clone(), order);
                         match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
@@ -97,6 +94,7 @@ pub fn live_order_update(
                     if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
                         order.state = OrderState::Rejected(reason.clone());
                         order.symbol_code = Some(symbol_code.clone());
+                        order.quantity_open = dec!(0);
                         closed_order_cache.insert(order_id.clone(), order);
                         match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                             Ok(_) => {}
