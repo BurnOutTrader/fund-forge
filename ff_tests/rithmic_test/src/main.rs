@@ -190,7 +190,7 @@ pub async fn on_data_received(
                                 let atr_increasing = current_atr > last_atr;
 
                                     // entry orders
-                                if (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && quotebar.bid_close > last_candle.bid_high && is_flat && entry_order_id.is_none() &&  atr_increasing {
+                                if (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && quotebar.bid_close > last_candle.bid_high && is_flat && entry_order_id.is_none() && atr_increasing {
                                     println!("Submitting long entry");
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
@@ -215,7 +215,6 @@ pub async fn on_data_received(
                                     bars_since_entry += 1;
                                 }
 
-                                //todo THIS WORKS I WAS CHECKING WRONG BROKERAGE
                                 let open_profit = strategy.pnl(&account,  &symbol_code);
                                 let position_size = strategy.position_size(&account, &symbol_code);
                                 println!(
