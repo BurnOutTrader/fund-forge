@@ -114,7 +114,8 @@ impl LedgerService {
 
     pub async fn print_ledger(&self, account: &Account) {
        if let Some(ledger) = self.ledgers.get(account) {
-           ledger.value().print().await;
+           let string = ledger.value().print().await; //todo need to return the string here
+           println!("{}", string);
        }
     }
 

@@ -96,7 +96,7 @@ pub async fn on_data_received(
                                 //LONG CONDITIONS
                                 {
                                     // ENTER LONG
-                                    let is_flat = strategy.is_flat(&account_1, &candle.symbol.name).await;
+                                    let is_flat = strategy.is_flat(&account_1, &candle.symbol.name);
                                     // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
                                     if is_flat
                                         && candle.close > candle.open
@@ -107,22 +107,22 @@ pub async fn on_data_received(
                                     }
 
                                     // ADD LONG
-                                    let is_short = strategy.is_short(&account_1, &candle.symbol.name).await;
-                                    let is_long = strategy.is_long(&account_1, &candle.symbol.name).await;
-                                    let long_pnl = strategy.pnl(&account_1, &candle.symbol.name).await;
+                                    let is_short = strategy.is_short(&account_1, &candle.symbol.name);
+                                    let is_long = strategy.is_long(&account_1, &candle.symbol.name);
+                                    let long_pnl = strategy.pnl(&account_1, &candle.symbol.name);
                                     println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
 
                                     // LONG SL+TP
                                     if is_long && long_pnl > dec!(250.0)
                                     {
-                                        let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name).await;
+                                        let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name);
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, dec!(100), String::from("Exit Long Take Profit")).await;
                                         println!("Strategy: Add Short, Time {}", strategy.time_local());
                                     }
                                     else if is_long
                                         && long_pnl <= dec!(-250.0)
                                     {
-                                        let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name).await;
+                                        let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name);
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, dec!(100), String::from("Exit Long Take Loss")).await;
                                         println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
                                     }
@@ -137,7 +137,7 @@ pub async fn on_data_received(
                 strategy.flatten_all_for(account_1).await;
                 let msg = format!("{}",event);
                 println!("{}", msg.as_str().bright_magenta());
-                strategy.export_trades(&String::from("./trades exports")).await;
+                strategy.export_trades(&String::from("./trades exports"));
                 strategy.print_ledgers().await;
                 //we should handle shutdown gracefully by first ending the strategy loop.
                 break 'strategy_loop
@@ -150,13 +150,14 @@ pub async fn on_data_received(
             }
 
             StrategyEvent::PositionEvents(event) => {
+                strategy.print_ledger(event.account()).await;
                 match event {
                     PositionUpdateEvent::PositionOpened { .. } => {}
                     PositionUpdateEvent::Increased { .. } => {}
                     PositionUpdateEvent::PositionReduced { .. } => strategy.print_ledger(event.account()).await,
                     PositionUpdateEvent::PositionClosed { .. } => strategy.print_ledger(event.account()).await,
                 }
-                let quantity = strategy.position_size(&account_1, &"EUR-USD".to_string()).await;
+                let quantity = strategy.position_size(&account_1, &"EUR-USD".to_string());
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                 println!("{}", msg.as_str().purple());
                 println!("Strategy: Open Quantity: {}", quantity);

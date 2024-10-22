@@ -240,15 +240,15 @@ impl FundForgeStrategy {
     }
 
     /// true if long, false if flat or short.
-    pub async fn is_long(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+    pub fn is_long(&self, account: &Account, symbol_name: &SymbolName) -> bool {
         LEDGER_SERVICE.is_long(account, symbol_name)
     }
 
-    pub async fn is_flat(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+    pub fn is_flat(&self, account: &Account, symbol_name: &SymbolName) -> bool {
         LEDGER_SERVICE.is_flat(account, symbol_name)
     }
 
-    pub async fn is_short(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+    pub fn is_short(&self, account: &Account, symbol_name: &SymbolName) -> bool {
         LEDGER_SERVICE.is_short(account, symbol_name)
     }
 
@@ -1047,31 +1047,30 @@ impl FundForgeStrategy {
         LEDGER_SERVICE.print_ledgers().await;
     }
 
-    pub async fn export_trades(&self, directory: &str) {
+    pub fn export_trades(&self, directory: &str) {
         for account_entry in LEDGER_SERVICE.ledgers.iter() {
             LEDGER_SERVICE.export_trades(account_entry.key(), directory);
         }
     }
 
     // Updated position query functions
-
-    pub async fn in_profit(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+    pub fn in_profit(&self, account: &Account, symbol_name: &SymbolName) -> bool {
         LEDGER_SERVICE.in_profit(account, symbol_name)
     }
 
-    pub async fn in_drawdown(&self, account: &Account, symbol_name: &SymbolName) -> bool {
+    pub fn in_drawdown(&self, account: &Account, symbol_name: &SymbolName) -> bool {
         LEDGER_SERVICE.in_drawdown(account, symbol_name)
     }
 
-    pub async fn pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
+    pub fn pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
         LEDGER_SERVICE.open_pnl_symbol(account, symbol_name)
     }
 
-    pub async fn booked_pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
+    pub fn booked_pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
         LEDGER_SERVICE.booked_pnl(account, symbol_name)
     }
 
-    pub async fn position_size(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
+    pub fn position_size(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
         LEDGER_SERVICE.position_size(account, symbol_name)
     }
 }
