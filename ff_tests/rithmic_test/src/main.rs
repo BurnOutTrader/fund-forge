@@ -167,14 +167,16 @@ pub async fn on_data_received(
 
                                 let last_candle = strategy.bar_index(&subscription, 1);
 
+
                                 if last_candle.is_none() || quotebar.resolution != Resolution::Seconds(1) {
                                     println!("Last Candle Is None");
                                     continue;
                                 }
 
+                                let is_flat = strategy.is_flat(&account, &symbol_code);
                                 let last_candle = last_candle.unwrap();
                                 // entry orders
-                                if quotebar.bid_close > last_candle.bid_high {
+                                if quotebar.bid_close > last_candle.bid_high && is_flat {
                                     println!("Submitting long entry");
                                     let cancel_order_time = Utc::now() + Duration::seconds(15);
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(3), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
