@@ -39,7 +39,9 @@ pub fn live_order_update(
                          {
                              order.symbol_code = Some(symbol_code.clone());
                              order.state = OrderState::Filled;
-                             order.quantity_filled += order.quantity_open;
+
+                             //todo, we cant update based on the open quantity, because in some circumstances the server adjusts our ordered quantity
+                             order.quantity_filled += quantity;
                              order.quantity_open = dec!(0.0);
                              order.time_filled_utc = Some(time.clone());
                          }
@@ -58,6 +60,7 @@ pub fn live_order_update(
                 }
                 OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time } => {
                    if let Some(mut order) = open_order_cache.get_mut(order_id) {
+                       //todo, possibly better to do this check so that our orders aren't being modified multiple times
                        if order.quantity_open <= dec!(0) {
                            continue;
                        }
