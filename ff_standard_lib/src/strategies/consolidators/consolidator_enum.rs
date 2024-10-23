@@ -8,7 +8,7 @@ use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, D
 use chrono::{DateTime, Datelike, Duration, Utc, Weekday};
 use crate::standardized_types::base_data::history::get_historical_data;
 use crate::standardized_types::resolution::Resolution;
-use crate::standardized_types::symbol_info::extract_symbol_from_contract;
+use crate::standardized_types::futures_products::extract_symbol_from_contract;
 
 pub enum ConsolidatorEnum {
     Count(CountConsolidator),
