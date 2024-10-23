@@ -252,33 +252,44 @@ pub async fn match_pnl_plant_id(
                             None => dec!(0)
                         };
 
-                        let position = Position {
-                            pnl_currency: symbol_info.pnl_currency.clone(),
-                            symbol_name: symbol_name.clone(),
-                            symbol_code: symbol_code.clone(),
-                            account: Account {
-                                brokerage: client.brokerage,
-                                account_id: account_id.clone(),
-                            },
-                            side,
-                            open_time: Utc::now().to_string(),
-                            quantity_open: open_position_quantity,
-                            quantity_closed: Default::default(),
-                            close_time: None,
-                            average_price,
-                            open_pnl,
-                            booked_pnl: dec!(0),
-                            highest_recoded_price: average_price,
-                            lowest_recoded_price: average_price,
-                            average_exit_price: None,
-                            is_closed: false,
-                            position_id: client.generate_id(symbol_code, side, count_entry.value().clone(), &account_id),
-                            symbol_info,
-                            tag,
+                        let position = match POSITIONS.get_mut(&symbol_code) {
+                            None => {
+                                let position = Position {
+                                    pnl_currency: symbol_info.pnl_currency.clone(),
+                                    symbol_name: symbol_name.clone(),
+                                    symbol_code: symbol_code.clone(),
+                                    account: Account {
+                                        brokerage: client.brokerage,
+                                        account_id: account_id.clone(),
+                                    },
+                                    side,
+                                    open_time: Utc::now().to_string(),
+                                    quantity_open: open_position_quantity,
+                                    quantity_closed: Default::default(),
+                                    close_time: None,
+                                    average_price,
+                                    open_pnl,
+                                    booked_pnl: dec!(0),
+                                    highest_recoded_price: average_price,
+                                    lowest_recoded_price: average_price,
+                                    average_exit_price: None,
+                                    is_closed: false,
+                                    position_id: client.generate_id(symbol_code, side, count_entry.value().clone(), &account_id),
+                                    symbol_info,
+                                    tag,
+                                };
+                                POSITIONS.insert(symbol_code.clone(), position.clone());
+                                position
+                            }
+                            Some(position_ref) => {
+                                position_ref.quantity_open = open_position_quantity;
+                                position_ref.side = side;;
+                                position_ref.average_price = average_price;
+                                position_ref.open_pnl = open_pnl;
+                                position_ref.is_closed = false;
+                                position_ref.value().clone()
+                            }
                         };
-
-                        println!("Adding new position: {:?}", position);
-                        POSITIONS.insert(symbol_code.clone(), position.clone());
 
                         let position_update = DataServerResponse::LivePositionUpdates {
                             account: Account::new(client.brokerage, account_id.clone()),

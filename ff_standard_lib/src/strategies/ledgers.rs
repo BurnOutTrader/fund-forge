@@ -296,9 +296,20 @@ impl Ledger {
     #[allow(unused)]
     /// Booked pnl is only sent for closed positions, it is the amount of booked pnl since the last side change from none to long or short
     pub fn synchronize_live_position(&self, position: Position) {
-        if let Some(existing_position) = self.positions.remove(&position.symbol_code) {
-            if position.is_closed {
+        if position.is_closed {
+            if let Some(existing_position) = self.positions.remove(&position.symbol_code) {
                 self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position);
+            } else {
+                self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position);
+            }
+        }
+        else {
+            if let Some(mut existing_position) = self.positions.get_mut(&position.symbol_code) {
+                existing_position.open_pnl = position.open_pnl;
+                existing_position.booked_pnl = position.booked_pnl;
+                existing_position.quantity_open = position.quantity_open;
+                existing_position.average_price = position.average_price;
+                existing_position.is_closed = position.is_closed;
             } else {
                 self.positions.insert(position.symbol_code.clone(), position);
             }
