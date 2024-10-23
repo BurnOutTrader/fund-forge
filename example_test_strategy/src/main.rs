@@ -86,23 +86,25 @@ async fn main() {
     let quotebar_3m_atr_5 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(
             IndicatorName::from("quotebar_3m_atr_5"),
-                              // The subscription for the indicator
-                              DataSubscription::new(
-                                  SymbolName::from("EUR-USD"),
-                                  DataVendor::Test,
-                                  Resolution::Minutes(3),
-                                  BaseDataType::QuoteBars,
-                                  MarketType::Forex,
-                              ),
+              // The subscription for the indicator
+              DataSubscription::new(
+                  SymbolName::from("EUR-USD"),
+                  DataVendor::Test,
+                  Resolution::Minutes(3),
+                  BaseDataType::QuoteBars,
+                  MarketType::Forex,
+              ),
 
-                              // history to retain
-                              100,
+              // history to retain
+              100,
 
-                              // atr period
-                              5,
+              // atr period
+              5,
 
-                              // Plot color for GUI or println!()
-                              Color::new (128, 0, 128)
+              // Plot color for GUI or println!()
+              Color::new (128, 0, 128),
+
+            true
         ).await,
     );
 
@@ -453,7 +455,8 @@ pub async fn subscribe_to_my_atr_example(strategy: &FundForgeStrategy) {
             ),
             5,
             10,
-            Color::new(255, 165, 0)
+            Color::new(255, 165, 0),
+            true
         ).await,
     );
     // we auto subscribe to the subscription, this will warm up the data subscription, which the indicator will then use to warm up.

@@ -40,14 +40,14 @@ const MAX_LOSS: Decimal = dec!(1500);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR ACCOUNT ID or NAME HERE".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID".to_string());
     let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
     let subscription = DataSubscription::new(
         SymbolName::from("MNQ"),
         data_vendor.clone(),
-        Resolution::Seconds(1),
+        Resolution::Seconds(3),
         BaseDataType::QuoteBars,
-        MarketType::Futures(FuturesExchange::CME));
+        MarketType::Futures(FuturesExchange::CME)); //todo, dont forget to change the exchange for the symbol you are trading
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let strategy = FundForgeStrategy::initialize(
@@ -65,7 +65,7 @@ async fn main() {
                 data_vendor.clone(),
                 Resolution::Instant,
                 BaseDataType::Quotes,
-                MarketType::Futures(FuturesExchange::CME)
+                MarketType::Futures(FuturesExchange::CME) //todo, dont forget to change the exchange for the symbol you are trading
             ),
            /* DataSubscription::new(
                 SymbolName::from("MNQ"),
@@ -112,6 +112,8 @@ pub async fn on_data_received(
     account: Account,
     subscription: DataSubscription
 ) {
+    println!("Staring Strategy Loop");
+
     let atr_10 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(
             IndicatorName::from("atr_10"),
@@ -125,17 +127,17 @@ pub async fn on_data_received(
             10,
 
             // Plot color for GUI or println!()
-            Color::new (128, 0, 128)
+            Color::new (128, 0, 128),
+
+            false
         ).await,
     );
 
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
     strategy.subscribe_indicator(atr_10.clone(), false).await;
-
     let mut warmup_complete = false;
     let mut last_side = LastSide::Flat;
     let mut symbol_code = "MNQZ4".to_string();
-    println!("Staring Strategy Loop");
     let mut count = 0;
     let mut bars_since_entry = 0;
     let mut entry_order_id = None;
@@ -194,7 +196,7 @@ pub async fn on_data_received(
                                 let last_candle = last_candle.unwrap();
                                 let last_atr = last_atr.unwrap().get_plot(&atr_plot).unwrap().value;
                                 let current_atr = current_atr.unwrap().get_plot(&atr_plot).unwrap().value;
-                                let min_atr = current_atr >= dec!(1.5);
+                                let min_atr = current_atr >= dec!(1.25);
                                 let atr_increasing = current_atr > last_atr;
                                 let booked_pnl = strategy.booked_pnl(&account, &symbol_code);
                                 let bar_time = quotebar.time_utc();
