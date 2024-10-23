@@ -22,7 +22,9 @@ pub struct AverageTrueRange {
     subscription: DataSubscription,
     history: RollingWindow<IndicatorValues>,
     base_data_history: RollingWindow<BaseDataEnum>,
+    #[allow(unused)]
     market_type: MarketType,
+    #[allow(unused)]
     tick_size: Decimal,
     decimal_accuracy: u32,
     is_ready: bool,
