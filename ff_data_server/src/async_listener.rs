@@ -11,6 +11,7 @@ use ff_standard_lib::standardized_types::enums::StrategyMode;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use crate::request_handlers::manage_async_requests;
+use crate::subscribe_server_shutdown;
 
 pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr, _data_folder: PathBuf) {
     let acceptor = TlsAcceptor::from(Arc::new(config));
@@ -23,28 +24,45 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr, _data_f
     };
     println!("Listening on: {}", addr);
 
-    loop {
-        let (stream, peer_addr) = match listener.accept().await {
-            Ok((stream, peer_addr)) => (stream, peer_addr),
-            Err(e) => {
-                eprintln!("Server: Failed to accept TLS connection: {:?}", e);
-                continue;
-            }
-        };
-        println!("Server: {}, peer_addr: {:?}", Utc::now(), peer_addr);
-        let acceptor = acceptor.clone();
+    // Subscribe to the shutdown signal
+    let mut shutdown_receiver = subscribe_server_shutdown();
 
-        tokio::spawn(async move {
-            match acceptor.accept(stream).await {
-                Ok(tls_stream) => {
-                    handle_async_connection(tls_stream, peer_addr).await;
+    loop {
+        tokio::select! {
+            // Handle incoming connections
+            result = listener.accept() => {
+                match result {
+                    Ok((stream, peer_addr)) => {
+                        println!("Server: {}, peer_addr: {:?}", Utc::now(), peer_addr);
+                        let acceptor = acceptor.clone();
+
+                        tokio::spawn(async move {
+                            match acceptor.accept(stream).await {
+                                Ok(tls_stream) => {
+                                    handle_async_connection(tls_stream, peer_addr).await;
+                                }
+                                Err(e) => {
+                                    eprintln!("Server: Failed to accept TLS connection: {:?}", e);
+                                }
+                            }
+                        });
+                    }
+                    Err(e) => {
+                        eprintln!("Server: Failed to accept TLS connection: {:?}", e);
+                        continue;
+                    }
                 }
-                Err(e) => {
-                    eprintln!("Server: Failed to accept TLS connection: {:?}", e);
-                }
+            },
+
+            // Wait for shutdown signal
+            _ = shutdown_receiver.recv() => {
+                println!("Server: Shutdown signal received.");
+                break;
             }
-        });
+        }
     }
+
+    println!("Server: Shutting down.");
 }
 
 async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr: SocketAddr) {

@@ -5,11 +5,12 @@ use ff_rithmic_api::credentials::RithmicCredentials;
 #[allow(unused_imports)]
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use ff_rithmic_api::rithmic_proto_objects::rti::Reject;
+use ff_rithmic_api::rithmic_proto_objects::rti::request_depth_by_order_updates::Request;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::time_bar::BarType;
 use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
-use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal_macros::dec;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
@@ -159,6 +160,14 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
         }
     };
 
+    let mut remove_broadcaster = false;
+    let period = match msg.period.clone() {
+        Some(p) => match p.parse::<u64>().ok() {
+            None => return,
+            Some(period) => period
+        },
+        None => return,
+    };
     // Retrieve broadcaster for the symbol
     if let Some(broadcaster) = client.candle_feed_broadcasters.get(&symbol) {
         // Construct the symbol object
@@ -186,14 +195,6 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
         let close = match msg.close_price.and_then(Decimal::from_f64) {
             Some(price) => price,
             None => return,  // Exit if close price is invalid
-        };
-
-        let period = match msg.period.clone() {
-            Some(p) => match p.parse::<u64>().ok() {
-                None => return,
-                Some(period) => period
-            },
-            None => return,
         };
 
         let resolution = match msg.r#type.clone() {
@@ -235,33 +236,34 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
             candle_type: CandleType::CandleStick,
         });
 
+
         // Send the candle data
         if let Err(e) = broadcaster.send(data) {
             if broadcaster.receiver_count() == 0 {
-                let bar_type = match msg.r#type {
-                    Some(num) => Some(num),
-                    None => None, // Exit if msg.r#type is None
-                };
-                let period = match msg.period {
-                    Some(p) => match p.parse::<i32>().ok() {
-                        None => None,
-                        Some(period) => Some(period)
-                    },
-                    None => None,
-                };
+                remove_broadcaster = true;
+            }
+        }
+    }
+
+    if remove_broadcaster {
+        let bar_type = match msg.r#type {
+            Some(num) => num,
+            None => return,              // Exit if `msg.r#type` is None
+        };
+        if let Some((_, broadcaster)) = client.candle_feed_broadcasters.remove(&symbol) {
+            if broadcaster.receiver_count() == 0 {
                 let req = RequestTimeBarUpdate {
                     template_id: 200,
                     user_msg: vec![],
-                    symbol: Some(symbol_obj.name.clone()),
+                    symbol: Some(symbol),
                     exchange: Some(exchange.to_string()),
-                    request: Some(2), //1 subscribe 2 unsubscribe
-                    bar_type,
-                    bar_type_period: period,
+                    request: Some(Request::Unsubscribe.into()),
+                    bar_type: Some(1),
+                    bar_type_period: Some(bar_type),
                 };
+
                 const PLANT: SysInfraType = SysInfraType::HistoryPlant;
                 client.send_message(&PLANT, req).await;
-                client.candle_feed_broadcasters.remove(&symbol_obj.name);
-                eprintln!("Failed to broadcast candle: {:?}", e);
             }
         }
     }

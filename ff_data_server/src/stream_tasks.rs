@@ -82,7 +82,7 @@ pub async fn stream_handler(
     stream_receivers: Arc<DashMap<DataSubscription, broadcast::Receiver<BaseDataEnum>>>,
     subscriptions: Arc<RwLock<Vec<DataSubscription>>>,
 ) {
-    let (data_sender, mut data_receiver) = mpsc::channel::<TimeSlice>(10);
+    let (data_sender, mut data_receiver) = mpsc::channel::<TimeSlice>(100);
     let (tick_sender, tick_receiver) = watch::channel(());
 
     let _ = tokio::spawn({

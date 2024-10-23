@@ -5,12 +5,6 @@ use std::io;
 use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestTradeRoutes};
-use ff_rithmic_api::systems::RithmicSystem;
-use futures::future::join_all;
 use once_cell::sync::Lazy;
 use structopt::StructOpt;
 use tokio::net::TcpStream;
@@ -84,108 +78,6 @@ struct ServerLaunchOptions {
     pub disable_rithmic_server: u64,
 }
 
-#[allow(dead_code)]
-async fn init_rithmic_apis(options: ServerLaunchOptions) {
-    let options = options;
-    if options.disable_rithmic_server == 1 {
-        return
-    }
-    let toml_files = RithmicClient::get_rithmic_tomls();
-    if toml_files.is_empty() {
-        return;
-    }
-    let init_tasks = toml_files.into_iter().filter_map(|file| {
-        RithmicSystem::from_file_string(file.as_str()).map(|system| {
-            task::spawn(async move {
-                let running = Arc::new(AtomicBool::new(true));
-                let running_clone = running.clone();
-
-                // Task 1: Handle shutdown signal
-                tokio::spawn(async move {
-                    let mut shutdown_receiver = subscribe_server_shutdown();
-                    let _ = shutdown_receiver.recv().await;
-                    running_clone.store(false, Ordering::SeqCst);
-                });
-
-                match RithmicClient::new(system).await {
-                    Ok(client) => {
-                        let client = Arc::new(client);
-                        match client.connect_plant(SysInfraType::TickerPlant).await {
-                            Ok(receiver) => {
-                                RITHMIC_CLIENTS.insert(system, client.clone());
-                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant, running.clone());
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                            }
-                        }
-                        match client.connect_plant(SysInfraType::HistoryPlant).await {
-                            Ok(receiver) => {
-                                RITHMIC_CLIENTS.insert(system, client.clone());
-                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant, running.clone());
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                            }
-                        }
-                        match client.connect_plant(SysInfraType::OrderPlant).await {
-                            Ok(receiver) => {
-                                RITHMIC_CLIENTS.insert(system, client.clone());
-                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant, running.clone());
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                            }
-                        }
-                        match client.connect_plant(SysInfraType::PnlPlant).await {
-                            Ok(receiver) => {
-                                RITHMIC_CLIENTS.insert(system, client.clone());
-                                handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant, running.clone());
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                            }
-                        }
-                        /*match client.connect_plant(SysInfraType::RepositoryPlant).await {
-                            Ok(receiver) => {
-                                handle_rithmic_responses(client.clone(), receiver).await;
-                            }
-                            Err(e) => {
-                                eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                            }
-                        }*/
-                    }
-                    Err(e) => {
-                        eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
-                    }
-                }
-            })
-        })
-    }).collect::<Vec<_>>();
-
-    // Wait for all initialization tasks to complete
-    join_all(init_tasks).await;
-
-    for api in RITHMIC_CLIENTS.iter() {
-        let api = api.value().clone();
-        let rms_req = RequestAccountRmsInfo {
-            template_id: 304,
-            user_msg: vec![],
-            fcm_id: api.credentials.fcm_id.clone(),
-            ib_id: api.credentials.ib_id.clone(),
-            user_type: api.credentials.user_type.clone(),
-        };
-        api.send_message(&SysInfraType::OrderPlant, rms_req).await;
-        
-        let routes = RequestTradeRoutes {
-            template_id: 310,
-            user_msg: vec![],
-            subscribe_for_updates: Some(true),
-        };
-        api.send_message(&SysInfraType::OrderPlant, routes).await;
-    }
-}
-
 async fn logout_apis() {
     println!("Logging Out Apis Function Started");
     if !RITHMIC_CLIENTS.is_empty() {
@@ -202,7 +94,7 @@ static SHUTDOWN_CHANNEL: Lazy<broadcast::Sender<()>> = Lazy::new(|| {
 });
 
 // Function to get the sender
-pub fn get_shutdown_sender() -> &'static broadcast::Sender<()> {
+fn get_shutdown_sender() -> &'static broadcast::Sender<()> {
     &SHUTDOWN_CHANNEL
 }
 
@@ -226,9 +118,9 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-    init_rithmic_apis(options.clone()).await;
+    RithmicClient::init_rithmic_apis(options.clone()).await;
 
-    let (async_handle, stream_handle) = run_servers(config, options.clone());
+    run_servers(config, options.clone());
 
     // Wait for initialization to complete
 
@@ -246,9 +138,6 @@ async fn main() -> io::Result<()> {
     // Perform logout
     logout_apis().await;
 
-    async_handle.abort();
-    stream_handle.abort();
-
 
     println!("Shutdown complete");
     Ok(())
@@ -258,19 +147,17 @@ async fn get_ip_addresses(stream: &TlsStream<TcpStream>) -> SocketAddr {
     let tcp_stream = stream.get_ref();
     tcp_stream.0.peer_addr().unwrap()
 }
-use tokio::task::JoinHandle;
 use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
-use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::test_api::api_client::TEST_CLIENT;
 
 fn run_servers(
     config: rustls::ServerConfig,
     options: ServerLaunchOptions
-) -> (JoinHandle<()>, JoinHandle<()>) {
+) {
     let config_clone = config.clone();
     let options_clone = options.clone();
 
-    let async_handle = task::spawn(async move  {
+    let _ = task::spawn(async move  {
         async_listener::async_server(
             config_clone,
             SocketAddr::new(options_clone.listener_address, options_clone.port),
@@ -278,14 +165,12 @@ fn run_servers(
         ).await
     });
 
-    let stream_handle = task::spawn(async move  {
+    let _ = task::spawn(async move  {
          stream_listener::stream_server(
             config,
             SocketAddr::new(options.stream_address, options.stream_port),
         ).await
     });
-
-    (async_handle, stream_handle)
 }
 
 pub(crate) fn load_certs(path: &Path) -> io::Result<Vec<CertificateDer<'static>>> {

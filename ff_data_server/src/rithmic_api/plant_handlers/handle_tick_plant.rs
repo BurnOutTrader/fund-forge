@@ -345,24 +345,32 @@ async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
 
     let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
     let tick = Tick::new(symbol.clone(), price, time.to_string(), volume, side);
+    let mut remove_broadcaster = false;
     if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
-        match broadcaster.value().send(BaseDataEnum::Tick(tick)) {
+        match broadcaster.value().send(BaseDataEnum::Tick(tick.clone())) {
             Ok(_) => {}
             Err(_) => {
                 if broadcaster.receiver_count() == 0 {
-                    client.tick_feed_broadcasters.remove(&symbol.name);
-                    let req = RequestMarketDataUpdate {
-                        template_id: 100,
-                        user_msg: vec![],
-                        symbol: Some(symbol.name.clone()),
-                        exchange: Some(exchange.to_string()),
-                        request: Some(2), // 2 for unsubscribe
-                        update_bits: Some(1),  //1 ticks, 2 quotes
-                    };
-
-                    const PLANT: SysInfraType = SysInfraType::TickerPlant;
-                    client.send_message(&PLANT, req).await;
+                    remove_broadcaster = true;
                 }
+            }
+        }
+    }
+
+    if remove_broadcaster {
+        if let Some((_, broadcaster)) = client.tick_feed_broadcasters.remove(&tick.symbol.name) {
+            if broadcaster.receiver_count() == 0 {
+                let req = RequestMarketDataUpdate {
+                    template_id: 100,
+                    user_msg: vec![],
+                    symbol: Some(tick.symbol.name.clone()),
+                    exchange: Some(exchange.to_string()),
+                    request: Some(2), // 2 for unsubscribe
+                    update_bits: Some(1), //1 ticks, 2 quotes
+                };
+
+                const PLANT: SysInfraType = SysInfraType::TickerPlant;
+                client.send_message(&PLANT, req).await;
             }
         }
     }
@@ -424,6 +432,7 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
         }
     };
 
+    let mut remove_broadcaster = false;
     if let Some(broadcaster) = client.quote_feed_broadcasters.get(&symbol) {
         let (ask, ask_volume) = client.ask_book
             .get(&symbol)
@@ -454,7 +463,14 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
 
         if let Err(_e) = broadcaster.send(data) {
             if broadcaster.receiver_count() == 0 {
-                client.quote_feed_broadcasters.remove(&symbol_obj.name);
+                remove_broadcaster = true;
+            }
+        }
+    }
+
+    if remove_broadcaster {
+        if let Some((_, broadcaster)) = client.quote_feed_broadcasters.remove(&symbol) {
+            if broadcaster.receiver_count() == 0 {
                 client.ask_book.remove(&symbol);
                 client.bid_book.remove(&symbol);
                 let req = RequestMarketDataUpdate {

@@ -24,7 +24,7 @@ use crate::stream_tasks::{deregister_streamer};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::{Order, OrderRequest, OrderType, OrderUpdateEvent};
 use ff_standard_lib::StreamName;
-use crate::{get_shutdown_sender, stream_listener};
+use crate::{stream_listener};
 
 lazy_static!(
     pub static ref DATA_STORAGE: Arc<HybridStorage> = Arc::new(HybridStorage::new(PathBuf::from(get_data_folder()), Duration::from_secs(1800)));
@@ -60,29 +60,24 @@ pub async fn manage_async_requests(
     let (response_sender, request_receiver) = mpsc::channel(1000);
     RESPONSE_SENDERS.insert(stream_name.clone(), response_sender.clone());
 
-    tokio::spawn(async move {
-        response_handler(request_receiver, write_half).await;
-    });
-    tokio::spawn(async move {
+    let read_task = tokio::spawn(async move {
         const LENGTH: usize = 8;
         let mut receiver = read_half;
         let mut length_bytes = [0u8; LENGTH];
 
         while let Ok(_) = receiver.read_exact(&mut length_bytes).await {
-            // Parse the length from the header
             let msg_length = u64::from_be_bytes(length_bytes) as usize;
             let mut message_body = vec![0u8; msg_length];
 
-            // Read the message body based on the length
             match receiver.read_exact(&mut message_body).await {
                 Ok(_) => {},
                 Err(e) => {
                     eprintln!("Error reading message body: {}", e);
-                    continue;
+                    // Break the loop and stop processing on disconnection
+                    break;
                 }
             }
 
-            // Parse the request from the message body
             let request = match DataServerRequest::from_bytes(&message_body) {
                 Ok(req) => req,
                 Err(e) => {
@@ -91,15 +86,15 @@ pub async fn manage_async_requests(
                 }
             };
             println!("{:?}", request);
+
             let stream_name = stream_name.clone();
-            let mode =strategy_mode.clone();
+            let mode = strategy_mode.clone();
             let sender = response_sender.clone();
+
             tokio::spawn(async move {
                 // Handle the request and generate a response
                 match request {
-                    DataServerRequest::Register(_) => {
-
-                    },
+                    DataServerRequest::Register(_) => {},
                     DataServerRequest::DecimalAccuracy {
                         data_vendor,
                         callback_id,
@@ -142,7 +137,7 @@ pub async fn manage_async_requests(
                             }
                         };
                         handle_callback(
-                            || symbols_response(data_vendor, mode,stream_name, market_type, time, callback_id),
+                            || symbols_response(data_vendor, mode, stream_name, market_type, time, callback_id),
                             sender.clone()
                         ).await
                     },
@@ -204,7 +199,8 @@ pub async fn manage_async_requests(
                         || intraday_margin_required_response(brokerage, mode, stream_name, symbol_name, quantity, callback_id),
                         sender.clone()).await,
 
-                    DataServerRequest::OvernightMarginRequired {  brokerage,
+                    DataServerRequest::OvernightMarginRequired {
+                        brokerage,
                         callback_id,
                         symbol_name,
                         quantity
@@ -212,7 +208,7 @@ pub async fn manage_async_requests(
                         || overnight_margin_required_response(brokerage, mode, stream_name, symbol_name, quantity, callback_id),
                         sender.clone()).await,
 
-                    DataServerRequest::SymbolNames{ callback_id, brokerage, time } => {
+                    DataServerRequest::SymbolNames { callback_id, brokerage, time } => {
                         let time = match time {
                             None => None,
                             Some(t) => match DateTime::<Utc>::from_str(&t) {
@@ -242,7 +238,6 @@ pub async fn manage_async_requests(
                             sender.clone()).await
                     }
 
-
                     DataServerRequest::StreamRequest {
                         request
                     } => {
@@ -270,16 +265,34 @@ pub async fn manage_async_requests(
                     DataServerRequest::PrimarySubscriptionFor { .. } => {
                         todo!()
                     }
-                    DataServerRequest::RegisterStreamer{..} => {
+                    DataServerRequest::RegisterStreamer { .. } => {
                         //no need to handle here
                     }
-                };
+                }
             });
         }
-        deregister_streamer(&stream_name).await;
+        // Deregister when disconnected
+        //deregister_streamer(&stream_name).await;
         RESPONSE_SENDERS.remove(&stream_name);
         println!("Streamer Disconnected: {}", stream_name);
     });
+
+    // Response handler for outgoing messages
+    let write_task = tokio::spawn(async move {
+        response_handler(request_receiver, write_half).await;
+    });
+
+    // Wait for both tasks to complete, handle if any one task finishes first
+    tokio::select! {
+        _ = read_task => {
+            // The read task finished (client likely disconnected)
+            println!("Read task finished for stream: {}", stream_name);
+        },
+        _ = write_task => {
+            // The write task finished (likely due to shutdown)
+            println!("Write task finished for stream: {}", stream_name);
+        }
+    }
 }
 
 async fn response_handler(receiver: Receiver<DataServerResponse>, writer: WriteHalf<TlsStream<TcpStream>>)  {
@@ -337,34 +350,28 @@ where
     }
 }
 
+async fn send_error_response(sender: &tokio::sync::mpsc::Sender<DataServerResponse>, error: OrderUpdateEvent, stream_name: &StreamName) {
+    let event = DataServerResponse::OrderUpdates(error);
+    if let Err(_) = sender.send(event).await {
+        eprintln!("Failed to send order response to: {}", stream_name);
+    }
+}
+
+fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
+    OrderUpdateEvent::OrderRejected {
+        account: order.account.clone(),
+        symbol_name: order.symbol_name.clone(),
+        symbol_code: "".to_string(),
+        order_id: order.id.clone(),
+        reason,
+        tag: order.tag.clone(),
+        time: Utc::now().to_string(),
+    }
+}
 
 const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 #[allow(dead_code, unused)]
 async fn order_response(stream_name: StreamName, mode: StrategyMode, request: OrderRequest, sender: tokio::sync::mpsc::Sender<DataServerResponse>) {
-    if mode != StrategyMode::Live {
-        get_shutdown_sender().send(()).unwrap();
-        panic!("Attempt to send Live order from: {:?}", mode);
-    }
-
-    async fn send_error_response(sender: &tokio::sync::mpsc::Sender<DataServerResponse>, error: OrderUpdateEvent, stream_name: &StreamName) {
-        let event = DataServerResponse::OrderUpdates(error);
-        if let Err(_) = sender.send(event).await {
-            eprintln!("Failed to send order response to: {}", stream_name);
-        }
-    }
-
-    fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
-        OrderUpdateEvent::OrderRejected {
-            account: order.account.clone(),
-            symbol_name: order.symbol_name.clone(),
-            symbol_code: "".to_string(),
-            order_id: order.id.clone(),
-            reason,
-            tag: order.tag.clone(),
-            time: Utc::now().to_string(),
-        }
-    }
-
     match request {
         OrderRequest::Create { account, order, order_type } => {
             match order_type {

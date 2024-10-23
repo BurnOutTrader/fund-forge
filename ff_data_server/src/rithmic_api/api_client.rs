@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
 use chrono::{DateTime, TimeZone, Utc};
@@ -11,12 +12,13 @@ use dashmap::DashMap;
 use ff_rithmic_api::api_client::RithmicApiClient;
 use ff_rithmic_api::credentials::RithmicCredentials;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, ResponseHeartbeat};
+use ff_rithmic_api::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTradeRoutes, ResponseHeartbeat};
 use ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::OrderPlacement;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_new_order::PriceType;
 use ff_rithmic_api::rithmic_proto_objects::rti::rithmic_order_notification::TransactionType;
 use ff_rithmic_api::systems::RithmicSystem;
 use futures::{SinkExt, StreamExt};
+use futures::future::join_all;
 use futures::stream::{SplitSink, SplitStream};
 #[allow(unused_imports)]
 use structopt::lazy_static::lazy_static;
@@ -46,7 +48,8 @@ use tungstenite::Message;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::AccountInfo;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use crate::{get_shutdown_sender, subscribe_server_shutdown};
+use crate::{subscribe_server_shutdown, ServerLaunchOptions};
+use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::rithmic_api::products::get_exchange_by_code;
 
 lazy_static! {
@@ -540,12 +543,7 @@ impl RithmicClient {
     }
 
 
-    pub async fn rithmic_order_details(&self, mode: StrategyMode, stream_name: StreamName, order: &Order) -> Result<CommonRithmicOrderDetails, OrderUpdateEvent> {
-        if mode != StrategyMode::Live {
-            get_shutdown_sender().send(()).unwrap();
-            panic!("This should never happen, Live order sent by Backtest")
-        }
-
+    pub async fn rithmic_order_details(&self, _mode: StrategyMode, stream_name: StreamName, order: &Order) -> Result<CommonRithmicOrderDetails, OrderUpdateEvent> {
         match self.is_valid_order(&order) {
             Err(e) =>
                 return Err(OrderUpdateEvent::OrderRejected {
@@ -813,6 +811,108 @@ impl RithmicClient {
         };
 
         self.send_message(&SysInfraType::OrderPlant, req).await;
+    }
+
+    #[allow(dead_code)]
+    pub(crate) async fn init_rithmic_apis(options: ServerLaunchOptions) {
+        let options = options;
+        if options.disable_rithmic_server == 1 {
+            return
+        }
+        let toml_files = RithmicClient::get_rithmic_tomls();
+        if toml_files.is_empty() {
+            return;
+        }
+        let init_tasks = toml_files.into_iter().filter_map(|file| {
+            RithmicSystem::from_file_string(file.as_str()).map(|system| {
+                task::spawn(async move {
+                    let running = Arc::new(AtomicBool::new(true));
+                    let running_clone = running.clone();
+
+                    // Task 1: Handle shutdown signal
+                    tokio::spawn(async move {
+                        let mut shutdown_receiver = subscribe_server_shutdown();
+                        let _ = shutdown_receiver.recv().await;
+                        running_clone.store(false, Ordering::SeqCst);
+                    });
+
+                    match RithmicClient::new(system).await {
+                        Ok(client) => {
+                            let client = Arc::new(client);
+                            match client.connect_plant(SysInfraType::TickerPlant).await {
+                                Ok(receiver) => {
+                                    RITHMIC_CLIENTS.insert(system, client.clone());
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant, running.clone());
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
+                            }
+                            match client.connect_plant(SysInfraType::HistoryPlant).await {
+                                Ok(receiver) => {
+                                    RITHMIC_CLIENTS.insert(system, client.clone());
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant, running.clone());
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
+                            }
+                            match client.connect_plant(SysInfraType::OrderPlant).await {
+                                Ok(receiver) => {
+                                    RITHMIC_CLIENTS.insert(system, client.clone());
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant, running.clone());
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
+                            }
+                            match client.connect_plant(SysInfraType::PnlPlant).await {
+                                Ok(receiver) => {
+                                    RITHMIC_CLIENTS.insert(system, client.clone());
+                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant, running.clone());
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
+                            }
+                            /*match client.connect_plant(SysInfraType::RepositoryPlant).await {
+                                Ok(receiver) => {
+                                    handle_rithmic_responses(client.clone(), receiver).await;
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+                                }
+                            }*/
+                        }
+                        Err(e) => {
+                            eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
+                        }
+                    }
+                })
+            })
+        }).collect::<Vec<_>>();
+
+        // Wait for all initialization tasks to complete
+        join_all(init_tasks).await;
+
+        for api in RITHMIC_CLIENTS.iter() {
+            let api = api.value().clone();
+            let rms_req = RequestAccountRmsInfo {
+                template_id: 304,
+                user_msg: vec![],
+                fcm_id: api.credentials.fcm_id.clone(),
+                ib_id: api.credentials.ib_id.clone(),
+                user_type: api.credentials.user_type.clone(),
+            };
+            api.send_message(&SysInfraType::OrderPlant, rms_req).await;
+
+            let routes = RequestTradeRoutes {
+                template_id: 310,
+                user_msg: vec![],
+                subscribe_for_updates: Some(true),
+            };
+            api.send_message(&SysInfraType::OrderPlant, routes).await;
+        }
     }
 }
 

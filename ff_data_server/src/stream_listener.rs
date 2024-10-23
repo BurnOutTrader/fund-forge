@@ -9,6 +9,7 @@ use ff_standard_lib::messages::data_server_messaging::{DataServerRequest, DataSe
 use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use ff_standard_lib::StreamName;
+use crate::{subscribe_server_shutdown};
 use crate::server_side_datavendor::{data_feed_subscribe};
 use crate::stream_tasks::initialize_streamer;
 
@@ -21,30 +22,37 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
             return;
         }
     };
+
+    let mut shutdown_receiver = subscribe_server_shutdown();
     println!("Stream: Listening on: {}", addr);
 
     loop {
-        let (stream, peer_addr) = match listener.accept().await {
-            Ok((stream, peer_addr)) => (stream, peer_addr),
-            Err(e) => {
-                eprintln!("Stream: Failed to accept TLS connection: {:?}", e);
-                continue;
-            }
-        };
-        println!("Stream: {}, peer_addr: {:?}", Utc::now(), peer_addr);
-        let acceptor = acceptor.clone();
+        tokio::select! {
+            // Accept new connection
+            Ok((stream, peer_addr)) = listener.accept() => {
+                println!("Stream: {}, peer_addr: {:?}", Utc::now(), peer_addr);
+                let acceptor = acceptor.clone();
 
-        tokio::spawn(async move {
-            match acceptor.accept(stream).await {
-                Ok(tls_stream) => {
-                    handle_stream_connection(tls_stream, peer_addr).await;
-                }
-                Err(e) => {
-                    eprintln!("Stream: Failed to accept TLS connection: {:?}", e);
-                }
+                tokio::spawn(async move {
+                    match acceptor.accept(stream).await {
+                        Ok(tls_stream) => {
+                            handle_stream_connection(tls_stream, peer_addr).await;
+                        }
+                        Err(e) => {
+                            eprintln!("Stream: Failed to accept TLS connection: {:?}", e);
+                        }
+                    }
+                });
             }
-        });
+
+            // Listen for shutdown signal
+            _ = shutdown_receiver.recv() => {
+                println!("Stream: Shutdown signal received, stopping server.");
+                break;
+            }
+        }
     }
+    println!("Stream: Server stopped.");
 }
 
 const LENGTH: usize = 4;
