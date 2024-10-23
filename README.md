@@ -14,21 +14,18 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 Live order functionality is being implemented, and any active strategy may send real orders directly to the market.
 If I make any mistakes, and leave a test strategy in live mode, it will trade your live accounts!.
 
-Order logic is incomplete, updates not yet forwarded to strategies. 
-
 Make sure to double-check your configurations to avoid unintended trades.
 
 Once `StrategyMode::Live`, the system will not differentiate between test and real orders!
 
 ## Current State of Live Trading
-The platform is capable of live trading with rithmic, but it is not currently stable.
+***The server now properly handles multiple connects and disconnects when using rithmic, the problem was in shutting down rithmic broadcasters (removing broadcaster while holding a mut ref)***
+
+The platform is capable of live trading with rithmic, but it is not 100% stable or complete.
 
 No History functions have been built yet, so indicators and subscriptions will not auto warm up.
 
-Once a strategy disconnects, the server must be restarted.
-
 Many problem scenarios have not been tested, although the strategy seems to maintain good synchronisation with rithmic, even with `synchronise_accounts` disabled.
-The server will need to be stabilized in the future to better handle connecting and disconnecting of the live api's.
 
 Live trading with rithmic requires you to use the `product_code` in place of `symbol_name` for functions like `strategy.is_long()`.
 
