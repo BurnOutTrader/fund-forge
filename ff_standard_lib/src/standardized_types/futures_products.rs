@@ -83,8 +83,16 @@ pub fn extract_symbol_from_contract(contract: &str) -> String {
 
     symbol.to_string()
 }
-
 pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> String {
+    // Get the correct rollover day for the symbol
+    let roll_day = match ROLLOVER_DAYS.get(symbol) {
+        Some(&day) => day,
+        None => return symbol.to_string(), // Return symbol if no rollover day is found
+    };
+
+    let current_day = utc_time.day();
+
+    // Get the current month and year
     let month_code = match utc_time.month() {
         1 => 'F',  // January
         2 => 'G',  // February
@@ -101,14 +109,31 @@ pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> String {
         _ => return symbol.to_string(), // Invalid month
     };
 
-    // Check if we are near the end of the month (for simplicity, assume roll happens on 15th) todo add a fn for rollover days based on symbol name
-    let roll_day = ROLLOVER_DAYS.get(symbol).unwrap(); // Adjust this based on the actual roll schedule for the symbol
-    let current_day = utc_time.day();
-
-    let year = if current_day >= *roll_day {
-        utc_time.year() % 100 + 1 // Move to the next year if rolled over in December
+    // If the current day is past the rollover day, move to the next contract month
+    let (month_code, year) = if current_day >= roll_day {
+        // Roll over to the next month
+        if utc_time.month() == 12 {
+            ('F', utc_time.year() % 100 + 1) // Move to January of next year
+        } else {
+            let next_month_code = match utc_time.month() + 1 {
+                1 => 'F',  // January
+                2 => 'G',  // February
+                3 => 'H',  // March
+                4 => 'J',  // April
+                5 => 'K',  // May
+                6 => 'M',  // June
+                7 => 'N',  // July
+                8 => 'Q',  // August
+                9 => 'U',  // September
+                10 => 'V', // October
+                11 => 'X', // November
+                12 => 'Z', // December
+                _ => return symbol.to_string(), // Invalid month
+            };
+            (next_month_code, utc_time.year() % 100)
+        }
     } else {
-        utc_time.year() % 100 // Stay in the current year
+        (month_code, utc_time.year() % 100) // Stay in the current month and year
     };
 
     // Now, construct the contract code

@@ -43,6 +43,7 @@ const MIN_ATR_VALUE: Decimal = dec!(0.7);
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID_HERE".to_string());
+    let symbol_code = "MESZ24".to_string();
     let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
     let subscription = DataSubscription::new(
         SymbolName::from("MES"),
@@ -90,7 +91,7 @@ async fn main() {
         vec![account.clone()] //todo, add any more accounts you want into here.
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver, account, subscription).await;
+    on_data_received(strategy, strategy_event_receiver, account, subscription, symbol_code).await;
 }
 
 #[allow(dead_code, unused)]
@@ -113,6 +114,7 @@ pub async fn on_data_received(
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
     account: Account,
     subscription: DataSubscription,
+    mut symbol_code: String
 ) {
     println!("Staring Strategy Loop");
 
@@ -139,7 +141,6 @@ pub async fn on_data_received(
     strategy.subscribe_indicator(atr_10.clone(), false).await;
     let mut warmup_complete = false;
     let mut last_side = LastSide::Flat;
-    let mut symbol_code = get_front_month(&subscription.symbol.name, Utc::now());
     let mut count = 0;
     let mut bars_since_entry = 0;
     let mut entry_order_id = None;
