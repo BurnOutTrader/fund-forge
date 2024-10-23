@@ -21,7 +21,7 @@ use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
-use ff_standard_lib::standardized_types::symbol_info::get_front_month;
+use ff_standard_lib::standardized_types::futures_products::get_front_month;
 #[allow(unused_imports)]
 use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
 #[allow(unused_imports)]
@@ -37,14 +37,15 @@ const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
+const MIN_ATR_VALUE: Decimal = dec!(0.7);
 
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID_HERE".to_string());
     let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
     let subscription = DataSubscription::new(
-        SymbolName::from("MNQ"),
+        SymbolName::from("MES"),
         data_vendor.clone(),
         Resolution::Seconds(3),
         BaseDataType::QuoteBars,
@@ -62,7 +63,7 @@ async fn main() {
         vec![
             //subscribe to a quote feed to ensure we use quotes
             DataSubscription::new(
-                SymbolName::from("MNQ"),
+                SymbolName::from("MES"),
                 data_vendor.clone(),
                 Resolution::Instant,
                 BaseDataType::Quotes,
@@ -85,7 +86,7 @@ async fn main() {
         core::time::Duration::from_millis(10),
         false,
         true,
-        false,
+        true,
         vec![account.clone()] //todo, add any more accounts you want into here.
     ).await;
 
@@ -111,7 +112,7 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
     account: Account,
-    subscription: DataSubscription
+    subscription: DataSubscription,
 ) {
     println!("Staring Strategy Loop");
 
@@ -197,7 +198,7 @@ pub async fn on_data_received(
                                 let last_candle = last_candle.unwrap();
                                 let last_atr = last_atr.unwrap().get_plot(&atr_plot).unwrap().value;
                                 let current_atr = current_atr.unwrap().get_plot(&atr_plot).unwrap().value;
-                                let min_atr = current_atr >= dec!(1.25);
+                                let min_atr = current_atr >= MIN_ATR_VALUE;
                                 let atr_increasing = current_atr > last_atr;
                                 let booked_pnl = strategy.booked_pnl(&account, &symbol_code);
                                 let bar_time = quotebar.time_utc();
@@ -285,8 +286,8 @@ pub async fn on_data_received(
                                 let open_profit = strategy.pnl(&account,  &symbol_code);
                                 let position_size = strategy.position_size(&account, &symbol_code);
                                 println!(
-                                    "Bars: {}, Open Profit: {}, Position Size: {}, Last Entry Attempt: {}",
-                                    bars_since_entry, open_profit, position_size, attempting_entry
+                                    "{}, Open Profit: {}, Position Size: {}, Last Entry Attempt: {}",
+                                    symbol_code, open_profit, position_size, attempting_entry
                                 );
 
                                 //Add to winners up to 2x if we have momentum
