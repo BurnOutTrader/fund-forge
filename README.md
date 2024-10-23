@@ -20,6 +20,20 @@ Once `StrategyMode::Live`, the system will not differentiate between test and re
 
 See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) for more information.
 
+### Initial Setup
+1. Install [rust](https://www.rust-lang.org/tools/install).
+2. Download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKID2SU-oFFpKWsqGg?e=jYaN6n) or
+   for more free testing data [Demonstration Testing Data](#demonstration-testing-data) below
+3. Get the testing data (instructions below)
+4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (dont run the server in your IDE, it will have issues (more issues than normal :) )
+    - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
+    - to run with only test api to run the server with rithmic apis connected use `cargo run -- --rithmic "1"`.
+5. Navigate to [example_test_strategy](./example_test_strategy) directory and `cargo build` then`cargo run`
+
+*When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](example_test_strategy/README.md)
+
+*When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](example_test_strategy/README.md)
+
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
 - [Example Strategy](example_test_strategy/src/main.rs)
@@ -32,20 +46,6 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 - [Current Development Tasks](DEV_TODO_ISSUES.md)
 - [The End Game: Project Goals](#the-end-game)
 - [Licence](LICENCE.md)
-
-### Initial Setup
-1. Install [rust](https://www.rust-lang.org/tools/install).
-2. Download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKID2SU-oFFpKWsqGg?e=jYaN6n) or 
-for more free testing data [Demonstration Testing Data](#demonstration-testing-data) below
-3. Get the testing data (instructions below)
-4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (dont run the server in your IDE, it will have issues (more issues than normal :) )
-   - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
-   - to run with only test api to run the server with rithmic apis connected use `cargo run -- --rithmic "1"`.
-5. Navigate to [example_test_strategy](./example_test_strategy) directory and `cargo build` then`cargo run`
-
-*When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](example_test_strategy/README.md)
-
-*When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](example_test_strategy/README.md)
 
 ## Demonstration Testing Data
 You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKF125tuEG16grLM_Q?e=Yukrv6)
