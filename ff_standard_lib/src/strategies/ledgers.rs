@@ -302,20 +302,14 @@ impl Ledger {
             };
             self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position.clone());
 
-            let close_time = match position.close_time {
-                None => {
-                    eprintln!("No close time for position: {}", position.position_id);
-                    return None;
-                }
-                Some(time) => time
-            };
+            let close_time = position.close_time.unwrap_or_else(|| Utc::now().to_string());
             Some(PositionUpdateEvent::PositionClosed {
                 position_id: position.position_id.clone(),
                 total_quantity_open: dec!(0),
                 total_quantity_closed: position.quantity_closed,
                 average_price: average_exit_price,
                 booked_pnl: Default::default(),
-                average_exit_price: None,
+                average_exit_price: position.average_exit_price,
                 account: self.account.clone(),
                 originating_order_tag: position.tag,
                 time: close_time
