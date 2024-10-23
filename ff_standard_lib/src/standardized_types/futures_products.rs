@@ -83,59 +83,83 @@ pub fn extract_symbol_from_contract(contract: &str) -> String {
 
     symbol.to_string()
 }
-pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> String {
-    // Get the correct rollover day for the symbol
-    let roll_day = match ROLLOVER_DAYS.get(symbol) {
-        Some(&day) => day,
-        None => return symbol.to_string(), // Return symbol if no rollover day is found
-    };
 
+pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>, is_quarterly: bool) -> String {
+    let rollover_day = *ROLLOVER_DAYS.get(symbol).unwrap_or(&15); // Default rollover day
     let current_day = utc_time.day();
 
-    // Get the current month and year
-    let month_code = match utc_time.month() {
-        1 => 'F',  // January
-        2 => 'G',  // February
-        3 => 'H',  // March
-        4 => 'J',  // April
-        5 => 'K',  // May
-        6 => 'M',  // June
-        7 => 'N',  // July
-        8 => 'Q',  // August
-        9 => 'U',  // September
-        10 => 'V', // October
-        11 => 'X', // November
-        12 => 'Z', // December
-        _ => return symbol.to_string(), // Invalid month
-    };
-
-    // If the current day is past the rollover day, move to the next contract month
-    let (month_code, year) = if current_day >= roll_day {
-        // Roll over to the next month
-        if utc_time.month() == 12 {
-            ('F', utc_time.year() % 100 + 1) // Move to January of next year
-        } else {
-            let next_month_code = match utc_time.month() + 1 {
-                1 => 'F',  // January
-                2 => 'G',  // February
-                3 => 'H',  // March
-                4 => 'J',  // April
-                5 => 'K',  // May
-                6 => 'M',  // June
-                7 => 'N',  // July
-                8 => 'Q',  // August
-                9 => 'U',  // September
-                10 => 'V', // October
-                11 => 'X', // November
-                12 => 'Z', // December
-                _ => return symbol.to_string(), // Invalid month
-            };
-            (next_month_code, utc_time.year() % 100)
+    let month_code = if is_quarterly {
+        // Quarterly contract logic
+        match utc_time.month() {
+            1 | 2 => 'H',  // March
+            3 | 4 | 5 => 'M',  // June
+            6 | 7 | 8 => 'U',  // September
+            9 | 10 | 11 => 'Z', // December
+            12 => 'H', // Roll over to March next year
+            _ => return symbol.to_string(),
         }
     } else {
-        (month_code, utc_time.year() % 100) // Stay in the current month and year
+        // Monthly contract logic
+        match utc_time.month() {
+            1 => 'F',  // January
+            2 => 'G',  // February
+            3 => 'H',  // March
+            4 => 'J',  // April
+            5 => 'K',  // May
+            6 => 'M',  // June
+            7 => 'N',  // July
+            8 => 'Q',  // August
+            9 => 'U',  // September
+            10 => 'V', // October
+            11 => 'X', // November
+            12 => 'Z', // December
+            _ => return symbol.to_string(),
+        }
     };
 
-    // Now, construct the contract code
+    let (month_code, year) = if current_day >= rollover_day {
+        if is_quarterly {
+            // Move to the next quarterly contract
+            let next_month_code = match month_code {
+                'H' => 'M',  // March -> June
+                'M' => 'U',  // June -> September
+                'U' => 'Z',  // September -> December
+                'Z' => 'H',  // December -> March next year
+                _ => month_code,
+            };
+            let next_year = if next_month_code == 'H' && month_code == 'Z' {
+                utc_time.year() % 100 + 1
+            } else {
+                utc_time.year() % 100
+            };
+            (next_month_code, next_year)
+        } else {
+            // Move to the next monthly contract
+            let next_month_code = match utc_time.month() + 1 {
+                1 => 'F',
+                2 => 'G',
+                3 => 'H',
+                4 => 'J',
+                5 => 'K',
+                6 => 'M',
+                7 => 'N',
+                8 => 'Q',
+                9 => 'U',
+                10 => 'V',
+                11 => 'X',
+                12 => 'Z',
+                _ => month_code,
+            };
+            let next_year = if next_month_code == 'F' {
+                utc_time.year() % 100 + 1
+            } else {
+                utc_time.year() % 100
+            };
+            (next_month_code, next_year)
+        }
+    } else {
+        (month_code, utc_time.year() % 100) // Stay in current month and year
+    };
+
     format!("{}{}{}", symbol, month_code, year)
 }
