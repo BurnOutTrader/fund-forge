@@ -9,6 +9,7 @@ use rust_decimal::Decimal;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::gui_types::settings::Color;
+use crate::helpers::decimal_calculators::round_to_tick_size;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::standardized_types::base_data::traits::BaseData;
@@ -29,7 +30,8 @@ pub struct AverageTrueRange {
     decimal_accuracy: u32,
     is_ready: bool,
     plot_color: Color,
-    period: u64
+    period: u64,
+    tick_rounding: bool
 }
 
 impl Display for AverageTrueRange {
@@ -50,6 +52,7 @@ impl AverageTrueRange {
         history_to_retain: usize,
         period: u64,
         plot_color: Color,
+        tick_rounding: bool
     ) -> Self {
         let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap();
         let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await.unwrap();
@@ -64,6 +67,7 @@ impl AverageTrueRange {
             plot_color,
             period,
             decimal_accuracy,
+            tick_rounding
         };
         atr
     }
@@ -132,7 +136,10 @@ impl AverageTrueRange {
             if sum == dec!(0.0) {
                 return dec!(0.0)
             }
-            (sum / Decimal::from_usize(true_ranges.len()).unwrap()).round_dp(self.decimal_accuracy)
+            match self.tick_rounding {
+                true => round_to_tick_size(sum / Decimal::from_usize(true_ranges.len()).unwrap(), self.tick_size),
+                false => (sum / Decimal::from_usize(true_ranges.len()).unwrap()).round_dp(self.decimal_accuracy)
+            }
         } else {
             dec!(0.0)
         };
