@@ -203,7 +203,7 @@ pub async fn response_handler(
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
     order_updates_sender: Sender<OrderUpdateEvent>,
-    _synchronise_accounts: bool,
+    synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>,
 ) {
     for (connection, settings) in &settings_map {
@@ -268,13 +268,12 @@ pub async fn response_handler(
                                         LEDGER_SERVICE.live_account_updates(&account, cash_value, cash_available, cash_used).await;
                                     });
                                 }
-                                DataServerResponse::LivePositionUpdates { account: _, symbol_name: _, symbol_code: _, open_pnl: _, open_quantity: _, side: _ } => {
-                                 /*  if synchronise_accounts {
+                                DataServerResponse::LivePositionUpdates { account, position } => {
+                                   if synchronise_accounts {
                                         tokio::task::spawn(async move {
-                                            let message = LedgerMessage::LivePositionUpdates { account: account.clone(), symbol_name, symbol_code, open_pnl, open_quantity, side };
-                                            LEDGER_SERVICE.process_message(&account, message).await;
+                                            LEDGER_SERVICE.synchronize_live_position(account, position);
                                         });
-                                    }*/
+                                    }
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {

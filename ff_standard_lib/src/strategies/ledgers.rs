@@ -73,6 +73,12 @@ impl LedgerService {
         }
     }
 
+    pub fn synchronize_live_position(&self, account: Account, position: Position) {
+        if let Some(account_ledger) = self.ledgers.get(&account) {
+            account_ledger.value().synchronize_live_position(position);
+        }
+    }
+
     pub(crate) async fn paper_exit_position(
         &self,
         account: &Account,
@@ -286,55 +292,17 @@ impl Ledger {
         *account_cash_available = cash_available;
     }
 
-    pub fn add_live_position(&self, mut position: Position) {
-        //todo, check ledger max order etc before placing orders
-        if let Some((symbol_name, mut existing_position)) = self.positions.remove(&position.symbol_name) {
-            existing_position.is_closed = true;
-            self.positions_closed
-                .entry(symbol_name)
-                .or_insert_with(Vec::new)
-                .push(existing_position);
-        }
-        let id = self.generate_id(&position.symbol_name, position.side);
-        position.position_id = id;
-        self.positions.insert(position.symbol_name.clone(), position);
-    }
-
     // TODO[Strategy]: Add option to mirror account position or use internal position curating.
     #[allow(unused)]
-    pub fn update_live_position(&self, symbol_name: SymbolName, product_code: Option<String>, open_pnl: Decimal, open_quantity: Decimal, side: Option<PositionSide>) {
-        //todo, check ledger max order etc before placing orders
-        if let Some((_symbol_name, mut existing_position)) = self.positions.remove(&symbol_name) {
-            match existing_position.side {
-                PositionSide::Long => {
-
-                }
-                PositionSide::Short => {
-
-                }
+    /// Booked pnl is only sent for closed positions, it is the amount of booked pnl since the last side change from none to long or short
+    pub fn synchronize_live_position(&self, position: Position) {
+        if let Some(existing_position) = self.positions.remove(&position.symbol_code) {
+            if position.is_closed {
+                self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position);
+            } else {
+                self.positions.insert(position.symbol_code.clone(), position);
             }
         }
-        else if let Some(product_code) = product_code {
-            if let Some(existing_position) = self.positions.get_mut(&product_code) {
-                match existing_position.side {
-                    PositionSide::Long => {
-
-                    }
-                    PositionSide::Short => {
-
-                    }
-                }
-            }
-        }
-
-        /* existing_position.is_closed = true;
-           self.positions_closed
-               .entry(symbol_name)
-               .or_insert_with(Vec::new)
-               .push(existing_position);*/
-     /*   let id = self.generate_id(&symbol_name, position.side);
-        position.position_id = id;
-        self.positions.insert(position.symbol_name.clone(), position);*/
     }
 
     pub fn in_profit(&self, symbol_name: &SymbolName) -> bool {

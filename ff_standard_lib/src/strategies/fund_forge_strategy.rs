@@ -156,7 +156,7 @@ impl FundForgeStrategy {
         init_sub_handler(subscription_handler.clone(), indicator_handler.clone()).await;
         let (live_order_updates_sender, live_order_updates_receiver) = tokio::sync::mpsc::channel(50);
         if strategy_mode == StrategyMode::Live {
-            live_order_update(open_order_cache.clone(), closed_order_cache.clone(), live_order_updates_receiver, strategy_event_sender.clone());
+            live_order_update(open_order_cache.clone(), closed_order_cache.clone(), live_order_updates_receiver, strategy_event_sender.clone(), synchronize_accounts);
         }
         init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone()).await;
 

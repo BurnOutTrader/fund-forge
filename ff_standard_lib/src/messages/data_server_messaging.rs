@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use crate::standardized_types::enums::{MarketType, PositionSide, StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -12,6 +12,7 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
+use crate::standardized_types::position::Position;
 use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SessionMarketHours, SymbolInfo};
 use crate::standardized_types::time_slices::TimeSlice;
 
@@ -321,7 +322,8 @@ DataServerResponse {
 
     LiveAccountUpdates {account: Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
 
-    LivePositionUpdates {account: Account, symbol_name: SymbolName, symbol_code: String, open_pnl: Decimal, open_quantity: Volume, side: Option<PositionSide>},
+    /// Booked pnl is only sent for closed positions, it is the amount of booked pnl since the last side change from none to long or short
+    LivePositionUpdates {account: Account, position: Position},
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {

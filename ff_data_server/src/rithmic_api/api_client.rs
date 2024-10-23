@@ -28,9 +28,9 @@ use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundF
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, PositionSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderType, OrderUpdateEvent, TimeInForce};
-use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolCode, SymbolName};
 use ff_standard_lib::standardized_types::symbol_info::{FrontMonthInfo, SymbolInfo};
 use ff_standard_lib::standardized_types::books::BookLevel;
 use ff_standard_lib::standardized_types::accounts::AccountId;
@@ -48,6 +48,7 @@ use tungstenite::Message;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::AccountInfo;
 use ff_standard_lib::standardized_types::new_types::Volume;
+use ff_standard_lib::standardized_types::position::PositionId;
 use crate::{subscribe_server_shutdown, ServerLaunchOptions};
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::rithmic_api::products::get_exchange_by_code;
@@ -98,6 +99,7 @@ pub struct RithmicClient {
     pub max_size: DashMap<AccountId, Volume>,
     pub long_quantity: DashMap<AccountId, DashMap<SymbolName, Volume>>,
     pub short_quantity: DashMap<AccountId, DashMap<SymbolName, Volume>>,
+    pub last_tag: DashMap<AccountId, DashMap<SymbolName, String>>,
 
     pub orders_open: DashMap<OrderId, Order>,
 
@@ -175,8 +177,20 @@ impl RithmicClient {
             long_quantity: Default::default(),
             short_quantity: Default::default(),
             default_trade_route: DashMap::new(),
+            last_tag: Default::default(),
         };
         Ok(client)
+    }
+
+    pub fn generate_id(
+        &self,
+        symbol_code: &SymbolCode,
+        side: PositionSide,
+        count: u64,
+        account_id: &AccountId,
+    ) -> PositionId {
+        // Return the generated position ID
+        format!("{}-{}-{}-{}-{}", self.brokerage, account_id, count, symbol_code, side)
     }
 
     pub fn total_open_size(&self) -> Volume {
@@ -425,6 +439,7 @@ impl RithmicClient {
 
     pub async fn request_updates(&self, account_id: AccountId) {
         if let Some(id_account_info_kvp) = self.account_info.get(&account_id) {
+            self.last_tag.insert(account_id.clone(), DashMap::new());
             let req = RequestShowOrders {
                 template_id: 320,
                 user_msg: vec![],
@@ -737,7 +752,7 @@ impl RithmicClient {
             fcm_id: self.fcm_id.clone(),
             ib_id: self.ib_id.clone(),
             account_id: Some(order.account.account_id.clone()),
-            symbol: Some(details.symbol_code),
+            symbol: Some(details.symbol_code.clone()),
             exchange: Some(details.exchange.to_string()),
             quantity: Some(details.quantity),
             price: limit_price,
@@ -762,6 +777,9 @@ impl RithmicClient {
             if_touched_price: None,
         };
 
+        if let Some(account_map) = self.last_tag.get(&order.account.account_id) {
+            account_map.insert(details.symbol_code, order.tag.clone());
+        }
         self.send_message(&SysInfraType::OrderPlant, req).await;
     }
 
@@ -785,7 +803,7 @@ impl RithmicClient {
             fcm_id: self.fcm_id.clone(),
             ib_id: self.ib_id.clone(),
             account_id: Some(order.account.account_id.clone()),
-            symbol: Some(details.symbol_code),
+            symbol: Some(details.symbol_code.clone()),
             exchange: Some(details.exchange.to_string()),
             quantity: Some(details.quantity),
             price: None,
@@ -810,6 +828,10 @@ impl RithmicClient {
             if_touched_price: None,
         };
 
+        //this is used to update positions when synchronise positions is used
+        if let Some(account_map) = self.last_tag.get(&order.account.account_id) {
+            account_map.insert(details.symbol_code, order.tag.clone());
+        }
         self.send_message(&SysInfraType::OrderPlant, req).await;
     }
 

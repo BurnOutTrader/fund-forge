@@ -10,7 +10,7 @@ use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::time_bar::BarType;
 use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
-use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
+use rust_decimal::prelude::{FromPrimitive};
 use rust_decimal_macros::dec;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
@@ -238,7 +238,7 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
 
 
         // Send the candle data
-        if let Err(e) = broadcaster.send(data) {
+        if let Err(_) = broadcaster.send(data) {
             if broadcaster.receiver_count() == 0 {
                 remove_broadcaster = true;
             }
