@@ -414,19 +414,46 @@ impl RithmicClient {
     }
 
     pub fn handle_response_heartbeat(&self, plant: SysInfraType, response: ResponseHeartbeat) {
-        let now = Utc::now();
         if let (Some(ssboe), Some(usecs)) = (response.ssboe, response.usecs) {
-            let response_time = Utc.timestamp_opt(ssboe as i64, usecs as u32 * 1000).unwrap();
-            let latency = (now - response_time).num_microseconds().unwrap_or(i64::MAX);
+            // Get current time components
+            let now = Utc::now();
+            let now_secs = now.timestamp() as u64;
+            let now_nanos = now.timestamp_subsec_nanos() as u64;
 
-            self.latency.insert(plant.clone(), latency);
+            // Convert server time to the same components
+            let server_secs = ssboe as u64;
+            let server_nanos = (usecs as u64) * 1000;  // Convert microseconds to nanoseconds
+
+            // Calculate latency components
+            let secs_diff = if now_secs >= server_secs {
+                now_secs - server_secs
+            } else {
+                0
+            };
+
+            // Calculate total nanoseconds difference
+            let latency = if secs_diff == 0 {
+                // If within the same second, just compare nanoseconds
+                if now_nanos >= server_nanos {
+                    now_nanos - server_nanos
+                } else {
+                    server_nanos - now_nanos
+                }
+            } else {
+                // If seconds differ, calculate total nanosecond difference
+                (secs_diff * 1_000_000_000) + now_nanos - server_nanos
+            };
+
+            self.latency.insert(plant.clone(), latency as i64);
 
             let formatted_latency = if latency < 1_000 {
-                format!("{} µs", latency)
+                format!("{} ns", latency)
             } else if latency < 1_000_000 {
-                format!("{:.2} ms", latency as f64 / 1_000.0)
+                format!("{:.2} µs", latency as f64 / 1_000.0)
+            } else if latency < 1_000_000_000 {
+                format!("{:.2} ms", latency as f64 / 1_000_000.0)
             } else {
-                format!("{:.3} s", latency as f64 / 1_000_000.0)
+                format!("{:.3} s", latency as f64 / 1_000_000_000.0)
             };
 
             println!("Round Trip Latency for Rithmic {:?}: {}", plant, formatted_latency);
