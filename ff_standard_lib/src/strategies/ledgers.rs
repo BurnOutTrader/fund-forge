@@ -73,10 +73,11 @@ impl LedgerService {
         }
     }
 
-    pub fn synchronize_live_position(&self, account: Account, position: Position) {
+    pub fn synchronize_live_position(&self, account: Account, position: Position) -> Option<PositionUpdateEvent> {
         if let Some(account_ledger) = self.ledgers.get(&account) {
-            account_ledger.value().synchronize_live_position(position);
+            return account_ledger.value().synchronize_live_position(position)
         }
+        None
     }
 
     pub(crate) async fn paper_exit_position(
@@ -292,10 +293,33 @@ impl Ledger {
         *account_cash_available = cash_available;
     }
 
-    pub fn synchronize_live_position(&self, position: Position) {
+    pub fn synchronize_live_position(&self, position: Position) -> Option<PositionUpdateEvent> {
         if position.is_closed {
             self.positions.remove(&position.symbol_code);
-            self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position);
+            let average_exit_price = match position.average_exit_price {
+                None => dec!(0.0),
+                Some(price) => price
+            };
+            self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position.clone());
+
+            let close_time = match position.close_time {
+                None => {
+                    eprintln!("No close time for position: {}", position.position_id);
+                    return None;
+                }
+                Some(time) => time
+            };
+            Some(PositionUpdateEvent::PositionClosed {
+                position_id: position.position_id.clone(),
+                total_quantity_open: dec!(0),
+                total_quantity_closed: position.quantity_closed,
+                average_price: average_exit_price,
+                booked_pnl: Default::default(),
+                average_exit_price: None,
+                account: self.account.clone(),
+                originating_order_tag: position.tag,
+                time: close_time
+            })
         }
         else {
             if let Some(mut existing_position) = self.positions.get_mut(&position.symbol_code) {
@@ -304,8 +328,15 @@ impl Ledger {
                 existing_position.quantity_open = position.quantity_open;
                 existing_position.average_price = position.average_price;
                 existing_position.is_closed = position.is_closed;
+                None
             } else {
-                self.positions.insert(position.symbol_code.clone(), position);
+                self.positions.insert(position.symbol_code.clone(), position.clone());
+                Some(PositionUpdateEvent::PositionOpened {
+                    position_id: position.position_id.clone(),
+                    account: self.account.clone(),
+                    originating_order_tag: position.tag,
+                    time: position.open_time
+                })
             }
         }
     }

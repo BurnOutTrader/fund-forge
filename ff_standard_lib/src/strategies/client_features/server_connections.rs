@@ -272,7 +272,12 @@ pub async fn response_handler(
                                    if synchronise_accounts {
                                        //println!("Live Position: {:?}", position);
                                         //tokio::task::spawn(async move {
-                                       LEDGER_SERVICE.synchronize_live_position(account, position);
+                                       match LEDGER_SERVICE.synchronize_live_position(account, position) {
+                                           None => {}
+                                           Some(event) => {
+                                               strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap();
+                                           }
+                                       }
                                         //});
                                     }
                                 }
