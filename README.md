@@ -18,22 +18,7 @@ Make sure to double-check your configurations to avoid unintended trades.
 
 Once `StrategyMode::Live`, the system will not differentiate between test and real orders!
 
-## Current State of Live Trading
-***The server now properly handles multiple connects and disconnects when using rithmic, the problem was in shutting down rithmic broadcasters (removing broadcaster while holding a mut ref)***
-
-The platform is capable of live trading with rithmic, but it is not 100% stable or complete.
-
-No History functions have been built yet, so indicators and subscriptions will not auto warm up.
-
-Many problem scenarios have not been tested, although the strategy seems to maintain good synchronisation with rithmic, even with `synchronise_accounts` disabled.
-
-Live trading with rithmic requires you to use the `product_code` in place of `symbol_name` for functions like `strategy.is_long()`.
-
-When placing orders with rithmic you can pass in the exact product code you want to trade, or you can use the symbol name and the rithmic api will choose the front month for you.
-
-The order events will return both the symbol_name and product_code, should you let the api find the front month for you.
-
-Currently, you can only subscribe to data using symbol_name, but this will be fixed to allow trading calendar spreads.
+See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) for more information.
 
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
@@ -100,6 +85,24 @@ fn main() {
 }
 ```
 After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
+
+
+## Current State of Live Trading
+***The server now properly handles multiple connects and disconnects when using rithmic, the problem was in shutting down rithmic broadcasters (removing broadcaster while holding a mut ref)***
+
+The platform is capable of live trading with rithmic, but it is not 100% stable or complete.
+
+No History functions have been built yet, so indicators and subscriptions will not auto warm up.
+
+Many problem scenarios have not been tested, although the strategy seems to maintain good synchronisation with rithmic, even with `synchronise_accounts` disabled.
+
+Live trading with rithmic requires you to use the `product_code` in place of `symbol_name` for functions like `strategy.is_long()`.
+
+When placing orders with rithmic you can pass in the exact product code you want to trade, or you can use the symbol name and the rithmic api will choose the front month for you.
+
+The order events will return both the symbol_name and product_code, should you let the api find the front month for you.
+
+Currently, you can only subscribe to data using symbol_name, but this will be fixed to allow trading calendar spreads.
 
 ## Overview
 The engine is designed to provide simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators,
