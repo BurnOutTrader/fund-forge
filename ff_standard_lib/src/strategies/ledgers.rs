@@ -292,16 +292,10 @@ impl Ledger {
         *account_cash_available = cash_available;
     }
 
-    // TODO[Strategy]: Add option to mirror account position or use internal position curating.
-    #[allow(unused)]
-    /// Booked pnl is only sent for closed positions, it is the amount of booked pnl since the last side change from none to long or short
     pub fn synchronize_live_position(&self, position: Position) {
         if position.is_closed {
-            if let Some(existing_position) = self.positions.remove(&position.symbol_code) {
-                self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position);
-            } else {
-                self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position);
-            }
+            self.positions.remove(&position.symbol_code);
+            self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position);
         }
         else {
             if let Some(mut existing_position) = self.positions.get_mut(&position.symbol_code) {
