@@ -31,7 +31,7 @@ use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, PositionSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderType, OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolCode, SymbolName};
-use ff_standard_lib::standardized_types::symbol_info::{FrontMonthInfo, SymbolInfo};
+use ff_standard_lib::standardized_types::symbol_info::{FrontMonthInfo};
 use ff_standard_lib::standardized_types::books::BookLevel;
 use ff_standard_lib::standardized_types::accounts::AccountId;
 use ff_standard_lib::StreamName;
@@ -82,7 +82,6 @@ pub struct RithmicClient {
     pub latency: Arc<DashMap<SysInfraType, i64>>,
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
-    pub symbol_info: DashMap<SymbolName, SymbolInfo>,
     pub front_month_info: DashMap<SymbolName, FrontMonthInfo>,
 
     // accounts
@@ -152,7 +151,6 @@ impl RithmicClient {
             heartbeat_tasks: Arc::new(DashMap::with_capacity(5)),
             latency: Arc::new(DashMap::with_capacity(5)),
             client: Arc::new(client),
-            symbol_info: Default::default(),
             front_month_info: Default::default(),
             account_info: Default::default(),
             account_balance: Default::default(),
