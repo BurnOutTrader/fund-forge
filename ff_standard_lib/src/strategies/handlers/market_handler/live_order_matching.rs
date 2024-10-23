@@ -45,7 +45,7 @@ pub fn live_order_update(
                          order.time_filled_utc = Some(time.clone());
                          let events = match synchronize_positions {
                              false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), order.side.clone(), Utc::now(), *price, tag.to_string()).await),
-                                true => None
+                                true => None //todo, we should update only average exit price here
                          };
                          match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                              Ok(_) => {}
@@ -71,7 +71,7 @@ pub fn live_order_update(
 
                        let events = match synchronize_positions {
                            false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), order.side.clone(), Utc::now(), *price, tag.to_string()).await),
-                           true => None
+                           true => None //todo, we should update only average exit price here
                        };
 
                        match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {

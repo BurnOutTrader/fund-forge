@@ -109,10 +109,16 @@ pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> String {
         _ => return symbol.to_string(), // Invalid month
     };
 
-    let year = utc_time.year() % 100; // Get the last two digits of the year
+    // Check if we are near the end of the month (for simplicity, assume roll happens on 15th) todo add a fn for rollover days based on symbol name
+    let roll_day = 15; // Adjust this based on the actual roll schedule for the symbol
+    let current_day = utc_time.day();
+
+    let year = if current_day >= roll_day {
+        utc_time.year() % 100 + 1 // Move to the next year if rolled over in December
+    } else {
+        utc_time.year() % 100 // Stay in the current year
+    };
 
     // Now, construct the contract code
-    let contract_code = format!("{}{}{}", symbol, month_code, year);
-
-    contract_code
+    format!("{}{}{}", symbol, month_code, year)
 }
