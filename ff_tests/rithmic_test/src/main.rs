@@ -40,7 +40,7 @@ const MAX_LOSS: Decimal = dec!(1500);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR ACCOUNT ID HERE".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR ACCOUNT_ID HERE".to_string());
     let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
     let subscription = DataSubscription::new(
         SymbolName::from("MNQ"),
@@ -67,6 +67,14 @@ async fn main() {
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)
             ),
+           /* DataSubscription::new(
+                SymbolName::from("MNQ"),
+                data_vendor.clone(),
+                Resolution::Ticks(1),
+                BaseDataType::Ticks,
+                MarketType::Futures(FuturesExchange::CME)
+            ),*/
+
             //subscribe to our subscription
             subscription.clone() //todo, add any more data feeds you want into here.
         ],
@@ -76,7 +84,7 @@ async fn main() {
         core::time::Duration::from_millis(10),
         false,
         true,
-        false,
+        true,
         vec![account.clone()] //todo, add any more accounts you want into here.
     ).await;
 
@@ -137,6 +145,7 @@ pub async fn on_data_received(
     let mut position_size = 0;
     let atr_plot = "atr".to_string();
     let mut last_result = TradeResult::BreakEven;
+    let mut attempting_entry = "None".to_string();
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -152,6 +161,7 @@ pub async fn on_data_received(
                         }
                         BaseDataEnum::Candle(candle) => {
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
+                            //println!("{} Candle: {} @ {}", candle.symbol.name, candle.close, candle.time_local(strategy.time_zone()));
 
                         }
                         BaseDataEnum::Quote(quote) => {
@@ -186,7 +196,7 @@ pub async fn on_data_received(
                                 let last_candle = last_candle.unwrap();
                                 let last_atr = last_atr.unwrap().get_plot(&atr_plot).unwrap().value;
                                 let current_atr = current_atr.unwrap().get_plot(&atr_plot).unwrap().value;
-                                let min_atr = current_atr >= dec!(2);
+                                let min_atr = current_atr >= dec!(1.25);
                                 let atr_increasing = current_atr > last_atr;
                                 let booked_pnl = strategy.booked_pnl(&account, &symbol_code);
                                 let bar_time = quotebar.time_utc();
@@ -235,7 +245,7 @@ pub async fn on_data_received(
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
                                     entry_order_id = Some(order_id);
                                     exit_order_id = None;
-                                    last_side = LastSide::Long;
+                                    attempting_entry = "Long".to_string();
 
                                 }
                                 else if IS_SHORT_STRATEGY && (last_side != LastSide::Short || (last_side == LastSide::Short && last_result == TradeResult::Win)) && is_flat && low_1 && entry_order_id.is_none() && atr_increasing && min_atr {
@@ -244,7 +254,7 @@ pub async fn on_data_received(
                                     let order_id = strategy.limit_order(&symbol, None, &account, None,dec!(2), OrderSide::Sell, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Short Limit")).await;
                                     entry_order_id = Some(order_id);
                                     exit_order_id = None;
-                                    last_side = LastSide::Short;
+                                    attempting_entry = "Short".to_string();
                                 }
 
                                 // exit orders
@@ -257,8 +267,8 @@ pub async fn on_data_received(
                                 let open_profit = strategy.pnl(&account,  &symbol_code);
                                 let position_size = strategy.position_size(&account, &symbol_code);
                                 println!(
-                                    "Bars: {}, Open Profit: {}, Position Size: {}, Last Trade Side: {:?}",
-                                    bars_since_entry, open_profit, position_size, last_side
+                                    "Bars: {}, Open Profit: {}, Position Size: {}, Last Entry Attempt: {}",
+                                    bars_since_entry, open_profit, position_size, attempting_entry
                                 );
 
                                 //Add to winners up to 2x if we have momentum
@@ -348,7 +358,9 @@ pub async fn on_data_received(
                 println!("Strategy: Open Quantity: {}", quantity);
 
                 match event {
-                    PositionUpdateEvent::PositionOpened { .. } => {},
+                    PositionUpdateEvent::PositionOpened { .. } => {
+
+                    },
                     PositionUpdateEvent::Increased { .. } => {},
                     PositionUpdateEvent::PositionReduced { .. } => {},
                     PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
@@ -392,6 +404,7 @@ pub async fn on_data_received(
                     },
                     OrderUpdateEvent::OrderCancelled {order_id, ..} | OrderUpdateEvent::OrderFilled {order_id, ..} => {
                         println!("{}", msg.as_str().bright_cyan());
+
                         let mut closed = false;
                         if let Some(entry_order_id) = &entry_order_id {
                             if *order_id == *entry_order_id {
@@ -401,6 +414,7 @@ pub async fn on_data_received(
                         if closed {
                             entry_order_id = None;
                         }
+
                         closed = false;
                         if let Some( exit_order_id) =  &exit_order_id {
                             if order_id == *exit_order_id {
@@ -411,6 +425,7 @@ pub async fn on_data_received(
                             exit_order_id = None;
                         }
 
+                        closed = false;
                         if let Some( add_order_id) =  &add_order_id {
                             if order_id == *add_order_id {
                                 closed = true;

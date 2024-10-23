@@ -34,6 +34,8 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 
 *When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](example_test_strategy/README.md)
 
+The easiest way to get up and running is to download the repo and open it with [Jetbrains Rust Rover](https://www.jetbrains.com/rust/?_gl=1*132okxr*_gcl_aw*R0NMLjE3MjczMDE0MjAuQ2p3S0NBanc2YzYzQmhBaUVpd0FGMEVIMUJSYkxpU1lmRUdJZkFENGMtbzlWc0FFQnNPaVpTS2cxLUxxaDdDeDZuMXB2ajlUUXpFQWtSb0MxNUVRQXZEX0J3RQ..*_gcl_au*MTgwMzYzMTQwOS4xNzI1MjI3MDMx*_ga*NTkyMTQxNDAyLjE3MjUyMjcwMjc.*_ga_9J976DJZ68*MTcyOTY3MDgzMC44LjEuMTcyOTY3MjQ5NC41OC4wLjA), I have already got the run configurations set up for you.
+
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
 - [Example Strategy](example_test_strategy/src/main.rs)
