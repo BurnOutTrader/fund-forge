@@ -2,12 +2,13 @@ use crate::strategies::consolidators::candlesticks::CandleStickConsolidator;
 use crate::strategies::consolidators::count::CountConsolidator;
 use crate::strategies::consolidators::heikinashi::HeikinAshiConsolidator;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use crate::standardized_types::enums::{StrategyMode};
+use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Datelike, Duration, Utc, Weekday};
 use crate::standardized_types::base_data::history::get_historical_data;
 use crate::standardized_types::resolution::Resolution;
+use crate::standardized_types::symbol_info::extract_symbol_from_contract;
 
 pub enum ConsolidatorEnum {
     Count(CountConsolidator),
@@ -27,9 +28,17 @@ impl ConsolidatorEnum {
             _ => false,
         };
 
+        let symbol_name = match subscription.market_type {
+            MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
+            _ => subscription.symbol.name.clone(),
+        };
+
+        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(symbol_name.clone()).await.unwrap();
+        let tick_size = subscription.symbol.data_vendor.tick_size(symbol_name.clone()).await.unwrap();
+
         if is_tick {
            return ConsolidatorEnum::Count(
-                CountConsolidator::new(subscription.clone())
+                CountConsolidator::new(subscription.clone(), decimal_accuracy, tick_size)
                     .await
                     .unwrap(),
             )
@@ -38,12 +47,12 @@ impl ConsolidatorEnum {
         let consolidator = match &subscription.candle_type {
             Some(candle_type) => match candle_type {
                 CandleType::HeikinAshi => ConsolidatorEnum::HeikinAshi(
-                    HeikinAshiConsolidator::new(subscription.clone(), fill_forward)
+                    HeikinAshiConsolidator::new(subscription.clone(), fill_forward, decimal_accuracy, tick_size)
                         .await
                         .unwrap(),
                 ),
                 CandleType::CandleStick => ConsolidatorEnum::CandleStickConsolidator(
-                    CandleStickConsolidator::new(subscription.clone(), fill_forward)
+                    CandleStickConsolidator::new(subscription.clone(), fill_forward, decimal_accuracy, tick_size)
                         .await
                         .unwrap(),
                 ),

@@ -81,18 +81,18 @@ pub struct FrontMonthInfo {
     pub symbol_code: SymbolCode
 }
 
-pub fn extract_symbol_from_contract(contract: &str) -> Option<String> {
+pub fn extract_symbol_from_contract(contract: &str) -> String {
     // Ensure the contract is long enough to contain a symbol and month-year code
     if contract.len() < 4 {
-        return None;
+        return contract.to_string();
     }
 
     // Extract the symbol by removing the last three characters (month and year)
     let symbol = &contract[..contract.len() - 3];
 
-    Some(symbol.to_string())
+    symbol.to_string()
 }
-pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> Option<String> {
+pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> String {
     let month_code = match utc_time.month() {
         1 => 'F',  // January
         2 => 'G',  // February
@@ -106,7 +106,7 @@ pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> Option<String> 
         10 => 'V', // October
         11 => 'X', // November
         12 => 'Z', // December
-        _ => return None, // Invalid month
+        _ => return symbol.to_string(), // Invalid month
     };
 
     let year = utc_time.year() % 100; // Get the last two digits of the year
@@ -114,5 +114,5 @@ pub fn get_front_month(symbol: &str, utc_time: DateTime<Utc>) -> Option<String> 
     // Now, construct the contract code
     let contract_code = format!("{}{}{}", symbol, month_code, year);
 
-    Some(contract_code)
+    contract_code
 }

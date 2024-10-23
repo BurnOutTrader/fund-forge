@@ -14,6 +14,7 @@ use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators}
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::MarketType;
+use crate::standardized_types::symbol_info::extract_symbol_from_contract;
 
 #[derive(Clone, Debug)]
 /// The Atr indicator only updates on closed data
@@ -54,8 +55,13 @@ impl AverageTrueRange {
         plot_color: Color,
         tick_rounding: bool
     ) -> Self {
-        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await.unwrap();
-        let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await.unwrap();
+        let symbol_name = match subscription.market_type {
+            MarketType::Futures(_) => extract_symbol_from_contract(&subscription.symbol.name),
+            _ => subscription.symbol.name.clone(),
+        };
+        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(symbol_name.clone()).await.unwrap();
+        let tick_size = subscription.symbol.data_vendor.tick_size(symbol_name.clone()).await.unwrap();
+
         let atr = AverageTrueRange {
             name,
             market_type: subscription.symbol.market_type.clone(),

@@ -21,6 +21,7 @@ use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
+use ff_standard_lib::standardized_types::symbol_info::get_front_month;
 #[allow(unused_imports)]
 use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
 #[allow(unused_imports)]
@@ -47,7 +48,7 @@ async fn main() {
         data_vendor.clone(),
         Resolution::Seconds(3),
         BaseDataType::QuoteBars,
-        MarketType::Futures(FuturesExchange::CME)); //todo, dont forget to change the exchange for the symbol you are trading
+        MarketType::Futures(FuturesExchange::CME));  //todo, dont forget to change the exchange for the symbol you are trading
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let strategy = FundForgeStrategy::initialize(
@@ -65,7 +66,7 @@ async fn main() {
                 data_vendor.clone(),
                 Resolution::Instant,
                 BaseDataType::Quotes,
-                MarketType::Futures(FuturesExchange::CME) //todo, dont forget to change the exchange for the symbol you are trading
+                MarketType::Futures(FuturesExchange::CME)  //todo, dont forget to change the exchange for the symbol you are trading
             ),
            /* DataSubscription::new(
                 SymbolName::from("MNQ"),
@@ -137,7 +138,7 @@ pub async fn on_data_received(
     strategy.subscribe_indicator(atr_10.clone(), false).await;
     let mut warmup_complete = false;
     let mut last_side = LastSide::Flat;
-    let mut symbol_code = "MNQZ4".to_string();
+    let mut symbol_code = get_front_month(&subscription.symbol.name, Utc::now());
     let mut count = 0;
     let mut bars_since_entry = 0;
     let mut entry_order_id = None;
@@ -403,11 +404,7 @@ pub async fn on_data_received(
             StrategyEvent::OrderEvents(event) => {
                 match event.symbol_code() {
                     None => {}
-                    Some(code) => {
-                        if code.starts_with("MNQ") {
-                            symbol_code = code;
-                        }
-                    }
+                    Some(_) => {}
                 }
                 strategy.print_ledger(event.account());
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));

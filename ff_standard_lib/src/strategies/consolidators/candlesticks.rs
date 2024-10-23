@@ -326,6 +326,8 @@ impl CandleStickConsolidator {
     pub(crate) async fn new(
         subscription: DataSubscription,
         fill_forward: bool,
+        decimal_accuracy: u32,
+        tick_size: Decimal,
     ) -> Result<Self, FundForgeError> {
         println!("Creating Consolidator For: {}", subscription);
         if subscription.base_data_type == BaseDataType::Fundamentals {
@@ -343,9 +345,6 @@ impl CandleStickConsolidator {
                 )),
             );
         }
-
-        let decimal_accuracy = subscription.symbol.data_vendor.decimal_accuracy(subscription.symbol.name.clone()).await?;
-        let tick_size = subscription.symbol.data_vendor.tick_size(subscription.symbol.name.clone()).await?;
 
         let market_type = subscription.symbol.market_type.clone();
 
