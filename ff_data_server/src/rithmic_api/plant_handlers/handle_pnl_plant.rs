@@ -129,7 +129,7 @@ pub async fn match_pnl_plant_id(
                     },
                     _ => {}
                 }
-                println!("PNL Update Message: {:?}", msg);
+                //println!("PNL Update Message: {:?}", msg);
                 println!("Rithmic Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
                 let account_id = match msg.account_id {
                     None => return,
@@ -151,7 +151,6 @@ pub async fn match_pnl_plant_id(
                 // Update long positions
                 if net_quantity > 0 {
                     if let Some(open_position_quantity) = msg.open_position_quantity {
-                        println!("Net Quantity is greater than 0, updating long position");
                         client.long_quantity
                             .entry(account_id.clone())
                             .or_insert_with(DashMap::new)
@@ -162,7 +161,6 @@ pub async fn match_pnl_plant_id(
                         .or_insert_with(DashMap::new)
                         .remove(symbol_code);
                 } else if net_quantity < 0 {
-                    println!("Net Quantity is negative, updating short position");
                     if let Some(open_position_quantity) = msg.open_position_quantity {
                         client.short_quantity
                             .entry(account_id.clone())
@@ -216,7 +214,6 @@ pub async fn match_pnl_plant_id(
                 }
 
                 if let (Some(side) ,Some(open_position_quantity)) = (side, msg.open_position_quantity) {
-                    println!("Creating new position");
                     if let (Some(symbol_name), Some(average_price)) = (&msg.product_code, &msg.avg_open_fill_price) {
                         let average_price = match Decimal::from_f64_retain(*average_price) {
                             Some(average_price) => average_price,

@@ -270,7 +270,7 @@ pub async fn response_handler(
                                 }
                                 DataServerResponse::LivePositionUpdates { account, position } => {
                                    if synchronise_accounts {
-                                       println!("Live Position: {:?}", position);
+                                       //println!("Live Position: {:?}", position);
                                         //tokio::task::spawn(async move {
                                        LEDGER_SERVICE.synchronize_live_position(account, position);
                                         //});
