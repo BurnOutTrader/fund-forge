@@ -40,7 +40,7 @@ const MAX_LOSS: Decimal = dec!(1500);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR ACCOUNT_ID HERE".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID_HERE".to_string());
     let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
     let subscription = DataSubscription::new(
         SymbolName::from("MNQ"),
@@ -221,22 +221,21 @@ pub async fn on_data_received(
                                     continue;
                                 }
 
-                                // Calculate 5% of the bar's range using the built-in property
-                                let five_percent_range = quotebar.range * dec!(0.5);
-
                                 // Check if close is within 5% of high or low
-                                let high_close = (quotebar.bid_high - quotebar.bid_close) <= five_percent_range;
-                                let low_close = (quotebar.bid_close - quotebar.bid_low) <= five_percent_range;
+                                let high_close = (quotebar.bid_high - quotebar.bid_close) / quotebar.bid_high <= dec!(0.05);
+                                let low_close = (quotebar.bid_close - quotebar.bid_low) / quotebar.bid_low <= dec!(0.05);
 
                                 // See if we have a clean bullish entry bar
-                                let high_1 = quotebar.bid_low <= last_candle.bid_open &&
+                                let high_1 = quotebar.bid_low >= last_candle.bid_open && // Changed to >= for true support
                                     quotebar.bid_close > last_candle.ask_high &&
-                                    high_close;
+                                    high_close &&
+                                    quotebar.bid_close > quotebar.bid_open; // Add check for bullish close
 
                                 // See if we have a clean bearish entry bar
-                                let low_1 = quotebar.ask_high >= last_candle.ask_open &&
+                                let low_1 = quotebar.ask_high <= last_candle.ask_open && // Changed to <= for true resistance
                                     quotebar.ask_close < last_candle.bid_low &&
-                                    low_close;
+                                    low_close &&
+                                    quotebar.ask_close < quotebar.ask_open; // Add check for bearish close
 
                                 // entry orders
                                 if IS_LONG_STRATEGY && (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && is_flat && high_1 && entry_order_id.is_none() && atr_increasing && min_atr {
