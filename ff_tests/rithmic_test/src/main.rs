@@ -221,9 +221,27 @@ pub async fn on_data_received(
                                     continue;
                                 }
 
-                                // Check if close is within 5% of high or low
-                                let high_close = (quotebar.bid_high - quotebar.bid_close) / quotebar.bid_high <= dec!(0.05);
-                                let low_close = (quotebar.bid_close - quotebar.bid_low) / quotebar.bid_low <= dec!(0.05);
+                                let high_close = match quotebar.bid_close.cmp(&quotebar.bid_open) {
+                                    std::cmp::Ordering::Greater => { // Bullish candle
+                                        // Close should be near high for bullish
+                                        match quotebar.bid_high.cmp(&quotebar.bid_close) {
+                                            std::cmp::Ordering::Greater => (quotebar.bid_high - quotebar.bid_close) / quotebar.bid_high <= dec!(0.05),
+                                            _ => false
+                                        }
+                                    },
+                                    _ => false // Must be bullish to check high close
+                                };
+
+                                let low_close = match quotebar.bid_close.cmp(&quotebar.bid_open) {
+                                    std::cmp::Ordering::Less => { // Bearish candle
+                                        // Close should be near low for bearish
+                                        match quotebar.bid_close.cmp(&quotebar.bid_low) {
+                                            std::cmp::Ordering::Greater => (quotebar.bid_close - quotebar.bid_low) / quotebar.bid_low <= dec!(0.05),
+                                            _ => false
+                                        }
+                                    },
+                                    _ => false // Must be bearish to check low close
+                                };
 
                                 // See if we have a clean bullish entry bar
                                 let high_1 = quotebar.bid_low >= last_candle.bid_open && // Changed to >= for true support
