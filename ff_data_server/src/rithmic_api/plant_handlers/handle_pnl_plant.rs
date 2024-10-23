@@ -252,7 +252,7 @@ pub async fn match_pnl_plant_id(
                             None => dec!(0)
                         };
 
-                        let position = match POSITIONS.get_mut(&symbol_code) {
+                        let position = match POSITIONS.get_mut(symbol_code) {
                             None => {
                                 let position = Position {
                                     pnl_currency: symbol_info.pnl_currency.clone(),
@@ -281,7 +281,7 @@ pub async fn match_pnl_plant_id(
                                 POSITIONS.insert(symbol_code.clone(), position.clone());
                                 position
                             }
-                            Some(position_ref) => {
+                            Some(mut position_ref) => {
                                 position_ref.quantity_open = open_position_quantity;
                                 position_ref.side = side;;
                                 position_ref.average_price = average_price;
