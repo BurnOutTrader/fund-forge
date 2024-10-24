@@ -14,6 +14,18 @@ Then you will just need to start the data server and keep it running until rithm
 
 Since Fund Forge is not a company, each user must do this, you can find more information at [Rithmic](https://www.rithmic.com/apis).
 
+## Rithmic Systems For Testing
+I have had trouble logging in with rithmic paper accounts which are given by brokers, this is possibly because you are required to pay for the rithmic api with real brokerages.
+You can use an online prop firm accounts without any problems.
+Some prop firms do not want algo traders. 
+Of all that I have spoken to TopStep seems to not have a problem with algo traders.
+Be aware prop firms do not offer support for this platform, you should use RTrader to flatten and monitor accounts.
+
+I am using:
+- [Apex](https://apextraderfunding.com/member/aff/go/burnouttrader) I have an affiliate coupon: `LISUNZQY`
+- [TopstepTrader](https://www.topsteptrader.com/) I have no affiliate yet.
+- [TakeProfitTrader](https://takeprofittrader.com/) I have no affiliate yet.
+
 ## File Structure
 The active folder will contain the credentials for the rithmic systems you intend to use.
 
