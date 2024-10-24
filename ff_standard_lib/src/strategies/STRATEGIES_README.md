@@ -184,7 +184,7 @@ disabled: the strategy will assume that it is the only source of orders and posi
 For example, you could close a strategy position, and the strategy will still think the position is open.
 
 #### `accounts: Vec<Account`
-Example of initializing accounts.
+Example of initializing accounts. You must list any accounts you want to trade prior to starting the strategy or it will crash at runtime. (this will be updated later to allow adding accounts at run time).
 ```rust
 let account_1 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
 let account_2 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
@@ -258,23 +258,6 @@ async fn main() {
         // The accounts we will be trading, there will also be a fn to initialize at run time.
         vec![Account::new(Brokerage::Test, "Test_Account_1".to_string()), Account::new(Brokerage::Test, "Test_Account_2".to_string())]
     ).await;
-
-   // You don't have to pass in accounts, but if you want to customise accounts you can do it like this.
-   // Any account you use in a backtest will be automatically created if you do not pass it in here.
-   let mut account_info = AccountSetup {
-      account_id: "123".to_string(),
-      brokerage: Brokerage::Test,
-      cash_value: dec!(100000),
-      currency: Currency::USD,
-      size_limit: None, //will be implemented but not currently relevant
-      max_orders: None, //will be implemented but not currently relevant
-      daily_max_loss: None, //will be implemented but not currently relevant
-      daily_max_reset_time: None, //will be implemented but not currently relevant, will be the hour of the day 
-      daily_max_loss_reset_time_zone: Tz, //will be implemented but not currently relevant, the time zone of the max loss reset hour.
-      leverage: Some(1), //un-leveraged 1 to 1 == None == 1, rithmic and test brokerage does not use this regardless of input.
-   };
-   // pass in the account info to create an account for this product
-   strategy.add_account(account_info);
 
     // We start receiving data in our on data fn
     on_data_received(strategy, strategy_event_receiver).await;
