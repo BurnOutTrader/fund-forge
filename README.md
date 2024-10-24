@@ -32,10 +32,10 @@ You might need to change the directories to your own.
 
 ### If Using Rust Rover
 #### Open the configurations and check if they are set to my directories or your own
-![img_1.png](misc/edit_configs.png)
+![config_edit_1.png](misc/config_edit_1.png)
 
 #### If they are not matching your directories then change this to match the location of your repo
-![img.png](misc/edit_configs_2.png)
+![edit_configs_2.png](misc/edit_configs_2.png)
 
 ## Warning!
 ⚠️ Warning ⚠️
