@@ -73,7 +73,9 @@ pub struct FundForgeStrategy {
 
     backtest_account_currency: Currency,
 
-    historical_message_sender: Option<Sender<BackTestEngineMessage>>
+    historical_message_sender: Option<Sender<BackTestEngineMessage>>,
+
+    accounts: Vec<Account>
 
 }
 
@@ -185,6 +187,7 @@ impl FundForgeStrategy {
             drawing_objects_handler,
             orders_count: Default::default(),
             synchronize_accounts,
+            accounts: accounts.clone()
         };
 
         match strategy_mode {
@@ -213,6 +216,10 @@ impl FundForgeStrategy {
             LEDGER_SERVICE.init_ledger(&account,strategy_mode, synchronize_accounts, backtest_accounts_starting_cash, backtest_account_currency).await;
         }
         strategy
+    }
+
+    pub fn accounts(&self) -> &Vec<Account> {
+        &self.accounts
     }
 
     pub async fn get_market_fill_price_estimate (
