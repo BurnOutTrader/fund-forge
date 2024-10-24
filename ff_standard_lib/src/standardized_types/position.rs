@@ -40,6 +40,7 @@ pub(crate) struct PositionExport {
 pub enum PositionUpdateEvent {
     PositionOpened {
         position_id: PositionId,
+        side: PositionSide,
         account: Account,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,

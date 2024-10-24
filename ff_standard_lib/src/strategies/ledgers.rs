@@ -334,9 +334,10 @@ impl Ledger {
             } else {
                 self.positions.insert(position.symbol_code.clone(), position.clone());
                 Some(PositionUpdateEvent::PositionOpened {
-                    symbol_name: position.symbol_name.clone(),
-                    symbol_code: position.symbol_code.clone(),
-                    position_id: position.position_id.clone(),
+                    side: position.side,
+                    symbol_name: position.symbol_name,
+                    symbol_code: position.symbol_code,
+                    position_id: position.position_id,
                     account: self.account.clone(),
                     originating_order_tag: position.tag,
                     time: position.open_time
@@ -733,6 +734,7 @@ impl Ledger {
                 symbol_name: symbol_name.clone(),
                 symbol_code: symbol_code.clone(),
                 position_id: id,
+                side: position_side,
                 account: self.account.clone(),
                 originating_order_tag: tag,
                 time: time.to_string()
@@ -1011,7 +1013,7 @@ mod historical_ledgers {
                     symbol_code.clone(),
                     symbol_code.clone(),
                     self.account.clone(),
-                    position_side,
+                    position_side.clone(),
                     remaining_quantity,
                     market_fill_price,
                     id.clone(),
@@ -1032,6 +1034,7 @@ mod historical_ledgers {
                 }
 
                 let event = PositionUpdateEvent::PositionOpened {
+                    side: position_side,
                     symbol_name: symbol_name.clone(),
                     symbol_code: symbol_code.clone(),
                     position_id: id,
