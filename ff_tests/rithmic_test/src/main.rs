@@ -35,20 +35,23 @@ const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
-const MIN_ATR_VALUE: Decimal = dec!(1.25);
+const MIN_ATR_VALUE: Decimal = dec!(01.25);
+const PROFIT_TARGET: Decimal = dec!(150);
+const RISK: Decimal = dec!(100);
+const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_HERE".to_string()); //todo change your brokerage to the broker
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_ID".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
     let symbol_name = SymbolName::from("MNQ");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
-    let data_vendor = DataVendor::Rithmic(RithmicSystem::Apex); //todo change your system to the provider
+
     let subscription = DataSubscription::new(
         symbol_name.clone(),
-        data_vendor.clone(),
+        DATAVENDOR,
         Resolution::Seconds(3),
         BaseDataType::QuoteBars,
         MarketType::Futures(FuturesExchange::CME));  //todo, dont forget to change the exchange for the symbol you are trading
@@ -66,7 +69,7 @@ async fn main() {
             //subscribe to a quote feed to ensure we use quotes
             DataSubscription::new(
                 symbol_name,
-                data_vendor.clone(),
+                DATAVENDOR,
                 Resolution::Instant,
                 BaseDataType::Quotes,
                 MarketType::Futures(FuturesExchange::CME)  //todo, dont forget to change the exchange for the symbol you are trading
@@ -312,12 +315,12 @@ pub async fn on_data_received(
                                 }
 
                                 let profit_goal = match position_size > dec!(5) {
-                                    true => dec!(400),
-                                    false => dec!(150)
+                                    true => PROFIT_TARGET,
+                                    false => PROFIT_TARGET * dec!(2)
                                 };
 
                                 // Cut losses and take profits, we check entry order is none to prevent exiting while an entry order is unfilled, entry order will expire and go to none on the TIF expiry, or on fill.
-                                if open_profit > profit_goal || (open_profit < dec!(-100) && bars_since_entry > 10) && add_order_id.is_none() && entry_order_id.is_none() && exit_order_id.is_none() {
+                                if open_profit > profit_goal || (open_profit < RISK && bars_since_entry > 10) && add_order_id.is_none() && entry_order_id.is_none() && exit_order_id.is_none() {
 
                                     let is_long = strategy.is_long(&account, &symbol_code);
                                     let is_short = strategy.is_short(&account, &symbol_code);
