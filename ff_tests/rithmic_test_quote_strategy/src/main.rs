@@ -62,8 +62,8 @@ const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
-    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
+    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string());
     let symbol_name = SymbolName::from("MNQ");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
@@ -279,13 +279,18 @@ pub async fn on_data_received(
                                             let exit_id = strategy.exit_long(&quotebar.symbol.name, None, &account, None, position_size, String::from("Exit Long")).await;
                                             exit_order_id.insert(account.clone(), exit_id);
                                             reset_bars_since_entry(&mut bars_since_entry_map, &account);
-                                            last_side = LastSide::Long;
+
+                                            if IS_SHORT_STRATEGY {
+                                                last_side = LastSide::Long;
+                                            }
                                         } else if strategy.is_short(&account, &symbol_code) {
                                             let position_size = strategy.position_size(&account, &symbol_code);
                                             let exit_id = strategy.exit_short(&quotebar.symbol.name, None, &account, None, position_size, String::from("Exit Short")).await;
                                             exit_order_id.insert(account.clone(), exit_id);
                                             reset_bars_since_entry(&mut bars_since_entry_map, &account);
-                                            last_side = LastSide::Short;
+                                            if IS_LONG_STRATEGY {
+                                                last_side = LastSide::Short;
+                                            }
                                         }
                                         continue;
                                     }
