@@ -140,6 +140,7 @@ pub async fn match_history_plant_id(
         _ => println!("No match for template_id: {}", template_id)
     }
 }
+
 async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
     let time = match deserialize_candle_time(&msg) {
         None => return,
@@ -258,7 +259,7 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
                     symbol: Some(symbol),
                     exchange: Some(exchange.to_string()),
                     request: Some(Request::Unsubscribe.into()),
-                    bar_type: Some(1),
+                    bar_type: Some(2), // 2 for unsubscribe
                     bar_type_period: Some(bar_type),
                 };
 
