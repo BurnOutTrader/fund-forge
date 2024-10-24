@@ -187,7 +187,7 @@ For example, you could close a strategy position, and the strategy will still th
 Example of initializing accounts. You must list any accounts you want to trade prior to starting the strategy or it will crash at runtime. (this will be updated later to allow adding accounts at run time).
 ```rust
 let account_1 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
-let account_2 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
+let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "Test_Account_1".to_string());
 let accounts = vec![account_1, account_2];
 ```
 
