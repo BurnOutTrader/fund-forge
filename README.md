@@ -69,7 +69,7 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 ## Demonstration Testing Data
 You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKF125tuEG16grLM_Q?e=Yukrv6)
 
-The Forex folder should be put into the following directory "ff_data_server/data/Test".
+The Forex folder should be put into the following directory "ff_data_server/data/historical/Test".
 
 *Note that between updates old data may become incompatible, this will only be during initial development, but be sure to keep original backups of any data if you parse your own data into the engine.
 
