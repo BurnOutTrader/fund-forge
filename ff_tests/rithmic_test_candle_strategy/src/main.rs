@@ -36,15 +36,15 @@ const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
 const MIN_ATR_VALUE: Decimal = dec!(2.5);
-const PROFIT_TARGET: Decimal = dec!(600);
-const RISK: Decimal = dec!(200);
+const PROFIT_TARGET: Decimal = dec!(150);
+const RISK: Decimal = dec!(100);
 const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_HERE".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
-    let symbol_name = SymbolName::from("MGC");
+    let symbol_name = SymbolName::from("GC");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
@@ -53,7 +53,7 @@ async fn main() {
         DATAVENDOR,
         Resolution::Minutes(3),
         MarketType::Futures(FuturesExchange::COMEX), //todo, dont forget to change the exchange for the symbol you are trading
-        CandleType::HeikinAshi
+        CandleType::CandleStick
         );
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
@@ -66,7 +66,7 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(5),
         vec![
-            DataSubscription::new(
+           DataSubscription::new(
                 subscription.symbol.name.clone(),
                 subscription.symbol.data_vendor.clone(),
                 Resolution::Ticks(1),
@@ -77,7 +77,7 @@ async fn main() {
             //subscribe to our subscription
             subscription.clone() //todo, add any more data feeds you want into here.
         ],
-        true,
+        false,
         100,
         strategy_event_sender,
         core::time::Duration::from_millis(10),
@@ -157,7 +157,7 @@ pub async fn on_data_received(
                     match base_data {
                         BaseDataEnum::Tick(tick) => {
                            let msg =  format!("{} Tick: {} @ {}", tick.symbol.name, tick.price, tick.time_local(strategy.time_zone()));
-                            println!("{}", msg.as_str().purple());
+                           println!("{}", msg.as_str().purple());
                         }
                         BaseDataEnum::Candle(candle) => {
                             if candle.is_closed == true  {
