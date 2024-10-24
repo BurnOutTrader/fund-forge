@@ -17,7 +17,7 @@ use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::accounts::{Account, AccountInfo, Currency};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::new_types::{Price, Volume};
-use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
+use crate::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
 
 lazy_static! {
@@ -78,6 +78,12 @@ impl LedgerService {
             return account_ledger.value().synchronize_live_position(position)
         }
         None
+    }
+
+    pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal) {
+        if let Some(account_ledger) = self.ledgers.get(&order.account) {
+            account_ledger.value().process_synchronized_orders(order, quantity).await;
+        }
     }
 
     pub(crate) async fn paper_exit_position(
@@ -332,6 +338,28 @@ impl Ledger {
                     time: position.open_time
                 })
             }
+        }
+    }
+
+    pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal) {
+        let symbol = match order.symbol_code {
+            None => order.symbol_name,
+            Some(code) => code
+        };
+        if let Some(mut position) = self.positions.get_mut(&symbol) {
+            let is_reducing = (position.side == PositionSide::Long && order.side == OrderSide::Sell)
+                || (position.side == PositionSide::Short && order.side == OrderSide::Buy);
+
+            if !is_reducing {
+                return;
+            }
+
+            let market_fill_price = match order.average_fill_price {
+                None => return,
+                Some(price) => price
+            };
+
+            position.reduce_position_size(self.mode, self.is_simulating_pnl, market_fill_price, quantity, Utc::now(), order.tag.clone(), self.currency).await;
         }
     }
 
