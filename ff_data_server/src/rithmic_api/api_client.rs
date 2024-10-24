@@ -244,6 +244,19 @@ impl RithmicClient {
                 self.writers.insert(system.clone(), writer.clone());
                 self.heartbeat_times.insert(system.clone(), Utc::now());
                 self.start_heart_beat(system, writer, self.heartbeat_times.clone()).await;
+                if self.credentials.ib_id != *self.client.ib_id.read().await {
+                 /*   let mut credentials = self.credentials.clone();
+                    credentials.ib_id = self.client.ib_id.read().await.clone();
+                    credentials.fcm_id = self.client.fcm_id.read().await.clone();
+                    let file_name = PathBuf::from(get_data_folder())
+                        .join("credentials")
+                        .join("rithmic_credentials")
+                        .join("active")
+                        .join(credentials.file_name())
+                        .to_string_lossy()
+                        .into_owned();
+                    credentials.save_credentials_to_file(&file_name).unwrap();*/
+                }
                 Ok(receiver)
             },
             Err(e) => {
