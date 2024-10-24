@@ -63,8 +63,8 @@ const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_ID".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
-    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
+    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT".to_string());
     let symbol_name = SymbolName::from("MNQ");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
@@ -338,7 +338,7 @@ pub async fn on_data_received(
 
                                         let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
                                         //Add to winners up to 2x if we have momentum
-                                        if (is_long || is_short) && bars_since_entry > 2 && open_profit >= dec!(60) && position_size <= dec!(5) && !add_order_id.contains_key(&account) {
+                                        if (is_long || is_short) && bars_since_entry > 2 && open_profit >= PROFIT_TARGET/dec!(3) && position_size <= dec!(5) && !add_order_id.contains_key(&account) {
 
                                             let cancel_order_time = Utc::now() + Duration::seconds(15);
 
@@ -381,7 +381,7 @@ pub async fn on_data_received(
 
                                         //Take smaller profit if we add and don't get momentum
                                         let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
-                                        if bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30) && position_size > dec!(2) && !exit_order_id.contains_key(&account) && add_order_id.contains_key(&account) {
+                                        if bars_since_entry > 5 && open_profit < profit_goal/dec!(3) && open_profit >= profit_goal/dec!(5) && position_size > dec!(2) && !exit_order_id.contains_key(&account) && add_order_id.contains_key(&account) {
 
                                             let is_long = strategy.is_long(&account, &symbol_code);
                                             let is_short = strategy.is_short(&account, &symbol_code);
