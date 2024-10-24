@@ -9,7 +9,6 @@ members = [
     "test_data_parser",
     "ff_tests/ledger_test",
     "ff_tests/rithmic_test_quote_strategy",
-    "ff_tests/rithmic_test_candle_strategy",
 ]
 
 

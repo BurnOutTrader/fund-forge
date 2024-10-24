@@ -8,7 +8,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::rolling_window::RollingWindow;
-use crate::standardized_types::subscriptions::{CandleType, DataSubscription, DataSubscriptionEvent, Symbol};
+use crate::standardized_types::subscriptions::{DataSubscription, DataSubscriptionEvent, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Duration, Utc};
 use dashmap::DashMap;
@@ -746,14 +746,11 @@ impl SymbolSubscriptionHandler {
                             return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
                         }
                         //todo this has issues, time to put it on server and decide per broker
-                        let is_heikin_ashi = new_subscription.candle_type == Some(CandleType::HeikinAshi);
                         let has_candles = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles));
                         let has_ticks = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
-                        if is_heikin_ashi {
-                            SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
-                        }
-                        else if has_ticks && has_candles {
-                            if fill_forward || is_heikin_ashi {
+
+                        if has_ticks && has_candles {
+                            if fill_forward {
                                 SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
                             } else {
                                 SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
