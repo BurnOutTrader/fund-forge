@@ -148,11 +148,11 @@ With fill forward enabled, during market close you will receive a series of bars
 You should consider that some indicators like ATR might see these bars and drop the ATR to 0 during these periods.
 If this is false, you will see periods of no data in backtests when the market is closed, as the engine ticks at buffering_millis through the close hours, until new  data is received.
 
-fill forward is best used on very low resolutions, like seconds. 
+fill_forward is best used on very low resolutions, like seconds. 
 
-If fill forward is enabled on a candle feed, the engine will prioritise a tick feed and consolidate the candles.
+If `fill_forward` is enabled on a candle feed, the engine will prioritise a tick feed and consolidate the candles.
 
-If fall forward == false, the engine will prioritise a 1-second candle feed if it is available.
+If `fill_forward == false`, the engine will prioritise a 1-second candle feed if it is available.
 
 If using very low resolutions <= 15 seconds, it is better to use QuoteBars, Quotes have many more updates than Ticks and you will get cleaner bars.
 QuoteBars will always update from Quote Feeds, this is a very expensive feed, it is better to use candles if you do not need the low resolutions of a Quote feed.
@@ -170,8 +170,8 @@ This helps us get consistent results between back testing and live trading and a
 This enables the ff_strategy_registry connection to connect to our gui, if false we will not broadcast events to the registry and will be invisible to the gui.
 
 #### `tick_over_no_data: bool`
-If true the historical engine will tick at buffer duration speed when there is no historical data available.
-This allows us to use timed events of fill forward over weekends, if no, the engine will skip days where no data was available and jump to the next time instantly.
+If true the historical engine will tick at buffer durations even when there is no historical data available.
+This allows us to use timed events of fill forward over weekends, if false, the engine will skip any periods where no data was available and jump to the next time instantly.
 This does nothing in live.
 
 #### `synchronize_accounts: bool` 
@@ -495,8 +495,8 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 
 ### Futures Subscriptions
 You can subscribe using the `SymbolName` eg "MNQ" or the `SymbolCode` eg "MNQZ4".
-If you are placing orders with SymbolCode instead of SymbolName you will also need to pass in the `FuturesExchange` as a string. Example `FuturesExchange::CME.to_string()`
-By passing in the exchange string we are telling the data server to specifically place a trade on the "Z4" Contract.
+You can also place orders on a specific contract using symbol_code.
+If you use symbol name for orders, rithmic will chose the front month contract for you.
 
 ### Subscription Performance Impacts
 In back-testing using multiple symbols will slow down the engine only relative to the size of the primary data set, since the Subscription manager updates consolidators concurrently,
