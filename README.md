@@ -34,8 +34,9 @@ You might need to change the directories to your own.
 #### Open the configurations and check if they are set to my directories or your own
 ![config_edit_1.png](misc/config_edit_1.png)
 
-#### If they are not matching your directories then change this to match the location of your repo
-![edit_configs_2.png](misc/edit_configs_2.png)
+#### If they are not matching your directories then change this to match the location of your repo.
+(this is specific per configuration, this example is for the rithmic_test strategy, other configurations will have different directories)
+![img.png](misc/config_edit_1.png)
 
 ## Warning!
 ⚠️ Warning ⚠️
