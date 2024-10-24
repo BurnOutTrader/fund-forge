@@ -35,8 +35,8 @@ use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
   - This strategy is designed to trade 1 symbol at a time, the logic will not work for multiple symbols.
     - It can trade multiple accounts / brokers.
     - It is designed to get into a position and add to winners, up to 4x the original position size. (2 contracts starting size, up to 8)
- - It will start by limiting in on a clean bull or bear bar closing on its high or low, where atr is increasing and above a minimum value.
-    - If it is in a winner it will look to increase size on the next signal by taking a momentum stop limit entry 2x after initial entry.
+    - It will start by limiting in on a clean bull or bear bar closing on its high or low, where atr is increasing and above a minimum value.
+    - If it is in a winner it will look to increase size on the next signal by taking a momentum stop limit entry up to 2x after initial entry.
     - Both the initial limit order and the add stop limit orders use a 15 to 30 second time in force to expire if not filled, this is done on the exchange side.
     - It will only enter trades when the atr looks to be increasing.
     - It will not enter trades below the minimum atr value.
