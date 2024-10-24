@@ -63,8 +63,8 @@ const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
-    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
+    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT".to_string());
     let symbol_name = SymbolName::from("MNQ");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
@@ -471,7 +471,7 @@ pub async fn on_data_received(
                         if let Some( entry_order_id) =  entry_order_id.get(&event.account()) {
                             if order_id == entry_order_id {
                                 closed = true;
-                                last_side.remove(&event.account());
+                                last_side.insert( event.account().clone() ,LastSide::Flat);
                             }
                         }
                         if closed {
