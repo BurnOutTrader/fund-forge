@@ -12,17 +12,6 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 ## Announcements
 - 24/10/2024: The folder and file structure was changed, The historical data has not changed, you can just move the historical data you have already downloaded to `ff_data_server/data/historical` and it will work as before. This was done to make set up easier for new users.
 
-⚠️ Warning
-: If you are using Rithmic, proceed with extreme caution!
-Live order functionality is being implemented, and any active strategy may send real orders directly to the market.
-If I make any mistakes, and leave a test strategy in live mode, it will trade your live accounts!.
-
-Make sure to double-check your configurations to avoid unintended trades.
-
-Once `StrategyMode::Live`, the system will not differentiate between test and real orders!
-
-See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) for more information.
-
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
 2. Download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKID2SU-oFFpKWsqGg?e=jYaN6n) or
@@ -38,6 +27,18 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 *When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](example_test_strategy/README.md)
 
 The easiest way to get up and running is to download the repo and open it with [Jetbrains Rust Rover](https://www.jetbrains.com/rust/?_gl=1*132okxr*_gcl_aw*R0NMLjE3MjczMDE0MjAuQ2p3S0NBanc2YzYzQmhBaUVpd0FGMEVIMUJSYkxpU1lmRUdJZkFENGMtbzlWc0FFQnNPaVpTS2cxLUxxaDdDeDZuMXB2ajlUUXpFQWtSb0MxNUVRQXZEX0J3RQ..*_gcl_au*MTgwMzYzMTQwOS4xNzI1MjI3MDMx*_ga*NTkyMTQxNDAyLjE3MjUyMjcwMjc.*_ga_9J976DJZ68*MTcyOTY3MDgzMC44LjEuMTcyOTY3MjQ5NC41OC4wLjA), I have already got the run configurations set up for you.
+
+⚠️ Warning ⚠️
+
+If you are using Rithmic, proceed with extreme caution!
+Live order functionality is being implemented, and any active strategy may send real orders directly to the market.
+If I make any mistakes, and leave a test strategy in live mode, it will trade your live accounts!.
+
+Make sure to double-check your configurations to avoid unintended trades.
+
+Once `StrategyMode::Live`, the system will not differentiate between test and real orders!
+
+See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) for more information.
 
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
