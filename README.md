@@ -15,7 +15,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
 2. Download the backtesting data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKID2SU-oFFpKWsqGg?e=jYaN6n) or
-   for [more free testing](https://www.histdata.com/), to parse data [see](#for-more-testing-and-development-data).
+   for [more free testing](https://www.histdata.com/). (To parse data [see](#for-more-testing-and-development-data))
 3. Put the test data into the correct directory. [instructions below](#file-and-folder-structure)
 4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (don't run the server in your IDE, it will have issues (more issues than normal :) )
     - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
