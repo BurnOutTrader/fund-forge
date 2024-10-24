@@ -54,7 +54,7 @@ const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
-const MIN_ATR_VALUE: Decimal = dec!(01.25);
+const MIN_ATR_VALUE: Decimal = dec!(1.25);
 const PROFIT_TARGET: Decimal = dec!(150);
 const RISK: Decimal = dec!(100);
 const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
@@ -110,7 +110,7 @@ async fn main() {
         core::time::Duration::from_millis(10),
         false,
         true,
-        false,
+        true,
         vec![account.clone(), account_2] //todo, add any more accounts you want into here.
     ).await;
 
