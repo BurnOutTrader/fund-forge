@@ -55,7 +55,7 @@ const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
-const MIN_ATR_VALUE: Decimal = dec!(5);
+const MIN_ATR_VALUE: Decimal = dec!(0.5);
 const PROFIT_TARGET: Decimal = dec!(150);
 const RISK: Decimal = dec!(100);
 const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
@@ -65,7 +65,7 @@ async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_ID".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
     let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID".to_string());
-    let symbol_name = SymbolName::from("YM");
+    let symbol_name = SymbolName::from("MNQ");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
@@ -74,7 +74,7 @@ async fn main() {
         DATAVENDOR,
         Resolution::Seconds(5),
         BaseDataType::QuoteBars,
-        MarketType::Futures(FuturesExchange::CBOT));  //todo, dont forget to change the exchange for the symbol you are trading
+        MarketType::Futures(FuturesExchange::CME));  //todo, dont forget to change the exchange for the symbol you are trading
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let strategy = FundForgeStrategy::initialize(
@@ -92,7 +92,7 @@ async fn main() {
                 DATAVENDOR,
                 Resolution::Instant,
                 BaseDataType::Quotes,
-                MarketType::Futures(FuturesExchange::CBOT)  //todo, dont forget to change the exchange for the symbol you are trading
+                MarketType::Futures(FuturesExchange::CME)  //todo, dont forget to change the exchange for the symbol you are trading
             ),
            /* DataSubscription::new(
                 SymbolName::from("MNQ"),
@@ -115,7 +115,7 @@ async fn main() {
         vec![account.clone(), account_2.clone()] //todo, add any more accounts you want into here.
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver, account, subscription, symbol_code).await;
+    on_data_received(strategy, strategy_event_receiver, subscription, symbol_code).await;
 }
 
 #[allow(dead_code, unused)]
@@ -136,7 +136,6 @@ enum TradeResult {
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
-    account: Account,
     subscription: DataSubscription,
     mut symbol_code: String
 ) {
@@ -162,8 +161,6 @@ pub async fn on_data_received(
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
     strategy.subscribe_indicator(atr_10.clone(), false).await;
     let mut warmup_complete = false;
-    let mut last_side = LastSide::Flat;
-    let mut count = 0;
     let mut bars_since_entry_map: HashMap<Account, u64> = strategy
         .accounts()
         .into_iter().map(|account| (account.clone(), 0))
@@ -226,8 +223,6 @@ pub async fn on_data_received(
                                     }
                                 }
 
-                                count += 1;
-
                                 let last_candle = strategy.bar_index(&subscription, 1);
                                 let last_atr = strategy.indicator_index(&atr_10.name(), 1);
                                 let current_atr = strategy.indicator_index(&atr_10.name(), 0);
@@ -237,13 +232,13 @@ pub async fn on_data_received(
                                     continue;
                                 }
 
-                                let is_flat = strategy.is_flat(&account, &symbol_code);
+
                                 let last_candle = last_candle.unwrap();
                                 let last_atr = last_atr.unwrap().get_plot(&atr_plot).unwrap().value;
                                 let current_atr = current_atr.unwrap().get_plot(&atr_plot).unwrap().value;
                                 let min_atr = current_atr >= MIN_ATR_VALUE;
                                 let atr_increasing = current_atr > last_atr;
-                                let booked_pnl = strategy.booked_pnl(&account, &symbol_code);
+
                                 let bar_time = quotebar.time_utc();
 
                                 let high_close = match quotebar.bid_close.cmp(&quotebar.bid_open) {
@@ -281,6 +276,9 @@ pub async fn on_data_received(
                                     quotebar.ask_close < quotebar.ask_open; // Add check for bearish close
 
                                 for account in strategy.accounts() {
+                                    let is_flat = strategy.is_flat(&account, &symbol_code);
+                                    let booked_pnl = strategy.booked_pnl(&account, &symbol_code);
+
                                     // Check if time is between Chicago close (19:50) utc and NZ open (21:00) Utc or if we hit daily profit target or loss limit.
                                     if (bar_time.hour() == 19 && bar_time.minute() >= 50) || bar_time.hour() == 20 || booked_pnl >= MAX_PROFIT || booked_pnl <= -MAX_LOSS {
                                         // Close any existing positions
@@ -307,7 +305,8 @@ pub async fn on_data_received(
 
                                     // entry orders
 
-                                    if let (Some(mut last_side), Some(mut last_result), Some(mut last_attempt)) = (last_side.get_mut(&account), last_result.get_mut(&account), attempting_entry.get_mut(&account)) {
+                                    if let (Some(mut last_side), Some(mut last_result), Some(mut last_attempt)) = (last_side.get_mut(&account), last_result.get_mut(&account), attempting_entry.get_mut(&account))
+                                    {
                                         if IS_LONG_STRATEGY && (*last_side != LastSide::Long || (*last_side == LastSide::Long && *last_result == TradeResult::Win || !IS_SHORT_STRATEGY)) && is_flat && high_1 && !entry_order_id.contains_key(&account) && atr_increasing && min_atr {
                                             //println!("Submitting long entry");
                                             let cancel_order_time = Utc::now() + Duration::seconds(30);
@@ -400,7 +399,9 @@ pub async fn on_data_received(
                 }
             }
             StrategyEvent::ShutdownEvent(event) => {
-                strategy.flatten_all_for(account).await;
+                for account in strategy.accounts() {
+                    strategy.flatten_all_for(account.clone()).await;
+                }
                 let msg = format!("{}",event);
                 println!("{}", msg.as_str().bright_magenta());
                 strategy.export_trades(&String::from("./trades exports"));

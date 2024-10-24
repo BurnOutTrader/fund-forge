@@ -81,12 +81,13 @@ impl TimeSlice {
         })
     }
 
-    pub fn get_by_subscription(self, subscription: DataSubscription) -> impl Iterator<Item = BaseDataEnum> {
+    pub fn get_by_subscription<'a>(
+        self,
+        subscription: &'a DataSubscription
+    ) -> impl Iterator<Item = BaseDataEnum> + 'a {
         self.data.into_iter().flat_map(move |(_, items)| {
-            items.into_iter().filter({
-            let value = subscription.clone();
-                move |item| item.subscription() == value
-            })
+            let value = subscription.clone(); // Cloning helps avoid borrowing issues
+            items.into_iter().filter(move |item| item.subscription() == value)
         })
     }
 

@@ -271,13 +271,14 @@ async fn main() {
 Simply Initialize the strategy using the parameters above and pass it to our `fn on_data_received()` function.
 The engine will automatically be created and started in the background, and we will receive events in our `fn on_data_received()` function.
 
-We can divert strategy events to different functions if we want to separate the logic, some tasks are less critical than others. 
-We can use  `notify.notify_one();` to slow the message sender channel until we have processed the last message.
+When we run the strategy we receive a `StrategyEvent` in our receiver.
 
-When we run the strategy we receive a `StrategyEventBuffer` in our receiver, the size of the buffer is determined by the Buffer Option<Duration>
-When we `iter()` the buffer we receive the events in the exact order they were captured.
-Similarly, when we `iter()` a `TimeSlice` we receive the `BaseDataEnum`'s in the exact order they were created.
+TimeSlice event represent all data captured during our buffer period, the size of the buffer is determined by the Buffer Option<Duration>.
+When `iter()` a `TimeSlice` we receive the `BaseDataEnum`'s in the exact order they were created.
+The timeslice has associated methods like `get_by_subscription(subscription: &DataSubscription)`, `get_by_type_borrowed(base_data_type: BaseDataType)` and `get_by_type(base_data_type: BaseDataType)`, 
+these methods make it easy to quickly divert data of certain types to other functions for handling outside our main strategy loop.
 
+Other events, like order or position update events are not buffered.
 ```rust
 pub async fn on_data_received(strategy: FundForgeStrategy, mut event_receiver: mpsc::Receiver<StrategyEventBuffer>)  {
     let mut warmup_complete = false;
@@ -286,50 +287,47 @@ pub async fn on_data_received(strategy: FundForgeStrategy, mut event_receiver: m
     // we can handle our events directly in the `strategy_loop` or we can divert them to other functions or threads.
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
         // when we iterate the buffer the events are returned in the exact order they occured, the time property is the time the event was captured in the buffer, not the current strategy time.
-        for (time, strategy_event) in event_slice.iter() {
-            match strategy_event {
-                // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
-                StrategyEvent::DrawingToolEvents(_, drawing_tool_event, _) => {
-                    // The engine is being designed to allow for extremely high levels of user interaction with strategies, 
-                    // where strategies can be written to interact with the users analysis through drawing tools.
-                }
-                // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
-                StrategyEvent::TimeSlice(_time, time_slice) => {
-                    'base_data_loop: for base_data in time_slice.iter() {
-                        if !warmup_complete {
-                            continue 'strategy_loop;
-                        }
-                        match base_data {
-                            BaseDataEnum::Candle(ref candle) => {}
-                            BaseDataEnum::QuoteBar(ref quote_bar) => {}
-                            BaseDataEnum::Tick(ref tick) => {}
-                            BaseDataEnum::Quote(ref tick) => {}
-                            BaseDataEnum::Fundamental(ref fundamental) => {}
-                        }
-                    }
-                }
-                StrategyEvent::OrderEvents(_, event) => {
-                    // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
-                }
-                StrategyEvent::DataSubscriptionEvents(_, events, _) => {
-                    // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
-                }
-                StrategyEvent::StrategyControls(_, _, _) => {
-                    // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
-                }
-                StrategyEvent::ShutdownEvent(_, _) => break 'strategy_loop, //we should handle shutdown gracefully by first ending the strategy loop.
-                StrategyEvent::WarmUpComplete(_) => {
-                    warmup_complete = true;
-                }
-                StrategyEvent::IndicatorEvent(_, _) => {
+         match strategy_event {
+             // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
+             StrategyEvent::DrawingToolEvents(_, drawing_tool_event, _) => {
+                 // The engine is being designed to allow for extremely high levels of user interaction with strategies, 
+                 // where strategies can be written to interact with the users analysis through drawing tools.
+             }
+             // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
+             StrategyEvent::TimeSlice(_time, time_slice) => {
+                 'base_data_loop: for base_data in time_slice.iter() {
+                     if !warmup_complete {
+                         continue 'strategy_loop;
+                     }
+                     match base_data {
+                         BaseDataEnum::Candle(ref candle) => {}
+                         BaseDataEnum::QuoteBar(ref quote_bar) => {}
+                         BaseDataEnum::Tick(ref tick) => {}
+                         BaseDataEnum::Quote(ref tick) => {}
+                         BaseDataEnum::Fundamental(ref fundamental) => {}
+                     }
+                 }
+             }
+             StrategyEvent::OrderEvents(_, event) => {
+                 // order updates are received here, excluding order creation events, the event loop here starts with an OrderEvent::Accepted event and ends with the last fill, rejection or cancellation events.
+             }
+             StrategyEvent::DataSubscriptionEvents(_, events, _) => {
+                 // if an external source adds or removes a data subscription it will show up here, this is useful for SemiAutomated mode
+             }
+             StrategyEvent::StrategyControls(_, _, _) => {
+                 // strategy controls are received here, this is useful for SemiAutomated mode. we could close all positions on a pause of the strategy, or custom handle other user inputs.
+             }
+             StrategyEvent::ShutdownEvent(_, _) => break 'strategy_loop, //we should handle shutdown gracefully by first ending the strategy loop.
+             StrategyEvent::WarmUpComplete(_) => {
+                 warmup_complete = true;
+             }
+             StrategyEvent::IndicatorEvent(_, _) => {
 
-                }
-                StrategyEvent::PositionEvents(event) => {
-                    println!("{:?}", event);
-                }
-            }
-            
-        }
+             }
+             StrategyEvent::PositionEvents(event) => {
+                 println!("{:?}", event);
+             }
+         }
     }
     event_receiver.close();
     println!("Strategy Event Loop Ended");
@@ -542,33 +540,41 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     // we can get the open candle for a candles subscription, note we return an optional `Candle` object, not a `BaseDataEnum`
     let aud_cad_60m_candles = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::Candles, MarketType::Forex);
     let current_open_candle: Option<Candle> = strategy.open_candle(&aud_cad_60m_candles);
-    // we can get a historical candle from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed Candles)
+    
+   // we can get a historical candle from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed Candles)
     let last_historical_candle: Option<Candle>  = candle_index(&aud_cad_60m_candles, 0);
-    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
+    
+   //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
     let candle_history: Option<RollingWindow<Candle>>  = strategy.candle_history(&aud_cad_60m_candles).await;
 
     // we can get the open quotebar for a quotebars subscription, note we return an optional `Candle` QuoteBar, not a `BaseDataEnum`
     let aud_cad_60m_quotebars = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Minutes(60), BaseDataType::QuoteBars, MarketType::Forex);
     let current_open_candle: Option<QuoteBar> = strategy.open_bar(&aud_cad_60m_quotebars);
-    // we can get a historical quotebar from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed QuoteBars)
+    
+   // we can get a historical quotebar from the history we retained according to the 'history_to_retain' parameter when subscribing. (this only retains closed QuoteBars)
     let last_historical_quotebar: Option<QuoteBar>  = bar_index(&aud_cad_60m, 0);
-    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
+    
+   //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
     let bar_history: Option<RollingWindow<QuoteBar>>  = strategy.bar_history(&aud_cad_60m_quotebars).await; 
 
     let aud_cad_ticks = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Ticks(1), BaseDataType::Ticks, MarketType::Forex);
-    // we can get a historical tick from the history we retained according to the 'history_to_retain' parameter when subscribing.
+    
+   // we can get a historical tick from the history we retained according to the 'history_to_retain' parameter when subscribing.
     // since ticks are never open or closed the current tick is always in history as index 0, so the last tick is index 1
     let current_tick: Option<Tick>  = tick_index(&aud_cad_ticks, 0);
     let last_historical_tick: Option<Tick>  = tick_index(&aud_cad_ticks, 1);
-    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
+    
+   //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
     let tick_history: Option<RollingWindow<Tick>>  = strategy.tick_history(&aud_cad_ticks).await;
 
     let aud_cad_quotes = DataSubscription::new("AUD-CAD".to_string(), DataVendor::Test, Resolution::Instant, BaseDataType::Quotes, MarketType::Forex);
-    // we can get a historical quote from the history we retained according to the 'history_to_retain' parameter when subscribing.
+    
+   // we can get a historical quote from the history we retained according to the 'history_to_retain' parameter when subscribing.
     // since quotes are never open or closed the current quote is always in history as index 0, so the last quote is index 1
     let current_quote: Option<Quote>  = quote_index(&aud_cad_quotes, 0);
     let last_historical_quote: Option<Quote>  = quote_index(&aud_cad_quotes, 1);
-    //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
+    
+   //expensive currently clones whole object, not an updating reference, but will give you the whole history should you need it (better to manually keep history in strategy loop)
     let quote_history: Option<RollingWindow<Quote>>  = strategy.quote_history(&aud_cad_quotes).await;
 
     // if our strategy has already warmed up, the subscription will automatically have warmup to the maximum number of bars and have history available.
@@ -747,71 +753,70 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     strategy.indicator_subscribe(heikin_atr_20).await;
     
     'strategy_loop: while let Some(event_slice) = event_receiver.recv().await {
-        for (time, strategy_event) in event_slice.iter() {
-            match strategy_event {
-                StrategyEvent::TimeSlice(time_slice) => {
-                    'base_data_loop: for base_data in time_slice.iter() {
-                        match base_data {
-                            BaseDataEnum::Candle(candle) => {
-                                // lets update the indicator with the new candles
-                                if candle.is_closed {
-                                    heikin_atr.update_base_data(candle).await;
-                                }
-                                
-                                // lets get the indicator value for the current candle, note for atr we can use current, as it only updates on closed candles.
-                                if heikin_atr.is_ready() {
-                                    let atr = heikin_atr.current();
-                                    println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
-                                    heikin_atr_history.add(heikin_atr.current());
-                               
-                                    // we can also get the value at a specific index, current bar (closed) is index 0, 1 bar ago is index 1 etc.
-                                    let atr = heikin_atr.index(3);
-                                    println!("{}...{} ATR 3 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
-                                    
-                                    //or we can use our own history to get the value at a specific index
-                                    let atr = heikin_atr_history.get(10);
-                                    println!("{}...{} ATR 10 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
-                                }
-                            },
-                            _ => {}
-                        }
-                    }
-                }
-                StrategyEvent::IndicatorEvent(_, event) => {
-                    //we can handle indicator events here, this is useful for working with the IndicatorHandler.
-                    // which will handle warming up, updating, subscribing etc for many indicators.
-                    match event {
-                        IndicatorEvents::IndicatorAdded(name) => {}
-                        IndicatorEvents::IndicatorRemoved(name) => {}
-                        IndicatorEvents::IndicatorTimeSlice(slice) => {
-                            // we can see our auto manged indicator values for here.
-                            for indicator_values in slice {
-                                println!("Indicator Time Slice: {:?}", indicator_values);
-                            }
+         match strategy_event {
+             StrategyEvent::TimeSlice(time_slice) => {
+                 'base_data_loop: for base_data in time_slice.iter() {
+                     match base_data {
+                         BaseDataEnum::Candle(candle) => {
+                             // lets update the indicator with the new candles
+                             if candle.is_closed {
+                                 heikin_atr.update_base_data(candle).await;
+                             }
+                             
+                             // lets get the indicator value for the current candle, note for atr we can use current, as it only updates on closed candles.
+                             if heikin_atr.is_ready() {
+                                 let atr = heikin_atr.current();
+                                 println!("{}...{} ATR: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
+                                 heikin_atr_history.add(heikin_atr.current());
+                            
+                                 // we can also get the value at a specific index, current bar (closed) is index 0, 1 bar ago is index 1 etc.
+                                 let atr = heikin_atr.index(3);
+                                 println!("{}...{} ATR 3 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
+                                 
+                                 //or we can use our own history to get the value at a specific index
+                                 let atr = heikin_atr_history.get(10);
+                                 println!("{}...{} ATR 10 bars ago: {}", strategy.time_utc().await, aud_cad_60m.symbol.name, atr.unwrap());
+                             }
+                         },
+                         _ => {}
+                     }
+                 }
+             }
+             StrategyEvent::IndicatorEvent(_, event) => {
+                 //we can handle indicator events here, this is useful for working with the IndicatorHandler.
+                 // which will handle warming up, updating, subscribing etc for many indicators.
+                 match event {
+                     IndicatorEvents::IndicatorAdded(name) => {}
+                     IndicatorEvents::IndicatorRemoved(name) => {}
+                     IndicatorEvents::IndicatorTimeSlice(slice) => {
+                         // we can see our auto manged indicator values for here.
+                         for indicator_values in slice {
+                             println!("Indicator Time Slice: {:?}", indicator_values);
+                         }
 
-                            // we could also get the auto-managed indicator values from the strategy at any time. we should have history immediately since the indicator will warm itself up.
-                            // this will not be the case if we did not have historical data available for the indicator.
-                            let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
-                            if let Some(history) = history {
-                                println!("History: {:?}", history.history());
-                            }
+                         // we could also get the auto-managed indicator values from the strategy at any time. we should have history immediately since the indicator will warm itself up.
+                         // this will not be the case if we did not have historical data available for the indicator.
+                         let history: Option<RollingWindow<IndicatorValues>> = strategy.indicator_history(IndicatorName::from("heikin_atr_20")).await;
+                         if let Some(history) = history {
+                             println!("History: {:?}", history.history());
+                         }
 
-                            let current: Option<IndicatorValues> = strategy.indicator_current(&IndicatorName::from("heikin_atr_20")).await;
-                            if let Some(current) = current {
-                                println!("Current: {:?}", current.values());
-                            }
+                         let current: Option<IndicatorValues> = strategy.indicator_current(&IndicatorName::from("heikin_atr_20")).await;
+                         if let Some(current) = current {
+                             println!("Current: {:?}", current.values());
+                         }
 
-                            let index: Option<IndicatorValues> = strategy.indicator_index(&IndicatorName::from("heikin_atr_20"), 3).await;
-                            if let Some(index) = index {
-                                println!("Index: {:?}", index.values());
-                            }
-                        }
-                        IndicatorEvents::Replaced(name) => {}
-                    }
-                }
-                _ => {}
-            }
-        }
+                         let index: Option<IndicatorValues> = strategy.indicator_index(&IndicatorName::from("heikin_atr_20"), 3).await;
+                         if let Some(index) = index {
+                             println!("Index: {:?}", index.values());
+                         }
+                     }
+                     IndicatorEvents::Replaced(name) => {}
+                 }
+             }
+             _ => {}
+         }
+       
     }
 }
 ```
