@@ -49,6 +49,7 @@ pub enum PositionUpdateEvent {
     },
     Increased {
         position_id: PositionId,
+        side: PositionSide,
         total_quantity_open: Volume,
         average_price: Price,
         symbol_name: SymbolName,
@@ -61,6 +62,7 @@ pub enum PositionUpdateEvent {
     },
     PositionReduced {
         position_id: PositionId,
+        side: PositionSide,
         total_quantity_open: Volume,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,
@@ -75,6 +77,7 @@ pub enum PositionUpdateEvent {
     },
     PositionClosed {
         position_id: PositionId,
+        side: PositionSide,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,
         total_quantity_open: Volume,
@@ -385,6 +388,7 @@ impl Position {
             self.close_time = Some(time.to_string());
             PositionUpdateEvent::PositionClosed {
                 position_id: self.position_id.clone(),
+                side: self.side.clone(),
                 symbol_name: self.symbol_name.clone(),
                 symbol_code: self.symbol_code.clone(),
                 total_quantity_open: self.quantity_open,
@@ -399,6 +403,7 @@ impl Position {
         } else {
             PositionUpdateEvent::PositionReduced {
                 position_id: self.position_id.clone(),
+                side: self.side.clone(),
                 symbol_name: self.symbol_name.clone(),
                 symbol_code: self.symbol_code.clone(),
                 total_quantity_open: self.quantity_open,
@@ -443,6 +448,7 @@ impl Position {
 
         PositionUpdateEvent::Increased {
             symbol_name: self.symbol_name.clone(),
+            side: self.side.clone(),
             symbol_code: self.symbol_code.clone(),
             position_id: self.position_id.clone(),
             total_quantity_open: self.quantity_open,

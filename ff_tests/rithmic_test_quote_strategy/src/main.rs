@@ -10,7 +10,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, PositionSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
@@ -63,8 +63,8 @@ const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_ID".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
-    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
+    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "TPT1053217".to_string());
     let symbol_name = SymbolName::from("MNQ");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
@@ -239,7 +239,6 @@ pub async fn on_data_received(
                                 let current_atr = current_atr.unwrap().get_plot(&atr_plot).unwrap().value;
                                 let min_atr = current_atr >= MIN_ATR_VALUE;
                                 let atr_increasing = current_atr > last_atr;
-
                                 let bar_time = quotebar.time_utc();
 
                                 let high_close = match quotebar.bid_close.cmp(&quotebar.bid_open) {

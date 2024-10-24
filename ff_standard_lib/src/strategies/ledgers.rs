@@ -311,6 +311,7 @@ impl Ledger {
             let close_time = position.close_time.unwrap_or_else(|| Utc::now().to_string());
             Some(PositionUpdateEvent::PositionClosed {
                 symbol_name: position.symbol_name.clone(),
+                side: position.side.clone(),
                 symbol_code: position.symbol_code.clone(),
                 position_id: position.position_id.clone(),
                 total_quantity_open: dec!(0),
