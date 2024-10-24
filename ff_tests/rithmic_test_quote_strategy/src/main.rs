@@ -48,7 +48,6 @@ async fn main() {
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
-
     let subscription = DataSubscription::new(
         symbol_name.clone(),
         DATAVENDOR,
