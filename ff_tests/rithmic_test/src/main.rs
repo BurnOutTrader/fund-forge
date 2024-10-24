@@ -35,16 +35,19 @@ const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
-const MIN_ATR_VALUE: Decimal = dec!(0.7);
+const MIN_ATR_VALUE: Decimal = dec!(1.25);
 
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string());
-    let symbol_code = "MESZ24".to_string();
-    let data_vendor = DataVendor::Rithmic(RithmicSystem::Apex);
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_HERE".to_string()); //todo change your brokerage to the broker
+    let symbol_name = SymbolName::from("MNQ");
+    let mut symbol_code = symbol_name.clone();
+    symbol_code.push_str("Z24");
+
+    let data_vendor = DataVendor::Rithmic(RithmicSystem::Apex); //todo change your system to the provider
     let subscription = DataSubscription::new(
-        SymbolName::from("MES"),
+        symbol_name.clone(),
         data_vendor.clone(),
         Resolution::Seconds(3),
         BaseDataType::QuoteBars,
@@ -62,7 +65,7 @@ async fn main() {
         vec![
             //subscribe to a quote feed to ensure we use quotes
             DataSubscription::new(
-                SymbolName::from("MES"),
+                symbol_name,
                 data_vendor.clone(),
                 Resolution::Instant,
                 BaseDataType::Quotes,
@@ -85,7 +88,7 @@ async fn main() {
         core::time::Duration::from_millis(10),
         false,
         true,
-        false,
+        true,
         vec![account.clone()] //todo, add any more accounts you want into here.
     ).await;
 
