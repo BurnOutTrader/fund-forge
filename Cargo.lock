@@ -2285,6 +2285,7 @@ dependencies = [
 name = "rithmic_test_quote_strategy"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.7.8",
  "chrono",
  "chrono-tz",
  "colored",

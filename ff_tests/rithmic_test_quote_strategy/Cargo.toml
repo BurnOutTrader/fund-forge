@@ -15,3 +15,4 @@ ff_standard_lib = { path = "../../ff_standard_lib" }
 colored = "*"
 futures = "*"
 log = "0.4.22"
+ahash = "*"

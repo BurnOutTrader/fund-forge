@@ -1,5 +1,6 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
+use ahash::AHashMap;
 use chrono::{Duration, NaiveDate, Timelike, Utc};
 use chrono_tz::{Australia, UTC};
 use colored::Colorize;
@@ -7,7 +8,7 @@ use ff_rithmic_api::systems::RithmicSystem;
 use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, PositionSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -50,11 +51,11 @@ use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
      - This strategy is for testing purposes, It is not 100% going to make money and is not a recommendation to trade live, although it is profitable for me.
 */
 
-const IS_LONG_STRATEGY: bool = false;
+const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
-const MIN_ATR_VALUE: Decimal = dec!(0.75);
+const MIN_ATR_VALUE: Decimal = dec!(5);
 const PROFIT_TARGET: Decimal = dec!(150);
 const RISK: Decimal = dec!(100);
 const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
@@ -64,16 +65,16 @@ async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_ID".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
     let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID".to_string());
-    let symbol_name = SymbolName::from("MES");
+    let symbol_name = SymbolName::from("YM");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
     let subscription = DataSubscription::new(
         symbol_name.clone(),
         DATAVENDOR,
-        Resolution::Seconds(1),
+        Resolution::Seconds(5),
         BaseDataType::QuoteBars,
-        MarketType::Futures(FuturesExchange::CME));  //todo, dont forget to change the exchange for the symbol you are trading
+        MarketType::Futures(FuturesExchange::CBOT));  //todo, dont forget to change the exchange for the symbol you are trading
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let strategy = FundForgeStrategy::initialize(
@@ -91,7 +92,7 @@ async fn main() {
                 DATAVENDOR,
                 Resolution::Instant,
                 BaseDataType::Quotes,
-                MarketType::Futures(FuturesExchange::CME)  //todo, dont forget to change the exchange for the symbol you are trading
+                MarketType::Futures(FuturesExchange::CBOT)  //todo, dont forget to change the exchange for the symbol you are trading
             ),
            /* DataSubscription::new(
                 SymbolName::from("MNQ"),
@@ -168,11 +169,23 @@ pub async fn on_data_received(
         .into_iter().map(|account| (account.clone(), 0))
         .collect();
 
-    let mut exit_order_id: HashMap<Account, OrderId> = HashMap::new();
+    let mut exit_order_id: AHashMap<Account, OrderId> = AHashMap::new();
 
-    let mut entry_order_id: HashMap<Account, OrderId> = HashMap::new();
+    let mut entry_order_id: AHashMap<Account, OrderId> = AHashMap::new();
 
-    let mut add_order_id: HashMap<Account, OrderId> = HashMap::new();
+    let mut add_order_id: AHashMap<Account, OrderId> = AHashMap::new();
+
+    let mut attempting_entry: AHashMap<Account, String> = AHashMap::new();
+
+    let mut last_side: AHashMap<Account, LastSide> = AHashMap::new();
+
+    let mut last_result: AHashMap<Account, TradeResult> = AHashMap::new();
+
+    for account in strategy.accounts() {
+        last_result.insert(account.clone(), TradeResult::BreakEven);
+        last_side.insert(account.clone(), LastSide::Flat);
+        attempting_entry.insert(account.clone(), "None".to_string());
+    }
 
 
     fn increment_bars_since_entry(bars_since_entry: &mut HashMap<Account, u64>, account: &Account) {
@@ -188,8 +201,6 @@ pub async fn on_data_received(
         }
     }
     let atr_plot = "atr".to_string();
-    let mut last_result = TradeResult::BreakEven;
-    let mut attempting_entry = "None".to_string();
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -270,7 +281,6 @@ pub async fn on_data_received(
                                     quotebar.ask_close < quotebar.ask_open; // Add check for bearish close
 
                                 for account in strategy.accounts() {
-
                                     // Check if time is between Chicago close (19:50) utc and NZ open (21:00) Utc or if we hit daily profit target or loss limit.
                                     if (bar_time.hour() == 19 && bar_time.minute() >= 50) || bar_time.hour() == 20 || booked_pnl >= MAX_PROFIT || booked_pnl <= -MAX_LOSS {
                                         // Close any existing positions
@@ -280,104 +290,106 @@ pub async fn on_data_received(
                                             exit_order_id.insert(account.clone(), exit_id);
                                             reset_bars_since_entry(&mut bars_since_entry_map, &account);
 
-                                            if IS_SHORT_STRATEGY {
-                                                last_side = LastSide::Long;
+                                            if IS_SHORT_STRATEGY && IS_LONG_STRATEGY {
+                                                last_side.insert(account.clone(), LastSide::Long);
                                             }
                                         } else if strategy.is_short(&account, &symbol_code) {
                                             let position_size = strategy.position_size(&account, &symbol_code);
                                             let exit_id = strategy.exit_short(&quotebar.symbol.name, None, &account, None, position_size, String::from("Exit Short")).await;
                                             exit_order_id.insert(account.clone(), exit_id);
                                             reset_bars_since_entry(&mut bars_since_entry_map, &account);
-                                            if IS_LONG_STRATEGY {
-                                                last_side = LastSide::Short;
+                                            if IS_SHORT_STRATEGY && IS_LONG_STRATEGY {
+                                                last_side.insert(account.clone(), LastSide::Short);
                                             }
                                         }
                                         continue;
                                     }
 
                                     // entry orders
-                                    if IS_LONG_STRATEGY && (last_side != LastSide::Long || (last_side == LastSide::Long && last_result == TradeResult::Win)) && is_flat && high_1 && !entry_order_id.contains_key(&account) && atr_increasing && min_atr {
-                                        //println!("Submitting long entry");
-                                        let cancel_order_time = Utc::now() + Duration::seconds(30);
-                                        let order_id = strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
-                                        entry_order_id.insert(account.clone(), order_id);
-                                        attempting_entry = "Long".to_string();
-                                    } else if IS_SHORT_STRATEGY && (last_side != LastSide::Short || (last_side == LastSide::Short && last_result == TradeResult::Win)) && is_flat && low_1 && !entry_order_id.contains_key(&account) && atr_increasing && min_atr {
-                                        //println!("Submitting short limit");
-                                        let cancel_order_time = Utc::now() + Duration::seconds(30);
-                                        let order_id = strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(2), OrderSide::Sell, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Short Limit")).await;
-                                        entry_order_id.insert(account.clone(), order_id);
-                                        attempting_entry = "Short".to_string();
-                                    }
 
-                                    // exit orders
-                                    let is_long = strategy.is_long(&account, &symbol_code);
-                                    let is_short = strategy.is_short(&account, &symbol_code);
-                                    if is_long || is_short {
-                                       increment_bars_since_entry(&mut bars_since_entry_map, &account);
-                                    }
-
-                                    let open_profit = strategy.pnl(&account, &symbol_code);
-                                    let position_size = strategy.position_size(&account, &symbol_code);
-                                    println!(
-                                        "Account: {}, {}, Open Profit: {}, Position Size: {}, Last Entry Attempt: {}",
-                                        account, symbol_code, open_profit, position_size, attempting_entry
-                                    );
-
-                                    let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
-                                    //Add to winners up to 2x if we have momentum
-                                    if (is_long || is_short) && bars_since_entry > 2 && open_profit >= dec!(60) && position_size <= dec!(5) && !add_order_id.contains_key(&account) {
-                                        let cancel_order_time = Utc::now() + Duration::seconds(15);
-                                        if IS_LONG_STRATEGY && is_long && high_1 {
-                                            let new_add_order_id = strategy.stop_limit(&quotebar.symbol.name, None, &account, None, dec!(3), OrderSide::Buy, String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
-                                            reset_bars_since_entry(&mut bars_since_entry_map, &account);
-                                            add_order_id.insert(account.clone(), new_add_order_id);
-                                        } else if IS_SHORT_STRATEGY && is_short && low_1 {
-                                            let new_add_order_id = strategy.stop_limit(&quotebar.symbol.name, None, &account, None, dec!(3), OrderSide::Sell, String::from("Add Short Stop Limit"), last_candle.bid_low - dec!(0.5), last_candle.bid_low - dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
-                                            reset_bars_since_entry(&mut bars_since_entry_map, &account);
-                                            add_order_id.insert(account.clone(), new_add_order_id);
+                                    if let (Some(mut last_side), Some(mut last_result), Some(mut last_attempt)) = (last_side.get_mut(&account), last_result.get_mut(&account), attempting_entry.get_mut(&account)) {
+                                        if IS_LONG_STRATEGY && (*last_side != LastSide::Long || (*last_side == LastSide::Long && *last_result == TradeResult::Win || !IS_SHORT_STRATEGY)) && is_flat && high_1 && !entry_order_id.contains_key(&account) && atr_increasing && min_atr {
+                                            //println!("Submitting long entry");
+                                            let cancel_order_time = Utc::now() + Duration::seconds(30);
+                                            let order_id = strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(2), OrderSide::Buy, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Long Limit")).await;
+                                            entry_order_id.insert(account.clone(), order_id);
+                                            *last_attempt = "Long".to_string();
+                                        } else if IS_SHORT_STRATEGY && (*last_side != LastSide::Short || (*last_side == LastSide::Short && *last_result == TradeResult::Win || !IS_LONG_STRATEGY)) && is_flat && low_1 && !entry_order_id.contains_key(&account) && atr_increasing && min_atr {
+                                            //println!("Submitting short limit");
+                                            let cancel_order_time = Utc::now() + Duration::seconds(30);
+                                            let order_id = strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(2), OrderSide::Sell, last_candle.bid_high, TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string()), String::from("Enter Short Limit")).await;
+                                            entry_order_id.insert(account.clone(), order_id);
+                                            *last_attempt = "Short".to_string();
                                         }
-                                    }
 
-                                    let profit_goal = match position_size > dec!(5) {
-                                        true => PROFIT_TARGET,
-                                        false => PROFIT_TARGET * dec!(2)
-                                    };
-
-                                    // Cut losses and take profits, we check entry order is none to prevent exiting while an entry order is unfilled, entry order will expire and go to none on the TIF expiry, or on fill.
-                                    if open_profit > profit_goal || (open_profit < RISK && bars_since_entry > 10) && !exit_order_id.contains_key(&account) {
+                                        // exit orders
                                         let is_long = strategy.is_long(&account, &symbol_code);
                                         let is_short = strategy.is_short(&account, &symbol_code);
-
-                                        if is_long {
-                                            let position_size = strategy.position_size(&account, &symbol_code);
-                                            let exit_id = strategy.exit_long(&quotebar.symbol.name, None, &account, None, position_size, String::from("Exit Long")).await;
-                                            exit_order_id.insert(account.clone(), exit_id);
-                                            reset_bars_since_entry(&mut bars_since_entry_map, &account);
-                                        } else if is_short {
-                                            let position_size = strategy.position_size(&account, &symbol_code);
-                                            let exit_id = strategy.exit_short(&quotebar.symbol.name, None, &account, None, position_size, String::from("Exit Short")).await;
-                                            exit_order_id.insert(account.clone(), exit_id);
-                                            reset_bars_since_entry(&mut bars_since_entry_map, &account);
+                                        if is_long || is_short {
+                                            increment_bars_since_entry(&mut bars_since_entry_map, &account);
                                         }
-                                    }
 
-                                    //Take smaller profit if we add and don't get momentum
-                                    let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
-                                    if bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30) && position_size > dec!(2) && !exit_order_id.contains_key(&account) && add_order_id.contains_key(&account) {
-                                        let is_long = strategy.is_long(&account, &symbol_code);
-                                        let is_short = strategy.is_short(&account, &symbol_code);
+                                        let open_profit = strategy.pnl(&account, &symbol_code);
                                         let position_size = strategy.position_size(&account, &symbol_code);
+                                        println!(
+                                            "Account: {}, {}, Open Profit: {}, Position Size: {}, Last Entry Attempt: {}",
+                                            account, symbol_code, open_profit, position_size, last_attempt
+                                        );
 
-                                        if is_long {
-                                            let exit_id = strategy.exit_long(&quotebar.symbol.name, None, &account, None, position_size, String::from("No Momo Exit Long")).await;
-                                            exit_order_id.insert(account.clone(), exit_id);
-                                            reset_bars_since_entry(&mut bars_since_entry_map, &account);
+                                        let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
+                                        //Add to winners up to 2x if we have momentum
+                                        if (is_long || is_short) && bars_since_entry > 2 && open_profit >= dec!(60) && position_size <= dec!(5) && !add_order_id.contains_key(&account) {
+                                            let cancel_order_time = Utc::now() + Duration::seconds(15);
+                                            if IS_LONG_STRATEGY && is_long && high_1 {
+                                                let new_add_order_id = strategy.stop_limit(&quotebar.symbol.name, None, &account, None, dec!(3), OrderSide::Buy, String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
+                                                reset_bars_since_entry(&mut bars_since_entry_map, &account);
+                                                add_order_id.insert(account.clone(), new_add_order_id);
+                                            } else if IS_SHORT_STRATEGY && is_short && low_1 {
+                                                let new_add_order_id = strategy.stop_limit(&quotebar.symbol.name, None, &account, None, dec!(3), OrderSide::Sell, String::from("Add Short Stop Limit"), last_candle.bid_low - dec!(0.5), last_candle.bid_low - dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
+                                                reset_bars_since_entry(&mut bars_since_entry_map, &account);
+                                                add_order_id.insert(account.clone(), new_add_order_id);
+                                            }
                                         }
-                                        else if is_short {
-                                            let exit_id = strategy.exit_short(&quotebar.symbol.name, None, &account, None, position_size, String::from("No Momo Exit Short")).await;
-                                            exit_order_id.insert(account.clone(), exit_id);
-                                            reset_bars_since_entry(&mut bars_since_entry_map, &account);
+
+                                        let profit_goal = match position_size > dec!(5) {
+                                            true => PROFIT_TARGET,
+                                            false => PROFIT_TARGET * dec!(2)
+                                        };
+
+                                        // Cut losses and take profits, we check entry order is none to prevent exiting while an entry order is unfilled, entry order will expire and go to none on the TIF expiry, or on fill.
+                                        if open_profit > profit_goal || (open_profit < RISK && bars_since_entry > 10) && !exit_order_id.contains_key(&account) {
+                                            let is_long = strategy.is_long(&account, &symbol_code);
+                                            let is_short = strategy.is_short(&account, &symbol_code);
+
+                                            if is_long {
+                                                let position_size = strategy.position_size(&account, &symbol_code);
+                                                let exit_id = strategy.exit_long(&quotebar.symbol.name, None, &account, None, position_size, String::from("Exit Long")).await;
+                                                exit_order_id.insert(account.clone(), exit_id);
+                                                reset_bars_since_entry(&mut bars_since_entry_map, &account);
+                                            } else if is_short {
+                                                let position_size = strategy.position_size(&account, &symbol_code);
+                                                let exit_id = strategy.exit_short(&quotebar.symbol.name, None, &account, None, position_size, String::from("Exit Short")).await;
+                                                exit_order_id.insert(account.clone(), exit_id);
+                                                reset_bars_since_entry(&mut bars_since_entry_map, &account);
+                                            }
+                                        }
+
+                                        //Take smaller profit if we add and don't get momentum
+                                        let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
+                                        if bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30) && position_size > dec!(2) && !exit_order_id.contains_key(&account) && add_order_id.contains_key(&account) {
+                                            let is_long = strategy.is_long(&account, &symbol_code);
+                                            let is_short = strategy.is_short(&account, &symbol_code);
+                                            let position_size = strategy.position_size(&account, &symbol_code);
+
+                                            if is_long {
+                                                let exit_id = strategy.exit_long(&quotebar.symbol.name, None, &account, None, position_size, String::from("No Momo Exit Long")).await;
+                                                exit_order_id.insert(account.clone(), exit_id);
+                                                reset_bars_since_entry(&mut bars_since_entry_map, &account);
+                                            } else if is_short {
+                                                let exit_id = strategy.exit_short(&quotebar.symbol.name, None, &account, None, position_size, String::from("No Momo Exit Short")).await;
+                                                exit_order_id.insert(account.clone(), exit_id);
+                                                reset_bars_since_entry(&mut bars_since_entry_map, &account);
+                                            }
                                         }
                                     }
                                 }
@@ -411,8 +423,12 @@ pub async fn on_data_received(
                 println!("Strategy: Open Quantity: {}", quantity);
 
                 match event {
-                    PositionUpdateEvent::PositionOpened { .. } => {
-
+                    PositionUpdateEvent::PositionOpened { side,account, .. } => {
+                        let side = match side {
+                            PositionSide::Long => LastSide::Long,
+                            PositionSide::Short => LastSide::Short,
+                        };
+                        last_side.insert(account, side);
                     },
                     PositionUpdateEvent::Increased { .. } => {},
                     PositionUpdateEvent::PositionReduced { .. } => {},
@@ -425,11 +441,11 @@ pub async fn on_data_received(
                         add_order_id.remove(&event.account());
                         strategy.print_ledger(event.account());
                         if booked_pnl > dec!(0) {
-                            last_result = TradeResult::Win
+                            last_result.insert(event.account().clone(), TradeResult::Win);
                         } else if booked_pnl < dec!(0) {
-                            last_result = TradeResult::Loss
+                            last_result.insert(event.account().clone(), TradeResult::Loss);
                         } else if booked_pnl == dec!(0) {
-                            last_result = TradeResult::BreakEven
+                            last_result.insert(event.account().clone(), TradeResult::BreakEven);
                         }
                         strategy.print_ledger(event.account()).await
                     }
@@ -455,6 +471,7 @@ pub async fn on_data_received(
                         if let Some( entry_order_id) =  entry_order_id.get(&event.account()) {
                             if order_id == entry_order_id {
                                 closed = true;
+                                last_side.remove(&event.account());
                             }
                         }
                         if closed {
@@ -469,10 +486,17 @@ pub async fn on_data_received(
                         }
                         if closed {
                             exit_order_id.remove(&event.account());
+                        }
+                        if let Some( add_order) =  add_order_id.get(&event.account()) {
+                            if order_id == add_order {
+                                closed = true;
+                            }
+                        }
+                        if closed {
                             add_order_id.remove(&event.account());
                         }
                     },
-                    OrderUpdateEvent::OrderCancelled {ref order_id, ref symbol_name, ..} | OrderUpdateEvent::OrderFilled {ref order_id, ref symbol_name, ..} => {
+                    OrderUpdateEvent::OrderFilled {ref order_id, ref symbol_name, ..} => {
                         if *symbol_name != subscription.symbol.name {
                             continue;
                         }
@@ -492,10 +516,47 @@ pub async fn on_data_received(
                         if let Some( exit_order_id) =  exit_order_id.get(&event.account()) {
                             if order_id == exit_order_id {
                                 closed = true;
+                                add_order_id.remove(&event.account());
                             }
                         }
                         if closed {
                             exit_order_id.remove(&event.account());
+                            add_order_id.remove(&event.account());
+                        }
+                    },
+                    OrderUpdateEvent::OrderCancelled {ref order_id, ref symbol_name, ..} => {
+                        if *symbol_name != subscription.symbol.name {
+                            continue;
+                        }
+                        println!("{}", msg.as_str().bright_cyan());
+
+                        let mut closed = false;
+                        if let Some( entry_order_id) =  entry_order_id.get(&event.account()) {
+                            if order_id == entry_order_id {
+                                closed = true;
+                            }
+                        }
+                        if closed {
+                            exit_order_id.remove(&event.account());
+                            last_side.insert(event.account().clone(), LastSide::Flat);
+                        }
+
+                        closed = false;
+                        if let Some( exit_order_id) =  exit_order_id.get(&event.account()) {
+                            if order_id == exit_order_id {
+                                closed = true;
+                            }
+                        }
+                        if closed {
+                            exit_order_id.remove(&event.account());
+                        }
+
+                        if let Some( add_order) =  add_order_id.get(&event.account()) {
+                            if order_id == add_order {
+                                closed = true;
+                            }
+                        }
+                        if closed {
                             add_order_id.remove(&event.account());
                         }
                     }
