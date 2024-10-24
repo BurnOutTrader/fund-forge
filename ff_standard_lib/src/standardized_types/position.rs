@@ -12,7 +12,7 @@ use crate::standardized_types::accounts::{Account, AccountId, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{PositionSide, StrategyMode};
-use crate::standardized_types::subscriptions::SymbolName;
+use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
 
@@ -41,6 +41,8 @@ pub enum PositionUpdateEvent {
     PositionOpened {
         position_id: PositionId,
         account: Account,
+        symbol_name: SymbolName,
+        symbol_code: SymbolCode,
         originating_order_tag: String,
         time: String
     },
@@ -48,6 +50,8 @@ pub enum PositionUpdateEvent {
         position_id: PositionId,
         total_quantity_open: Volume,
         average_price: Price,
+        symbol_name: SymbolName,
+        symbol_code: SymbolCode,
         open_pnl: Price,
         booked_pnl: Price,
         account: Account,
@@ -57,6 +61,8 @@ pub enum PositionUpdateEvent {
     PositionReduced {
         position_id: PositionId,
         total_quantity_open: Volume,
+        symbol_name: SymbolName,
+        symbol_code: SymbolCode,
         total_quantity_closed: Volume,
         average_price: Price,
         open_pnl: Price,
@@ -68,6 +74,8 @@ pub enum PositionUpdateEvent {
     },
     PositionClosed {
         position_id: PositionId,
+        symbol_name: SymbolName,
+        symbol_code: SymbolCode,
         total_quantity_open: Volume,
         total_quantity_closed: Volume,
         average_price: Price,
@@ -110,6 +118,24 @@ impl PositionUpdateEvent {
     pub fn time_local(&self, time_zone: &Tz) -> DateTime<Tz> {
         let utc_time: DateTime<Utc> = self.time_utc();
         time_zone.from_utc_datetime(&utc_time.naive_utc())
+    }
+
+    pub fn symbol_code(&self) -> &SymbolCode {
+        match self {
+            PositionUpdateEvent::PositionOpened{symbol_code,..} => symbol_code,
+            PositionUpdateEvent::Increased{symbol_code,..} => symbol_code,
+            PositionUpdateEvent::PositionReduced {symbol_code,..} => symbol_code,
+            PositionUpdateEvent::PositionClosed {symbol_code,..} => symbol_code,
+        }
+    }
+
+    pub fn symbol_name(&self) -> &SymbolName {
+        match self {
+            PositionUpdateEvent::PositionOpened{symbol_name,..} => symbol_name,
+            PositionUpdateEvent::Increased{symbol_name,..} => symbol_name,
+            PositionUpdateEvent::PositionReduced {symbol_name,..} => symbol_name,
+            PositionUpdateEvent::PositionClosed {symbol_name,..} => symbol_name,
+        }
     }
 
     pub fn time_utc(&self) -> DateTime<Utc> {
@@ -358,6 +384,8 @@ impl Position {
             self.close_time = Some(time.to_string());
             PositionUpdateEvent::PositionClosed {
                 position_id: self.position_id.clone(),
+                symbol_name: self.symbol_name.clone(),
+                symbol_code: self.symbol_code.clone(),
                 total_quantity_open: self.quantity_open,
                 total_quantity_closed: self.quantity_closed,
                 average_price: self.average_price,
@@ -370,6 +398,8 @@ impl Position {
         } else {
             PositionUpdateEvent::PositionReduced {
                 position_id: self.position_id.clone(),
+                symbol_name: self.symbol_name.clone(),
+                symbol_code: self.symbol_code.clone(),
                 total_quantity_open: self.quantity_open,
                 total_quantity_closed: self.quantity_closed,
                 average_price: self.average_price,
@@ -411,6 +441,8 @@ impl Position {
         }
 
         PositionUpdateEvent::Increased {
+            symbol_name: self.symbol_name.clone(),
+            symbol_code: self.symbol_code.clone(),
             position_id: self.position_id.clone(),
             total_quantity_open: self.quantity_open,
             average_price: self.average_price,

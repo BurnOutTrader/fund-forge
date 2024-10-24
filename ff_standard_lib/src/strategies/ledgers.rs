@@ -310,6 +310,8 @@ impl Ledger {
 
             let close_time = position.close_time.unwrap_or_else(|| Utc::now().to_string());
             Some(PositionUpdateEvent::PositionClosed {
+                symbol_name: position.symbol_name.clone(),
+                symbol_code: position.symbol_code.clone(),
                 position_id: position.position_id.clone(),
                 total_quantity_open: dec!(0),
                 total_quantity_closed: position.quantity_closed,
@@ -332,6 +334,8 @@ impl Ledger {
             } else {
                 self.positions.insert(position.symbol_code.clone(), position.clone());
                 Some(PositionUpdateEvent::PositionOpened {
+                    symbol_name: position.symbol_name.clone(),
+                    symbol_code: position.symbol_code.clone(),
                     position_id: position.position_id.clone(),
                     account: self.account.clone(),
                     originating_order_tag: position.tag,
@@ -722,10 +726,12 @@ impl Ledger {
                 self.positions_closed.insert(symbol_code.clone(), vec![]);
             }
             if symbol_name != symbol_code {
-                self.symbol_code_map.entry(symbol_name).or_insert(vec![]).push(symbol_code);
+                self.symbol_code_map.entry(symbol_name.clone()).or_insert(vec![]).push(symbol_code.clone());
             }
 
             let event = PositionUpdateEvent::PositionOpened {
+                symbol_name: symbol_name.clone(),
+                symbol_code: symbol_code.clone(),
                 position_id: id,
                 account: self.account.clone(),
                 originating_order_tag: tag,
@@ -1022,10 +1028,12 @@ mod historical_ledgers {
                     self.positions_closed.insert(symbol_code.clone(), vec![]);
                 }
                 if symbol_name != symbol_code {
-                    self.symbol_code_map.entry(symbol_name).or_insert(vec![]).push(symbol_code);
+                    self.symbol_code_map.entry(symbol_name.clone()).or_insert(vec![]).push(symbol_code.clone());
                 }
 
                 let event = PositionUpdateEvent::PositionOpened {
+                    symbol_name: symbol_name.clone(),
+                    symbol_code: symbol_code.clone(),
                     position_id: id,
                     account: self.account.clone(),
                     originating_order_tag: tag,

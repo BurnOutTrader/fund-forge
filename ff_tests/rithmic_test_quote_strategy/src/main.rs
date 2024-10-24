@@ -54,7 +54,7 @@ const IS_LONG_STRATEGY: bool = false;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
-const MIN_ATR_VALUE: Decimal = dec!(0.5);
+const MIN_ATR_VALUE: Decimal = dec!(0.75);
 const PROFIT_TARGET: Decimal = dec!(150);
 const RISK: Decimal = dec!(100);
 const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
@@ -62,18 +62,18 @@ const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
-    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT".to_string());
-    let symbol_name = SymbolName::from("GC");
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_ID".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
+    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID".to_string());
+    let symbol_name = SymbolName::from("MES");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
     let subscription = DataSubscription::new(
         symbol_name.clone(),
         DATAVENDOR,
-        Resolution::Seconds(15),
+        Resolution::Seconds(1),
         BaseDataType::QuoteBars,
-        MarketType::Futures(FuturesExchange::COMEX));  //todo, dont forget to change the exchange for the symbol you are trading
+        MarketType::Futures(FuturesExchange::CME));  //todo, dont forget to change the exchange for the symbol you are trading
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let strategy = FundForgeStrategy::initialize(
@@ -91,7 +91,7 @@ async fn main() {
                 DATAVENDOR,
                 Resolution::Instant,
                 BaseDataType::Quotes,
-                MarketType::Futures(FuturesExchange::COMEX)  //todo, dont forget to change the exchange for the symbol you are trading
+                MarketType::Futures(FuturesExchange::CME)  //todo, dont forget to change the exchange for the symbol you are trading
             ),
            /* DataSubscription::new(
                 SymbolName::from("MNQ"),
@@ -111,7 +111,7 @@ async fn main() {
         false,
         true,
         true,
-        vec![account.clone(), account] //todo, add any more accounts you want into here.
+        vec![account.clone(), account_2.clone()] //todo, add any more accounts you want into here.
     ).await;
 
     on_data_received(strategy, strategy_event_receiver, account, subscription, symbol_code).await;
@@ -416,7 +416,10 @@ pub async fn on_data_received(
                     },
                     PositionUpdateEvent::Increased { .. } => {},
                     PositionUpdateEvent::PositionReduced { .. } => {},
-                    PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
+                    PositionUpdateEvent::PositionClosed { booked_pnl, ref symbol_name, .. } => {
+                        if *symbol_name != subscription.symbol.name {
+                            continue;
+                        }
                         entry_order_id.remove(&event.account());
                         entry_order_id.remove(&event.account());
                         add_order_id.remove(&event.account());
@@ -437,10 +440,14 @@ pub async fn on_data_received(
                     None => {}
                     Some(code) => symbol_code = code
                 }
+
                 strategy.print_ledger(event.account());
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                 match event {
-                    OrderUpdateEvent::OrderRejected { ref order_id, .. } => {
+                    OrderUpdateEvent::OrderRejected { ref order_id, ref symbol_name, .. } => {
+                        if *symbol_name != subscription.symbol.name {
+                            continue;
+                        }
                         println!("{}", msg.as_str().on_bright_magenta().on_bright_red());
 
                         //todo make this a fn to avoid duplication
@@ -465,7 +472,10 @@ pub async fn on_data_received(
                             add_order_id.remove(&event.account());
                         }
                     },
-                    OrderUpdateEvent::OrderCancelled {ref order_id, ..} | OrderUpdateEvent::OrderFilled {ref order_id, ..} => {
+                    OrderUpdateEvent::OrderCancelled {ref order_id, ref symbol_name, ..} | OrderUpdateEvent::OrderFilled {ref order_id, ref symbol_name, ..} => {
+                        if *symbol_name != subscription.symbol.name {
+                            continue;
+                        }
                         println!("{}", msg.as_str().bright_cyan());
 
                         let mut closed = false;
