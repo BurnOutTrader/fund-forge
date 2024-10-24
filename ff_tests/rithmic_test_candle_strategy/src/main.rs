@@ -15,7 +15,6 @@ use tokio::sync::mpsc;
 #[allow(unused_imports)]
 use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::standardized_types::accounts::{Account, Currency};
-use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
@@ -43,8 +42,8 @@ const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_HERE".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
-    let symbol_name = SymbolName::from("GC");
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_ID".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
+    let symbol_name = SymbolName::from("MGC");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
@@ -54,7 +53,7 @@ async fn main() {
         Resolution::Minutes(3),
         MarketType::Futures(FuturesExchange::COMEX), //todo, dont forget to change the exchange for the symbol you are trading
         CandleType::CandleStick
-        );
+    );
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let strategy = FundForgeStrategy::initialize(
@@ -66,13 +65,13 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(5),
         vec![
-           DataSubscription::new(
+     /*      DataSubscription::new(
                 subscription.symbol.name.clone(),
                 subscription.symbol.data_vendor.clone(),
                 Resolution::Ticks(1),
                 BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::COMEX) //todo, dont forget to change the exchange for the symbol you are trading
-            ),
+            ),*/
 
             //subscribe to our subscription
             subscription.clone() //todo, add any more data feeds you want into here.
@@ -156,12 +155,12 @@ pub async fn on_data_received(
                 for (_, base_data) in time_slice.iter_ordered() {
                     match base_data {
                         BaseDataEnum::Tick(tick) => {
-                           let msg =  format!("{} Tick: {} @ {}", tick.symbol.name, tick.price, tick.time_local(strategy.time_zone()));
-                           println!("{}", msg.as_str().purple());
+                         /*  let msg =  format!("{} Tick: {} @ {}", tick.symbol.name, tick.price, tick.time_local(strategy.time_zone()));
+                           println!("{}", msg.as_str().purple());*/
                         }
                         BaseDataEnum::Candle(candle) => {
                             if candle.is_closed == true  {
-                                let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
+                                let msg = format!("{} {} {:?} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()) );
                                 if candle.close == candle.open {
                                     println!("{}", msg.as_str().blue())
                                 } else {
