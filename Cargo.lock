@@ -2282,7 +2282,23 @@ dependencies = [
 ]
 
 [[package]]
-name = "rithmic_test"
+name = "rithmic_test_candle_strategy"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "chrono-tz",
+ "colored",
+ "ff_rithmic_api",
+ "ff_standard_lib",
+ "futures",
+ "log",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "tokio",
+]
+
+[[package]]
+name = "rithmic_test_quote_strategy"
 version = "0.1.0"
 dependencies = [
  "chrono",

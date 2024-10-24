@@ -1,5 +1,5 @@
 [package]
-name = "rithmic_test"
+name = "rithmic_test_quote_strategy"
 version = "0.1.0"
 edition = "2021"
 license-file = "LICENCE.md"
