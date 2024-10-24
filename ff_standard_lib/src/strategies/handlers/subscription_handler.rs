@@ -745,10 +745,15 @@ impl SymbolSubscriptionHandler {
                         if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) && !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::Candles) {
                             return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
                         }
+                        //todo this has issues, time to put it on server and decide per broker
+                        let is_heikin_ashi = new_subscription.candle_type == Some(CandleType::HeikinAshi);
                         let has_candles = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles));
                         let has_ticks = self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
-                        if has_ticks && has_candles {
-                            if fill_forward {
+                        if is_heikin_ashi {
+                            SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
+                        }
+                        else if has_ticks && has_candles {
+                            if fill_forward || is_heikin_ashi {
                                 SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)
                             } else {
                                 SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)
