@@ -6,6 +6,7 @@ use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Datelike, Duration, Utc, Weekday};
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::get_historical_data;
 use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::futures_products::extract_symbol_from_contract;
@@ -124,7 +125,7 @@ impl ConsolidatorEnum {
         _strategy_mode: StrategyMode,
     ) -> (ConsolidatorEnum, RollingWindow<BaseDataEnum>) {
         let subscription = consolidator.subscription();
-        let vendor_resolutions = filter_resolutions(
+        let mut vendor_resolutions = filter_resolutions(
             subscription
                 .symbol
                 .data_vendor
@@ -133,6 +134,12 @@ impl ConsolidatorEnum {
                 .unwrap(),
             consolidator.subscription().resolution,
         );
+
+        if subscription.candle_type == Some(CandleType::HeikinAshi) {
+            vendor_resolutions.retain(|base_subscription| {
+                base_subscription.base_data_type == BaseDataType::Ticks && base_subscription.resolution == Resolution::Ticks(1)
+            });
+        }
         let max_resolution = vendor_resolutions.iter().max_by_key(|r| r.resolution);
         let min_resolution = match max_resolution.is_none() {
             true => panic!(
