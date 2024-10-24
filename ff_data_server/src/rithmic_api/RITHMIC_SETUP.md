@@ -85,7 +85,7 @@ pub fn from_file_string(file_name: &str) -> Option<Self> {
 }
 ```
 
-***After passing conformance:***
+***After passing conformance: If the servers.toml is not already in your repo.***
 You will need to populate the servers.toml file at ff_data_server/data/rithmic_credentials and fill in the server domains given to you by rithmic.
 this is to generate a BTreeMap for Servers where Key is RithmicServer (eg: RithmicServer::Chicago) and value is the domain (eg: wss://{DETAILS_FROM_RITHMIC})
 `ff_data_server/data/rithmic_credentials/server_domains/servers.toml`
