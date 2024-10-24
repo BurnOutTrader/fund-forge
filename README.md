@@ -28,6 +28,16 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 The easiest way to get up and running is to download the repo and open it with [Jetbrains Rust Rover](https://www.jetbrains.com/rust/?_gl=1*132okxr*_gcl_aw*R0NMLjE3MjczMDE0MjAuQ2p3S0NBanc2YzYzQmhBaUVpd0FGMEVIMUJSYkxpU1lmRUdJZkFENGMtbzlWc0FFQnNPaVpTS2cxLUxxaDdDeDZuMXB2ajlUUXpFQWtSb0MxNUVRQXZEX0J3RQ..*_gcl_au*MTgwMzYzMTQwOS4xNzI1MjI3MDMx*_ga*NTkyMTQxNDAyLjE3MjUyMjcwMjc.*_ga_9J976DJZ68*MTcyOTY3MDgzMC44LjEuMTcyOTY3MjQ5NC41OC4wLjA), I have already got the run configurations set up for you.
 
+You might need to change the directories to your own.
+
+### If Using Rust Rover
+#### Open the configurations and change the working directory to the ff_data_server directory
+![img_1.png](misc/edit_configs.png)
+
+#### Then change this to match the location of your repo
+![img.png](misc/edit_configs_2.png)
+
+## Warning!
 ⚠️ Warning ⚠️
 
 If you are using Rithmic, proceed with extreme caution!
