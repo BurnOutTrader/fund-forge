@@ -16,6 +16,7 @@ use tokio::sync::mpsc;
 #[allow(unused_imports)]
 use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::standardized_types::accounts::{Account, Currency};
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
@@ -52,7 +53,7 @@ const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
-const MIN_ATR_VALUE: Decimal = dec!(0.3);
+const MIN_ATR_VALUE: Decimal = dec!(1.25);
 const PROFIT_TARGET: Decimal = dec!(150);
 const RISK: Decimal = dec!(100);
 const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
@@ -60,8 +61,10 @@ const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_ID".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
-    let symbol_name = SymbolName::from("MNQ");
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
+    let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT".to_string());
+
+    let symbol_name = SymbolName::from("MES");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
@@ -69,7 +72,7 @@ async fn main() {
         symbol_name.clone(),
         DATAVENDOR,
         Resolution::Seconds(3),
-        MarketType::Futures(FuturesExchange::COMEX), //todo, dont forget to change the exchange for the symbol you are trading
+        MarketType::Futures(FuturesExchange::CME), //todo, dont forget to change the exchange for the symbol you are trading
         CandleType::CandleStick
     );
 
@@ -83,13 +86,13 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(5),
         vec![
-     /*      DataSubscription::new(
+           DataSubscription::new(
                 subscription.symbol.name.clone(),
                 subscription.symbol.data_vendor.clone(),
                 Resolution::Ticks(1),
                 BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::COMEX) //todo, dont forget to change the exchange for the symbol you are trading
-            ),*/
+            ),
 
             //subscribe to our subscription
             subscription.clone() //todo, add any more data feeds you want into here.
@@ -101,7 +104,7 @@ async fn main() {
         false,
         true,
         true,
-        vec![account.clone()] //todo, add any more accounts you want into here.
+        vec![account.clone(), account_2] //todo, add any more accounts you want into here.
     ).await;
 
     on_data_received(strategy, strategy_event_receiver, account, subscription, symbol_code).await;
@@ -129,8 +132,6 @@ pub async fn on_data_received(
     subscription: DataSubscription,
     mut symbol_code: String
 ) {
-    println!("Staring Strategy Loop");
-
     let atr_10 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(
             IndicatorName::from("atr_10"),
