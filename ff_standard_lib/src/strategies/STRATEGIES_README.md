@@ -814,9 +814,12 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 ```
 
 ## Accounts
-Live strategies will not differentiate between positions they opened or other account positions.
+Live strategies in `synchronize_accounts` mode will not differentiate between positions they opened or other account positions.
 They will treat any position on the account as if they opened it, unless you have your own logic for identifying positions.
 You could use the Order "tag" property.
+
+Live strategy with `synchronize_accounts == false` will ignore the real account position and monitor only from the perspective of the strategy and the orders they created, 
+this means if an outside source opens or closes a position, the strategy might still think it is flat, long or short.
 
 Positions are created managed and closed automatically when you place orders, they will update as the account/ledger position updates.
 each position has a String 'tag' property: `position.tag` this tag will be the same as the 'order.tag' which resulted in the position being created.
