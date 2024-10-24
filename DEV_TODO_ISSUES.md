@@ -1,3 +1,7 @@
+## Stats
+Statistics in synchronize accounts mode do not work, since orders arrive after the position is closed.
+Need to retroactively update the statistics when the order updates arrive.
+
 ## Subscription handling
 Subscriptions need to be handled by the broker enum, to many variables on the client side
 - Live subscriptions will be done by

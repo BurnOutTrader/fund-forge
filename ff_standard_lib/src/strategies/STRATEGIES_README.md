@@ -177,8 +177,11 @@ This does nothing in live.
 #### `synchronize_accounts: bool` 
 If true strategy positions and open + booked pnl will update in sync with the brokerage, if false the engine will simulate positions using the same logic as backtesting.
 
-enabled: your strategy will see positions opened by other strategies or external sources, and will be able to close them, or modify them.
-For example: You could place an order in rithmic and a strategy will be able to manage the position.
+enabled: your strategy will see positions opened by other strategies or external sources, and will be able to close them, or modify them. \
+For example: You could place an order in rithmic and a strategy will be able to manage the position. 
+
+Statistics in synchronize accounts mode do not work, since orders arrive after the position is closed. \
+I will Need to retroactively update the statistics when the order updates arrive, this will be done in the future.
 
 disabled: the strategy will assume that it is the only source of orders and positions, and will not be able to close or modify positions opened by other strategies or external sources.
 For example, you could close a strategy position, and the strategy will still think the position is open.
