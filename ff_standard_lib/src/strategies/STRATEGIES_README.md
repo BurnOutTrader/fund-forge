@@ -191,6 +191,7 @@ let account_2 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
 let accounts = vec![account_1, account_2];
 ```
 
+#### Initializing an account with custom parameters
 ```rust
 use std::time::Duration;
 
