@@ -36,7 +36,7 @@ You might need to change the directories to your own.
 
 #### If they are not matching your directories then change this to match the location of your repo.
 (this is specific per configuration, this example is for the rithmic_test strategy, other configurations will have different directories)
-![img.png](misc/config_edit_1.png)
+![config_edit_2.png](misc/config_edit_2.png)
 
 ## Warning!
 ⚠️ Warning ⚠️
