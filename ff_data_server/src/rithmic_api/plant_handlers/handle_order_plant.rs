@@ -16,7 +16,7 @@ use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountInfo};
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, OrderSide};
 use ff_standard_lib::standardized_types::accounts::Currency;
 use ff_standard_lib::standardized_types::new_types::{Price, Volume};
 use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent, OrderUpdateType};
@@ -538,6 +538,16 @@ pub async fn match_order_plant_id(
 
                     match notify_type {
                         1 => {
+                            let side = match msg.transaction_type {
+                                None => return,
+                                Some(tt) => {
+                                    match tt {
+                                        1 => OrderSide::Buy,
+                                        2 | 3 => OrderSide::Sell,
+                                        _ => return
+                                    }
+                                }
+                            };
                             let event = OrderUpdateEvent::OrderAccepted {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 symbol_name,
@@ -545,6 +555,7 @@ pub async fn match_order_plant_id(
                                 order_id: order_id.clone(),
                                 tag,
                                 time,
+                                side: side.clone(),
                             };
                             send_order_update(client.brokerage, &order_id, event).await;
                         },
@@ -559,8 +570,20 @@ pub async fn match_order_plant_id(
                                     Some(q) => q,
                                     None => return,
                                 };
+
+                                let side = match msg.transaction_type {
+                                    None => return,
+                                    Some(tt) => {
+                                        match tt {
+                                            1 => OrderSide::Buy,
+                                            2 | 3 => OrderSide::Sell,
+                                            _ => return
+                                        }
+                                    }
+                                };
                                 if total_unfilled_size == 0 {
                                     let event = OrderUpdateEvent::OrderFilled {
+                                        side,
                                         account: Account::new(client.brokerage, account_id.clone()),
                                         symbol_name,
                                         symbol_code,
@@ -573,6 +596,7 @@ pub async fn match_order_plant_id(
                                     send_order_update(client.brokerage, &order_id, event).await;
                                 } else if total_unfilled_size > 0 {
                                     let event = OrderUpdateEvent::OrderPartiallyFilled {
+                                        side,
                                         account: Account::new(client.brokerage, account_id.clone()),
                                         symbol_name,
                                         symbol_code,
@@ -589,7 +613,6 @@ pub async fn match_order_plant_id(
                             }
                         },
                         3 => {
-
                             let event = OrderUpdateEvent::OrderCancelled {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),

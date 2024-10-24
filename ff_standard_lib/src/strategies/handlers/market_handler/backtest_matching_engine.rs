@@ -46,7 +46,7 @@ pub async fn backtest_matching_engine(
                                     order_id: existing_order_id,
                                     tag: order.tag.clone(), 
                                     time: time.to_string(),
-                                    reason: "User Request".to_string()
+                                    reason: "User Request".to_string(),
                                 });
                                 match strategy_event_sender.send(cancel_event).await {
                                     Ok(_) => {}
@@ -117,10 +117,13 @@ pub async fn backtest_matching_engine(
                                     order.state = OrderState::Cancelled;
                                     let cancel_event = StrategyEvent::OrderEvents(
                                         OrderUpdateEvent::OrderCancelled {
-                                            account: account.clone(), symbol_name: order.symbol_name.clone(),
-                                            symbol_code: order.symbol_name.clone(), order_id: order.id.clone(),
+                                            account: account.clone(),
+                                            symbol_name: order.symbol_name.clone(),
+                                            symbol_code: order.symbol_name.clone(),
+                                            order_id: order.id.clone(),
                                             reason: "OrderRequest::CancelAll".to_string(),
-                                            tag: order.tag.clone(), time: time.to_string()
+                                            tag: order.tag.clone(),
+                                            time: time.to_string(),
                                         });
                                     match strategy_event_sender.send(cancel_event).await {
                                         Ok(_) => {}
@@ -617,6 +620,7 @@ async fn fill_order(
                     quantity: order.quantity_filled.clone(),
                     tag: order.tag.clone(),
                     time: time.to_string(),
+                    side: order.side.clone(),
                 });
                 match strategy_event_sender.send(order_event).await {
                     Ok(_) => {}
@@ -665,7 +669,8 @@ async fn partially_fill_order(
                 time: time.to_string(),
                 symbol_code: order.symbol_name.clone(),
                 quantity: fill_volume,
-                price: fill_price
+                price: fill_price,
+                side: order.side.clone(),
             })
 
         } else if fill_volume > dec!(0) {
@@ -677,7 +682,8 @@ async fn partially_fill_order(
                 time: time.to_string(),
                 symbol_code: order.symbol_name.clone(),
                 quantity: fill_volume,
-                price: fill_price
+                price: fill_price,
+                side: order.side.clone(),
             })
         } else {
             None
@@ -790,6 +796,7 @@ async fn accept_order(
                 tag: order.tag.clone(),
                 time: time.to_string(),
                 symbol_code: order.symbol_name.clone(),
+                side: order.side.clone(),
         });
         match strategy_event_sender.send(event).await {
             Ok(_) => {}

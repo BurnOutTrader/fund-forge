@@ -21,7 +21,7 @@ pub fn live_order_update(
         while let Some(ref order_update_event) = order_event_receiver.recv().await {
             match order_update_event {
                 #[allow(unused)]
-                OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time } => {
+                OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time, side } => {
                     if let Some(mut order) = open_order_cache.get_mut(order_id) {
                         {
                             order.value_mut().state = OrderState::Accepted;
@@ -33,7 +33,7 @@ pub fn live_order_update(
                         }
                     }
                 }
-                OrderUpdateEvent::OrderFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time } => {
+                OrderUpdateEvent::OrderFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time, side } => {
                     #[allow(unused)]
                      if let Some((order_id, mut order)) = open_order_cache.remove(order_id) {
                          order.symbol_code = Some(symbol_code.clone());
@@ -44,7 +44,7 @@ pub fn live_order_update(
                          order.quantity_open = dec!(0.0);
                          order.time_filled_utc = Some(time.clone());
                          let events = match synchronize_positions {
-                             false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), order.side.clone(), Utc::now(), *price, tag.to_string()).await),
+                             false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), Utc::now(), *price, tag.to_string()).await),
                                 true => {
                                     LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
                                     None
@@ -64,7 +64,7 @@ pub fn live_order_update(
                          }
                     }
                 }
-                OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time } => {
+                OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time,  side} => {
                    if let Some(mut order) = open_order_cache.get_mut(order_id) {
                        order.state = OrderState::PartiallyFilled;
                        order.symbol_code = Some(symbol_code.clone());
@@ -73,7 +73,7 @@ pub fn live_order_update(
                        order.time_filled_utc = Some(time.clone());
 
                        let events = match synchronize_positions {
-                           false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), order.side.clone(), Utc::now(), *price, tag.to_string()).await),
+                           false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), Utc::now(), *price, tag.to_string()).await),
                            true => {
                                LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
                                None
