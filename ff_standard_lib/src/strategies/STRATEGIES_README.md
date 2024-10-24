@@ -496,7 +496,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 ### Futures Subscriptions
 You can subscribe using the `SymbolName` eg "MNQ" or the `SymbolCode` eg "MNQZ4".
 You can also place orders on a specific contract using symbol_code.
-If you use symbol name for orders, rithmic will chose the front month contract for you.
+If you use symbol name for orders, rithmic will choose the front month contract for you.
 
 ### Subscription Performance Impacts
 In back-testing using multiple symbols will slow down the engine only relative to the size of the primary data set, since the Subscription manager updates consolidators concurrently,
