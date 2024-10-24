@@ -423,6 +423,25 @@ pub async fn on_data_received(
                         if closed {
                             entry_order_id = None;
                         }
+                        closed = false;
+                        if let Some( exit_order_id) =  &exit_order_id {
+                            if order_id == *exit_order_id {
+                                closed = true;
+                            }
+                        }
+                        if closed {
+                            exit_order_id = None;
+                        }
+
+                        closed = false;
+                        if let Some( add_order_id) =  &add_order_id {
+                            if order_id == *add_order_id {
+                                closed = true;
+                            }
+                        }
+                        if closed {
+                            add_order_id = None;
+                        }
                     },
                     OrderUpdateEvent::OrderCancelled {order_id, ..} | OrderUpdateEvent::OrderFilled {order_id, ..} => {
                         println!("{}", msg.as_str().bright_cyan());
