@@ -1,22 +1,3 @@
-# Ignore Rithmic credential files
-/data/rithmic_credentials/rithmic_01.toml
-/data/rithmic_credentials/rithmic_04_colo.toml
-/data/rithmic_credentials/not active/topstep_trader.toml
-/data/rithmic_credentials/not active/rithmic_paper_trading.toml
-/data/rithmic_credentials/speedup.toml
-/data/rithmic_credentials/tradefundrr.toml
-/data/rithmic_credentials/uprofit_trader.toml
-/data/rithmic_credentials/apex.toml
-/data/rithmic_credentials/mes_capital.toml
-/data/rithmic_credentials/the_trading_pit.toml
-/data/rithmic_credentials/funded_futures_network.toml
-/data/rithmic_credentials/bulenox.toml
-/data/rithmic_credentials/propshop_trader.toml
-/data/rithmic_credentials/4prop_trader.toml
-/data/rithmic_credentials/fasttrack_trading.toml
-/data/rithmic_credentials/test.toml
-/data/rithmic_credentials/server_domains/servers.toml
-/data/rithmic_credentials
-/data/bitget_credentials
-/data/bitget_credentials/bitget_credentials.toml
-/data/Test/AUD-CAD/I/Quotes/202407.bin
+/data/historical/Test/*
+/data/historical/Bitget/*
+/data/historical/Rithmic/*

@@ -1,12 +1,5 @@
 /target
-/resources/server_settings.toml
-/.obsidian
-/.obsidian/app.json
-/.obsidian/appearance.json
-/.obsidian/core-plugins.json
-/.obsidian/core-plugins-migration.json
-/.obsidian/workspace.json
-ff_data_server/data/rithmic_credentials//rithmic_credentials/rithmic_credentials.toml
+/resources/server_domains/*
 
 # Added by cargo
 #
@@ -14,8 +7,4 @@ ff_data_server/data/rithmic_credentials//rithmic_credentials/rithmic_credentials
 trades exports
 /trades exports
 #/target
-
-/ff_data_server/data/rithmic_credentials
-/ff_data_server/data/bitget_credentials
-/data/bitget_credentials/bitget_credentials.toml
-/ff_data_server/data/Test
+/temp_storage

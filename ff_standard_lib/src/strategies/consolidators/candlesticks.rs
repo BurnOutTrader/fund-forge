@@ -214,7 +214,7 @@ impl CandleStickConsolidator {
         }
     }
 
-    /// We can use if time == some multiple of resolution then we can consolidate, we dont need to know the actual algo time, because we can get time from the base_data if self.last_time >
+    /// We can use if time == some multiple of resolution then we can consolidate, we dont need to know the actual algo time, because we can get time from the historical if self.last_time >
     fn update_quote_bars(&mut self, base_data: &BaseDataEnum) -> ConsolidatedData {
         if self.current_data.is_none() {
             let data = self.new_quote_bar(base_data);

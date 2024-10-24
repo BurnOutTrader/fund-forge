@@ -39,11 +39,11 @@ pub trait Indicators {
     fn history_to_retain(&self) -> usize;
 
     /// This is where the engine sends data
-    /// The engine will send open and closed bars so you might want to check  if the base_data.is_closed()
+    /// The engine will send open and closed bars so you might want to check  if the historical.is_closed()
     /// depending on your indicators intentions and logic, open bars will make logic more complex,
     /// Using a BtreeMap<DateTime, BaseDataEnum> where the key time is the open time of the data is a good way to ensure you only have 1 open bar in your history.
     /// Since the open time of a bar never changes, each time the same open bar updates it will replace the last version of itself in the map.
-    /// if !base_data.is_closed() {
+    /// if !historical.is_closed() {
     ///     return None;
     ///  }
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<Vec<IndicatorValues>>;

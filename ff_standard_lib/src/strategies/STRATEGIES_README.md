@@ -495,7 +495,7 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     println!("subscriptions: {:?}", subscriptions);
 
     // we can also access the subscription for BaseDataEnums 
-    // base_data.subscription() which returns a DataSubscription object
+    // historical.subscription() which returns a DataSubscription object
     // all objects wrapped in a BaseDataEnum also have a subscription() fn. for example candle.subscription() will return the DataSubscription object.
 
     //only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.

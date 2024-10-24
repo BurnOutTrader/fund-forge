@@ -11,8 +11,9 @@ use futures::{SinkExt, StreamExt};
 use hmac::{Hmac, Mac};
 use base64::Engine;
 use sha2::Sha256;
-use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::messages::data_server_messaging::FundForgeError;
+use crate::get_data_folder;
+
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -116,7 +117,9 @@ fn generate_signature(secret_key: &str, timestamp: &str) -> Result<String, Box<d
 
 pub fn get_bitget_credentials() -> Option<BitGetCredentials> {
     let file_path = PathBuf::from(get_data_folder())
+        .join("credentials")
         .join("bitget_credentials")
+        .join("active")
         .join("bitget_credentials.toml");
 
     if file_path.is_file() && file_path.extension().and_then(|s| s.to_str()) == Some("toml") {

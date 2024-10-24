@@ -21,7 +21,6 @@ use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
-use ff_standard_lib::standardized_types::futures_products::get_front_month;
 #[allow(unused_imports)]
 use ff_standard_lib::strategies::indicators::built_in::average_true_range::AverageTrueRange;
 #[allow(unused_imports)]
@@ -32,7 +31,6 @@ use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
 
 // TODO WARNING THIS IS LIVE TRADING
-
 const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
@@ -42,9 +40,9 @@ const MIN_ATR_VALUE: Decimal = dec!(0.7);
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT_ID_HERE".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string());
     let symbol_code = "MESZ24".to_string();
-    let data_vendor = DataVendor::Rithmic(RithmicSystem::RithmicPaperTrading);
+    let data_vendor = DataVendor::Rithmic(RithmicSystem::Apex);
     let subscription = DataSubscription::new(
         SymbolName::from("MES"),
         data_vendor.clone(),
@@ -87,7 +85,7 @@ async fn main() {
         core::time::Duration::from_millis(10),
         false,
         true,
-        true,
+        false,
         vec![account.clone()] //todo, add any more accounts you want into here.
     ).await;
 
@@ -406,7 +404,7 @@ pub async fn on_data_received(
             StrategyEvent::OrderEvents(event) => {
                 match event.symbol_code() {
                     None => {}
-                    Some(_) => {}
+                    Some(code) => symbol_code = code
                 }
                 strategy.print_ledger(event.account());
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));

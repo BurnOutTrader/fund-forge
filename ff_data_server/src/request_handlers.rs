@@ -1,10 +1,8 @@
 use std::future::Future;
-use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::subscriptions::DataSubscription;
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use chrono::{DateTime, Utc};
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,7 +15,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
-use ff_standard_lib::server_features::database::HybridStorage;
+use ff_standard_lib::server_features::database::DATA_STORAGE;
 use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, session_market_hours_response, symbols_response, tick_size_response};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
@@ -26,8 +24,6 @@ use ff_standard_lib::StreamName;
 use crate::{stream_listener};
 
 lazy_static!(
-    pub static ref DATA_STORAGE: Arc<HybridStorage> = Arc::new(HybridStorage::new(PathBuf::from(get_data_folder()), Duration::from_secs(1800)));
-
     pub static ref RESPONSE_SENDERS: Arc<DashMap<StreamName, Sender<DataServerResponse>>> = Arc::new(DashMap::new());
 );
 
@@ -40,7 +36,7 @@ pub async fn base_data_response(
     let from_time: DateTime<Utc> = from_time.parse().unwrap();
     let to_time: DateTime<Utc> = to_time.parse().unwrap();
 
-    let data = match DATA_STORAGE.get_bulk_data(&subscriptions, from_time, to_time).await {
+    let data = match DATA_STORAGE.get().expect("data folder not initialized").get_bulk_data(&subscriptions, from_time, to_time).await {
         Err(e) => return  DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(e.to_string())},
         Ok(data) => data
     };
@@ -51,7 +47,7 @@ pub async fn base_data_response(
 pub async fn manage_async_requests(
     strategy_mode: StrategyMode,
     stream: TlsStream<TcpStream>,
-    stream_name: StreamName
+    stream_name: StreamName,
 ) {
     println!("stream name: {}", stream_name);
     let (read_half, write_half) = io::split(stream);

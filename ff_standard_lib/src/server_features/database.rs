@@ -10,20 +10,18 @@ use chrono::{DateTime, Datelike, TimeZone, Utc};
 use dashmap::DashMap;
 use futures::future;
 use memmap2::{Mmap};
+use tokio::sync::OnceCell;
 use tokio::task;
 use tokio::time::interval;
 use crate::messages::data_server_messaging::{FundForgeError};
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 
-//todo add update management handling, so we dont access data while it is being updated. instead we join a que to await the updates
-// the engine manages datavendor.update_data() functions, not the user
-// use market type in folder structure
-
-// todo Multiple concurrent calls possibly causing locking, need a test.
+pub static DATA_STORAGE: OnceCell<Arc<HybridStorage>> = OnceCell::const_new();
 
 pub struct HybridStorage {
     base_path: PathBuf,
@@ -36,7 +34,7 @@ pub struct HybridStorage {
 impl HybridStorage {
     pub fn new(base_path: PathBuf, clear_cache_duration: Duration) -> Self {
         let storage = Self {
-            base_path,
+            base_path: base_path.join("historical"),
             mmap_cache: Arc::new(DashMap::new()),
             cache_last_accessed: Arc::new(DashMap::new()),
             cache_is_updated: Arc::new(DashMap::new()),
@@ -98,12 +96,19 @@ impl HybridStorage {
     }
 
     fn get_base_path(&self, symbol: &Symbol, resolution: &Resolution, data_type: &BaseDataType, is_saving: bool) -> PathBuf {
+        let data_vendor = match symbol.data_vendor {
+            DataVendor::Rithmic(_) => "Rithmic".to_string(),
+            _ => symbol.data_vendor.to_string(),
+        };
+
         let base_path = self.base_path
-            .join(symbol.data_vendor.to_string())
+            .join(data_vendor)
             .join(symbol.market_type.to_string())
             .join(symbol.name.to_string())
             .join(resolution.to_string())
             .join(data_type.to_string());
+
+        println!("Base Path: {:?}", base_path);
 
         if is_saving && !base_path.exists() {
             fs::create_dir_all(&base_path).unwrap();

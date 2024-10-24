@@ -23,7 +23,6 @@ use futures::stream::{SplitSink, SplitStream};
 #[allow(unused_imports)]
 use structopt::lazy_static::lazy_static;
 use tokio::sync::{broadcast, oneshot, Mutex};
-use ff_standard_lib::helpers::get_data_folder;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
@@ -49,7 +48,7 @@ use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::AccountInfo;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::PositionId;
-use crate::{subscribe_server_shutdown, ServerLaunchOptions};
+use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::rithmic_api::products::get_exchange_by_code;
 
@@ -125,9 +124,10 @@ impl RithmicClient {
         let brokerage = Brokerage::Rithmic(system.clone());
         let data_vendor = DataVendor::Rithmic(system.clone());
         let credentials = RithmicClient::rithmic_credentials(&brokerage)?;
-        println!("{:?}", credentials);
+        println!("Activating {} {} on Rithmic Server: {}", credentials.user, credentials.system_name, credentials.server_name);
         let data_folder = get_data_folder();
         let server_domains_toml = PathBuf::from(data_folder)
+            .join("credentials")
             .join("rithmic_credentials")
             .join("server_domains")
             .join("servers.toml")
@@ -215,7 +215,9 @@ impl RithmicClient {
     pub fn get_rithmic_tomls() -> Vec<String> {
         let mut toml_files = Vec::new();
         let dir = PathBuf::from(get_data_folder())
+            .join("credentials")
             .join("rithmic_credentials")
+            .join("active")
             .to_string_lossy()
             .into_owned();
 
@@ -234,6 +236,7 @@ impl RithmicClient {
     }
 
     pub async fn connect_plant(&self, system: SysInfraType) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, FundForgeError> {
+
         match self.client.connect_and_login(system.clone()).await {
             Ok(r) => {
                 let (writer, receiver) = r.split();
@@ -292,8 +295,8 @@ impl RithmicClient {
                     Some(s) => s.to_string(),
                     None => String::from("Invalid UTF-8 sequence"), // Handle the error case as needed
                 };
-                let file_path = format!("{}/rithmic_credentials/{}", data_folder, file);
-                println!("{}", file_path);
+                let file_path = format!("{}/credentials/rithmic_credentials/active/{}", data_folder, file);
+                //println!("{}", file_path);
                 match RithmicCredentials::load_credentials_from_file(&file_path) {
                     Ok(file) => Ok(file),
                     Err(_e) => Err(FundForgeError::ServerErrorDebug(format!("Failed to load credentials for: {}", broker)))

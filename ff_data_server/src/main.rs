@@ -5,12 +5,16 @@ use std::io;
 use std::io::BufReader;
 use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 use once_cell::sync::Lazy;
 use structopt::StructOpt;
 use tokio::net::TcpStream;
 use tokio::{signal, task};
-use tokio::sync::{broadcast};
+use tokio::sync::{broadcast, OnceCell};
 use tokio_rustls::server::TlsStream;
+use ff_standard_lib::server_features::database::{HybridStorage, DATA_STORAGE};
+
 pub mod request_handlers;
 mod stream_listener;
 mod async_listener;
@@ -103,9 +107,17 @@ pub fn subscribe_server_shutdown() -> broadcast::Receiver<()> {
     SHUTDOWN_CHANNEL.subscribe()
 }
 
+static DATA_FOLDER: OnceCell<PathBuf> = OnceCell::const_new();
+pub fn get_data_folder() -> &'static PathBuf {
+    DATA_FOLDER.get().expect("DATA_FOLDER has not been initialized.")
+}
+
 #[tokio::main]
 async fn main() -> io::Result<()> {
     let options = ServerLaunchOptions::from_args();
+    let _ = DATA_FOLDER.set(options.data_folder.clone());
+    println!("Data Folder: {:?}", get_data_folder());
+    let _ = DATA_STORAGE.set(Arc::new(HybridStorage::new(options.data_folder.clone(), Duration::from_secs(900))));
     let cert = Path::join(&options.ssl_auth_folder, "cert.pem");
     let key = Path::join(&options.ssl_auth_folder, "key.pem");
 
@@ -152,7 +164,7 @@ use crate::test_api::api_client::TEST_CLIENT;
 
 fn run_servers(
     config: rustls::ServerConfig,
-    options: ServerLaunchOptions
+    options: ServerLaunchOptions,
 ) {
     let config_clone = config.clone();
     let options_clone = options.clone();
@@ -161,7 +173,6 @@ fn run_servers(
         async_listener::async_server(
             config_clone,
             SocketAddr::new(options_clone.listener_address, options_clone.port),
-            options_clone.data_folder
         ).await
     });
 

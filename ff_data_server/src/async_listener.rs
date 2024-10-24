@@ -1,6 +1,5 @@
 use rustls::ServerConfig;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use tokio_rustls::TlsAcceptor;
 use std::sync::Arc;
 use tokio::net::{TcpListener, TcpStream};
@@ -13,7 +12,7 @@ use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use crate::request_handlers::manage_async_requests;
 use crate::subscribe_server_shutdown;
 
-pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr, _data_folder: PathBuf) {
+pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
     let acceptor = TlsAcceptor::from(Arc::new(config));
     let listener = match TcpListener::bind(&addr).await {
         Ok(listener) => listener,

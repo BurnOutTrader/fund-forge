@@ -15,8 +15,8 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use tokio::time::sleep;
 use std::time::Duration;
 use rust_decimal_macros::dec;
+use ff_standard_lib::server_features::database::DATA_STORAGE;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use crate::request_handlers::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 use crate::test_api::api_client::TestApiClient;
 
@@ -107,7 +107,7 @@ impl VendorApiResponse for TestApiClient {
 
             let mut last_time = from_time;
             'main_loop: while last_time < to_time {
-                let data = match DATA_STORAGE.get_data_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, from_time, to_time).await {
+                let data = match DATA_STORAGE.get().expect("DATA_STORAGE not initialized").get_data_range(&subscription.symbol, &subscription.resolution, &subscription.base_data_type, from_time, to_time).await {
                     Ok(data) => data,
                     Err(e) => {
                         eprintln!("Failed to get test data: {}", e);

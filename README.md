@@ -9,6 +9,9 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 <span style="color: red;">***For development and testing purposes only. live trading is in development. repo is currently unstable.***</span>
 
+## Announcements
+- 24/10/2024: The folder and file structure was changed, The historical data has not changed, you can just move the historical data you have already downloaded to `ff_data_server/data/historical` and it will work as before. This was done to make set up easier for new users.
+
 ⚠️ Warning
 : If you are using Rithmic, proceed with extreme caution!
 Live order functionality is being implemented, and any active strategy may send real orders directly to the market.
@@ -64,7 +67,7 @@ From this data your strategy will consolidate Candles or QuoteBars of any desire
 
 In the example image 'Test' represents `DataVendor::Test`
 
-![img.png](misc/folder_structure.png)
+![folder_structure.png](misc/folder_structure.png)
 
 ### For more testing and development data
 You can download some free testing data [here](https://www.histdata.com/download-free-forex-data/?/ascii/tick-data-quotes)
