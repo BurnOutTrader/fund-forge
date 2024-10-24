@@ -310,18 +310,16 @@ pub async fn on_data_received(
 
                                     let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
                                     //Add to winners up to 2x if we have momentum
-                                    if (is_long || is_short) && bars_since_entry > 2 && open_profit >= dec!(40) && position_size <= dec!(5) && add_order_id.is_none() && exit_order_id.is_none() && entry_order_id.is_none() {
+                                    if (is_long || is_short) && bars_since_entry > 2 && open_profit >= dec!(40) && position_size <= dec!(5) && add_order_id.is_none()  {
                                         let cancel_order_time = Utc::now() + Duration::seconds(15);
 
                                         if IS_LONG_STRATEGY && is_long && high_1 {
                                             let new_add_order_id = strategy.stop_limit(&candle.symbol.name, None, &account, None, dec!(3), OrderSide::Buy, String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
                                             reset_bars_since_entry(&mut bars_since_entry_map, &account);
-                                            exit_order_id = None;
                                             add_order_id = Some(new_add_order_id);
                                         } else if IS_SHORT_STRATEGY && is_short && low_1 {
                                             let new_add_order_id = strategy.stop_limit(&candle.symbol.name, None, &account, None, dec!(3), OrderSide::Sell, String::from("Add Short Stop Limit"), last_candle.bid_low - dec!(0.5), last_candle.bid_low - dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
                                             reset_bars_since_entry(&mut bars_since_entry_map, &account);
-                                            exit_order_id = None;
                                             add_order_id = Some(new_add_order_id);
                                         }
                                     }
@@ -332,7 +330,7 @@ pub async fn on_data_received(
                                     };
 
                                     // Cut losses and take profits, we check entry order is none to prevent exiting while an entry order is unfilled, entry order will expire and go to none on the TIF expiry, or on fill.
-                                    if open_profit > profit_goal || (open_profit < RISK && bars_since_entry > 10) && add_order_id.is_none() && entry_order_id.is_none() && exit_order_id.is_none() {
+                                    if open_profit > profit_goal || (open_profit < RISK && bars_since_entry > 10) && exit_order_id.is_none() {
                                         let is_long = strategy.is_long(&account, &symbol_code);
                                         let is_short = strategy.is_short(&account, &symbol_code);
 
@@ -351,7 +349,7 @@ pub async fn on_data_received(
 
                                     //Take smaller profit if we add and don't get momentum
                                     let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
-                                    if bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30) && position_size > dec!(2) && add_order_id.is_none() && entry_order_id.is_none() && exit_order_id.is_none() {
+                                    if bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30) && position_size > dec!(2) && exit_order_id.is_none()  {
                                         let is_long = strategy.is_long(&account, &symbol_code);
                                         let is_short = strategy.is_short(&account, &symbol_code);
                                         let position_size = strategy.position_size(&account, &symbol_code);
