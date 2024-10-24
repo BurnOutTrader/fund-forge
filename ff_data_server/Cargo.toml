@@ -3,6 +3,7 @@ name = "ff_data_server"
 version = "0.1.0"
 edition = "2021"
 authors = ["Kevin Monaghan"]
+license-file = "LICENCE.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
