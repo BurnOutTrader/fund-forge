@@ -868,7 +868,7 @@ When using the functions above with futures in live mode you might need to get t
 The symbol code will be returned in order events, an example of a symbol code or futures 'symbol' == "M6AZ4". \
 Alternatively just use the symbol code as symbol name. \
 There will be functions built to make this effortless at a later date. \
-The reason it works this way is to enable the trading of calander spreads, where a trader might place trades on contracts with the same SymbolName. \
+The reason it works this way is to enable the trading of calendar spreads, where a trader might place trades on contracts with the same SymbolName. \
 Currently in Backtesting, you will need to use the SymbolName of your data, this will all be fixed in the future once the Live api's are stable. \
 ```rust
   // A Note for Live Mode
