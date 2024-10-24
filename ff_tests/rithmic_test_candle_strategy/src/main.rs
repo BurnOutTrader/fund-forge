@@ -35,24 +35,24 @@ const IS_LONG_STRATEGY: bool = true;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
-const MIN_ATR_VALUE: Decimal = dec!(01.25);
-const PROFIT_TARGET: Decimal = dec!(150);
-const RISK: Decimal = dec!(100);
+const MIN_ATR_VALUE: Decimal = dec!(2.5);
+const PROFIT_TARGET: Decimal = dec!(600);
+const RISK: Decimal = dec!(200);
 const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
 
 #[tokio::main]
 async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_ID".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
-    let symbol_name = SymbolName::from("MNQ");
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT_HERE".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
+    let symbol_name = SymbolName::from("MGC");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
     let subscription = DataSubscription::new_custom(
         symbol_name.clone(),
         DATAVENDOR,
-        Resolution::Seconds(3),
-        MarketType::Futures(FuturesExchange::CME), //todo, dont forget to change the exchange for the symbol you are trading
+        Resolution::Minutes(3),
+        MarketType::Futures(FuturesExchange::COMEX), //todo, dont forget to change the exchange for the symbol you are trading
         CandleType::HeikinAshi
         );
 
@@ -71,7 +71,7 @@ async fn main() {
                 subscription.symbol.data_vendor.clone(),
                 Resolution::Ticks(1),
                 BaseDataType::Ticks,
-                MarketType::Futures(FuturesExchange::CME) //todo, dont forget to change the exchange for the symbol you are trading
+                MarketType::Futures(FuturesExchange::COMEX) //todo, dont forget to change the exchange for the symbol you are trading
             ),
 
             //subscribe to our subscription
