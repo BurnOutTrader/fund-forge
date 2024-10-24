@@ -35,9 +35,9 @@ use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
 /*
   - This strategy is designed to trade 1 symbol at a time, the logic will not work for multiple symbols.
     - It can trade multiple accounts / brokers.
-    - It is designed to get into a position and add to winners, up to 4x the original position size. (2 contracts starting size, up to 8)
+    - It is designed to get into a position and add to winners, up to 2.5x the original position size. (2 contracts starting size, up to 5)
     - It will start by limiting in on a clean bull or bear bar closing on its high or low, where atr is increasing and above a minimum value.
-    - If it is in a winner it will look to increase size on the next signal by taking a momentum stop limit entry up to 2x after initial entry.
+    - If it is in a winner it will look to increase size on the next signal by taking a momentum stop limit entry up to 1x after initial entry.
     - Both the initial limit order and the add stop limit orders use a 15 to 30 second time in force to expire if not filled, this is done on the exchange side.
     - It will only enter trades when the atr looks to be increasing.
     - It will not enter trades below the minimum atr value.
@@ -50,11 +50,11 @@ use ff_standard_lib::strategies::indicators::indicators_trait::Indicators;
      - This strategy is for testing purposes, It is not 100% going to make money and is not a recommendation to trade live, although it is profitable for me.
 */
 
-const IS_LONG_STRATEGY: bool = true;
+const IS_LONG_STRATEGY: bool = false;
 const IS_SHORT_STRATEGY: bool = true;
 const MAX_PROFIT: Decimal = dec!(9000);
 const MAX_LOSS: Decimal = dec!(1500);
-const MIN_ATR_VALUE: Decimal = dec!(1.25);
+const MIN_ATR_VALUE: Decimal = dec!(0.5);
 const PROFIT_TARGET: Decimal = dec!(150);
 const RISK: Decimal = dec!(100);
 const DATAVENDOR: DataVendor = DataVendor::Rithmic(RithmicSystem::Apex);
@@ -64,16 +64,16 @@ async fn main() {
     //todo You will need to put in your paper account ID here or the strategy will crash on initialization, you can trade multiple accounts and brokers and mix and match data feeds.
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "YOUR_ACCOUNT".to_string()); //todo change your brokerage to the correct broker, prop firm or rithmic system.
     let account_2 = Account::new(Brokerage::Rithmic(RithmicSystem::RithmicPaperTrading), "YOUR_ACCOUNT".to_string());
-    let symbol_name = SymbolName::from("MNQ");
+    let symbol_name = SymbolName::from("GC");
     let mut symbol_code = symbol_name.clone();
     symbol_code.push_str("Z24");
 
     let subscription = DataSubscription::new(
         symbol_name.clone(),
         DATAVENDOR,
-        Resolution::Seconds(3),
+        Resolution::Seconds(15),
         BaseDataType::QuoteBars,
-        MarketType::Futures(FuturesExchange::CME));  //todo, dont forget to change the exchange for the symbol you are trading
+        MarketType::Futures(FuturesExchange::COMEX));  //todo, dont forget to change the exchange for the symbol you are trading
 
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let strategy = FundForgeStrategy::initialize(
@@ -91,7 +91,7 @@ async fn main() {
                 DATAVENDOR,
                 Resolution::Instant,
                 BaseDataType::Quotes,
-                MarketType::Futures(FuturesExchange::CME)  //todo, dont forget to change the exchange for the symbol you are trading
+                MarketType::Futures(FuturesExchange::COMEX)  //todo, dont forget to change the exchange for the symbol you are trading
             ),
            /* DataSubscription::new(
                 SymbolName::from("MNQ"),
@@ -111,7 +111,7 @@ async fn main() {
         false,
         true,
         true,
-        vec![account.clone(), account_2] //todo, add any more accounts you want into here.
+        vec![account.clone(), account] //todo, add any more accounts you want into here.
     ).await;
 
     on_data_received(strategy, strategy_event_receiver, account, subscription, symbol_code).await;
@@ -326,7 +326,7 @@ pub async fn on_data_received(
 
                                     let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
                                     //Add to winners up to 2x if we have momentum
-                                    if (is_long || is_short) && bars_since_entry > 2 && open_profit >= dec!(40) && position_size <= dec!(5) && !add_order_id.contains_key(&account) {
+                                    if (is_long || is_short) && bars_since_entry > 2 && open_profit >= dec!(60) && position_size <= dec!(5) && !add_order_id.contains_key(&account) {
                                         let cancel_order_time = Utc::now() + Duration::seconds(15);
                                         if IS_LONG_STRATEGY && is_long && high_1 {
                                             let new_add_order_id = strategy.stop_limit(&quotebar.symbol.name, None, &account, None, dec!(3), OrderSide::Buy, String::from("Add Long Stop Limit"), last_candle.ask_high + dec!(0.5), last_candle.ask_high + dec!(0.25), TimeInForce::Time(cancel_order_time.timestamp(), UTC.to_string())).await;
@@ -364,7 +364,7 @@ pub async fn on_data_received(
 
                                     //Take smaller profit if we add and don't get momentum
                                     let bars_since_entry = bars_since_entry_map.get(&account).unwrap().clone();
-                                    if bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30) && position_size > dec!(2) && !exit_order_id.contains_key(&account) {
+                                    if bars_since_entry > 5 && open_profit < dec!(60) && open_profit >= dec!(30) && position_size > dec!(2) && !exit_order_id.contains_key(&account) && add_order_id.contains_key(&account) {
                                         let is_long = strategy.is_long(&account, &symbol_code);
                                         let is_short = strategy.is_short(&account, &symbol_code);
                                         let position_size = strategy.position_size(&account, &symbol_code);
@@ -462,15 +462,6 @@ pub async fn on_data_received(
                         }
                         if closed {
                             exit_order_id.remove(&event.account());
-                        }
-
-                        closed = false;
-                        if let Some( add_order_id) =  add_order_id.get(&event.account()) {
-                            if order_id == add_order_id {
-                                closed = true;
-                            }
-                        }
-                        if closed {
                             add_order_id.remove(&event.account());
                         }
                     },
@@ -495,15 +486,6 @@ pub async fn on_data_received(
                         }
                         if closed {
                             exit_order_id.remove(&event.account());
-                        }
-
-                        closed = false;
-                        if let Some( add_order_id) =  add_order_id.get(&event.account()) {
-                            if order_id == add_order_id {
-                                closed = true;
-                            }
-                        }
-                        if closed {
                             add_order_id.remove(&event.account());
                         }
                     }
