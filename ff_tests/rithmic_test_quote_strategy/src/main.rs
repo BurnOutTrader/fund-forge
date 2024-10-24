@@ -168,20 +168,11 @@ pub async fn on_data_received(
         .into_iter().map(|account| (account.clone(), 0))
         .collect();
 
-    let mut exit_order_id: HashMap<Account, OrderId> = strategy
-        .accounts()
-        .into_iter().map(|account| (account.clone(), String))
-        .collect();
+    let mut exit_order_id: HashMap<Account, OrderId> = HashMap::new();
 
-    let mut entry_order_id: HashMap<Account, OrderId> = strategy
-        .accounts()
-        .into_iter().map(|account| (account.clone(), OrderId))
-        .collect();
+    let mut entry_order_id: HashMap<Account, OrderId> = HashMap::new();
 
-    let mut add_order_id: HashMap<Account, OrderId> = strategy
-        .accounts()
-        .into_iter().map(|account| (account.clone(), OrderId))
-        .collect();
+    let mut add_order_id: HashMap<Account, OrderId> = HashMap::new();
 
 
     fn increment_bars_since_entry(bars_since_entry: &mut HashMap<Account, u64>, account: &Account) {
@@ -444,7 +435,7 @@ pub async fn on_data_received(
                 strategy.print_ledger(event.account());
                 let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                 match event {
-                    OrderUpdateEvent::OrderRejected { order_id, .. } => {
+                    OrderUpdateEvent::OrderRejected { ref order_id, .. } => {
                         println!("{}", msg.as_str().on_bright_magenta().on_bright_red());
 
                         //todo make this a fn to avoid duplication
@@ -455,7 +446,7 @@ pub async fn on_data_received(
                             }
                         }
                         if closed {
-                            exit_order_id.remove(&event.account())
+                            exit_order_id.remove(&event.account());
                         }
 
                         closed = false;
@@ -465,7 +456,7 @@ pub async fn on_data_received(
                             }
                         }
                         if closed {
-                            exit_order_id.remove(&event.account())
+                            exit_order_id.remove(&event.account());
                         }
 
                         closed = false;
@@ -475,10 +466,10 @@ pub async fn on_data_received(
                             }
                         }
                         if closed {
-                            add_order_id.remove(&event.account())
+                            add_order_id.remove(&event.account());
                         }
                     },
-                    OrderUpdateEvent::OrderCancelled {order_id, ..} | OrderUpdateEvent::OrderFilled {order_id, ..} => {
+                    OrderUpdateEvent::OrderCancelled {ref order_id, ..} | OrderUpdateEvent::OrderFilled {ref order_id, ..} => {
                         println!("{}", msg.as_str().bright_cyan());
 
                         let mut closed = false;
@@ -488,7 +479,7 @@ pub async fn on_data_received(
                             }
                         }
                         if closed {
-                            exit_order_id.remove(&event.account())
+                            exit_order_id.remove(&event.account());
                         }
 
                         closed = false;
@@ -498,7 +489,7 @@ pub async fn on_data_received(
                             }
                         }
                         if closed {
-                            exit_order_id.remove(&event.account())
+                            exit_order_id.remove(&event.account());
                         }
 
                         closed = false;
@@ -508,7 +499,7 @@ pub async fn on_data_received(
                             }
                         }
                         if closed {
-                            add_order_id.remove(&event.account())
+                            add_order_id.remove(&event.account());
                         }
                     }
                     _ =>  println!("{}", msg.as_str().bright_yellow())
