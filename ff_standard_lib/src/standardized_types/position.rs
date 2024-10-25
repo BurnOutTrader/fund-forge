@@ -342,27 +342,25 @@ impl Position {
     }
 
     /// Reduces position size a position event, this event will include a booked_pnl property
-    pub(crate) async fn reduce_position_size(&mut self, mode: StrategyMode, simulate_pnl: bool, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
+    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
         if quantity > self.quantity_open {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
 
-        if mode != StrategyMode::Live || simulate_pnl {
-            // Calculate booked PnL
-            let booked_pnl = calculate_theoretical_pnl(
-                self.side,
-                self.average_price,
-                market_price,
-                quantity,
-                account_currency,
-                time,
-                &self.symbol_info
-            );
+        // Calculate booked PnL
+        let booked_pnl = calculate_theoretical_pnl(
+            self.side,
+            self.average_price,
+            market_price,
+            quantity,
+            account_currency,
+            time,
+            &self.symbol_info
+        );
 
-            // Update position
-            self.booked_pnl += booked_pnl;
-            self.open_pnl -= booked_pnl;
-        }
+        // Update position
+        self.booked_pnl += booked_pnl;
+        self.open_pnl -= booked_pnl;
 
         self.average_exit_price = match self.average_exit_price {
             Some(existing_exit_price) => {

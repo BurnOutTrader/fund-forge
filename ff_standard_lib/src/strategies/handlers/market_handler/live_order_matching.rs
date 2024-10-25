@@ -48,8 +48,7 @@ pub fn live_order_update(
                          let events = match synchronize_positions {
                              false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), Utc::now(), *price, tag.to_string()).await),
                             true => {
-                                //todo, this doesnt work, creates an opposing order even if there is none
-                                //LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
+                                LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
                                 None
                             }
                          };
@@ -79,7 +78,7 @@ pub fn live_order_update(
                        let events = match synchronize_positions {
                            false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), Utc::now(), *price, tag.to_string()).await),
                            true => {
-                               //LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
+                               LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
                                None
                            }
                        };
