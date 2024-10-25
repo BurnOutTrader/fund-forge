@@ -93,6 +93,7 @@ pub async fn on_data_received(
     let mut last_side = LastSide::Flat;
     let mut entry_order_id = None;
     let mut exit_order_id = None;
+    let mut bars_since_entry = 0;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -115,16 +116,18 @@ pub async fn on_data_received(
                                 if let Some(last_block) = last_block {
                                     let last_close = last_block.get_plot(&close).unwrap().value;
                                     let last_open = last_block.get_plot(&open).unwrap().value;
+                                    let is_long = strategy.is_long(&account, &symbol_code);
 
-                                    if last_open < last_close && block_close.value > block_open.value && no_entry && entry_order_id == None && (!strategy.is_long(&account, &symbol_code) || strategy.pnl(&account, &symbol_code) > dec!(0)) {
+                                    if last_open < last_close && block_close.value > block_open.value && no_entry && entry_order_id == None
+                                        && (!is_long || strategy.pnl(&account, &symbol_code) > INCREMENTAL_SCALP_PNL / dec!(3)) {
+
                                         let quantity = strategy.position_size(&account, &symbol_code);
-
                                         if !strategy.is_long(&account, &symbol_code) && quantity < MAX_SIZE {
                                             entry_order_id = Some(strategy.enter_long(&symbol_name, None, &account, None, SIZE, String::from("Enter Long")).await);
                                             no_entry = false;
                                         }
                                     }
-                                    if strategy.is_long(&account, &symbol_code) {
+                                    if is_long {
                                         //tp on 2 bearish renko blocks
                                         if last_open > last_close && block_close.value < block_open.value && no_exit && exit_order_id == None {
                                             let quantity = strategy.position_size(&account, &symbol_code);
