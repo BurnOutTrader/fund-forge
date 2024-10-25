@@ -23,6 +23,7 @@ pub fn live_order_update(
                 #[allow(unused)]
                 OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time } => {
                     if let Some(mut order) = open_order_cache.get_mut(order_id) {
+                        //println!("{}", order_update_event);
                         {
                             order.value_mut().state = OrderState::Accepted;
                             order.symbol_code = Some(symbol_code.clone());
@@ -43,12 +44,13 @@ pub fn live_order_update(
                          order.quantity_filled += quantity;
                          order.quantity_open = dec!(0.0);
                          order.time_filled_utc = Some(time.clone());
+                         //println!("{}", order_update_event);
                          let events = match synchronize_positions {
                              false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), Utc::now(), *price, tag.to_string()).await),
-                                true => {
-                                    //LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
-                                    None
-                                }
+                            true => {
+                                //LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
+                                None
+                            }
                          };
                          match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                              Ok(_) => {}
@@ -66,6 +68,7 @@ pub fn live_order_update(
                 }
                 OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time,  side} => {
                    if let Some(mut order) = open_order_cache.get_mut(order_id) {
+                       //println!("{}", order_update_event);
                        order.state = OrderState::PartiallyFilled;
                        order.symbol_code = Some(symbol_code.clone());
                        order.quantity_filled += quantity;

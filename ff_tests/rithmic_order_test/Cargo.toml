@@ -1,8 +1,7 @@
 [package]
-name = "rithmic_test_quote_strategy"
+name = "rithmic_order_test"
 version = "0.1.0"
 edition = "2021"
-license-file = "LICENCE.md"
 
 [dependencies]
 ff_rithmic_api = "0.2.4"

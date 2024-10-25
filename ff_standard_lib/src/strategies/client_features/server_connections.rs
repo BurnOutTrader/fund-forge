@@ -77,9 +77,6 @@ pub(crate) async fn live_subscription_handler(
         return;
     }
 
-    //todo! THIS HAS TO BE REMOVED ONCE LIVE WARM UP IS BUILT
-    set_warmup_complete();
-
     let settings_map = Arc::new(initialise_settings().unwrap());
     let mut subscription_update_channel = subscribe_primary_subscription_updates();
 

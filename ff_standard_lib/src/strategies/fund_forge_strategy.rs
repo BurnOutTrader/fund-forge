@@ -22,7 +22,7 @@ use rust_decimal::Decimal;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::{Sender};
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc};
-use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, send_request, StrategyRequest};
+use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, send_request, set_warmup_complete, StrategyRequest};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
@@ -136,6 +136,12 @@ impl FundForgeStrategy {
         synchronize_accounts: bool,
         accounts: Vec<Account>
     ) -> FundForgeStrategy {
+
+
+        //todo! THIS HAS TO BE REMOVED ONCE LIVE WARM UP IS BUILT
+        if strategy_mode != StrategyMode::Backtest {
+            set_warmup_complete();
+        }
 
         let timed_event_handler = Arc::new(TimedEventHandler::new(strategy_event_sender.clone()));
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));

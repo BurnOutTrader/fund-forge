@@ -17,45 +17,6 @@ use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::products::{get_available_symbol_names, get_symbol_info};
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
-fn generate_subscription_resolutions() -> Vec<SubscriptionResolutionType> {
-    let mut resolutions = Vec::new();
-
-    // Add seconds 1-60
-    for seconds in 1..=60 {
-        resolutions.push(SubscriptionResolutionType::new(Resolution::Seconds(seconds), BaseDataType::Candles));
-    }
-
-    // Add minutes 1 to 480 (8 hours)
-    for minutes in 1..=480 {
-        resolutions.push(SubscriptionResolutionType::new(Resolution::Minutes(minutes), BaseDataType::Candles));
-    }
-
-    resolutions.push(SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes));
-    resolutions.push(SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
-    resolutions
-}
-
-fn generate_resolutions(mode: StrategyMode) -> Vec<Resolution> {
-    if mode == StrategyMode::LivePaperTrading || mode == StrategyMode::Live {
-        let mut resolutions = Vec::new();
-
-        // Add seconds 1-60
-        for seconds in 1..=60 {
-            resolutions.push(Resolution::Seconds(seconds));
-        }
-
-        // Add minutes 1 to 480 (8 hours)
-        for minutes in 1..=480 {
-            resolutions.push(Resolution::Minutes(minutes));
-        }
-
-        resolutions.push(Resolution::Instant);
-        resolutions.push(Resolution::Ticks(1));
-        return resolutions
-    }
-    vec![Resolution::Instant, Resolution::Seconds(1), Resolution::Ticks(1)]
-}
-
 #[allow(dead_code)]
 #[async_trait]
 impl VendorApiResponse for RithmicClient {
@@ -84,18 +45,14 @@ impl VendorApiResponse for RithmicClient {
         todo!()
     }
 
-    async fn resolutions_response(&self, mode: StrategyMode, _stream_name: StreamName, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
-        let subs = match mode {
-            StrategyMode::LivePaperTrading | StrategyMode::Live => generate_subscription_resolutions(),
-            StrategyMode::Backtest => {
-                vec![SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes),
-                     SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks),
-                     SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles)]
-            }
-        };
+    async fn resolutions_response(&self, _mode: StrategyMode, _stream_name: StreamName, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
+        let mut resolutions = Vec::new();
+        resolutions.push(SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes));
+        resolutions.push(SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
+        resolutions.push(SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles));
         DataServerResponse::Resolutions {
             callback_id,
-            subscription_resolutions_types: subs,
+            subscription_resolutions_types: resolutions,
             market_type: MarketType::Forex,
         }
     }
@@ -157,8 +114,13 @@ impl VendorApiResponse for RithmicClient {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
 
+        let mut resolutions = Vec::new();
+        resolutions.push(Resolution::Instant);
+        resolutions.push(Resolution::Ticks(1));
+        resolutions.push(Resolution::Seconds(1));
         //we can pass in live here because backtest never calls this fn
-        if !generate_resolutions(StrategyMode::Live).contains(&subscription.resolution) {
+
+        if !resolutions.contains(&subscription.resolution) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
 
