@@ -71,7 +71,7 @@ enum LastSide {
     Short
 }
 
-// This strategy is designed to pyramid into bull trends w=suing renko.
+// This strategy is designed to pyramid into bull trends using renko.
 // 1. It enters after a bearish renko bar is reversed by a bullish renko bar.
 // 2. It exits after 2 bearish renko bars.
 // 3. It adds on repeat signals up to 4 times, only if it is in profit.
