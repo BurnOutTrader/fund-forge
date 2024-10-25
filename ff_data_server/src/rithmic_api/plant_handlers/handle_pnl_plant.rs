@@ -215,7 +215,7 @@ pub async fn match_pnl_plant_id(
                             };
                         }
 
-                        println!("Closing position: {:?}", position);
+                        //println!("Closing position: {:?}", position);
                         send_updates(DataServerResponse::LivePositionUpdates {
                             account: Account::new(client.brokerage, account_id.clone()),
                             position
@@ -259,7 +259,7 @@ pub async fn match_pnl_plant_id(
                                         Some(tag) => tag.clone()
                                     }
                                 };
-                                println!("Creating Position");
+                                //println!("Creating Position");
                                 let position = Position {
                                     pnl_currency: symbol_info.pnl_currency.clone(),
                                     symbol_name: symbol_name.clone(),
@@ -288,7 +288,7 @@ pub async fn match_pnl_plant_id(
                                 position
                             }
                             Some(mut position_ref) => {
-                                println!("Updating Position");
+                                //println!("Updating Position");
                                 position_ref.quantity_open = open_position_quantity;
                                 position_ref.side = side;;
                                 position_ref.average_price = average_price;
