@@ -116,7 +116,7 @@ pub async fn on_data_received(
                                     let last_close = last_block.get_plot(&close).unwrap().value;
                                     let last_open = last_block.get_plot(&open).unwrap().value;
 
-                                    if last_open < last_close && block_close.value > block_open.value && no_entry && entry_order_id == None {
+                                    if last_open < last_close && block_close.value > block_open.value && no_entry && entry_order_id == None && (!strategy.is_long(&account, &symbol_code) || strategy.pnl(&account, &symbol_code) > dec!(0)) {
                                         let quantity = strategy.position_size(&account, &symbol_code);
 
                                         if !strategy.is_long(&account, &symbol_code) && quantity < MAX_SIZE {
@@ -125,6 +125,7 @@ pub async fn on_data_received(
                                         }
                                     }
                                     if strategy.is_long(&account, &symbol_code) {
+                                        //tp on 2 bearish renko blocks
                                         if last_open > last_close && block_close.value < block_open.value && no_exit && exit_order_id == None {
                                             let quantity = strategy.position_size(&account, &symbol_code);
                                             exit_order_id = Some(strategy.exit_long(&symbol_name, None, &account, None, quantity, String::from("Exit Long")).await);
@@ -143,6 +144,10 @@ pub async fn on_data_received(
                             }
                             last_block = Some(renko_value);
                         }
+                        let pnl = strategy.pnl(&account, &symbol_code);
+                        let quantity = strategy.position_size(&account, &symbol_code);
+                        let msg = format!("Strategy: PNL: {}, Quantity: {}", pnl, quantity);
+                        println!("{}", msg.as_str().bright_blue());
                     }
                     _ => {}
                 }
