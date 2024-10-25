@@ -25,7 +25,6 @@ use ff_standard_lib::strategies::indicators::indicator_enum::IndicatorEnum;
 use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 use ff_standard_lib::strategies::indicators::indicator_values::IndicatorValues;
 
-// to launch on separate machine
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
@@ -64,13 +63,6 @@ async fn main() {
     on_data_received(strategy, strategy_event_receiver, subscription, symbol_code, symbol_name, account).await;
 }
 
-#[derive(Clone, PartialEq, Debug)]
-enum LastSide {
-    Long,
-    Flat,
-    Short
-}
-
 // This strategy is designed to pyramid into bull trends using renko.
 // 1. It enters after a bearish renko bar is reversed by a bullish renko bar.
 // 2. It exits after 2 bearish renko bars.
@@ -99,7 +91,6 @@ pub async fn on_data_received(
     let close = "close".to_string();
     let mut last_block: Option<IndicatorValues> = None;
     let mut warmup_complete = false;
-    let mut last_side = LastSide::Flat;
     let mut entry_order_id = None;
     let mut exit_order_id = None;
     let mut tp_id = None;
