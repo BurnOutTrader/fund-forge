@@ -302,11 +302,14 @@ impl Ledger {
 
     pub fn synchronize_live_position(&self, position: Position) -> Option<PositionUpdateEvent> {
         if position.is_closed {
+            // If position is closed, remove it and don't try to create a new one
             self.positions.remove(&position.symbol_code);
-            self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position.clone());
+            self.positions_closed.entry(position.symbol_code.clone())
+                .or_insert(vec![])
+                .push(position.clone());
 
             let close_time = position.close_time.unwrap_or_else(|| Utc::now().to_string());
-            Some(PositionUpdateEvent::PositionClosed {
+            return Some(PositionUpdateEvent::PositionClosed {
                 symbol_name: position.symbol_name.clone(),
                 side: position.side.clone(),
                 symbol_code: position.symbol_code.clone(),
@@ -319,18 +322,20 @@ impl Ledger {
                 account: self.account.clone(),
                 originating_order_tag: position.tag,
                 time: close_time
-            })
+            });
         }
-        else {
-            if let Some(mut existing_position) = self.positions.get_mut(&position.symbol_code) {
-                existing_position.open_pnl = position.open_pnl;
-                existing_position.booked_pnl = position.booked_pnl;
-                existing_position.quantity_open = position.quantity_open;
-                existing_position.average_price = position.average_price;
-                existing_position.is_closed = position.is_closed;
-                existing_position.average_exit_price = position.average_exit_price;
+
+        // Only handle open position updates if quantity > 0
+        if position.quantity_open > dec!(0) {
+            if let Some(mut existing) = self.positions.get_mut(&position.symbol_code) {
+                // Update existing position
+                existing.quantity_open = position.quantity_open;
+                existing.open_pnl = position.open_pnl;
+                existing.side = position.side;
+                existing.average_price = position.average_price;
                 None
             } else {
+                // Create new position
                 self.positions.insert(position.symbol_code.clone(), position.clone());
                 Some(PositionUpdateEvent::PositionOpened {
                     side: position.side,
@@ -342,6 +347,8 @@ impl Ledger {
                     time: position.open_time
                 })
             }
+        } else {
+            None
         }
     }
 

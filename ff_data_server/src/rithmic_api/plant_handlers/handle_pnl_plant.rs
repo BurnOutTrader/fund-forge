@@ -136,20 +136,22 @@ pub async fn match_pnl_plant_id(
                     Some(id) => id
                 };
 
-                let (side, net_quantity) = if let Some(net_quantity) = msg.net_quantity {
-                    match net_quantity {
-                        n if n > 0 => (Some(PositionSide::Long), net_quantity),
-                        n if n < 0 => (Some(PositionSide::Short), net_quantity),
-                        _ => (None, net_quantity),
+                let (side, open_quantity) = if let (Some(buy_quantity), Some(sell_qty)) = (msg.buy_qty, msg.sell_qty) {
+                    if sell_qty > 0 {
+                        (Some(PositionSide::Short), sell_qty)
+                    } else if buy_quantity > 0 {
+                        (Some(PositionSide::Long), buy_quantity)
+                    } else {
+                        (None, 0)
                     }
                 } else {
-                    (None, 0) // Default case if net_quantity is None
+                    (None, 0)
                 };
 
 
                 //if buy and sell quantity = 0 position is closed
                 // Update long positions
-                if net_quantity > 0 {
+                if open_quantity > 0 {
                     if let Some(open_position_quantity) = msg.open_position_quantity {
                         client.long_quantity
                             .entry(account_id.clone())
@@ -160,7 +162,7 @@ pub async fn match_pnl_plant_id(
                         .entry(account_id.clone())
                         .or_insert_with(DashMap::new)
                         .remove(symbol_code);
-                } else if net_quantity < 0 {
+                } else if open_quantity < 0 {
                     if let Some(open_position_quantity) = msg.open_position_quantity {
                         client.short_quantity
                             .entry(account_id.clone())
@@ -171,7 +173,7 @@ pub async fn match_pnl_plant_id(
                         .entry(account_id.clone())
                         .or_insert_with(DashMap::new)
                         .remove(symbol_code);
-                } else if net_quantity == 0 {
+                } else if open_quantity == 0 {
                     client.long_quantity
                         .entry(account_id.clone())
                         .or_insert_with(DashMap::new)
@@ -182,7 +184,7 @@ pub async fn match_pnl_plant_id(
                         .remove(symbol_code);
 
                     if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
-                        println!("Closing position: {:?}", position);
+
                         position.quantity_closed += position.quantity_open;
                         position.quantity_open = dec!(0);
                         position.open_pnl = dec!(0);
@@ -207,21 +209,17 @@ pub async fn match_pnl_plant_id(
                             };
                         }
 
+                        println!("Closing position: {:?}", position);
                         send_updates(DataServerResponse::LivePositionUpdates {
                             account: Account::new(client.brokerage, account_id.clone()),
                             position
                         }).await;
-                        return
                     }
+                    return
                 }
 
-                if net_quantity == 0 {
-                    return;
-                }
-                if let (Some(side) ,Some(open_position_quantity)) = (side, msg.open_position_quantity) {
+                if let Some(side) = side {
                     if let (Some(symbol_name), Some(average_price)) = (&msg.product_code, &msg.avg_open_fill_price) {
-
-                        println!("Creating Position");
                         let average_price = match Decimal::from_f64_retain(*average_price) {
                             Some(average_price) => average_price,
                             None => return
@@ -238,15 +236,7 @@ pub async fn match_pnl_plant_id(
                             *count_entry = 1; // Prevent the count from being 0, reset to 1
                         }
 
-                        let tag = match client.last_tag.get(&account_id) {
-                            None => "External Position".to_string(),
-                            Some(tag) => match tag.value().get(symbol_code) {
-                                None => "External Position".to_string(),
-                                Some(tag) => tag.clone()
-                            }
-                        };
-
-                        let open_position_quantity = match Decimal::from_i32(open_position_quantity) {
+                        let open_position_quantity = match Decimal::from_i32(open_quantity) {
                             Some(open_quantity) => open_quantity,
                             None => return
                         };
@@ -258,6 +248,14 @@ pub async fn match_pnl_plant_id(
 
                         let position = match POSITIONS.get_mut(symbol_code) {
                             None => {
+                                let tag = match client.last_tag.get(&account_id) {
+                                    None => "External Position".to_string(),
+                                    Some(tag) => match tag.value().get(symbol_code) {
+                                        None => "External Position".to_string(),
+                                        Some(tag) => tag.clone()
+                                    }
+                                };
+                                println!("Creating Position");
                                 let position = Position {
                                     pnl_currency: symbol_info.pnl_currency.clone(),
                                     symbol_name: symbol_name.clone(),
@@ -286,6 +284,7 @@ pub async fn match_pnl_plant_id(
                                 position
                             }
                             Some(mut position_ref) => {
+                                println!("Updating Position");
                                 position_ref.quantity_open = open_position_quantity;
                                 position_ref.side = side;;
                                 position_ref.average_price = average_price;
@@ -294,7 +293,6 @@ pub async fn match_pnl_plant_id(
                                 position_ref.value().clone()
                             }
                         };
-
                         let position_update = DataServerResponse::LivePositionUpdates {
                             account: Account::new(client.brokerage, account_id.clone()),
                             position
@@ -406,7 +404,6 @@ pub async fn match_pnl_plant_id(
                     client.account_cash_available.get(&id).map(|r| *r)
                 ) {
                     let cash_used = dec!(0.0); //cash_available - cash_value ;
-
                     // Update the cash_used in the DashMap
                     client.account_cash_used.insert(id.clone(), cash_used);
 
