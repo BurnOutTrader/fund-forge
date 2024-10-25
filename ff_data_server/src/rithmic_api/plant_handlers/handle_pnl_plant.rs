@@ -106,6 +106,8 @@ pub async fn match_pnl_plant_id(
             option_cash_reserved: Some("0.00"), open_position_pnl: Some("-11.00"), open_position_quantity: Some(3), closed_position_pnl: Some("-246.50"),
             closed_position_quantity: Some(160), net_quantity: Some(-3), ssboe: Some(1729238967), usecs: Some(596000) }
             */
+
+            // This is the worst designed message in the world, dont mess with this function if it works, just accept that you have to right shit code for a shit message and move on.
             if let Ok(msg) = InstrumentPnLPositionUpdate::decode(&message_buf[..]) {
                 let symbol_code = match msg.symbol {
                     None => return,
