@@ -184,7 +184,6 @@ pub async fn match_pnl_plant_id(
                         .remove(symbol_code);
 
                     if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
-
                         position.quantity_closed += position.quantity_open;
                         position.quantity_open = dec!(0);
                         position.open_pnl = dec!(0);
@@ -216,6 +215,10 @@ pub async fn match_pnl_plant_id(
                         }).await;
                     }
                     return
+                }
+
+                if open_quantity <= 0 {
+                    return;
                 }
 
                 if let Some(side) = side {
