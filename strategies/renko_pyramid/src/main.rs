@@ -120,6 +120,10 @@ pub async fn on_data_received(
                                     let last_open = last_block.get_plot(&open).unwrap().value;
                                     let is_long = strategy.is_long(&account, &symbol_code);
 
+                                    if is_long {
+                                        bars_since_entry += 1;
+                                    }
+
                                     if last_open < last_close && block_close.value > block_open.value && no_entry && entry_order_id == None
                                         && (is_long == false || strategy.pnl(&account, &symbol_code) > INCREMENTAL_SCALP_PNL / dec!(3)) {
 
@@ -247,11 +251,17 @@ pub async fn on_data_received(
                                 if let Some(order_id) = &tp_id {
                                     strategy.cancel_order(order_id.clone()).await;
                                 }
+                                if !strategy.is_long(&account, &symbol_code) {
+                                    bars_since_entry = 0;
+                                }
                             }
                         }
                         if let Some(order_id) = &tp_id {
                             if event.order_id() == order_id {
                                 tp_id = None;
+                            }
+                            if !strategy.is_long(&account, &symbol_code) {
+                                bars_since_entry = 0;
                             }
                         }
                     },
