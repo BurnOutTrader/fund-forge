@@ -250,7 +250,7 @@ pub async fn match_pnl_plant_id(
                             None => dec!(0)
                         };
 
-                        let position = match POSITIONS.get_mut(symbol_code) {
+                        match POSITIONS.remove(symbol_code) {
                             None => {
                                 let tag = match client.last_tag.get(&account_id) {
                                     None => "External Position Modification".to_string(),
@@ -285,23 +285,24 @@ pub async fn match_pnl_plant_id(
                                     tag,
                                 };
                                 POSITIONS.insert(symbol_code.clone(), position.clone());
-                                position
                             }
-                            Some(mut position_ref) => {
+                            Some((symbol_code, mut position)) => {
                                 //println!("Updating Position");
-                                position_ref.quantity_open = open_position_quantity;
-                                position_ref.side = side;;
-                                position_ref.average_price = average_price;
-                                position_ref.open_pnl = open_pnl;
-                                position_ref.is_closed = false;
-                                position_ref.value().clone()
+                                position.quantity_open = open_position_quantity;
+                                position.side = side;;
+                                position.average_price = average_price;
+                                position.open_pnl = open_pnl;
+                                position.is_closed = false;
+                                let clone_position = position.clone();
+
+                                let position_update = DataServerResponse::LivePositionUpdates {
+                                    account: Account::new(client.brokerage, account_id.clone()),
+                                    position: clone_position
+                                };
+                                send_updates(position_update).await;
+                                POSITIONS.insert(symbol_code, position);
                             }
                         };
-                        let position_update = DataServerResponse::LivePositionUpdates {
-                            account: Account::new(client.brokerage, account_id.clone()),
-                            position
-                        };
-                        send_updates(position_update).await;
                     }
                 }
             }

@@ -48,7 +48,7 @@ impl LedgerService {
     ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
         //println!("Create Position: Ledger Service: {}, {}, {}, {}", account, symbol_name, market_fill_price, quantity);
         if let Some(ledger_ref) = self.ledgers.get(account) {
-            return ledger_ref.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await;
+            ledger_ref.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await
         } else {
             panic!("No ledger for account: {}", account);
         }

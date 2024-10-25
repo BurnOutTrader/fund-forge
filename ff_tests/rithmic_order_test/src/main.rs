@@ -1,4 +1,3 @@
-use std::cmp::PartialEq;
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
@@ -58,21 +57,13 @@ async fn main() {
     on_data_received(strategy, strategy_event_receiver, symbol_name, symbol_code).await;
 }
 
-#[derive(Clone, PartialEq, Debug)]
-enum LastSide {
-    Long,
-    Flat,
-    Short
-}
-
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
-    symbol_name: SymbolName,
+    _symbol_name: SymbolName,
     symbol_code: SymbolCode
 ) {
     let account_1 = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), AccountId::from("APEX-3396-168"));
-    let mut last_side = LastSide::Flat;
     let mut exit_sent = false;
     let mut count = 1;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
@@ -100,7 +91,6 @@ pub async fn on_data_received(
                                 count += 1;
                                 //LONG CONDITIONS
                                 {
-                                    let is_flat = strategy.is_flat(&account_1, &symbol_code);
                                     if count == 5 {
                                         println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                         let _entry_order_id = strategy.enter_long(&candle.symbol.name, None ,&account_1, None, dec!(1), String::from("Enter Long")).await;
