@@ -71,6 +71,14 @@ enum LastSide {
     Short
 }
 
+// This strategy is designed to pyramid into bull trends w=suing renko.
+// 1. It enters after a bearish renko bar is reversed by a bullish renko bar.
+// 2. It exits after 2 bearish renko bars.
+// 3. It adds on repeat signals up to 4 times, only if it is in profit.
+// 4. It takes profit after a certain amount of profit is made if it is at max size. It will do this with mit orders that expire in X seconds.
+// 5. The limit order expiry is on the exchange/rithmic side.
+// 6. It will cancel the take profit order if the position is closed.
+
 const RENKO_RANGE: Decimal = dec!(3);
 const MAX_SIZE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(5);
