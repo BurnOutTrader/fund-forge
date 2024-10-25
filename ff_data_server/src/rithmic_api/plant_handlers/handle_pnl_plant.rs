@@ -109,6 +109,7 @@ pub async fn match_pnl_plant_id(
 
             // This is the worst designed message in the world, dont mess with this function if it works, just accept that you have to right shit code for a shit message and move on.
             if let Ok(msg) = InstrumentPnLPositionUpdate::decode(&message_buf[..]) {
+                println!("{:?}", msg);
                 let symbol_code = match msg.symbol {
                     None => return,
                     Some(ref s) => s
