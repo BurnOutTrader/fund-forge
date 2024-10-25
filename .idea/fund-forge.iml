@@ -20,8 +20,7 @@
       <sourceFolder url="file://$MODULE_DIR$/example_test_strategy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_tests/ledger_test/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_rithmic_api/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/ff_tests/rithmic_test_candle_strategy/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/ff_tests/rithmic_test_quote_strategy/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ff_tests/rithmic_order_test/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ff-data-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff-registry-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_application/target" />
