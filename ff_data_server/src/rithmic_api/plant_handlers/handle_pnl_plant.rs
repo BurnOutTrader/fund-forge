@@ -136,44 +136,40 @@ pub async fn match_pnl_plant_id(
                     Some(id) => id
                 };
 
-                let (side, open_quantity) = if let (Some(buy_quantity), Some(sell_qty)) = (msg.buy_qty, msg.sell_qty) {
-                    if sell_qty > 0 {
-                        (Some(PositionSide::Short), sell_qty)
-                    } else if buy_quantity > 0 {
-                        (Some(PositionSide::Long), buy_quantity)
-                    } else {
-                        (None, 0)
-                    }
-                } else {
-                    (None, 0)
-                };
-
-
-                //if buy and sell quantity = 0 position is closed
-                // Update long positions
-                if open_quantity > 0 {
-                    if let Some(open_position_quantity) = msg.open_position_quantity {
+                let (side, quantity) = if let (Some(buy_quantity), Some(sell_qty)) = (msg.buy_qty, msg.sell_qty) {
+                    if buy_quantity > 0 && sell_qty <= 0 {
                         client.long_quantity
                             .entry(account_id.clone())
                             .or_insert_with(DashMap::new)
-                            .insert(symbol_code.clone(), Volume::from_i32(open_position_quantity).unwrap());
-                    }
-                    client.short_quantity
-                        .entry(account_id.clone())
-                        .or_insert_with(DashMap::new)
-                        .remove(symbol_code);
-                } else if open_quantity < 0 {
-                    if let Some(open_position_quantity) = msg.open_position_quantity {
+                            .insert(symbol_code.clone(), Volume::from_i32(buy_quantity).unwrap());
                         client.short_quantity
                             .entry(account_id.clone())
                             .or_insert_with(DashMap::new)
-                            .insert(symbol_code.clone(), Volume::from_i32(open_position_quantity.abs()).unwrap());
+                            .remove(symbol_code);
+                        (Some(PositionSide::Long), buy_quantity)
+                    } else if buy_quantity <= 0 && sell_qty > 0 {
+                        client.short_quantity
+                            .entry(account_id.clone())
+                            .or_insert_with(DashMap::new)
+                            .insert(symbol_code.clone(), Volume::from_i32(sell_qty.abs()).unwrap());
+                        client.long_quantity
+                            .entry(account_id.clone())
+                            .or_insert_with(DashMap::new)
+                            .remove(symbol_code);
+                        // Short position: negative sell, no buy
+                        (Some(PositionSide::Short), sell_qty)
+                    } else {
+                        client.long_quantity
+                            .entry(account_id.clone())
+                            .or_insert_with(DashMap::new)
+                            .remove(symbol_code);
+                        client.short_quantity
+                            .entry(account_id.clone())
+                            .or_insert_with(DashMap::new)
+                            .remove(symbol_code);
+                        (None, 0)
                     }
-                    client.long_quantity
-                        .entry(account_id.clone())
-                        .or_insert_with(DashMap::new)
-                        .remove(symbol_code);
-                } else if open_quantity == 0 {
+                } else {
                     client.long_quantity
                         .entry(account_id.clone())
                         .or_insert_with(DashMap::new)
@@ -182,7 +178,11 @@ pub async fn match_pnl_plant_id(
                         .entry(account_id.clone())
                         .or_insert_with(DashMap::new)
                         .remove(symbol_code);
+                    // Missing quantities
+                    (None, 0)
+                };
 
+                if side.is_none() {
                     if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
                         position.quantity_closed += position.quantity_open;
                         position.quantity_open = dec!(0);
@@ -215,13 +215,7 @@ pub async fn match_pnl_plant_id(
                         }).await;
                     }
                     return
-                }
-
-                if open_quantity <= 0 {
-                    return;
-                }
-
-                if let Some(side) = side {
+                } else if let Some(side) = side {
                     if let (Some(symbol_name), Some(average_price)) = (&msg.product_code, &msg.avg_open_fill_price) {
                         let average_price = match Decimal::from_f64_retain(*average_price) {
                             Some(average_price) => average_price,
@@ -239,7 +233,7 @@ pub async fn match_pnl_plant_id(
                             *count_entry = 1; // Prevent the count from being 0, reset to 1
                         }
 
-                        let open_position_quantity = match Decimal::from_i32(open_quantity) {
+                        let open_position_quantity = match Decimal::from_i32(quantity) {
                             Some(open_quantity) => open_quantity,
                             None => return
                         };
