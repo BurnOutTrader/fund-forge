@@ -21,7 +21,7 @@ pub fn live_order_update(
         while let Some(ref order_update_event) = order_event_receiver.recv().await {
             match order_update_event {
                 #[allow(unused)]
-                OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time, side } => {
+                OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time } => {
                     if let Some(mut order) = open_order_cache.get_mut(order_id) {
                         {
                             order.value_mut().state = OrderState::Accepted;

@@ -545,7 +545,7 @@ pub enum OrderUpdateType {
 pub enum OrderUpdateEvent {
 
     /// Example, product: MNQZ4,
-    OrderAccepted {account: Account, symbol_name: SymbolName, symbol_code: SymbolCode, side: OrderSide, order_id: OrderId, tag: String, time: String},
+    OrderAccepted {account: Account, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, tag: String, time: String},
 
     ///Quantity should only represent the quantity filled on this event.
     OrderFilled {account: Account, symbol_name: SymbolName, symbol_code: SymbolCode, order_id: OrderId, side: OrderSide, price: Price, quantity: Volume, tag: String, time: String},

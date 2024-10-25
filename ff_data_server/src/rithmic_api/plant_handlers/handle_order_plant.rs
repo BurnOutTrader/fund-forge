@@ -538,19 +538,6 @@ pub async fn match_order_plant_id(
 
                     match notify_type {
                         1 => {
-                            let side = match msg.transaction_type {
-                                None => {
-                                    eprintln!("NO SIDE ON TRANSACTION for ACCEPTED ORDER");
-                                    return;
-                                },
-                                Some(tt) => {
-                                    match tt {
-                                        1 => OrderSide::Buy,
-                                        2 | 3 => OrderSide::Sell,
-                                        _ => return
-                                    }
-                                }
-                            };
                             let event = OrderUpdateEvent::OrderAccepted {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 symbol_name,
@@ -558,7 +545,6 @@ pub async fn match_order_plant_id(
                                 order_id: order_id.clone(),
                                 tag,
                                 time,
-                                side: side.clone(),
                             };
                             send_order_update(client.brokerage, &order_id, event).await;
                         },

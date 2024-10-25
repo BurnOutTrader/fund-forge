@@ -796,7 +796,6 @@ async fn accept_order(
                 tag: order.tag.clone(),
                 time: time.to_string(),
                 symbol_code: order.symbol_name.clone(),
-                side: order.side.clone(),
         });
         match strategy_event_sender.send(event).await {
             Ok(_) => {}
