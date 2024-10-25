@@ -57,7 +57,7 @@ async fn main() {
         core::time::Duration::from_millis(5),
         false,
         false,
-        false,
+        true,
         vec![account.clone()],
     ).await;
 
@@ -121,7 +121,7 @@ pub async fn on_data_received(
                                     let is_long = strategy.is_long(&account, &symbol_code);
 
                                     if last_open < last_close && block_close.value > block_open.value && no_entry && entry_order_id == None
-                                        && (!is_long || strategy.pnl(&account, &symbol_code) > INCREMENTAL_SCALP_PNL / dec!(3)) {
+                                        && (is_long == false || strategy.pnl(&account, &symbol_code) > INCREMENTAL_SCALP_PNL / dec!(3)) {
 
                                         let quantity = strategy.position_size(&account, &symbol_code);
                                         if !strategy.is_long(&account, &symbol_code) && quantity < MAX_SIZE {
