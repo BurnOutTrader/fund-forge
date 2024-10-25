@@ -67,15 +67,10 @@ pub async fn on_data_received(
     let account_1 = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), AccountId::from("APEX-3396-168"));
     let mut exit_sent = false;
     let mut count = 1;
-    // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
-        //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
-        //println!("Strategy: Buffer Event Time: {}", strategy.time_zone().from_utc_datetime(&time.naive_utc()));
         match strategy_event {
             StrategyEvent::TimeSlice(time_slice) => {
-                // here we would process the time slice events and update the strategy state accordingly.
                 for base_data in time_slice.iter() {
-                    // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                     match base_data {
                         BaseDataEnum::Candle(candle) => {
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
@@ -110,7 +105,8 @@ pub async fn on_data_received(
                                     }
                                 }
 
-                                if count > 11 {
+                                if count > 15 {
+                                    strategy.export_trades(&String::from("./trades exports"));
                                     let open_pnl = strategy.pnl(&account_1, &symbol_code);
                                     let is_long = strategy.is_long(&account_1, &symbol_code);
                                     assert_eq!(is_long, false);
@@ -133,19 +129,11 @@ pub async fn on_data_received(
                 //we should handle shutdown gracefully by first ending the strategy loop.
                 break 'strategy_loop
             },
-
-            StrategyEvent::WarmUpComplete => {
-                let msg = String::from("Strategy: Warmup Complete");
-                println!("{}", msg.as_str().bright_magenta());
-            }
-
             StrategyEvent::PositionEvents(event) => {
                 match event {
                     PositionUpdateEvent::PositionOpened { ..} => {}
                     PositionUpdateEvent::Increased { .. } => {}
-                    PositionUpdateEvent::PositionReduced { .. } => {
-                        //strategy.print_ledger(event.account()).await
-                    },
+                    PositionUpdateEvent::PositionReduced { .. } => {},
                     PositionUpdateEvent::PositionClosed { .. } => {
                         strategy.print_ledger(event.account()).await
                     },
@@ -165,12 +153,8 @@ pub async fn on_data_received(
                     _ =>  println!("{}", msg.as_str().bright_yellow())
                 }
             }
-            StrategyEvent::TimedEvent(name) => {
-                println!("{} has triggered", name);
-            }
             _ => {}
         }
     }
     event_receiver.close();
-    println!("Strategy: Event Loop Ended");
 }
