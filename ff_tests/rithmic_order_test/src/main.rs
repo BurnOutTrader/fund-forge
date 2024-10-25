@@ -73,9 +73,8 @@ pub async fn on_data_received(
 ) {
     let account_1 = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), AccountId::from("APEX-3396-168"));
     let mut last_side = LastSide::Flat;
-
-    let mut order_palaced = false;
-    let mut order_palaced_2 = false;
+    let mut exit_sent = false;
+    let mut count = 1;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -98,27 +97,25 @@ pub async fn on_data_received(
                                         false => println!("{}", msg.as_str().bright_red()),
                                     }
                                 }
-
+                                count += 1;
                                 //LONG CONDITIONS
                                 {
                                     let is_flat = strategy.is_flat(&account_1, &symbol_code);
-                                    if !order_palaced && is_flat {
+                                    if count == 5 {
                                         println!("Strategy: Enter Long, Time {}", strategy.time_local());
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, None ,&account_1, None, dec!(5), String::from("Enter Long")).await;
-                                        last_side = LastSide::Long;
-                                        order_palaced = true;  // Mark order as placed
+                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, None ,&account_1, None, dec!(1), String::from("Enter Long")).await;
                                     }
 
                                     let open_pnl = strategy.pnl(&account_1, &symbol_code);
                                     let is_long = strategy.is_long(&account_1, &symbol_code);
-
                                     println!("Strategy Long = {}, Pnl = {}", is_long, open_pnl);
+
                                     // Remove order_placed from exit condition
-                                    if is_long && (open_pnl > dec!(5) || open_pnl < dec!(-5)) {
+                                    if count == 10 && !exit_sent {
+                                        exit_sent = true;
                                         let position_size: Decimal = strategy.position_size(&account_1, &symbol_code);
                                         println!("Strategy: Exit Long, Time {}: Size: {}", strategy.time_local(), position_size);
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long")).await;
-                                        order_palaced = false;  // Reset flag after exit
                                     }
                                 }
                             }
@@ -147,7 +144,7 @@ pub async fn on_data_received(
                     PositionUpdateEvent::PositionOpened { ..} => {}
                     PositionUpdateEvent::Increased { .. } => {}
                     PositionUpdateEvent::PositionReduced { .. } => {
-                        strategy.print_ledger(event.account()).await
+                        //strategy.print_ledger(event.account()).await
                     },
                     PositionUpdateEvent::PositionClosed { .. } => {
                         strategy.print_ledger(event.account()).await

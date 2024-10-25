@@ -159,7 +159,10 @@ pub async fn send_updates(event: DataServerResponse) {
     for stream_name in RESPONSE_SENDERS.iter() {
         match stream_name.value().send(event.clone()).await {
             Ok(_) => {}
-            Err(e) => eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e)
+            Err(e) => {
+                eprintln!("failed to forward ResponseNewOrder 313 to strategy stream {}", e);
+
+            }
         }
     }
 }

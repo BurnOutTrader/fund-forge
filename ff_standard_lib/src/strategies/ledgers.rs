@@ -303,10 +303,6 @@ impl Ledger {
     pub fn synchronize_live_position(&self, position: Position) -> Option<PositionUpdateEvent> {
         if position.is_closed {
             self.positions.remove(&position.symbol_code);
-            let average_exit_price = match position.average_exit_price {
-                None => dec!(0.0),
-                Some(price) => price
-            };
             self.positions_closed.entry(position.symbol_code.clone()).or_insert(vec![]).push(position.clone());
 
             let close_time = position.close_time.unwrap_or_else(|| Utc::now().to_string());
@@ -317,7 +313,7 @@ impl Ledger {
                 position_id: position.position_id.clone(),
                 total_quantity_open: dec!(0),
                 total_quantity_closed: position.quantity_closed,
-                average_price: average_exit_price,
+                average_price: position.average_price,
                 booked_pnl: Default::default(),
                 average_exit_price: position.average_exit_price,
                 account: self.account.clone(),
