@@ -65,7 +65,6 @@ impl LedgerService {
         market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
         tag: String
     ) -> Vec<PositionUpdateEvent> {
-        //println!("Create Position: Ledger Service: {}, {}, {}, {}", account, symbol_name, market_fill_price, quantity);
         if let Some(ledger_ref) = self.ledgers.get(account) {
             ledger_ref.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await
         } else {
@@ -80,7 +79,6 @@ impl LedgerService {
         None
     }
 
-    #[allow(dead_code)]
     pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal) {
         if let Some(account_ledger) = self.ledgers.get(&order.account) {
             account_ledger.value().process_synchronized_orders(order, quantity).await;
@@ -309,6 +307,8 @@ impl Ledger {
                 .push(position.clone());
 
             let close_time = position.close_time.unwrap_or_else(|| Utc::now().to_string());
+
+            println!("Average Exit Price: {:?}", position.average_exit_price);
             return Some(PositionUpdateEvent::PositionClosed {
                 symbol_name: position.symbol_name.clone(),
                 side: position.side.clone(),
@@ -370,7 +370,23 @@ impl Ledger {
                 Some(price) => price
             };
 
-            position.reduce_position_size(self.mode, self.is_simulating_pnl, market_fill_price, quantity, Utc::now(), order.tag.clone(), self.currency).await;
+            position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone(), self.currency).await;
+        } else if let Some(mut position_vec) = self.positions_closed.get_mut(&symbol) {
+            if let Some(last_position) = position_vec.last_mut() {
+                let is_reducing = (last_position.side == PositionSide::Long && order.side == OrderSide::Sell)
+                    || (last_position.side == PositionSide::Short && order.side == OrderSide::Buy);
+
+                if !is_reducing {
+                    return;
+                }
+
+                let market_fill_price = match order.average_fill_price {
+                    None => return,
+                    Some(price) => price
+                };
+
+                last_position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone(), self.currency).await;
+            }
         }
     }
 
@@ -645,7 +661,7 @@ impl Ledger {
 
             if is_reducing {
                 remaining_quantity -= existing_position.quantity_open;
-                let event= existing_position.reduce_position_size(self.mode, self.is_simulating_pnl, market_fill_price, quantity, time, tag.clone(), self.currency).await;
+                let event= existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         self.positions.insert(symbol_code.clone(), existing_position);
@@ -833,7 +849,7 @@ mod historical_ledgers {
                 {
                     self.release_margin_used(&symbol_name).await;
                 }
-                let event = existing_position.reduce_position_size(self.mode, self.is_simulating_pnl, market_price, existing_position.quantity_open, time, tag, self.currency).await;
+                let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
                 let mut cash_available = self.cash_available.lock().await;
                 let mut total_booked_pnl = self.total_booked_pnl.lock().await;
                 match &event {
@@ -890,7 +906,7 @@ mod historical_ledgers {
 
                 if is_reducing {
                     remaining_quantity -= existing_position.quantity_open;
-                    let event = existing_position.reduce_position_size(self.mode, self.is_simulating_pnl, market_fill_price, quantity, time, tag.clone(), self.currency).await;
+                    let event = existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
 
                     self.release_margin_used(&symbol_name).await;
 

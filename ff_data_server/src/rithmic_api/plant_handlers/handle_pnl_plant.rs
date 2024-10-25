@@ -199,24 +199,6 @@ pub async fn match_pnl_plant_id(
                         position.is_closed = true;
                         position.close_time = Some(Utc::now().to_string());
 
-                        if let Some(closed_pnl) = client.closed_pnl.get(&symbol_code) {
-                            match msg.closed_position_pnl {
-                                None => {},
-                                Some(closed_position_pnl) => {
-                                    match Decimal::from_str(&closed_position_pnl) {
-                                        Ok(closed_position_pnl) => {
-                                            position.booked_pnl = closed_position_pnl - *closed_pnl;
-                                            client.closed_pnl.insert(symbol_code.clone(), closed_position_pnl);
-                                            let value_per_tick = position.symbol_info.value_per_tick;
-                                            let avg_entry_price = position.average_price;  // Average entry price of the position
-                                            position.average_exit_price = Some((position.booked_pnl / (position.quantity_closed * value_per_tick)).round_dp(position.symbol_info.decimal_accuracy));
-                                        },
-                                        Err(_) => {}
-                                    }
-                                }
-                            };
-                        }
-
                         //println!("Closing position: {:?}", position);
                         send_updates(DataServerResponse::LivePositionUpdates {
                             account: Account::new(client.brokerage, account_id.clone()),
@@ -383,29 +365,6 @@ pub async fn match_pnl_plant_id(
                     }
                 };
 
-                match msg.day_closed_pnl {
-                    None => {},
-                    Some(day_closed_pnl) => {
-                        match Decimal::from_str(&day_closed_pnl) {
-                            Ok(day_closed_pnl) => {
-                                client.day_closed_pnl.insert(id.clone(), day_closed_pnl);
-                            },
-                            Err(_) => {}
-                        }
-                    }
-                };
-
-                match msg.day_open_pnl {
-                    None => {},
-                    Some(day_open_pnl) => {
-                        match Decimal::from_str(&day_open_pnl) {
-                            Ok(day_open_pnl) => {
-                                client.day_open_pnl.insert(id.clone(), day_open_pnl);
-                            },
-                            Err(_) => {}
-                        }
-                    }
-                };
                 if let (Some(cash_value), Some(cash_available)) = (
                     client.account_balance.get(&id).map(|r| *r),
                     client.account_cash_available.get(&id).map(|r| *r)
