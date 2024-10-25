@@ -75,6 +75,7 @@ const RENKO_RANGE: Decimal = dec!(3);
 const MAX_SIZE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(5);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(100);
+const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60;
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
@@ -93,6 +94,7 @@ pub async fn on_data_received(
     let mut last_side = LastSide::Flat;
     let mut entry_order_id = None;
     let mut exit_order_id = None;
+    let mut tp_id = None;
     let mut bars_since_entry = 0;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
@@ -137,9 +139,9 @@ pub async fn on_data_received(
 
                                         let profit = strategy.pnl(&account, &symbol_code);
                                         let quantity = strategy.position_size(&account, &symbol_code);
-                                        if profit > INCREMENTAL_SCALP_PNL && quantity == MAX_SIZE && exit_order_id == None && no_exit  {
-                                            let tif = TimeInForce::Time((Utc::now() + Duration::seconds(30)).timestamp(), UTC.to_string());
-                                            exit_order_id = Some(strategy.limit_order(&symbol_name, None, &account, None, SIZE, OrderSide::Sell, last_close + RENKO_RANGE, tif, String::from("TP Long")).await);
+                                        if profit > INCREMENTAL_SCALP_PNL && quantity == MAX_SIZE && exit_order_id == None && tp_id == None {
+                                            let tif = TimeInForce::Time((Utc::now() + Duration::seconds(LIMIT_ORDER_EXPIRE_IN_SECS)).timestamp(), UTC.to_string());
+                                            tp_id = Some(strategy.limit_order(&symbol_name, None, &account, None, SIZE, OrderSide::Sell, last_close + RENKO_RANGE, tif, String::from("TP Long")).await);
                                             no_exit = false;
                                         }
                                     }
@@ -206,8 +208,13 @@ pub async fn on_data_received(
                                 exit_order_id = None;
                             }
                         }
+                        if let Some(order_id) = &tp_id {
+                            if event.order_id() == order_id {
+                                tp_id = None;
+                            }
+                        }
                     },
-                    OrderUpdateEvent::OrderCancelled { .. } | OrderUpdateEvent::OrderFilled {..} => {
+                    OrderUpdateEvent::OrderCancelled { .. }  => {
                         strategy.print_ledger(event.account()).await;
                         println!("{}", msg.as_str().on_bright_magenta().on_bright_yellow());
                         if let Some(order_id) = &entry_order_id {
@@ -218,6 +225,33 @@ pub async fn on_data_received(
                         if let Some(order_id) = &exit_order_id {
                             if event.order_id() == order_id {
                                 exit_order_id = None;
+                            }
+                        }
+                        if let Some(order_id) = &tp_id {
+                            if event.order_id() == order_id {
+                                tp_id = None;
+                            }
+                        }
+                    },
+                    OrderUpdateEvent::OrderFilled {..} => {
+                        strategy.print_ledger(event.account()).await;
+                        println!("{}", msg.as_str().on_bright_magenta().on_bright_yellow());
+                        if let Some(order_id) = &entry_order_id {
+                            if event.order_id() == order_id {
+                                entry_order_id = None;
+                            }
+                        }
+                        if let Some(order_id) = &exit_order_id {
+                            if event.order_id() == order_id {
+                                exit_order_id = None;
+                                if let Some(order_id) = &tp_id {
+                                    strategy.cancel_order(order_id.clone()).await;
+                                }
+                            }
+                        }
+                        if let Some(order_id) = &tp_id {
+                            if event.order_id() == order_id {
+                                tp_id = None;
                             }
                         }
                     },
