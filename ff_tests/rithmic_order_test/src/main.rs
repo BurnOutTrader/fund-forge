@@ -57,6 +57,7 @@ async fn main() {
     on_data_received(strategy, strategy_event_receiver, symbol_name, symbol_code).await;
 }
 
+
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
@@ -107,6 +108,15 @@ pub async fn on_data_received(
                                         println!("Strategy: Exit Long, Time {}: Size: {}", strategy.time_local(), position_size);
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long")).await;
                                     }
+                                }
+
+                                if count > 11 {
+                                    let open_pnl = strategy.pnl(&account_1, &symbol_code);
+                                    let is_long = strategy.is_long(&account_1, &symbol_code);
+                                    assert_eq!(is_long, false);
+                                    assert_eq!(open_pnl, dec!(0));
+                                    println!("TEST PASSED");
+                                    break 'strategy_loop;
                                 }
                             }
                         }
