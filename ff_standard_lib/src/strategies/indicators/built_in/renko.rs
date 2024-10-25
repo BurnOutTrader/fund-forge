@@ -7,7 +7,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{DataSubscription};
-use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
+use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues, PlotName};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use rust_decimal_macros::dec;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -72,48 +72,65 @@ impl Renko {
             return None;
         }
 
-        let open_price = self.open_price.unwrap();
+        let last_price = self.open_price.unwrap();
+        let last_block_top = last_price;
+        let last_block_bottom = last_price - self.renko_range;
+
+        // For upward movement, price must exceed the top of last block by renko_range
+        let up_threshold = last_block_top + self.renko_range;
+        // For downward movement, price must exceed the bottom of last block by renko_range
+        let down_threshold = last_block_bottom - self.renko_range;
+
         let mut blocks = Vec::new();
 
-        // Calculate movement needed to complete a block
-        let distance_moved = price - open_price;
-        if distance_moved.abs() >= self.renko_range {
-            // Calculate how many full blocks can be created
-            let num_blocks = (distance_moved / self.renko_range).abs().floor();
-            let direction = if distance_moved > dec!(0) { 1 } else { -1 };
+        if price >= up_threshold {
+            // Calculate full blocks above
+            let distance_above = price - last_block_top;
+            let num_blocks = (distance_above / self.renko_range).floor();
 
-            // Only proceed if we have at least one full block
             if num_blocks >= dec!(1) {
                 for i in 0..num_blocks.to_i64().unwrap() {
-                    let block_close = self.market_type.round_price(
-                        open_price + (self.renko_range * Decimal::from(direction) * Decimal::from(i + 1)),
-                        self.tick_size,
-                        self.decimal_accuracy
-                    );
+                    let block_open = last_block_top + (self.renko_range * Decimal::from(i));
+                    let block_close = block_open + self.renko_range;
 
-                    let block = self.create_renko_block(
-                        open_price + (self.renko_range * Decimal::from(direction) * Decimal::from(i)),
-                        block_close,
-                        self.open_time.unwrap()
-                    );
-
+                    let block = self.create_renko_block(block_open, block_close, self.open_time.unwrap());
                     blocks.push(block);
                 }
 
-                // Update open price to last block's close
+
                 if let Some(last_block) = blocks.last() {
                     self.open_price = last_block.get_plot(&"close".to_string()).map(|plot| plot.value);
                     self.open_time = Some(time);
                 }
+            }
+        } else if price <= down_threshold {
+            // Calculate full blocks below
+            let distance_below = last_block_bottom - price;
+            let num_blocks = (distance_below / self.renko_range).floor();
 
-                self.is_ready = true;
-         /*       println!("Created {} Renko blocks from {} to {}",
-                         blocks.len(), open_price, self.open_price.unwrap());*/
-                return Some(blocks);
+            if num_blocks >= dec!(1) {
+                for i in 0..num_blocks.to_i64().unwrap() {
+                    let block_open = last_block_bottom - (self.renko_range * Decimal::from(i));
+                    let block_close = block_open - self.renko_range;
+
+                    let block = self.create_renko_block(block_open, block_close, self.open_time.unwrap());
+                    blocks.push(block);
+                }
+
+                if let Some(last_block) = blocks.last() {
+                    //todo make close string a property to save init each time
+                    self.open_price = last_block.get_plot(&"close".to_string()).map(|plot| plot.value);
+                    self.open_time = Some(time);
+                }
             }
         }
 
-        None
+        if blocks.is_empty() {
+            None
+        } else {
+            self.is_ready = true;
+            Some(blocks)
+        }
     }
 
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<Vec<IndicatorValues>> {
