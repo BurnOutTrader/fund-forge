@@ -184,6 +184,13 @@ pub async fn match_pnl_plant_id(
 
                 if side.is_none() {
                     if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
+                        let tag = match client.last_tag.get(&account_id) {
+                            None => "External Position".to_string(),
+                            Some(tag) => match tag.value().get(&symbol_code) {
+                                None => "External Position".to_string(),
+                                Some(tag) => tag.clone()
+                            }
+                        };
                         position.quantity_closed += position.quantity_open;
                         position.quantity_open = dec!(0);
                         position.open_pnl = dec!(0);
