@@ -115,7 +115,7 @@ pub async fn on_data_received(
 
                                     // ADD LONG
                                     let is_short = strategy.is_short(&account_1, &symbol_code);
-                                    let is_long = strategy.is_long(&account_1, &symbol_code);
+                                    let is_long = strategy.is_long(&account_1, &candle.symbol.name);
                                     let long_pnl = strategy.pnl(&account_1, &symbol_code);
                                     println!("Open pnl: {}, Is_short: {}, is_long: {} ", long_pnl, is_short, is_long);
 
