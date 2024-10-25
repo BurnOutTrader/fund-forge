@@ -185,9 +185,9 @@ pub async fn match_pnl_plant_id(
                 if side.is_none() {
                     if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
                         let tag = match client.last_tag.get(&account_id) {
-                            None => "External Position".to_string(),
+                            None => "External Position Modification".to_string(),
                             Some(tag) => match tag.value().get(&symbol_code) {
-                                None => "External Position".to_string(),
+                                None => "External Position Modification".to_string(),
                                 Some(tag) => tag.clone()
                             }
                         };
@@ -253,9 +253,9 @@ pub async fn match_pnl_plant_id(
                         let position = match POSITIONS.get_mut(symbol_code) {
                             None => {
                                 let tag = match client.last_tag.get(&account_id) {
-                                    None => "External Position".to_string(),
+                                    None => "External Position Modification".to_string(),
                                     Some(tag) => match tag.value().get(symbol_code) {
-                                        None => "External Position".to_string(),
+                                        None => "External Position Modification".to_string(),
                                         Some(tag) => tag.clone()
                                     }
                                 };
