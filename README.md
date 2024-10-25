@@ -506,9 +506,6 @@ I am considering making a paid cross-platform GUI to connect to the engine in th
 Since the engine is open source you will need to undergo the rithmic verification independently, you can see Rithmic section below.
 [Current Licence](https://github.com/BurnOutTrader/fund-forge/blob/main/LICENCE.md)
 
-## fund-forge/src 
-Fund forge /src is just for testing random functionality during development, it will not be used in the future, please use the test_strategy folder for testing and developing.
-
 ### Rithmic Credentials and Setup
 To use rithmic API's you will need to request a dev kit for RProtocol (Proto Buffer) from rithmic, you will then need to complete the app conformance procedure.
 You will need to have a unique app name in your rithmic_credentials.toml files.
