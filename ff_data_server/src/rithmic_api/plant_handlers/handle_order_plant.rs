@@ -539,7 +539,10 @@ pub async fn match_order_plant_id(
                     match notify_type {
                         1 => {
                             let side = match msg.transaction_type {
-                                None => return,
+                                None => {
+                                    eprintln!("NO SIDE ON TRANSACTION for ACCEPTED ORDER");
+                                    return;
+                                },
                                 Some(tt) => {
                                     match tt {
                                         1 => OrderSide::Buy,
@@ -572,7 +575,10 @@ pub async fn match_order_plant_id(
                                 };
 
                                 let side = match msg.transaction_type {
-                                    None => return,
+                                    None => {
+                                        eprintln!("NO SIDE ON TRANSACTION");
+                                        return;
+                                    },
                                     Some(tt) => {
                                         match tt {
                                             1 => OrderSide::Buy,

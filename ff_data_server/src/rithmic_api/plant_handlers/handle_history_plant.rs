@@ -5,7 +5,6 @@ use ff_rithmic_api::credentials::RithmicCredentials;
 #[allow(unused_imports)]
 use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use ff_rithmic_api::rithmic_proto_objects::rti::Reject;
-use ff_rithmic_api::rithmic_proto_objects::rti::request_depth_by_order_updates::Request;
 use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
 use ff_rithmic_api::rithmic_proto_objects::rti::time_bar::BarType;
 use prost::{Message as ProstMessage};
@@ -252,19 +251,28 @@ async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
             None => return,              // Exit if `msg.r#type` is None
         };
         if let Some((_, broadcaster)) = client.candle_feed_broadcasters.remove(&symbol) {
+            let period = match msg.period {
+                Some(p) => match p.parse::<i32>().ok() {
+                    None => return,
+                    Some(period) => period
+                },
+                None => return,
+            };
+
             if broadcaster.receiver_count() == 0 {
                 let req = RequestTimeBarUpdate {
                     template_id: 200,
                     user_msg: vec![],
-                    symbol: Some(symbol),
+                    symbol: Some(symbol.clone()),
                     exchange: Some(exchange.to_string()),
-                    request: Some(Request::Unsubscribe.into()),
-                    bar_type: Some(2), // 2 for unsubscribe
-                    bar_type_period: Some(bar_type),
+                    request: Some(2),// 2 for unsubscribe
+                    bar_type: Some(bar_type),
+                    bar_type_period: Some(period),
                 };
 
                 const PLANT: SysInfraType = SysInfraType::HistoryPlant;
                 client.send_message(&PLANT, req).await;
+                println!("Unsubscribed {} Candles {}, {}", symbol, bar_type, period);
             }
         }
     }

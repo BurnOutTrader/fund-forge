@@ -80,6 +80,7 @@ impl LedgerService {
         None
     }
 
+    #[allow(dead_code)]
     pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal) {
         if let Some(account_ledger) = self.ledgers.get(&order.account) {
             account_ledger.value().process_synchronized_orders(order, quantity).await;

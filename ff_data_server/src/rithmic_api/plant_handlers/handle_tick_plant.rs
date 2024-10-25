@@ -371,6 +371,7 @@ async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
 
                 const PLANT: SysInfraType = SysInfraType::TickerPlant;
                 client.send_message(&PLANT, req).await;
+                println!("Unsubscribed: {} Ticks", tick.symbol.name.clone());
             }
         }
     }
@@ -484,6 +485,7 @@ async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
 
                 const PLANT: SysInfraType = SysInfraType::TickerPlant;
                 client.send_message(&PLANT, req).await;
+                println!("Unsubscribed: {} Quotes", symbol);
             }
         }
     }
