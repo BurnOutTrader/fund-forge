@@ -332,6 +332,7 @@ impl Ledger {
                 existing_position.quantity_open = position.quantity_open;
                 existing_position.average_price = position.average_price;
                 existing_position.is_closed = position.is_closed;
+                existing_position.average_exit_price = position.average_exit_price;
                 None
             } else {
                 self.positions.insert(position.symbol_code.clone(), position.clone());

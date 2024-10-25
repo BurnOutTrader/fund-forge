@@ -2299,23 +2299,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rithmic_test_quote_strategy"
-version = "0.1.0"
-dependencies = [
- "ahash 0.8.11",
- "chrono",
- "chrono-tz",
- "colored",
- "ff_rithmic_api",
- "ff_standard_lib",
- "futures",
- "log",
- "rust_decimal",
- "rust_decimal_macros",
- "tokio",
-]
-
-[[package]]
 name = "rkyv"
 version = "0.7.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"

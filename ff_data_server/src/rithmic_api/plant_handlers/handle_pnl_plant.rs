@@ -185,6 +185,8 @@ pub async fn match_pnl_plant_id(
                         if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
                             println!("Closing position: {:?}", position);
                             position.quantity_closed += position.quantity_open;
+
+
                             position.quantity_open = dec!(0);
                             position.open_pnl = dec!(0);
                             position.is_closed = true;
@@ -197,6 +199,9 @@ pub async fn match_pnl_plant_id(
                                             Ok(closed_position_pnl) => {
                                                 position.booked_pnl = closed_position_pnl - *closed_pnl;
                                                 client.closed_pnl.insert(symbol_code.clone(), closed_position_pnl);
+                                                let value_per_tick = position.symbol_info.value_per_tick;
+                                                let avg_entry_price = position.average_price;  // Average entry price of the position
+                                                position.average_exit_price = Some((position.booked_pnl / (position.quantity_closed * value_per_tick)).round_dp(position.symbol_info.decimal_accuracy));
                                             },
                                             Err(_) => {}
                                         }
