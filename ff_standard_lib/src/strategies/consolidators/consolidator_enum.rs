@@ -137,8 +137,8 @@ impl ConsolidatorEnum {
 
         if subscription.candle_type == Some(CandleType::HeikinAshi) {
             vendor_resolutions.retain(|base_subscription| {
-                ((base_subscription.base_data_type == BaseDataType::Ticks && base_subscription.resolution == Resolution::Ticks(1)) || (base_subscription.base_data_type == BaseDataType::Quotes)
-                    || (base_subscription.base_data_type == BaseDataType::Candles && base_subscription.resolution == Resolution::Seconds(1) && subscription.resolution > Resolution::Seconds(1)))
+                (base_subscription.base_data_type == BaseDataType::Ticks && base_subscription.resolution == Resolution::Ticks(1)) || (base_subscription.base_data_type == BaseDataType::Quotes)
+                    || (base_subscription.base_data_type == BaseDataType::Candles && base_subscription.resolution == Resolution::Seconds(1) && subscription.resolution > Resolution::Seconds(1))
             });
         }
         let max_resolution = vendor_resolutions.iter().max_by_key(|r| r.resolution);
