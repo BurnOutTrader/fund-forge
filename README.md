@@ -533,6 +533,9 @@ All Gui development is totally decoupled from the engine by using the ff_strateg
 after the last refactor the strategy registry is not in a working state, but is easily fixed in the future.
 
 ## Architecture
+![diagram.png](misc/diagram.png)
+
+
 I have tried to maintain a reasonable separation of concerns throughout the code base to allow any backend implementations to be upgraded without effecting existing strategies.
 
 Some of the current implementations are a crude implementations that act as placeholders for more performant designs in the future, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
