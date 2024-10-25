@@ -611,6 +611,7 @@ async fn fill_order(
 
         match LEDGER_SERVICE.update_or_create_position(&order.account, order.symbol_name.clone(), symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
             Ok(events) => {
+                //todo, need to send an accepted event first if the order state != accepted
                 let order_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {
                     account: order.account.clone(),
                     symbol_name: order.symbol_name.clone(),
@@ -658,6 +659,7 @@ async fn partially_fill_order(
             Some(code) => code.clone()
         };
 
+
         // If the order is now fully filled, remove it from open_order_cache
         let order_event = if order.quantity_open <= dec!(0) {
             open_order_cache.remove(order_id);
@@ -691,6 +693,7 @@ async fn partially_fill_order(
 
         match LEDGER_SERVICE.update_or_create_position(&order.account, order.symbol_name.clone(), symbol_code, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
             Ok(events) => {
+                //todo, need to send an accepted event first if the order state != accepted
                 if let Some(order_event) = order_event {
                     match strategy_event_sender.send(StrategyEvent::OrderEvents(order_event)).await {
                         Ok(_) => {}
