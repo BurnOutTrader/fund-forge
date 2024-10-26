@@ -7,7 +7,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::enums::MarketType;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{DataSubscription};
-use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues, PlotName};
+use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use rust_decimal_macros::dec;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -20,6 +20,7 @@ use crate::standardized_types::base_data::traits::BaseData;
 pub struct Renko {
     name: IndicatorName,
     pub(crate) subscription: DataSubscription,
+    #[allow(unused)]
     market_type: MarketType,
     decimal_accuracy: u32,
     tick_size: Decimal,
@@ -133,6 +134,7 @@ impl Renko {
         }
     }
 
+    #[allow(dead_code)]
     fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Option<Vec<IndicatorValues>> {
         if base_data.subscription() != self.subscription {
             return None;

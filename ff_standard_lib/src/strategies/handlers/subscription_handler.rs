@@ -520,7 +520,7 @@ impl SubscriptionHandler {
             }
         }).collect();
 
-        // Execute all futures concurrently
+        // Execute all cme_futures concurrently
         let results = futures::future::join_all(futures).await;
 
         // Collect the results into a TimeSlice

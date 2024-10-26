@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use futures::stream::SplitStream;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tokio::net::TcpStream;
