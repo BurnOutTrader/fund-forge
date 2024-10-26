@@ -34,7 +34,14 @@ impl LedgerService {
         }
     }
 
-    pub(crate) async fn update_or_create_position(
+    pub fn synchronize_live_position(&self, account: Account, position: Position) -> Option<PositionUpdateEvent> {
+        if let Some(account_ledger) = self.ledgers.get(&account) {
+            return account_ledger.value().synchronize_live_position(position)
+        }
+        None
+    }
+
+    pub(crate) async fn update_or_create_paper_position(
         &self,
         account: &Account,
         symbol_name: SymbolName,
@@ -48,7 +55,7 @@ impl LedgerService {
     ) -> Result<Vec<PositionUpdateEvent>, OrderUpdateEvent> {
         //println!("Create Position: Ledger Service: {}, {}, {}, {}", account, symbol_name, market_fill_price, quantity);
         if let Some(ledger_ref) = self.ledgers.get(account) {
-            ledger_ref.update_or_create_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await
+            ledger_ref.update_or_create_paper_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await
         } else {
             panic!("No ledger for account: {}", account);
         }
@@ -70,13 +77,6 @@ impl LedgerService {
         } else {
             panic!("No ledger for account: {}", account);
         }
-    }
-
-    pub fn synchronize_live_position(&self, account: Account, position: Position) -> Option<PositionUpdateEvent> {
-        if let Some(account_ledger) = self.ledgers.get(&account) {
-            return account_ledger.value().synchronize_live_position(position)
-        }
-        None
     }
 
     pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal) {
@@ -226,14 +226,14 @@ pub struct Ledger {
     pub cash_available: Mutex<Price>,
     pub currency: Currency,
     pub cash_used: Mutex<Price>,
-    pub positions: DashMap<SymbolName, Position>,
+    pub positions: DashMap<SymbolCode, Position>,
     pub symbol_code_map: DashMap<SymbolName, Vec<String>>,
-    pub margin_used: DashMap<SymbolName, Price>,
-    pub positions_closed: DashMap<SymbolName, Vec<Position>>,
-    pub symbol_closed_pnl: DashMap<SymbolName, Decimal>,
+    pub margin_used: DashMap<SymbolCode, Price>,
+    pub positions_closed: DashMap<SymbolCode, Vec<Position>>,
+    pub symbol_closed_pnl: DashMap<SymbolCode, Decimal>,
     pub positions_counter: DashMap<SymbolName, u64>,
     pub(crate) symbol_info: DashMap<SymbolName, SymbolInfo>,
-    pub open_pnl: DashMap<SymbolName, Price>,
+    pub open_pnl: DashMap<SymbolCode, Price>,
     pub total_booked_pnl: Mutex<Price>,
     pub mode: StrategyMode,
     pub leverage: u32,
@@ -883,7 +883,7 @@ mod historical_ledgers {
 
         /// If Ok it will return a Position event for the successful position update, if the ledger rejects the order it will return an Err(OrderEvent)
         ///todo, check ledger max order etc before placing orders
-        pub(crate) async fn update_or_create_position(
+        pub(crate) async fn update_or_create_paper_position(
             &self,
             symbol_name: SymbolName,
             symbol_code: SymbolCode,
