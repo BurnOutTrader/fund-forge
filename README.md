@@ -536,7 +536,7 @@ after the last refactor the strategy registry is not in a working state, but is 
 I have tried to maintain a reasonable separation of concerns throughout the code base to allow any backend implementations to be upgraded without effecting existing strategies.
 
 Some of the current implementations are crude implementations that act as placeholders for more performant designs in the future, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
-Anything can be improved and optimized one a stable platform is built.
+Anything can be improved and optimized once a stable platform is built.
 
 All strategy functionality is accessed by calling the `FundForgeStrategy` object's associated functions, there is a complete decoupling of strategy instance from the backend so that
 upgrades can be implemented in the engine and handlers without causing breaking changes to strategies.
