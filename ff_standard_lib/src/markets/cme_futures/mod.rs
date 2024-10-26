@@ -1,16 +1,17 @@
 use serde::{Deserialize, Deserializer};
-use std::collections::HashMap;
 use std::str::FromStr;
+use ahash::AHashMap;
 use chrono_tz::Tz;
+use futures::TryFutureExt;
 use crate::standardized_types::enums::FuturesExchange;
 
-/*#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct MarketConfig {
     #[serde(flatten)]
-    symbols: HashMap<String, SymbolConfig>,
-}*/
+    symbols: AHashMap<String, SymbolConfig>,
+}
 
-/*#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize)]
 struct SymbolConfig {
     #[serde(deserialize_with = "deserialize_exchange")]
     exchange: FuturesExchange,
@@ -18,7 +19,7 @@ struct SymbolConfig {
     timezone: Tz,
     schedule: Schedule,
     special_dates: SpecialDates,
-}*/
+}
 
 #[derive(Debug, Deserialize)]
 struct Schedule {
@@ -45,14 +46,14 @@ struct SpecialTime {
     date: String,
     time: String,
 }
-/*
+
 // Custom deserializer for FuturesExchange enum
 fn deserialize_exchange<'de, D>(deserializer: D) -> Result<FuturesExchange, D::Error>
 where
     D: Deserializer<'de>,
 {
     let s: String = String::deserialize(deserializer)?;
-    FuturesExchange::from_str(&s).map_err(serde::de::Error::custom)
+    FuturesExchange::from_string(&s).map_err(serde::de::Error::custom)
 }
 
 // Custom deserializer for chrono_tz::Tz
@@ -62,4 +63,4 @@ where
 {
     let s: String = String::deserialize(deserializer)?;
     s.parse::<Tz>().map_err(serde::de::Error::custom)
-}*/
+}
