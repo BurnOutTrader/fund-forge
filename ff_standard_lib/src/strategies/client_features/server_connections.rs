@@ -269,6 +269,7 @@ pub async fn response_handler(
                                    if synchronise_accounts {
                                        //println!("Live Position: {:?}", position);
                                         //tokio::task::spawn(async move {
+                                       //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates
                                        match LEDGER_SERVICE.synchronize_live_position(account, position) {
                                            None => {}
                                            Some(event) => {

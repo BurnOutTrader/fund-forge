@@ -17,6 +17,7 @@ pub fn live_order_update(
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
     synchronize_positions: bool
 ) {
+    //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates
     tokio::task::spawn(async move {
         while let Some(ref order_update_event) = order_event_receiver.recv().await {
             match order_update_event {

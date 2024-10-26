@@ -22,6 +22,7 @@ pub struct Renko {
     pub(crate) subscription: DataSubscription,
     #[allow(unused)]
     market_type: MarketType,
+    #[allow(unused)]
     decimal_accuracy: u32,
     tick_size: Decimal,
     up_color: Color,

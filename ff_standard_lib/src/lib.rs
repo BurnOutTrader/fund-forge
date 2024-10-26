@@ -5,6 +5,7 @@ pub mod standardized_types;
 pub mod messages;
 pub mod strategies;
 pub mod markets;
+pub(crate) mod tests;
 
 #[cfg(feature = "server")]
 pub mod server_features;
