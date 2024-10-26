@@ -1315,3 +1315,7 @@ Sometimes order and position updates arrive from the broker 1 to 2 seconds after
 You need to allow for this by including logic to handle this in your strategy, to avoid submitting multiple orders, before an order fill event is received.
 
 This won't happen in backtesting, but it does happen in live markets.
+
+One way to await order fill events would be to use and Option<OrderId> to store the order_id after placing an order, and then await the order fill, cancel or rejection event and set order_id back to None.
+
+
