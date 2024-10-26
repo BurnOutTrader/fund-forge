@@ -530,7 +530,7 @@ All Gui development is totally decoupled from the engine by using the ff_strateg
 after the last refactor the strategy registry is not in a working state, but is easily fixed in the future.
 
 ## Architecture
-![diagram.png](misc/diagram.png)
+![complex_diagram_2.png](misc/complex_diagram_2.png)
 
 
 I have tried to maintain a reasonable separation of concerns throughout the code base to allow any backend implementations to be upgraded without effecting existing strategies.
