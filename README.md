@@ -532,7 +532,6 @@ after the last refactor the strategy registry is not in a working state, but is 
 ## Architecture
 ![diagram.png](misc/diagram.png)
 
-
 I have tried to maintain a reasonable separation of concerns throughout the code base to allow any backend implementations to be upgraded without effecting existing strategies.
 
 Some of the current implementations are a crude implementations that act as placeholders for more performant designs in the future, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
@@ -548,7 +547,7 @@ All pull requests should include only human-readable code and files.
 The platform is designed to be as fast as possible, using `rkyv` for serialization and deserialization and network messaging, and `tokio` for async communication.
 The full potential of using rkyv will be unlocked in future versions, currently it is only the most basic implementation of serializing and deserializing to and from archived bytes.
 see: [rkyv](https://github.com/rkyv/rkyv)
-see tests [here](https://github.com/BurnOutTrader/fund-forge/blob/main/ff_standard_lib/README.md)
+see tests [here](ff_data_server/README.md)
 
 I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance at the cost of slightly more hardcoding for new implementations.
 
