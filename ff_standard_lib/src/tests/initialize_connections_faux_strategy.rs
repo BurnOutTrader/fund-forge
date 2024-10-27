@@ -10,6 +10,7 @@ use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
 use crate::strategies::fund_forge_strategy::FundForgeStrategy;
 
+#[allow(dead_code)]
 pub(crate) fn initialize_tests() -> FundForgeStrategy {
     // Set up strategy event channel
     let (strategy_event_sender, _strategy_event_receiver) = mpsc::channel(100);

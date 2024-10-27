@@ -346,7 +346,7 @@ where
 }
 
 async fn send_error_response(sender: &tokio::sync::mpsc::Sender<DataServerResponse>, error: OrderUpdateEvent, stream_name: &StreamName) {
-    let event = DataServerResponse::OrderUpdates(error);
+    let event = DataServerResponse::OrderUpdates{event: error, time: Utc::now().to_string()};
     if let Err(_) = sender.send(event).await {
         eprintln!("Failed to send order response to: {}", stream_name);
     }
