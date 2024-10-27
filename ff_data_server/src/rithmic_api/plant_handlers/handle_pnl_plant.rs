@@ -151,52 +151,7 @@ pub async fn match_pnl_plant_id(
                     Some(id) => id
                 };
 
-                let (side, quantity) = if let (Some(buy_quantity), Some(sell_qty)) = (msg.buy_qty, msg.sell_qty) {
-                    if buy_quantity > 0 && sell_qty <= 0 {
-                        client.long_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .insert(symbol_code.clone(), Volume::from_i32(buy_quantity).unwrap());
-                        client.short_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .remove(symbol_code);
-                        (Some(PositionSide::Long), buy_quantity)
-                    } else if buy_quantity <= 0 && sell_qty > 0 {
-                        client.short_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .insert(symbol_code.clone(), Volume::from_i32(sell_qty.abs()).unwrap());
-                        client.long_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .remove(symbol_code);
-                        // Short position: negative sell, no buy
-                        (Some(PositionSide::Short), sell_qty)
-                    } else {
-                        client.long_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .remove(symbol_code);
-                        client.short_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .remove(symbol_code);
-                        (None, 0)
-                    }
-                } else {
-                    client.long_quantity
-                        .entry(account_id.clone())
-                        .or_insert_with(DashMap::new)
-                        .remove(symbol_code);
-                    client.short_quantity
-                        .entry(account_id.clone())
-                        .or_insert_with(DashMap::new)
-                        .remove(symbol_code);
-                    // Missing quantities
-                    (None, 0)
-                };
-
+                let (side, quantity) = update_position(account_id.clone(), &symbol_code, msg.buy_qty, msg.sell_qty, &client);
                 if side.is_none() {
                     if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
                         let tag = match client.last_tag.get(&account_id) {
@@ -398,5 +353,84 @@ pub async fn match_pnl_plant_id(
             }
         },
         _ => println!("No match for template_id: {}", template_id)
+    }
+}
+
+fn update_position(
+    account_id: String,
+    symbol_code: &SymbolCode,
+    msg_buy_qty: Option<i32>,
+    msg_sell_qty: Option<i32>,
+    client: &Arc<RithmicClient>
+) -> (Option<PositionSide>, i32) {
+    match (msg_buy_qty, msg_sell_qty) {
+        (Some(buy_quantity), None) if buy_quantity > 0 => {
+            client.long_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .insert(symbol_code.clone(), Volume::from_i32(buy_quantity).unwrap());
+            client.short_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .remove(symbol_code);
+            (Some(PositionSide::Long), buy_quantity)
+        }
+        (None, Some(sell_qty)) if sell_qty > 0 => {
+            client.short_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .insert(symbol_code.clone(), Volume::from_i32(sell_qty).unwrap());
+            client.long_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .remove(symbol_code);
+            (Some(PositionSide::Short), sell_qty)
+        }
+        (Some(buy_quantity), Some(sell_qty)) => {
+            if buy_quantity > 0 && sell_qty <= 0 {
+                client.long_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .insert(symbol_code.clone(), Volume::from_i32(buy_quantity).unwrap());
+                client.short_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .remove(symbol_code);
+                (Some(PositionSide::Long), buy_quantity)
+            } else if buy_quantity <= 0 && sell_qty > 0 {
+                client.short_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .insert(symbol_code.clone(), Volume::from_i32(sell_qty.abs()).unwrap());
+                client.long_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .remove(symbol_code);
+                (Some(PositionSide::Short), sell_qty)
+            } else {
+                // Clear positions if neither buy nor sell is active
+                client.long_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .remove(symbol_code);
+                client.short_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .remove(symbol_code);
+                (None, 0)
+            }
+        }
+        _ => {
+            // Clear positions for all other cases, including None, 0, or invalid values
+            client.long_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .remove(symbol_code);
+            client.short_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .remove(symbol_code);
+            (None, 0)
+        }
     }
 }
