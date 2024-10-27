@@ -1,6 +1,6 @@
 use std::str::FromStr;
 use std::sync::Arc;
-use chrono::Utc;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use dashmap::DashMap;
 
 #[allow(unused_imports)]
@@ -21,6 +21,7 @@ use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::Position;
 use ff_standard_lib::standardized_types::subscriptions::{SymbolCode};
 use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 use crate::rithmic_api::products::get_symbol_info;
 
@@ -131,6 +132,18 @@ pub async fn match_pnl_plant_id(
                     },
                     _ => {}
                 }
+
+                let ssboe = match msg.ssboe {
+                    None => return,
+                    Some(ssboe) => ssboe
+                };
+
+                let usecs = match msg.usecs {
+                    None => return,
+                    Some(usecs) => usecs
+                };
+
+                let time = create_datetime(ssboe as i64, usecs as i64).to_string();
                 //println!("PNL Update Message: {:?}", msg);
                 println!("Rithmic Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
                 let account_id = match msg.account_id {
@@ -202,7 +215,8 @@ pub async fn match_pnl_plant_id(
                         //println!("Closing position: {:?}", position);
                         send_updates(DataServerResponse::LivePositionUpdates {
                             account: Account::new(client.brokerage, account_id.clone()),
-                            position
+                            position,
+                            time,
                         }).await;
                     }
                     return
@@ -281,7 +295,8 @@ pub async fn match_pnl_plant_id(
 
                                 let position_update = DataServerResponse::LivePositionUpdates {
                                     account: Account::new(client.brokerage, account_id.clone()),
-                                    position: clone_position
+                                    position: clone_position,
+                                    time,
                                 };
                                 send_updates(position_update).await;
                                 POSITIONS.insert(symbol_code, position);

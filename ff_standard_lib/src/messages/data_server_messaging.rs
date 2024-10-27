@@ -311,7 +311,7 @@ DataServerResponse {
 
     PrimarySubscriptionFor{callback_id: u64, primary_subscription: DataSubscription},
 
-    OrderUpdates(OrderUpdateEvent),
+    OrderUpdates{event: OrderUpdateEvent, time: String},
 
     RegistrationResponse(u16),
 
@@ -323,7 +323,7 @@ DataServerResponse {
     LiveAccountUpdates {account: Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
 
     /// Booked pnl is only sent for closed positions, it is the amount of booked pnl since the last side change from none to long or short
-    LivePositionUpdates {account: Account, position: Position},
+    LivePositionUpdates {account: Account, position: Position, time: String},
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -360,7 +360,7 @@ impl DataServerResponse {
             DataServerResponse::SubscribeResponse { .. } => None,
             DataServerResponse::UnSubscribeResponse { .. } => None,
             DataServerResponse::Accounts {callback_id, ..} => Some(callback_id.clone()),
-            DataServerResponse::OrderUpdates(_) => None,
+            DataServerResponse::OrderUpdates{..} => None,
             DataServerResponse::PrimarySubscriptionFor {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::SymbolNames {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::RegistrationResponse(_) => None,

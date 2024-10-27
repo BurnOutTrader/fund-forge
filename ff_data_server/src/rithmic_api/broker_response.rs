@@ -293,6 +293,7 @@ impl BrokerApiResponse for RithmicClient {
 
                 // For shorts, just ensure we don't exit more than we have
                 if details.quantity > volume {
+                    let time = Utc::now().to_string();
                     details.quantity = volume;
                     let order_update_event = OrderUpdateEvent::OrderUpdated {
                         account: order.account.clone(),
@@ -302,9 +303,9 @@ impl BrokerApiResponse for RithmicClient {
                         update_type: OrderUpdateType::Quantity(Decimal::from_i32(volume).unwrap()),
                         tag: order.tag.clone(),
                         text: String::from("ff_data_server Api adjusted exit quantity to prevent over fill"),
-                        time: Utc::now().to_string(),
+                        time: time.clone(),
                     };
-                    let order_event = DataServerResponse::OrderUpdates(order_update_event);
+                    let order_event = DataServerResponse::OrderUpdates{event: order_update_event, time};
                     if let Some(sender) = RESPONSE_SENDERS.get(&stream_name) {
                         match sender.send(order_event).await {
                             Ok(_) => {}
@@ -361,7 +362,7 @@ impl BrokerApiResponse for RithmicClient {
                 // Use absolute values for comparison and adjustment
                 if details.quantity.abs() > volume.abs() {
                     details.quantity = volume.abs();  // Keep positive for the order
-
+                    let time = Utc::now().to_string();
                     let order_update_event = OrderUpdateEvent::OrderUpdated {
                         account: order.account.clone(),
                         symbol_name: order.symbol_name.clone(),
@@ -370,9 +371,9 @@ impl BrokerApiResponse for RithmicClient {
                         update_type: OrderUpdateType::Quantity(Decimal::from_i32(volume).unwrap()),
                         tag: order.tag.clone(),
                         text: String::from("ff_data_server Api adjusted exit quantity to prevent over fill"),
-                        time: Utc::now().to_string(),
+                        time: time.clone(),
                     };
-                    let order_event = DataServerResponse::OrderUpdates(order_update_event);
+                    let order_event = DataServerResponse::OrderUpdates{event: order_update_event, time};
                     if let Some(sender) = RESPONSE_SENDERS.get(&stream_name) {
                         match sender.send(order_event).await {
                             Ok(_) => {}

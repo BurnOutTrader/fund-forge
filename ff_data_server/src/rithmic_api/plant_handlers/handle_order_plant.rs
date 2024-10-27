@@ -21,6 +21,7 @@ use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
+use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 use crate::rithmic_api::products::find_base_symbol;
 
@@ -38,11 +39,6 @@ pub async fn match_order_plant_id(
     template_id: i32, message_buf: Vec<u8>,
     client: Arc<RithmicClient>,
 ) {
-    // Helper function to create DateTime<Utc> from ssboe and usecs
-    let create_datetime = |ssboe: i64, usecs: i64| -> DateTime<Utc> {
-        let nanosecs = usecs * 1000; // Convert microseconds to nanoseconds
-        DateTime::from_timestamp(ssboe, nanosecs as u32).unwrap()
-    };
     const PLANT: SysInfraType = SysInfraType::OrderPlant;
     match template_id {
         75 => {
@@ -541,9 +537,9 @@ pub async fn match_order_plant_id(
                                 symbol_code,
                                 order_id: order_id.clone(),
                                 tag,
-                                time,
+                                time: time.clone(),
                             };
-                            send_order_update(client.brokerage, &order_id, event).await;
+                            send_order_update(client.brokerage, &order_id, event, time).await;
                         },
                         5 => {
                             if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size)) =
@@ -580,9 +576,9 @@ pub async fn match_order_plant_id(
                                         price,
                                         quantity: fill_quantity,
                                         tag,
-                                        time,
+                                        time: time.clone(),
                                     };
-                                    send_order_update(client.brokerage, &order_id, event).await;
+                                    send_order_update(client.brokerage, &order_id, event, time).await;
                                 } else if total_unfilled_size > 0 {
                                     let event = OrderUpdateEvent::OrderPartiallyFilled {
                                         side,
@@ -593,9 +589,9 @@ pub async fn match_order_plant_id(
                                         price,
                                         quantity: fill_quantity,
                                         tag,
-                                        time,
+                                        time: time.clone(),
                                     };
-                                    send_order_update(client.brokerage, &order_id, event).await;
+                                    send_order_update(client.brokerage, &order_id, event, time).await;
                                 }
                             } else {
                                 return;
@@ -608,10 +604,10 @@ pub async fn match_order_plant_id(
                                 symbol_name,
                                 symbol_code,
                                 tag,
-                                time,
+                                time: time.clone(),
                                 reason,
                             };
-                            send_order_update(client.brokerage, &order_id, event).await;
+                            send_order_update(client.brokerage, &order_id, event, time).await;
                         },
                         6 => {
                             let event = OrderUpdateEvent::OrderRejected {
@@ -621,9 +617,9 @@ pub async fn match_order_plant_id(
                                 symbol_name,
                                 symbol_code,
                                 tag,
-                                time,
+                                time: time.clone(),
                             };
-                            send_order_update(client.brokerage, &order_id, event).await;
+                            send_order_update(client.brokerage, &order_id, event, time).await;
                         },
                        2 => {
                            if let Some(broker_map) = ID_UPDATE_TYPE.get(&client.brokerage) {
@@ -635,10 +631,10 @@ pub async fn match_order_plant_id(
                                        symbol_name,
                                        symbol_code,
                                        tag,
-                                       time,
+                                       time: time.clone(),
                                        text: "User Request".to_string(),
                                    };
-                                   send_order_update(client.brokerage, &order_id, event).await;
+                                   send_order_update(client.brokerage, &order_id, event, time).await;
                                } else {
                                    return;
                                }
@@ -649,10 +645,10 @@ pub async fn match_order_plant_id(
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),
                                 reason: msg.status.unwrap_or_default(),
-                                time,
+                                time: time.clone(),
                             };
 
-                            send_order_update(client.brokerage, &order_id, event).await;
+                            send_order_update(client.brokerage, &order_id, event, time).await;
                         },
                         _ => return,  // Ignore other notification types
                     };
@@ -744,10 +740,10 @@ pub async fn match_order_plant_id(
     }
 }
 
-async fn send_order_update(brokerage: Brokerage, order_id: &OrderId, event: OrderUpdateEvent) {
+async fn send_order_update(brokerage: Brokerage, order_id: &OrderId, event: OrderUpdateEvent, time: String) {
     if let Some(broker_map) = ID_TO_STREAM_NAME_MAP.get(&brokerage) {
         if let Some(stream_name) = broker_map.value().get(order_id) {
-            let order_event = DataServerResponse::OrderUpdates(event);
+            let order_event = DataServerResponse::OrderUpdates{event, time};
             if let Some(sender) = RESPONSE_SENDERS.get(&stream_name.value()) {
                 match sender.send(order_event).await {
                     Ok(_) => {}

@@ -46,6 +46,7 @@ impl Brokerage {
                             currency,
                             cash_used: Mutex::new(dec!(0.0)),
                             positions: DashMap::new(),
+                            last_update: Default::default(),
                             symbol_code_map: Default::default(),
                             margin_used: DashMap::new(),
                             positions_closed: DashMap::new(),
