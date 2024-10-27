@@ -34,9 +34,9 @@ impl LedgerService {
         }
     }
 
-    pub fn synchronize_live_position(&self, account: Account, position: Position) -> Option<PositionUpdateEvent> {
+    pub fn synchronize_live_position(&self, account: Account, position: Position, time: DateTime<Utc>) -> Option<PositionUpdateEvent> {
         if let Some(account_ledger) = self.ledgers.get(&account) {
-            return account_ledger.value().synchronize_live_position(position)
+            return account_ledger.value().synchronize_live_position(position, time)
         }
         None
     }
@@ -79,9 +79,9 @@ impl LedgerService {
         }
     }
 
-    pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal) {
+    pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal, time: DateTime<Utc>) {
         if let Some(account_ledger) = self.ledgers.get(&order.account) {
-            account_ledger.value().process_synchronized_orders(order, quantity).await;
+            account_ledger.value().process_synchronized_orders(order, quantity, time).await;
         }
     }
 
@@ -227,6 +227,7 @@ pub struct Ledger {
     pub currency: Currency,
     pub cash_used: Mutex<Price>,
     pub positions: DashMap<SymbolCode, Position>,
+    pub last_update: DashMap<SymbolCode, DateTime<Utc>>,
     pub symbol_code_map: DashMap<SymbolName, Vec<String>>,
     pub margin_used: DashMap<SymbolCode, Price>,
     pub positions_closed: DashMap<SymbolCode, Vec<Position>>,
@@ -272,6 +273,7 @@ impl Ledger {
             currency: account_info.currency,
             cash_used: Mutex::new(account_info.cash_used),
             positions,
+            last_update: Default::default(),
             symbol_code_map: contract_map,
             margin_used: Default::default(),
             positions_closed: DashMap::new(),
@@ -298,7 +300,14 @@ impl Ledger {
         *account_cash_available = cash_available;
     }
 
-    pub fn synchronize_live_position(&self, position: Position) -> Option<PositionUpdateEvent> {
+    pub fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) -> Option<PositionUpdateEvent> {
+        if let Some(last_update) = self.last_update.get(&position.symbol_code) {
+            if last_update.value() > &time {
+                return None;
+            }
+        } else {
+            self.last_update.insert(position.symbol_code.clone(), time);
+        }
         if position.is_closed {
             // If position is closed, remove it and don't try to create a new one
             self.positions.remove(&position.symbol_code);
@@ -352,11 +361,20 @@ impl Ledger {
         }
     }
 
-    pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal) {
+    pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal, time: DateTime<Utc>) {
         let symbol = match order.symbol_code {
             None => order.symbol_name,
             Some(code) => code
         };
+
+        if let Some(last_update) = self.last_update.get(&symbol) {
+            if last_update.value() > &time {
+                return;
+            }
+        } else {
+            self.last_update.insert(symbol.clone(), time);
+        }
+
         if let Some(mut position) = self.positions.get_mut(&symbol) {
             let is_reducing = (position.side == PositionSide::Long && order.side == OrderSide::Sell)
                 || (position.side == PositionSide::Short && order.side == OrderSide::Buy);
@@ -646,11 +664,15 @@ impl Ledger {
         quantity: Volume,
         side: OrderSide,
         time: DateTime<Utc>,
-        market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
+        market_fill_price: Price,
         tag: String
     ) -> Vec<PositionUpdateEvent> {
-        if self.mode != StrategyMode::Live {
-            panic!("Incorrect strategy mode for ledger update_or_create_live_position()");
+        if let Some(last_update) = self.last_update.get(&symbol_code) {
+            if last_update.value() > &time {
+                return vec![];
+            }
+        } else {
+            self.last_update.insert(symbol_code.clone(), time);
         }
         let mut position_events = vec![];
         // Check if there's an existing position for the given symbol
@@ -743,7 +765,6 @@ impl Ledger {
             );
 
             // Insert the new position into the positions map
-            eprintln!("Symbol Code {}", symbol_code);
             self.positions.insert(symbol_code.clone(), position);
             if !self.positions_closed.contains_key(&symbol_code) {
                 self.positions_closed.insert(symbol_code.clone(), vec![]);
