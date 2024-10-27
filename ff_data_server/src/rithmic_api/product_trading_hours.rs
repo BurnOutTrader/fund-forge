@@ -54,17 +54,6 @@ lazy_static! {
         m.insert("M6A", &CME_HOURS); // Micro AUD/USD
         m.insert("M6B", &CME_HOURS); // Micro GBP/USD
 
-        // Commodities
-        m.insert("GC", &CME_HOURS);  // Gold
-        m.insert("SI", &CME_HOURS);  // Silver
-        m.insert("HG", &CME_HOURS);  // Copper
-        m.insert("PL", &CME_HOURS);  // Platinum
-        m.insert("PA", &CME_HOURS);  // Palladium
-
-        // Micro Metals
-        m.insert("MGC", &CME_HOURS); // Micro Gold
-        m.insert("SIL", &CME_HOURS); // Micro Silver
-
         // Metals and Commodities
         m.insert("GC", &CME_HOURS);   // Gold Futures
         m.insert("SI", &CME_HOURS);   // Silver Futures

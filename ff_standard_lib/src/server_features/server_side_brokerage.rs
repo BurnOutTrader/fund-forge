@@ -231,4 +231,13 @@ pub trait BrokerApiResponse: Sync + Send {
         mode: StrategyMode,
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
+
+    async fn session_market_hours_response(
+        &self,
+        mode: StrategyMode,
+        stream_name: StreamName,
+        symbol_name: SymbolName,
+        date_time: DateTime<Utc>,
+        callback_id: u64
+    ) -> DataServerResponse;
 }
