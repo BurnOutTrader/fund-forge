@@ -98,6 +98,13 @@ lazy_static! {
         m.insert("SPS".to_string(), &CME_HOURS);  // Silver/Platinum Spread
         m.insert("SPA".to_string(), &CME_HOURS);  // Silver/Palladium Spread
 
+        //Cbot equiteis
+        m.insert("YM".to_string(), &CME_HOURS);   // E-mini Dow ($5)
+        m.insert("MYM".to_string(), &CME_HOURS);  // Micro E-mini Dow ($0.50)
+        m.insert("DJI".to_string(), &CME_HOURS);  // DJIA Futures (Big Dow)
+        m.insert("DOW".to_string(), &CME_HOURS);  // Dow Jones Industrial Average Futures
+
+        // Agricultural products use same CBOT_GRAINS_HOURS schedule
         m.insert("ZC".to_string(), &CBOT_GRAINS_HOURS);  // Corn
         m.insert("ZS".to_string(), &CBOT_GRAINS_HOURS);  // Soybeans
         m.insert("ZW".to_string(), &CBOT_GRAINS_HOURS);  // Wheat
@@ -106,6 +113,19 @@ lazy_static! {
         m.insert("ZO".to_string(), &CBOT_GRAINS_HOURS);  // Oats
         m.insert("KE".to_string(), &CBOT_GRAINS_HOURS);  // KC Wheat
         m.insert("ZR".to_string(), &CBOT_GRAINS_HOURS);  // Rough Rice
+
+        // Mini Agricultural products use same CBOT_GRAINS_HOURS schedule
+        m.insert("YC".to_string(), &CBOT_GRAINS_HOURS);  // Mini-sized Corn
+        m.insert("YK".to_string(), &CBOT_GRAINS_HOURS);  // Mini-sized Soybeans
+        m.insert("XW".to_string(), &CBOT_GRAINS_HOURS);  // Mini-sized Wheat
+        m.insert("XC".to_string(), &CBOT_GRAINS_HOURS);  // E-mini Corn
+        m.insert("XK".to_string(), &CBOT_GRAINS_HOURS);  // E-mini Soybeans
+        m.insert("KE".to_string(), &CBOT_GRAINS_HOURS);  // KC Wheat
+
+        // Add any product spreads that follow same schedule
+        m.insert("ZS-ZM".to_string(), &CBOT_GRAINS_HOURS);  // Soybean-Soybean Meal Spread
+        m.insert("ZS-ZL".to_string(), &CBOT_GRAINS_HOURS);  // Soybean-Soybean Oil Spread
+        m.insert("ZM-ZL".to_string(), &CBOT_GRAINS_HOURS);  // Soybean Meal-Soybean Oil Spread
         m
     };
 }
