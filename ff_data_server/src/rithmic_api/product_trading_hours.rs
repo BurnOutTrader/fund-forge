@@ -130,7 +130,6 @@ lazy_static! {
     };
 }
 
-
 pub fn get_trading_hours(symbol: &str) -> Option<&'static TradingHours> {
     TRADING_HOURS.get(symbol).copied()
 }
