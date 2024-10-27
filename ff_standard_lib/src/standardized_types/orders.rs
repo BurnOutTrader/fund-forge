@@ -83,7 +83,9 @@ pub enum TimeInForce {
     IOC,
     FOK,
     Day(TzString),
-    Time(i64, TzString)
+
+    //Utc Timestamp
+    Time(i64)
 }
 
 #[derive(Archive, Clone, rkyv::Serialize, rkyv::Deserialize, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]

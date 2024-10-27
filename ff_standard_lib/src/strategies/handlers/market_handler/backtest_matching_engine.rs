@@ -196,11 +196,16 @@ pub async fn simulated_order_matching (
                     cancelled.push((order.id.clone(), reason));
                 }*/
             }
-            TimeInForce::Time(cancel_time, time_zone_string) => {
-                let tz: Tz = time_zone_string.parse().unwrap();
-                let local_time = time_convert_utc_to_local(&tz, time);
-                let cancel_time = tz.timestamp_opt(*cancel_time, 0).unwrap();
-                if local_time >= cancel_time {
+            TimeInForce::Time(cancel_time) => {
+                let cancel_time = match DateTime::<Utc>::from_timestamp(*cancel_time, 0) {
+                    Some(time) => time,
+                    None => {
+                        let reason = "Time In Force Expired: TimeInForce::Time".to_string();
+                        rejected.push((order.id.clone(), reason));
+                        continue;
+                    }
+                };
+                if Utc::now() >= cancel_time {
                     let reason = "Time In Force Expired: TimeInForce::Time".to_string();
                     cancelled.push((order.id.clone(), reason));
                 }

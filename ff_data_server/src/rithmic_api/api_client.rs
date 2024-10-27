@@ -698,7 +698,19 @@ impl RithmicClient {
         })
     }
 
-    pub async fn submit_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) {
+    fn reject_order(order: &Order, reason: String) -> OrderUpdateEvent {
+        OrderUpdateEvent::OrderRejected {
+            account: order.account.clone(),
+            symbol_name: order.symbol_name.clone(),
+            symbol_code: order.symbol_name.clone(),
+            order_id: order.id.clone(),
+            reason,
+            tag: order.tag.clone(),
+            time: Utc::now().to_string()
+        }
+    }
+
+    pub async fn submit_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) -> Result<(), OrderUpdateEvent> {
         let (duration, cancel_at_ssboe, cancel_at_usecs) = match order.time_in_force {
             TimeInForce::IOC => (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Ioc.into(), None, None),
             TimeInForce::FOK => (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into(), None, None),
@@ -706,11 +718,9 @@ impl RithmicClient {
             TimeInForce::Day(ref tz_string) => {
                 let time_zone = match Tz::from_str(tz_string) {
                     Ok(time_zone) => time_zone,
-                    Err(e) => {
-                        eprintln!("Failed to parse TZ in rithmic submit_order(): {}", e);
-                        return;
-                    }
+                    Err(e) => return Err(Self::reject_order(&order, format!("Failed to parse Tz: {}", e)))
                 };
+
                 let now = Utc::now();
                 let end_of_day = match time_zone.from_utc_datetime(&now.naive_utc())
                     .date_naive()
@@ -719,22 +729,18 @@ impl RithmicClient {
                     .map(|tz_dt| tz_dt.with_timezone(&Utc))
                 {
                     Some(dt) => dt,
-                    None => return eprintln!("Failed to calculate end of day for timezone: {}", tz_string),
+                    None => return Err(Self::reject_order(&order, format!("Failed to calculate end of day for timezone: {}", tz_string)))
                 };
 
                 (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
                  Some(end_of_day.timestamp() as i32),
                  Some(end_of_day.timestamp_subsec_micros() as i32))
             }
-            TimeInForce::Time(ref time_stamp, ref tz_string) => {
-                let time_zone = match Tz::from_str(tz_string) {
-                    Ok(tz) => tz,
-                    Err(e) => {
-                        eprintln!("Failed to parse time zone in rithmic submit_order(): {}", e);
-                        return;
-                    }
+            TimeInForce::Time(ref time_stamp) => {
+                let cancel_time = match DateTime::<Utc>::from_timestamp(*time_stamp, 0) {
+                    Some(dt) => dt,
+                    None => return Err(Self::reject_order(&order, format!("Failed to parse time stamp: {}", time_stamp)))
                 };
-                let cancel_time = time_zone.timestamp_opt(*time_stamp, 0).unwrap();
 
                 (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
                  Some(cancel_time.timestamp() as i32),
@@ -742,6 +748,7 @@ impl RithmicClient {
             }
         };
 
+        // Rest of the function remains the same...
         match order.side {
             OrderSide::Buy => eprintln!("Buying {}" , order.quantity_open),
             OrderSide::Sell => eprintln!("Selling {}" , order.quantity_open),
@@ -751,7 +758,7 @@ impl RithmicClient {
             None => None,
             Some(price) => {
                 match price.to_f64() {
-                    None => return,
+                    None => return Err(Self::reject_order(&order, format!("Failed to parse trigger price: {}", price))),
                     Some(price) => Some(price)
                 }
             }
@@ -761,7 +768,7 @@ impl RithmicClient {
             None => None,
             Some(price) => {
                 match price.to_f64() {
-                    None => return,
+                    None => return Err(Self::reject_order(&order, format!("Failed to parse limit price: {}", price))),
                     Some(price) => Some(price)
                 }
             }
@@ -816,6 +823,7 @@ impl RithmicClient {
             account_map.insert(details.symbol_code, order.tag.clone());
         }
         self.send_message(&SysInfraType::OrderPlant, req).await;
+        Ok(())
     }
 
     pub async fn submit_market_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) {
