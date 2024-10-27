@@ -103,4 +103,8 @@ impl BrokerApiResponse for BitgetClient {
     async fn other_orders(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
         todo!()
     }
+
+    async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
+        todo!()
+    }
 }
