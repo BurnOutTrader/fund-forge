@@ -396,10 +396,10 @@ impl BrokerApiResponse for RithmicClient {
             Ok(details) => details,
             Err(e) => return Err(e)
         };
-        self.submit_order(stream_name, order, details).await;
-        Ok(())
+        self.submit_order(stream_name, order, details).await
     }
 
+    #[allow(unused)]
     async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
         todo!()
     }
