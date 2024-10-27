@@ -176,7 +176,7 @@ lazy_static! {
 }
 
 #[allow(dead_code)]
-pub fn get_exchange_by_code(code: &str) -> Option<FuturesExchange> {
+pub fn get_exchange_by_symbol_name(code: &str) -> Option<FuturesExchange> {
     CODE_TO_EXCHANGE_MAP.get(code).cloned()
 }
 

@@ -48,7 +48,7 @@ use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTradeRoutes, ResponseHeartbeat};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_new_order::{OrderPlacement, PriceType, TransactionType};
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
-use crate::rithmic_api::products::get_exchange_by_code;
+use crate::rithmic_api::products::get_exchange_by_symbol_name;
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
@@ -623,7 +623,7 @@ impl RithmicClient {
         };
 
         let (symbol_code, exchange): (SymbolName, FuturesExchange) = {
-            match get_exchange_by_code(&order.symbol_name) {
+            match get_exchange_by_symbol_name(&order.symbol_name) {
                 None => {
                     return Err(OrderUpdateEvent::OrderRejected {
                         account: order.account.clone(),

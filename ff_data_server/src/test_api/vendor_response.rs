@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use async_trait::async_trait;
 use ff_standard_lib::helpers::converters::{fund_forge_formatted_symbol_name};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
@@ -15,6 +14,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use tokio::time::sleep;
 use std::time::Duration;
 use rust_decimal_macros::dec;
+use tokio::task::JoinHandle;
 use ff_standard_lib::server_features::database::DATA_STORAGE;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
@@ -185,8 +185,8 @@ impl VendorApiResponse for TestApiClient {
     async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
         todo!()
     }
-    #[allow(unused)]
-    async fn update_historical_data_for(subscription: DataSubscription, from: DateTime<Utc>, to: DateTime<Utc>) -> Result<Option<BTreeMap<i64, BaseDataEnum>>, FundForgeError> {
+
+    async fn update_historical_data_for(&self, stream_name: StreamName, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) -> Result<JoinHandle<()>, FundForgeError> {
         todo!()
     }
 }
