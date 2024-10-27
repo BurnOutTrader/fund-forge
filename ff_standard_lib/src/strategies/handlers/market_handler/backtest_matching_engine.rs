@@ -133,16 +133,8 @@ pub async fn backtest_matching_engine(
                                 }
                             }
                         }
-                        OrderRequest::FlattenAllFor { account: _} => {
-                            //Todo
-                        /*    if let Some(broker_map) = ledger_senders.get(&brokerage) {
-                                if let Some(account_map) = broker_map.get(&account_id) {
-                                    match account_map.send(LedgerMessage::FlattenAccount(time)).await {
-                                        Ok(_) => {}
-                                        Err(e) => panic!("Failed to send ledger flatten account message: {}", e)
-                                    }
-                                }
-                            }*/
+                        OrderRequest::FlattenAllFor { account} => {
+                            LEDGER_SERVICE.flatten_all_positions(&account).await;
                         }
                     }
                 }

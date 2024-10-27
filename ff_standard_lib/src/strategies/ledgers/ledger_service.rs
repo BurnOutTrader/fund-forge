@@ -209,5 +209,11 @@ impl LedgerService {
              .map(|ledger| ledger.in_drawdown(symbol_name))
             .unwrap_or(false)
     }
+
+    pub async fn flatten_all_positions(&self, account: &Account) {
+        if let Some(_) = self.ledgers.get(account) {
+            todo!();
+        }
+    }
 }
 
