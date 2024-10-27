@@ -7,6 +7,7 @@ use chrono::{DateTime, NaiveTime, TimeZone};
 
 #[derive(Debug, Deserialize)]
 struct MarketConfig {
+    #[allow(dead_code)]
     #[serde(flatten)]
     symbols: HashMap<String, SymbolConfig>,
 }
