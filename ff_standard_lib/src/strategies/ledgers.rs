@@ -305,9 +305,9 @@ impl Ledger {
             if last_update.value() > &time {
                 return None;
             }
-        } else {
-            self.last_update.insert(position.symbol_code.clone(), time);
         }
+        self.last_update.insert(position.symbol_code.clone(), time);
+
         if position.is_closed {
             // If position is closed, remove it and don't try to create a new one
             self.positions.remove(&position.symbol_code);
@@ -371,9 +371,10 @@ impl Ledger {
             if last_update.value() > &time {
                 return;
             }
-        } else {
-            self.last_update.insert(symbol.clone(), time);
         }
+        self.last_update.insert(symbol.clone(), time);
+
+        self.last_update.insert(symbol.clone(), time);
 
         if let Some(mut position) = self.positions.get_mut(&symbol) {
             let is_reducing = (position.side == PositionSide::Long && order.side == OrderSide::Sell)
@@ -671,9 +672,9 @@ impl Ledger {
             if last_update.value() > &time {
                 return vec![];
             }
-        } else {
-            self.last_update.insert(symbol_code.clone(), time);
         }
+        self.last_update.insert(symbol_code.clone(), time);
+
         let mut position_events = vec![];
         // Check if there's an existing position for the given symbol
         let mut remaining_quantity = quantity;
@@ -918,6 +919,7 @@ mod historical_ledgers {
             if self.mode == StrategyMode::Live {
                 panic!("Incorrect mode for update_or_create_position()");
             }
+            //todo it is possible I might want to use the last updates time to prevent duplicate updates or out of order updates
             let mut updates = vec![];
             // Check if there's an existing position for the given symbol
             let mut remaining_quantity = quantity;
