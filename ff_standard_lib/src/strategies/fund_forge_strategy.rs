@@ -40,7 +40,7 @@ use crate::strategies::handlers::market_handler::price_service::{price_service_r
 use crate::strategies::historical_engine::HistoricalEngine;
 use crate::strategies::historical_time::get_backtest_time;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
-use crate::strategies::ledgers::{LEDGER_SERVICE};
+use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 

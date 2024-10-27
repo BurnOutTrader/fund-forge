@@ -31,7 +31,7 @@ use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
 use crate::standardized_types::orders::OrderUpdateEvent;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
-use crate::strategies::ledgers::{LEDGER_SERVICE};
+use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);

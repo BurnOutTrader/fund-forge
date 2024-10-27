@@ -5,7 +5,7 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
 use crate::standardized_types::orders::{Order, OrderId, OrderState, OrderUpdateEvent, OrderUpdateType};
-use crate::strategies::ledgers::LEDGER_SERVICE;
+use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
 use crate::strategies::strategy_events::StrategyEvent;
 
 //todo, this probably isnt needed

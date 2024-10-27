@@ -10,7 +10,7 @@ use crate::standardized_types::enums::{OrderSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::strategies::handlers::market_handler::price_service::{price_service_request_limit_fill_price_quantity, price_service_request_market_fill_price, price_service_request_market_price, PriceServiceResponse};
-use crate::strategies::ledgers::{LEDGER_SERVICE};
+use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
 use crate::strategies::strategy_events::StrategyEvent;
 
 pub enum BackTestEngineMessage {
