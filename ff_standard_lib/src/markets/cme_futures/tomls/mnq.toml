@@ -2,7 +2,7 @@
 "MNQ"
 ]
 exchange = "CME"
-timezone = "America/New_York"
+timezone = "America/Chicago"
 
 [
 "MNQ".symbol_info

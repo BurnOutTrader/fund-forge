@@ -3,7 +3,8 @@ use serde::{Deserialize, Deserializer};
 use chrono_tz::Tz;
 use crate::standardized_types::enums::FuturesExchange;
 use crate::standardized_types::symbol_info::SymbolInfo;
-use chrono::{DateTime, NaiveTime, TimeZone};
+use chrono::{DateTime, NaiveTime};
+use crate::helpers::converters::resolve_market_datetime_in_timezone;
 
 #[derive(Debug, Deserialize)]
 struct MarketConfig {
@@ -74,25 +75,11 @@ struct SpecialTime {
 }
 
 impl SpecialTime {
-    pub fn time(&self, tz: Tz) -> Result<DateTime<Tz>, chrono::ParseError> {
-        let naive_date = chrono::NaiveDate::parse_from_str(&self.date, "%Y-%m-%d")?;
-        let naive_time = NaiveTime::parse_from_str(&self.time, "%H:%M:%S")?;
+    pub fn time(&self, tz: Tz) -> DateTime<Tz> {
+        let naive_date = chrono::NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").unwrap();
+        let naive_time = NaiveTime::parse_from_str(&self.time, "%H:%M:%S").unwrap();
         let naive_dt = naive_date.and_time(naive_time);
-
-        // For market times, always take the first/earliest time during ambiguous periods
-        match tz.from_local_datetime(&naive_dt) {
-            chrono::LocalResult::Single(dt) => Ok(dt),
-            chrono::LocalResult::Ambiguous(dt1, _dt2) => {
-                // During fall back, take the first occurrence to avoid double-counting
-                Ok(dt1)
-            },
-            chrono::LocalResult::None => {
-                // During spring forward, skip to the next valid time
-                Ok(tz.from_local_datetime(&(naive_dt + chrono::Duration::hours(1)))
-                    .earliest()
-                    .unwrap())
-            }
-        }
+        resolve_market_datetime_in_timezone(tz, naive_dt)
     }
 }
 
@@ -108,7 +95,7 @@ mod tests {
             time: "13:00:00".to_string(),
         };
 
-        let dt = special_time.time(New_York).unwrap();
+        let dt = special_time.time(New_York);
         assert_eq!(dt.format("%Y-%m-%d %H:%M:%S %z").to_string(), "2024-01-15 13:00:00 -0500");
     }
 
@@ -120,7 +107,7 @@ mod tests {
             time: "02:30:00".to_string(),   // This time doesn't exist
         };
 
-        let dt = special_time.time(New_York).unwrap();
+        let dt = special_time.time(New_York);
         // Should be adjusted to 3:30 AM as 2:30 AM doesn't exist
         assert_eq!(dt.format("%Y-%m-%d %H:%M:%S %z").to_string(), "2024-03-10 03:30:00 -0400");
     }
@@ -133,7 +120,7 @@ mod tests {
             time: "01:30:00".to_string(),   // This time happens twice
         };
 
-        let dt = special_time.time(New_York).unwrap();
+        let dt = special_time.time(New_York);
         // Should take the earlier time (EDT)
         assert_eq!(dt.format("%Y-%m-%d %H:%M:%S %z").to_string(), "2024-11-03 01:30:00 -0400");
     }
@@ -145,7 +132,7 @@ mod tests {
             time: "14:30:00".to_string(),
         };
 
-        let dt = special_time.time(New_York).unwrap();
+        let dt = special_time.time(New_York);
         assert_eq!(dt.format("%Y-%m-%d %H:%M:%S %z").to_string(), "2024-07-15 14:30:00 -0400");
     }
 }

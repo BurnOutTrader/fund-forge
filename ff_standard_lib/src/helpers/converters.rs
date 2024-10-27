@@ -1,6 +1,6 @@
 use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::subscriptions::DataSubscription;
-use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Datelike, Duration, LocalResult, NaiveDate, NaiveDateTime, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use std::fmt::Error;
 use std::fs;
@@ -21,7 +21,7 @@ use std::fmt::Write;
 /// 1. If your data is already in UTC time you can just use `let data_time_utc = naive_date_time_to_utc(naive_date_time: NaiveDateTime);`
 /// 2. Convert to a string by using `data_time_utc.to_string();` for `BaseDataEnum` variants
 pub fn naive_date_time_to_tz(naive_date_time: NaiveDateTime, time_zone: Tz) -> DateTime<Tz> {
-    time_zone.from_local_datetime(&naive_date_time).unwrap()
+    resolve_market_datetime_in_timezone(time_zone, naive_date_time)
 }
 
 /// Convert a NaiveDateTime to the exact same Date and time Utc DateTime object
@@ -63,6 +63,26 @@ pub fn load_as_bytes(file_path: PathBuf) -> Result<Vec<u8>, Error> {
         Err(_e) => return Err(Error::default()),
     };
     Ok(bytes)
+}
+
+pub fn resolve_market_datetime_in_timezone(
+    tz: Tz,
+    naive_dt: NaiveDateTime,
+) -> DateTime<Tz>{
+    match tz.from_local_datetime(&naive_dt) {
+        LocalResult::Single(dt) => dt,
+        LocalResult::Ambiguous(dt1, _dt2) => {
+            // During fall back, take the first occurrence
+            dt1
+        }
+        LocalResult::None => {
+            // During spring forward, skip to the next valid time
+            // This maintains market schedule alignment
+            tz.from_local_datetime(&(naive_dt + Duration::hours(1)))
+                .earliest()
+                .unwrap()
+        }
+    }
 }
 
 /// Converts a datetime string to a timestamp, if the string is already a timestamp it will return the timestamp.

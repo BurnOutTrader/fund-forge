@@ -21,7 +21,7 @@ use dashmap::DashMap;
 use rust_decimal::Decimal;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::{Sender};
-use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc};
+use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc, resolve_market_datetime_in_timezone};
 use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, send_request, set_warmup_complete, StrategyRequest};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
@@ -150,8 +150,10 @@ impl FundForgeStrategy {
             drawing_objects_handler.clone()
         ).await;
 
-        let start_time = time_zone.from_local_datetime(&start_date).unwrap().to_utc();
-        let end_time = time_zone.from_local_datetime(&end_date).unwrap().to_utc();
+
+        let start_time = resolve_market_datetime_in_timezone(time_zone, start_date).to_utc();
+        let end_time = resolve_market_datetime_in_timezone(time_zone, end_date).to_utc();
+
         let warm_up_start_time = start_time - warmup_duration;
 
         let open_order_cache: Arc<DashMap<OrderId, Order>> = Arc::new(DashMap::new());

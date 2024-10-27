@@ -16,8 +16,6 @@ mod tests {
     use crate::standardized_types::orders::Order;
     use crate::standardized_types::position::Position;
     use crate::standardized_types::symbol_info::SymbolInfo;
-    use crate::strategies::ledgers::LEDGER_SERVICE;
-
 
     lazy_static! {
         static ref STRATEGY: FundForgeStrategy = initialize_tests();
