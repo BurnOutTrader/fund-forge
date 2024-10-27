@@ -367,11 +367,15 @@ impl VendorApiResponse for RithmicClient {
                 let id = self.generate_callback_id().await;
                 self.register_callback_and_send(&SYSTEM, stream_name, id, sender, req).await;
 
-                let response = receiver.await.unwrap();
+                //let response = receiver.await.unwrap();
 
-                println!("Response: {:?}", response);
+                //println!("Response: {:?}", response);
 
-                todo!()
+                //todo save all data with RithmicSystem::Rithmic01
+
+                Ok(tokio::spawn(async move {
+                    //todo save all data with RithmicSystem::Rithmic01
+                }))
             }
             BaseDataType::Ticks => {
                 if resolution != Resolution::Ticks(1) {

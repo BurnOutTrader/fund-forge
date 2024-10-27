@@ -39,8 +39,10 @@ use tungstenite::Message;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::AccountInfo;
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::PositionId;
+use ff_standard_lib::standardized_types::resolution::Resolution;
 use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 use crate::rithmic_api::client_base::api_base::RithmicApiClient;
 use crate::rithmic_api::client_base::credentials::RithmicCredentials;
@@ -500,6 +502,15 @@ impl RithmicClient {
                 account_id: Some(id_account_info_kvp.key().clone()),
             };
             self.send_message(&SysInfraType::PnlPlant, req).await;
+            let symbol = Symbol {
+                name: "MNQ".to_string(),
+                market_type: MarketType::Futures(FuturesExchange::CME),
+                data_vendor: DataVendor::Rithmic(RithmicSystem::Rithmic01),
+            };
+            match self.update_historical_data_for(1, symbol, BaseDataType::Candles, Resolution::Seconds(1)).await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
     }
 

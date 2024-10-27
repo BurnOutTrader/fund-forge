@@ -82,7 +82,7 @@ pub async fn match_history_plant_id(
             if let Ok(msg) = ResponseTimeBarReplay::decode(&message_buf[..]) {
                 // Time Bar Replay Response
                 // From Server
-                //println!("Time Bar Replay Response (Template ID: 203) from Server: {:?}", msg);
+                println!("Time Bar Replay Response (Template ID: 203) from Server: {:?}", msg);
             }
         },
         205 => {
