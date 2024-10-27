@@ -1,13 +1,15 @@
 use chrono::NaiveTime;
 use chrono_tz::Tz;
 
+pub mod product_trading_hours;
+
 #[derive(Debug, Clone)]
 pub struct DaySession {
     pub open: Option<NaiveTime>,
     pub close: Option<NaiveTime>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct TradingHours {
     pub timezone: Tz,
     pub sunday: DaySession,

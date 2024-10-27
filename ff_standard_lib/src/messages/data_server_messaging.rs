@@ -13,7 +13,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::position::Position;
-use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SessionMarketHours, SymbolInfo};
+use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SymbolInfo};
 use crate::standardized_types::time_slices::TimeSlice;
 
 /// An Api key String
@@ -134,13 +134,6 @@ pub enum DataServerRequest {
         symbol_name: SymbolName
     },
 
-    SessionMarketHours{
-        callback_id: u64,
-        data_vendor: DataVendor,
-        symbol_name: SymbolName,
-        date: String
-    },
-
     PaperAccountInit {
         callback_id: u64,
         account_id: AccountId,
@@ -184,7 +177,6 @@ impl DataServerRequest {
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
             DataServerRequest::RegisterStreamer{..} => {}
             DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::SessionMarketHours { callback_id, .. } => {*callback_id = id}
             DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::PaperAccountInit { callback_id, .. } => {*callback_id = id}
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
@@ -317,7 +309,6 @@ DataServerResponse {
 
     CommissionInfo{callback_id: u64, commission_info: CommissionInfo},
 
-    SessionMarketHours{callback_id: u64, session_market_hours: SessionMarketHours},
     PaperAccountInit{callback_id: u64, account_info: AccountInfo},
 
     LiveAccountUpdates {account: Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
@@ -365,7 +356,6 @@ impl DataServerResponse {
             DataServerResponse::SymbolNames {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::RegistrationResponse(_) => None,
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
-            DataServerResponse::SessionMarketHours { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::PaperAccountInit { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),

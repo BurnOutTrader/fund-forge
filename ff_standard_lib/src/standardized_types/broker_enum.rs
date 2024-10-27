@@ -4,6 +4,7 @@ use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv
 use std::str::FromStr;
 use crate::apis::rithmic::rithmic_systems::RithmicSystem;
 use crate::messages::data_server_messaging::FundForgeError;
+
 #[derive(Serialize, Deserialize, Clone, Eq, Serialize_rkyv, Deserialize_rkyv,
     Archive, PartialEq, Debug, Hash, PartialOrd, Ord, Copy)]
 #[archive(compare(PartialEq), check_bytes)]
@@ -13,6 +14,7 @@ pub enum Brokerage {
     Rithmic(RithmicSystem),
     Bitget
 }
+
 impl fmt::Display for Brokerage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {

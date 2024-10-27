@@ -1,7 +1,7 @@
 use ahash::AHashMap;
 use chrono::NaiveTime;
 use lazy_static::lazy_static;
-use ff_standard_lib::standardized_types::trading_hours::{DaySession, TradingHours};
+use crate::standardized_types::market_maps::{DaySession, TradingHours};
 
 lazy_static! {
     pub static ref TRADING_HOURS: AHashMap<&'static str, &'static TradingHours> = {
@@ -137,7 +137,7 @@ lazy_static! {
     };
 }
 
-pub fn get_trading_hours(symbol: &str) -> Option<&'static TradingHours> {
+pub fn get_futures_trading_hours(symbol: &str) -> Option<&'static TradingHours> {
     TRADING_HOURS.get(symbol).copied()
 }
 

@@ -34,7 +34,6 @@ impl BrokerApiResponse for RithmicClient {
     }
 
     async fn account_info_response(&self, mode: StrategyMode, _stream_name: StreamName, account_id: AccountId, callback_id: u64) -> DataServerResponse {
-        //todo use match mode to create sim account
         match mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 self.paper_account_init(account_id, callback_id).await
@@ -397,11 +396,6 @@ impl BrokerApiResponse for RithmicClient {
             Err(e) => return Err(e)
         };
         self.submit_order(stream_name, order, details).await
-    }
-
-    #[allow(unused)]
-    async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
-        todo!()
     }
 }
 

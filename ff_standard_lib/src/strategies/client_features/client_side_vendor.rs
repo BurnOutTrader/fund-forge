@@ -7,7 +7,6 @@ use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::enums::{MarketType, SubscriptionResolutionType};
 use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
-use crate::standardized_types::symbol_info::SessionMarketHours;
 use crate::strategies::client_features::client_side_brokerage::TIME_OUT;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
@@ -150,31 +149,6 @@ impl DataVendor {
                 Ok(response) => {
                     match response {
                         DataServerResponse::TickSize { tick_size, .. } => Ok(tick_size),
-                        DataServerResponse::Error {error,..} => Err(error),
-                        _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                    }
-                },
-                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
-            },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
-        }
-    }
-
-    pub async fn session_market_hours(&self, data_vendor: DataVendor, symbol_name: SymbolName, time: DateTime<Utc>) -> Result<SessionMarketHours, FundForgeError> {
-        let request = DataServerRequest::SessionMarketHours {
-            callback_id: 0,
-            data_vendor,
-            symbol_name,
-            date: time.to_string(),
-        };
-        let (sender, receiver) = oneshot::channel();
-        let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
-        send_request(msg).await;
-        match timeout(TIME_OUT, receiver).await {
-            Ok(receiver_result) => match receiver_result {
-                Ok(response) => {
-                    match response {
-                        DataServerResponse::SessionMarketHours { session_market_hours, .. } => Ok(session_market_hours),
                         DataServerResponse::Error {error,..} => Err(error),
                         _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
                     }
