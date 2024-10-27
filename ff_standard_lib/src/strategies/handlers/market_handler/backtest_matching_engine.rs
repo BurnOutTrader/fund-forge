@@ -1,4 +1,4 @@
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use dashmap::DashMap;
 use std::sync::Arc;
