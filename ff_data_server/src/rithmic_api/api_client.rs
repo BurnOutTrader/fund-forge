@@ -457,6 +457,7 @@ impl RithmicClient {
 
             self.latency.insert(plant.clone(), latency as i64);
 
+            #[allow(unused_variables)]
             let formatted_latency = if latency < 1_000 {
                 format!("{} ns", latency)
             } else if latency < 1_000_000 {
