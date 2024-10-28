@@ -15,7 +15,7 @@ pub(crate) fn live_order_update(
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
     mut order_event_receiver: Receiver<(OrderUpdateEvent, DateTime<Utc>)>,
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
-    ledger_service: Arc<LedgerService>,
+    ledger_service: Arc<LedgerService>, //todo this can probably just be a sender now
     synchronize_positions: bool
 ) {
     //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates

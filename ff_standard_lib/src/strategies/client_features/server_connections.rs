@@ -203,7 +203,7 @@ pub async fn response_handler(
     order_updates_sender: Sender<(OrderUpdateEvent, DateTime<Utc>)>,
     synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>,
-    ledger_service: Arc<LedgerService>,
+    ledger_service: Arc<LedgerService>, //todo this can probably just be a sender now
 ) {
     for (connection, settings) in &settings_map {
         let order_updates_sender = order_updates_sender.clone();
