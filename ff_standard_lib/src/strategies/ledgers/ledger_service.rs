@@ -3,7 +3,6 @@ use chrono::{DateTime, Utc};
 use crate::standardized_types::enums::{OrderSide, StrategyMode};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use dashmap::DashMap;
-use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use crate::standardized_types::position::{Position, PositionUpdateEvent};
@@ -11,27 +10,29 @@ use crate::standardized_types::accounts::{Account, Currency};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::strategies::ledgers::ledger::Ledger;
-
-lazy_static! {
-    pub(crate) static ref LEDGER_SERVICE: LedgerService = LedgerService::new();
-}
+use crate::strategies::ledgers::ledger::{Ledger, LedgerMessage};
+use crate::strategies::strategy_events::StrategyEvent;
 
 pub(crate) struct LedgerService {
     pub (crate) ledgers: DashMap<Account, Arc<Ledger>>,
+    ledger_senders: DashMap<Account, tokio::sync::mpsc::Sender<LedgerMessage>>,
+    strategy_sender: tokio::sync::mpsc::Sender<StrategyEvent>
 }
+
 impl LedgerService {
-    pub fn new() -> Self {
+    pub fn new(strategy_sender: tokio::sync::mpsc::Sender<StrategyEvent>) -> Self {
         LedgerService {
             ledgers: Default::default(),
+            ledger_senders: Default::default(),
+            strategy_sender
         }
     }
 
-    pub fn synchronize_live_position(&self, account: Account, position: Position, time: DateTime<Utc>) -> Option<PositionUpdateEvent> {
-        if let Some(account_ledger) = self.ledgers.get(&account) {
-            return account_ledger.value().synchronize_live_position(position, time)
+    pub async fn synchronize_live_position(&self, account: Account, position: Position, time: DateTime<Utc>) {
+        if let Some(sender) = self.ledger_senders.get(&account) {
+            let msg = LedgerMessage::SyncPosition{position, time};
+            sender.send(msg).await.unwrap();
         }
-        None
     }
 
     pub(crate) async fn update_or_create_paper_position(
@@ -64,17 +65,17 @@ impl LedgerService {
         time: DateTime<Utc>,
         market_fill_price: Price, // we use the passed in price because we don't know what sort of order was filled, limit or market
         tag: String
-    ) -> Vec<PositionUpdateEvent> {
-        if let Some(ledger_ref) = self.ledgers.get(account) {
-            ledger_ref.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await
-        } else {
-            panic!("No ledger for account: {}", account);
+    ) {
+        if let Some(sender) = self.ledger_senders.get(account) {
+            let msg = LedgerMessage::UpdateOrCreatePosition{symbol_name, symbol_code, quantity, side, time, market_fill_price, tag};
+            sender.send(msg).await.unwrap();
         }
     }
 
     pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal, time: DateTime<Utc>) {
-        if let Some(account_ledger) = self.ledgers.get(&order.account) {
-            account_ledger.value().process_synchronized_orders(order, quantity, time).await;
+        if let Some(sender) = self.ledger_senders.get(&order.account) {
+            let msg = LedgerMessage::ProcessOrder{order, quantity, time};
+            sender.send(msg).await.unwrap();
         }
     }
 
@@ -131,7 +132,7 @@ impl LedgerService {
 
     pub async fn init_ledger(&self, account: &Account, strategy_mode: StrategyMode, synchronize_accounts: bool, starting_cash: Decimal, currency: Currency) {
         if !self.ledgers.contains_key(account) {
-            let ledger: Ledger = match strategy_mode {
+            let ledger: Arc<Ledger> = match strategy_mode {
                 StrategyMode::Live => {
                     let account_info = match account.brokerage.account_info(account.account_id.clone()).await {
                         Ok(ledger) => ledger,
@@ -139,18 +140,21 @@ impl LedgerService {
                             panic!("LEDGER_SERVICE: Error initializing account: {}", e);
                         }
                     };
-                    Ledger::new(account_info, strategy_mode, synchronize_accounts)
+                    let ledger = Arc::new(Ledger::new(account_info, strategy_mode, synchronize_accounts, self.strategy_sender.clone()));
+                    let (sender, receiver) = tokio::sync::mpsc::channel(100);
+                    Ledger::live_ledger_updates(ledger.clone(), receiver);
+                    self.ledger_senders.insert(account.clone(), sender);
+                    ledger
                 },
                 StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                    match account.brokerage.paper_account_init(strategy_mode, starting_cash, currency, account.account_id.clone()).await {
-                        Ok(ledger) => ledger,
+                    match account.brokerage.paper_account_init(strategy_mode, starting_cash, currency, account.account_id.clone(), self.strategy_sender.clone()).await {
+                        Ok(ledger) => Arc::new(ledger),
                         Err(e) => {
                             panic!("LEDGER_SERVICE: Error initializing account: {}", e);
                         }
                     }
                 }
             };
-            let ledger = Arc::new(ledger);
 
             self.ledgers.insert(account.clone(), ledger);
         }

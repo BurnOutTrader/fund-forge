@@ -131,6 +131,9 @@ impl Renko {
             None
         } else {
             self.is_ready = true;
+            for block in &blocks {
+                self.history.add(block.clone());
+            }
             Some(blocks)
         }
     }

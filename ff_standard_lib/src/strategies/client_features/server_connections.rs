@@ -31,7 +31,7 @@ use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
 use crate::standardized_types::orders::OrderUpdateEvent;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
-use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
+use crate::strategies::ledgers::ledger_service::LedgerService;
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
@@ -203,6 +203,7 @@ pub async fn response_handler(
     order_updates_sender: Sender<(OrderUpdateEvent, DateTime<Utc>)>,
     synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>,
+    ledger_service: Arc<LedgerService>,
 ) {
     for (connection, settings) in &settings_map {
         let order_updates_sender = order_updates_sender.clone();
@@ -214,6 +215,7 @@ pub async fn response_handler(
             let callbacks = callbacks.clone();
             let settings = settings.clone();
             let strategy_event_sender = strategy_event_sender.clone();
+            let ledger_service = ledger_service.clone();
             tokio::task::spawn(async move {
                 const LENGTH: usize = 8;
                 let mut length_bytes = [0u8; LENGTH];
@@ -260,11 +262,15 @@ pub async fn response_handler(
                                 DataServerResponse::OrderUpdates{ event, time} => {
                                     //println!("Event received: {}", update_event);
                                     let time = DateTime::<Utc>::from_str(&time).unwrap();
-                                    order_updates_sender.send((event, time)).await.unwrap()
+                                    match order_updates_sender.send((event, time)).await {
+                                        Ok(_) => {}
+                                        Err(e) => eprintln!("Order Update Sender Error: {}", e)
+                                    }
                                 }
                                 DataServerResponse::LiveAccountUpdates { account, cash_value, cash_available, cash_used } => {
+                                    let ledger_service = ledger_service.clone();
                                     tokio::task::spawn(async move {
-                                        LEDGER_SERVICE.live_account_updates(&account, cash_value, cash_available, cash_used).await;
+                                        ledger_service.live_account_updates(&account, cash_value, cash_available, cash_used).await;
                                     });
                                 }
                                 DataServerResponse::LivePositionUpdates { account, position, time } => {
@@ -273,18 +279,13 @@ pub async fn response_handler(
                                         //tokio::task::spawn(async move {
                                        //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates
                                        let time = DateTime::<Utc>::from_str(&time).unwrap();
-                                       match LEDGER_SERVICE.synchronize_live_position(account, position, time) {
-                                           None => {}
-                                           Some(event) => {
-                                               strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap();
-                                           }
-                                       }
+                                        ledger_service.synchronize_live_position(account, position, time).await
                                         //});
                                     }
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
                                     if mode != StrategyMode::Backtest {
-                                        handle_live_data(settings.clone(), port, buffer_duration, strategy_event_sender.clone()).await;
+                                        handle_live_data(settings.clone(), port, buffer_duration, strategy_event_sender.clone(), ledger_service.clone()).await;
                                     }
                                 }
                                 _ => panic!("Incorrect response here: {:?}", response)
@@ -302,7 +303,7 @@ pub async fn response_handler(
     }
 }
 
-pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration , strategy_event_sender: Sender<StrategyEvent>) {
+pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_name: u16, buffer_duration: Duration , strategy_event_sender: Sender<StrategyEvent>, ledger_service: Arc<LedgerService>,) {
     // set up async client
     let mut stream_client = match create_async_api_client(&connection_settings, true).await {
         Ok(client) => client,
@@ -381,7 +382,7 @@ pub async fn handle_live_data(connection_settings: ConnectionSettings, stream_na
                                         Ok(_) => {},
                                         Err(_) => {}
                                     }
-                                    LEDGER_SERVICE.timeslice_updates(Utc::now(), arc_slice.clone()).await;
+                                    ledger_service.timeslice_updates(Utc::now(), arc_slice.clone()).await;
                                     if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
                                         strategy_time_slice.extend(consolidated_data);
                                     }
@@ -439,7 +440,8 @@ pub async fn init_connections(
     mode: StrategyMode,
     order_updates_sender: Sender<(OrderUpdateEvent, DateTime<Utc>)>,
     synchronise_accounts: bool,
-    strategy_event_sender: Sender<StrategyEvent>
+    strategy_event_sender: Sender<StrategyEvent>,
+    ledger_service: Arc<LedgerService>,
 ) {
     let settings_map = initialise_settings().unwrap();
     let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
@@ -470,5 +472,5 @@ pub async fn init_connections(
 
     let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
     request_handler(rx, settings_map.clone(), server_senders, callbacks.clone()).await;
-    response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, order_updates_sender, synchronise_accounts, strategy_event_sender).await;
+    response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, order_updates_sender, synchronise_accounts, strategy_event_sender, ledger_service).await;
 }

@@ -40,7 +40,7 @@ use crate::strategies::handlers::market_handler::price_service::{price_service_r
 use crate::strategies::historical_engine::HistoricalEngine;
 use crate::strategies::historical_time::get_backtest_time;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
-use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
+use crate::strategies::ledgers::ledger_service::{LedgerService};
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 
@@ -75,7 +75,9 @@ pub struct FundForgeStrategy {
 
     historical_message_sender: Option<Sender<BackTestEngineMessage>>,
 
-    accounts: Vec<Account>
+    accounts: Vec<Account>,
+
+    ledger_service: Arc<LedgerService>
 
 }
 
@@ -137,11 +139,12 @@ impl FundForgeStrategy {
         accounts: Vec<Account>
     ) -> FundForgeStrategy {
 
-
         //todo! THIS HAS TO BE REMOVED ONCE LIVE WARM UP IS BUILT
         if strategy_mode != StrategyMode::Backtest {
             set_warmup_complete();
         }
+
+        let ledger_service = Arc::new(LedgerService::new(strategy_event_sender.clone()));
 
         let timed_event_handler = Arc::new(TimedEventHandler::new(strategy_event_sender.clone()));
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
@@ -164,18 +167,18 @@ impl FundForgeStrategy {
         let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone(), strategy_event_sender.clone()).await);
 
         init_sub_handler(subscription_handler.clone(), indicator_handler.clone()).await;
-        let (live_order_updates_sender, live_order_updates_receiver) = tokio::sync::mpsc::channel(50);
+        let (live_order_updates_sender, live_order_updates_receiver) = tokio::sync::mpsc::channel(100);
         if strategy_mode == StrategyMode::Live {
-            live_order_update(open_order_cache.clone(), closed_order_cache.clone(), live_order_updates_receiver, strategy_event_sender.clone(), synchronize_accounts);
+            live_order_update(open_order_cache.clone(), closed_order_cache.clone(), live_order_updates_receiver, strategy_event_sender.clone(), ledger_service.clone(), synchronize_accounts);
         }
-        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone()).await;
+        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone(), ledger_service.clone()).await;
 
         subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
 
         let paper_order_sender = match strategy_mode {
             StrategyMode::Live => None,
             StrategyMode::LivePaperTrading | StrategyMode::Backtest => {
-                let sender = backtest_matching_engine::backtest_matching_engine(open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender.clone(), notify.clone()).await;
+                let sender = backtest_matching_engine::backtest_matching_engine(open_order_cache.clone(), closed_order_cache.clone(), strategy_event_sender.clone(), ledger_service.clone()).await;
                 Some(sender) //todo, live paper wont update orders unless we update time in the backtest engine.
             }
         };
@@ -195,7 +198,8 @@ impl FundForgeStrategy {
             drawing_objects_handler,
             orders_count: Default::default(),
             synchronize_accounts,
-            accounts: accounts.clone()
+            accounts: accounts.clone(),
+            ledger_service: ledger_service.clone()
         };
 
         match strategy_mode {
@@ -210,7 +214,8 @@ impl FundForgeStrategy {
                     tick_over_no_data,
                     strategy_event_sender.clone(),
                     notify,
-                    paper_order_sender
+                    paper_order_sender,
+                    ledger_service.clone(),
                 ).await;
 
                 HistoricalEngine::launch(engine).await;
@@ -221,7 +226,7 @@ impl FundForgeStrategy {
         }
 
         for account in accounts {
-            LEDGER_SERVICE.init_ledger(&account,strategy_mode, synchronize_accounts, backtest_accounts_starting_cash, backtest_account_currency).await;
+            ledger_service.init_ledger(&account,strategy_mode, synchronize_accounts, backtest_accounts_starting_cash, backtest_account_currency).await;
         }
         strategy
     }
@@ -256,15 +261,15 @@ impl FundForgeStrategy {
 
     /// true if long, false if flat or short.
     pub fn is_long(&self, account: &Account, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.is_long(account, symbol_name)
+        self.ledger_service.is_long(account, symbol_name)
     }
 
     pub fn is_flat(&self, account: &Account, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.is_flat(account, symbol_name)
+        self.ledger_service.is_flat(account, symbol_name)
     }
 
     pub fn is_short(&self, account: &Account, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.is_short(account, symbol_name)
+        self.ledger_service.is_short(account, symbol_name)
     }
 
     async fn order_id(
@@ -1055,37 +1060,37 @@ impl FundForgeStrategy {
     }
 
     pub async fn print_ledger(&self, account: &Account) {
-        LEDGER_SERVICE.print_ledger(account).await;
+        self.ledger_service.print_ledger(account).await;
     }
 
     pub async fn print_ledgers(&self) {
-        LEDGER_SERVICE.print_ledgers().await;
+        self.ledger_service.print_ledgers().await;
     }
 
     pub fn export_trades(&self, directory: &str) {
-        for account_entry in LEDGER_SERVICE.ledgers.iter() {
-            LEDGER_SERVICE.export_trades(account_entry.key(), directory);
+        for account_entry in self.ledger_service.ledgers.iter() {
+            self.ledger_service.export_trades(account_entry.key(), directory);
         }
     }
 
     // Updated position query functions
     pub fn in_profit(&self, account: &Account, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.in_profit(account, symbol_name)
+        self.ledger_service.in_profit(account, symbol_name)
     }
 
     pub fn in_drawdown(&self, account: &Account, symbol_name: &SymbolName) -> bool {
-        LEDGER_SERVICE.in_drawdown(account, symbol_name)
+        self.ledger_service.in_drawdown(account, symbol_name)
     }
 
     pub fn pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
-        LEDGER_SERVICE.open_pnl_symbol(account, symbol_name)
+        self.ledger_service.open_pnl_symbol(account, symbol_name)
     }
 
     pub fn booked_pnl(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
-        LEDGER_SERVICE.booked_pnl(account, symbol_name)
+        self.ledger_service.booked_pnl(account, symbol_name)
     }
 
     pub fn position_size(&self, account: &Account, symbol_name: &SymbolName) -> Decimal {
-        LEDGER_SERVICE.position_size(account, symbol_name)
+        self.ledger_service.position_size(account, symbol_name)
     }
 }
