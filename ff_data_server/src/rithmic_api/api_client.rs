@@ -502,7 +502,13 @@ impl RithmicClient {
                 account_id: Some(id_account_info_kvp.key().clone()),
             };
             self.send_message(&SysInfraType::PnlPlant, req).await;
-
+            
+            let req = RequestTradeRoutes {
+                template_id: 310,
+                user_msg: vec![],
+                subscribe_for_updates: Some(true),
+            };
+            self.send_message(&SysInfraType::OrderPlant, req).await;
             /*   let symbol = Symbol {
                 name: "MNQ".to_string(),
                 market_type: MarketType::Futures(FuturesExchange::CME),
@@ -684,14 +690,32 @@ impl RithmicClient {
 
         let route = match self.default_trade_route.get(&exchange) {
             None => {
-                return Err(OrderUpdateEvent::OrderRejected {
-                    account: order.account.clone(),
-                    symbol_name: order.symbol_name.clone(),
-                    symbol_code: order.symbol_name.clone(),
-                    order_id: order.id.clone(),
-                    reason: format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name),
-                    tag: order.tag.clone(),
-                    time: Utc::now().to_string() })
+                match self.system {
+                    RithmicSystem::RithmicPaperTrading => "simulator".to_string(),
+                    RithmicSystem::TopstepTrader => "simulator".to_string(),
+                    RithmicSystem::SpeedUp => "simulator".to_string(),
+                    RithmicSystem::TradeFundrr => "simulator".to_string(),
+                    RithmicSystem::UProfitTrader => "simulator".to_string(),
+                    RithmicSystem::Apex => "simulator".to_string(),
+                    RithmicSystem::MESCapital => "simulator".to_string(),
+                    RithmicSystem::TheTradingPit => "simulator".to_string(),
+                    RithmicSystem::FundedFuturesNetwork => "simulator".to_string(),
+                    RithmicSystem::Bulenox => "simulator".to_string(),
+                    RithmicSystem::PropShopTrader => "simulator".to_string(),
+                    RithmicSystem::FourPropTrader => "simulator".to_string(),
+                    RithmicSystem::FastTrackTrading => "simulator".to_string(),
+                    RithmicSystem::Test => "simulator".to_string(),
+                    _ => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            account: order.account.clone(),
+                            symbol_name: order.symbol_name.clone(),
+                            symbol_code: order.symbol_name.clone(),
+                            order_id: order.id.clone(),
+                            reason: format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name),
+                            tag: order.tag.clone(),
+                            time: Utc::now().to_string() })
+                    }
+                }
             }
             Some(route) => route.value().clone(),
         };
