@@ -677,7 +677,7 @@ impl RithmicClient {
                 }
             },
         };
-        println!("Route: {}", route);
+        //println!("Route: {}", route);
 
         let transaction_type = match order.side {
             OrderSide::Buy => TransactionType::Buy,
