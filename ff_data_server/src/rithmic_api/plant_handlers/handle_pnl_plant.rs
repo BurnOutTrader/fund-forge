@@ -145,7 +145,7 @@ pub async fn match_pnl_plant_id(
 
                 let time = create_datetime(ssboe as i64, usecs as i64).to_string();
                 //println!("PNL Update Message: {:?}", msg);
-                println!("Rithmic Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
+                println!("{}: Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", client.brokerage, msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
                 let account_id = match msg.account_id {
                     None => return,
                     Some(id) => id

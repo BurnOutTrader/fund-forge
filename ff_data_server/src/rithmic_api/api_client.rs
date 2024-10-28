@@ -106,7 +106,7 @@ pub struct RithmicClient {
     pub candle_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
 
     // first string is fcm id second is trade route
-    pub default_trade_route: DashMap<RithmicSystem, AHashMap<String, String>>,
+    pub default_trade_route: DashMap<RithmicSystem, AHashMap<(String, FuturesExchange), String>>,
 
     pub bid_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
@@ -505,7 +505,7 @@ impl RithmicClient {
             let req = RequestTradeRoutes {
                 template_id: 310,
                 user_msg: vec![],
-                subscribe_for_updates: Some(false), //todo not sure if we want updates, they never seem to stop.
+                subscribe_for_updates: Some(true), //todo not sure if we want updates, they never seem to stop.
             };
             self.send_message(&SysInfraType::OrderPlant, req).await;
             /*   let symbol = Symbol {
@@ -657,28 +657,29 @@ impl RithmicClient {
             None => {
                 match self.system {
                     RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
-                    RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading | RithmicSystem::Test => "simulator".to_string(),
+                    RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading | RithmicSystem::Test
+                    => "simulator".to_string(),
                     _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
                 }
             }
             Some(route_map) => {
                 let fcm_id = match &self.credentials.fcm_id {
-                    None => {
-                        match self.system {
-                            RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
-                            RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading | RithmicSystem::Test => "simulator".to_string(),
-                            _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
-                        }
-                    },
+                    None => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {}, fcm_id not found",order.account.brokerage))),
                     Some(id) => id.clone()
                 };
-                if let Some(exchange_route) = route_map.get(&fcm_id) {
+                if let Some(exchange_route) = route_map.get(&(fcm_id.clone(), exchange.clone())) {
                     exchange_route.clone()
                 } else {
-                    return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
+                    match self.system {
+                        RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
+                        RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading | RithmicSystem::Test
+                        => "simulator".to_string(),
+                        _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
+                    }
                 }
             },
         };
+        println!("Route: {}", route);
 
         let transaction_type = match order.side {
             OrderSide::Buy => TransactionType::Buy,

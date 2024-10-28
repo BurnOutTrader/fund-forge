@@ -53,7 +53,7 @@ impl Ledger {
             true => false,
             false => true
         };
-        println!("Ledger Created: {}", account_info.account_id);
+        println!("Ledger Created: {} {}", account_info.brokerage, account_info.account_id);
         let positions: DashMap<SymbolName, Position> = account_info
             .positions
             .into_iter()

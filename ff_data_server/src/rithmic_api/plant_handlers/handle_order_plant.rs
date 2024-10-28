@@ -156,10 +156,10 @@ pub async fn match_order_plant_id(
                         };
                         if let Some(fcm_id) = msg.fcm_id {
                             if let Some(mut system_map) = client.default_trade_route.get_mut(&client.system) {
-                                system_map.insert(fcm_id, route.clone());
+                                system_map.insert((fcm_id, exchange), route.clone());
                             } else {
                                 let mut map = AHashMap::new();
-                                map.insert(fcm_id, route.clone());
+                                map.insert((fcm_id, exchange), route.clone());
                                 client.default_trade_route.insert(client.system.clone(), map);
                             }
                         }
