@@ -5,16 +5,17 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
 use crate::standardized_types::orders::{Order, OrderId, OrderState, OrderUpdateEvent, OrderUpdateType};
-use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
+use crate::strategies::ledgers::ledger_service::{LedgerService};
 use crate::strategies::strategy_events::StrategyEvent;
 
 //todo, this probably isnt needed
 
-pub fn live_order_update(
+pub(crate) fn live_order_update(
     open_order_cache: Arc<DashMap<OrderId, Order>>, //todo, make these static or lifetimes if possible.. might not be optimal though, look it up!
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
     mut order_event_receiver: Receiver<(OrderUpdateEvent, DateTime<Utc>)>,
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
+    ledger_service: Arc<LedgerService>,
     synchronize_positions: bool
 ) {
     //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates
@@ -46,25 +47,14 @@ pub fn live_order_update(
                          order.quantity_open = dec!(0.0);
                          order.time_filled_utc = Some(time.clone());
                          //println!("{}", order_update_event);
-                         let events = match synchronize_positions {
-                             false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await),
-                            true => {
-                                LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await;
-                                None
-                            }
-                         };
                          match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                              Ok(_) => {}
                              Err(e) => eprintln!("{}", e)
                          }
-                         if let Some(events) = events {
-                             for event in events {
-                                 match strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await {
-                                     Ok(_) => {}
-                                     Err(e) => eprintln!("{}", e)
-                                 }
-                             }
-                         }
+                         match synchronize_positions {
+                             false => ledger_service.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await,
+                            true => ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
+                         };
                     }
                 }
                 OrderUpdateEvent::OrderPartiallyFilled { account, symbol_name, symbol_code, order_id, price, quantity, tag, time,  side} => {
@@ -76,26 +66,14 @@ pub fn live_order_update(
                        order.quantity_open -= quantity;
                        order.time_filled_utc = Some(time.clone());
 
-                       let events = match synchronize_positions {
-                           false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await),
-                           true => {
-                               LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await;
-                               None
-                           }
-                       };
-
                        match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                            Ok(_) => {}
                            Err(e) => eprintln!("{}", e)
                        }
-                       if let Some(events) = events {
-                           for event in events {
-                               match strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await {
-                                   Ok(_) => {}
-                                   Err(e) => eprintln!("{}", e)
-                               }
-                           }
-                       }
+                       match synchronize_positions {
+                           false => ledger_service.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await,
+                           true => ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await,
+                       };
                    }
                 }
                 OrderUpdateEvent::OrderCancelled { order_id,symbol_code,.. } => {

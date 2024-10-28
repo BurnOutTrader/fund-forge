@@ -8,6 +8,7 @@ use csv::Writer;
 use std::sync::Arc;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
+use tokio::sync::mpsc::{Receiver, Sender};
 use crate::standardized_types::accounts::{Account, AccountInfo, Currency};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::broker_enum::Brokerage;
@@ -18,7 +19,13 @@ use crate::standardized_types::position::{Position, PositionId, PositionUpdateEv
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
+use crate::strategies::strategy_events::StrategyEvent;
 
+pub enum LedgerMessage {
+    SyncPosition{position: Position, time: DateTime<Utc>},
+    ProcessOrder{order: Order, quantity: Decimal, time: DateTime<Utc>},
+    UpdateOrCreatePosition{symbol_name: SymbolName, symbol_code: SymbolCode, quantity: Volume, side: OrderSide, time: DateTime<Utc>, market_fill_price: Price, tag: String}
+}
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
 #[derive(Debug)]
 pub struct Ledger {
@@ -40,6 +47,7 @@ pub struct Ledger {
     pub mode: StrategyMode,
     pub leverage: u32,
     pub is_simulating_pnl: bool,
+    pub(crate) strategy_sender: Sender<StrategyEvent>
     //todo, add daily max loss, max order size etc to ledger
 }
 
@@ -48,6 +56,7 @@ impl Ledger {
         account_info: AccountInfo,
         mode: StrategyMode,
         synchronise_accounts: bool,
+        strategy_sender: Sender<StrategyEvent>
     ) -> Self {
         let is_simulating_pnl = match synchronise_accounts {
             true => false,
@@ -86,7 +95,8 @@ impl Ledger {
             total_booked_pnl: Mutex::new(dec!(0)),
             mode,
             leverage: account_info.leverage,
-            is_simulating_pnl
+            is_simulating_pnl,
+            strategy_sender
         };
         ledger
     }
@@ -102,7 +112,37 @@ impl Ledger {
         *account_cash_available = cash_available;
     }
 
-    pub fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) -> Option<PositionUpdateEvent> {
+    pub fn live_ledger_updates(ledger: Arc<Ledger>, mut receiver: Receiver<LedgerMessage>) {
+        tokio::spawn(async move {
+            while let Some(message) = receiver.recv().await {
+                match message {
+                    LedgerMessage::SyncPosition { position, time } => {
+                        let event = ledger.synchronize_live_position(position, time);
+                        if let Some(event) = event {
+                            match ledger.strategy_sender.send(StrategyEvent::PositionEvents(event)).await {
+                                Ok(_) => {}
+                                Err(e) => eprintln!("Error sending position event: {}", e)
+                            }
+                        }
+                    }
+                    LedgerMessage::ProcessOrder { order, quantity, time } => {
+                        ledger.process_synchronized_orders(order, quantity, time).await;
+                    }
+                    LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag } => {
+                        let updates = ledger.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await;
+                        for update in updates {
+                            match ledger.strategy_sender.send(StrategyEvent::PositionEvents(update)).await {
+                                Ok(_) => {}
+                                Err(e) => eprintln!("Error sending position event: {}", e)
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) -> Option<PositionUpdateEvent> {
         if let Some(last_update) = self.last_update.get(&position.symbol_code) {
             if last_update.value() > &time {
                 return None;
@@ -163,7 +203,7 @@ impl Ledger {
         }
     }
 
-    pub async fn process_synchronized_orders(&self, order: Order, quantity: Decimal, time: DateTime<Utc>) {
+    async fn process_synchronized_orders(&self, order: Order, quantity: Decimal, time: DateTime<Utc>) {
         let symbol = match order.symbol_code {
             None => order.symbol_name,
             Some(code) => code
@@ -174,8 +214,6 @@ impl Ledger {
                 return;
             }
         }
-        self.last_update.insert(symbol.clone(), time);
-
         self.last_update.insert(symbol.clone(), time);
 
         if let Some(mut position) = self.positions.get_mut(&symbol) {
@@ -460,7 +498,7 @@ impl Ledger {
         }
     }
 
-    pub(crate) async fn update_or_create_live_position(
+    async fn update_or_create_live_position(
         &self,
         symbol_name: SymbolName,
         symbol_code: SymbolCode,

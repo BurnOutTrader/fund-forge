@@ -15,6 +15,7 @@ use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
 use crate::strategies::ledgers::ledger::Ledger;
+use crate::strategies::strategy_events::StrategyEvent;
 
 pub(crate) const TIME_OUT: Duration = Duration::from_secs(15);
 impl Brokerage {
@@ -24,6 +25,7 @@ impl Brokerage {
         starting_balance: Decimal,
         currency: Currency,
         account_id: AccountId,
+        strategy_sender: tokio::sync::mpsc::Sender<StrategyEvent>
     ) -> Result<Ledger, FundForgeError> {
         let request = DataServerRequest::PaperAccountInit {
             account_id: account_id.clone(),
@@ -58,6 +60,7 @@ impl Brokerage {
                             leverage: account_info.leverage,
                             is_simulating_pnl: true,
                             symbol_info: DashMap::new(),
+                            strategy_sender
                         })
                     },
                     DataServerResponse::Error { error, .. } => Err(error),

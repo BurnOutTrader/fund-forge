@@ -4,13 +4,12 @@ use dashmap::DashMap;
 use std::sync::Arc;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Sender};
-use tokio::sync::Notify;
 use crate::helpers::converters::{time_convert_utc_to_local};
 use crate::standardized_types::enums::{OrderSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::strategies::handlers::market_handler::price_service::{price_service_request_limit_fill_price_quantity, price_service_request_market_fill_price, price_service_request_market_price, PriceServiceResponse};
-use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
+use crate::strategies::ledgers::ledger_service::{LedgerService};
 use crate::strategies::strategy_events::StrategyEvent;
 
 pub enum BackTestEngineMessage {
@@ -18,13 +17,12 @@ pub enum BackTestEngineMessage {
     OrderRequest(DateTime<Utc>, OrderRequest)
 }
 
-pub async fn backtest_matching_engine(
+pub(crate) async fn backtest_matching_engine(
     open_order_cache: Arc<DashMap<OrderId, Order>>, //todo, make these static or lifetimes if possible.. might not be optimal though, look it up!
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
     strategy_event_sender: Sender<StrategyEvent>,
-    notify: Arc<Notify>,
+    ledger_service: Arc<LedgerService>
 ) -> Sender<BackTestEngineMessage> {
-    notify.notify_waiters();
     let (sender, mut receiver) = tokio::sync::mpsc::channel(100);
     tokio::task::spawn(async move {
        // notify.notify_one();
@@ -34,7 +32,7 @@ pub async fn backtest_matching_engine(
                     //println!("{:?}", order_request);
                     match order_request {
                         OrderRequest::Create {  .. } => {
-                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
+                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::Cancel { account,order_id } => {
                             let existing_order = open_order_cache.remove(&order_id);
@@ -134,13 +132,13 @@ pub async fn backtest_matching_engine(
                             }
                         }
                         OrderRequest::FlattenAllFor { account} => {
-                            LEDGER_SERVICE.flatten_all_positions(&account).await;
+                            ledger_service.flatten_all_positions(&account).await;
                         }
                     }
                 }
                 BackTestEngineMessage::Time(time) => {
                     if !open_order_cache.is_empty() {
-                        simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone()).await;
+                        simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                     }
 
                 }
@@ -151,11 +149,12 @@ pub async fn backtest_matching_engine(
     sender
 }
 
-pub async fn simulated_order_matching (
+pub(crate) async fn simulated_order_matching (
     time: DateTime<Utc>,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
-    strategy_event_sender: Sender<StrategyEvent>
+    strategy_event_sender: Sender<StrategyEvent>,
+    ledger_service: &Arc<LedgerService>
 ) {
     let mut rejected = Vec::new();
     let mut accepted = Vec::new();
@@ -484,8 +483,8 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue
                 };
-                if LEDGER_SERVICE.is_short(&order.account, &order.symbol_name) {
-                    match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, String::from("Force Exit By Enter Long")).await {
+                if ledger_service.is_short(&order.account, &order.symbol_name) {
+                    match ledger_service.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, String::from("Force Exit By Enter Long")).await {
                         Some(event) => {
                             events.push(StrategyEvent::PositionEvents(event));
                         }
@@ -502,8 +501,8 @@ pub async fn simulated_order_matching (
                     }
                     Err(_) => continue,
                 };
-                if LEDGER_SERVICE.is_long(&order.account, &order.symbol_name) {
-                    match LEDGER_SERVICE.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, String::from("Force Exit By Enter Short")).await {
+                if ledger_service.is_long(&order.account, &order.symbol_name) {
+                    match ledger_service.paper_exit_position(&order.account,  &order.symbol_name, time, market_fill_price, String::from("Force Exit By Enter Short")).await {
                         Some(event) => {
                             events.push(StrategyEvent::PositionEvents(event));
                         }
@@ -513,8 +512,8 @@ pub async fn simulated_order_matching (
                 filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::ExitLong => {
-                let long_quantity = LEDGER_SERVICE.position_size(&order.account, &order.symbol_name);
-                let is_long = LEDGER_SERVICE.is_long(&order.account, &order.symbol_name);
+                let long_quantity = ledger_service.position_size(&order.account, &order.symbol_name);
+                let is_long = ledger_service.is_long(&order.account, &order.symbol_name);
                 if long_quantity == dec!(0.0) && is_long {
                     let reason = "No Long Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
@@ -539,8 +538,8 @@ pub async fn simulated_order_matching (
                 }
             }
             OrderType::ExitShort => {
-                let short_quantity = LEDGER_SERVICE.position_size(&order.account, &order.symbol_name);
-                let is_short = LEDGER_SERVICE.is_short(&order.account, &order.symbol_name);
+                let short_quantity = ledger_service.position_size(&order.account, &order.symbol_name);
+                let is_short = ledger_service.is_short(&order.account, &order.symbol_name);
                 if short_quantity == dec!(0.0) && is_short {
                     let reason = "No Short Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
@@ -574,10 +573,10 @@ pub async fn simulated_order_matching (
         accept_order(&order_id, time, &open_order_cache, &strategy_event_sender).await;
     }
     for (order_id, price) in filled {
-        fill_order(&order_id, time, price, &open_order_cache, &closed_order_cache, &strategy_event_sender).await;
+        fill_order(&order_id, time, price, &open_order_cache, &closed_order_cache, &strategy_event_sender, &ledger_service).await;
     }
     for (order_id, price, volume) in partially_filled {
-        partially_fill_order(&order_id, time, price, volume, &open_order_cache, &closed_order_cache, &strategy_event_sender).await;
+        partially_fill_order(&order_id, time, price, volume, &open_order_cache, &closed_order_cache, &strategy_event_sender, &ledger_service).await;
     }
 
     for (order_id, reason) in cancelled {
@@ -595,7 +594,8 @@ async fn fill_order(
     market_price: Price,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
-    strategy_event_sender: &Sender<StrategyEvent>
+    strategy_event_sender: &Sender<StrategyEvent>,
+    ledger_service: &Arc<LedgerService>
 ) {
     if let Some((_, mut order)) = open_order_cache.remove(order_id) {  // Remove the order here
         let symbol_code = match &order.symbol_code {
@@ -606,7 +606,7 @@ async fn fill_order(
         order.quantity_filled = order.quantity_open;
         order.quantity_open = dec!(0);
 
-        match LEDGER_SERVICE.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
+        match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
             Ok(events) => {
                 //todo, need to send an accepted event first if the order state != accepted
                 let order_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {
@@ -648,7 +648,8 @@ async fn partially_fill_order(
     fill_volume: Volume,
     open_order_cache: &Arc<DashMap<OrderId, Order>>,
     closed_order_cache: &Arc<DashMap<OrderId, Order>>,
-    strategy_event_sender: &Sender<StrategyEvent>
+    strategy_event_sender: &Sender<StrategyEvent>,
+    ledger_service: &Arc<LedgerService>
 ) {
     if let Some(mut order) = open_order_cache.get_mut(order_id) {
         let symbol_code = match &order.symbol_code {
@@ -688,7 +689,7 @@ async fn partially_fill_order(
             None
         };
 
-        match LEDGER_SERVICE.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
+        match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
             Ok(events) => {
                 //todo, need to send an accepted event first if the order state != accepted
                 if let Some(order_event) = order_event {

@@ -14,10 +14,10 @@ use tokio::sync::{broadcast, mpsc, Notify};
 use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::historical_time::update_backtest_time;
-use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
+use crate::strategies::ledgers::ledger_service::LedgerService;
 
 #[allow(dead_code)]
-pub struct HistoricalEngine {
+pub(crate) struct HistoricalEngine {
     mode: StrategyMode,
     start_time: DateTime<Utc>,
     end_time: DateTime<Utc>,
@@ -28,12 +28,13 @@ pub struct HistoricalEngine {
     tick_over_no_data: bool,
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
     notified: Arc<Notify>,
-    historical_message_sender: Option<Sender<BackTestEngineMessage>>
+    historical_message_sender: Option<Sender<BackTestEngineMessage>>,
+    ledger_service: Arc<LedgerService>
 }
 
 // The date 2023-08-19 is in ISO week 33 of the year 2023
 impl HistoricalEngine {
-    pub async fn new(
+    pub(crate) async fn new(
         mode: StrategyMode,
         start_date: DateTime<Utc>,
         end_date: DateTime<Utc>,
@@ -43,7 +44,8 @@ impl HistoricalEngine {
         tick_over_no_data: bool,
         strategy_event_sender: mpsc::Sender<StrategyEvent>,
         notified: Arc<Notify>,
-        historical_message_sender: Option<Sender<BackTestEngineMessage>>
+        historical_message_sender: Option<Sender<BackTestEngineMessage>>,
+        ledger_service: Arc<LedgerService>
     ) -> Self {
         let rx = subscribe_primary_subscription_updates();
         let engine = HistoricalEngine {
@@ -57,7 +59,8 @@ impl HistoricalEngine {
             tick_over_no_data,
             strategy_event_sender,
             notified,
-            historical_message_sender
+            historical_message_sender,
+            ledger_service
         };
         engine
     }
@@ -103,7 +106,7 @@ impl HistoricalEngine {
         warm_up_start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
         buffer_duration: Duration,
-        mode: StrategyMode
+        mode: StrategyMode,
     ) {
         println!("Historical Engine: Warming up the strategy...");
         let subscription_handler = SUBSCRIPTION_HANDLER.get().unwrap().clone();
@@ -200,7 +203,7 @@ impl HistoricalEngine {
                         Ok(_) => {}
                         Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
                     }
-                    LEDGER_SERVICE.timeslice_updates(time, arc_slice.clone()).await;
+                    self.ledger_service.timeslice_updates(time, arc_slice.clone()).await;
 
                     // Add only primary data which the strategy has subscribed to into the strategies time slice
                     if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice.clone()).await {
