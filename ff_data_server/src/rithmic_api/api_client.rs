@@ -502,7 +502,8 @@ impl RithmicClient {
                 account_id: Some(id_account_info_kvp.key().clone()),
             };
             self.send_message(&SysInfraType::PnlPlant, req).await;
-            let symbol = Symbol {
+
+            /*   let symbol = Symbol {
                 name: "MNQ".to_string(),
                 market_type: MarketType::Futures(FuturesExchange::CME),
                 data_vendor: DataVendor::Rithmic(RithmicSystem::Rithmic01),
@@ -510,7 +511,7 @@ impl RithmicClient {
             match self.update_historical_data_for(1, symbol, BaseDataType::Candles, Resolution::Seconds(1)).await {
                 Ok(_) => {}
                 Err(_) => {}
-            }
+            }*/
         }
     }
 

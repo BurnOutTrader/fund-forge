@@ -355,12 +355,12 @@ impl VendorApiResponse for RithmicClient {
                     exchange: Some(exchange.to_string()),
                     bar_type: Some(BarType::SecondBar.into()),
                     bar_type_period: Some(1),
-                    start_index: None,
-                    finish_index: None,
-                    user_max_count: None,
+                    start_index: Some(1),
+                    finish_index: Some(100),
+                    user_max_count: Some(100),
                     direction: Some(Direction::First.into()),
                     time_order: Some(TimeOrder::Forwards.into()),
-                    resume_bars: None,
+                    resume_bars: Some(true),
                 };
 
                 let (sender, receiver) = tokio::sync::oneshot::channel();

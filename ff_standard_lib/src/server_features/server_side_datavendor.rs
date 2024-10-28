@@ -177,7 +177,7 @@ pub trait VendorApiResponse: Sync + Send {
         callback_id: u64
     ) -> DataServerResponse;
 
-    /// This should be your conversion into the DataVendor implementations historical data download function, historical data will be downloaded at the end of each UTC day.
+    /// This should be your conversion into the DataVendor implementations historical data download function, historical data will be downloaded at the end of each Trading Day or intraday if the symbol is being subscribed..
     /// You are returning a join handle to the update task, so that we can await the task completion. You simply add data to the data base to be saved using DATA_STORAGE.get().unwrap().save_data_bulk(data: Vec<BaseDataEnum>);
     /// If there was no data during the period then we return None.
     /// You should only return data.is_closed == true data points. although the server will filter out open data, it will still be better.
