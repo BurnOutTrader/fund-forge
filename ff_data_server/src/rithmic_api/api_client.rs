@@ -39,10 +39,8 @@ use tungstenite::Message;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::AccountInfo;
-use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::PositionId;
-use ff_standard_lib::standardized_types::resolution::Resolution;
 use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 use crate::rithmic_api::client_base::api_base::RithmicApiClient;
 use crate::rithmic_api::client_base::credentials::RithmicCredentials;
@@ -107,7 +105,8 @@ pub struct RithmicClient {
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
     pub candle_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
 
-    pub default_trade_route: DashMap<FuturesExchange, String>,
+    // first string is fcm id second is trade route
+    pub default_trade_route: DashMap<RithmicSystem, AHashMap<String, String>>,
 
     pub bid_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
@@ -506,7 +505,7 @@ impl RithmicClient {
             let req = RequestTradeRoutes {
                 template_id: 310,
                 user_msg: vec![],
-                subscribe_for_updates: Some(true),
+                subscribe_for_updates: Some(false), //todo not sure if we want updates, they never seem to stop.
             };
             self.send_message(&SysInfraType::OrderPlant, req).await;
             /*   let symbol = Symbol {
@@ -613,45 +612,20 @@ impl RithmicClient {
 
     pub async fn rithmic_order_details(&self, _mode: StrategyMode, stream_name: StreamName, order: &Order) -> Result<CommonRithmicOrderDetails, OrderUpdateEvent> {
         match self.is_valid_order(&order) {
-            Err(e) =>
-                return Err(OrderUpdateEvent::OrderRejected {
-                    account: order.account.clone(),
-                    symbol_name: order.symbol_name.clone(),
-                    symbol_code: order.symbol_name.clone(),
-                    order_id: order.id.clone(),
-                    reason: e,
-                    tag: order.tag.clone(),
-                    time: Utc::now().to_string() }),
-
+            Err(e) => return Err(RithmicClient::reject_order(&order, format!("{}",e))),
             Ok(_) => {}
         }
 
         let quantity = match order.quantity_open.to_i32() {
             None => {
-                return Err(OrderUpdateEvent::OrderRejected {
-                    account: order.account.clone(),
-                    symbol_name: order.symbol_name.clone(),
-                    symbol_code: order.symbol_name.clone(),
-                    order_id: order.id.clone(),
-                    reason: "Invalid Quantity".to_string(),
-                    tag: order.tag.clone(),
-                    time: Utc::now().to_string() })
+                return Err(RithmicClient::reject_order(&order, "Invalid quantity".to_string()))
             }
             Some(q) => q
         };
 
         let (symbol_code, exchange): (SymbolName, FuturesExchange) = {
             match get_exchange_by_symbol_name(&order.symbol_name) {
-                None => {
-                    return Err(OrderUpdateEvent::OrderRejected {
-                        account: order.account.clone(),
-                        symbol_name: order.symbol_name.clone(),
-                        symbol_code: order.symbol_name.clone(),
-                        order_id: order.id.clone(),
-                        reason: format!("Exchange Not found with {} for {}",order.account.brokerage, order.symbol_name),
-                        tag: order.tag.clone(),
-                        time: Utc::now().to_string() })
-                }
+                None => return Err(RithmicClient::reject_order(&order, format!("Exchange Not found with {} for {}",order.account.brokerage, order.symbol_name))),
                 Some(mut exchange) => {
                     exchange = match &order.exchange {
                         None => exchange,
@@ -667,16 +641,7 @@ impl RithmicClient {
                         None => {
                             let front_month = match self.front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
                                 Ok(info) => info,
-                                Err(e) => {
-                                    return Err(OrderUpdateEvent::OrderRejected {
-                                        account: order.account.clone(),
-                                        symbol_name: order.symbol_name.clone(),
-                                        symbol_code: "No Front Month Found".to_string(),
-                                        order_id: order.id.clone(),
-                                        reason: e,
-                                        tag: order.tag.clone(),
-                                        time: Utc::now().to_string() })
-                                }
+                                Err(e) => return Err(RithmicClient::reject_order(&order, format!("{}",e)))
                             };
                             (front_month.symbol_code, exchange)
                         }
@@ -688,36 +653,31 @@ impl RithmicClient {
             }
         };
 
-        let route = match self.default_trade_route.get(&exchange) {
+        let route = match self.default_trade_route.get(&self.system) {
             None => {
                 match self.system {
-                    RithmicSystem::RithmicPaperTrading => "simulator".to_string(),
-                    RithmicSystem::TopstepTrader => "simulator".to_string(),
-                    RithmicSystem::SpeedUp => "simulator".to_string(),
-                    RithmicSystem::TradeFundrr => "simulator".to_string(),
-                    RithmicSystem::UProfitTrader => "simulator".to_string(),
-                    RithmicSystem::Apex => "simulator".to_string(),
-                    RithmicSystem::MESCapital => "simulator".to_string(),
-                    RithmicSystem::TheTradingPit => "simulator".to_string(),
-                    RithmicSystem::FundedFuturesNetwork => "simulator".to_string(),
-                    RithmicSystem::Bulenox => "simulator".to_string(),
-                    RithmicSystem::PropShopTrader => "simulator".to_string(),
-                    RithmicSystem::FourPropTrader => "simulator".to_string(),
-                    RithmicSystem::FastTrackTrading => "simulator".to_string(),
-                    RithmicSystem::Test => "simulator".to_string(),
-                    _ => {
-                        return Err(OrderUpdateEvent::OrderRejected {
-                            account: order.account.clone(),
-                            symbol_name: order.symbol_name.clone(),
-                            symbol_code: order.symbol_name.clone(),
-                            order_id: order.id.clone(),
-                            reason: format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name),
-                            tag: order.tag.clone(),
-                            time: Utc::now().to_string() })
-                    }
+                    RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
+                    RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading | RithmicSystem::Test => "simulator".to_string(),
+                    _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
                 }
             }
-            Some(route) => route.value().clone(),
+            Some(route_map) => {
+                let fcm_id = match &self.credentials.fcm_id {
+                    None => {
+                        match self.system {
+                            RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
+                            RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading | RithmicSystem::Test => "simulator".to_string(),
+                            _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
+                        }
+                    },
+                    Some(id) => id.clone()
+                };
+                if let Some(exchange_route) = route_map.get(&fcm_id) {
+                    exchange_route.clone()
+                } else {
+                    return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
+                }
+            },
         };
 
         let transaction_type = match order.side {

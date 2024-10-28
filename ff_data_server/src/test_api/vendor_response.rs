@@ -186,6 +186,7 @@ impl VendorApiResponse for TestApiClient {
         todo!()
     }
 
+    #[allow(unused)]
     async fn update_historical_data_for(&self, stream_name: StreamName, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) -> Result<JoinHandle<()>, FundForgeError> {
         todo!()
     }
