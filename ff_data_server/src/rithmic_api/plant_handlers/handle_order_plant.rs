@@ -147,9 +147,10 @@ pub async fn match_order_plant_id(
             if let Ok(msg) = ResponseTradeRoutes::decode(&message_buf[..]) {
                 // Trade Routes Response
                 // From Server
-                //println!("Trade Routes Response (Template ID: 311) from Server: {:?}", msg);
+
                 if let Some(route) = msg.trade_route {
                     if let Some(exchange) = msg.exchange {
+                        //println!("Trade Routes Response (Template ID: 311) from Server: {:?}", msg);
                         let exchange = match FuturesExchange::from_string(&exchange) {
                             Ok(exchange) => exchange,
                             Err(_) => return,

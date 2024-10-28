@@ -467,9 +467,7 @@ impl RithmicClient {
                 format!("{:.3} s", latency as f64 / 1_000_000_000.0)
             };
 
-            println!("Round Trip Latency for Rithmic {:?}: {}", plant, formatted_latency);
-        } else {
-            println!("Unable to calculate latency: missing timestamp in ResponseHeartbeat");
+            //println!("Round Trip Latency for Rithmic {:?}: {}", plant, formatted_latency);
         }
     }
 
