@@ -2,12 +2,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 use chrono::Utc;
 use dashmap::DashMap;
+
 #[allow(unused_imports)]
-use ff_rithmic_api::credentials::RithmicCredentials;
-#[allow(unused_imports)]
-use ff_rithmic_api::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
-use ff_rithmic_api::rithmic_proto_objects::rti::Reject;
-use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::Reject;
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use lazy_static::lazy_static;
 use prost::{Message as ProstMessage};
 use rust_decimal::{Decimal};
@@ -22,6 +21,7 @@ use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::Position;
 use ff_standard_lib::standardized_types::subscriptions::{SymbolCode};
 use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 use crate::rithmic_api::products::get_symbol_info;
 
@@ -109,7 +109,7 @@ pub async fn match_pnl_plant_id(
 
             // This is the worst designed message in the world, dont mess with this function if it works, just accept that you have to right shit code for a shit message and move on.
             if let Ok(msg) = InstrumentPnLPositionUpdate::decode(&message_buf[..]) {
-                println!("{:?}", msg);
+               // println!("{:?}", msg);
                 let symbol_code = match msg.symbol {
                     None => return,
                     Some(ref s) => s
@@ -132,59 +132,26 @@ pub async fn match_pnl_plant_id(
                     },
                     _ => {}
                 }
+
+                let ssboe = match msg.ssboe {
+                    None => return,
+                    Some(ssboe) => ssboe
+                };
+
+                let usecs = match msg.usecs {
+                    None => return,
+                    Some(usecs) => usecs
+                };
+
+                let time = create_datetime(ssboe as i64, usecs as i64).to_string();
                 //println!("PNL Update Message: {:?}", msg);
-                println!("Rithmic Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
+                println!("{}: Pnl Update: {:?}, Pnl: {:?}, Buy Quantity: {:?}, Sell Quantity: {:?}", client.brokerage, msg.symbol, msg.open_position_pnl, msg.buy_qty, msg.sell_qty);
                 let account_id = match msg.account_id {
                     None => return,
                     Some(id) => id
                 };
 
-                let (side, quantity) = if let (Some(buy_quantity), Some(sell_qty)) = (msg.buy_qty, msg.sell_qty) {
-                    if buy_quantity > 0 && sell_qty <= 0 {
-                        client.long_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .insert(symbol_code.clone(), Volume::from_i32(buy_quantity).unwrap());
-                        client.short_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .remove(symbol_code);
-                        (Some(PositionSide::Long), buy_quantity)
-                    } else if buy_quantity <= 0 && sell_qty > 0 {
-                        client.short_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .insert(symbol_code.clone(), Volume::from_i32(sell_qty.abs()).unwrap());
-                        client.long_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .remove(symbol_code);
-                        // Short position: negative sell, no buy
-                        (Some(PositionSide::Short), sell_qty)
-                    } else {
-                        client.long_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .remove(symbol_code);
-                        client.short_quantity
-                            .entry(account_id.clone())
-                            .or_insert_with(DashMap::new)
-                            .remove(symbol_code);
-                        (None, 0)
-                    }
-                } else {
-                    client.long_quantity
-                        .entry(account_id.clone())
-                        .or_insert_with(DashMap::new)
-                        .remove(symbol_code);
-                    client.short_quantity
-                        .entry(account_id.clone())
-                        .or_insert_with(DashMap::new)
-                        .remove(symbol_code);
-                    // Missing quantities
-                    (None, 0)
-                };
-
+                let (side, quantity) = update_position(account_id.clone(), &symbol_code, msg.buy_qty, msg.sell_qty, &client);
                 if side.is_none() {
                     if let Some((symbol_code, mut position)) = POSITIONS.remove(symbol_code) {
                         let tag = match client.last_tag.get(&account_id) {
@@ -203,7 +170,8 @@ pub async fn match_pnl_plant_id(
                         //println!("Closing position: {:?}", position);
                         send_updates(DataServerResponse::LivePositionUpdates {
                             account: Account::new(client.brokerage, account_id.clone()),
-                            position
+                            position,
+                            time,
                         }).await;
                     }
                     return
@@ -282,7 +250,8 @@ pub async fn match_pnl_plant_id(
 
                                 let position_update = DataServerResponse::LivePositionUpdates {
                                     account: Account::new(client.brokerage, account_id.clone()),
-                                    position: clone_position
+                                    position: clone_position,
+                                    time,
                                 };
                                 send_updates(position_update).await;
                                 POSITIONS.insert(symbol_code, position);
@@ -384,5 +353,84 @@ pub async fn match_pnl_plant_id(
             }
         },
         _ => println!("No match for template_id: {}", template_id)
+    }
+}
+
+fn update_position(
+    account_id: String,
+    symbol_code: &SymbolCode,
+    msg_buy_qty: Option<i32>,
+    msg_sell_qty: Option<i32>,
+    client: &Arc<RithmicClient>
+) -> (Option<PositionSide>, i32) {
+    match (msg_buy_qty, msg_sell_qty) {
+        (Some(buy_quantity), None) if buy_quantity > 0 => {
+            client.long_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .insert(symbol_code.clone(), Volume::from_i32(buy_quantity).unwrap());
+            client.short_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .remove(symbol_code);
+            (Some(PositionSide::Long), buy_quantity)
+        }
+        (None, Some(sell_qty)) if sell_qty > 0 => {
+            client.short_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .insert(symbol_code.clone(), Volume::from_i32(sell_qty).unwrap());
+            client.long_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .remove(symbol_code);
+            (Some(PositionSide::Short), sell_qty)
+        }
+        (Some(buy_quantity), Some(sell_qty)) => {
+            if buy_quantity > 0 && sell_qty <= 0 {
+                client.long_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .insert(symbol_code.clone(), Volume::from_i32(buy_quantity).unwrap());
+                client.short_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .remove(symbol_code);
+                (Some(PositionSide::Long), buy_quantity)
+            } else if buy_quantity <= 0 && sell_qty > 0 {
+                client.short_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .insert(symbol_code.clone(), Volume::from_i32(sell_qty.abs()).unwrap());
+                client.long_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .remove(symbol_code);
+                (Some(PositionSide::Short), sell_qty)
+            } else {
+                // Clear positions if neither buy nor sell is active
+                client.long_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .remove(symbol_code);
+                client.short_quantity
+                    .entry(account_id.clone())
+                    .or_insert_with(DashMap::new)
+                    .remove(symbol_code);
+                (None, 0)
+            }
+        }
+        _ => {
+            // Clear positions for all other cases, including None, 0, or invalid values
+            client.long_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .remove(symbol_code);
+            client.short_quantity
+                .entry(account_id.clone())
+                .or_insert_with(DashMap::new)
+                .remove(symbol_code);
+            (None, 0)
+        }
     }
 }

@@ -1297,7 +1297,6 @@ Scenarios:
 A short position will be opened with the tag: "Take Profit Long", when reviewing positions you will see this tag as entering a short position. \
 You will see this in your exported positions `.csv`.
 
-
 2. You accidentally enter long instead of short. \
 You have a method to add to a short position, you have the order tag: "Add Short", but you accidentally use `strategy.enter_long()` instead of `strategy.enter_short()`. \
 A long position will be opened with the tag "Add Short". \
@@ -1307,3 +1306,15 @@ The `tag` property of `PositionUpdateEvents` that are fed to the strategy, will 
 In this way we can see in real time the effect of orders on a position.
 
 Uploading your exported trades to an Ai model like claude or GPT will quickly spot the mistake.
+
+### Live Order and Position Updates
+If trading on very low resolution or using renko blocks, it is possible that 2 or more TimeSlices can be received before an order or position update is received and processed.
+Sometimes order and position updates arrive from the broker 1 to 2 seconds after the event that triggered order entry or position creation.
+
+You need to allow for this by including logic to handle this in your strategy, to avoid submitting multiple orders, before an order fill event is received.
+
+This won't happen in backtesting, but it does happen in live markets.
+
+One way to await order fill events would be to use and Option<OrderId> to store the order_id after placing an order, and then await the order fill, cancel or rejection event and set order_id back to None.
+
+

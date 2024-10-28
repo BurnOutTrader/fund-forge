@@ -34,7 +34,6 @@ impl BrokerApiResponse for RithmicClient {
     }
 
     async fn account_info_response(&self, mode: StrategyMode, _stream_name: StreamName, account_id: AccountId, callback_id: u64) -> DataServerResponse {
-        //todo use match mode to create sim account
         match mode {
             StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
                 self.paper_account_init(account_id, callback_id).await
@@ -293,6 +292,7 @@ impl BrokerApiResponse for RithmicClient {
 
                 // For shorts, just ensure we don't exit more than we have
                 if details.quantity > volume {
+                    let time = Utc::now().to_string();
                     details.quantity = volume;
                     let order_update_event = OrderUpdateEvent::OrderUpdated {
                         account: order.account.clone(),
@@ -302,9 +302,9 @@ impl BrokerApiResponse for RithmicClient {
                         update_type: OrderUpdateType::Quantity(Decimal::from_i32(volume).unwrap()),
                         tag: order.tag.clone(),
                         text: String::from("ff_data_server Api adjusted exit quantity to prevent over fill"),
-                        time: Utc::now().to_string(),
+                        time: time.clone(),
                     };
-                    let order_event = DataServerResponse::OrderUpdates(order_update_event);
+                    let order_event = DataServerResponse::OrderUpdates{event: order_update_event, time};
                     if let Some(sender) = RESPONSE_SENDERS.get(&stream_name) {
                         match sender.send(order_event).await {
                             Ok(_) => {}
@@ -361,7 +361,7 @@ impl BrokerApiResponse for RithmicClient {
                 // Use absolute values for comparison and adjustment
                 if details.quantity.abs() > volume.abs() {
                     details.quantity = volume.abs();  // Keep positive for the order
-
+                    let time = Utc::now().to_string();
                     let order_update_event = OrderUpdateEvent::OrderUpdated {
                         account: order.account.clone(),
                         symbol_name: order.symbol_name.clone(),
@@ -370,9 +370,9 @@ impl BrokerApiResponse for RithmicClient {
                         update_type: OrderUpdateType::Quantity(Decimal::from_i32(volume).unwrap()),
                         tag: order.tag.clone(),
                         text: String::from("ff_data_server Api adjusted exit quantity to prevent over fill"),
-                        time: Utc::now().to_string(),
+                        time: time.clone(),
                     };
-                    let order_event = DataServerResponse::OrderUpdates(order_update_event);
+                    let order_event = DataServerResponse::OrderUpdates{event: order_update_event, time};
                     if let Some(sender) = RESPONSE_SENDERS.get(&stream_name) {
                         match sender.send(order_event).await {
                             Ok(_) => {}
@@ -395,8 +395,7 @@ impl BrokerApiResponse for RithmicClient {
             Ok(details) => details,
             Err(e) => return Err(e)
         };
-        self.submit_order(stream_name, order, details).await;
-        Ok(())
+        self.submit_order(stream_name, order, details).await
     }
 }
 

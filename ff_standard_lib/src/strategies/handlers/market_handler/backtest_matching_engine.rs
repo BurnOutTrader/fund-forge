@@ -1,4 +1,4 @@
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -10,7 +10,7 @@ use crate::standardized_types::enums::{OrderSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::strategies::handlers::market_handler::price_service::{price_service_request_limit_fill_price_quantity, price_service_request_market_fill_price, price_service_request_market_price, PriceServiceResponse};
-use crate::strategies::ledgers::{LEDGER_SERVICE};
+use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
 use crate::strategies::strategy_events::StrategyEvent;
 
 pub enum BackTestEngineMessage {
@@ -133,16 +133,8 @@ pub async fn backtest_matching_engine(
                                 }
                             }
                         }
-                        OrderRequest::FlattenAllFor { account: _} => {
-                            //Todo
-                        /*    if let Some(broker_map) = ledger_senders.get(&brokerage) {
-                                if let Some(account_map) = broker_map.get(&account_id) {
-                                    match account_map.send(LedgerMessage::FlattenAccount(time)).await {
-                                        Ok(_) => {}
-                                        Err(e) => panic!("Failed to send ledger flatten account message: {}", e)
-                                    }
-                                }
-                            }*/
+                        OrderRequest::FlattenAllFor { account} => {
+                            LEDGER_SERVICE.flatten_all_positions(&account).await;
                         }
                     }
                 }
@@ -196,11 +188,16 @@ pub async fn simulated_order_matching (
                     cancelled.push((order.id.clone(), reason));
                 }*/
             }
-            TimeInForce::Time(cancel_time, time_zone_string) => {
-                let tz: Tz = time_zone_string.parse().unwrap();
-                let local_time = time_convert_utc_to_local(&tz, time);
-                let cancel_time = tz.timestamp_opt(*cancel_time, 0).unwrap();
-                if local_time >= cancel_time {
+            TimeInForce::Time(cancel_time) => {
+                let cancel_time = match DateTime::<Utc>::from_timestamp(*cancel_time, 0) {
+                    Some(time) => time,
+                    None => {
+                        let reason = "Time In Force Expired: TimeInForce::Time".to_string();
+                        rejected.push((order.id.clone(), reason));
+                        continue;
+                    }
+                };
+                if Utc::now() >= cancel_time {
                     let reason = "Time In Force Expired: TimeInForce::Time".to_string();
                     cancelled.push((order.id.clone(), reason));
                 }
@@ -609,7 +606,7 @@ async fn fill_order(
         order.quantity_filled = order.quantity_open;
         order.quantity_open = dec!(0);
 
-        match LEDGER_SERVICE.update_or_create_position(&order.account, order.symbol_name.clone(), symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
+        match LEDGER_SERVICE.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
             Ok(events) => {
                 //todo, need to send an accepted event first if the order state != accepted
                 let order_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {
@@ -691,7 +688,7 @@ async fn partially_fill_order(
             None
         };
 
-        match LEDGER_SERVICE.update_or_create_position(&order.account, order.symbol_name.clone(), symbol_code, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
+        match LEDGER_SERVICE.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
             Ok(events) => {
                 //todo, need to send an accepted event first if the order state != accepted
                 if let Some(order_event) = order_event {

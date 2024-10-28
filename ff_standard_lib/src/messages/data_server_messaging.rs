@@ -13,7 +13,7 @@ use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::position::Position;
-use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SessionMarketHours, SymbolInfo};
+use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SymbolInfo};
 use crate::standardized_types::time_slices::TimeSlice;
 
 /// An Api key String
@@ -134,13 +134,6 @@ pub enum DataServerRequest {
         symbol_name: SymbolName
     },
 
-    SessionMarketHours{
-        callback_id: u64,
-        data_vendor: DataVendor,
-        symbol_name: SymbolName,
-        date: String
-    },
-
     PaperAccountInit {
         callback_id: u64,
         account_id: AccountId,
@@ -184,7 +177,6 @@ impl DataServerRequest {
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
             DataServerRequest::RegisterStreamer{..} => {}
             DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::SessionMarketHours { callback_id, .. } => {*callback_id = id}
             DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::PaperAccountInit { callback_id, .. } => {*callback_id = id}
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
@@ -311,19 +303,18 @@ DataServerResponse {
 
     PrimarySubscriptionFor{callback_id: u64, primary_subscription: DataSubscription},
 
-    OrderUpdates(OrderUpdateEvent),
+    OrderUpdates{event: OrderUpdateEvent, time: String},
 
     RegistrationResponse(u16),
 
     CommissionInfo{callback_id: u64, commission_info: CommissionInfo},
 
-    SessionMarketHours{callback_id: u64, session_market_hours: SessionMarketHours},
     PaperAccountInit{callback_id: u64, account_info: AccountInfo},
 
     LiveAccountUpdates {account: Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
 
     /// Booked pnl is only sent for closed positions, it is the amount of booked pnl since the last side change from none to long or short
-    LivePositionUpdates {account: Account, position: Position},
+    LivePositionUpdates {account: Account, position: Position, time: String},
 }
 
 impl Bytes<DataServerResponse> for DataServerResponse {
@@ -360,12 +351,11 @@ impl DataServerResponse {
             DataServerResponse::SubscribeResponse { .. } => None,
             DataServerResponse::UnSubscribeResponse { .. } => None,
             DataServerResponse::Accounts {callback_id, ..} => Some(callback_id.clone()),
-            DataServerResponse::OrderUpdates(_) => None,
+            DataServerResponse::OrderUpdates{..} => None,
             DataServerResponse::PrimarySubscriptionFor {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::SymbolNames {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::RegistrationResponse(_) => None,
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
-            DataServerResponse::SessionMarketHours { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::PaperAccountInit { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),

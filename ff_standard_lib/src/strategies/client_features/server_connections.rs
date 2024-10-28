@@ -1,4 +1,5 @@
 use std::collections::{HashMap};
+use std::str::FromStr;
 use crate::communicators::communications_async::ExternalSender;
 use crate::strategies::client_features::init_clients::create_async_api_client;
 use crate::strategies::client_features::connection_settings::client_settings::{initialise_settings, ConnectionSettings};
@@ -7,7 +8,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{Utc};
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use lazy_static::lazy_static;
 use tokio::{io};
@@ -30,7 +31,7 @@ use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::standardized_types::bytes_trait::Bytes;
 use crate::standardized_types::orders::OrderUpdateEvent;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
-use crate::strategies::ledgers::{LEDGER_SERVICE};
+use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
@@ -199,7 +200,7 @@ pub async fn response_handler(
     settings_map: HashMap<ConnectionType, ConnectionSettings>,
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
-    order_updates_sender: Sender<OrderUpdateEvent>,
+    order_updates_sender: Sender<(OrderUpdateEvent, DateTime<Utc>)>,
     synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>,
 ) {
@@ -256,20 +257,23 @@ pub async fn response_handler(
                                         Err(_) => {}
                                     }
                                 }
-                                DataServerResponse::OrderUpdates(update_event) => {
+                                DataServerResponse::OrderUpdates{ event, time} => {
                                     //println!("Event received: {}", update_event);
-                                    order_updates_sender.send(update_event).await.unwrap()
+                                    let time = DateTime::<Utc>::from_str(&time).unwrap();
+                                    order_updates_sender.send((event, time)).await.unwrap()
                                 }
                                 DataServerResponse::LiveAccountUpdates { account, cash_value, cash_available, cash_used } => {
                                     tokio::task::spawn(async move {
                                         LEDGER_SERVICE.live_account_updates(&account, cash_value, cash_available, cash_used).await;
                                     });
                                 }
-                                DataServerResponse::LivePositionUpdates { account, position } => {
+                                DataServerResponse::LivePositionUpdates { account, position, time } => {
                                    if synchronise_accounts {
                                        //println!("Live Position: {:?}", position);
                                         //tokio::task::spawn(async move {
-                                       match LEDGER_SERVICE.synchronize_live_position(account, position) {
+                                       //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates
+                                       let time = DateTime::<Utc>::from_str(&time).unwrap();
+                                       match LEDGER_SERVICE.synchronize_live_position(account, position, time) {
                                            None => {}
                                            Some(event) => {
                                                strategy_event_sender.send(StrategyEvent::PositionEvents(event)).await.unwrap();
@@ -433,7 +437,7 @@ pub async fn init_connections(
     gui_enabled: bool,
     buffer_duration: Duration,
     mode: StrategyMode,
-    order_updates_sender: Sender<OrderUpdateEvent>,
+    order_updates_sender: Sender<(OrderUpdateEvent, DateTime<Utc>)>,
     synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>
 ) {

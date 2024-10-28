@@ -1,11 +1,11 @@
 use std::sync::Arc;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::{Receiver};
 use crate::standardized_types::orders::{Order, OrderId, OrderState, OrderUpdateEvent, OrderUpdateType};
-use crate::strategies::ledgers::LEDGER_SERVICE;
+use crate::strategies::ledgers::ledger_service::LEDGER_SERVICE;
 use crate::strategies::strategy_events::StrategyEvent;
 
 //todo, this probably isnt needed
@@ -13,12 +13,13 @@ use crate::strategies::strategy_events::StrategyEvent;
 pub fn live_order_update(
     open_order_cache: Arc<DashMap<OrderId, Order>>, //todo, make these static or lifetimes if possible.. might not be optimal though, look it up!
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
-    mut order_event_receiver: Receiver<OrderUpdateEvent>,
+    mut order_event_receiver: Receiver<(OrderUpdateEvent, DateTime<Utc>)>,
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
     synchronize_positions: bool
 ) {
+    //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates
     tokio::task::spawn(async move {
-        while let Some(ref order_update_event) = order_event_receiver.recv().await {
+        while let Some((ref order_update_event, time_utc)) = order_event_receiver.recv().await {
             match order_update_event {
                 #[allow(unused)]
                 OrderUpdateEvent::OrderAccepted { account, symbol_name, symbol_code, order_id, tag, time } => {
@@ -46,9 +47,9 @@ pub fn live_order_update(
                          order.time_filled_utc = Some(time.clone());
                          //println!("{}", order_update_event);
                          let events = match synchronize_positions {
-                             false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), Utc::now(), *price, tag.to_string()).await),
+                             false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await),
                             true => {
-                                LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
+                                LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await;
                                 None
                             }
                          };
@@ -76,9 +77,9 @@ pub fn live_order_update(
                        order.time_filled_utc = Some(time.clone());
 
                        let events = match synchronize_positions {
-                           false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), Utc::now(), *price, tag.to_string()).await),
+                           false => Some(LEDGER_SERVICE.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await),
                            true => {
-                               LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone()).await;
+                               LEDGER_SERVICE.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await;
                                None
                            }
                        };

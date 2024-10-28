@@ -161,6 +161,7 @@ pub trait BrokerApiResponse: Sync + Send {
     /// # Example
     /// ```rust
     /// use chrono::Utc;
+    /// use ff_standard_lib::standardized_types::accounts::Account;
     /// use ff_standard_lib::standardized_types::enums::StrategyMode;
     /// use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
     ///
@@ -172,9 +173,9 @@ pub trait BrokerApiResponse: Sync + Send {
     ///             // If the order is invalid, return an `OrderRejected` event with details.
     ///             Err(e) => {
     ///                 Err(OrderUpdateEvent::OrderRejected {
-    ///                     brokerage: order.brokerage,  // Brokerage enum variant.
-    ///                     account_id: order.account_id,  // AccountId associated with the order.
-    ///                     order_id: order.id,  // The order Id of the order.
+    ///                     account: Account { brokerage: Brokerage::Test,account_id: "".to_string()},
+    ///                     symbol_name: "".to_string(),
+    ///                     symbol_code: "".to_string(),order_id: order.id,  // The order Id of the order.
     ///                     reason: e,  // Reason for rejection, provided by validation.
     ///                     tag: order.tag,  // we use the order tag so the strategy can identify the order responsible tag.
     ///                     time: Utc::now().to_string(),  // Utc Time String of the rejection event.

@@ -108,7 +108,7 @@ impl HybridStorage {
             .join(resolution.to_string())
             .join(data_type.to_string());
 
-        println!("Base Path: {:?}", base_path);
+        //println!("Base Path: {:?}", base_path);
 
         if is_saving && !base_path.exists() {
             fs::create_dir_all(&base_path).unwrap();

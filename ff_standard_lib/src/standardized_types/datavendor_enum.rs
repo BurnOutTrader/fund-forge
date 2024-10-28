@@ -1,8 +1,8 @@
 use std::fmt;
 use std::str::FromStr;
-use ff_rithmic_api::systems::RithmicSystem;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
+use crate::apis::rithmic::rithmic_systems::RithmicSystem;
 use crate::messages::data_server_messaging::FundForgeError;
 
 #[derive(Serialize, Deserialize, Clone, Eq, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Hash, PartialOrd, Ord)]

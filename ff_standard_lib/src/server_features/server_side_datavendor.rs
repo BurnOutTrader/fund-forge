@@ -1,10 +1,11 @@
-use std::collections::BTreeMap;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use tokio::task::JoinHandle;
 use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::enums::{MarketType, StrategyMode};
-use crate::standardized_types::subscriptions::{DataSubscription, SymbolName};
+use crate::standardized_types::resolution::Resolution;
+use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::StreamName;
 
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
@@ -175,13 +176,52 @@ pub trait VendorApiResponse: Sync + Send {
         callback_id: u64
     ) -> DataServerResponse;
 
-    /// This should be your conversion into the DataVendor implementations historical data download function, historical data will be downloaded at the end of each UTC day.
-    /// You are returning a Option<BTreeMap<nanosecond timestamp, BaseDataEnum>> where data.time_closed_utc().timestamp_nanos(), nanos is important
+    /// This should be your conversion into the DataVendor implementations historical data download function, historical data will be downloaded at the end of each Trading Day or intraday if the symbol is being subscribed..
+    /// You are returning a join handle to the update task, so that we can await the task completion. You simply add data to the data base to be saved using DATA_STORAGE.get().unwrap().save_data_bulk(data: Vec<BaseDataEnum>);
     /// If there was no data during the period then we return None.
     /// You should only return data.is_closed == true data points. although the server will filter out open data, it will still be better.
+    /// We are downloading from the last time downloaded or from the earliest data available with the broker, we only need to download data once, so we should initialize by getting everything if we can.
+    /// We can use the static DATA_STORAGE.get().unwrap().get_latest_data_point() to get the last time downloaded.
+    /// The data base will ignore any duplicate data and will also store data in the perfect order, all you need to do is get the data without missing data points.
+    /// ```rust
+    /// use std::sync::Arc;
+    /// use chrono::{DateTime, Utc};
+    /// use tokio::sync::OnceCell;
+    /// use ff_standard_lib::server_features::database::HybridStorage;
+    /// use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
+    /// use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
+    /// use ff_standard_lib::standardized_types::enums::MarketType;
+    /// use ff_standard_lib::standardized_types::resolution::Resolution;
+    /// use ff_standard_lib::standardized_types::subscriptions::Symbol;
+    ///
+    /// // This item already exists as a static public object, you do not need to create it.
+    /// pub static DATA_STORAGE: OnceCell<Arc<HybridStorage>> = OnceCell::const_new();
+    ///
+    /// let symbol = Symbol::new("AUDUSD".to_string(), DataVendor::Test, MarketType::Forex);
+    /// let base_data_type = BaseDataType::Candles;
+    /// let resolution = Resolution::Seconds(1);
+    ///
+    /// let oldest_data: DateTime<Utc> = DateTime::from_timestamp(1325376000, 0).unwrap(); //the oldest data available from the vendor
+    /// let last_time: DateTime<Utc> = match DATA_STORAGE.get().unwrap().get_latest_data_time(&symbol, &resolution, &base_data_type).await {
+    ///             Ok(last_time) => match last_time {
+    ///                 Some(last_time) => {
+    ///                     last_time
+    ///                 }
+    ///                 None => {
+    ///                     oldest_data
+    ///                 }
+    ///             }
+    ///             Err(_e) => {
+    ///                 eprintln!("No data found for: {:?}, beginning initial download, this could take a while", symbol);
+    ///                 oldest_data
+    ///             }
+    ///         };
+    ///```
     async fn update_historical_data_for(
-        subscription: DataSubscription,
-        from: DateTime<Utc>,
-        to: DateTime<Utc>
-    ) -> Result<Option<BTreeMap<i64, BaseDataEnum>>, FundForgeError>;
+        &self,
+        stream_name: StreamName,
+        symbol: Symbol,
+        base_data_type: BaseDataType,
+        resolution: Resolution
+    ) -> Result<JoinHandle<()>, FundForgeError>;
 }

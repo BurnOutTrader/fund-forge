@@ -9,7 +9,6 @@ license-file = "LICENCE.md"
 server = []
 
 [dependencies]
-ff_rithmic_api = "0.2.4"
 chrono = "*"
 serde = { version = "*", features = ["derive"] }
 rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }
@@ -42,3 +41,4 @@ csv ="*"
 rust_decimal_macros ="*"
 memmap2 = "0.9.5"
 log = "0.4.22"
+float-cmp = "0.10.0"

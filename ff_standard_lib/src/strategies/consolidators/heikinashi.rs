@@ -19,7 +19,7 @@ pub struct HeikinAshiConsolidator {
     pub(crate) subscription: DataSubscription,
     previous_ha_close: Price,
     previous_ha_open: Price,
-    decimal_accuracy: u32, //todo, we might need to use tick size to round futures and decimal accuracy to round other products
+    decimal_accuracy: u32, //todo, we might need to use tick size to round cme_futures and decimal accuracy to round other products
     tick_size: Decimal,
     fill_forward: bool,
     market_type: MarketType,

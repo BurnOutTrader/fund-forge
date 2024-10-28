@@ -4,9 +4,11 @@ pub mod communicators;
 pub mod standardized_types;
 pub mod messages;
 pub mod strategies;
+pub(crate) mod tests;
 
 #[cfg(feature = "server")]
 pub mod server_features;
+pub mod apis;
 
 /// The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
 /// it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.

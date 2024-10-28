@@ -9,14 +9,6 @@ use ahash::AHashMap;
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::{Tz};
 use dashmap::DashMap;
-use ff_rithmic_api::api_client::RithmicApiClient;
-use ff_rithmic_api::credentials::RithmicCredentials;
-use ff_rithmic_api::rithmic_proto_objects::rti::request_login::SysInfraType;
-use ff_rithmic_api::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTradeRoutes, ResponseHeartbeat};
-use ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::OrderPlacement;
-use ff_rithmic_api::rithmic_proto_objects::rti::request_new_order::PriceType;
-use ff_rithmic_api::rithmic_proto_objects::rti::rithmic_order_notification::TransactionType;
-use ff_rithmic_api::systems::RithmicSystem;
 use futures::{SinkExt, StreamExt};
 use futures::future::join_all;
 use futures::stream::{SplitSink, SplitStream};
@@ -44,13 +36,19 @@ use tokio::task::JoinHandle;
 use tokio::time::{interval, timeout};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
+use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::AccountInfo;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::PositionId;
 use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
+use crate::rithmic_api::client_base::api_base::RithmicApiClient;
+use crate::rithmic_api::client_base::credentials::RithmicCredentials;
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTradeRoutes, ResponseHeartbeat};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_new_order::{OrderPlacement, PriceType, TransactionType};
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
-use crate::rithmic_api::products::get_exchange_by_code;
+use crate::rithmic_api::products::get_exchange_by_symbol_name;
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
@@ -107,7 +105,8 @@ pub struct RithmicClient {
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
     pub candle_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
 
-    pub default_trade_route: DashMap<FuturesExchange, String>,
+    // first string is fcm id second is trade route
+    pub default_trade_route: DashMap<RithmicSystem, AHashMap<(String, FuturesExchange), String>>,
 
     pub bid_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
@@ -458,6 +457,7 @@ impl RithmicClient {
 
             self.latency.insert(plant.clone(), latency as i64);
 
+            #[allow(unused_variables)]
             let formatted_latency = if latency < 1_000 {
                 format!("{} ns", latency)
             } else if latency < 1_000_000 {
@@ -468,9 +468,7 @@ impl RithmicClient {
                 format!("{:.3} s", latency as f64 / 1_000_000_000.0)
             };
 
-            println!("Round Trip Latency for Rithmic {:?}: {}", plant, formatted_latency);
-        } else {
-            println!("Unable to calculate latency: missing timestamp in ResponseHeartbeat");
+            //println!("Round Trip Latency for Rithmic {:?}: {}", plant, formatted_latency);
         }
     }
 
@@ -502,6 +500,22 @@ impl RithmicClient {
                 account_id: Some(id_account_info_kvp.key().clone()),
             };
             self.send_message(&SysInfraType::PnlPlant, req).await;
+            
+            let req = RequestTradeRoutes {
+                template_id: 310,
+                user_msg: vec![],
+                subscribe_for_updates: Some(true), //todo not sure if we want updates, they never seem to stop.
+            };
+            self.send_message(&SysInfraType::OrderPlant, req).await;
+            /*   let symbol = Symbol {
+                name: "MNQ".to_string(),
+                market_type: MarketType::Futures(FuturesExchange::CME),
+                data_vendor: DataVendor::Rithmic(RithmicSystem::Rithmic01),
+            };
+            match self.update_historical_data_for(1, symbol, BaseDataType::Candles, Resolution::Seconds(1)).await {
+                Ok(_) => {}
+                Err(_) => {}
+            }*/
         }
     }
 
@@ -597,45 +611,20 @@ impl RithmicClient {
 
     pub async fn rithmic_order_details(&self, _mode: StrategyMode, stream_name: StreamName, order: &Order) -> Result<CommonRithmicOrderDetails, OrderUpdateEvent> {
         match self.is_valid_order(&order) {
-            Err(e) =>
-                return Err(OrderUpdateEvent::OrderRejected {
-                    account: order.account.clone(),
-                    symbol_name: order.symbol_name.clone(),
-                    symbol_code: order.symbol_name.clone(),
-                    order_id: order.id.clone(),
-                    reason: e,
-                    tag: order.tag.clone(),
-                    time: Utc::now().to_string() }),
-
+            Err(e) => return Err(RithmicClient::reject_order(&order, format!("{}",e))),
             Ok(_) => {}
         }
 
         let quantity = match order.quantity_open.to_i32() {
             None => {
-                return Err(OrderUpdateEvent::OrderRejected {
-                    account: order.account.clone(),
-                    symbol_name: order.symbol_name.clone(),
-                    symbol_code: order.symbol_name.clone(),
-                    order_id: order.id.clone(),
-                    reason: "Invalid Quantity".to_string(),
-                    tag: order.tag.clone(),
-                    time: Utc::now().to_string() })
+                return Err(RithmicClient::reject_order(&order, "Invalid quantity".to_string()))
             }
             Some(q) => q
         };
 
         let (symbol_code, exchange): (SymbolName, FuturesExchange) = {
-            match get_exchange_by_code(&order.symbol_name) {
-                None => {
-                    return Err(OrderUpdateEvent::OrderRejected {
-                        account: order.account.clone(),
-                        symbol_name: order.symbol_name.clone(),
-                        symbol_code: order.symbol_name.clone(),
-                        order_id: order.id.clone(),
-                        reason: format!("Exchange Not found with {} for {}",order.account.brokerage, order.symbol_name),
-                        tag: order.tag.clone(),
-                        time: Utc::now().to_string() })
-                }
+            match get_exchange_by_symbol_name(&order.symbol_name) {
+                None => return Err(RithmicClient::reject_order(&order, format!("Exchange Not found with {} for {}",order.account.brokerage, order.symbol_name))),
                 Some(mut exchange) => {
                     exchange = match &order.exchange {
                         None => exchange,
@@ -651,16 +640,7 @@ impl RithmicClient {
                         None => {
                             let front_month = match self.front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
                                 Ok(info) => info,
-                                Err(e) => {
-                                    return Err(OrderUpdateEvent::OrderRejected {
-                                        account: order.account.clone(),
-                                        symbol_name: order.symbol_name.clone(),
-                                        symbol_code: "No Front Month Found".to_string(),
-                                        order_id: order.id.clone(),
-                                        reason: e,
-                                        tag: order.tag.clone(),
-                                        time: Utc::now().to_string() })
-                                }
+                                Err(e) => return Err(RithmicClient::reject_order(&order, format!("{}",e)))
                             };
                             (front_month.symbol_code, exchange)
                         }
@@ -672,19 +652,33 @@ impl RithmicClient {
             }
         };
 
-        let route = match self.default_trade_route.get(&exchange) {
+        let route = match self.default_trade_route.get(&self.system) {
             None => {
-                return Err(OrderUpdateEvent::OrderRejected {
-                    account: order.account.clone(),
-                    symbol_name: order.symbol_name.clone(),
-                    symbol_code: order.symbol_name.clone(),
-                    order_id: order.id.clone(),
-                    reason: format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name),
-                    tag: order.tag.clone(),
-                    time: Utc::now().to_string() })
+                match self.system {
+                    RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
+                    RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
+                    => "simulator".to_string(),
+                    _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
+                }
             }
-            Some(route) => route.value().clone(),
+            Some(route_map) => {
+                let fcm_id = match &self.credentials.fcm_id {
+                    None => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {}, fcm_id not found",order.account.brokerage))),
+                    Some(id) => id.clone()
+                };
+                if let Some(exchange_route) = route_map.get(&(fcm_id.clone(), exchange.clone())) {
+                    exchange_route.clone()
+                } else {
+                    match self.system {
+                        RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
+                        RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
+                        => "simulator".to_string(),
+                        _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
+                    }
+                }
+            },
         };
+        //println!("Route: {}", route);
 
         let transaction_type = match order.side {
             OrderSide::Buy => TransactionType::Buy,
@@ -700,19 +694,29 @@ impl RithmicClient {
         })
     }
 
-    pub async fn submit_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) {
+    fn reject_order(order: &Order, reason: String) -> OrderUpdateEvent {
+        OrderUpdateEvent::OrderRejected {
+            account: order.account.clone(),
+            symbol_name: order.symbol_name.clone(),
+            symbol_code: order.symbol_name.clone(),
+            order_id: order.id.clone(),
+            reason,
+            tag: order.tag.clone(),
+            time: Utc::now().to_string()
+        }
+    }
+
+    pub async fn submit_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) -> Result<(), OrderUpdateEvent> {
         let (duration, cancel_at_ssboe, cancel_at_usecs) = match order.time_in_force {
-            TimeInForce::IOC => (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Ioc.into(), None, None),
-            TimeInForce::FOK => (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into(), None, None),
-            TimeInForce::GTC => (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(), None, None),
+            TimeInForce::IOC => (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Ioc.into(), None, None),
+            TimeInForce::FOK => (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into(), None, None),
+            TimeInForce::GTC => (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(), None, None),
             TimeInForce::Day(ref tz_string) => {
                 let time_zone = match Tz::from_str(tz_string) {
                     Ok(time_zone) => time_zone,
-                    Err(e) => {
-                        eprintln!("Failed to parse TZ in rithmic submit_order(): {}", e);
-                        return;
-                    }
+                    Err(e) => return Err(Self::reject_order(&order, format!("Failed to parse Tz: {}", e)))
                 };
+
                 let now = Utc::now();
                 let end_of_day = match time_zone.from_utc_datetime(&now.naive_utc())
                     .date_naive()
@@ -721,29 +725,26 @@ impl RithmicClient {
                     .map(|tz_dt| tz_dt.with_timezone(&Utc))
                 {
                     Some(dt) => dt,
-                    None => return eprintln!("Failed to calculate end of day for timezone: {}", tz_string),
+                    None => return Err(Self::reject_order(&order, format!("Failed to calculate end of day for timezone: {}", tz_string)))
                 };
 
-                (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
+                (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
                  Some(end_of_day.timestamp() as i32),
                  Some(end_of_day.timestamp_subsec_micros() as i32))
             }
-            TimeInForce::Time(ref time_stamp, ref tz_string) => {
-                let time_zone = match Tz::from_str(tz_string) {
-                    Ok(tz) => tz,
-                    Err(e) => {
-                        eprintln!("Failed to parse time zone in rithmic submit_order(): {}", e);
-                        return;
-                    }
+            TimeInForce::Time(ref time_stamp) => {
+                let cancel_time = match DateTime::<Utc>::from_timestamp(*time_stamp, 0) {
+                    Some(dt) => dt,
+                    None => return Err(Self::reject_order(&order, format!("Failed to parse time stamp: {}", time_stamp)))
                 };
-                let cancel_time = time_zone.timestamp_opt(*time_stamp, 0).unwrap();
 
-                (ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
+                (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
                  Some(cancel_time.timestamp() as i32),
                  Some(cancel_time.timestamp_subsec_micros() as i32))
             }
         };
 
+        // Rest of the function remains the same...
         match order.side {
             OrderSide::Buy => eprintln!("Buying {}" , order.quantity_open),
             OrderSide::Sell => eprintln!("Selling {}" , order.quantity_open),
@@ -753,7 +754,7 @@ impl RithmicClient {
             None => None,
             Some(price) => {
                 match price.to_f64() {
-                    None => return,
+                    None => return Err(Self::reject_order(&order, format!("Failed to parse trigger price: {}", price))),
                     Some(price) => Some(price)
                 }
             }
@@ -763,7 +764,7 @@ impl RithmicClient {
             None => None,
             Some(price) => {
                 match price.to_f64() {
-                    None => return,
+                    None => return Err(Self::reject_order(&order, format!("Failed to parse limit price: {}", price))),
                     Some(price) => Some(price)
                 }
             }
@@ -818,13 +819,14 @@ impl RithmicClient {
             account_map.insert(details.symbol_code, order.tag.clone());
         }
         self.send_message(&SysInfraType::OrderPlant, req).await;
+        Ok(())
     }
 
     pub async fn submit_market_order(&self, stream_name: StreamName, order: Order, details: CommonRithmicOrderDetails) {
         let duration = match order.time_in_force {
-            TimeInForce::IOC => ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Ioc.into(),
-            TimeInForce::FOK => ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into(),
-            _ => ff_rithmic_api::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into()
+            TimeInForce::IOC => crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Ioc.into(),
+            TimeInForce::FOK => crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into(),
+            _ => crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into()
         };
 
         match order.side {
@@ -934,14 +936,6 @@ impl RithmicClient {
                                     eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
                                 }
                             }
-                            /*match client.connect_plant(SysInfraType::RepositoryPlant).await {
-                                Ok(receiver) => {
-                                    handle_rithmic_responses(client.clone(), receiver).await;
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                                }
-                            }*/
                         }
                         Err(e) => {
                             eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
