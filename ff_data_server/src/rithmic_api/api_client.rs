@@ -935,14 +935,6 @@ impl RithmicClient {
                                     eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
                                 }
                             }
-                            /*match client.connect_plant(SysInfraType::RepositoryPlant).await {
-                                Ok(receiver) => {
-                                    handle_rithmic_responses(client.clone(), receiver).await;
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                                }
-                            }*/
                         }
                         Err(e) => {
                             eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
