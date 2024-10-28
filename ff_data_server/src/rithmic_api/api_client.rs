@@ -655,7 +655,7 @@ impl RithmicClient {
             None => {
                 match self.system {
                     RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
-                    RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading | RithmicSystem::Test
+                    RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
                     => "simulator".to_string(),
                     _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
                 }
@@ -670,7 +670,7 @@ impl RithmicClient {
                 } else {
                     match self.system {
                         RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
-                        RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading | RithmicSystem::Test
+                        RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
                         => "simulator".to_string(),
                         _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
                     }
