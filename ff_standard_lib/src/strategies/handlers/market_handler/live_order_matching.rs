@@ -53,7 +53,7 @@ pub(crate) fn live_order_update(
                          }
                          match synchronize_positions {
                              false => ledger_service.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await,
-                            true => {}//todo this causes desync issue //ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
+                             true => {}//todo this causes desync issue //ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
                          };
                     }
                 }
@@ -106,9 +106,7 @@ pub(crate) fn live_order_update(
                         match &update_type {
                             OrderUpdateType::LimitPrice(price) => order.limit_price = Some(price.clone()),
                             OrderUpdateType::TriggerPrice(price) => order.trigger_price = Some(price.clone()),
-                            OrderUpdateType::TimeInForce(tif) => order.time_in_force = tif.clone(),
                             OrderUpdateType::Quantity(quantity) => order.quantity_open = quantity.clone(),
-                            OrderUpdateType::Tag(tag) => order.tag = tag.clone()
                         }
                         match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                             Ok(_) => {}

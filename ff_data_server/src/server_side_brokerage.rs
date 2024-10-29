@@ -4,14 +4,15 @@ use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
-use ff_standard_lib::standardized_types::accounts::AccountId;
+use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
+use ff_standard_lib::standardized_types::orders::OrderUpdateEvent::OrderUpdateRejected;
 
 pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
@@ -403,5 +404,96 @@ pub async fn other_orders(stream_name: StreamName, mode: StrategyMode, order: Or
         Ok(result) => result,
         Err(_) => Err(create_order_rejected(&order, "Operation timed out".to_string()))
     }
+}
+
+pub async fn cancel_order(account: Account, order_id: OrderId) {
+    match account.brokerage {
+        Brokerage::Test => {}
+        Brokerage::Rithmic(system) => {
+           if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                client.cancel_order(account, order_id).await;
+           }
+        }
+        Brokerage::Bitget => {
+            if let Some(client) = BITGET_CLIENT.get() {
+                client.cancel_order(account, order_id).await;
+            }
+        }
+    }
+}
+
+pub async fn cancel_orders_on_account_symbol( account: Account, symbol_name: SymbolName) {
+    match account.brokerage {
+        Brokerage::Test => {}
+        Brokerage::Rithmic(system) => {
+            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                client.cancel_orders_on_account_symbol(account, symbol_name).await;
+            }
+        }
+        Brokerage::Bitget => {
+            if let Some(client) = BITGET_CLIENT.get() {
+                client.cancel_orders_on_account_symbol(account, symbol_name).await;
+            }
+        }
+    }
+}
+
+pub async fn cancel_orders_on_account(account: Account) {
+    match account.brokerage {
+        Brokerage::Test => {}
+        Brokerage::Rithmic(system) => {
+            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                client.cancel_orders_on_account(account).await;
+            }
+        }
+        Brokerage::Bitget => {
+            if let Some(client) = BITGET_CLIENT.get() {
+                client.cancel_orders_on_account(account).await;
+            }
+        }
+    }
+}
+
+pub async fn flatten_all_for(account: Account) {
+    match account.brokerage {
+        Brokerage::Test => {}
+        Brokerage::Rithmic(system) => {
+            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                client.flatten_all_for(account).await;
+            }
+        }
+        Brokerage::Bitget => {
+            if let Some(client) = BITGET_CLIENT.get() {
+                client.flatten_all_for(account).await;
+            }
+        }
+    }
+}
+
+pub async fn update_order(account: Account, order_id: OrderId, update: OrderUpdateType) -> Result<(), OrderUpdateEvent> {
+    match account.brokerage {
+        Brokerage::Test => return Err(OrderUpdateRejected {
+            account,
+            order_id,
+            reason: "Test Brokerage Can Not Modify Live Orders".to_string(),
+            time: Utc::now().to_string(),
+        }),
+        Brokerage::Rithmic(system) => {
+            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                return client.update_order(account, order_id, update).await
+            }
+        }
+        Brokerage::Bitget => {
+            if let Some(client) = BITGET_CLIENT.get() {
+                return client.update_order(account, order_id, update).await;
+            }
+        }
+    }
+    Err(OrderUpdateRejected {
+        account: account.clone(),
+        order_id,
+        reason: format!("No Client Found For: {}", account),
+        time: Utc::now().to_string(),
+    })
 }
 

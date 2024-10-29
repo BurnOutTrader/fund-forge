@@ -6,11 +6,11 @@ use ff_standard_lib::helpers::decimal_calculators::round_to_decimals;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
-use ff_standard_lib::standardized_types::accounts::{AccountId, AccountInfo, Currency};
+use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo, Currency};
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use ff_standard_lib::StreamName;
@@ -190,6 +190,27 @@ impl BrokerApiResponse for TestApiClient {
 
     #[allow(unused)]
     async fn other_orders(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        todo!()
+    }
+    #[allow(unused)]
+    async fn cancel_orders_on_account(&self, account: Account) {
+        todo!()
+    }
+    #[allow(unused)]
+    async fn cancel_orders_on_account_symbol(&self, account: Account, symbol_name: SymbolName) {
+        todo!()
+    }
+    #[allow(unused)]
+    async fn cancel_order(&self, account: Account, order_id: OrderId) {
+        todo!()
+    }
+    #[allow(unused)]
+    async fn flatten_all_for(&self, account: Account) {
+        todo!()
+    }
+
+    #[allow(unused)]
+    async fn update_order(&self, account: Account, order_id: OrderId, update: OrderUpdateType) -> Result<(), OrderUpdateEvent> {
         todo!()
     }
 }

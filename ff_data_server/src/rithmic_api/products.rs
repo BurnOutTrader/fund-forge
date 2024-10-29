@@ -177,7 +177,10 @@ lazy_static! {
 
 #[allow(dead_code)]
 pub fn get_exchange_by_symbol_name(code: &str) -> Option<FuturesExchange> {
-    CODE_TO_EXCHANGE_MAP.get(code).cloned()
+    match CODE_TO_EXCHANGE_MAP.get(code) {
+        Some(exchange) => Some(*exchange),
+        None => None,
+    }
 }
 
 lazy_static! {

@@ -3,9 +3,9 @@ use chrono::{DateTime, Utc};
 use crate::messages::data_server_messaging::DataServerResponse;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::Volume;
-use crate::standardized_types::orders::{Order, OrderUpdateEvent};
+use crate::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use crate::standardized_types::subscriptions::SymbolName;
-use crate::standardized_types::accounts::AccountId;
+use crate::standardized_types::accounts::{Account, AccountId};
 use crate::StreamName;
 
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
@@ -197,6 +197,8 @@ pub trait BrokerApiResponse: Sync + Send {
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
 
+    /// The Err order event is only returned if there is some error that occured in our logic,
+    /// a successful update event should come from the broker side
     async fn live_enter_long(
         &self,
         stream_name: StreamName,
@@ -204,6 +206,8 @@ pub trait BrokerApiResponse: Sync + Send {
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
 
+    /// The Err order event is only returned if there is some error that occured in our logic,
+    /// a successful update event should come from the broker side
     async fn live_enter_short(
         &self,
         stream_name: StreamName,
@@ -211,6 +215,8 @@ pub trait BrokerApiResponse: Sync + Send {
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
 
+    /// The Err order event is only returned if there is some error that occured in our logic,
+    /// a successful update event should come from the broker side
     async fn live_exit_short(
         &self,
         stream_name: StreamName,
@@ -218,6 +224,8 @@ pub trait BrokerApiResponse: Sync + Send {
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
 
+    /// The Err order event is only returned if there is some error that occured in our logic,
+    /// a successful update event should come from the broker side
     async fn live_exit_long(
         &self,
         stream_name: StreamName,
@@ -226,10 +234,46 @@ pub trait BrokerApiResponse: Sync + Send {
     ) -> Result<(), OrderUpdateEvent>;
 
     // Handle other order types, Limit, Stop Limit, Stop Market, MIT etc
+    /// The Err order event is only returned if there is some error that occured in our logic,
+    /// a successful update event should come from the broker side
     async fn other_orders(
         &self,
         stream_name: StreamName,
         mode: StrategyMode,
         order: Order,
+    ) -> Result<(), OrderUpdateEvent>;
+
+    /// cancel all pending orders on an account
+    async fn cancel_orders_on_account(
+        &self,
+        account: Account,
+    );
+
+    async fn cancel_orders_on_account_symbol(
+        &self,
+        account: Account,
+        symbol_name: SymbolName
+    );
+
+    ///cancel a specific order
+    async fn cancel_order(
+        &self,
+        account: Account,
+        order_id: OrderId,
+    );
+
+    ///flatten the entire account including cancelling any orders
+    async fn flatten_all_for(
+        &self,
+        account: Account
+    );
+
+    /// update the existing order based on update type, the order event is only returned if there is some error that occured in our logic,
+    /// a successful update event should come from the broker side
+    async fn update_order(
+        &self,
+        account: Account,
+        order_id: OrderId,
+        update: OrderUpdateType
     ) -> Result<(), OrderUpdateEvent>;
 }

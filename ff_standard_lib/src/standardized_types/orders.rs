@@ -533,9 +533,7 @@ pub type OrderId = String;
 pub enum OrderUpdateType {
     LimitPrice(Price),
     TriggerPrice(Price),
-    TimeInForce(TimeInForce),
     Quantity(Volume),
-    Tag(String),
 }
 
 #[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug)]
