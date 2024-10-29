@@ -534,7 +534,7 @@ pub async fn match_order_plant_id(
                         .or(msg.remarks)
                         .unwrap_or_else(|| "Cancelled".to_string());
 
-                    let tag = if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                    let tag = if let Some(account_map) = client.open_orders.get(&account_id) {
                         if let Some(order) = account_map.get(&order_id) {
                             order.tag.clone()
                         } else {
@@ -555,7 +555,7 @@ pub async fn match_order_plant_id(
                                 time: time.clone(),
                             };
                             send_order_update(client.brokerage, &order_id, event, time).await;
-                            if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                            if let Some(account_map) = client.open_orders.get(&account_id) {
                                 if let Some(mut open_order) = account_map.get_mut(&order_id) {
                                     open_order.state = OrderState::Accepted;
                                     open_order.symbol_code = Some(symbol_code.clone());
