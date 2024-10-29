@@ -603,6 +603,9 @@ pub async fn match_order_plant_id(
                                         time: time.clone(),
                                     };
                                     send_order_update(client.brokerage, &order_id, event, time).await;
+                                    if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                        account_map.remove(&order_id);
+                                    }
                                 } else if total_unfilled_size > 0 {
                                     let event = OrderUpdateEvent::OrderPartiallyFilled {
                                         side,
@@ -638,6 +641,9 @@ pub async fn match_order_plant_id(
                                 reason,
                             };
                             send_order_update(client.brokerage, &order_id, event, time).await;
+                            if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                account_map.remove(&order_id);
+                            }
                         },
                         6 => {
                             if let Some(account_map) = client.open_orders.get_mut(&account_id) {
@@ -656,6 +662,9 @@ pub async fn match_order_plant_id(
                                 time: time.clone(),
                             };
                             send_order_update(client.brokerage, &order_id, event, time).await;
+                            if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                account_map.remove(&order_id);
+                            }
                         },
                        2 => {
                            if let Some(broker_map) = client.pending_order_updates.get(&client.brokerage) {
@@ -682,7 +691,6 @@ pub async fn match_order_plant_id(
                                        text: "User Request".to_string(),
                                    };
                                    send_order_update(client.brokerage, &order_id, event, time).await;
-
                                } else {
                                    return;
                                }
