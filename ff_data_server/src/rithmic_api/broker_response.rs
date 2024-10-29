@@ -417,11 +417,20 @@ impl BrokerApiResponse for RithmicClient {
     }
 
     async fn cancel_orders_on_account_symbol(&self, account: Account, symbol_name: SymbolName) {
+        println!("Cancel Orders on Account Symbol: {}", symbol_name);
         const PLANT: SysInfraType = SysInfraType::OrderPlant;
         if let Some(order_map) = self.open_orders.get(&account.account_id) {
             for order in order_map.value() {
                 if order.symbol_name != symbol_name {
-                    continue;
+                    if let Some(symbol_code) = &order.symbol_code {
+                        if symbol_name != *symbol_code {
+                            eprintln!("Rithmic `cancel_orders_on_account_symbol()` error, Symbol name does not match symbol code: {} != {}", symbol_name, symbol_code);
+                            continue
+                        }
+                    } else {
+                        eprintln!("Rithmic `cancel_orders_on_account_symbol()` error, Symbol name does not match symbol name: {}", symbol_name);
+                        continue
+                    }
                 }
                 if let Some(account_map) = self.id_to_basket_id_map.get(&account.account_id) {
                     if let Some(order) = account_map.get(order.key()) {

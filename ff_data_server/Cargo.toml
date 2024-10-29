@@ -43,3 +43,4 @@ parking_lot = "0.12.3"
 rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }
 thiserror = "*"
 strum_macros = "*"
+uuid = { version = "1.10.0", features = ["v4"] }

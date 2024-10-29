@@ -232,7 +232,7 @@ pub async fn match_pnl_plant_id(
                                     lowest_recoded_price: average_price,
                                     average_exit_price: None,
                                     is_closed: false,
-                                    position_id: client.generate_id(symbol_code, side, count_entry.value().clone(), &account_id),
+                                    position_id: client.generate_id(side),
                                     symbol_info,
                                     tag,
                                 };

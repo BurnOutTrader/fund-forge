@@ -53,7 +53,6 @@ impl Brokerage {
                             margin_used: DashMap::new(),
                             positions_closed: DashMap::new(),
                             symbol_closed_pnl: Default::default(),
-                            positions_counter: DashMap::new(),
                             open_pnl: DashMap::new(),
                             total_booked_pnl: Mutex::new(dec!(0.0)),
                             mode,

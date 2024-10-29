@@ -21,6 +21,7 @@ use dashmap::DashMap;
 use rust_decimal::Decimal;
 use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::{Sender};
+use uuid::Uuid;
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc, resolve_market_datetime_in_timezone};
 use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, send_request, set_warmup_complete, StrategyRequest};
 use crate::standardized_types::base_data::candle::Candle;
@@ -60,8 +61,6 @@ pub struct FundForgeStrategy {
     timed_event_handler: Arc<TimedEventHandler>,
 
     drawing_objects_handler: Arc<DrawingObjectHandler>,
-
-    orders_count: DashMap<Account, i64>,
 
     synchronize_accounts: bool,
 
@@ -196,7 +195,6 @@ impl FundForgeStrategy {
             indicator_handler: indicator_handler.clone(),
             timed_event_handler,
             drawing_objects_handler,
-            orders_count: Default::default(),
             synchronize_accounts,
             accounts: accounts.clone(),
             ledger_service: ledger_service.clone()
@@ -274,26 +272,11 @@ impl FundForgeStrategy {
 
     async fn order_id(
         &self,
-        symbol_name: &SymbolName,
-        account: &Account,
-        order_string: &str
     ) -> OrderId {
-        let num = match self.orders_count.get_mut(account) {
-            None => {
-                self.orders_count.insert(account.clone(), 1);
-                1
-            }
-            Some(mut broker_order_number) => {
-                *broker_order_number.value_mut() += 1;
-                broker_order_number.value().clone()
-            }
-        };
+        let guid = Uuid::new_v4();
         format!(
-            "{}: {}:{}, {}",
-            num,
-            order_string,
-            account,
-            symbol_name,
+            "{}",
+            guid
         )
     }
 
@@ -313,7 +296,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account, &"Enter Long").await;
+        let order_id = self.order_id().await;
         let order = Order::enter_long(
             symbol_name.clone(),
             symbol_code,
@@ -348,7 +331,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account, &"Enter Short").await;
+        let order_id = self.order_id().await;
         let order = Order::enter_short(
             symbol_name.clone(),
             symbol_code,
@@ -383,7 +366,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account, &"Exit Long").await;
+        let order_id = self.order_id().await;
         let order = Order::exit_long(
             symbol_name.clone(),
             symbol_code,
@@ -418,7 +401,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account, &"Exit Short").await;
+        let order_id = self.order_id().await;
         let order = Order::exit_short(
             symbol_name.clone(),
             symbol_code,
@@ -453,7 +436,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account, &"Buy Market").await;
+        let order_id = self.order_id().await;
         let order = Order::market_order(
             symbol_name.clone(),
             symbol_code,
@@ -490,7 +473,7 @@ impl FundForgeStrategy {
         quantity: Volume,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account, &"Sell Market").await;
+        let order_id = self.order_id().await;
         let order = Order::market_order(
             symbol_name.clone(),
             symbol_code,
@@ -529,7 +512,7 @@ impl FundForgeStrategy {
         tif: TimeInForce,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account, &format!("{} Limit", side)).await;
+        let order_id = self.order_id().await;
         let order = Order::limit_order(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(), limit_price, tif, exchange);
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::Limit};
         self.open_order_cache.insert(order_id.clone(), order.clone());
@@ -558,7 +541,7 @@ impl FundForgeStrategy {
         tif: TimeInForce,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(&symbol_name, account, &format!("{} MIT", side)).await;
+        let order_id = self.order_id().await;
         let order = Order::market_if_touched(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::MarketIfTouched};
         self.open_order_cache.insert(order_id.clone(), order.clone());
@@ -587,7 +570,7 @@ impl FundForgeStrategy {
         tif: TimeInForce,
         tag: String,
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account, &format!("{} Stop", side)).await;
+        let order_id = self.order_id().await;
         let order = Order::stop(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(),trigger_price, tif, exchange);
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::StopMarket};
         self.open_order_cache.insert(order_id.clone(), order.clone());
@@ -617,7 +600,7 @@ impl FundForgeStrategy {
         trigger_price: Price,
         tif: TimeInForce
     ) -> OrderId {
-        let order_id = self.order_id(symbol_name, account, &format!("{} Stop Limit", side)).await;
+        let order_id = self.order_id().await;
         let order = Order::stop_limit(symbol_name.clone(), symbol_code, account, quantity, side, tag, order_id.clone(), self.time_utc(),limit_price, trigger_price, tif, exchange);
         let order_request = OrderRequest::Create{ account: account.clone(), order: order.clone(), order_type: OrderType::StopLimit};
         self.open_order_cache.insert(order_id.clone(), order.clone());

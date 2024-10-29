@@ -534,6 +534,16 @@ pub async fn match_order_plant_id(
                         .or(msg.remarks)
                         .unwrap_or_else(|| "Cancelled".to_string());
 
+                    let tag = if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                        if let Some((_, open_order)) = account_map.remove(&order_id) {
+                            open_order.tag.clone()
+                        } else {
+                            "External Order".to_string()
+                        }
+                    } else {
+                        "External Order".to_string()
+                    };
+
                     match notify_type {
                         1 => {
                             let event = OrderUpdateEvent::OrderAccepted {
@@ -541,7 +551,7 @@ pub async fn match_order_plant_id(
                                 symbol_name,
                                 symbol_code: symbol_code.clone(),
                                 order_id: order_id.clone(),
-                                tag: user_tag,
+                                tag,
                                 time: time.clone(),
                             };
                             send_order_update(client.brokerage, &order_id, event, time).await;
@@ -578,9 +588,6 @@ pub async fn match_order_plant_id(
                                     }
                                 };
                                 if total_unfilled_size == 0 {
-                                    if let Some(account_map) = client.open_orders.get_mut(&account_id) {
-                                        account_map.remove(&order_id);
-                                    }
                                     if let Some(account_map) = client.id_to_basket_id_map.get(&account_id) {
                                         account_map.remove(&order_id);
                                     }
@@ -592,16 +599,11 @@ pub async fn match_order_plant_id(
                                         order_id: order_id.clone(),
                                         price,
                                         quantity: fill_quantity,
-                                        tag: user_tag,
+                                        tag,
                                         time: time.clone(),
                                     };
                                     send_order_update(client.brokerage, &order_id, event, time).await;
                                 } else if total_unfilled_size > 0 {
-                                    if let Some(account_map) = client.open_orders.get_mut(&account_id) {
-                                        if let Some(mut open_order) = account_map.get_mut(&order_id) {
-                                            open_order.state = OrderState::PartiallyFilled;
-                                        }
-                                    }
                                     let event = OrderUpdateEvent::OrderPartiallyFilled {
                                         side,
                                         account: Account::new(client.brokerage, account_id.clone()),
@@ -610,7 +612,7 @@ pub async fn match_order_plant_id(
                                         order_id: order_id.clone(),
                                         price,
                                         quantity: fill_quantity,
-                                        tag: user_tag,
+                                        tag,
                                         time: time.clone(),
                                     };
                                     send_order_update(client.brokerage, &order_id, event, time).await;
@@ -631,7 +633,7 @@ pub async fn match_order_plant_id(
                                 order_id: order_id.clone(),
                                 symbol_name,
                                 symbol_code,
-                                tag: user_tag,
+                                tag,
                                 time: time.clone(),
                                 reason,
                             };
@@ -650,7 +652,7 @@ pub async fn match_order_plant_id(
                                 reason,
                                 symbol_name,
                                 symbol_code,
-                                tag: user_tag,
+                                tag,
                                 time: time.clone(),
                             };
                             send_order_update(client.brokerage, &order_id, event, time).await;
@@ -675,7 +677,7 @@ pub async fn match_order_plant_id(
                                        update_type,
                                        symbol_name,
                                        symbol_code,
-                                       tag: user_tag,
+                                       tag,
                                        time: time.clone(),
                                        text: "User Request".to_string(),
                                    };

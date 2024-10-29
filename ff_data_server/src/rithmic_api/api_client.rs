@@ -21,7 +21,7 @@ use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, PositionSide, StrategyMode};
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
-use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolCode, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use ff_standard_lib::standardized_types::symbol_info::{FrontMonthInfo};
 use ff_standard_lib::standardized_types::books::BookLevel;
 use ff_standard_lib::standardized_types::accounts::AccountId;
@@ -41,6 +41,7 @@ use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::AccountInfo;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::PositionId;
+use uuid::Uuid;
 use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 use crate::rithmic_api::client_base::api_base::RithmicApiClient;
 use crate::rithmic_api::client_base::credentials::RithmicCredentials;
@@ -184,33 +185,17 @@ impl RithmicClient {
 
     pub fn generate_id(
         &self,
-        symbol_code: &SymbolCode,
         side: PositionSide,
-        count: u64,
-        account_id: &AccountId,
     ) -> PositionId {
-        // Return the generated position ID
-        format!("{}-{}-{}-{}-{}", self.brokerage, account_id, count, symbol_code, side)
-    }
+        // Generate a UUID v4 (random)
+        let guid = Uuid::new_v4();
 
-    pub fn total_open_size(&self) -> Volume {
-        let mut size = dec!(0);
-
-        // Sum up long positions
-        for account_map in self.long_quantity.iter() {
-            for symbol_map in account_map.value().iter() {
-                size += *symbol_map.value();
-            }
-        }
-
-        // Sum up short positions
-        for account_map in self.short_quantity.iter() {
-            for symbol_map in account_map.value().iter() {
-                size += *symbol_map.value();
-            }
-        }
-
-        size
+        // Return the generated position ID with both readable prefix and GUID
+        format!(
+            "{}-{}",
+            side,
+            guid.to_string()
+        )
     }
 
 

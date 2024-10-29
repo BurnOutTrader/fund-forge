@@ -258,7 +258,7 @@ impl Ledger {
                 }
             }
 
-            let id = self.generate_id(&symbol_name, position_side);
+            let id = self.generate_id(position_side);
             // Create a new position
             let position = Position::new(
                 symbol_code.clone(),

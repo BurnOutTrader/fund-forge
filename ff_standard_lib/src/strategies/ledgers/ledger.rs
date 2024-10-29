@@ -9,6 +9,7 @@ use std::sync::Arc;
 use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Receiver, Sender};
+use uuid::Uuid;
 use crate::standardized_types::accounts::{Account, AccountInfo, Currency};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::broker_enum::Brokerage;
@@ -46,7 +47,6 @@ pub struct Ledger {
     pub margin_used: DashMap<SymbolCode, Price>,
     pub positions_closed: DashMap<SymbolCode, Vec<Position>>,
     pub symbol_closed_pnl: DashMap<SymbolCode, Decimal>,
-    pub positions_counter: DashMap<SymbolName, u64>,
     pub(crate) symbol_info: DashMap<SymbolName, SymbolInfo>,
     pub open_pnl: DashMap<SymbolCode, Price>,
     pub total_booked_pnl: Mutex<Price>,
@@ -95,7 +95,6 @@ impl Ledger {
             margin_used: Default::default(),
             positions_closed: DashMap::new(),
             symbol_closed_pnl: Default::default(),
-            positions_counter: DashMap::new(),
             symbol_info: DashMap::new(),
             open_pnl: DashMap::new(),
             total_booked_pnl: Mutex::new(dec!(0)),
@@ -452,16 +451,17 @@ impl Ledger {
 
     pub fn generate_id(
         &self,
-        symbol_name: &SymbolName,
         side: PositionSide
     ) -> PositionId {
-        // Increment the counter for the symbol, or insert it if it doesn't exist
-        let counter = self.positions_counter.entry(symbol_name.clone())
-            .and_modify(|count| *count += 1)
-            .or_insert(1).value().clone();
+        // Generate a UUID v4 (random)
+        let guid = Uuid::new_v4();
 
-        // Return the generated position ID
-        format!("{}-{}-{}-{}-{}", self.account.brokerage, self.account.account_id, counter, symbol_name, side)
+        // Return the generated position ID with GUID
+        format!(
+            "{}-{}",
+            side,
+            guid.as_simple()
+        )
     }
 
     pub async fn timeslice_update(&self, time_slice: Arc<TimeSlice>, time: DateTime<Utc>) {
@@ -596,7 +596,7 @@ impl Ledger {
                 }
             }
 
-            let id = self.generate_id(&symbol_name, position_side);
+            let id = self.generate_id(position_side);
             // Create a new position
             let position = Position::new(
                 symbol_code.clone(),
