@@ -603,7 +603,7 @@ pub async fn match_order_plant_id(
                                         time: time.clone(),
                                     };
                                     send_order_update(client.brokerage, &order_id, event, time).await;
-                                    if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                    if let Some(account_map) = client.open_orders.get(&account_id) {
                                         account_map.remove(&order_id);
                                     }
                                 } else if total_unfilled_size > 0 {
@@ -625,7 +625,7 @@ pub async fn match_order_plant_id(
                             }
                         },
                         3 => {
-                            if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                            if let Some(account_map) = client.open_orders.get(&account_id) {
                                 account_map.remove(&order_id);
                             }
                             if let Some(account_map) = client.id_to_basket_id_map.get(&account_id) {
@@ -641,12 +641,12 @@ pub async fn match_order_plant_id(
                                 reason,
                             };
                             send_order_update(client.brokerage, &order_id, event, time).await;
-                            if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                            if let Some(account_map) = client.open_orders.get(&account_id) {
                                 account_map.remove(&order_id);
                             }
                         },
                         6 => {
-                            if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                            if let Some(account_map) = client.open_orders.get(&account_id) {
                                 account_map.remove(&order_id);
                             }
                             if let Some(account_map) = client.id_to_basket_id_map.get(&account_id) {
