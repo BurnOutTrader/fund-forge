@@ -535,8 +535,8 @@ pub async fn match_order_plant_id(
                         .unwrap_or_else(|| "Cancelled".to_string());
 
                     let tag = if let Some(account_map) = client.open_orders.get_mut(&account_id) {
-                        if let Some((_, open_order)) = account_map.remove(&order_id) {
-                            open_order.tag.clone()
+                        if let Some(order) = account_map.get(&order_id) {
+                            order.tag.clone()
                         } else {
                             "External Order".to_string()
                         }
