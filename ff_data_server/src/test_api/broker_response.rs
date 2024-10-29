@@ -197,10 +197,6 @@ impl BrokerApiResponse for TestApiClient {
         todo!()
     }
     #[allow(unused)]
-    async fn cancel_orders_on_account_symbol(&self, account: Account, symbol_name: SymbolName) {
-        todo!()
-    }
-    #[allow(unused)]
     async fn cancel_order(&self, account: Account, order_id: OrderId) {
         todo!()
     }

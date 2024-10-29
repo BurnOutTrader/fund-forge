@@ -99,7 +99,7 @@ pub async fn on_data_received(
                                     // Remove order_placed from exit condition
                                     if count == 10 && !exit_sent {
                                         exit_sent = true;
-                                        strategy.cancel_orders(account_1.clone(), candle.symbol.name.clone()).await;
+                                        strategy.flatten_all_for(account_1.clone()).await;
                                         /*let position_size: Decimal = strategy.position_size(&account_1, &symbol_code);
                                         println!("Strategy: Exit Long, Time {}: Size: {}", strategy.time_local(), position_size);
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long")).await;*/

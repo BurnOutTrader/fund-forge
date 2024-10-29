@@ -669,28 +669,43 @@ impl FundForgeStrategy {
         }
     }
 
-    /// Cancel all pending orders on the account for the symbol_name
+    /// Cancel all pending orders on the account for the symbol_name, this cancels only orders on the symbol which were created by the strategy
     pub async fn cancel_orders(&self, account: Account, symbol_name: SymbolName) {
-        let order_request = OrderRequest::CancelAll{account, symbol_name};
-        if self.mode == StrategyMode::Live {
-            let connection_type = ConnectionType::Broker(order_request.brokerage());
-            let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
-            send_request(request).await;
-        } else {
-            if let Some(historical_message_sender) = &self.historical_message_sender {
-                historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
+        for order in self.open_order_cache.iter() {
+            if account == order.account && order.symbol_name == symbol_name {
+                self.cancel_order(order.id.clone()).await;
             }
         }
     }
 
-    /// Flatten all positions on the account.
+    /// if not synchronize_accounts mode, this will cancel only orders placed by the strategy,
+    /// if synchronize_accounts mode, this will cancel all orders on the account.
+    pub async fn cancel_orders_account(&self, account: Account) {
+        if !self.synchronize_accounts || self.mode == StrategyMode::Backtest {
+            for order in self.open_order_cache.iter() {
+                if account == order.account {
+                    self.cancel_order(order.id.clone()).await;
+                }
+            }
+        } else {
+            let order_request = OrderRequest::CancelAll {account};
+            if self.mode == StrategyMode::Live {
+                let connection_type = ConnectionType::Broker(order_request.brokerage());
+                let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
+                send_request(request).await;
+            }
+        }
+    }
+
+    /// Flatten all positions on the account. this will try to flatten the whole account regardless of is_synchronize_accounts.
     pub async fn flatten_all_for(&self, account: Account) {
-        let order_request = OrderRequest::FlattenAllFor {account};
         if self.mode == StrategyMode::Live {
+            let order_request = OrderRequest::FlattenAllFor {account};
             let connection_type = ConnectionType::Broker(order_request.brokerage());
             let request = StrategyRequest::OneWay(connection_type, DataServerRequest::OrderRequest { request: order_request });
             send_request(request).await;
         } else {
+            let order_request = OrderRequest::FlattenAllFor {account};
             if let Some(historical_message_sender) = &self.historical_message_sender {
                 historical_message_sender.send(BackTestEngineMessage::OrderRequest(get_backtest_time(), order_request)).await.unwrap();
             }

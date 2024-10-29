@@ -422,22 +422,6 @@ pub async fn cancel_order(account: Account, order_id: OrderId) {
     }
 }
 
-pub async fn cancel_orders_on_account_symbol( account: Account, symbol_name: SymbolName) {
-    match account.brokerage {
-        Brokerage::Test => {}
-        Brokerage::Rithmic(system) => {
-            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                client.cancel_orders_on_account_symbol(account, symbol_name).await;
-            }
-        }
-        Brokerage::Bitget => {
-            if let Some(client) = BITGET_CLIENT.get() {
-                client.cancel_orders_on_account_symbol(account, symbol_name).await;
-            }
-        }
-    }
-}
-
 pub async fn cancel_orders_on_account(account: Account) {
     match account.brokerage {
         Brokerage::Test => {}

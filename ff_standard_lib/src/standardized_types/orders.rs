@@ -21,7 +21,7 @@ pub enum OrderRequest {
     Create{account: Account, order: Order, order_type: OrderType},
     Cancel{account: Account, order_id: OrderId},
     Update{account: Account, order_id: OrderId, update: OrderUpdateType },
-    CancelAll{account: Account, symbol_name: SymbolName},
+    CancelAll{account: Account},
     FlattenAllFor{account: Account},
 }
 

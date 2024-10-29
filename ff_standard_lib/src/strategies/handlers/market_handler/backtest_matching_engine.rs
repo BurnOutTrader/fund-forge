@@ -97,10 +97,10 @@ pub(crate) async fn backtest_matching_engine(
                                 }
                             }
                         }
-                        OrderRequest::CancelAll { account, symbol_name } => {
+                        OrderRequest::CancelAll { account } => {
                             let mut remove = vec![];
                             for order in open_order_cache.iter() {
-                                if order.account == account && order.symbol_name == symbol_name {
+                                if order.account == account {
                                     remove.push(order.id.clone());
                                 }
                             }

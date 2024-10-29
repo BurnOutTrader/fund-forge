@@ -249,12 +249,6 @@ pub trait BrokerApiResponse: Sync + Send {
         account: Account,
     );
 
-    async fn cancel_orders_on_account_symbol(
-        &self,
-        account: Account,
-        symbol_name: SymbolName
-    );
-
     ///cancel a specific order
     async fn cancel_order(
         &self,
