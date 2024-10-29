@@ -21,6 +21,12 @@ use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::strategy_events::StrategyEvent;
 
+/*
+ The ledger could be split into event driven components
+ - We could have an static dashmap symbol name atomic bool, for is long is short etc, this can be updated in an event loop that manages position updates
+ - The ledger itself doesnt need to exist,
+*/
+
 pub enum LedgerMessage {
     SyncPosition{position: Position, time: DateTime<Utc>},
     ProcessOrder{order: Order, quantity: Decimal, time: DateTime<Utc>},
@@ -111,6 +117,7 @@ impl Ledger {
         let mut account_cash_available= self.cash_available.lock().await;
         *account_cash_available = cash_available;
     }
+
 
     pub fn live_ledger_updates(ledger: Arc<Ledger>, mut receiver: Receiver<LedgerMessage>) {
         tokio::spawn(async move {

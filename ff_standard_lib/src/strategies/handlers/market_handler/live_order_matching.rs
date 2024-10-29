@@ -15,7 +15,7 @@ pub(crate) fn live_order_update(
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
     mut order_event_receiver: Receiver<(OrderUpdateEvent, DateTime<Utc>)>,
     strategy_event_sender: mpsc::Sender<StrategyEvent>,
-    ledger_service: Arc<LedgerService>,
+    ledger_service: Arc<LedgerService>, //it is better to do this, because using a direct fn call we can concurrently update individual ledgers and have a que per ledger. sending a msg here would cause a bottleneck with more ledgers.
     synchronize_positions: bool
 ) {
     //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates
@@ -53,7 +53,7 @@ pub(crate) fn live_order_update(
                          }
                          match synchronize_positions {
                              false => ledger_service.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await,
-                            true => ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
+                            true => {}//todo this causes desync issue //ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
                          };
                     }
                 }
@@ -72,7 +72,7 @@ pub(crate) fn live_order_update(
                        }
                        match synchronize_positions {
                            false => ledger_service.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await,
-                           true => ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await,
+                           true => {}//todo this causes desync issue //ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await,
                        };
                    }
                 }

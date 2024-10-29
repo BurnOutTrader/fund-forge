@@ -628,12 +628,11 @@ impl RithmicClient {
                 Some(mut exchange) => {
                     exchange = match &order.exchange {
                         None => exchange,
-                        Some(_preset) => {
-                            exchange
-                            //todo[Rithmic Api] Set this up to parse from string
-                            /*match preset {
-
-                            }*/
+                        Some(preset) => {
+                            match FuturesExchange::from_string(preset) {
+                                Err(e) => return Err(RithmicClient::reject_order(&order, format!("Error parsing exchange string {} {}",preset, e))),
+                                Ok(ex) => ex.clone()
+                            }
                         }
                     };
                     match &order.symbol_code {
