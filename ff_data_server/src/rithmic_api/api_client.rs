@@ -676,6 +676,8 @@ impl RithmicClient {
             OrderSide::Sell => TransactionType::Sell,
         };
 
+        self.open_orders.entry(order.account.account_id.clone()).or_insert(DashMap::new()).insert(order.id.clone(), order.clone());
+
         Ok(CommonRithmicOrderDetails {
             symbol_code,
             exchange,
