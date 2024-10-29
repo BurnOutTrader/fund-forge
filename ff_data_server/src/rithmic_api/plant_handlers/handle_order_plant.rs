@@ -520,19 +520,6 @@ pub async fn match_order_plant_id(
                         return;
                     };
 
-                    let tag = if let Some(brokerage_map) = ID_TO_TAG.get(&client.brokerage) {
-                        match brokerage_map.value().get(&order_id) {
-                            Some(tag) => tag.clone(),
-                            None => {
-                                //eprintln!("Tag not found for order: {}", order_id);
-                                return;
-                            },
-                        }
-                    } else {
-                        //eprintln!("Brokerage map not found for client: {:?}", client.brokerage);
-                        return;
-                    };
-
                     let (symbol_name, symbol_code) = match msg.symbol {
                         None => return,
                         Some(code) => {
@@ -555,7 +542,7 @@ pub async fn match_order_plant_id(
                                 symbol_name,
                                 symbol_code: symbol_code.clone(),
                                 order_id: order_id.clone(),
-                                tag,
+                                tag: user_tag,
                                 time: time.clone(),
                             };
                             send_order_update(client.brokerage, &order_id, event, time).await;
@@ -606,7 +593,7 @@ pub async fn match_order_plant_id(
                                         order_id: order_id.clone(),
                                         price,
                                         quantity: fill_quantity,
-                                        tag,
+                                        tag: user_tag,
                                         time: time.clone(),
                                     };
                                     send_order_update(client.brokerage, &order_id, event, time).await;
@@ -624,7 +611,7 @@ pub async fn match_order_plant_id(
                                         order_id: order_id.clone(),
                                         price,
                                         quantity: fill_quantity,
-                                        tag,
+                                        tag: user_tag,
                                         time: time.clone(),
                                     };
                                     send_order_update(client.brokerage, &order_id, event, time).await;
@@ -645,7 +632,7 @@ pub async fn match_order_plant_id(
                                 order_id: order_id.clone(),
                                 symbol_name,
                                 symbol_code,
-                                tag,
+                                tag: user_tag,
                                 time: time.clone(),
                                 reason,
                             };
@@ -664,7 +651,7 @@ pub async fn match_order_plant_id(
                                 reason,
                                 symbol_name,
                                 symbol_code,
-                                tag,
+                                tag: user_tag,
                                 time: time.clone(),
                             };
                             send_order_update(client.brokerage, &order_id, event, time).await;
@@ -691,7 +678,7 @@ pub async fn match_order_plant_id(
                                        update_type,
                                        symbol_name,
                                        symbol_code,
-                                       tag,
+                                       tag: user_tag,
                                        time: time.clone(),
                                        text: "User Request".to_string(),
                                    };

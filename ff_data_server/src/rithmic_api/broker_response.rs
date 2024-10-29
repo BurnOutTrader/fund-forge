@@ -405,7 +405,7 @@ impl BrokerApiResponse for RithmicClient {
         //Cancel All Orders Request 346
         let req = RequestCancelAllOrders {
             template_id: 346,
-            user_msg: vec![],
+            user_msg: vec!["Cancel All Orders".to_string()],
             fcm_id: self.fcm_id.clone(),
             ib_id: self.ib_id.clone(),
             account_id: Some(account.account_id),
@@ -426,7 +426,7 @@ impl BrokerApiResponse for RithmicClient {
                     if let Some(order) = account_map.get(order.key()) {
                         let req = RequestCancelOrder {
                             template_id: 316,
-                            user_msg: vec![],
+                            user_msg: vec![format!("Cancel Orders {}", symbol_name)],
                             window_name: None,
                             fcm_id: self.fcm_id.clone(),
                             ib_id: self.ib_id.clone(),
@@ -449,7 +449,7 @@ impl BrokerApiResponse for RithmicClient {
             if let Some(order) = account_map.get(&order_id) {
                 let req = RequestCancelOrder {
                     template_id: 316,
-                    user_msg: vec![],
+                    user_msg: vec!["Cancel Order".to_string()],
                     window_name: None,
                     fcm_id: self.fcm_id.clone(),
                     ib_id: self.ib_id.clone(),
@@ -477,7 +477,7 @@ impl BrokerApiResponse for RithmicClient {
                 };
                 let req = RequestExitPosition {
                     template_id: 3504,
-                    user_msg: vec![],
+                    user_msg: vec!["Flatten All".to_string()],
                     window_name: None,
                     fcm_id: self.fcm_id.clone(),
                     ib_id: self.ib_id.clone(),
