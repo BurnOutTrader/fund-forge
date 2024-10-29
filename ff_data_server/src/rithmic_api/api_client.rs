@@ -812,10 +812,6 @@ impl RithmicClient {
             if_touched_price: None,
         };
 
-        if let Some(account_map) = self.open_orders.get(&order.account.account_id) {
-            account_map.insert(order.account.account_id.clone(), order.clone());
-        }
-
         if let Some(account_map) = self.last_tag.get(&order.account.account_id) {
             account_map.insert(details.symbol_code, order.tag.clone());
         }
@@ -867,9 +863,6 @@ impl RithmicClient {
             if_touched_price: None,
         };
 
-        if let Some(account_map) = self.open_orders.get(&order.account.account_id) {
-            account_map.insert(order.account.account_id.clone(), order.clone());
-        }
         //this is used to update positions when synchronise positions is used
         if let Some(account_map) = self.last_tag.get(&order.account.account_id) {
             account_map.insert(details.symbol_code, order.tag.clone());
