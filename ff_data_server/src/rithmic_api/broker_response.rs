@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal_macros::dec;
@@ -14,7 +15,7 @@ use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestCancelAllOrders, RequestCancelOrder, RequestExitPosition};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestCancelAllOrders, RequestCancelOrder, RequestExitPosition, RequestModifyOrder};
 use crate::rithmic_api::products::{find_base_symbol, get_available_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
 
 #[async_trait]
@@ -422,7 +423,7 @@ impl BrokerApiResponse for RithmicClient {
                 if order.symbol_name != symbol_name {
                     continue;
                 }
-                if let Some(account_map) = self.id_to_baskt_id_map.get(&account.account_id) {
+                if let Some(account_map) = self.id_to_basket_id_map.get(&account.account_id) {
                     if let Some(order) = account_map.get(order.key()) {
                         let req = RequestCancelOrder {
                             template_id: 316,
@@ -445,7 +446,7 @@ impl BrokerApiResponse for RithmicClient {
     async fn cancel_order(&self, account: Account, order_id: OrderId) {
         const PLANT: SysInfraType = SysInfraType::OrderPlant;
         //Cancel Order Request 316
-        if let Some(account_map) = self.id_to_baskt_id_map.get(&account.account_id) {
+        if let Some(account_map) = self.id_to_basket_id_map.get(&account.account_id) {
             if let Some(order) = account_map.get(&order_id) {
                 let req = RequestCancelOrder {
                     template_id: 316,
@@ -491,6 +492,110 @@ impl BrokerApiResponse for RithmicClient {
             }
         }
         //Exit Position Request 3504 for all positions
+    }
+
+    async fn update_order(&self, account: Account, order_id: OrderId, update: OrderUpdateType) -> Result<(), OrderUpdateEvent> {
+        const PLANT: SysInfraType = SysInfraType::OrderPlant;
+        let map = self.pending_order_updates.entry(account.brokerage.clone()).or_insert(DashMap::new());
+        map.insert(order_id.clone(), update.clone());
+        let basket_id = match self.id_to_basket_id_map.get(&account.account_id) {
+            None => {
+                return Err(OrderUpdateEvent::OrderUpdateRejected {
+                    account,
+                    order_id,
+                    reason: "No basket id found for order id".to_string(),
+                    time: Utc::now().to_string(),
+                })
+            }
+            Some(basket_id_map) => match basket_id_map.get(&order_id) {
+                None => {
+                    return Err(OrderUpdateEvent::OrderUpdateRejected {
+                        account,
+                        order_id,
+                        reason: "No basket id found for order id".to_string(),
+                        time: Utc::now().to_string(),
+                    })
+                }
+                Some(basket_id) => basket_id.value().clone()
+            },
+        };
+
+        match self.orders_open.get(&order_id) {
+            None => {
+                Err(OrderUpdateEvent::OrderUpdateRejected {
+                    account,
+                    order_id,
+                    reason: "No order found for id".to_string(),
+                    time: Utc::now().to_string(),
+                })
+            }
+            Some(order) => {
+                let (quantity, limit_price, stop_price) = match update {
+                    OrderUpdateType::Quantity(q) => match q.to_i32() {
+                        None => {
+                            return Err(OrderUpdateEvent::OrderUpdateRejected {
+                                account,
+                                order_id,
+                                reason: "Unable to parse quantity".to_string(),
+                                time: Utc::now().to_string(),
+                            })
+                        }
+                        Some(q) => (Some(q), None, None)
+                    },
+                    OrderUpdateType::LimitPrice(price) => {
+                        match price.to_f64() {
+                            None => {
+                                return Err(OrderUpdateEvent::OrderUpdateRejected {
+                                    account,
+                                    order_id,
+                                    reason: "Unable to parse limit price".to_string(),
+                                    time: Utc::now().to_string(),
+                                })
+                            }
+                            Some(price) => (None, Some(price), None)
+                        }
+                    }
+                    OrderUpdateType::TriggerPrice(price) => {
+                        match price.to_f64() {
+                            None => {
+                                return Err(OrderUpdateEvent::OrderUpdateRejected {
+                                    account,
+                                    order_id,
+                                    reason: "Unable to parse trigger price".to_string(),
+                                    time: Utc::now().to_string(),
+                                })
+                            }
+                            Some(price) => (None, None, Some(price))
+                        }
+                    }
+                };
+                let req = RequestModifyOrder {
+                    template_id: 314,
+                    user_msg: vec![order.tag.clone()],
+                    window_name: None,
+                    fcm_id: self.fcm_id.clone(),
+                    ib_id: self.ib_id.clone(),
+                    account_id: Some(account.account_id),
+                    basket_id: Some(basket_id),
+                    symbol: order.symbol_code.clone(),
+                    exchange: order.exchange.clone(),
+                    quantity: quantity,
+                    price: limit_price,
+                    trigger_price: stop_price,
+                    price_type: None,
+                    manual_or_auto: Some(2),
+                    trailing_stop: None,
+                    trail_by_ticks: None,
+                    if_touched_symbol: None,
+                    if_touched_exchange: None,
+                    if_touched_condition: None,
+                    if_touched_price_field: None,
+                    if_touched_price: None,
+                };
+                self.send_message(&PLANT, req).await;
+                Ok(())
+            }
+        }
     }
 }
 

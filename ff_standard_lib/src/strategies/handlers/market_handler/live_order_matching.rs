@@ -106,9 +106,7 @@ pub(crate) fn live_order_update(
                         match &update_type {
                             OrderUpdateType::LimitPrice(price) => order.limit_price = Some(price.clone()),
                             OrderUpdateType::TriggerPrice(price) => order.trigger_price = Some(price.clone()),
-                            OrderUpdateType::TimeInForce(tif) => order.time_in_force = tif.clone(),
                             OrderUpdateType::Quantity(quantity) => order.quantity_open = quantity.clone(),
-                            OrderUpdateType::Tag(tag) => order.tag = tag.clone()
                         }
                         match strategy_event_sender.send(StrategyEvent::OrderEvents(order_update_event.clone())).await {
                             Ok(_) => {}

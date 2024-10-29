@@ -7,7 +7,7 @@ use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountI
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BitgetClient;
@@ -117,6 +117,11 @@ impl BrokerApiResponse for BitgetClient {
     }
     #[allow(unused)]
     async fn flatten_all_for(&self, account: Account) {
+        todo!()
+    }
+
+    #[allow(unused)]
+    async fn update_order(&self, account: Account, order_id: OrderId, update: OrderUpdateType) -> Result<(), OrderUpdateEvent> {
         todo!()
     }
 }

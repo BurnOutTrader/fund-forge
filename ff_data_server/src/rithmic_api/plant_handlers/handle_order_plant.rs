@@ -31,7 +31,6 @@ lazy_static! {
     pub static ref BASKET_TO_STREAM_NAME_MAP: DashMap<Brokerage, DashMap<BasketId , StreamName>> = DashMap::new();
     pub static ref ID_TO_STREAM_NAME_MAP: DashMap<Brokerage, DashMap<OrderId , u16>> = DashMap::new();
     pub static ref ID_TO_TAG: DashMap<Brokerage, DashMap<OrderId , String>> = DashMap::new();
-    pub static ref ID_UPDATE_TYPE: DashMap<Brokerage, DashMap<OrderId , OrderUpdateType>> = DashMap::new();
 }
 
 #[allow(unused, dead_code)]
@@ -205,7 +204,7 @@ pub async fn match_order_plant_id(
                         Some(id) => id
                     };
 
-                    client.id_to_baskt_id_map.entry(account_id.clone()).or_insert(DashMap::new()).insert(order_id.clone(), basket_id.clone());
+                    client.id_to_basket_id_map.entry(account_id.clone()).or_insert(DashMap::new()).insert(order_id.clone(), basket_id.clone());
 
                     let symbol_name = match msg.user_msg.get(3) {
                         None => return,
@@ -582,7 +581,7 @@ pub async fn match_order_plant_id(
                                     if let Some(account_map) = client.open_orders.get_mut(&account_id) {
                                         account_map.remove(&order_id);
                                     }
-                                    if let Some(account_map) = client.id_to_baskt_id_map.get(&account_id) {
+                                    if let Some(account_map) = client.id_to_basket_id_map.get(&account_id) {
                                         account_map.remove(&order_id);
                                     }
                                     let event = OrderUpdateEvent::OrderFilled {
@@ -624,7 +623,7 @@ pub async fn match_order_plant_id(
                             if let Some(account_map) = client.open_orders.get_mut(&account_id) {
                                 account_map.remove(&order_id);
                             }
-                            if let Some(account_map) = client.id_to_baskt_id_map.get(&account_id) {
+                            if let Some(account_map) = client.id_to_basket_id_map.get(&account_id) {
                                 account_map.remove(&order_id);
                             }
                             let event = OrderUpdateEvent::OrderCancelled {
@@ -642,7 +641,7 @@ pub async fn match_order_plant_id(
                             if let Some(account_map) = client.open_orders.get_mut(&account_id) {
                                 account_map.remove(&order_id);
                             }
-                            if let Some(account_map) = client.id_to_baskt_id_map.get(&account_id) {
+                            if let Some(account_map) = client.id_to_basket_id_map.get(&account_id) {
                                 account_map.remove(&order_id);
                             }
                             let event = OrderUpdateEvent::OrderRejected {
@@ -657,7 +656,7 @@ pub async fn match_order_plant_id(
                             send_order_update(client.brokerage, &order_id, event, time).await;
                         },
                        2 => {
-                           if let Some(broker_map) = ID_UPDATE_TYPE.get(&client.brokerage) {
+                           if let Some(broker_map) = client.pending_order_updates.get(&client.brokerage) {
                                if let Some((_, update_type)) = broker_map.remove(&order_id) {
 
                                    if let Some(account_map) = client.open_orders.get_mut(&account_id) {
@@ -665,9 +664,7 @@ pub async fn match_order_plant_id(
                                            match &update_type {
                                                OrderUpdateType::LimitPrice(price) => order.limit_price = Some(price.clone()),
                                                OrderUpdateType::TriggerPrice(price) => order.trigger_price = Some(price.clone()),
-                                               OrderUpdateType::TimeInForce(tif) => order.time_in_force = tif.clone(),
                                                OrderUpdateType::Quantity(q) => order.quantity_open = q.clone(),
-                                               OrderUpdateType::Tag(tag) => order.tag = tag.clone(),
                                            }
                                        }
                                    }

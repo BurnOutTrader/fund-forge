@@ -4,7 +4,7 @@ use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
 use ff_standard_lib::StreamName;
@@ -12,6 +12,7 @@ use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
+use ff_standard_lib::standardized_types::orders::OrderUpdateEvent::OrderUpdateRejected;
 
 pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
@@ -467,5 +468,32 @@ pub async fn flatten_all_for(account: Account) {
             }
         }
     }
+}
+
+pub async fn update_order(account: Account, order_id: OrderId, update: OrderUpdateType) -> Result<(), OrderUpdateEvent> {
+    match account.brokerage {
+        Brokerage::Test => return Err(OrderUpdateRejected {
+            account,
+            order_id,
+            reason: "Test Brokerage Can Not Modify Live Orders".to_string(),
+            time: Utc::now().to_string(),
+        }),
+        Brokerage::Rithmic(system) => {
+            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                return client.update_order(account, order_id, update).await
+            }
+        }
+        Brokerage::Bitget => {
+            if let Some(client) = BITGET_CLIENT.get() {
+                return client.update_order(account, order_id, update).await;
+            }
+        }
+    }
+    Err(OrderUpdateRejected {
+        account: account.clone(),
+        order_id,
+        reason: format!("No Client Found For: {}", account),
+        time: Utc::now().to_string(),
+    })
 }
 

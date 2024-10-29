@@ -74,14 +74,8 @@ pub(crate) async fn backtest_matching_engine(
                                             *trigger_price = price.clone();
                                         }
                                     }
-                                    OrderUpdateType::TimeInForce(tif) => {
-                                        order.time_in_force = tif.clone();
-                                    }
                                     OrderUpdateType::Quantity(quantity) => {
                                         order.quantity_open = quantity.clone();
-                                    }
-                                    OrderUpdateType::Tag(tag) => {
-                                        order.tag = tag.clone();
                                     }
                                 }
                                 let update_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderUpdated {
