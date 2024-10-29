@@ -95,6 +95,9 @@ pub struct RithmicClient {
     pub short_quantity: DashMap<AccountId, DashMap<SymbolName, Volume>>,
     pub last_tag: DashMap<AccountId, DashMap<SymbolName, String>>,
 
+    pub open_orders: DashMap<AccountId, DashMap<OrderId, Order>>,
+    pub id_to_baskt_id_map: DashMap<AccountId, DashMap<OrderId, String>>,
+
     pub orders_open: DashMap<OrderId, Order>,
 
     //products
@@ -171,6 +174,8 @@ impl RithmicClient {
             short_quantity: Default::default(),
             default_trade_route: DashMap::new(),
             last_tag: Default::default(),
+            open_orders: Default::default(),
+            id_to_baskt_id_map: Default::default(),
         };
         Ok(client)
     }
@@ -783,7 +788,7 @@ impl RithmicClient {
 
         let req = RequestNewOrder {
             template_id: 312,
-            user_msg: vec![stream_name.to_string(), order.account.account_id.clone(), order.tag.clone(), order.symbol_name, details.symbol_code.clone()],
+            user_msg: vec![stream_name.to_string(), order.account.account_id.clone(), order.tag.clone(), order.symbol_name.clone(), details.symbol_code.clone()],
             user_tag: Some(order.id.clone()),
             window_name: Some(stream_name.to_string()),
             fcm_id: self.fcm_id.clone(),
@@ -814,6 +819,10 @@ impl RithmicClient {
             if_touched_price: None,
         };
 
+        if let Some(account_map) = self.open_orders.get(&order.account.account_id) {
+            account_map.insert(order.account.account_id.clone(), order.clone());
+        }
+
         if let Some(account_map) = self.last_tag.get(&order.account.account_id) {
             account_map.insert(details.symbol_code, order.tag.clone());
         }
@@ -828,14 +837,9 @@ impl RithmicClient {
             _ => crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into()
         };
 
-        match order.side {
-            OrderSide::Buy => eprintln!("Buying {}" , order.quantity_open),
-            OrderSide::Sell => eprintln!("Selling {}" , order.quantity_open),
-        }
-
         let req = RequestNewOrder {
             template_id: 312,
-            user_msg: vec![stream_name.to_string(), order.account.account_id.clone(), order.tag.clone(), order.symbol_name, details.symbol_code.clone()],
+            user_msg: vec![stream_name.to_string(), order.account.account_id.clone(), order.tag.clone(), order.symbol_name.clone(), details.symbol_code.clone()],
             user_tag: Some(order.id.clone()),
             window_name: Some(stream_name.to_string()),
             fcm_id: self.fcm_id.clone(),
@@ -866,6 +870,9 @@ impl RithmicClient {
             if_touched_price: None,
         };
 
+        if let Some(account_map) = self.open_orders.get(&order.account.account_id) {
+            account_map.insert(order.account.account_id.clone(), order.clone());
+        }
         //this is used to update positions when synchronise positions is used
         if let Some(account_map) = self.last_tag.get(&order.account.account_id) {
             account_map.insert(details.symbol_code, order.tag.clone());

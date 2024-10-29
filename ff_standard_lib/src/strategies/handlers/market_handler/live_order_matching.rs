@@ -53,7 +53,7 @@ pub(crate) fn live_order_update(
                          }
                          match synchronize_positions {
                              false => ledger_service.update_or_create_live_position(&account, symbol_name.clone(), symbol_code.clone(), quantity.clone(), side.clone(), time_utc, *price, tag.to_string()).await,
-                            true => {}//todo this causes desync issue //ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
+                             true => {}//todo this causes desync issue //ledger_service.process_synchronized_orders(order.clone(), quantity.clone(), time_utc).await
                          };
                     }
                 }

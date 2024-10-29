@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
-use crate::standardized_types::enums::{OrderSide, StrategyMode};
+use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use dashmap::DashMap;
 use rust_decimal::Decimal;
@@ -10,6 +10,7 @@ use crate::standardized_types::accounts::{Account, Currency};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
 use crate::standardized_types::time_slices::TimeSlice;
+use crate::strategies::handlers::market_handler::price_service::price_service_request_market_fill_price;
 use crate::strategies::ledgers::ledger::{Ledger, LedgerMessage};
 use crate::strategies::strategy_events::StrategyEvent;
 
@@ -215,9 +216,25 @@ impl LedgerService {
             .unwrap_or(false)
     }
 
-    pub async fn flatten_all_positions(&self, account: &Account) {
-        if let Some(_) = self.ledgers.get(account) {
-            todo!();
+    pub async fn flatten_all_for_paper_account(&self, account: &Account, time: DateTime<Utc>) {
+        if let Some(ledger) = self.ledgers.get(account) {
+            for position in ledger.positions.iter() {
+                let order_side = match position.side {
+                    PositionSide::Long => OrderSide::Sell,
+                    PositionSide::Short => OrderSide::Buy,
+                };
+                let market_price = match price_service_request_market_fill_price(order_side, position.symbol_name.clone(), position.quantity_open).await {
+                    Ok(price) => {
+                        match price.price() {
+                            None =>  continue,
+                            Some(price) => price
+                        }
+                    },
+                    Err(_) => continue
+                };
+                let tag = "Flatten All".to_string();
+                let _ = ledger.paper_exit_position(position.key(), time, market_price, tag).await;
+            }
         }
     }
 }

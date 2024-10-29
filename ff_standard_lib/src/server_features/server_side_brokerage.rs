@@ -3,9 +3,9 @@ use chrono::{DateTime, Utc};
 use crate::messages::data_server_messaging::DataServerResponse;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::Volume;
-use crate::standardized_types::orders::{Order, OrderUpdateEvent};
+use crate::standardized_types::orders::{Order, OrderId, OrderUpdateEvent};
 use crate::standardized_types::subscriptions::SymbolName;
-use crate::standardized_types::accounts::AccountId;
+use crate::standardized_types::accounts::{Account, AccountId};
 use crate::StreamName;
 
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
@@ -232,4 +232,29 @@ pub trait BrokerApiResponse: Sync + Send {
         mode: StrategyMode,
         order: Order,
     ) -> Result<(), OrderUpdateEvent>;
+
+    // cancel all pending orders on an account
+    async fn cancel_orders_on_account(
+        &self,
+        account: Account,
+    );
+
+    async fn cancel_orders_on_account_symbol(
+        &self,
+        account: Account,
+        symbol_name: SymbolName
+    );
+
+    //cancel a specific order
+    async fn cancel_order(
+        &self,
+        account: Account,
+        order_id: OrderId,
+    );
+
+    //flatten the entire account including cancelling any orders
+    async fn flatten_all_for(
+        &self,
+        account: Account
+    );
 }

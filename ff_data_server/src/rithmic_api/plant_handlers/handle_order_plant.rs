@@ -16,7 +16,7 @@ use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, OrderSide};
 use ff_standard_lib::standardized_types::accounts::Currency;
 use ff_standard_lib::standardized_types::new_types::{Price, Volume};
-use ff_standard_lib::standardized_types::orders::{OrderId, OrderUpdateEvent, OrderUpdateType};
+use ff_standard_lib::standardized_types::orders::{OrderId, OrderState, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
@@ -88,6 +88,7 @@ pub async fn match_order_plant_id(
             if let Ok(msg) = ResponseAccountRmsInfo::decode(&message_buf[..]) {
                 //println!("Response Account Rms Info (Template ID: 305) from Server: {:?}", msg);
                 if let Some(id) = msg.account_id {
+                    client.open_orders.insert(id.clone(), DashMap::new());
                     let mut account_info = AccountInfo {
                         account_id: id.to_string(),
                         brokerage: client.brokerage.clone(),
@@ -180,6 +181,7 @@ pub async fn match_order_plant_id(
                         None => return,
                         Some(order_id) => order_id
                     };
+
                     BASKET_ID_TO_ID_MAP.entry(client.brokerage.clone()).or_insert(DashMap::new()).insert(basket_id.clone(), order_id.clone());
 
                     let stream_name = match msg.user_msg.get(0) {
@@ -189,7 +191,7 @@ pub async fn match_order_plant_id(
 
                     let stream_name = u16::from_str(&stream_name).unwrap_or_default();
 
-                    BASKET_TO_STREAM_NAME_MAP.entry(client.brokerage.clone()).or_insert(DashMap::new()).insert(basket_id,stream_name );
+                    BASKET_TO_STREAM_NAME_MAP.entry(client.brokerage.clone()).or_insert(DashMap::new()).insert(basket_id.clone(),stream_name );
                     ID_TO_STREAM_NAME_MAP.entry(client.brokerage.clone()).or_insert(DashMap::new()).insert(order_id.clone(), stream_name);
 
                     let tag = match msg.user_msg.get(2) {
@@ -203,6 +205,8 @@ pub async fn match_order_plant_id(
                         Some(id) => id
                     };
 
+                    client.id_to_baskt_id_map.entry(account_id.clone()).or_insert(DashMap::new()).insert(order_id.clone(), basket_id.clone());
+
                     let symbol_name = match msg.user_msg.get(3) {
                         None => return,
                         Some(name) => name.clone()
@@ -212,6 +216,13 @@ pub async fn match_order_plant_id(
                         None => return,
                         Some(symbol_code) => symbol_code.clone()
                     };
+
+                    if let Some(account_map) = client.open_orders.get_mut(account_id) {
+                        if let Some(mut open_order) = account_map.get_mut(&order_id) {
+                            open_order.state = OrderState::Accepted;
+                            open_order.symbol_code = Some(symbol_code.clone());
+                        }
+                    }
                     // on sim accounts we don't need to do this, not sure about live.
 
                     /*let event = OrderUpdateEvent::OrderAccepted {
@@ -542,12 +553,18 @@ pub async fn match_order_plant_id(
                             let event = OrderUpdateEvent::OrderAccepted {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 symbol_name,
-                                symbol_code,
+                                symbol_code: symbol_code.clone(),
                                 order_id: order_id.clone(),
                                 tag,
                                 time: time.clone(),
                             };
                             send_order_update(client.brokerage, &order_id, event, time).await;
+                            if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                if let Some(mut open_order) = account_map.get_mut(&order_id) {
+                                    open_order.state = OrderState::Accepted;
+                                    open_order.symbol_code = Some(symbol_code.clone());
+                                }
+                            }
                         },
                         5 => {
                             if let (Some(fill_price), Some(fill_size), Some(total_unfilled_size)) =
@@ -575,6 +592,12 @@ pub async fn match_order_plant_id(
                                     }
                                 };
                                 if total_unfilled_size == 0 {
+                                    if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                        account_map.remove(&order_id);
+                                    }
+                                    if let Some(account_map) = client.id_to_baskt_id_map.get(&account_id) {
+                                        account_map.remove(&order_id);
+                                    }
                                     let event = OrderUpdateEvent::OrderFilled {
                                         side,
                                         account: Account::new(client.brokerage, account_id.clone()),
@@ -588,6 +611,11 @@ pub async fn match_order_plant_id(
                                     };
                                     send_order_update(client.brokerage, &order_id, event, time).await;
                                 } else if total_unfilled_size > 0 {
+                                    if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                        if let Some(mut open_order) = account_map.get_mut(&order_id) {
+                                            open_order.state = OrderState::PartiallyFilled;
+                                        }
+                                    }
                                     let event = OrderUpdateEvent::OrderPartiallyFilled {
                                         side,
                                         account: Account::new(client.brokerage, account_id.clone()),
@@ -606,6 +634,12 @@ pub async fn match_order_plant_id(
                             }
                         },
                         3 => {
+                            if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                account_map.remove(&order_id);
+                            }
+                            if let Some(account_map) = client.id_to_baskt_id_map.get(&account_id) {
+                                account_map.remove(&order_id);
+                            }
                             let event = OrderUpdateEvent::OrderCancelled {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),
@@ -618,6 +652,12 @@ pub async fn match_order_plant_id(
                             send_order_update(client.brokerage, &order_id, event, time).await;
                         },
                         6 => {
+                            if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                account_map.remove(&order_id);
+                            }
+                            if let Some(account_map) = client.id_to_baskt_id_map.get(&account_id) {
+                                account_map.remove(&order_id);
+                            }
                             let event = OrderUpdateEvent::OrderRejected {
                                 account: Account::new(client.brokerage, account_id.clone()),
                                 order_id: order_id.clone(),
@@ -632,6 +672,19 @@ pub async fn match_order_plant_id(
                        2 => {
                            if let Some(broker_map) = ID_UPDATE_TYPE.get(&client.brokerage) {
                                if let Some((_, update_type)) = broker_map.remove(&order_id) {
+
+                                   if let Some(account_map) = client.open_orders.get_mut(&account_id) {
+                                       if let Some(mut order) = account_map.get_mut(&order_id) {
+                                           match &update_type {
+                                               OrderUpdateType::LimitPrice(price) => order.limit_price = Some(price.clone()),
+                                               OrderUpdateType::TriggerPrice(price) => order.trigger_price = Some(price.clone()),
+                                               OrderUpdateType::TimeInForce(tif) => order.time_in_force = tif.clone(),
+                                               OrderUpdateType::Quantity(q) => order.quantity_open = q.clone(),
+                                               OrderUpdateType::Tag(tag) => order.tag = tag.clone(),
+                                           }
+                                       }
+                                   }
+
                                    let event = OrderUpdateEvent::OrderUpdated {
                                        account: Account::new(client.brokerage, account_id.clone()),
                                        order_id: order_id.clone(),
@@ -643,6 +696,7 @@ pub async fn match_order_plant_id(
                                        text: "User Request".to_string(),
                                    };
                                    send_order_update(client.brokerage, &order_id, event, time).await;
+
                                } else {
                                    return;
                                }

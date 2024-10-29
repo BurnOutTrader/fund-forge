@@ -5,15 +5,17 @@ use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
-use ff_standard_lib::standardized_types::accounts::{AccountId, AccountInfo, Currency};
+use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo, Currency};
 use ff_standard_lib::standardized_types::enums::{StrategyMode};
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::orders::{Order, OrderUpdateEvent, OrderUpdateType};
+use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
 use crate::rithmic_api::api_client::RithmicClient;
-use crate::rithmic_api::products::{find_base_symbol, get_available_symbol_names, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestCancelAllOrders, RequestCancelOrder, RequestExitPosition};
+use crate::rithmic_api::products::{find_base_symbol, get_available_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
 
 #[async_trait]
 impl BrokerApiResponse for RithmicClient {
@@ -396,6 +398,99 @@ impl BrokerApiResponse for RithmicClient {
             Err(e) => return Err(e)
         };
         self.submit_order(stream_name, order, details).await
+    }
+
+    async fn cancel_orders_on_account(&self, account: Account) {
+        const PLANT: SysInfraType = SysInfraType::OrderPlant;
+        //Cancel All Orders Request 346
+        let req = RequestCancelAllOrders {
+            template_id: 346,
+            user_msg: vec![],
+            fcm_id: self.fcm_id.clone(),
+            ib_id: self.ib_id.clone(),
+            account_id: Some(account.account_id),
+            user_type: self.credentials.user_type,
+            manual_or_auto: Some(2),
+        };
+        self.send_message(&PLANT, req).await;
+    }
+
+    async fn cancel_orders_on_account_symbol(&self, account: Account, symbol_name: SymbolName) {
+        const PLANT: SysInfraType = SysInfraType::OrderPlant;
+        if let Some(order_map) = self.open_orders.get(&account.account_id) {
+            for order in order_map.value() {
+                if order.symbol_name != symbol_name {
+                    continue;
+                }
+                if let Some(account_map) = self.id_to_baskt_id_map.get(&account.account_id) {
+                    if let Some(order) = account_map.get(order.key()) {
+                        let req = RequestCancelOrder {
+                            template_id: 316,
+                            user_msg: vec![],
+                            window_name: None,
+                            fcm_id: self.fcm_id.clone(),
+                            ib_id: self.ib_id.clone(),
+                            account_id: Some(account.account_id.clone()),
+                            basket_id: Some(order.value().to_string()),
+                            manual_or_auto: Some(2),
+                        };
+                        //Cancel Order Request 316
+                        self.send_message(&PLANT, req).await;
+                    }
+                }
+            }
+        }
+    }
+
+    async fn cancel_order(&self, account: Account, order_id: OrderId) {
+        const PLANT: SysInfraType = SysInfraType::OrderPlant;
+        //Cancel Order Request 316
+        if let Some(account_map) = self.id_to_baskt_id_map.get(&account.account_id) {
+            if let Some(order) = account_map.get(&order_id) {
+                let req = RequestCancelOrder {
+                    template_id: 316,
+                    user_msg: vec![],
+                    window_name: None,
+                    fcm_id: self.fcm_id.clone(),
+                    ib_id: self.ib_id.clone(),
+                    account_id: Some(account.account_id),
+                    basket_id: Some(order.value().to_string()),
+                    manual_or_auto: Some(2),
+                };
+                //Cancel Order Request 316
+                self.send_message(&PLANT, req).await;
+            }
+        }
+    }
+
+    async fn flatten_all_for(&self, account: Account) {
+        const PLANT: SysInfraType = SysInfraType::OrderPlant;
+        self.cancel_orders_on_account(account.clone()).await;
+        if let Some(tag_map) = self.last_tag.get(&account.account_id) {
+            for tag in tag_map.value() {
+                let exchange = match get_exchange_by_symbol_name(tag.key()) {
+                    None => {
+                        eprintln!("Rithmic `flatten_all_for()` error, No exchange found for symbol: {}", tag.key());
+                        continue
+                    },
+                    Some(exchange) => exchange
+                };
+                let req = RequestExitPosition {
+                    template_id: 3504,
+                    user_msg: vec![],
+                    window_name: None,
+                    fcm_id: self.fcm_id.clone(),
+                    ib_id: self.ib_id.clone(),
+                    account_id: Some(account.account_id.clone()),
+                    symbol: Some(tag.key().to_string()),
+                    exchange: Some(exchange.to_string()),
+                    trading_algorithm: None,
+                    manual_or_auto: Some(2),
+                };
+                self.send_message(&PLANT, req).await;
+            }
+        }
+        //Exit Position Request 3504 for all positions
     }
 }
 

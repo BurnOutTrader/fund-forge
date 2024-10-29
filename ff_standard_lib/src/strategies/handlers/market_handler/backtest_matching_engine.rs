@@ -132,7 +132,7 @@ pub(crate) async fn backtest_matching_engine(
                             }
                         }
                         OrderRequest::FlattenAllFor { account} => {
-                            ledger_service.flatten_all_positions(&account).await;
+                            ledger_service.flatten_all_for_paper_account(&account, time).await;
                         }
                     }
                 }
