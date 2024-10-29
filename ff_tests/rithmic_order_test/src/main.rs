@@ -4,7 +4,7 @@ use colored::Colorize;
 use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolCode, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -14,7 +14,7 @@ use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::OrderUpdateEvent;
+use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 
@@ -67,6 +67,7 @@ pub async fn on_data_received(
     let account_1 = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), AccountId::from("APEX-3396-168"));
     let mut exit_sent = false;
     let mut count = 1;
+    let mut entry_order_id = "".to_string();
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         match strategy_event {
             StrategyEvent::TimeSlice(time_slice) => {
@@ -89,7 +90,7 @@ pub async fn on_data_received(
                                 {
                                     if count == 5 {
                                         println!("Strategy: Enter Long, Time {}", strategy.time_local());
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, None ,&account_1, None, dec!(1), String::from("Enter Long")).await;
+                                        entry_order_id = strategy.limit_order(&candle.symbol.name, None ,&account_1, None, dec!(1), OrderSide::Buy, candle.low - dec!(10), TimeInForce::GTC, String::from("Enter Long")).await;
                                     }
 
                                     let open_pnl = strategy.pnl(&account_1, &symbol_code);
@@ -99,9 +100,10 @@ pub async fn on_data_received(
                                     // Remove order_placed from exit condition
                                     if count == 10 && !exit_sent {
                                         exit_sent = true;
-                                        let position_size: Decimal = strategy.position_size(&account_1, &symbol_code);
+                                        strategy.cancel_order(entry_order_id.clone()).await;
+                                        /*let position_size: Decimal = strategy.position_size(&account_1, &symbol_code);
                                         println!("Strategy: Exit Long, Time {}: Size: {}", strategy.time_local(), position_size);
-                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long")).await;
+                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long")).await;*/
                                     }
                                 }
 

@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::server_features::database::DATA_STORAGE;
-use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders};
+use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, paper_account_init, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders, cancel_order, cancel_orders_on_account_symbol, flatten_all_for};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, symbols_response, tick_size_response};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::{Order, OrderRequest, OrderType, OrderUpdateEvent};
@@ -444,17 +444,17 @@ async fn order_response(stream_name: StreamName, mode: StrategyMode, request: Or
                 }
             }
         }
-        OrderRequest::Cancel { .. } => {
+        OrderRequest::Cancel { account, order_id } => {
+            cancel_order(account, order_id).await;
+        }
+        OrderRequest::Update { account, order_id, update } => {
             todo!()
         }
-        OrderRequest::Update { .. } => {
-            todo!()
+        OrderRequest::CancelAll { account, symbol_name } => {
+            cancel_orders_on_account_symbol(account, symbol_name).await;
         }
-        OrderRequest::CancelAll { .. } => {
-            todo!()
-        }
-        OrderRequest::FlattenAllFor { .. } => {
-            todo!()
+        OrderRequest::FlattenAllFor { account } => {
+            flatten_all_for(account).await;
         }
     }
 }
