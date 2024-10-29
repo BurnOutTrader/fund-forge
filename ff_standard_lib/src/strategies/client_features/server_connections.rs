@@ -203,7 +203,7 @@ pub async fn response_handler(
     order_updates_sender: Sender<(OrderUpdateEvent, DateTime<Utc>)>,
     synchronise_accounts: bool,
     strategy_event_sender: Sender<StrategyEvent>,
-    ledger_service: Arc<LedgerService>, //todo this can probably just be a sender now
+    ledger_service: Arc<LedgerService>, //it is better to do this than use messaging, because using a direct fn call we can concurrently update individual ledgers and have a que per ledger. sending a msg here would cause a bottleneck with more ledgers.
 ) {
     for (connection, settings) in &settings_map {
         let order_updates_sender = order_updates_sender.clone();
@@ -277,7 +277,6 @@ pub async fn response_handler(
                                    if synchronise_accounts {
                                        //println!("Live Position: {:?}", position);
                                         //tokio::task::spawn(async move {
-                                       //todo, we need a message que for ledger, where orders and positions are update the ledger 1 at a time per symbol_code, this should fix the possible race conditions of positions updates
                                        let time = DateTime::<Utc>::from_str(&time).unwrap();
                                         ledger_service.synchronize_live_position(account, position, time).await
                                         //});
