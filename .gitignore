@@ -4,7 +4,7 @@
 # already existing elements were commented out
 trades exports
 /trades exports
-#/target
+#/target a
 /temp_storage
 /ff_data_server/data/credentials
 
