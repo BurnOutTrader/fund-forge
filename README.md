@@ -573,13 +573,6 @@ What the above function actually does is:
 3. The server requests the correct api using a matching statement for each variant and retrieves the symbols from the correct api implementation returning them in fund forge format as `Vec<Symbol>`.
 
 ## Time handling
-
-### Accuracy
-Backtesting in the Un-Buffered engine, has a minimum accuracy of 1 nanosecond, but will depend on the granularity of your data.
-Live trading in the Un-Buffered engine will have no minimum accuracy.
-
-Both Live trading and Backtesting in the Buffered engine, has a minimum accuracy of your `buffer_duration: Option<Duration>` parameter, and will never depend on the granularity of your data.
-
 ### Parsing Data Time
 All data should be saved using the static `HybridStorage` object, the data server hosts a public static `DATA_STORAGE` object, this object acts as a data base tool for serializing and loading data.
 Historical data loading will be handled automatically by the server, when you need to serialize data in a new API implementation, you should use the `DATA_STORAGE.save_data_bulk(data).await.unwrap()` function.
