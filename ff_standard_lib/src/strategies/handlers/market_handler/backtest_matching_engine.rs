@@ -21,11 +21,12 @@ pub(crate) async fn backtest_matching_engine(
     open_order_cache: Arc<DashMap<OrderId, Order>>, //todo, make these static or lifetimes if possible.. might not be optimal though, look it up!
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
     strategy_event_sender: Sender<StrategyEvent>,
-    ledger_service: Arc<LedgerService>
+    ledger_service: Arc<LedgerService>,
+    notify: Arc<tokio::sync::Notify>
 ) -> Sender<BackTestEngineMessage> {
     let (sender, mut receiver) = tokio::sync::mpsc::channel(100);
     tokio::task::spawn(async move {
-       // notify.notify_one();
+       notify.notify_one();
         while let Some(backtest_message) = receiver.recv().await {
             match backtest_message {
                 BackTestEngineMessage::OrderRequest(time, order_request) => {
@@ -137,7 +138,7 @@ pub(crate) async fn backtest_matching_engine(
 
                 }
             }
-            //notify.notify_one();
+            notify.notify_one();
         }
     });
     sender
