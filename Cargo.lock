@@ -2712,18 +2712,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "test_data_parser"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "ff_data_server",
- "ff_standard_lib",
- "rust_decimal",
- "rust_decimal_macros",
- "tokio",
-]
-
-[[package]]
 name = "test_strategy"
 version = "0.1.0"
 dependencies = [
