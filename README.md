@@ -88,6 +88,13 @@ In the example image 'Test' represents `DataVendor::Test`
 Oanda is currently the only api which has historical data, see the setup to download data. (oanda live trading in development)
 [Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md)
 
+The Initial download for each symbol will take a long time, since we start from 2005, with 5 second quote bars, the full data set (all symbols) would be about 80Gb.
+Each time the server restarts it will resume the download from the last saved data point forwards.
+It will never have to re-download data if you don't delete the data directory.
+
+Auto update functions will be developed soon to keep data history updating every 15 minutes.
+Download progress bars will replace print lines to keep the server terminal clean.
+
 Rithmic historical data functions will be completed soon.
 
 
