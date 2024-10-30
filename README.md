@@ -105,6 +105,8 @@ The order events will return both the symbol_name and product_code, should you l
 
 Currently, you can only subscribe to data using symbol_name, but this will be fixed to allow trading calendar spreads.
 
+Oanda and Bitget apis are not functional and will cause a crash if you specify them as `DataVendor` or `Brokerage`
+
 ## Overview
 The engine is designed to provide simple abstractions for building strategies with an object-oriented strategy instance and familiar associated helper functions for adding indicators,
 or managing orders, brokers and data streams. 
