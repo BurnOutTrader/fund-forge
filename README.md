@@ -15,7 +15,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - 31/10/2024: Rithmic Live trading works but Rithmic Historical Data function is not complete and will be finished soon, I am currently working on the historical data functions for Rithmic.
 - 31/10/2024: Bitget Api Is not functional in any way and any use of Bitget will crash. I will work on this last.
 - 31/10/2024: The server will soon be upgraded to automatically keep your historical data up to date, for fast live strategy warm up and backtesting. The download print lines will be replaced with progress bars.
-- 31/10/2024: The Test Data needs to be re-parsed as the folder structure has been changed to allow faster data retrieval, it won't need to be changed again. No parser for the test data currently exists, it will need to be remade later. Set up a demo Oanda account for data.
+- 31/10/2024: The Test Data needs to be re-parsed as the folder structure has been changed to allow faster data retrieval, it won't need to be changed again. No parser for the test data currently exists, it will need to be remade later. Set up a demo Oanda account for data. [See](#historical-data-file-structure)
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
@@ -722,3 +722,7 @@ You might need to change the directories to your own.
 #### If they are not matching your directories then change this to match the location of your repo.
 (this is specific per configuration, this example is for the rithmic_test strategy, other configurations will have different directories)
 ![config_edit_2.png](misc/config_edit_2.png)
+
+### Historical Data File Structure
+ff_data_server/data/historical/{DataVendor}/{SymbolName}/{Resolution}/{BaseDataType}/{Year}{Month}{Day}.bin
+![base_data_file_structure.png](misc/base_data_file_structure.png)
