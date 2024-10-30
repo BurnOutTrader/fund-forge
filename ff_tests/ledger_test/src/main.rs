@@ -27,7 +27,7 @@ async fn main() {
         StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2005, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2005, 1, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         NaiveDate::from_ymd_opt(2009, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(1),
@@ -127,6 +127,17 @@ pub async fn on_data_received(
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await;
                                         println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
                                     }
+                                }
+                            }
+                        }
+                        BaseDataEnum::QuoteBar(qb) => {
+                            let msg = format!("{} {} {} Close: {}, {}", qb.symbol.name, qb.resolution, qb.candle_type, qb.bid_close, qb.time_closed_local(strategy.time_zone()));
+                            if qb.bid_close == qb.bid_open {
+                                println!("{}", msg.as_str().blue())
+                            } else {
+                                match qb.bid_close > qb.bid_open {
+                                    true => println!("{}", msg.as_str().bright_green()),
+                                    false => println!("{}", msg.as_str().bright_red()),
                                 }
                             }
                         }

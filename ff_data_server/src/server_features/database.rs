@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use std::path::{Path, PathBuf};
-use std::fs::{File, OpenOptions};
+use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::sync::{Arc};
 use std::time::Duration;
@@ -137,7 +137,13 @@ impl HybridStorage {
 
     fn get_file_path(&self, symbol: &Symbol, resolution: &Resolution, data_type: &BaseDataType, date: &DateTime<Utc>, is_saving: bool) -> PathBuf {
         let base_path = self.get_base_path(symbol, resolution, data_type, is_saving);
-        base_path.join(format!("{:04}{:02}{:02}.bin", date.year(), date.month(), date.day()))
+        let path = base_path
+            .join(format!("{:04}", date.year()))
+            .join(format!("{:02}", date.month()));
+        if !path.exists() && is_saving {
+            let _ = create_dir_all(&path);
+        }
+        path.join(format!("{:04}{:02}{:02}.bin", date.year(), date.month(), date.day()))
     }
 
     pub async fn save_data(&self, data: &BaseDataEnum) -> io::Result<()> {
