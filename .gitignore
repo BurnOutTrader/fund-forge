@@ -17,3 +17,4 @@ ff_data_server/data/historical/Test/*
 ff_data_server/data/historical/Bitget/*
 ff_data_server/data/historical/Rithmic/*
 ff_data_server/data/historical/Oanda/*
+/ff_data_server/data/credentials/oanda_credentials/download_list.toml
