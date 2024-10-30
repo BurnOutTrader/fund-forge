@@ -1,0 +1,13 @@
+[package]
+name = "renko_pyramid"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono-tz = "0.10.0"
+tokio = "1.36.0"
+chrono = "*"
+rust_decimal = { version = "1.36.0", features = ["rkyv", "rkyv-safe"] }
+rust_decimal_macros ="1.36.0"
+ff_standard_lib = { path = "/Users/kevmonaghan/RustroverProjects/fund-forge/ff_standard_lib" }
+colored = "*"
