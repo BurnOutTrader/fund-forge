@@ -6,7 +6,7 @@ trades exports
 /trades exports
 #/target
 /temp_storage
-#/ff_data_server/data/credentials
+/ff_data_server/data/credentials
 
 ff_data_server/data/historical/Test/*
 ff_data_server/data/historical/Bitget/*
