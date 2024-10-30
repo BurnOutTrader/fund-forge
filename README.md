@@ -140,15 +140,10 @@ There are handlers and a buffering mechanism for maintaining consistency from ba
 The correct strategy engine  started in the background depending on the StrategyMode. 
 The strategy can be shared between threads as an `Arc<FundForgeStrategy>` and maintain full functionality, allowing the strategy logic to be delegated between custom user functions and async architectures.
 
-After creating the strategy instance using `FundForgeStrategy::initialize();` we will receive data and events as a `StrategyEventBuffer` in our event_receiver.
-The `StrategyEventBuffer` is an Iterable object with a collection of all `StrategyEvent`s that occurred within a buffer period.
+After creating the strategy instance using `FundForgeStrategy::initialize();` we will receive data and events as a `StrategyEvent` object in our event_receiver.
+The `StrategyEvent` is an enum variant.
 
-If strategy parameter `tick_over_no_data: bool` == true; The engine might seem to pause for a few seconds over weekends as we check for weekend data 1 day at a time, this pause will be longer the more symbols and resolutions we have subscribed to.
-Even when there is no weekend data, the engine will run at buffer speed through the weekend or no data periods.
-
-If `tick_over_no_data: bool` == false; The engine will have a much smaller weekend pause as it requests 1 days worth of data at a time from the server, and finds the next data points.
-
-We also have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
+We have options for interacting with strategies using drawing tools and commands from a user interface, and a [complete rust driven desktop charting package is in development](https://www.youtube.com/watch?v=BU9TU3e1-UY).
 
 Take a more in depth look at [strategy features here](ff_standard_lib/src/strategies/STRATEGIES_README.md).
 ```rust
