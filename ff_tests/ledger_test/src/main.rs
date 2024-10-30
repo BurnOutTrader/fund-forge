@@ -92,6 +92,11 @@ pub async fn on_data_received(
                             }
                         }
                         BaseDataEnum::QuoteBar(qb) => {
+
+                            if !qb.is_closed {
+                                continue;
+                            }
+
                             let msg = format!("{} {} {} Close: {}, {}", qb.symbol.name, qb.resolution, qb.candle_type, qb.bid_close, qb.time_closed_local(strategy.time_zone()));
                             if qb.bid_close == qb.bid_open {
                                 println!("{}", msg.as_str().blue())
@@ -125,11 +130,10 @@ pub async fn on_data_received(
                                 println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
 
                                 // LONG SL+TP
-                                if is_long && long_pnl > dec!(250.0)
-                                {
-                                    let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
+                                if is_long && long_pnl > dec!(250.0) {
+                                    let position_size = strategy.position_size(&account_1, &qb.symbol.name);
                                     let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
-                                    println!("Strategy: Add Short, Time {}", strategy.time_local());
+                                    println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
                                 }
                                 else if is_long
                                     && long_pnl <= dec!(-250.0)
