@@ -19,7 +19,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
-2. For Test data you will need to set up a practice account with oanda then follow the [Oanda setup instructions](ff_data_server/src/oanda_api/OANDA_SETUP.md). 
+2. For Test data you will need to set up a practice account with oanda then follow the [Oanda setup instructions](ff_data_server/src/oanda_api/OANDA_SETUP.md). Or you can download some data I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=1G7P4f)
 3. Put the test data into the correct directory. [instructions below](#file-and-folder-structure)
 4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (don't run the server in your IDE, it will have issues (more issues than normal :) )
     - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
