@@ -17,7 +17,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - 31/10/2024: The server will soon be upgraded to automatically keep your historical data up to date, for fast live strategy warm up and backtesting. The download print lines will be replaced with progress bars.
 - 31/10/2024: The Test Data needs to be re-parsed as the folder structure has been changed to allow faster data retrieval, it won't need to be changed again. No parser for the test data currently exists, it will need to be remade later. Set up a demo Oanda account for data. [See](#historical-data-file-structure)
 - 31/10/2024: There are some bugs in backtest example after switching from Test brokerage to Oanda, I will fix these soon, they will be minor and related to margin etc.
-- 
+
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
 2. For Test data you will need to set up a practice account with oanda then follow the [Oanda setup instructions](ff_data_server/src/oanda_api/OANDA_SETUP.md). Or you can download some data I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=1G7P4f)
