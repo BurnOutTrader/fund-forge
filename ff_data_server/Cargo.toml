@@ -9,7 +9,7 @@ license-file = "LICENCE.md"
 [dependencies]
 futures-util = "0.3.30"
 chrono-tz ="*"
-ff_standard_lib = { path = "../ff_standard_lib", features = ["server"]}
+ff_standard_lib = { path = "../ff_standard_lib"}
 chrono = "*"
 tokio = { version = "*", features = ["full"] }
 futures = "*"
@@ -44,3 +44,7 @@ rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }
 thiserror = "*"
 strum_macros = "*"
 uuid = { version = "1.10.0", features = ["v4"] }
+reqwest = "0.12.9"
+urlencoding = "*"
+bytes = "1.8.0"
+memmap2 = "0.9.5"

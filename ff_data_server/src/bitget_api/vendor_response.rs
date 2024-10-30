@@ -1,8 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use tokio::task::JoinHandle;
-use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
+use ff_standard_lib::messages::data_server_messaging::{DataServerResponse};
+use crate::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
 use ff_standard_lib::standardized_types::resolution::Resolution;
@@ -55,7 +54,7 @@ impl VendorApiResponse for BitgetClient {
     }
 
     #[allow(unused)]
-    async fn update_historical_data_for(&self, stream_name: StreamName, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) -> Result<JoinHandle<()>, FundForgeError> {
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) {
         todo!()
     }
 }

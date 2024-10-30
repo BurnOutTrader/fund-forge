@@ -139,7 +139,7 @@ pub async fn match_history_plant_id(
 }
 
 async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
-    //println!("Time Bar (Template ID: 250) from Server: {:?}", msg);
+    println!("Time Bar (Template ID: 250) from Server: {:?}", msg);
     let time = match deserialize_candle_time(&msg) {
         None => return,
         Some(time) => time

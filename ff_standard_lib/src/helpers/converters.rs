@@ -167,6 +167,7 @@ pub fn fund_forge_formatted_symbol_name(symbol: &str) -> String {
         .replace("?", "-")
         .replace("_", "-")
         .replace(" ", "-")
+        .replace("_", "-")
         .to_uppercase()
 }
 

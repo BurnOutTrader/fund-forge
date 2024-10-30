@@ -1,7 +1,6 @@
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
@@ -10,6 +9,8 @@ use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
+use crate::oanda_api::api_client::OANDA_CLIENT;
+use crate::server_features::server_side_datavendor::VendorApiResponse;
 
 const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
@@ -30,6 +31,11 @@ pub async fn session_market_hours_response(mode: StrategyMode, data_vendor: Data
             DataVendor::Test => return TEST_CLIENT.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
+                    return client.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
+                }
+            }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
                     return client.session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
                 }
             }
@@ -61,6 +67,11 @@ pub async fn symbols_response(
             DataVendor::Test => return TEST_CLIENT.symbols_response(mode, stream_name, market_type, time, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
+                    return client.symbols_response(mode, stream_name, market_type, time, callback_id).await;
+                }
+            }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
                     return client.symbols_response(mode, stream_name, market_type, time, callback_id).await;
                 }
             }
@@ -97,6 +108,11 @@ pub async fn resolutions_response(
                     return client.resolutions_response(mode, stream_name, market_type, callback_id).await;
                 }
             }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
+                    return client.resolutions_response(mode, stream_name, market_type, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -122,6 +138,11 @@ pub async fn markets_response(
             DataVendor::Test => return TEST_CLIENT.markets_response(mode, stream_name, callback_id).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
+                    return client.markets_response(mode, stream_name, callback_id).await;
+                }
+            }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
                     return client.markets_response(mode, stream_name, callback_id).await;
                 }
             }
@@ -155,6 +176,11 @@ pub async fn decimal_accuracy_response(
                     return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await;
                 }
             }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
+                    return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -184,6 +210,11 @@ pub async fn tick_size_response(
                     return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await;
                 }
             }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
+                    return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -208,6 +239,11 @@ pub async fn data_feed_subscribe(
             DataVendor::Test => return TEST_CLIENT.data_feed_subscribe(stream_name, subscription.clone()).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
+                    return client.data_feed_subscribe(stream_name, subscription.clone()).await;
+                }
+            }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
                     return client.data_feed_subscribe(stream_name, subscription.clone()).await;
                 }
             }
@@ -244,6 +280,11 @@ pub async fn data_feed_unsubscribe(
                     return client.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await;
                 }
             }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
+                    return client.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await;
+                }
+            }
         }
         DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -276,6 +317,11 @@ pub async fn base_data_types_response(
                     return client.base_data_types_response(mode, stream_name, callback_id).await;
                 }
             }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
+                    return client.base_data_types_response(mode, stream_name, callback_id).await;
+                }
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", data_vendor))}
     };
@@ -297,6 +343,11 @@ pub async fn logout_command_vendors(data_vendor: DataVendor, stream_name: Stream
             DataVendor::Test => TEST_CLIENT.logout_command_vendors(stream_name).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
+                    client.logout_command_vendors(stream_name).await;
+                }
+            }
+            DataVendor::Oanda => {
+                if let Some(client) = OANDA_CLIENT.get() {
                     client.logout_command_vendors(stream_name).await;
                 }
             }

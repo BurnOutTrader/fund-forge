@@ -5,9 +5,6 @@ edition = "2021"
 authors = ["Kevin Monaghan"]
 license-file = "LICENCE.md"
 
-[features]
-server = []
-
 [dependencies]
 chrono = "*"
 serde = { version = "*", features = ["derive"] }

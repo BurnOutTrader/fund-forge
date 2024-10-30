@@ -232,7 +232,7 @@ impl QuoteBar {
             bid_volume,
             range: (ask_high + bid_high) - (ask_low + bid_low),
             time: time.to_string(),
-            spread: ask_high - bid_low,
+            spread: ask_close - bid_close,
             is_closed: true,
             resolution,
             candle_type,

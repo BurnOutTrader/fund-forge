@@ -13,7 +13,7 @@ use tokio::net::TcpStream;
 use tokio::{signal, task};
 use tokio::sync::{broadcast, OnceCell};
 use tokio_rustls::server::TlsStream;
-use ff_standard_lib::server_features::database::{HybridStorage, DATA_STORAGE};
+use server_features::database::{HybridStorage, DATA_STORAGE};
 use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 
@@ -23,13 +23,15 @@ mod async_listener;
 pub mod rithmic_api;
 pub mod test_api;
 pub mod rate_limiter;
-pub mod update_tasks;
 pub mod server_side_brokerage;
 pub mod server_side_datavendor;
 pub mod bitget_api;
 pub mod stream_tasks;
+pub mod oanda_api;
+pub mod server_features;
 
 #[derive(Debug, StructOpt, Clone)]
+#[allow(dead_code)]
 struct ServerLaunchOptions {
     /// Sets the data folder
     #[structopt(
@@ -70,7 +72,7 @@ struct ServerLaunchOptions {
     pub stream_address: IpAddr,
 
     #[structopt(
-        short = "o",
+        short = "x",
         long = "stream_port",
         default_value = "8082"
     )]
@@ -82,6 +84,20 @@ struct ServerLaunchOptions {
         default_value = "0"
     )]
     pub disable_rithmic_server: u64,
+
+    #[structopt(
+        short = "o",
+        long = "oanda",
+        default_value = "0"
+    )]
+    pub disable_oanda_server: u64,
+
+    #[structopt(
+        short = "b",
+        long = "bitget",
+        default_value = "0"
+    )]
+    pub disable_bitget_server: u64,
 }
 
 async fn logout_apis() {

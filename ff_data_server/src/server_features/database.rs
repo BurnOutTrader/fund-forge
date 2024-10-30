@@ -1,6 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use std::path::{Path, PathBuf};
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
@@ -10,25 +10,35 @@ use chrono::{DateTime, Datelike, TimeZone, Utc};
 use dashmap::DashMap;
 use futures::future;
 use memmap2::{Mmap};
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell};
 use tokio::task;
+use tokio::task::JoinHandle;
 use tokio::time::interval;
-use crate::messages::data_server_messaging::{FundForgeError};
-use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::base_data::traits::BaseData;
-use crate::standardized_types::datavendor_enum::DataVendor;
-use crate::standardized_types::resolution::Resolution;
-use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
-use crate::standardized_types::time_slices::TimeSlice;
+use ff_standard_lib::messages::data_server_messaging::{FundForgeError};
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
+use ff_standard_lib::standardized_types::base_data::traits::BaseData;
+use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
+use ff_standard_lib::standardized_types::resolution::Resolution;
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
+use ff_standard_lib::standardized_types::time_slices::TimeSlice;
+
+#[derive(Eq, PartialEq, Clone, Hash, Debug)]
+pub struct UpdateTask {
+    pub symbol: Symbol,
+    pub resolution: Resolution,
+    pub base_data_type: BaseDataType
+}
 
 pub static DATA_STORAGE: OnceCell<Arc<HybridStorage>> = OnceCell::const_new();
 
+#[allow(unused)]
 pub struct HybridStorage {
     base_path: PathBuf,
     mmap_cache: Arc<DashMap<String, Arc<Mmap>>>,
     cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
     cache_is_updated: Arc<DashMap<String, bool>>,
-    clear_cache_duration: Duration
+    clear_cache_duration: Duration,
+    download_tasks: Arc<DashMap<UpdateTask, JoinHandle<()>>>
 }
 
 impl HybridStorage {
@@ -38,7 +48,8 @@ impl HybridStorage {
             mmap_cache: Arc::new(DashMap::new()),
             cache_last_accessed: Arc::new(DashMap::new()),
             cache_is_updated: Arc::new(DashMap::new()),
-            clear_cache_duration
+            clear_cache_duration,
+            download_tasks: Arc::new(DashMap::new()),
         };
 
         // Start the background task for cache management

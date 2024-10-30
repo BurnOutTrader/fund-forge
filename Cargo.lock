@@ -479,9 +479,9 @@ checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
-version = "1.7.2"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "428d9aa8fbc0670b7b8d6030a7fadd0f86151cae55e4dbbece15f3780a3dfaf3"
+checksum = "9ac0150caa2ae65ca5bd83f25c7de183dea78d4d366469f148435e2acfbad0da"
 
 [[package]]
 name = "bzip2"
@@ -921,6 +921,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "base64",
+ "bytes",
  "chrono",
  "chrono-tz",
  "dashmap",
@@ -931,9 +932,11 @@ dependencies = [
  "hmac",
  "indicatif",
  "lazy_static",
+ "memmap2",
  "once_cell",
  "parking_lot",
  "prost",
+ "reqwest",
  "rkyv",
  "rust_decimal",
  "rust_decimal_macros",
@@ -952,6 +955,7 @@ dependencies = [
  "tokio-tungstenite",
  "toml",
  "tungstenite",
+ "urlencoding",
  "uuid",
  "webpki-roots",
 ]
@@ -2165,9 +2169,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.12.8"
+version = "0.12.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f713147fbe92361e52392c73b8c9e48c04c6625bce969ef54dc901e58e042a7b"
+checksum = "a77c62af46e79de0a562e1a9849205ffcb7fc1238876e9bd743357570e04046f"
 dependencies = [
  "base64",
  "bytes",
@@ -2712,6 +2716,7 @@ name = "test_data_parser"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "ff_data_server",
  "ff_standard_lib",
  "rust_decimal",
  "rust_decimal_macros",

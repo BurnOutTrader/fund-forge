@@ -2,21 +2,18 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestProductCodes, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestProductCodes, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
+use crate::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode, SubscriptionResolutionType};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
-use tokio::task::JoinHandle;
-use ff_standard_lib::server_features::database::DATA_STORAGE;
 use crate::rithmic_api::api_client::RithmicClient;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};
-use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
+use crate::rithmic_api::products::{get_available_symbol_names, get_symbol_info};
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
 #[allow(dead_code)]
@@ -316,8 +313,8 @@ impl VendorApiResponse for RithmicClient {
     }
 
     #[allow(unused)]
-    async fn update_historical_data_for(&self, stream_name: StreamName, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) -> Result<JoinHandle<()>, FundForgeError> {
-        const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) {
+        /*const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         let oldest_data: DateTime<Utc> = DateTime::from_timestamp(1325376000, 0).unwrap();
         let last_time: DateTime<Utc> = match DATA_STORAGE.get().unwrap().get_latest_data_time(&symbol, &resolution, &base_data_type).await {
             Ok(last_time) => match last_time {
@@ -364,7 +361,7 @@ impl VendorApiResponse for RithmicClient {
 
                 let (sender, receiver) = tokio::sync::oneshot::channel();
                 let id = self.generate_callback_id().await;
-                self.register_callback_and_send(&SYSTEM, stream_name, id, sender, req).await;
+                //self.register_callback_and_send(&SYSTEM, id, sender, req).await;
 
                 //let response = receiver.await.unwrap();
 
@@ -372,13 +369,10 @@ impl VendorApiResponse for RithmicClient {
 
                 //todo save all data with RithmicSystem::Rithmic01
 
-                Ok(tokio::spawn(async move {
-                    //todo save all data with RithmicSystem::Rithmic01
-                }))
             }
             BaseDataType::Ticks => {
                 if resolution != Resolution::Ticks(1) {
-                    return Err(FundForgeError::ClientSideErrorDebug(format!("Unsupported resolution: {:?}", resolution)))
+                    return
                 }
                 let req = RequestTickBarReplay{
                     template_id: 206,
@@ -400,6 +394,6 @@ impl VendorApiResponse for RithmicClient {
                 todo!()
             }
             _ => Err(FundForgeError::ClientSideErrorDebug(format!("Unsupported base data type: {:?}", base_data_type))),
-        }
+        }*/
     }
 }

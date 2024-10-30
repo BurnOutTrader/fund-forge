@@ -1,12 +1,11 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use tokio::task::JoinHandle;
-use crate::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::enums::{MarketType, StrategyMode};
-use crate::standardized_types::resolution::Resolution;
-use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
-use crate::StreamName;
+use ff_standard_lib::messages::data_server_messaging::{DataServerResponse};
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
+use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
+use ff_standard_lib::standardized_types::resolution::Resolution;
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
+use ff_standard_lib::StreamName;
 
 /// The trait allows the server to implement the vendor specific methods for the DataVendor enum without the client needing to implement them.
 #[async_trait]
@@ -183,11 +182,12 @@ pub trait VendorApiResponse: Sync + Send {
     /// We are downloading from the last time downloaded or from the earliest data available with the broker, we only need to download data once, so we should initialize by getting everything if we can.
     /// We can use the static DATA_STORAGE.get().unwrap().get_latest_data_point() to get the last time downloaded.
     /// The data base will ignore any duplicate data and will also store data in the perfect order, all you need to do is get the data without missing data points.
+    /// For the sake of saving memory, you can call the save_bulk_data method every 1 days worth of data. Remember we will be updating many symbols concurrently.
     /// ```rust
     /// use std::sync::Arc;
     /// use chrono::{DateTime, Utc};
     /// use tokio::sync::OnceCell;
-    /// use ff_standard_lib::server_features::database::HybridStorage;
+    /// use ff_data_server::::database::HybridStorage;
     /// use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
     /// use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
     /// use ff_standard_lib::standardized_types::enums::MarketType;
@@ -219,9 +219,8 @@ pub trait VendorApiResponse: Sync + Send {
     ///```
     async fn update_historical_data_for(
         &self,
-        stream_name: StreamName,
         symbol: Symbol,
         base_data_type: BaseDataType,
         resolution: Resolution
-    ) -> Result<JoinHandle<()>, FundForgeError>;
+    );
 }

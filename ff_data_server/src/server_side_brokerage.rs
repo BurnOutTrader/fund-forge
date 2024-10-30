@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::server_features::server_side_brokerage::BrokerApiResponse;
+use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
@@ -13,6 +13,7 @@ use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent::OrderUpdateRejected;
+use crate::oanda_api::api_client::{get_oanda_client, OANDA_CLIENT};
 
 pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
@@ -33,6 +34,9 @@ pub async fn paper_account_init(brokerage: Brokerage, account_id: AccountId, cal
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.paper_account_init(account_id, callback_id).await
                 }
+            }
+            Brokerage::Oanda => if let Some(client) = OANDA_CLIENT.get() {
+                return client.paper_account_init(account_id, callback_id).await
             }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
@@ -55,6 +59,9 @@ pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, 
                 if let Some(client) = BITGET_CLIENT.get() {
                     return client.commission_info_response(mode, stream_name, symbol_name, callback_id).await
                 }
+            }
+            Brokerage::Oanda => if let Some(client) = OANDA_CLIENT.get() {
+                return client.commission_info_response(mode, stream_name, symbol_name, callback_id).await
             }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
@@ -85,6 +92,9 @@ pub async fn symbol_names_response(
                     return client.symbol_names_response(mode, time, stream_name, callback_id).await
                 }
             }
+            Brokerage::Oanda => if let Some(client) = OANDA_CLIENT.get() {
+                return client.symbol_names_response(mode, time, stream_name, callback_id).await
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
     };
@@ -114,6 +124,9 @@ pub async fn account_info_response(
                     return client.account_info_response(mode, stream_name, account_id, callback_id).await
                 }
             }
+            Brokerage::Oanda => if let Some(client) = OANDA_CLIENT.get() {
+                return client.account_info_response(mode, stream_name, account_id, callback_id).await
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
     };
@@ -134,7 +147,10 @@ pub async fn symbol_info_response(brokerage: Brokerage, mode: StrategyMode, stre
                     return client.symbol_info_response(mode, stream_name, symbol_name, callback_id).await
                 }
             }
-            Brokerage::Test => return TEST_CLIENT.symbol_info_response(mode, stream_name, symbol_name, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.symbol_info_response(mode, stream_name, symbol_name, callback_id).await,
+            Brokerage::Oanda => if let Some(client) = get_oanda_client() {
+                return client.symbol_info_response(mode, stream_name, symbol_name, callback_id).await
+            }
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
     };
@@ -159,7 +175,10 @@ pub async fn intraday_margin_required_response(brokerage: Brokerage, mode: Strat
                     return client.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
                 }
             }
-            Brokerage::Test => return TEST_CLIENT.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await,
+            Brokerage::Oanda => if let Some(client) = get_oanda_client() {
+                return client.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
+            },
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
     };
@@ -180,7 +199,10 @@ pub async fn overnight_margin_required_response(brokerage: Brokerage, mode: Stra
                     return client.overnight_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
                 }
             }
-            Brokerage::Test => return TEST_CLIENT.overnight_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.overnight_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await,
+            Brokerage::Oanda => if let Some(client) = get_oanda_client() {
+                return client.overnight_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
+            },
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
     };
@@ -203,7 +225,10 @@ pub async fn accounts_response(brokerage: Brokerage, mode: StrategyMode, stream_
                     return client.accounts_response(mode, stream_name, callback_id).await
                 }
             }
-            Brokerage::Test => return TEST_CLIENT.accounts_response(mode, stream_name, callback_id).await
+            Brokerage::Test => return TEST_CLIENT.accounts_response(mode, stream_name, callback_id).await,
+            Brokerage::Oanda => if let Some(client) = get_oanda_client() {
+                return client.accounts_response(mode, stream_name, callback_id).await
+            },
         }
         DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
     };
@@ -226,7 +251,10 @@ pub async fn logout_command(brokerage: Brokerage, stream_name: StreamName) {
                 client.logout_command(stream_name).await
             }
         }
-        Brokerage::Test => TEST_CLIENT.logout_command(stream_name).await
+        Brokerage::Test => TEST_CLIENT.logout_command(stream_name).await,
+        Brokerage::Oanda => if let Some(client) = OANDA_CLIENT.get() {
+            client.logout_command(stream_name).await
+        },
     }
 }
 
@@ -261,6 +289,10 @@ pub async fn live_market_order(stream_name: StreamName, mode: StrategyMode, orde
                     .live_market_order(stream_name, mode, order.clone())
                     .await
             }
+            Brokerage::Oanda => OANDA_CLIENT.get()
+                .ok_or_else(|| create_order_rejected(&order, "Oanda client not found".to_string()))?
+                .live_market_order(stream_name, mode, order.clone())
+                .await
         }
     };
 
@@ -288,6 +320,10 @@ pub async fn live_enter_long(stream_name: StreamName, mode: StrategyMode, order:
                     .live_enter_long(stream_name, mode, order.clone())
                     .await
             }
+            Brokerage::Oanda => OANDA_CLIENT.get()
+                .ok_or_else(|| create_order_rejected(&order, "Oanda client not found".to_string()))?
+                .live_enter_long(stream_name, mode, order.clone())
+                .await
         }
     };
 
@@ -315,6 +351,11 @@ pub async fn live_enter_short(stream_name: StreamName, mode: StrategyMode, order
                     .live_enter_short(stream_name, mode, order.clone())
                     .await
             }
+            Brokerage::Oanda => OANDA_CLIENT.get()
+                .ok_or_else(|| create_order_rejected(&order, "Oanda client not found".to_string()))?
+                .live_enter_short(stream_name, mode, order.clone())
+                .await
+
         }
     };
 
@@ -342,6 +383,10 @@ pub async fn live_exit_short(stream_name: StreamName, mode: StrategyMode, order:
                     .live_exit_short(stream_name, mode, order.clone())
                     .await
             }
+            Brokerage::Oanda => OANDA_CLIENT.get()
+                .ok_or_else(|| create_order_rejected(&order, "Bitget client not found".to_string()))?
+                .live_exit_short(stream_name, mode, order.clone())
+                .await
         }
     };
 
@@ -370,6 +415,10 @@ pub async fn live_exit_long(stream_name: StreamName, mode: StrategyMode, order: 
                     .live_exit_long(stream_name, mode, order.clone())
                     .await
             }
+            Brokerage::Oanda => OANDA_CLIENT.get()
+                .ok_or_else(|| create_order_rejected(&order, "Bitget client not found".to_string()))?
+                .live_exit_long(stream_name, mode, order.clone())
+                .await
         }
     };
 
@@ -397,6 +446,10 @@ pub async fn other_orders(stream_name: StreamName, mode: StrategyMode, order: Or
                     .other_orders(stream_name, mode, order.clone())
                     .await
             }
+            Brokerage::Oanda => OANDA_CLIENT.get()
+                .ok_or_else(|| create_order_rejected(&order, "Bitget client not found".to_string()))?
+                .other_orders(stream_name, mode, order.clone())
+                .await
         }
     };
 
@@ -419,6 +472,11 @@ pub async fn cancel_order(account: Account, order_id: OrderId) {
                 client.cancel_order(account, order_id).await;
             }
         }
+        Brokerage::Oanda => {
+            if let Some(client) = OANDA_CLIENT.get() {
+                client.cancel_order(account, order_id).await;
+            }
+        }
     }
 }
 
@@ -432,6 +490,11 @@ pub async fn cancel_orders_on_account(account: Account) {
         }
         Brokerage::Bitget => {
             if let Some(client) = BITGET_CLIENT.get() {
+                client.cancel_orders_on_account(account).await;
+            }
+        }
+        Brokerage::Oanda => {
+            if let Some(client) = OANDA_CLIENT.get() {
                 client.cancel_orders_on_account(account).await;
             }
         }
@@ -451,6 +514,11 @@ pub async fn flatten_all_for(account: Account) {
                 client.flatten_all_for(account).await;
             }
         }
+        Brokerage::Oanda => {
+            if let Some(client) = OANDA_CLIENT.get() {
+                client.flatten_all_for(account).await;
+            }
+        }
     }
 }
 
@@ -464,11 +532,16 @@ pub async fn update_order(account: Account, order_id: OrderId, update: OrderUpda
         }),
         Brokerage::Rithmic(system) => {
             if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                return client.update_order(account, order_id, update).await
+                return client.update_order(account, order_id, update).await;
             }
         }
         Brokerage::Bitget => {
             if let Some(client) = BITGET_CLIENT.get() {
+                return client.update_order(account, order_id, update).await;
+            }
+        }
+        Brokerage::Oanda => {
+            if let Some(client) = OANDA_CLIENT.get() {
                 return client.update_order(account, order_id, update).await;
             }
         }

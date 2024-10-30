@@ -12,7 +12,8 @@ use crate::messages::data_server_messaging::FundForgeError;
 pub enum Brokerage {
     Test, //DO NOT CHANGE ORDER
     Rithmic(RithmicSystem),
-    Bitget
+    Bitget,
+    Oanda
 }
 
 impl fmt::Display for Brokerage {
@@ -21,6 +22,7 @@ impl fmt::Display for Brokerage {
             Brokerage::Test => "Test".to_string(),
             Brokerage::Rithmic(system) => format!("Rithmic {}", system.to_string()),
             Brokerage::Bitget => "Bitget".to_string(),
+            Brokerage::Oanda => "Oanda".to_string(),
         };
         write!(f, "{}", s)
     }
@@ -45,7 +47,9 @@ impl FromStr for Brokerage {
         } else if s == "Bitget" {
             Ok(Brokerage::Bitget)
 
-        } else {
+        } else if "Oanda" == s {
+            Ok(Brokerage::Oanda)
+        }else {
             Err(FundForgeError::ClientSideErrorDebug(format!(
                 "Invalid brokerage string: {}",
                 s

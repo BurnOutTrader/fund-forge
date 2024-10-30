@@ -6,8 +6,6 @@ pub mod messages;
 pub mod strategies;
 pub(crate) mod tests;
 
-#[cfg(feature = "server")]
-pub mod server_features;
 pub mod apis;
 
 /// The `stream_name` is just the u16 port number of the strategy which the server is connecting to,

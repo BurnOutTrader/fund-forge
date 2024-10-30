@@ -37,7 +37,7 @@ use tokio::time::{interval, timeout};
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 use tungstenite::Message;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
-use ff_standard_lib::server_features::server_side_datavendor::VendorApiResponse;
+use crate::server_features::server_side_datavendor::VendorApiResponse;
 use ff_standard_lib::standardized_types::accounts::AccountInfo;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::PositionId;
@@ -231,19 +231,6 @@ impl RithmicClient {
                 self.writers.insert(system.clone(), writer.clone());
                 self.heartbeat_times.insert(system.clone(), Utc::now());
                 self.start_heart_beat(system, writer, self.heartbeat_times.clone()).await;
-                if self.credentials.ib_id != *self.client.ib_id.read().await {
-                 /*   let mut credentials = self.credentials.clone();
-                    credentials.ib_id = self.client.ib_id.read().await.clone();
-                    credentials.fcm_id = self.client.fcm_id.read().await.clone();
-                    let file_name = PathBuf::from(get_data_folder())
-                        .join("credentials")
-                        .join("rithmic_credentials")
-                        .join("active")
-                        .join(credentials.file_name())
-                        .to_string_lossy()
-                        .into_owned();
-                    credentials.save_credentials_to_file(&file_name).unwrap();*/
-                }
                 Ok(receiver)
             },
             Err(e) => {
@@ -296,7 +283,6 @@ impl RithmicClient {
                     None => String::from("Invalid UTF-8 sequence"), // Handle the error case as needed
                 };
                 let file_path = format!("{}/credentials/rithmic_credentials/active/{}", data_folder, file);
-                //println!("{}", file_path);
                 match RithmicCredentials::load_credentials_from_file(&file_path) {
                     Ok(file) => Ok(file),
                     Err(_e) => Err(FundForgeError::ServerErrorDebug(format!("Failed to load credentials for: {}", broker)))
@@ -499,15 +485,16 @@ impl RithmicClient {
                 subscribe_for_updates: Some(true), //todo not sure if we want updates, they never seem to stop.
             };
             self.send_message(&SysInfraType::OrderPlant, req).await;
+
             /*   let symbol = Symbol {
-                name: "MNQ".to_string(),
-                market_type: MarketType::Futures(FuturesExchange::CME),
-                data_vendor: DataVendor::Rithmic(RithmicSystem::Rithmic01),
-            };
-            match self.update_historical_data_for(1, symbol, BaseDataType::Candles, Resolution::Seconds(1)).await {
-                Ok(_) => {}
-                Err(_) => {}
-            }*/
+                 name: "MNQ".to_string(),
+                 market_type: MarketType::Futures(FuturesExchange::CME),
+                 data_vendor: DataVendor::Rithmic(RithmicSystem::Rithmic01),
+             };
+             match self.update_historical_data_for(1, symbol, BaseDataType::Candles, Resolution::Seconds(1)).await {
+                 Ok(_) => {}
+                 Err(_) => {}
+             }*/
         }
     }
 
