@@ -14,6 +14,7 @@ use tokio::{signal, task};
 use tokio::sync::{broadcast, OnceCell};
 use tokio_rustls::server::TlsStream;
 use server_features::database::{HybridStorage, DATA_STORAGE};
+use crate::oanda_api::api_client::{oanda_init};
 use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 
@@ -32,7 +33,7 @@ pub mod server_features;
 
 #[derive(Debug, StructOpt, Clone)]
 #[allow(dead_code)]
-struct ServerLaunchOptions {
+pub(crate) struct ServerLaunchOptions {
     /// Sets the data folder
     #[structopt(
         short = "f",
@@ -149,6 +150,7 @@ async fn main() -> io::Result<()> {
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
     RithmicClient::init_rithmic_apis(options.clone()).await;
+    oanda_init(options.clone()).await;
 
     run_servers(config, options.clone());
 
