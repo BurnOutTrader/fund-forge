@@ -6,7 +6,12 @@ trades exports
 /trades exports
 #/target a
 /temp_storage
-/ff_data_server/data/credentials/*
+/ff_data_server/data/credentials/bitget_credentials/active
+/ff_data_server/data/credentials/bitget_credentials/inactive
+/ff_data_server/data/credentials/rithmic_credentials/active
+/ff_data_server/data/credentials/rithmic_credentials/inactive
+/ff_data_server/data/credentials/oanda_credentials/active
+/ff_data_server/data/credentials/oanda_credentials/inactive
 
 ff_data_server/data/historical/Test/*
 ff_data_server/data/historical/Bitget/*
