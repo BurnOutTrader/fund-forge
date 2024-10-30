@@ -18,10 +18,10 @@ Only credentials files in active directories will be used by the server.
 
 ![file_structure.png](misc/file_structure.png)
 
-Depending on if you are using a live or practice account you input the mode as "practice" or "live" respectively
+Depending on if you are using a live or practice account you input the mode as "Practice" or "Live" respectively
 ```toml
 api_key = "your-api-key-here"
-mode = "practice"  # "practice" or "live"
+mode = "Practice"  # "practice" or "live"
 ```
 
 ## Historical Data 
