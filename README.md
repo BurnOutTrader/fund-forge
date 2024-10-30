@@ -84,26 +84,8 @@ In the example image 'Test' represents `DataVendor::Test`
 ![folder_structure.png](misc/folder_structure.png)
 
 ### For more testing and development data
-You can download some free testing data [here](https://www.histdata.com/download-free-forex-data/?/ascii/tick-data-quotes)
-
-Tick data from histdata.com will actually be parsed into the engine as `BaseDataEnum::Quotes(Quote)`
-
-Since the tick data is actually best bid and ask data.
-
-There is a crude test data parser [here](test_data_parser)
-
-You will need to manually download the files, then put all the .csv files into 1 folder and change the variables such as input/output folders and Symbol of the data.
-
-Change the following to suit the symbol and your directory.
-
-The parsing logic expects the original files to be in a directory with the same symbol name eg "/Users/{username}/Downloads/AUD-CAD"
-```rust
-fn main() {
-    let your_folder_path: String = "/Downloads".to_string(); //it will be assumed there is a folder named "AUD-CAD" here
-    let symbol_name: String = "AUD-CAD".to_string();
-}
-```
-After running the parsing program copy-paste the generated 'TEST' folder into ff_data_server/data
+The data parser has been removed since Oanda historical data will be available in the next patch.
+Rithmic Data will also be available in a week (today being 30/10/2024)
 
 
 ## Current State of Live Trading
