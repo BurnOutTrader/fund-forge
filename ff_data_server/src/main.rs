@@ -154,7 +154,7 @@ async fn main() -> io::Result<()> {
 
     run_servers(config, options.clone());
 
-    //DATA_STORAGE.get().unwrap().update_history();
+    DATA_STORAGE.get().unwrap().update_history();
 
     // Wait for Ctrl+C
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");
