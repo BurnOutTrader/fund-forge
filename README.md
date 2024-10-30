@@ -101,6 +101,10 @@ Download progress bars will replace print lines to keep the server terminal clea
 
 Rithmic historical data functions will be completed soon.
 
+## Architecture Overview
+![complex_diagram_2.png](misc/complex_diagram_2.png)
+
+[more on architecture](#Architecture)
 
 ## Current State of Live Trading
 ***The server now properly handles multiple connects and disconnects when using rithmic, the problem was in shutting down rithmic broadcasters (removing broadcaster while holding a mut ref)***
@@ -513,65 +517,6 @@ Unfortunately the learning curve for GUI development in iced is rather steep and
 All Gui development is totally decoupled from the engine by using the ff_strategy_registry as an intermediate server for forwarding messages between strategies and gui's
 after the last refactor the strategy registry is not in a working state, but is easily fixed in the future.
 
-## Architecture
-![complex_diagram_2.png](misc/complex_diagram_2.png)
-
-
-I have tried to maintain a reasonable separation of concerns throughout the code base to allow any backend implementations to be upgraded without effecting existing strategies.
-
-Some of the current implementations are crude implementations that act as placeholders for more performant designs in the future, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
-Anything can be improved and optimized once a stable platform is built.
-
-All strategy functionality is accessed by calling the `FundForgeStrategy` object's associated functions, there is a complete decoupling of strategy instance from the backend so that
-upgrades can be implemented in the engine and handlers without causing breaking changes to strategies.
-
-I am willing to accept improvements and pull requests that do not include any kind of binary file (all vendor data is serialized as binaries).
-All pull requests should include only human-readable code and files.
-
-The platform is designed to be as fast as possible, using `rkyv` for serialization and deserialization and network messaging, and `tokio` for async communication.
-The full potential of using rkyv will be unlocked in future versions, currently it is only the most basic implementation of serializing and deserializing to and from archived bytes.
-see: [rkyv](https://github.com/rkyv/rkyv)
-see tests [here](ff_data_server/README.md)
-
-I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance at the cost of slightly more hardcoding for new implementations.
-
-'ff_strategy_registry': decouples the strategy instance to allow front end Gui implementations in any programming language. 
-
-`ff_data_servers`: decouples api instances from any specific server and allows a microservices approach to maintaining api connections.
-If no settings are provided in the `resources/server_settings.toml` then that brokerage or vendor will use the default server addresses, this way we have the option for maximum and minimum segregation of api instances.
-
-When running a Strategy or Ui each vendor or brokerage instance will automatically generate an Asynchronous connection per individual `Brokerage` or `DataVendor` specification, if no unique specs are input in the `server_settings.toml` then the default connection will be assumed to host the api instance.
-We can have a unique `ff_data_server` instance for each brokerage and data vendor, or we can holst all api instances on a single instance of the data server.
-
-All data transferred between strategies and the data server or strategy registry is transferred over raw TLS/TCP (not websocket) using 0 cost deserialization with the `rkyv crate`
-The TLS handshake requires both server and client authentication certificates.
-
-An api instance for a `DataVendor` is just an object that implements `VendorApiResponse` trait
-All 'DataVendor' and `Brokerage` Responses are `DataServerResponse` enum variants. 
-You can implement your api however you like, as long as you return all the required functions implemented by the specific trait, if your DataVendor or Brokerage doesn't have the ability to return the required data, simple return `DataServerResponse::Error{error: String}`.
-
-Brokerages utilize the `BrokerApiResponse` trait. 
-
-On the client side the function calls are automatically forwarded to the correct api and so no changes to `ClientSideDataVendor` or `ClientSideBrokerage` need to be made
-
-All requests made by the engine will use the `DataVendor` or `Brokerage` enum variants in some way.
-We are simply: 
-1. Sending a request to the server using the DataVendor or Brokerage enum variant
-2. The server is returning a response with the data we require based on that variant.
-```rust
-fn example() {
-    /// in a strategy we could request the symbols for a market like this
-    let vendor = DataVendor::Test;
-
-    /// we will return a result from the fn, it will either be a Vec<Symbol> or a FundForgeError, this error type will contain a variant and a message string to tell us if the error was on the client side, or if the server has some problem fetching data.
-    let symbols = vendor.symbols(MarketType::Forex).await.unwrap();
-}
-```
-What the above function actually does is:
-1. Call a function to get the TLS/TCP connection to the data server instance associated with that enum variant.
-2. The engine sends a request for the symbols which also contains the enum variant to the data server.
-3. The server requests the correct api using a matching statement for each variant and retrieves the symbols from the correct api implementation returning them in fund forge format as `Vec<Symbol>`.
-
 ## Time handling
 ### Parsing Data Time
 All data should be saved using the static `HybridStorage` object, the data server hosts a public static `DATA_STORAGE` object, this object acts as a data base tool for serializing and loading data.
@@ -633,6 +578,64 @@ Using a new type pattern for Price and Volume, both are rust decimals. This adds
 pub type Volume = rust_decimal::decimal::Decimal;
 pub type Price = rust_decimal::decimal::Decimal;
 ```
+
+
+## Architecture
+I have tried to maintain a reasonable separation of concerns throughout the code base to allow any backend implementations to be upgraded without effecting existing strategies.
+
+Some of the current implementations are crude implementations that act as placeholders for more performant designs in the future, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
+Anything can be improved and optimized once a stable platform is built.
+
+All strategy functionality is accessed by calling the `FundForgeStrategy` object's associated functions, there is a complete decoupling of strategy instance from the backend so that
+upgrades can be implemented in the engine and handlers without causing breaking changes to strategies.
+
+I am willing to accept improvements and pull requests that do not include any kind of binary file (all vendor data is serialized as binaries).
+All pull requests should include only human-readable code and files.
+
+The platform is designed to be as fast as possible, using `rkyv` for serialization and deserialization and network messaging, and `tokio` for async communication.
+The full potential of using rkyv will be unlocked in future versions, currently it is only the most basic implementation of serializing and deserializing to and from archived bytes.
+see: [rkyv](https://github.com/rkyv/rkyv)
+see tests [here](ff_data_server/README.md)
+
+I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance at the cost of slightly more hardcoding for new implementations.
+
+'ff_strategy_registry': decouples the strategy instance to allow front end Gui implementations in any programming language.
+
+`ff_data_servers`: decouples api instances from any specific server and allows a microservices approach to maintaining api connections.
+If no settings are provided in the `resources/server_settings.toml` then that brokerage or vendor will use the default server addresses, this way we have the option for maximum and minimum segregation of api instances.
+
+When running a Strategy or Ui each vendor or brokerage instance will automatically generate an Asynchronous connection per individual `Brokerage` or `DataVendor` specification, if no unique specs are input in the `server_settings.toml` then the default connection will be assumed to host the api instance.
+We can have a unique `ff_data_server` instance for each brokerage and data vendor, or we can holst all api instances on a single instance of the data server.
+
+All data transferred between strategies and the data server or strategy registry is transferred over raw TLS/TCP (not websocket) using 0 cost deserialization with the `rkyv crate`
+The TLS handshake requires both server and client authentication certificates.
+
+An api instance for a `DataVendor` is just an object that implements `VendorApiResponse` trait
+All 'DataVendor' and `Brokerage` Responses are `DataServerResponse` enum variants.
+You can implement your api however you like, as long as you return all the required functions implemented by the specific trait, if your DataVendor or Brokerage doesn't have the ability to return the required data, simple return `DataServerResponse::Error{error: String}`.
+
+Brokerages utilize the `BrokerApiResponse` trait.
+
+On the client side the function calls are automatically forwarded to the correct api and so no changes to `ClientSideDataVendor` or `ClientSideBrokerage` need to be made
+
+All requests made by the engine will use the `DataVendor` or `Brokerage` enum variants in some way.
+We are simply:
+1. Sending a request to the server using the DataVendor or Brokerage enum variant
+2. The server is returning a response with the data we require based on that variant.
+```rust
+fn example() {
+    /// in a strategy we could request the symbols for a market like this
+    let vendor = DataVendor::Test;
+
+    /// we will return a result from the fn, it will either be a Vec<Symbol> or a FundForgeError, this error type will contain a variant and a message string to tell us if the error was on the client side, or if the server has some problem fetching data.
+    let symbols = vendor.symbols(MarketType::Forex).await.unwrap();
+}
+```
+What the above function actually does is:
+1. Call a function to get the TLS/TCP connection to the data server instance associated with that enum variant.
+2. The engine sends a request for the symbols which also contains the enum variant to the data server.
+3. The server requests the correct api using a matching statement for each variant and retrieves the symbols from the correct api implementation returning them in fund forge format as `Vec<Symbol>`.
+
 
 ## Strategy Registry
 The strategy registry service is a server where running strategies register and forward `StrategyEvents` to the Gui.
