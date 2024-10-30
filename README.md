@@ -85,8 +85,10 @@ In the example image 'Test' represents `DataVendor::Test`
 ![folder_structure.png](misc/folder_structure.png)
 
 ### For more testing and development data
-The data parser has been removed since Oanda historical data will be available in the next patch.
-Rithmic Data will also be available in a week (today being 30/10/2024)
+Oanda is currently the only api which has historical data, see the setup to download data. (oanda live trading in development)
+[Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md)
+
+Rithmic historical data functions will be completed soon.
 
 
 ## Current State of Live Trading
