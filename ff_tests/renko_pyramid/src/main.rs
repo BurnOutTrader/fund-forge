@@ -99,8 +99,8 @@ pub async fn on_data_received(
     let mut exit_order_id = None;
     let mut tp_id = None;
     let mut bars_since_entry = 0;
-    let mut last_short_result = Result::None;
-    let mut last_long_result = Result::None;
+    let mut last_short_result = Result::BreakEven;
+    let mut last_long_result = Result::BreakEven;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
@@ -160,6 +160,7 @@ pub async fn on_data_received(
                                             }
                                         }
                                     }
+                                    #[allow(clippy::const_err)]
                                     if TRADING_SHORT {
                                         let is_short = strategy.is_short(&account, &symbol_code);
 
@@ -237,7 +238,7 @@ pub async fn on_data_received(
                         } else if *booked_pnl < dec!(0) {
                             Result::Loss
                         } else {
-                            Result::None
+                            Result::BreakEven
                         };
                         match side {
                             PositionSide::Long => {
@@ -340,5 +341,5 @@ pub async fn on_data_received(
 enum Result {
     Win,
     Loss,
-    None
+    BreakEven
 }
