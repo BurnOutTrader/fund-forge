@@ -60,6 +60,7 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 - [Indicators](ff_standard_lib/src/strategies/indicators/INDICATORS_README.md)
 - [Rithmic Setup](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md)
 - [Bitget Setup](ff_data_server/src/bitget_api/BITGET_SETUP.md)
+- [Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md)
 - [Back Test Accuracy](ff_standard_lib/src/strategies/ACCURACY_README.md)
 - [Developing Engine](DEV_README.md)
 - [Current Development Tasks](DEV_TODO_ISSUES.md)
