@@ -12,6 +12,7 @@ use ff_standard_lib::standardized_types::accounts::Account;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use crate::oanda_api::get_requests::{oanda_accounts_list, oanda_instruments_download};
 use crate::oanda_api::instruments::OandaInstrument;
+use crate::ServerLaunchOptions;
 
 pub(crate) static OANDA_CLIENT: OnceCell<Arc<OandaClient>> = OnceCell::const_new();
 pub fn get_oanda_client() -> Option<Arc<OandaClient>> {
@@ -25,7 +26,24 @@ pub fn get_oanda_client_ref() -> &'static Arc<OandaClient> {
     OANDA_CLIENT.get().expect("Oanda client not initialized")
 }
 
-pub async fn oanda_init(settings: &OandaSettings) -> Result<(), Error> {
+pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
+    if options.disable_oanda_server != 0 {
+        return;
+    }
+    let path = options.data_folder.clone()
+        .join("credentials")
+        .join("oanda_credentials")
+        .join("active")
+        .join("oanda_settings.toml");
+
+    let settings: OandaSettings = match OandaSettings::from_file(path) {
+        Some(s) => s,
+        None => {
+            eprintln!("No oanda settings retrieved");
+            return;
+        }
+    };
+
     let client = Arc::new(Client::builder()
         .default_headers({
             let mut headers = reqwest::header::HeaderMap::new();
@@ -36,7 +54,7 @@ pub async fn oanda_init(settings: &OandaSettings) -> Result<(), Error> {
             headers
         })
         .http2_keep_alive_while_idle(true)
-        .build()?);
+        .build().unwrap());
 
     let rate_limiter = RateLimiter::new(120, Duration::from_secs(1));
     let mut oanda_client = OandaClient {
@@ -66,8 +84,6 @@ pub async fn oanda_init(settings: &OandaSettings) -> Result<(), Error> {
         }
     }
     let _ = OANDA_CLIENT.set(Arc::new(oanda_client));
-    
-    Ok(())
 }
 
 
