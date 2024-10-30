@@ -47,7 +47,7 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("NAS100-USD"),
                 DataVendor::Oanda,
-                Resolution::Minutes(3),
+                Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
