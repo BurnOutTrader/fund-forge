@@ -134,12 +134,6 @@ pub enum DataServerRequest {
         symbol_name: SymbolName
     },
 
-    PaperAccountInit {
-        callback_id: u64,
-        account_id: AccountId,
-        brokerage: Brokerage
-    },
-
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage, time: Option<String>},
     RegisterStreamer{port: u16, secs: u64, subsec: u32},
@@ -178,7 +172,6 @@ impl DataServerRequest {
             DataServerRequest::RegisterStreamer{..} => {}
             DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
             DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::PaperAccountInit { callback_id, .. } => {*callback_id = id}
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
         }
     }
@@ -309,8 +302,6 @@ DataServerResponse {
 
     CommissionInfo{callback_id: u64, commission_info: CommissionInfo},
 
-    PaperAccountInit{callback_id: u64, account_info: AccountInfo},
-
     LiveAccountUpdates {account: Account, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal},
 
     /// Booked pnl is only sent for closed positions, it is the amount of booked pnl since the last side change from none to long or short
@@ -357,7 +348,6 @@ impl DataServerResponse {
             DataServerResponse::RegistrationResponse(_) => None,
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
-            DataServerResponse::PaperAccountInit { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
             DataServerResponse::LivePositionUpdates { .. } => None

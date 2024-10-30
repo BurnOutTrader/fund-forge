@@ -36,7 +36,7 @@ pub struct TransactionHeartbeat {
 
 /// The specification of a Position within an Account.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct Position {
+pub struct OandaPosition {
     /// The Position’s Instrument.
     pub instrument: InstrumentName,
 

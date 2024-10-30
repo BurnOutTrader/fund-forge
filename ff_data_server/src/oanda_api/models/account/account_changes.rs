@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use serde::Serialize;
 use crate::oanda_api::models::order::orders::Order;
-use crate::oanda_api::models::position::Position;
+use crate::oanda_api::models::position::OandaPosition;
 use crate::oanda_api::models::trade::TradeSummary;
 use crate::oanda_api::models::transaction::transaction::Transaction;
 
@@ -39,7 +39,7 @@ struct AccountChanges {
 
     /// The Positions changed.
     #[serde(rename = "positions")]
-    positions: Vec<Position>,
+    positions: Vec<OandaPosition>,
 
     /// The Transactions that have been generated.
     #[serde(rename = "transactions")]

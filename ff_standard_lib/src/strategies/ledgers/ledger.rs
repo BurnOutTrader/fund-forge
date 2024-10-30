@@ -51,7 +51,6 @@ pub struct Ledger {
     pub open_pnl: DashMap<SymbolCode, Price>,
     pub total_booked_pnl: Mutex<Price>,
     pub mode: StrategyMode,
-    pub leverage: u32,
     pub is_simulating_pnl: bool,
     pub(crate) strategy_sender: Sender<StrategyEvent>
     //todo, add daily max loss, max order size etc to ledger
@@ -99,7 +98,6 @@ impl Ledger {
             open_pnl: DashMap::new(),
             total_booked_pnl: Mutex::new(dec!(0)),
             mode,
-            leverage: account_info.leverage,
             is_simulating_pnl,
             strategy_sender
         };

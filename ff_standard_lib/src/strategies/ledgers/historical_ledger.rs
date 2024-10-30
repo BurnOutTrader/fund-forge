@@ -1,7 +1,5 @@
 use crate::strategies::ledgers::ledger::Ledger;
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
-use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::messages::data_server_messaging::FundForgeError;
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
@@ -30,7 +28,7 @@ impl Ledger {
 
     pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price) -> Result<(), FundForgeError> {
         let margin = self.account.brokerage.intraday_margin_required(symbol_name.clone(), quantity).await?
-            .unwrap_or_else(|| (quantity * market_price) / Decimal::from_u32(self.leverage).unwrap());
+            .unwrap_or_else(|| quantity * market_price);
 
         // Check available cash first
         {

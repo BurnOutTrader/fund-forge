@@ -1,76 +1,18 @@
 use std::time::Duration;
 use chrono::{DateTime, Utc};
-use dashmap::DashMap;
-use rust_decimal::Decimal;
-use rust_decimal_macros::dec;
-use tokio::sync::{oneshot, Mutex};
+use tokio::sync::oneshot;
 use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
-use crate::standardized_types::accounts::{Account, AccountId, AccountInfo, Currency};
+use crate::standardized_types::accounts::{AccountId, AccountInfo};
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
-use crate::strategies::ledgers::ledger::Ledger;
-use crate::strategies::strategy_events::StrategyEvent;
 
 pub(crate) const TIME_OUT: Duration = Duration::from_secs(15);
 impl Brokerage {
-    pub async fn paper_account_init(
-        &self,
-        mode: StrategyMode,
-        starting_balance: Decimal,
-        currency: Currency,
-        account_id: AccountId,
-        strategy_sender: tokio::sync::mpsc::Sender<StrategyEvent>
-    ) -> Result<Ledger, FundForgeError> {
-        let request = DataServerRequest::PaperAccountInit {
-            account_id: account_id.clone(),
-            callback_id: 0,
-            brokerage: self.clone(),
-        };
-        let account = Account::new(self.clone(), account_id.clone());
-        let (sender, receiver) = oneshot::channel();
-        let msg = StrategyRequest::CallBack(ConnectionType::Broker(self.clone()), request, sender);
-        send_request(msg).await;
-        //todo, we need reconnect and resend callback logic for time outs and disconnects
-        match timeout(TIME_OUT, receiver).await {
-            Ok(receiver_result) => match receiver_result {
-                Ok(response) => match response {
-                    DataServerResponse::PaperAccountInit { account_info, .. } => {
-                        Ok(Ledger {
-                            account,
-                            cash_value: Mutex::new(starting_balance),
-                            cash_available: Mutex::new(starting_balance),
-                            currency,
-                            cash_used: Mutex::new(dec!(0.0)),
-                            positions: DashMap::new(),
-                            last_update: Default::default(),
-                            symbol_code_map: Default::default(),
-                            margin_used: DashMap::new(),
-                            positions_closed: DashMap::new(),
-                            symbol_closed_pnl: Default::default(),
-                            open_pnl: DashMap::new(),
-                            total_booked_pnl: Mutex::new(dec!(0.0)),
-                            mode,
-                            leverage: account_info.leverage,
-                            is_simulating_pnl: true,
-                            symbol_info: DashMap::new(),
-                            strategy_sender
-                        })
-                    },
-                    DataServerResponse::Error { error, .. } => Err(error),
-                    _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
-                },
-                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
-            },
-            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
-        }
-    }
-
     pub async fn intraday_margin_required(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Option<Price>, FundForgeError> {
         let request = DataServerRequest::IntradayMarginRequired {
             callback_id: 0,

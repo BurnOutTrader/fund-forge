@@ -17,34 +17,6 @@ use crate::oanda_api::api_client::{get_oanda_client, OANDA_CLIENT};
 
 pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
-// Responses
-/// return `DataServerResponse::PaperAccountInit` or `DataServerResponse::Error(FundForgeError)`.
-/// This provides a template only, the user can still set their own accounts prior to starting a backtest, but this will help the engine create a more accurate template in the event the user forgot to set-up the account.
-///The cash value and Currency will be over-ridden by the user, but the leverage field will be important.
-pub async fn paper_account_init(brokerage: Brokerage, account_id: AccountId, callback_id: u64) -> DataServerResponse {
-    let operation = async {
-        match brokerage {
-            Brokerage::Rithmic(system) => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                    return client.value().paper_account_init(account_id, callback_id).await
-                }
-            },
-            Brokerage::Test => return TEST_CLIENT.paper_account_init(account_id, callback_id).await,
-            Brokerage::Bitget => {
-                if let Some(client) = BITGET_CLIENT.get() {
-                    return client.paper_account_init(account_id, callback_id).await
-                }
-            }
-            Brokerage::Oanda => if let Some(client) = OANDA_CLIENT.get() {
-                return client.paper_account_init(account_id, callback_id).await
-            }
-        }
-        DataServerResponse::Error{ callback_id, error: FundForgeError::ServerErrorDebug(format!("Unable to find api client instance for: {}", brokerage))}
-    };
-
-    timeout(TIMEOUT_DURATION, operation).await.unwrap_or_else(|_| DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug("Operation timed out".to_string()) })
-}
-
 /// return `DataServerResponse::CommissionInfo` or `DataServerResponse::Error(FundForgeError)`.
 pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, symbol_name: SymbolName, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
     let operation = async {

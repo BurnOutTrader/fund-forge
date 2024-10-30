@@ -39,12 +39,6 @@ pub trait BrokerApiResponse: Sync + Send {
         callback_id: u64
     ) -> DataServerResponse;
 
-    async fn paper_account_init(
-        &self,
-        account_id: AccountId,
-        callback_id: u64
-    ) -> DataServerResponse;
-
     /// return` DataServerResponse::SymbolInfo` or `DataServerResponse::Error{error: FundForgeError, callback_id: u64}`
     ///
     /// `FundForgeError::ServerSideErrorDebug` or `FundForgeError::ClientSideErrorDebug` depending on who caused this problem.

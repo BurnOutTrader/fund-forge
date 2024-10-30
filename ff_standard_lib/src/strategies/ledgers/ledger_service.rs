@@ -5,6 +5,7 @@ use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+use tokio::sync::Mutex;
 use crate::standardized_types::position::{Position, PositionUpdateEvent};
 use crate::standardized_types::accounts::{Account, Currency};
 use crate::standardized_types::new_types::{Price, Volume};
@@ -17,7 +18,7 @@ use crate::strategies::strategy_events::StrategyEvent;
 pub(crate) struct LedgerService {
     pub (crate) ledgers: DashMap<Account, Arc<Ledger>>,
     ledger_senders: DashMap<Account, tokio::sync::mpsc::Sender<LedgerMessage>>,
-    strategy_sender: tokio::sync::mpsc::Sender<StrategyEvent>
+    strategy_sender: tokio::sync::mpsc::Sender<StrategyEvent>,
 }
 
 impl LedgerService {
@@ -25,7 +26,7 @@ impl LedgerService {
         LedgerService {
             ledgers: Default::default(),
             ledger_senders: Default::default(),
-            strategy_sender
+            strategy_sender,
         }
     }
 
@@ -149,12 +150,25 @@ impl LedgerService {
                     ledger
                 },
                 StrategyMode::Backtest | StrategyMode::LivePaperTrading => {
-                    match account.brokerage.paper_account_init(strategy_mode, starting_cash, currency, account.account_id.clone(), self.strategy_sender.clone()).await {
-                        Ok(ledger) => Arc::new(ledger),
-                        Err(e) => {
-                            panic!("LEDGER_SERVICE: Error initializing account: {}", e);
-                        }
-                    }
+                    Arc::new(Ledger {
+                        account: account.clone(),
+                        cash_value: Mutex::new(starting_cash.clone()),
+                        cash_available: Mutex::new(starting_cash.clone()),
+                        currency,
+                        cash_used: Mutex::new(dec!(0)),
+                        positions: Default::default(),
+                        last_update: Default::default(),
+                        symbol_code_map: Default::default(),
+                        margin_used: Default::default(),
+                        positions_closed: Default::default(),
+                        symbol_closed_pnl: Default::default(),
+                        symbol_info: Default::default(),
+                        open_pnl: Default::default(),
+                        total_booked_pnl: Mutex::new(dec!(0)),
+                        mode: strategy_mode.clone(),
+                        is_simulating_pnl: true,
+                        strategy_sender: self.strategy_sender.clone(),
+                    })
                 }
             };
 

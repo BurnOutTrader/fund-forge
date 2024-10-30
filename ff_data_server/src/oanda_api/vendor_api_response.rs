@@ -87,10 +87,12 @@ impl VendorApiResponse for OandaClient {
     async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         todo!()
     }
+
     #[allow(unused)]
     async fn data_feed_unsubscribe(&self, mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         todo!()
     }
+
     #[allow(unused)]
     async fn base_data_types_response(&self, mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         DataServerResponse::BaseDataTypes {
@@ -98,14 +100,17 @@ impl VendorApiResponse for OandaClient {
             base_data_types: vec![BaseDataType::QuoteBars],
         }
     }
+
     #[allow(unused)]
     async fn logout_command_vendors(&self, stream_name: StreamName) {
         todo!()
     }
+
     #[allow(unused)]
     async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
         todo!()
     }
+
     #[allow(unused)]
     async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) {
         let earliest_oanda_data = || {

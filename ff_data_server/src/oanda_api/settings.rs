@@ -1,4 +1,5 @@
 use std::fs;
+use std::path::PathBuf;
 use serde_derive::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -11,14 +12,25 @@ pub enum OandaApiMode {
 pub struct OandaSettings {
     pub(crate) api_key: String,
     pub(crate) mode: OandaApiMode,
-    pub(crate) max_concurrent_downloads: usize,
 }
 
 impl OandaSettings {
-    pub fn from_file(path: &str) -> Result<Self, Box<dyn std::error::Error>> {
-        let contents = fs::read_to_string(path)?;
-        let settings: OandaSettings = toml::from_str(&contents)?;
-        Ok(settings)
+    pub fn from_file(path: PathBuf) -> Option<Self> {
+        let contents = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Error reading oanda settings file: {}", e);
+                return None;
+            }
+        };
+        let settings: OandaSettings = match toml::from_str(&contents) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("Error parsing oanda settings: {}", e);
+                return None;
+            }
+        };
+        Some(settings)
     }
 
     pub fn save_to_file(&self, path: &str) -> Result<(), Box<dyn std::error::Error>> {
