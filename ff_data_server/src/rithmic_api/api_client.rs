@@ -857,10 +857,9 @@ impl RithmicClient {
         self.send_message(&SysInfraType::OrderPlant, req).await;
     }
 
-    #[allow(dead_code)]
     pub(crate) async fn init_rithmic_apis(options: ServerLaunchOptions) {
         let options = options;
-        if options.disable_rithmic_server == 1 {
+        if options.disable_rithmic_server != 0 {
             return
         }
         let toml_files = RithmicClient::get_rithmic_tomls();
