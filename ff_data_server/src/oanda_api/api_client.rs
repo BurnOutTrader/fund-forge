@@ -7,19 +7,11 @@ use tokio::time::sleep;
 use crate::oanda_api::settings::{OandaApiMode, OandaSettings};
 use crate::rate_limiter::RateLimiter;
 use bytes::Bytes;
-use chrono::Utc;
 use dashmap::DashMap;
-use rust_decimal::MathematicalOps;
-use rust_decimal_macros::dec;
-use uuid::Uuid;
-use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo};
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use ff_standard_lib::standardized_types::enums::PositionSide;
-use ff_standard_lib::standardized_types::position::Position;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
-use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
-use crate::oanda_api::get_requests::{get_oanda_account_details, oanda_accounts_list, oanda_instruments_download};
+use crate::oanda_api::get_requests::{oanda_account_summary, oanda_accounts_list, oanda_instruments_download};
 use crate::oanda_api::instruments::OandaInstrument;
 use crate::oanda_api::models::position::OandaPosition;
 use crate::ServerLaunchOptions;
@@ -44,7 +36,11 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         .join("credentials")
         .join("oanda_credentials")
         .join("active")
-        .join("oanda_settings.toml");
+        .join("oanda_credentials.toml");
+
+    if !path.exists() {
+        return;
+    }
 
     let settings: OandaSettings = match OandaSettings::from_file(path) {
         Some(s) => s,
@@ -96,69 +92,8 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         }
     }
     for account in &oanda_client.accounts {
-        match get_oanda_account_details(&oanda_client, &account.account_id).await {
+        match oanda_account_summary(&oanda_client, &account.account_id).await {
             Ok(summary) => {
-                let mut positions = vec![];
-                for oanda_position in summary.positions {
-                    let side = match oanda_position.long.units > dec!(0) {
-                        true => PositionSide::Long,
-                        false => PositionSide::Short
-                    };
-
-                    let (quantity, average_price, open_pnl) = match side {
-                        PositionSide::Long => {
-                            (oanda_position.long.units, oanda_position.long.average_price, oanda_position.long.unrealized_pl)
-                        }
-                        PositionSide::Short => {
-                            (oanda_position.short.units, oanda_position.short.average_price, oanda_position.short.unrealized_pl)
-                        }
-                    };
-
-                    let symbol = fund_forge_formatted_symbol_name(&oanda_position.instrument);
-
-                    if let Some(instrument) = oanda_client.instruments.get(&symbol) {
-                        let tick_size = dec!(1) / dec!(10).powi(instrument.display_precision as i64);
-                        let info = SymbolInfo {
-                            symbol_name: symbol.clone(),
-                            pnl_currency: summary.currency, //todo need to do dynamically
-                            value_per_tick: dec!(1), //todo might need a hard coded list, cant find dynamic info
-                            tick_size,
-                            decimal_accuracy: instrument.pip_location,
-                        };
-
-                        let guid = Uuid::new_v4();
-
-                        // Return the generated position ID with both readable prefix and GUID
-                        let id = format!(
-                            "{}-{}",
-                            side,
-                            guid.to_string()
-                        );
-
-                        let position = Position {
-                            symbol_name: symbol.clone(),
-                            symbol_code: symbol.clone(),
-                            account: Account { brokerage: Brokerage::Oanda, account_id: account.account_id.clone() },
-                            side,
-                            open_time: Utc::now().to_string(),
-                            quantity_open: quantity,
-                            quantity_closed: dec!(0),
-                            close_time: None,
-                            average_price,
-                            open_pnl,
-                            booked_pnl: dec!(0),
-                            highest_recoded_price: Default::default(),
-                            lowest_recoded_price: Default::default(),
-                            average_exit_price: None,
-                            is_closed: false,
-                            position_id: id,
-                            symbol_info: info,
-                            pnl_currency: summary.currency, //todo dynamically get somehow for each position
-                            tag: "External Position".to_string(),
-                        };
-                        positions.push(position);
-                    }
-                }
                 let info = AccountInfo {
                     account_id: account.account_id.clone(),
                     brokerage: Brokerage::Oanda,
@@ -314,3 +249,81 @@ async fn wait_until_next_hour() -> Instant {
     sleep(Duration::from_secs(delay)).await;
     Instant::now()
 }
+
+//for deserializing positions
+/*
+let mut positions = vec![];
+                for oanda_position in summary.positions {
+                    let side = match oanda_position.long.units > dec!(0) {
+                        true => PositionSide::Long,
+                        false => PositionSide::Short
+                    };
+
+                    let (quantity, average_price, open_pnl) = match side {
+                        PositionSide::Long => {
+                            match oanda_position.long.average_price {
+                                Some(price) => (oanda_position.long.units, price, oanda_position.long.unrealized_pl),
+                                None => {
+                                    eprintln!("Long position has no average price");
+                                    continue;
+                                }
+                            }
+                        }
+                        PositionSide::Short => {
+                            match oanda_position.short.average_price {
+                                Some(price) => (oanda_position.short.units, price, oanda_position.short.unrealized_pl),
+                                None => {
+                                    eprintln!("Short position has no average price");
+                                    continue;
+                                }
+                            }
+                        }
+                    };
+
+                    let symbol = fund_forge_formatted_symbol_name(&oanda_position.instrument);
+
+                    if let Some(instrument) = oanda_client.instruments.get(&symbol) {
+                        let tick_size = dec!(1) / dec!(10).powi(instrument.display_precision as i64);
+                        let info = SymbolInfo {
+                            symbol_name: symbol.clone(),
+                            pnl_currency: summary.currency, //todo need to do dynamically
+                            value_per_tick: dec!(1), //todo might need a hard coded list, cant find dynamic info
+                            tick_size,
+                            decimal_accuracy: instrument.pip_location,
+                        };
+
+                        let guid = Uuid::new_v4();
+
+                        // Return the generated position ID with both readable prefix and GUID
+                        let id = format!(
+                            "{}-{}",
+                            side,
+                            guid.to_string()
+                        );
+
+                        let position = Position {
+                            symbol_name: symbol.clone(),
+                            symbol_code: symbol.clone(),
+                            account: Account { brokerage: Brokerage::Oanda, account_id: account.account_id.clone() },
+                            side,
+                            open_time: Utc::now().to_string(),
+                            quantity_open: quantity,
+                            quantity_closed: dec!(0),
+                            close_time: None,
+                            average_price,
+                            open_pnl,
+                            booked_pnl: dec!(0),
+                            highest_recoded_price: Default::default(),
+                            lowest_recoded_price: Default::default(),
+                            average_exit_price: None,
+                            is_closed: false,
+                            position_id: id,
+                            symbol_info: info,
+                            pnl_currency: summary.currency, //todo dynamically get somehow for each position
+                            tag: "External Position".to_string(),
+                        };
+                        positions.push(position);
+                    }
+                }
+
+*/

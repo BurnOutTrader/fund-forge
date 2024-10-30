@@ -32,8 +32,8 @@ pub(crate) struct AccountSummary {
 
     /// The current guaranteed Stop Loss Order settings of the Account.
     /// This field will only be present if the guaranteedStopLossOrderMode is not 'DISABLED'.
-    #[serde(rename = "guaranteedStopLossOrderParameters")]
-    pub guaranteed_stop_loss_order_parameters: GuaranteedStopLossOrderParameters,
+    #[serde(rename = "guaranteedStopLossOrderParameters", skip_serializing_if = "Option::is_none")]
+    pub guaranteed_stop_loss_order_parameters: Option<GuaranteedStopLossOrderParameters>,
 
     /// The current guaranteed Stop Loss Order mode of the Account.
     #[serde(rename = "guaranteedStopLossOrderMode")]
@@ -163,8 +163,8 @@ pub(crate) struct AccountSummary {
     pub margin_call_enter_time: Option<DateTime>,
 
     /// The number of times that the Account's current margin call was extended.
-    #[serde(rename = "marginCallExtensionCount")]
-    pub margin_call_extension_count: i32,
+    #[serde(rename = "marginCallExtensionCount", skip_serializing_if = "Option::is_none")]
+    pub margin_call_extension_count: Option<i32>,
 
     /// The date/time of the Account's last margin call extension.
     #[serde(rename = "lastMarginCallExtensionTime")]

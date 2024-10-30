@@ -84,7 +84,7 @@ pub struct PositionSide {
 
     /// Volume-weighted average of the underlying Trade open prices for the PositionSide.
     #[serde(rename = "averagePrice")]
-    pub average_price: Decimal,
+    pub average_price: Option<Decimal>,
 
     /// List of the open Trade IDs which contribute to the open PositionSide.
     #[serde(rename = "tradeIDs")]

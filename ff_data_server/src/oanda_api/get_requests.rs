@@ -125,6 +125,7 @@ pub(crate) async fn oanda_account_summary(oanda_client: &OandaClient, account_id
     }
 }
 
+#[allow(dead_code)]
 pub(crate) async fn get_oanda_account_details(oanda_client: &OandaClient, account_id: &str) -> Result<OandaAccount, FundForgeError> {
     let request_uri = format!("/accounts/{}", account_id);
 
@@ -146,6 +147,8 @@ pub(crate) async fn get_oanda_account_details(oanda_client: &OandaClient, accoun
         }
     };
 
+    //println!("Raw response: {}", content); // Add this for debugging
+
     let json: serde_json::Value = match serde_json::from_str(&content) {
         Ok(json) => json,
         Err(e) => {
@@ -155,11 +158,14 @@ pub(crate) async fn get_oanda_account_details(oanda_client: &OandaClient, accoun
         }
     };
 
-    // Assuming Account implements Deserialize
     match serde_json::from_value(json["account"].clone()) {
         Ok(account) => Ok(account),
-        Err(e) => Err(FundForgeError::ServerErrorDebug(
-            format!("Failed to deserialize account details: {:?}", e)
-        ))
+        Err(e) => {
+            // Print the actual JSON structure for debugging
+            println!("Account JSON: {}", json["account"]);
+            Err(FundForgeError::ServerErrorDebug(
+                format!("Failed to deserialize account details: {:?}", e)
+            ))
+        }
     }
 }

@@ -133,17 +133,17 @@ pub struct Trade {
 
 /// The summary of a Trade within an Account. This representation does not
 /// provide the full details of the Trade’s dependent Orders.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TradeSummary {
-    /// The Trade’s identifier, unique within the Trade’s Account.
+    /// The Trade's identifier, unique within the Trade's Account.
     #[serde(rename = "id")]
-    pub trade_id: TradeID,
+    pub id: TradeID,
 
-    /// The Trade’s Instrument.
+    /// The Trade's Instrument.
     pub instrument: InstrumentName,
 
-    /// The execution prices of the Trade.
-    pub price:Decimal ,
+    /// The execution price of the Trade.
+    pub price: Decimal,
 
     /// The date/time when the Trade was opened.
     #[serde(rename = "openTime")]
@@ -158,7 +158,7 @@ pub struct TradeSummary {
     pub initial_units: Decimal,
 
     /// The margin required at the time the Trade was created. Note, this is the
-    /// ‘pure’ margin required, it is not the ‘effective’ margin used that
+    /// 'pure' margin required, it is not the 'effective' margin used that
     /// factors in the trade risk if a GSLO is attached to the trade.
     #[serde(rename = "initialMarginRequired")]
     pub initial_margin_required: Decimal,
@@ -180,13 +180,13 @@ pub struct TradeSummary {
     #[serde(rename = "marginUsed")]
     pub margin_used: Decimal,
 
-    /// The average closing prices of the Trade. Only present if the Trade has
+    /// The average closing price of the Trade. Only present if the Trade has
     /// been closed or reduced at least once.
-    #[serde(rename = "averageClosePrice")]
-    pub average_close_price: Decimal,
+    #[serde(rename = "averageClosePrice", skip_serializing_if = "Option::is_none")]
+    pub average_close_price: Option<Decimal>,
 
     /// The IDs of the Transactions that have closed portions of this Trade.
-    #[serde(rename = "closingTransactionIDs")]
+    #[serde(rename = "closingTransactionIDs", default)]
     pub closing_transaction_ids: Vec<TransactionID>,
 
     /// The financing paid/collected for this Trade.
@@ -198,30 +198,27 @@ pub struct TradeSummary {
 
     /// The date/time when the Trade was fully closed. Only provided for Trades
     /// whose state is CLOSED.
-    #[serde(rename = "closeTime")]
-    pub close_time: DateTime,
+    #[serde(rename = "closeTime", skip_serializing_if = "Option::is_none")]
+    pub close_time: Option<DateTime>,
 
     /// The client extensions of the Trade.
-    #[serde(rename = "clientExtensions")]
-    pub client_extensions: ClientExtensions,
+    #[serde(rename = "clientExtensions", skip_serializing_if = "Option::is_none")]
+    pub client_extensions: Option<ClientExtensions>,
 
-    /// ID of the Trade’s Take Profit Order, only provided if such an Order
-    /// exists.
-    #[serde(rename = "takeProfitOrderID")]
+    /// ID of the Trade's Take Profit Order, only provided if such an Order exists.
+    #[serde(rename = "takeProfitOrderID", skip_serializing_if = "Option::is_none")]
     pub take_profit_order_id: Option<OrderId>,
 
-    /// ID of the Trade’s Stop Loss Order, only provided if such an Order exists.
-    #[serde(rename = "stopLossOrderID")]
+    /// ID of the Trade's Stop Loss Order, only provided if such an Order exists.
+    #[serde(rename = "stopLossOrderID", skip_serializing_if = "Option::is_none")]
     pub stop_loss_order_id: Option<OrderId>,
 
-    /// ID of the Trade’s Guaranteed Stop Loss Order, only provided if such an
-    /// Order exists.
-    #[serde(rename = "guaranteedStopLossOrderID")]
+    /// ID of the Trade's Guaranteed Stop Loss Order, only provided if such an Order exists.
+    #[serde(rename = "guaranteedStopLossOrderID", skip_serializing_if = "Option::is_none")]
     pub guaranteed_stop_loss_order_id: Option<OrderId>,
 
-    /// ID of the Trade’s Trailing Stop Loss Order, only provided if such an
-    /// Order exists.
-    #[serde(rename = "trailingStopLossOrderID")]
+    /// ID of the Trade's Trailing Stop Loss Order, only provided if such an Order exists.
+    #[serde(rename = "trailingStopLossOrderID", skip_serializing_if = "Option::is_none")]
     pub trailing_stop_loss_order_id: Option<OrderId>,
 }
 

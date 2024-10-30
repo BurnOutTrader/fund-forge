@@ -11,7 +11,10 @@ Please do not use a hedging account.
 ![hedging.png](misc/hedging.png)
 
 ## Credentials
-In the following directory you need to setup the credential file
+In the following directory you need to setup the credential file, there is a template file in the `oanda_credentials/inactive`.
+You need to fill it out and copy it into the `oanda_credentials/active` directory.
+
+Only credentials files in active directories will be used by the server.
 
 ![file_structure.png](misc/file_structure.png)
 
@@ -32,7 +35,7 @@ The download list can be found in data/credentials/{Brokerage}_credentials/downl
 The symbols should fund forge format, in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name.
 ```toml
 symbols = [
-    "US-Nas-100",
+    "NAS100-USD",
 ]
 ```
 

@@ -55,39 +55,73 @@ impl OandaInstrument {
         let maximum_order_units = Decimal::from_str(instrument["maximumOrderUnits"].as_str().ok_or("Missing maximumOrderUnits")?)?;
         let margin_rate = Decimal::from_str(instrument["marginRate"].as_str().ok_or("Missing marginRate")?)?;
 
-        // Commission info (assuming CommissionInfo type exists)
-        let commission: InstrumentCommission = serde_json::from_value(instrument["commission"].clone())?;
-        let instrument_financing: InstrumentFinancing = serde_json::from_value(instrument["financing"].clone())?;
+        // Default commission since it's not in the JSON
+        let commission = InstrumentCommission {
+            commission: Decimal::ZERO,
+            units_traded: Decimal::ZERO,
+            minimum_commission: Decimal::ZERO,
+        };
+
+        // Handle GuaranteedStopLossOrderMode
+        let guaranteed_stop_loss_order_mode = match instrument["guaranteedStopLossOrderMode"].as_str() {
+            Some("ALLOWED") => GuaranteedStopLossOrderMode::Allowed,
+            _ => GuaranteedStopLossOrderMode::Disabled,
+        };
+
+        // Optional fields
+        let guaranteed_stop_loss_order_execution_premium = instrument["guaranteedStopLossOrderExecutionPremium"]
+            .as_str()
+            .map(|s| Decimal::from_str(s))
+            .transpose()?;
+
+        // Parse tags
+        let tags = instrument["tags"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|tag| tag["name"].as_str().map(String::from))
+                    .collect()
+            })
+            .unwrap_or_default();
+
         let market_type = match instrument_type.as_str() {
             "CURRENCY" => MarketType::Forex,
             _ => MarketType::CFD,
         };
 
-        // Format the symbol if needed
+        // Format the symbol
         let symbol_name = fund_forge_formatted_symbol_name(&name);
+
+        let minimum_guaranteed_stop_loss_distance = instrument["minimumGuaranteedStopLossDistance"]
+            .as_str()
+            .map(Decimal::from_str)
+            .transpose()?
+            .unwrap_or_default();
+
+        let financing: InstrumentFinancing = serde_json::from_value(instrument["financing"].clone())?;
 
         Ok(OandaInstrument {
             display_name,
             name,
             symbol_name,
+            instrument_type,
             display_precision,
-            margin_rate,
-            commission,
-            guaranteed_stop_loss_order_mode: GuaranteedStopLossOrderMode::Disabled, //todo
-            guaranteed_stop_loss_order_execution_premium: None, //todo
-            guaranteed_stop_loss_order_level_restriction: None, //todo
-            financing: instrument_financing,
-            maximum_order_units,
-            maximum_position_size,
-            maximum_trailing_stop_distance,
-            minimum_trade_size,
-            minimum_trailing_stop_distance,
             pip_location,
             trade_units_precision,
+            minimum_trade_size,
+            maximum_trailing_stop_distance,
+            minimum_guaranteed_stop_loss_distance,
+            minimum_trailing_stop_distance,
+            maximum_position_size,
+            maximum_order_units,
+            margin_rate,
+            commission,
+            guaranteed_stop_loss_order_mode,
+            guaranteed_stop_loss_order_execution_premium,
+            guaranteed_stop_loss_order_level_restriction: None,
+            financing,
+            tags,
             market_type,
-            instrument_type,
-            minimum_guaranteed_stop_loss_distance: Default::default(), //todo
-            tags: vec![],
         })
     }
 }

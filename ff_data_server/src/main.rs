@@ -33,7 +33,7 @@ pub mod server_features;
 
 #[derive(Debug, StructOpt, Clone)]
 #[allow(dead_code)]
-pub(crate) struct ServerLaunchOptions {
+pub struct ServerLaunchOptions {
     /// Sets the data folder
     #[structopt(
         short = "f",
@@ -136,7 +136,7 @@ async fn main() -> io::Result<()> {
     let options = ServerLaunchOptions::from_args();
     let _ = DATA_FOLDER.set(options.data_folder.clone());
     println!("Data Folder: {:?}", get_data_folder());
-    let _ = DATA_STORAGE.set(Arc::new(HybridStorage::new(options.data_folder.clone(), Duration::from_secs(900))));
+    let _ = DATA_STORAGE.set(Arc::new(HybridStorage::new(Duration::from_secs(900), options.clone())));
     let cert = Path::join(&options.ssl_auth_folder, "cert.pem");
     let key = Path::join(&options.ssl_auth_folder, "key.pem");
 
@@ -154,8 +154,7 @@ async fn main() -> io::Result<()> {
 
     run_servers(config, options.clone());
 
-    // Wait for initialization to complete
-
+    DATA_STORAGE.get().unwrap().update_history();
 
     // Wait for Ctrl+C
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");

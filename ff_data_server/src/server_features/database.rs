@@ -9,7 +9,9 @@ use std::time::Duration;
 use chrono::{DateTime, Datelike, TimeZone, Utc};
 use dashmap::DashMap;
 use futures::future;
+use futures_util::future::join_all;
 use memmap2::{Mmap};
+use serde_derive::Deserialize;
 use tokio::sync::{OnceCell};
 use tokio::task;
 use tokio::task::JoinHandle;
@@ -19,8 +21,11 @@ use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::resolution::Resolution;
-use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
+use crate::oanda_api::api_client::OANDA_CLIENT;
+use crate::server_features::server_side_datavendor::VendorApiResponse;
+use crate::ServerLaunchOptions;
 
 #[derive(Eq, PartialEq, Clone, Hash, Debug)]
 pub struct UpdateTask {
@@ -38,18 +43,20 @@ pub struct HybridStorage {
     cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
     cache_is_updated: Arc<DashMap<String, bool>>,
     clear_cache_duration: Duration,
-    download_tasks: Arc<DashMap<UpdateTask, JoinHandle<()>>>
+    download_tasks: Arc<DashMap<UpdateTask, JoinHandle<()>>>,
+    options: ServerLaunchOptions
 }
 
 impl HybridStorage {
-    pub fn new(base_path: PathBuf, clear_cache_duration: Duration) -> Self {
+    pub fn new(clear_cache_duration: Duration, options: ServerLaunchOptions) -> Self {
         let storage = Self {
-            base_path: base_path.join("historical"),
+            base_path: options.data_folder.clone().join("historical"),
             mmap_cache: Arc::new(DashMap::new()),
             cache_last_accessed: Arc::new(DashMap::new()),
             cache_is_updated: Arc::new(DashMap::new()),
             clear_cache_duration,
             download_tasks: Arc::new(DashMap::new()),
+            options
         };
 
         // Start the background task for cache management
@@ -454,4 +461,59 @@ impl HybridStorage {
 
         Ok(combined_data)
     }
+
+    pub fn update_history(&self) {
+        let options = self.options.clone();
+        task::spawn(async move {
+            let mut tasks = vec![];
+            if options.disable_oanda_server == 0 {
+                //update oanda history
+                let oanda_path = options.data_folder.clone()
+                    .join("credentials")
+                    .join("oanda_credentials")
+                    .join("download_list.toml");
+
+                if oanda_path.exists() {
+                    let content = match std::fs::read_to_string(&oanda_path) {
+                        Ok(content) => content,
+                        Err(e) => {
+                            eprintln!("Failed to read download list file: {}", e);
+                            return;
+                        }
+                    };
+
+                    let symbol_object = match toml::from_str::<DownloadSymbols>(&content) {
+                        Ok(symbol_object) => symbol_object,
+                        Err(e) => {
+                            eprintln!("Failed to parse download list: {}", e);
+                            return;
+                        }
+                    };
+                    if let Some(client) = OANDA_CLIENT.get() {
+                        let symbols = symbol_object.symbols;
+                        for symbol in symbols {
+                            if let Some(instrument) = client.instruments.get(&symbol) {
+                                let symbol = Symbol::new(symbol, DataVendor::Oanda, instrument.market_type);
+                                tasks.push(task::spawn(async move {
+                                    client.update_historical_data_for(symbol, BaseDataType::QuoteBars, Resolution::Seconds(5)).await;
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+            if options.disable_bitget_server == 0 {
+
+            }
+            if options.disable_rithmic_server == 0 {
+
+            }
+            join_all(tasks).await;
+        });
+    }
+}
+
+#[derive(Deserialize)]
+struct DownloadSymbols {
+    symbols: Vec<SymbolName>
 }

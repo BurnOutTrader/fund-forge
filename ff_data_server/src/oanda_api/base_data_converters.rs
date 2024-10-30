@@ -1,15 +1,15 @@
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use serde_json::Value;
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, Symbol};
-
 pub(crate) fn oanda_quotebar_from_candle(candle: &Value, symbol: Symbol, resolution: Resolution) -> Result<QuoteBar, Box<dyn std::error::Error + Send + Sync>> {
-
+    //println!("candle: {:?}", candle);
     let bid = candle["bid"].as_object().ok_or("Missing bid data")?;
     let ask = candle["ask"].as_object().ok_or("Missing ask data")?;
 
@@ -22,12 +22,32 @@ pub(crate) fn oanda_quotebar_from_candle(candle: &Value, symbol: Symbol, resolut
     let ask_open = Decimal::from_str(ask["o"].as_str().ok_or("Missing ask open")?)?;
     let ask_close = Decimal::from_str(ask["c"].as_str().ok_or("Missing ask close")?)?;
 
-    let volume = Decimal::from_str(candle["volume"].as_str().ok_or("Missing bid high")?)?;
+    // Changed to handle volume as a number
+    let volume = candle["volume"].as_f64()
+        .ok_or("Missing volume")?;
+    let volume = Decimal::from_f64(volume)
+        .ok_or("Failed to convert volume to Decimal")?;
 
     let time_str = candle["time"].as_str().ok_or("Missing time")?;
-    let time     = parse_oanda_time(time_str)?;
+    let time = parse_oanda_time(time_str)?;
 
-    Ok(QuoteBar::from_closed(symbol, bid_high, bid_low, bid_open, bid_close, ask_high, ask_low, ask_open, ask_close, volume, dec!(0), dec!(0), time, resolution, CandleType::CandleStick))
+    Ok(QuoteBar::from_closed(
+        symbol,
+        bid_high,
+        bid_low,
+        bid_open,
+        bid_close,
+        ask_high,
+        ask_low,
+        ask_open,
+        ask_close,
+        volume,
+        dec!(0),
+        dec!(0),
+        time,
+        resolution,
+        CandleType::CandleStick
+    ))
 }
 
 fn parse_oanda_time(time: &str) -> Result<DateTime<Utc>, Box<dyn std::error::Error + Send + Sync>> {

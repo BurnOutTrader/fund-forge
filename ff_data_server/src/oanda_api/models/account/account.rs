@@ -6,7 +6,7 @@ use crate::oanda_api::models::account::guaranteed_stop_loss_parameters::Guarante
 use crate::oanda_api::models::order::orders::Order;
 use crate::oanda_api::models::position::OandaPosition;
 use crate::oanda_api::models::primitives::DateTime;
-use crate::oanda_api::models::trade::TradeSummary;
+use crate::oanda_api::models::trade::{TradeSummary};
 use crate::oanda_api::models::transaction_related::TransactionID;
 
 /// Represents the full details of a client's Account, including Trades, Positions, and Orders.
@@ -167,7 +167,7 @@ pub(crate) struct OandaAccount {
 
     /// The number of times that the Account's current margin call was extended.
     #[serde(rename = "marginCallExtensionCount")]
-    pub margin_call_extension_count: i32,
+    pub margin_call_extension_count: Option<i32>,
 
     /// The date/time of the Account's last margin call extension.
     #[serde(rename = "lastMarginCallExtensionTime")]
@@ -178,15 +178,15 @@ pub(crate) struct OandaAccount {
     pub last_transaction_id: TransactionID,
 
     /// The details of the Trades currently open in the Account.
-    #[serde(rename = "trades")]
+    #[serde(rename = "trades", default)]
     pub trades: Vec<TradeSummary>,
 
     /// The details all Account Positions.
-    #[serde(rename = "positions")]
+    #[serde(rename = "positions", default)]
     pub positions: Vec<OandaPosition>,
 
     /// The details of the Orders currently pending in the Account.
-    #[serde(rename = "orders")]
+    #[serde(rename = "orders", default)]
     pub orders: Vec<Order>,
 }
 

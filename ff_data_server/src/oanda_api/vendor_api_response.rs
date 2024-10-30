@@ -113,6 +113,7 @@ impl VendorApiResponse for OandaClient {
 
     #[allow(unused)]
     async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) {
+        println!("Downloading historical data for: {}", symbol.name);
         let earliest_oanda_data = || {
             let utc_time_string = "2005-01-01 00:00:00.000000";
             let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
@@ -133,6 +134,7 @@ impl VendorApiResponse for OandaClient {
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         for url in &urls {
+            println!("Downloading data from: {}", url);
             let response = self.send_rest_request(&url).await.unwrap();
 
             if !response.status().is_success() {
@@ -148,6 +150,10 @@ impl VendorApiResponse for OandaClient {
             }
 
             for price_data in candles {
+                let is_closed = price_data["complete"].as_bool().unwrap();
+                if !is_closed {
+                    continue;
+                }
                 let bar: BaseDataEnum = match base_data_type {
                     BaseDataType::QuoteBars => match oanda_quotebar_from_candle(&price_data, symbol.clone(), resolution.clone()) {
                         Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
