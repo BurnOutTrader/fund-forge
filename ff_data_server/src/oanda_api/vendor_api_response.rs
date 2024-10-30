@@ -35,13 +35,13 @@ impl VendorApiResponse for OandaClient {
     }
     #[allow(unused)]
     async fn resolutions_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse {
-        let resolutions = vec![
+        let subscription_resolutions_types = vec![
             SubscriptionResolutionType::new(Resolution::Seconds(5), BaseDataType::QuoteBars),
         ];
         DataServerResponse::Resolutions {
             callback_id,
             market_type,
-            subscription_resolutions_types: resolutions,
+            subscription_resolutions_types,
         }
     }
     #[allow(unused)]

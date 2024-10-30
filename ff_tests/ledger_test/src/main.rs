@@ -12,6 +12,7 @@ use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent;
@@ -26,17 +27,17 @@ async fn main() {
         StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2024, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2005, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2009, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(1),
         vec![
-            DataSubscription::new_custom(
-                SymbolName::from("EUR-USD"),
-                DataVendor::Test,
-                Resolution::Minutes(3),
-                MarketType::Forex,
-                CandleType::HeikinAshi
+            DataSubscription::new(
+                SymbolName::from("NAS100-USD"),
+                DataVendor::Oanda,
+                Resolution::Seconds(5),
+                BaseDataType::QuoteBars,
+                MarketType::CFD
             ),
         ],
         false,

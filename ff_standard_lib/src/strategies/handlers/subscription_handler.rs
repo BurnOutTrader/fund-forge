@@ -661,7 +661,7 @@ impl SymbolSubscriptionHandler {
         fill_forward: bool
     ) -> Result<AHashMap<DataSubscription, RollingWindow<BaseDataEnum>>, DataSubscriptionEvent> {
         if new_subscription.base_data_type == BaseDataType::Fundamentals {
-            return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription, "Symbol handler does not handle Fundamental subcsriptions".to_string()));
+            return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription, "Symbol handler does not handle Fundamental subscriptions".to_string()));
         }
 
         if let Some(subscription) = self.primary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
@@ -736,13 +736,31 @@ impl SymbolSubscriptionHandler {
             BaseDataType::QuoteBars | BaseDataType::Candles => {
                 let ideal_subscription = match new_subscription.base_data_type {
                     BaseDataType::QuoteBars => {
-                        if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::QuoteBars) {
-                            return Err( DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
+                        if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes))
+                            && !self.vendor_data_types.contains(&BaseDataType::QuoteBars) {
+                            return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
                         }
-                        SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
+                        if self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) {
+                            SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)
+                        } else {
+                            // Find lowest resolution quote bars available
+                            self.vendor_primary_resolutions.iter()
+                                .filter(|res| res.base_data_type == BaseDataType::QuoteBars)
+                                .min_by_key(|res| match res.resolution {
+                                    Resolution::Instant => 0,
+                                    Resolution::Seconds(s) => s,
+                                    Resolution::Minutes(m) => m * 60,
+                                    Resolution::Hours(h) => h * 3600,
+                                    _ => 0,
+                                })
+                                .cloned()
+                                .unwrap_or_else(|| SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::QuoteBars))
+                        }
                     }
                     BaseDataType::Candles => {
-                        if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) && !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) && !!self.vendor_data_types.contains(&BaseDataType::Candles) {
+                        if !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks)) &&
+                            !self.vendor_primary_resolutions.contains(&SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)) &&
+                            !self.vendor_data_types.contains(&BaseDataType::Candles) {
                             return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Does not support this subscription: {}", new_subscription.symbol.data_vendor, new_subscription)))
                         }
                         //todo this has issues, time to put it on server and decide per broker
