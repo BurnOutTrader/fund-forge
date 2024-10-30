@@ -283,7 +283,7 @@ fn example() {
 Much of the functionality of fund forge occurs through associated helper functions with either a strategy, brokerage or data vendor object.
 ```rust
 fn example() {
-  let vendor = DataVendor::RithmicTest;
+  let vendor = DataVendor::Rithmic(RithmicSystem::Apex);
   let symbols: Vec<Symbol> = vendor.symbols(MarketType::Futures).await;
   
   let brokerage = Brokerage::RithmicTest;
