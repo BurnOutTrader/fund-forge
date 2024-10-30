@@ -13,7 +13,7 @@ passphrase = ""
 ## Historical Data
 Not yet implemented for bitget, coming asap.
 
-To download historical data you need to add the symbols to your the download list for the specified brokerage.
+To download historical data you need to add the symbols to the download list for the specified brokerage.
 The download list can be found in ff_data-server/data/credentials/{Brokerage}_credentials/download_list.toml (see folder structure above).
 
 The symbols should fund forge format, in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name.
