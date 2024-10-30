@@ -6,7 +6,7 @@ use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::sync::{Arc};
 use std::time::Duration;
-use chrono::{DateTime, Datelike, TimeZone, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
 use dashmap::DashMap;
 use futures::future;
 use futures_util::future::join_all;
@@ -267,16 +267,47 @@ impl HybridStorage {
         end: DateTime<Utc>,
     ) -> Result<Vec<BaseDataEnum>, FundForgeError> {
         let mut all_data = Vec::new();
+        let base_path = self.get_base_path(symbol, resolution, data_type, false);
 
-        let mut current_date = start.date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap();
+        let start_year = start.year();
+        let end_year = end.year();
 
-        while current_date <= end {
-            let file_path = self.get_file_path(symbol, resolution, data_type, &current_date, false);
-            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
-                let day_data = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()).unwrap(); //todo handle instead of unwrap
-                all_data.extend(day_data.into_iter().filter(|d| d.time_closed_utc() >= start && d.time_closed_utc() <= end));
+        for year in start_year..=end_year {
+            let year_path = base_path.join(format!("{:04}", year));
+            if !year_path.exists() { continue; }
+
+            let start_month = if year == start_year { start.month() } else { 1 };
+            let end_month = if year == end_year { end.month() } else { 12 };
+
+            for month in start_month..=end_month {
+                let month_path = year_path.join(format!("{:02}", month));
+                if !month_path.exists() { continue; }
+
+                // Only iterate through relevant days in this month
+                let current_date = if year == start_year && month == start.month() {
+                    start.date_naive()
+                } else {
+                    NaiveDate::from_ymd_opt(year, month, 1).unwrap()
+                };
+                let month_end = if year == end_year && month == end.month() {
+                    end.date_naive()
+                } else {
+                    // Last day of month
+                    NaiveDate::from_ymd_opt(year, month + 1, 1)
+                        .unwrap_or_else(|| NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap())
+                        .pred()
+                };
+
+                let mut current_date = current_date;
+                while current_date <= month_end {
+                    let file_path = month_path.join(format!("{:04}{:02}{:02}.bin", year, month, current_date.day()));
+                    if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
+                        let day_data = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()).unwrap();
+                        all_data.extend(day_data.into_iter().filter(|d| d.time_closed_utc() >= start && d.time_closed_utc() <= end));
+                    }
+                    current_date = current_date.succ();
+                }
             }
-            current_date = current_date + chrono::Duration::days(1);
         }
 
         Ok(all_data)
@@ -289,47 +320,44 @@ impl HybridStorage {
         resolution: &Resolution,
         data_type: &BaseDataType,
     ) -> Result<Option<BaseDataEnum>, Box<dyn std::error::Error>> {
-        let current_date = Utc::now().date_naive();
-        let mut file_cache = HashMap::new();
+        let base_path = self.get_base_path(symbol, resolution, data_type, false);
 
-        // Binary search
-        let mut left = 0;
-        let mut right = 10000; // Maximum number of days to look back
+        // Get years in descending order
+        let mut years: Vec<_> = fs::read_dir(&base_path)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .collect();
+        years.sort_by(|a, b| b.path().cmp(&a.path()));
 
-        while left <= right {
-            let mid = (left + right) / 2;
-            let date = current_date - chrono::Duration::days(mid);
-            let file_path = self.get_file_path(symbol, resolution, data_type, &date.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap(), false);
+        for year_dir in years {
+            // Get months in descending order
+            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .collect();
+            months.sort_by(|a, b| b.path().cmp(&a.path()));
 
-            if let Some(&exists) = file_cache.get(&mid) {
-                if exists {
-                    // File exists, check the next more recent date
-                    right = mid - 1;
-                } else {
-                    // File doesn't exist, check older dates
-                    left = mid + 1;
-                }
-            } else {
-                let exists = file_path.exists();
-                file_cache.insert(mid, exists);
-                if exists {
-                    right = mid - 1;
-                } else {
-                    left = mid + 1;
+            for month_dir in months {
+                // Get days in descending order
+                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
+                    .collect();
+                days.sort_by(|a, b| b.path().cmp(&a.path()));
+
+                // Check first (latest) file in this month
+                if let Some(latest_file) = days.first() {
+                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()) {
+                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
+                            if let Some(latest) = day_data.into_iter().max_by_key(|d| d.time_closed_utc()) {
+                                return Ok(Some(latest));
+                            }
+                        }
+                    }
                 }
             }
         }
-
-        // At this point, 'left' is the index of the most recent existing file
-        let latest_date = current_date - chrono::Duration::days(left);
-        let file_path = self.get_file_path(symbol, resolution, data_type, &latest_date.and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap(), false);
-
-        if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
-            let day_data = BaseDataEnum::from_array_bytes(&mmap.to_vec())?;
-            Ok(day_data.into_iter().max_by_key(|d| d.time_closed_utc()))
-        } else {
-            Ok(None)
-        }
+        Ok(None)
     }
 
     pub async fn get_latest_data_time(
@@ -340,33 +368,38 @@ impl HybridStorage {
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
 
-        let mut latest_file: Option<PathBuf> = None;
-        let mut latest_modified: Option<std::time::SystemTime> = None;
+        // Get latest year
+        let mut years: Vec<_> = fs::read_dir(&base_path)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .collect();
+        years.sort_by_key(|e| e.path());
 
-        if let Ok(entries) = fs::read_dir(&base_path) {
-            for entry in entries.filter_map(Result::ok) {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("bin") {
-                    if let Ok(metadata) = entry.metadata() {
-                        if let Ok(modified) = metadata.modified() {
-                            if latest_modified.map_or(true, |t| modified > t) {
-                                latest_modified = Some(modified);
-                                latest_file = Some(path);
-                            }
+        if let Some(year_dir) = years.last() {
+            // Get latest month in latest year
+            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .collect();
+            months.sort_by_key(|e| e.path());
+
+            if let Some(month_dir) = months.last() {
+                // Get latest day file in latest month
+                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
+                    .collect();
+                days.sort_by_key(|e| e.path());
+
+                if let Some(latest_file) = days.last() {
+                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()) {
+                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
+                            return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).max());
                         }
                     }
                 }
             }
         }
-
-        if let Some(file_path) = latest_file {
-            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
-                if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
-                    return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).max());
-                }
-            }
-        }
-
         Ok(None)
     }
 
@@ -378,33 +411,38 @@ impl HybridStorage {
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
 
-        let mut earliest_file: Option<PathBuf> = None;
-        let mut earliest_modified: Option<std::time::SystemTime> = None;
+        // Get earliest year
+        let mut years: Vec<_> = fs::read_dir(&base_path)?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_dir())
+            .collect();
+        years.sort_by_key(|e| e.path());
 
-        if let Ok(entries) = fs::read_dir(&base_path) {
-            for entry in entries.filter_map(Result::ok) {
-                let path = entry.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("bin") {
-                    if let Ok(metadata) = entry.metadata() {
-                        if let Ok(modified) = metadata.modified() {
-                            if earliest_modified.map_or(true, |t| modified < t) {
-                                earliest_modified = Some(modified);
-                                earliest_file = Some(path);
-                            }
+        if let Some(year_dir) = years.first() {
+            // Get earliest month in earliest year
+            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .collect();
+            months.sort_by_key(|e| e.path());
+
+            if let Some(month_dir) = months.first() {
+                // Get earliest day file in earliest month
+                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
+                    .filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
+                    .collect();
+                days.sort_by_key(|e| e.path());
+
+                if let Some(earliest_file) = days.first() {
+                    if let Ok(mmap) = self.get_or_create_mmap(&earliest_file.path()) {
+                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
+                            return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).min());
                         }
                     }
                 }
             }
         }
-
-        if let Some(file_path) = earliest_file {
-            if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
-                if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
-                    return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).min());
-                }
-            }
-        }
-
         Ok(None)
     }
 
