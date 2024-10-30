@@ -645,17 +645,17 @@ async fn partially_fill_order(
     strategy_event_sender: &Sender<StrategyEvent>,
     ledger_service: &Arc<LedgerService>
 ) {
-    if let Some(mut order) = open_order_cache.get_mut(order_id) {
+    if let Some((_, mut order)) = open_order_cache.remove(order_id) {
         let symbol_code = match &order.symbol_code {
             None => order.symbol_name.clone(),
             Some(code) => code.clone()
         };
 
+        order.quantity_open -= fill_volume;
+        let is_fully_filled = order.quantity_open <= dec!(0);
 
-        // If the order is now fully filled, remove it from open_order_cache
-        let order_event = if order.quantity_open <= dec!(0) {
-            open_order_cache.remove(order_id);
-            Some(OrderUpdateEvent::OrderFilled {
+        let order_event = if is_fully_filled {
+            OrderUpdateEvent::OrderFilled {
                 order_id: order.id.clone(),
                 account: order.account.clone(),
                 symbol_name: order.symbol_name.clone(),
@@ -665,28 +665,24 @@ async fn partially_fill_order(
                 quantity: fill_volume,
                 price: fill_price,
                 side: order.side.clone(),
-            })
-
-        } else if fill_volume > dec!(0) {
-            Some(OrderUpdateEvent::OrderPartiallyFilled {
-                order_id: order.id.clone(),
-                account: order.account.clone(),
-                symbol_name: order.symbol_name.clone(),
-                tag: order.tag.clone(),
-                time: time.to_string(),
-                symbol_code: order.symbol_name.clone(),
-                quantity: fill_volume,
-                price: fill_price,
-                side: order.side.clone(),
-            })
+            }
         } else {
-            None
+            OrderUpdateEvent::OrderPartiallyFilled {
+                order_id: order.id.clone(),
+                account: order.account.clone(),
+                symbol_name: order.symbol_name.clone(),
+                tag: order.tag.clone(),
+                time: time.to_string(),
+                symbol_code: order.symbol_name.clone(),
+                quantity: fill_volume,
+                price: fill_price,
+                side: order.side.clone(),
+            }
         };
 
         match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
             Ok(events) => {
-                //todo, need to send an accepted event first if the order state != accepted
-                if let Some(order_event) = order_event {
+                if let Some(order_event) = Some(order_event) {
                     match strategy_event_sender.send(StrategyEvent::OrderEvents(order_event)).await {
                         Ok(_) => {}
                         Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
@@ -707,11 +703,10 @@ async fn partially_fill_order(
             }
         }
 
-        // Update the remaining quantity
-        order.quantity_open -= fill_volume;
-
-        if order.quantity_open == dec!(0) {
-            closed_order_cache.insert(order.id.clone(), order.value().clone());
+        if is_fully_filled {
+            closed_order_cache.insert(order.id.clone(), order);
+        } else {
+            open_order_cache.insert(order_id.clone(), order);
         }
     }
 }
