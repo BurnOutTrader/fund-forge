@@ -49,7 +49,7 @@ async fn main() {
                 DataVendor::Oanda,
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
-                MarketType::Forex,
+                MarketType::CFD
             ),
         ],
 
