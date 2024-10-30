@@ -89,45 +89,6 @@ pub async fn on_data_received(
                                         false => println!("{}", msg.as_str().bright_red()),
                                     }
                                 }
-
-                                if !warmup_complete {
-                                    continue;
-                                }
-
-                                //LONG CONDITIONS
-                                {
-                                    // ENTER LONG
-                                    let is_flat = strategy.is_flat(&account_1, &candle.symbol.name);
-                                    // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                    if is_flat
-                                        && candle.close > candle.open
-                                    {
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, None ,&account_1, None, dec!(100), String::from("Enter Long")).await;
-                                        println!("Strategy: Enter Long, Time {}", strategy.time_local());
-                                        last_side = LastSide::Long;
-                                    }
-
-                                    // ADD LONG
-                                    let is_short = strategy.is_short(&account_1, &candle.symbol.name);
-                                    let is_long = strategy.is_long(&account_1, &candle.symbol.name);
-                                    let long_pnl = strategy.pnl(&account_1, &candle.symbol.name);
-                                    println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
-
-                                    // LONG SL+TP
-                                    if is_long && long_pnl > dec!(250.0)
-                                    {
-                                        let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name);
-                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
-                                        println!("Strategy: Add Short, Time {}", strategy.time_local());
-                                    }
-                                    else if is_long
-                                        && long_pnl <= dec!(-250.0)
-                                    {
-                                        let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name);
-                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await;
-                                        println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
-                                    }
-                                }
                             }
                         }
                         BaseDataEnum::QuoteBar(qb) => {
@@ -138,6 +99,44 @@ pub async fn on_data_received(
                                 match qb.bid_close > qb.bid_open {
                                     true => println!("{}", msg.as_str().bright_green()),
                                     false => println!("{}", msg.as_str().bright_red()),
+                                }
+                            }
+                            if !warmup_complete {
+                                continue;
+                            }
+
+                            //LONG CONDITIONS
+                            {
+                                // ENTER LONG
+                                let is_flat = strategy.is_flat(&account_1, &qb.symbol.name);
+                                // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
+                                if is_flat
+                                    && qb.bid_close > qb.bid_open
+                                {
+                                    let _entry_order_id = strategy.enter_long(&qb.symbol.name, None ,&account_1, None, dec!(100), String::from("Enter Long")).await;
+                                    println!("Strategy: Enter Long, Time {}", strategy.time_local());
+                                    last_side = LastSide::Long;
+                                }
+
+                                // ADD LONG
+                                let is_short = strategy.is_short(&account_1, &qb.symbol.name);
+                                let is_long = strategy.is_long(&account_1, &qb.symbol.name);
+                                let long_pnl = strategy.pnl(&account_1, &qb.symbol.name);
+                                println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
+
+                                // LONG SL+TP
+                                if is_long && long_pnl > dec!(250.0)
+                                {
+                                    let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
+                                    let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
+                                    println!("Strategy: Add Short, Time {}", strategy.time_local());
+                                }
+                                else if is_long
+                                    && long_pnl <= dec!(-250.0)
+                                {
+                                    let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
+                                    let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await;
+                                    println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
                                 }
                             }
                         }
