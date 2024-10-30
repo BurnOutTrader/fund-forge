@@ -15,11 +15,11 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - 31/10/2024: Rithmic Live trading works but Rithmic Historical Data function is not complete and will be finished soon, I am currently working on the historical data functions for Rithmic.
 - 31/10/2024: Bitget Api Is not functional in any way and any use of Bitget will crash. I will work on this last.
 - 31/10/2024: The server will soon be upgraded to automatically keep your historical data up to date, for fast live strategy warm up and backtesting. The download print lines will be replaced with progress bars.
+- 31/10/2024: The Test Data needs to be re-parsed as the folder structure has been changed to allow faster data retrieval, it won't need to be changed again. No parser for the test data currently exists, it will need to be remade later. Set up a demo Oanda account for data.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
-2. Download the backtesting data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKID2SU-oFFpKWsqGg?e=jYaN6n) or
-   for [more free testing](#for-more-testing-and-development-data). 
+2. For Test data you will need to set up a practice account with oanda then follow the [Oanda setup instructions](ff_data_server/src/oanda_api/OANDA_SETUP.md). 
 3. Put the test data into the correct directory. [instructions below](#file-and-folder-structure)
 4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (don't run the server in your IDE, it will have issues (more issues than normal :) )
     - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
