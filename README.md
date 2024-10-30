@@ -32,21 +32,9 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 The easiest way to get up and running is to download the repo and open it with [Jetbrains Rust Rover](https://www.jetbrains.com/rust/?_gl=1*132okxr*_gcl_aw*R0NMLjE3MjczMDE0MjAuQ2p3S0NBanc2YzYzQmhBaUVpd0FGMEVIMUJSYkxpU1lmRUdJZkFENGMtbzlWc0FFQnNPaVpTS2cxLUxxaDdDeDZuMXB2ajlUUXpFQWtSb0MxNUVRQXZEX0J3RQ..*_gcl_au*MTgwMzYzMTQwOS4xNzI1MjI3MDMx*_ga*NTkyMTQxNDAyLjE3MjUyMjcwMjc.*_ga_9J976DJZ68*MTcyOTY3MDgzMC44LjEuMTcyOTY3MjQ5NC41OC4wLjA), I have already got the run configurations set up for you.
 
-You might need to change the directories to your own.
+[If using Rust Rover You might need to change the config directories to your own](#if-using-rust-rover).
 
-### If Using Rust Rover
-#### Open the configurations and check if they are set to my directories or your own
-![config_edit_1.png](misc/config_edit_1.png)
-
-
-
-#### If they are not matching your directories then change this to match the location of your repo.
-(this is specific per configuration, this example is for the rithmic_test strategy, other configurations will have different directories)
-![config_edit_2.png](misc/config_edit_2.png)
-
-## Warning!
-⚠️ Warning ⚠️
-
+⚠️ Warning
 If you are using Rithmic, proceed with extreme caution!
 Live order functionality is being implemented, and any active strategy may send real orders directly to the market.
 If I make any mistakes, and leave a test strategy in live mode, it will trade your live accounts!.
@@ -722,3 +710,17 @@ This will be done via the ff_strategy_registry, which is currently in a non-work
 
 #### C-types Interface
 Depending on complexity, the might be a c-types interface to build strategies in other programming languages.
+
+
+The easiest way to get up and running is to download the repo and open it with [Jetbrains Rust Rover](https://www.jetbrains.com/rust/?_gl=1*132okxr*_gcl_aw*R0NMLjE3MjczMDE0MjAuQ2p3S0NBanc2YzYzQmhBaUVpd0FGMEVIMUJSYkxpU1lmRUdJZkFENGMtbzlWc0FFQnNPaVpTS2cxLUxxaDdDeDZuMXB2ajlUUXpFQWtSb0MxNUVRQXZEX0J3RQ..*_gcl_au*MTgwMzYzMTQwOS4xNzI1MjI3MDMx*_ga*NTkyMTQxNDAyLjE3MjUyMjcwMjc.*_ga_9J976DJZ68*MTcyOTY3MDgzMC44LjEuMTcyOTY3MjQ5NC41OC4wLjA), I have already got the run configurations set up for you.
+
+You might need to change the directories to your own.
+
+### If Using Rust Rover
+#### Open the configurations and check if they are set to my directories or your own
+![config_edit_1.png](misc/config_edit_1.png)
+
+
+#### If they are not matching your directories then change this to match the location of your repo.
+(this is specific per configuration, this example is for the rithmic_test strategy, other configurations will have different directories)
+![config_edit_2.png](misc/config_edit_2.png)
