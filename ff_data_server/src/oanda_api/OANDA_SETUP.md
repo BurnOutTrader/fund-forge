@@ -25,10 +25,6 @@ mode = "Practice"  # "practice" or "live"
 ```
 
 ## Historical Data 
-Not yet implemented for rithmic, coming asap, waiting for live rithmic account to activate with my broker)
-
-Prop firms don't seem to have access to historical data.
-
 To download historical data you need to add the symbols to your the download list for the specified brokerage.
 The download list can be found in data/credentials/{Brokerage}_credentials/download_list.toml
 
