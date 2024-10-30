@@ -59,6 +59,11 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 - [The End Game: Project Goals](#the-end-game)
 - [Licence](LICENCE.md)
 
+## Architecture Overview
+![complex_diagram_2.png](misc/complex_diagram_2.png)
+
+[more on architecture](#Architecture)
+
 ## Demonstration Testing Data
 You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKF125tuEG16grLM_Q?e=Yukrv6)
 
@@ -88,11 +93,6 @@ Auto update functions will be developed soon to keep data history updating every
 Download progress bars will replace print lines to keep the server terminal clean.
 
 Rithmic historical data functions will be completed soon.
-
-## Architecture Overview
-![complex_diagram_2.png](misc/complex_diagram_2.png)
-
-[more on architecture](#Architecture)
 
 ## Current State of Live Trading
 ***The server now properly handles multiple connects and disconnects when using rithmic, the problem was in shutting down rithmic broadcasters (removing broadcaster while holding a mut ref)***
