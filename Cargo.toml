@@ -6,7 +6,6 @@ members = [
     "ff_data_server",
     "example_test_strategy",
     "ff_strategy_registry",
-    "test_data_parser",
     "ff_tests/ledger_test",
     "ff_tests/rithmic_order_test",
 ]
