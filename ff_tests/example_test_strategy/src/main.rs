@@ -38,26 +38,20 @@ async fn main() {
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 6, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 06, 25).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2005, 1, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2005, 03, 25).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
         Duration::hours(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
             DataSubscription::new(
-                SymbolName::from("EUR-USD"),
-                DataVendor::Test,
+                SymbolName::from("NAS100-USD"),
+                DataVendor::Oanda,
                 Resolution::Minutes(3),
                 BaseDataType::QuoteBars,
                 MarketType::Forex,
             ),
-            DataSubscription::new_custom(
-                 SymbolName::from("AUD-CAD"),
-                 DataVendor::Test,
-                 Resolution::Minutes(3),
-                 MarketType::Forex,
-                 CandleType::HeikinAshi
-             ),],
+        ],
 
         //fill forward
         false,
@@ -79,7 +73,7 @@ async fn main() {
         //tick over no data, strategy will run at buffer resolution speed to simulate weekends and holidays, if false we will just skip over them to the next data point.
         false,
         false,
-        vec![Account::new(Brokerage::Test, "Test_Account_1".to_string()), Account::new(Brokerage::Test, "Test_Account_2".to_string())]
+        vec![Account::new(Brokerage::Oanda, "Test_Account_1".to_string()), Account::new(Brokerage::Oanda, "Test_Account_2".to_string())]
     ).await;
 
     // we can subscribe to indicators here or in our event loop at run time.
@@ -121,8 +115,8 @@ pub async fn on_data_received(
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
 ) {
     let mut count = 0;
-    let account_1 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
-    let account_2 = Account::new(Brokerage::Test, "Test_Account_1".to_string());
+    let account_1 = Account::new(Brokerage::Oanda, "Test_Account_1".to_string());
+    let account_2 = Account::new(Brokerage::Oanda, "Test_Account_1".to_string());
     let mut warmup_complete = false;
     let mut bars_since_entry_1 = 0;
     let mut bars_since_entry_2 = 0;
