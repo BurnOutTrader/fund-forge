@@ -26,7 +26,7 @@ mode = "Practice"  # "practice" or "live"
 
 ## Historical Data 
 To download historical data you need to add the symbols to your the download list for the specified brokerage.
-The download list can be found in data/credentials/{Brokerage}_credentials/download_list.toml
+The download list can be found in ff_data-server/data/credentials/{Brokerage}_credentials/download_list.toml (see folder structure above).
 
 The symbols should be in fund forge format, (in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name).
 ```toml
