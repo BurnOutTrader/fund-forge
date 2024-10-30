@@ -17,11 +17,12 @@
       <sourceFolder url="file://$MODULE_DIR$/ff_multi_machine_data/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_api_rithmic/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_brokerage/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/example_test_strategy/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_tests/ledger_test/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_rithmic_api/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/ff_tests/rithmic_order_test/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/strategies/renko_pyramid/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ff_tests/example_test_strategy/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/ff_tests/renko_pyramid/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/ff-data-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff-registry-server/target" />
       <excludeFolder url="file://$MODULE_DIR$/ff_application/target" />

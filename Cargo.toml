@@ -8,6 +8,7 @@ members = [
     "ff_strategy_registry",
     "ff_tests/ledger_test",
     "ff_tests/rithmic_order_test",
+    "ff_tests/renko_pyramid",
 ]
 
 
