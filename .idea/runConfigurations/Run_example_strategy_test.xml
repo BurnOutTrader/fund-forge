@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run example_strategy_test" type="CargoCommandRunConfiguration" factoryName="Cargo Command" singleton="false">
     <option name="command" value="run" />
-    <option name="workingDirectory" value="file://$PROJECT_DIR$/example_test_strategy" />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/ff_tests/example_test_strategy" />
     <envs />
     <option name="emulateTerminal" value="true" />
     <option name="channel" value="DEFAULT" />
