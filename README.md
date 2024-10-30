@@ -11,6 +11,10 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 ## Announcements
 - 24/10/2024: The folder and file structure was changed, The historical data has not changed, you can just move the historical data you have already downloaded to `ff_data_server/data/historical` and it will work as before. This was done to make set up easier for new users.
+- 31/10/2024: Oanda Brokerage and Datavendor was added, Oanda has historical data available, see the [Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md) to download data. Oanda Live trading has not been tested, backtesting with Oanda might not work until I have tested (I am downloading the data now)
+- 31/10/2024: Rithmic Live trading works but Rithmic Historical Data function is not complete and will be finished soon, I am currently working on the historical data functions for Rithmic.
+- 31/10/2024: Bitget Api Is not functional in any way and any use of Bitget will crash. I will work on this last.
+- 31/10/2024: The server will soon be upgraded to automatically keep your historical data up to date, for fast live strategy warm up and backtesting. The download print lines will be replaced with progress bars.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
