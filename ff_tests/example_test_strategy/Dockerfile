@@ -14,7 +14,7 @@ COPY /ff_strategies  /usr/src/myapp/ff_strategies/
 COPY /resources  /usr/src/myapp/resources/
 
 # Then, copy the current strategy including the Dockerfile
-COPY /example_test_strategy  /usr/src/myapp/test_strategy/
+COPY /ff_tests/example_test_strategy  /usr/src/myapp/test_strategy/
 
 # Finally, if needed, copy ff_strategy (assuming it's required and part of your structure)
 # COPY ../../ff_strategy ./ff_strategy

@@ -13,5 +13,5 @@ chrono = "*"
 rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }
 rust_decimal = { version = "1.36.0", features = ["rkyv", "rkyv-safe"] }
 rust_decimal_macros ="1.36.0"
-ff_standard_lib = { path = "../ff_standard_lib" }
+ff_standard_lib = { path = "../../ff_standard_lib" }
 colored = "*"

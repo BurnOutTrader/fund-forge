@@ -4,7 +4,7 @@ members = [
     "ff_standard_lib",
     "ff_data_server",
     "ff_data_server",
-    "example_test_strategy",
+    "ff_tests/example_test_strategy",
     "ff_strategy_registry",
     "ff_tests/ledger_test",
     "ff_tests/rithmic_order_test",

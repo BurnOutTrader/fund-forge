@@ -20,11 +20,11 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (don't run the server in your IDE, it will have issues (more issues than normal :) )
     - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
     - to run with only test api use `cargo run -- --rithmic "1"`.
-5. Navigate to [example_test_strategy](./example_test_strategy) directory and `cargo build` then`cargo run`
+5. Navigate to [example_test_strategy](ff_tests/example_test_strategy) directory and `cargo build` then`cargo run`
 
-*When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](example_test_strategy/README.md)
+*When running a server the working directory must be the ff_data_server directory, or the server will not find its resources' folder.* [see](ff_tests/example_test_strategy/README.md)
 
-*When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](example_test_strategy/README.md)
+*When running a strategy the working directory must be the strategy directory, or the strategy will not find its resources' folder.* [see](ff_tests/example_test_strategy/README.md)
 
 The easiest way to get up and running is to download the repo and open it with [Jetbrains Rust Rover](https://www.jetbrains.com/rust/?_gl=1*132okxr*_gcl_aw*R0NMLjE3MjczMDE0MjAuQ2p3S0NBanc2YzYzQmhBaUVpd0FGMEVIMUJSYkxpU1lmRUdJZkFENGMtbzlWc0FFQnNPaVpTS2cxLUxxaDdDeDZuMXB2ajlUUXpFQWtSb0MxNUVRQXZEX0J3RQ..*_gcl_au*MTgwMzYzMTQwOS4xNzI1MjI3MDMx*_ga*NTkyMTQxNDAyLjE3MjUyMjcwMjc.*_ga_9J976DJZ68*MTcyOTY3MDgzMC44LjEuMTcyOTY3MjQ5NC41OC4wLjA), I have already got the run configurations set up for you.
 
@@ -55,7 +55,7 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 
 ## Full Glossary
 - [Strategy Features](ff_standard_lib/src/strategies/STRATEGIES_README.md)
-- [Example Strategy](example_test_strategy/src/main.rs)
+- [Example Strategy](ff_tests/example_test_strategy/src/main.rs)
 - [More Example Strategies](ff_tests)
 - [Indicators](ff_standard_lib/src/strategies/indicators/INDICATORS_README.md)
 - [Rithmic Setup](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md)
@@ -317,7 +317,7 @@ fn example() {
 This only has an impact on backtesting fills, duplicate SymbolName subscriptions from different `DataVendors` will still flow into the strategy event receiver and can be handled as unique feeds using the `BaseDataEnum.symbol()`
 
 For a full look at strategies see
-[test_strategy](example_test_strategy/src/main.rs)
+[test_strategy](ff_tests/example_test_strategy/src/main.rs)
 and
 [strategies readme](ff_standard_lib/src/strategies/STRATEGIES_README)
 
@@ -497,7 +497,7 @@ You will need to have a unique app name in your rithmic_credentials.toml files.
 ## Strategies
 Once you have followed the setup instructions above, you can play with a test strategy by reviewing [Strategies Guide](ff_standard_lib/src/strategies/STRATEGIES_README.md).
 
-Run the test strategy [example_test_strategy](example_test_strategy/src/main.rs) 
+Run the test strategy [example_test_strategy](ff_tests/example_test_strategy/src/main.rs) 
 
 Or see more [test strategies](ff_tests)
 
