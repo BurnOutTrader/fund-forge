@@ -106,6 +106,7 @@ pub async fn match_order_plant_id(
                         max_orders: None,
                         daily_max_loss: None,
                         daily_max_loss_reset_time: None,
+                        leverage: 0
                     };
                     if let Some(ref currency) = msg.currency {
                         account_info.currency = Currency::from_str(&currency);

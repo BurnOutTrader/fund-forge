@@ -52,7 +52,8 @@ pub struct Ledger {
     pub total_booked_pnl: Mutex<Price>,
     pub mode: StrategyMode,
     pub is_simulating_pnl: bool,
-    pub(crate) strategy_sender: Sender<StrategyEvent>
+    pub(crate) strategy_sender: Sender<StrategyEvent>,
+    pub leverage: Decimal
     //todo, add daily max loss, max order size etc to ledger
 }
 
@@ -99,7 +100,8 @@ impl Ledger {
             total_booked_pnl: Mutex::new(dec!(0)),
             mode,
             is_simulating_pnl,
-            strategy_sender
+            strategy_sender,
+            leverage: Decimal::from(account_info.leverage)
         };
         ledger
     }
@@ -481,8 +483,6 @@ impl Ledger {
                 if self.mode != StrategyMode::Live || self.is_simulating_pnl {
                     let open_pnl = position.update_base_data(&base_data_enum, time, self.currency);
                     self.open_pnl.insert(data_symbol_name.clone(), open_pnl);
-
-
                 }
 
                 if position.is_closed {

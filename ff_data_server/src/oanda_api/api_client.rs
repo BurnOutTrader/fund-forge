@@ -112,6 +112,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
                     max_orders: None,
                     daily_max_loss: None,
                     daily_max_loss_reset_time: None,
+                    leverage: 30
                 };
                 oanda_client.account_info.insert(account.account_id.clone(), info);
             }

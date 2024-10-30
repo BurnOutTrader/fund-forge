@@ -26,7 +26,8 @@ pub struct AccountInfo {
     pub sell_limit: Option<Volume>,
     pub max_orders: Option<Volume>,
     pub daily_max_loss: Option<Price>,
-    pub daily_max_loss_reset_time: Option<String>
+    pub daily_max_loss_reset_time: Option<String>,
+    pub leverage: u32
 }
 
 pub type AccountId = String;

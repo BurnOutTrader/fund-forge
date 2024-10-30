@@ -49,6 +49,7 @@ impl BrokerApiResponse for TestApiClient {
             max_orders: None,
             daily_max_loss: None,
             daily_max_loss_reset_time: None,
+            leverage: 100,
         };
         DataServerResponse::AccountInfo {
             callback_id,
