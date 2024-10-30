@@ -33,7 +33,7 @@ You can store login details for other systems in the inactive folder, the server
 
 You only need data active for 1 rithmic connection, unless you want multiple rithmic data feeds to use for `DataVendor` subscriptions.
 
-![file_structure.png](misc/file_structure.png)
+![folder_structure.png](misc/folder_structure.png)
 
 For each rithmic RithmicSystem you intend to use, you will need to create a rithmic .toml file for the credentials.
 
