@@ -24,14 +24,16 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Backtest,
+        //ToDo: You can Test Live paper using the simulated data feed which simulates quote stream from the server side at 10 ms per quote.
+        StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2005, 1, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2009, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        Australia::Sydney,
-        Duration::hours(1),
+        NaiveDate::from_ymd_opt(2005, 1, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2005, 03, 25).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        Australia::Sydney,                      // the strategy time zone
+        Duration::hours(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
+            // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
             DataSubscription::new(
                 SymbolName::from("NAS100-USD"),
                 DataVendor::Oanda,
@@ -40,14 +42,28 @@ async fn main() {
                 MarketType::CFD
             ),
         ],
+
+        //fill forward
         false,
+
+        // history to retain for our initial subscriptions
         100,
+
+        // the sender for the strategy events
         strategy_event_sender,
+
+        // Buffer Duration
+        //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         core::time::Duration::from_millis(100),
+
+
+        // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
+        false,
+
+        //tick over no data, strategy will run at buffer resolution speed to simulate weekends and holidays, if false we will just skip over them to the next data point.
         false,
         false,
-        false,
-        vec![Account::new(Brokerage::Test, "Test_Account_1".to_string()), Account::new(Brokerage::Test, "Test_Account_2".to_string())]
+        vec![Account::new(Brokerage::Oanda, "Test_Account_1".to_string()), Account::new(Brokerage::Oanda, "Test_Account_2".to_string())]
     ).await;
 
     on_data_received(strategy, strategy_event_receiver).await;
@@ -65,7 +81,7 @@ pub async fn on_data_received(
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
 ) {
     let mut warmup_complete = false;
-    let account_1 = Account::new(Brokerage::Test, AccountId::from("Test_Account_1"));
+    let account_1 = Account::new(Brokerage::Oanda, "Test_Account_1".to_string());
     let mut last_side = LastSide::Flat;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
@@ -77,70 +93,53 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                     match base_data {
-                        BaseDataEnum::Candle(candle) => {
-                            // Place trades based on the AUD-CAD Heikin Ashi Candles
-                            if candle.is_closed == true {
-                                let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
-                                if candle.close == candle.open {
+                        BaseDataEnum::Candle(candle) => {}
+                        BaseDataEnum::QuoteBar(qb) => {
+                            if qb.is_closed == true {
+                                let msg = format!("{} {} {} Close: {}, {}", qb.symbol.name, qb.resolution, qb.candle_type, qb.bid_close, qb.time_closed_local(strategy.time_zone()));
+                                if qb.bid_close == qb.bid_open {
                                     println!("{}", msg.as_str().blue())
                                 } else {
-                                    match candle.close > candle.open {
+                                    match qb.bid_close > qb.bid_open {
                                         true => println!("{}", msg.as_str().bright_green()),
                                         false => println!("{}", msg.as_str().bright_red()),
                                     }
                                 }
-                            }
-                        }
-                        BaseDataEnum::QuoteBar(qb) => {
-
-                            if !qb.is_closed {
-                                continue;
-                            }
-
-                            let msg = format!("{} {} {} Close: {}, {}", qb.symbol.name, qb.resolution, qb.candle_type, qb.bid_close, qb.time_closed_local(strategy.time_zone()));
-                            if qb.bid_close == qb.bid_open {
-                                println!("{}", msg.as_str().blue())
-                            } else {
-                                match qb.bid_close > qb.bid_open {
-                                    true => println!("{}", msg.as_str().bright_green()),
-                                    false => println!("{}", msg.as_str().bright_red()),
+                                if !warmup_complete {
+                                    continue;
                                 }
-                            }
-                            if !warmup_complete {
-                                continue;
-                            }
 
-                            //LONG CONDITIONS
-                            {
-                                // ENTER LONG
-                                let is_flat = strategy.is_flat(&account_1, &qb.symbol.name);
-                                // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
-                                if is_flat
-                                    && qb.bid_close > qb.bid_open
+                                //LONG CONDITIONS
                                 {
-                                    let _entry_order_id = strategy.enter_long(&qb.symbol.name, None ,&account_1, None, dec!(1), String::from("Enter Long")).await;
-                                    println!("Strategy: Enter Long, Time {}", strategy.time_local());
-                                    last_side = LastSide::Long;
-                                }
+                                    // ENTER LONG
+                                    let is_flat = strategy.is_flat(&account_1, &qb.symbol.name);
+                                    // buy AUD-CAD if consecutive green HA candles if our other account is long on EUR
+                                    if is_flat
+                                        && qb.bid_close > qb.bid_open
+                                    {
+                                        let _entry_order_id = strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(1), String::from("Enter Long")).await;
+                                        println!("Strategy: Enter Long, Time {}", strategy.time_local());
+                                        last_side = LastSide::Long;
+                                    }
 
-                                // ADD LONG
-                                let is_short = strategy.is_short(&account_1, &qb.symbol.name);
-                                let is_long = strategy.is_long(&account_1, &qb.symbol.name);
-                                let long_pnl = strategy.pnl(&account_1, &qb.symbol.name);
-                                println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
+                                    // ADD LONG
+                                    let is_short = strategy.is_short(&account_1, &qb.symbol.name);
+                                    let is_long = strategy.is_long(&account_1, &qb.symbol.name);
+                                    let long_pnl = strategy.pnl(&account_1, &qb.symbol.name);
+                                    println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
 
-                                // LONG SL+TP
-                                if is_long && long_pnl > dec!(250.0) {
-                                    let position_size = strategy.position_size(&account_1, &qb.symbol.name);
-                                    let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
-                                    println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
-                                }
-                                else if is_long
-                                    && long_pnl <= dec!(-250.0)
-                                {
-                                    let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
-                                    let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await;
-                                    println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
+                                    // LONG SL+TP
+                                    if is_long && long_pnl > dec!(250.0) {
+                                        let position_size = strategy.position_size(&account_1, &qb.symbol.name);
+                                        let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
+                                        println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
+                                    } else if is_long
+                                        && long_pnl <= dec!(-250.0)
+                                    {
+                                        let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
+                                        let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await;
+                                        println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
+                                    }
                                 }
                             }
                         }

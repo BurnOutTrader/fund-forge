@@ -137,7 +137,7 @@ impl HistoricalEngine {
             if first_iteration {
                 first_iteration = false;
             }
-            let time_slices = match get_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
+            let mut time_slices = match get_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
                     if time_slices.is_empty() && self.tick_over_no_data {
                         println!("Historical Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
@@ -157,6 +157,8 @@ impl HistoricalEngine {
                     BTreeMap::new()
                 }
             };
+
+            //println!("Time Slices: {:?}", time_slices);
 
             let mut time = last_time;
             'day_loop: while time <= to_time {
@@ -189,11 +191,21 @@ impl HistoricalEngine {
                 }
                 update_backtest_time(time);
                 timed_event_handler.update_time(time.clone()).await;
-                // Collect data from the primary feeds simulating a buffering range
-                let time_slice: TimeSlice = time_slices
-                    .range(last_time.timestamp_nanos_opt().unwrap()..=time.timestamp_nanos_opt().unwrap())
-                    .flat_map(|(_, value)| value.iter().cloned())
+
+                let time_range = last_time.timestamp_nanos_opt().unwrap()..=time.timestamp_nanos_opt().unwrap();
+                let mut time_slice: TimeSlice = TimeSlice::new();
+
+                // Extract and remove data points in this range
+                let keys_to_remove: Vec<i64> = time_slices
+                    .range(time_range)
+                    .map(|(k, _)| *k)
                     .collect();
+
+                for key in keys_to_remove {
+                    if let Some(data) = time_slices.remove(&key) {
+                        time_slice.extend(data);
+                    }
+                }
 
                 let mut strategy_time_slice: TimeSlice = TimeSlice::new();
                 // update our consolidators and create the strategies time slice with any new data or just create empty slice.

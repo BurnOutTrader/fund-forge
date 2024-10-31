@@ -83,10 +83,10 @@ async fn main() {
               // The subscription for the indicator
               DataSubscription::new(
                   SymbolName::from("NAS100-USD"),
-                  DataVendor::Test,
-                  Resolution::Minutes(3),
+                  DataVendor::Oanda,
+                  Resolution::Seconds(5),
                   BaseDataType::QuoteBars,
-                  MarketType::Forex,
+                  MarketType::CFD,
               ),
 
               // history to retain
@@ -224,7 +224,7 @@ pub async fn on_data_received(
                                     continue;
                                 }
 
-                                if quotebar.resolution == Resolution::Minutes(3) && quotebar.symbol.name == "NAS100-USD" && quotebar.symbol.data_vendor == DataVendor::Test {
+                                if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "NAS100-USD" && quotebar.symbol.data_vendor == DataVendor::Oanda {
                                     // We are using a limit order to enter here, so we will manage our order differently. there are a number of ways to do this, this is probably not the best way.
                                     // Using Option<OrderId> for entry order as an alternative to is_long()
                                     if entry_order_id_2.is_some() {
