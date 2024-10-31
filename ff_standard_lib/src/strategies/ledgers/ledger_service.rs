@@ -54,7 +54,7 @@ impl LedgerService {
         if let Some(ledger_ref) = self.ledgers.get(account) {
             ledger_ref.update_or_create_paper_position(symbol_name, symbol_code, order_id, quantity, side, time, market_fill_price, tag).await
         } else {
-            panic!("No ledger for account: {}", account);
+            panic!("No ledger for account: {}, Please Initialize accounts in strategy initialize", account);
         }
     }
 
