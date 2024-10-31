@@ -20,7 +20,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
-2. For Test data you will need to set up a practice account with oanda then follow the [Oanda setup instructions](ff_data_server/src/oanda_api/OANDA_SETUP.md). Or you can download some data I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=1G7P4f)
+2. For Test data you will need to set up a practice account with oanda then follow the [Oanda setup instructions](ff_data_server/src/oanda_api/OANDA_SETUP.md). Or you can download some data I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=nzilot)
 3. Put the test data into the correct directory. [instructions below](#file-and-folder-structure)
 4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (don't run the server in your IDE, it will have issues (more issues than normal :) )
     - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
@@ -66,12 +66,9 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 [more on architecture](#Architecture)
 
 ## Demonstration Testing Data
-You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKF125tuEG16grLM_Q?e=Yukrv6)
+You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=nzilot
 
-The Forex folder should be put into the following directory "ff_data_server/data/historical/Test".
-
-The parsed data includes Quote data for AUD-CAD and EUR-CAD from start of 06/2024 to end of 08/2024.
-From this data your strategy will consolidate Candles or QuoteBars of any desired resolution, with open bar values being accurate to the latest quoted bid ask.
+The Oanda folder should be put into the following directory "ff_data_server/data/historical/".
 
 ## File and Folder Structure
 1 file per day for base data, since we focus on keeping only the lowest resolution data available with each vendor.
