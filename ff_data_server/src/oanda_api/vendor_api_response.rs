@@ -3,6 +3,7 @@ use std::str::FromStr;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use rust_decimal::Decimal;
+use tokio::sync::broadcast;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
@@ -17,6 +18,7 @@ use crate::oanda_api::api_client::OandaClient;
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
 use crate::oanda_api::download::generate_urls;
 use crate::server_features::database::DATA_STORAGE;
+use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
 #[async_trait]
 impl VendorApiResponse for OandaClient {
@@ -35,15 +37,18 @@ impl VendorApiResponse for OandaClient {
     }
     #[allow(unused)]
     async fn resolutions_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse {
-        let subscription_resolutions_types = vec![
-            SubscriptionResolutionType::new(Resolution::Seconds(5), BaseDataType::QuoteBars),
-        ];
+        let subscription_resolutions_types = match mode {
+            StrategyMode::Backtest => vec![SubscriptionResolutionType::new(Resolution::Seconds(5), BaseDataType::QuoteBars)],
+            StrategyMode::LivePaperTrading | StrategyMode::Live => vec![SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)],
+        };
+
         DataServerResponse::Resolutions {
             callback_id,
             market_type,
             subscription_resolutions_types,
         }
     }
+
     #[allow(unused)]
     async fn markets_response(&self, mode: StrategyMode, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         DataServerResponse::Markets {
@@ -51,6 +56,7 @@ impl VendorApiResponse for OandaClient {
             markets: vec![MarketType::CFD, MarketType::Forex],
         }
     }
+
     #[allow(unused)]
     async fn decimal_accuracy_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
         if let Some(instrument) = self.instruments.get(&symbol_name) {
@@ -85,12 +91,52 @@ impl VendorApiResponse for OandaClient {
     }
     #[allow(unused)]
     async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
-        todo!()
+        if subscription.subscription_resolution_type() != SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes) {
+            return DataServerResponse::UnSubscribeResponse {
+                success: false,
+                subscription,
+                reason: Some("Live Oanda only supports quotes".to_string()),
+            };
+        }
+
+        let mut is_subscribed = true;
+        if let Some(broadcaster) = self.quote_feed_broadcasters.get(&subscription.symbol.name) {
+            let receiver = broadcaster.value().subscribe();
+            subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+        } else {
+            let (sender, receiver) = broadcast::channel(500);
+            self.quote_feed_broadcasters.insert(subscription.symbol.name.clone(), sender);
+            subscribe_stream(&stream_name, subscription.clone(), receiver).await;
+            is_subscribed = false;
+        }
+
+        if !is_subscribed {
+            let mut keys: Vec<SymbolName> = self.quote_feed_broadcasters.iter().map(|entry| entry.key().clone()).collect();
+            if keys.len() == 20 {
+                return DataServerResponse::UnSubscribeResponse {
+                    success: false,
+                    subscription,
+                    reason: Some("Max number of subscriptions reached".to_string()),
+                };
+            }
+            keys.push(subscription.symbol.name.clone());
+            self.subscription_sender.send(keys).await;
+        }
+        DataServerResponse::SubscribeResponse {
+            success: true,
+            subscription,
+            reason: None,
+        }
     }
 
     #[allow(unused)]
     async fn data_feed_unsubscribe(&self, mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
-        todo!()
+        unsubscribe_stream(&stream_name, &subscription).await;
+        DataServerResponse::UnSubscribeResponse {
+            success: true,
+            subscription,
+            reason: None,
+        }
     }
 
     #[allow(unused)]

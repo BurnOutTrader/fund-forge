@@ -214,7 +214,7 @@ impl VendorApiResponse for RithmicClient {
     async fn data_feed_unsubscribe(&self, _mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         let exchange = match subscription.market_type {
             MarketType::Futures(exchange) => exchange.to_string(),
-            _ => return DataServerResponse::SubscribeResponse {
+            _ => return DataServerResponse::UnSubscribeResponse {
                 success: false,
                 subscription: subscription.clone(),
                 reason: Some(format!("Unsupported market type: {:?}", subscription.market_type)),

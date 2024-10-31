@@ -1,5 +1,5 @@
 use urlencoding::encode;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{Symbol};
@@ -19,7 +19,7 @@ pub(crate) async fn generate_urls(symbol: Symbol, resolution: Resolution, base_d
     loop {
             let mut end = start + add_time_to_date(&interval);
             if &end > &Utc::now().naive_utc() {
-                end = Utc::now().naive_utc().clone();
+                end = (Utc::now() + Duration::minutes(30)).naive_utc().clone();
                 up_to_date = true;
             }
             let url = generate_url(&start, &end, &instrument, &interval, &base_data_type);
