@@ -208,7 +208,7 @@ pub async fn on_data_received(
                                             entry_order_state = OrderState::Cancelled;
                                         }
 
-                                    // Add to our winners when atr is increasing and we get a new signal
+                                        // Add to our winners when atr is increasing and we get a new signal
                                         let in_profit = strategy.in_profit(&account, &quotebar.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&account, &quotebar.symbol.name);
                                         if  in_profit
