@@ -722,5 +722,6 @@ You might need to change the directories to your own.
 ![config_edit_2.png](misc/config_edit_2.png)
 
 ### Historical Data File Structure
-ff_data_server/data/historical/{DataVendor}/{SymbolName}/{Resolution}/{BaseDataType}/{Year}{Month}{Day}.bin
-![base_data_file_structure.png](misc/base_data_file_structure.png)
+ff_data_server/data/historical/{DataVendor}/{SymbolName}/{Resolution}/{BaseDataType}/{Year}/{Month}/{Year}{Month}{Day}.bin
+![img.png](hist_data.png)
+
