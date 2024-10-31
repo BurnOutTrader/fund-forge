@@ -149,11 +149,11 @@ impl Ledger {
     }
 
     fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) -> Option<PositionUpdateEvent> {
-        if let Some(last_update) = self.last_update.get(&position.symbol_code) {
+       /* if let Some(last_update) = self.last_update.get(&position.symbol_code) {
             if last_update.value() > &time {
                 return None;
             }
-        }
+        }*/
         self.last_update.insert(position.symbol_code.clone(), time);
 
         if position.is_closed {
@@ -215,11 +215,11 @@ impl Ledger {
             Some(code) => code
         };
 
-        if let Some(last_update) = self.last_update.get(&symbol) {
+    /*    if let Some(last_update) = self.last_update.get(&symbol) {
             if last_update.value() > &time {
                 return;
             }
-        }
+        }*/
         self.last_update.insert(symbol.clone(), time);
 
         if let Some(mut position) = self.positions.get_mut(&symbol) {
@@ -513,11 +513,11 @@ impl Ledger {
         market_fill_price: Price,
         tag: String
     ) -> Vec<PositionUpdateEvent> {
-        if let Some(last_update) = self.last_update.get(&symbol_code) {
+    /*    if let Some(last_update) = self.last_update.get(&symbol_code) {
             if last_update.value() > &time {
                 return vec![];
             }
-        }
+        }*/
         self.last_update.insert(symbol_code.clone(), time);
 
         let mut position_events = vec![];
