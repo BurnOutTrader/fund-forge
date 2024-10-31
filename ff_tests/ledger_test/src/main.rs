@@ -28,8 +28,8 @@ async fn main() {
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2005, 1, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2005, 03, 25).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2012, 1, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2012, 03, 25).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
         Duration::hours(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
@@ -129,12 +129,12 @@ pub async fn on_data_received(
                                     println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
 
                                     // LONG SL+TP
-                                    if is_long && long_pnl > dec!(250.0) {
+                                    if is_long && long_pnl > dec!(10.0) {
                                         let position_size = strategy.position_size(&account_1, &qb.symbol.name);
                                         let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
                                         println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
                                     } else if is_long
-                                        && long_pnl <= dec!(-250.0)
+                                        && long_pnl <= dec!(-10.0)
                                     {
                                         let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
                                         let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await;

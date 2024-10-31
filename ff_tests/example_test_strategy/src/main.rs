@@ -177,7 +177,7 @@ pub async fn on_data_received(
                                         let limit_price = last_bar.ask_low;
                                         // we will set the time in force to Day, based on the strategy Tz of Australia::Sydney, I am not sure how this will work in live trading, TIF might be handled by manually sending cancel order on data server.
                                         let time_in_force = TimeInForce::Day(strategy.time_zone().to_string());
-                                        entry_order_id = Some(strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(200), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
+                                        entry_order_id = Some(strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(1), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
                                         bars_since_entry = 0;
                                     }
 
@@ -214,11 +214,11 @@ pub async fn on_data_received(
                                         let in_profit = strategy.in_profit(&account, &quotebar.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&account, &quotebar.symbol.name);
                                         if  in_profit
-                                            && position_size < dec!(400)
+                                            && position_size < dec!(5)
                                             && bars_since_entry == 3
                                             && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
                                         {
-                                            entry_order_id = Some(strategy.enter_long(&quotebar.symbol.name, None, &account, None, dec!(200), String::from("Add Long")).await);
+                                            entry_order_id = Some(strategy.enter_long(&quotebar.symbol.name, None, &account, None, dec!(2), String::from("Add Long")).await);
                                         }
                                     }
                                 }

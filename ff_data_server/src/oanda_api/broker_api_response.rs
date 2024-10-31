@@ -49,7 +49,7 @@ impl BrokerApiResponse for OandaClient {
             let info = SymbolInfo {
                 symbol_name,
                 pnl_currency: Currency::USD, //todo need to do dynamically
-                value_per_tick: dec!(0.1), //todo might need a hard coded list, cant find dynamic info
+                value_per_tick: dec!(1), //todo might need a hard coded list, cant find dynamic info
                 tick_size,
                 decimal_accuracy: instrument.pip_location,
             };
