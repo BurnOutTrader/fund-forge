@@ -14,7 +14,7 @@ use tokio::{signal, task};
 use tokio::sync::{broadcast, OnceCell};
 use tokio_rustls::server::TlsStream;
 use server_features::database::{HybridStorage, DATA_STORAGE};
-use crate::oanda_api::api_client::{oanda_init};
+use crate::oanda_api::api_client::{oanda_init, OANDA_CLIENT};
 use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 
@@ -152,9 +152,11 @@ async fn main() -> io::Result<()> {
     RithmicClient::init_rithmic_apis(options.clone()).await;
     oanda_init(options.clone()).await;
 
-    run_servers(config, options.clone());
+    if let Some(client) = OANDA_CLIENT.get() {
+        DATA_STORAGE.get().unwrap().update_history();
+    }
 
-    DATA_STORAGE.get().unwrap().update_history();
+    run_servers(config, options.clone());
 
     // Wait for Ctrl+C
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");

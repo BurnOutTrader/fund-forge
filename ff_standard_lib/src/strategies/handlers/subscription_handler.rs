@@ -745,7 +745,7 @@ impl SymbolSubscriptionHandler {
                         } else {
                             // Find lowest resolution quote bars available
                             self.vendor_primary_resolutions.iter()
-                                .filter(|res| res.base_data_type == BaseDataType::QuoteBars)
+                                .filter(|res| res.base_data_type == BaseDataType::QuoteBars && res.resolution <= sub_res_type.resolution)
                                 .min_by_key(|res| match res.resolution {
                                     Resolution::Instant => 0,
                                     Resolution::Seconds(s) => s,
