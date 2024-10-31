@@ -636,12 +636,13 @@ impl RithmicClient {
                     RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
                     RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
                     => "simulator".to_string(),
+                    RithmicSystem::Rithmic01 => "globex".to_string(),
                     _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
                 }
             }
             Some(route_map) => {
-                let fcm_id = match &self.credentials.fcm_id {
-                    None => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {}, fcm_id not found",order.account.brokerage))),
+                let fcm_id = match &self.fcm_id {
+                    None => return Err(RithmicClient::reject_order(&order, "Server error: fcm_id not found".to_string())),
                     Some(id) => id.clone()
                 };
                 if let Some(exchange_route) = route_map.get(&(fcm_id.clone(), exchange.clone())) {
@@ -651,6 +652,7 @@ impl RithmicClient {
                         RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
                         RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
                         => "simulator".to_string(),
+                        RithmicSystem::Rithmic01 => "globex".to_string(),
                         _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
                     }
                 }

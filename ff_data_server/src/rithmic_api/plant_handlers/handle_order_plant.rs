@@ -148,8 +148,8 @@ pub async fn match_order_plant_id(
                 // Trade Routes Response
                 // From Server
 
-                if let Some(route) = msg.trade_route {
-                    if let Some(exchange) = msg.exchange {
+                if let Some(route) = &msg.trade_route {
+                    if let Some(exchange) = &msg.exchange {
                         //println!("Trade Routes Response (Template ID: 311) from Server: {:?}", msg);
                         let exchange = match FuturesExchange::from_string(&exchange) {
                             Ok(exchange) => exchange,
@@ -157,11 +157,13 @@ pub async fn match_order_plant_id(
                         };
                         if let Some(fcm_id) = msg.fcm_id {
                             if let Some(mut system_map) = client.default_trade_route.get_mut(&client.system) {
-                                system_map.insert((fcm_id, exchange), route.clone());
+                                system_map.insert((fcm_id, exchange.clone()), route.clone());
+                                //println!("Rihtmic {} Trade Route Added: {:?}", exchange, route);
                             } else {
                                 let mut map = AHashMap::new();
-                                map.insert((fcm_id, exchange), route.clone());
+                                map.insert((fcm_id, exchange.clone()), route.clone());
                                 client.default_trade_route.insert(client.system.clone(), map);
+                                //println!("Rihtmic {} Trade Route Added: {:?}", exchange, route);
                             }
                         }
                     }
