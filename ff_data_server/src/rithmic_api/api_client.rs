@@ -46,7 +46,7 @@ use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 use crate::rithmic_api::client_base::api_base::RithmicApiClient;
 use crate::rithmic_api::client_base::credentials::RithmicCredentials;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTradeRoutes, ResponseHeartbeat};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTradeRoutes};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_new_order::{OrderPlacement, PriceType, TransactionType};
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
@@ -77,7 +77,6 @@ pub struct RithmicClient {
     pub writers: DashMap<SysInfraType, Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
     pub heartbeat_times: Arc<DashMap<SysInfraType, DateTime<Utc>>>,
     pub heartbeat_tasks: Arc<DashMap<SysInfraType, JoinHandle<()>>>,
-    pub latency: Arc<DashMap<SysInfraType, i64>>,
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
     pub front_month_info: DashMap<SymbolName, FrontMonthInfo>,
@@ -151,7 +150,6 @@ impl RithmicClient {
             writers: DashMap::with_capacity(5),
             heartbeat_times: Arc::new(DashMap::with_capacity(5)),
             heartbeat_tasks: Arc::new(DashMap::with_capacity(5)),
-            latency: Arc::new(DashMap::with_capacity(5)),
             client: Arc::new(client),
             front_month_info: Default::default(),
             account_info: Default::default(),
@@ -402,54 +400,6 @@ impl RithmicClient {
         self.heartbeat_tasks.insert(plant, task);
     }
 
-    pub fn handle_response_heartbeat(&self, plant: SysInfraType, response: ResponseHeartbeat) {
-        if let (Some(ssboe), Some(usecs)) = (response.ssboe, response.usecs) {
-            // Get current time components
-            let now = Utc::now();
-            let now_secs = now.timestamp() as u64;
-            let now_nanos = now.timestamp_subsec_nanos() as u64;
-
-            // Convert server time to the same components
-            let server_secs = ssboe as u64;
-            let server_nanos = (usecs as u64) * 1000;  // Convert microseconds to nanoseconds
-
-            // Calculate latency components
-            let secs_diff = if now_secs >= server_secs {
-                now_secs - server_secs
-            } else {
-                0
-            };
-
-            // Calculate total nanoseconds difference
-            let latency = if secs_diff == 0 {
-                // If within the same second, just compare nanoseconds
-                if now_nanos >= server_nanos {
-                    now_nanos - server_nanos
-                } else {
-                    server_nanos - now_nanos
-                }
-            } else {
-                // If seconds differ, calculate total nanosecond difference
-                (secs_diff * 1_000_000_000) + now_nanos - server_nanos
-            };
-
-            self.latency.insert(plant.clone(), latency as i64);
-
-            #[allow(unused_variables)]
-            let formatted_latency = if latency < 1_000 {
-                format!("{} ns", latency)
-            } else if latency < 1_000_000 {
-                format!("{:.2} µs", latency as f64 / 1_000.0)
-            } else if latency < 1_000_000_000 {
-                format!("{:.2} ms", latency as f64 / 1_000_000.0)
-            } else {
-                format!("{:.3} s", latency as f64 / 1_000_000_000.0)
-            };
-
-            //println!("Round Trip Latency for Rithmic {:?}: {}", plant, formatted_latency);
-        }
-    }
-
     pub async fn request_updates(&self, account_id: AccountId) {
         if let Some(id_account_info_kvp) = self.account_info.get(&account_id) {
             self.last_tag.insert(account_id.clone(), DashMap::new());
@@ -460,6 +410,7 @@ impl RithmicClient {
                 ib_id: self.ib_id.clone(),
                 account_id: Some(id_account_info_kvp.key().clone()),
             };
+            //println!("Requesting account: {:?}", req);
             self.send_message(&SysInfraType::OrderPlant, req).await;
             let req = RequestSubscribeForOrderUpdates {
                 template_id: 308 ,
@@ -468,6 +419,7 @@ impl RithmicClient {
                 ib_id: self.ib_id.clone(),
                 account_id: Some(id_account_info_kvp.key().clone()),
             };
+            //println!("Requesting account: {:?}", req);
             self.send_message(&SysInfraType::OrderPlant, req).await;
             let req = RequestPnLPositionUpdates {
                 template_id: 400,
@@ -477,6 +429,7 @@ impl RithmicClient {
                 ib_id: self.ib_id.clone(),
                 account_id: Some(id_account_info_kvp.key().clone()),
             };
+            //println!("Requesting account: {:?}", req);
             self.send_message(&SysInfraType::PnlPlant, req).await;
             
             let req = RequestTradeRoutes {
@@ -484,6 +437,7 @@ impl RithmicClient {
                 user_msg: vec![],
                 subscribe_for_updates: Some(true), //todo not sure if we want updates, they never seem to stop.
             };
+            //println!("Requesting account: {:?}", req);
             self.send_message(&SysInfraType::OrderPlant, req).await;
 
             /*   let symbol = Symbol {
@@ -636,12 +590,12 @@ impl RithmicClient {
                     RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
                     RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
                     => "simulator".to_string(),
-                    RithmicSystem::Rithmic01 => "globex".to_string(),
+                    //RithmicSystem::Rithmic01 => "globex".to_string(),
                     _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
                 }
             }
             Some(route_map) => {
-                let fcm_id = match &self.fcm_id {
+                let fcm_id = match &self.credentials.fcm_id {
                     None => return Err(RithmicClient::reject_order(&order, "Server error: fcm_id not found".to_string())),
                     Some(id) => id.clone()
                 };
@@ -652,7 +606,7 @@ impl RithmicClient {
                         RithmicSystem::RithmicPaperTrading | RithmicSystem::TopstepTrader | RithmicSystem::SpeedUp | RithmicSystem::TradeFundrr | RithmicSystem::UProfitTrader | RithmicSystem::Apex | RithmicSystem::MESCapital |
                         RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
                         => "simulator".to_string(),
-                        RithmicSystem::Rithmic01 => "globex".to_string(),
+                        //RithmicSystem::Rithmic01 => "globex".to_string(),
                         _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
                     }
                 }

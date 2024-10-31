@@ -10,7 +10,7 @@ use crate::rithmic_api::api_client::RithmicClient;
 #[allow(dead_code)]
 pub async fn match_repo_plant_id(
     template_id: i32, message_buf: Vec<u8>,
-    client: Arc<RithmicClient>,
+    _client: Arc<RithmicClient>,
 ) {
     const PLANT: SysInfraType = SysInfraType::RepositoryPlant;
     match template_id {
@@ -43,11 +43,10 @@ pub async fn match_repo_plant_id(
             }
         },
         19 => {
-            if let Ok(msg) = ResponseHeartbeat::decode(&message_buf[..]) {
+            if let Ok(_msg) = ResponseHeartbeat::decode(&message_buf[..]) {
                 // Response Heartbeat
                 // From Server
                 //println!("Response Heartbeat (Template ID: 19) from Server: {:?}", msg);
-                client.handle_response_heartbeat(PLANT, msg);
             }
         },
         501 => {

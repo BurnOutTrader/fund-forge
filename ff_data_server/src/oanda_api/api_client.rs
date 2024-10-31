@@ -1,4 +1,3 @@
-use std::collections::BTreeMap;
 use std::str::FromStr;
 use reqwest::{Client, Error, Response};
 use std::time::{Duration};
@@ -229,7 +228,7 @@ async fn handle_price_stream(
                                         ));
                                         match broadcaster.send(quote) {
                                             Ok(_) => {}
-                                            Err(e) => {
+                                            Err(_e) => {
                                                 if broadcaster.receiver_count() == 0 {
                                                     dead_broadcast = true;
                                                 }

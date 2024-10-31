@@ -73,8 +73,6 @@ pub async fn match_ticker_plant_id(
                 // Response Heartbeat
                 // From Server
                 //println!("Response Heartbeat (Template ID: 19) from Server: {:?}", msg);
-
-                client.handle_response_heartbeat(PLANT, msg);
             }
         },
         101 => {

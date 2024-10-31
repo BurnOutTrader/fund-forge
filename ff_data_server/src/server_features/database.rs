@@ -295,7 +295,7 @@ impl HybridStorage {
                     // Last day of month
                     NaiveDate::from_ymd_opt(year, month + 1, 1)
                         .unwrap_or_else(|| NaiveDate::from_ymd_opt(year + 1, 1, 1).unwrap())
-                        .pred()
+                        .pred_opt().unwrap()
                 };
 
                 let mut current_date = current_date;
@@ -305,7 +305,13 @@ impl HybridStorage {
                         let day_data = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()).unwrap();
                         all_data.extend(day_data.into_iter().filter(|d| d.time_closed_utc() >= start && d.time_closed_utc() <= end));
                     }
-                    current_date = current_date.succ();
+                    current_date = match current_date.succ_opt() {
+                        Some(date) => date,
+                        None => {
+                            eprintln!("Failed to get next day");
+                            break
+                        },
+                    }
                 }
             }
         }

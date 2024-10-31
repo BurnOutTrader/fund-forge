@@ -20,7 +20,6 @@ use ff_standard_lib::strategies::indicators::indicators_trait::IndicatorName;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::gui_types::settings::Color;
 use ff_standard_lib::standardized_types::accounts::{Account, Currency};
-use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::orders::{OrderId, OrderState, OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
@@ -232,7 +231,7 @@ pub async fn on_data_received(
                           /*  let msg = format!("{} Quote: bid: {} ,ask {}, Local Time {}", quote.symbol.name, quote.bid, quote.ask, quote.time_local(strategy.time_zone()));
                             println!("{}", msg.as_str().purple());*/
                         }
-                        BaseDataEnum::Candle(candle) => {}
+                        BaseDataEnum::Candle(_candle) => {}
                         BaseDataEnum::Fundamental(_fundamental) => {}
                     }
                 }

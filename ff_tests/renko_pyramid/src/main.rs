@@ -25,15 +25,15 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "".to_string());
-    let symbol_code = SymbolCode::from("YMZ4");
-    let symbol_name = SymbolName::from("YM");
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Rithmic01), "150765".to_string());
+    let symbol_code = SymbolCode::from("MESZ4");
+    let symbol_name = SymbolName::from("MES");
     let subscription = DataSubscription::new(
         symbol_name.clone(),
-        DataVendor::Rithmic(RithmicSystem::Apex),
+        DataVendor::Rithmic(RithmicSystem::Rithmic01),
         Resolution::Ticks(1),
         BaseDataType::Ticks,
-        MarketType::Futures(FuturesExchange::CBOT),
+        MarketType::Futures(FuturesExchange::CME),
     );
 
     let strategy = FundForgeStrategy::initialize(
@@ -69,14 +69,14 @@ async fn main() {
 // 5. The limit order expiry is on the exchange/rithmic side.
 // 6. It will cancel the take profit order if the position is closed.
 
-const RENKO_RANGE: Decimal = dec!(5);
+const RENKO_RANGE: Decimal = dec!(0.5);
 const MAX_SIZE: Decimal = dec!(2);
 const SIZE: Decimal = dec!(1);
-const INCREMENTAL_SCALP_PNL: Decimal = dec!(200);
+const INCREMENTAL_SCALP_PNL: Decimal = dec!(10);
 const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60;
 const TRADING_LONG: bool = false;
 const TRADING_SHORT: bool = true;
-const MOMENTUM: bool = false; //if true we will enter on 2 blocks (2 bull blocks for bull entry), if false we will enter on reversal (1 bear block then 2 bull blocks)
+const MOMENTUM: bool = true; //if true we will enter on 2 blocks (2 bull blocks for bull entry), if false we will enter on reversal (1 bear block then 2 bull blocks)
 
 #[allow(clippy::const_err)]
 pub async fn on_data_received(

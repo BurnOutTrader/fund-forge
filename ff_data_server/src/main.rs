@@ -152,7 +152,7 @@ async fn main() -> io::Result<()> {
     RithmicClient::init_rithmic_apis(options.clone()).await;
     oanda_init(options.clone()).await;
 
-    if let Some(client) = OANDA_CLIENT.get() {
+    if let Some(_client) = OANDA_CLIENT.get() {
         DATA_STORAGE.get().unwrap().update_history();
     }
 
