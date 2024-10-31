@@ -8,6 +8,7 @@ use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::quotebar::QuoteBar;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, Symbol};
+
 pub(crate) fn oanda_quotebar_from_candle(candle: &Value, symbol: Symbol, resolution: Resolution) -> Result<QuoteBar, Box<dyn std::error::Error + Send + Sync>> {
     //println!("candle: {:?}", candle);
     let bid = candle["bid"].as_object().ok_or("Missing bid data")?;
