@@ -73,13 +73,13 @@ async fn main() {
         //tick over no data, strategy will run at buffer resolution speed to simulate weekends and holidays, if false we will just skip over them to the next data point.
         false,
         false,
-        vec![Account::new(Brokerage::Oanda, "Test_Account_1".to_string()), Account::new(Brokerage::Oanda, "Test_Account_2".to_string())]
+        vec![Account::new(Brokerage::Oanda, "Test_Account_1".to_string())]
     ).await;
 
     // we can subscribe to indicators here or in our event loop at run time.
-    let quotebar_3m_atr_5 = IndicatorEnum::AverageTrueRange(
+    let quotebar_5s_atr_5 = IndicatorEnum::AverageTrueRange(
         AverageTrueRange::new(
-            IndicatorName::from("quotebar_3m_atr_5"),
+            IndicatorName::from("quotebar_5s_atr_5"),
               // The subscription for the indicator
               DataSubscription::new(
                   SymbolName::from("NAS100-USD"),
@@ -103,7 +103,7 @@ async fn main() {
     );
 
     //if you set auto subscribe to false and change the resolution, the strategy will intentionally panic to let you know you won't have data for the indicator
-    strategy.subscribe_indicator(quotebar_3m_atr_5, true).await;
+    strategy.subscribe_indicator(quotebar_5s_atr_5, true).await;
 
     // Start receiving the buffers
     on_data_received(strategy, strategy_event_receiver).await;
@@ -114,14 +114,11 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
 ) {
-    let mut count = 0;
-    let account_1 = Account::new(Brokerage::Oanda, "Test_Account_1".to_string());
-    let account_2 = Account::new(Brokerage::Oanda, "Test_Account_1".to_string());
+    let account = Account::new(Brokerage::Oanda, "Test_Account_1".to_string());
     let mut warmup_complete = false;
-    let mut bars_since_entry_1 = 0;
-    let mut bars_since_entry_2 = 0;
-    let mut entry_order_id_2: Option<OrderId> = None;
-    let mut entry_2_order_state = OrderState::Created;
+    let mut bars_since_entry = 0;
+    let mut entry_order_id: Option<OrderId> = None;
+    let mut entry_order_state = OrderState::Created;
     // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         match strategy_event {
@@ -132,80 +129,6 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                     match base_data {
-                        // Market Order Strategy
-                        BaseDataEnum::Candle(candle) => {
-                            // Place trades based on the AUD-CAD Heikin Ashi Candles
-                            if candle.is_closed == true {
-                                let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
-                                if candle.close == candle.open {
-                                    println!("{}", msg.as_str().blue())
-                                } else {
-                                    match candle.close > candle.open {
-                                        true => println!("{}", msg.as_str().bright_green()),
-                                        false => println!("{}", msg.as_str().bright_red()),
-                                    }
-                                }
-
-                                if !warmup_complete {
-                                    continue;
-                                }
-
-                                if candle.resolution == Resolution::Minutes(3) && candle.symbol.name == "AUD-CAD" && candle.symbol.data_vendor == DataVendor::Test && candle.candle_type == CandleType::HeikinAshi {
-                                    if strategy.is_long(&account_1, &candle.symbol.name) {
-                                        bars_since_entry_1 += 1;
-                                    }
-
-                                    let other_account_is_long_euro_and_in_profit: bool = strategy.is_long(&account_1, &SymbolName::from("EUR-USD")) && strategy.in_profit(&account_1, &SymbolName::from("EUR-USD"));
-
-                                    let last_candle: Candle = strategy.candle_index(&candle.subscription(), 1).unwrap();
-                                    // buy AUD-CAD if higher close HA candle and if our other account is long on EUR
-                                    if strategy.is_flat(&account_1, &candle.symbol.name)
-                                        && candle.close > last_candle.close
-                                        && other_account_is_long_euro_and_in_profit
-                                    {
-                                        let _entry_order_id = strategy.enter_long(&candle.symbol.name, None, &account_1, None, dec!(30), String::from("Enter Long")).await;
-                                        bars_since_entry_1 = 0;
-                                    }
-
-                                    let in_profit: bool = strategy.in_profit(&account_1, &candle.symbol.name);
-                                    let position_size: Decimal = strategy.position_size(&account_1, &candle.symbol.name);
-
-                                    // take profit conditions
-                                    if strategy.is_long(&account_1, &candle.symbol.name)
-                                        && bars_since_entry_1 >= 3
-                                        && in_profit
-                                    {
-                                        let _exit_order_id: OrderId = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
-                                        bars_since_entry_1 = 0;
-                                    }
-
-                                    let in_drawdown = strategy.in_drawdown(&account_1, &candle.symbol.name);
-                                    //stop loss conditions
-                                    if strategy.is_long(&account_1, &candle.symbol.name)
-                                        && bars_since_entry_1 >= 3
-                                        && in_drawdown
-                                    {
-                                        let _exit_order_id: OrderId = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Stop Loss")).await;
-                                        bars_since_entry_1 = 0;
-                                    }
-                                }
-
-                                count += 1;
-                                // We can subscribe to new DataSubscriptions at run time
-                                // We can use a strategy reference and still use strategy functions in the receiving functions.
-                                if count == 20 {
-                                    subscribe_to_my_atr_example(&strategy).await;// SEE THE FUNCTION BELOW THE STRATEGY LOOP
-                                }
-                                if count == 30 {
-                                    subscribe_to_new_candles_example(&strategy).await; // SEE THE FUNCTION BELOW THE STRATEGY LOOP
-                                }
-                            }
-                            //do something with the current open bar
-                            if !candle.is_closed {
-                                //println!("Open candle closing time: {}", candle.time_closed())
-                            }
-                        }
-
                         // Limit Order Strategy
                         BaseDataEnum::QuoteBar(quotebar) => {
                             // Place trades based on the EUR-USD QuoteBars
@@ -227,8 +150,8 @@ pub async fn on_data_received(
                                 if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "NAS100-USD" && quotebar.symbol.data_vendor == DataVendor::Oanda {
                                     // We are using a limit order to enter here, so we will manage our order differently. there are a number of ways to do this, this is probably not the best way.
                                     // Using Option<OrderId> for entry order as an alternative to is_long()
-                                    if entry_order_id_2.is_some() {
-                                        bars_since_entry_2 += 1;
+                                    if entry_order_id.is_some() {
+                                        bars_since_entry += 1;
                                     }
 
                                     //if we start the warm up on a weekend, this unwrap will crash, because we didn't have warm up data available for the warm up period.
@@ -237,65 +160,65 @@ pub async fn on_data_received(
 
                                     // Since our "heikin_3m_atr_5" indicator was consumed when we used the strategies auto mange strategy.subscribe_indicator() function,
                                     // we can use the name we assigned to get the indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
-                                    let quotebar_3m_atr_5_current_values: IndicatorValues = strategy.indicator_index(&"quotebar_3m_atr_5".to_string(), 0).unwrap();
-                                    let quotebar_3m_atr_5_last_values: IndicatorValues = strategy.indicator_index(&"quotebar_3m_atr_5".to_string(), 1).unwrap();
+                                    let quotebar_3m_atr_5_current_values: IndicatorValues = strategy.indicator_index(&"quotebar_5s_atr_5".to_string(), 0).unwrap();
+                                    let quotebar_3m_atr_5_last_values: IndicatorValues = strategy.indicator_index(&"quotebar_5s_atr_5".to_string(), 1).unwrap();
 
                                     // We want to check the current value for the "atr" plot of the atr indicator. We unwrap() since we should have this value, if we don't our strategy logic has a flaw.
                                     let current_heikin_3m_atr_5: Decimal = quotebar_3m_atr_5_current_values.get_plot(&"atr".to_string()).unwrap().value;
                                     let last_heikin_3m_atr_5: Decimal = quotebar_3m_atr_5_last_values.get_plot(&"atr".to_string()).unwrap().value;
 
                                     // buy below the low of prior bar when atr is high and atr is increasing and the bars are closing higher, we are using a limit order which will cancel out at the end of the day
-                                    if entry_order_id_2.is_none()
+                                    if entry_order_id.is_none()
                                         && quotebar.bid_close > last_bar.bid_close
                                         && current_heikin_3m_atr_5 >= dec!(0.00030)
                                         && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
-                                        && entry_order_id_2.is_none()
+                                        && entry_order_id.is_none()
                                     {
                                         let limit_price = last_bar.ask_low;
                                         // we will set the time in force to Day, based on the strategy Tz of Australia::Sydney, I am not sure how this will work in live trading, TIF might be handled by manually sending cancel order on data server.
                                         let time_in_force = TimeInForce::Day(strategy.time_zone().to_string());
-                                        entry_order_id_2 = Some(strategy.limit_order(&quotebar.symbol.name, None, &account_2, None,dec!(200), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
-                                        bars_since_entry_2 = 0;
+                                        entry_order_id = Some(strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(200), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
+                                        bars_since_entry = 0;
                                     }
 
-                                    if entry_2_order_state != OrderState::Filled && entry_2_order_state != OrderState::PartiallyFilled {
+                                    if entry_order_state != OrderState::Filled && entry_order_state != OrderState::PartiallyFilled {
                                         continue;
                                     }
 
-                                    let position_size: Decimal = strategy.position_size(&account_2, &quotebar.symbol.name);
+                                    let position_size: Decimal = strategy.position_size(&account, &quotebar.symbol.name);
 
                                     // take profit conditions
-                                    if let Some(_entry_order) = &entry_order_id_2 {
-                                        let in_profit = strategy.in_profit(&account_2, &quotebar.symbol.name);
-                                        if bars_since_entry_2 > 5
+                                    if let Some(_entry_order) = &entry_order_id {
+                                        let in_profit = strategy.in_profit(&account, &quotebar.symbol.name);
+                                        if bars_since_entry > 5
                                             && in_profit
                                         {
-                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, None, &account_2, None, position_size, String::from("Exit Take Profit")).await;
-                                            bars_since_entry_2 = 0;
-                                            entry_order_id_2 = None;
-                                            entry_2_order_state = OrderState::Cancelled;
+                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, None, &account, None, position_size, String::from("Exit Take Profit")).await;
+                                            bars_since_entry = 0;
+                                            entry_order_id = None;
+                                            entry_order_state = OrderState::Cancelled;
                                         }
 
                                     //stop loss conditions
-                                        let in_drawdown = strategy.in_drawdown(&account_2, &quotebar.symbol.name);
-                                        if bars_since_entry_2 >= 10
+                                        let in_drawdown = strategy.in_drawdown(&account, &quotebar.symbol.name);
+                                        if bars_since_entry >= 10
                                             && in_drawdown
                                         {
-                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, None, &account_2, None, position_size, String::from("Exit Long Stop Loss")).await;
-                                            bars_since_entry_2 = 0;
-                                            entry_order_id_2 = None;
-                                            entry_2_order_state = OrderState::Cancelled;
+                                            let _exit_order_id: OrderId = strategy.exit_long(&quotebar.symbol.name, None, &account, None, position_size, String::from("Exit Long Stop Loss")).await;
+                                            bars_since_entry = 0;
+                                            entry_order_id = None;
+                                            entry_order_state = OrderState::Cancelled;
                                         }
 
                                     // Add to our winners when atr is increasing and we get a new signal
-                                        let in_profit = strategy.in_profit(&account_2, &quotebar.symbol.name);
-                                        let position_size: Decimal = strategy.position_size(&account_2, &quotebar.symbol.name);
+                                        let in_profit = strategy.in_profit(&account, &quotebar.symbol.name);
+                                        let position_size: Decimal = strategy.position_size(&account, &quotebar.symbol.name);
                                         if  in_profit
                                             && position_size < dec!(400)
-                                            && bars_since_entry_2 == 3
+                                            && bars_since_entry == 3
                                             && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
                                         {
-                                            entry_order_id_2 = Some(strategy.enter_long(&quotebar.symbol.name, None, &account_2, None,dec!(200), String::from("Add Long")).await);
+                                            entry_order_id = Some(strategy.enter_long(&quotebar.symbol.name, None, &account, None, dec!(200), String::from("Add Long")).await);
                                         }
                                     }
                                 }
@@ -311,6 +234,7 @@ pub async fn on_data_received(
                           /*  let msg = format!("{} Quote: bid: {} ,ask {}, Local Time {}", quote.symbol.name, quote.bid, quote.ask, quote.time_local(strategy.time_zone()));
                             println!("{}", msg.as_str().purple());*/
                         }
+                        BaseDataEnum::Candle(candle) => {}
                         BaseDataEnum::Fundamental(_fundamental) => {}
                     }
                 }
@@ -326,10 +250,10 @@ pub async fn on_data_received(
                 }
 
                 // See if our limit order has changed state, we could match each individual event here and handle manually. or we can just use the assumed change based on the event enum.
-                if let Some(entry_order_id_2) = &entry_order_id_2 {
+                if let Some(entry_order_id_2) = &entry_order_id {
                     if event.order_id() == entry_order_id_2 {
                         if let Some(state_change) = event.state_change() {
-                            entry_2_order_state = state_change
+                            entry_order_state = state_change
                         }
                     }
                 }
@@ -355,8 +279,7 @@ pub async fn on_data_received(
             }
 
             StrategyEvent::ShutdownEvent(event) => {
-                strategy.flatten_all_for(account_1).await;
-                strategy.flatten_all_for(account_2).await;
+                strategy.flatten_all_for(account).await;
                 let msg = format!("{}",event);
                 println!("{}", msg.as_str().bright_magenta());
                 //we should handle shutdown gracefully by first ending the strategy loop.
