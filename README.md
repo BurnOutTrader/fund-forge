@@ -723,5 +723,6 @@ You might need to change the directories to your own.
 
 ### Historical Data File Structure
 ff_data_server/data/historical/{DataVendor}/{SymbolName}/{Resolution}/{BaseDataType}/{Year}/{Month}/{Year}{Month}{Day}.bin
-![img.png](hist_data.png)
+
+![hist_data.png](hist_data.png)
 
