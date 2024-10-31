@@ -119,15 +119,13 @@ pub async fn on_data_received(
     let mut bars_since_entry = 0;
     let mut entry_order_id: Option<OrderId> = None;
     let mut entry_order_state = OrderState::Created;
-    // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
+
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         match strategy_event {
-            // when a drawing tool is added from some external source the event will also show up here (the tool itself will be added to the strategy.drawing_objects HashMap behind the scenes)
             StrategyEvent::DrawingToolEvents(_event) => {}
             StrategyEvent::TimeSlice(time_slice) => {
-                // here we would process the time slice events and update the strategy state accordingly.
                 for base_data in time_slice.iter() {
-                    // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
+
                     match base_data {
                         // Limit Order Strategy
                         BaseDataEnum::QuoteBar(quotebar) => {

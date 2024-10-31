@@ -25,7 +25,7 @@ async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
         //ToDo: You can Test Live paper using the simulated data feed which simulates quote stream from the server side at 10 ms per quote.
-        StrategyMode::Backtest, // Backtest, Live, LivePaper
+        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2011, 1, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
@@ -37,7 +37,7 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("NAS100-USD"),
                 DataVendor::Oanda,
-                Resolution::Seconds(5),
+                Resolution::Seconds(1),
                 BaseDataType::QuoteBars,
                 MarketType::CFD
             ),
@@ -80,20 +80,18 @@ pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
 ) {
+
     let mut warmup_complete = false;
     let account_1 = Account::new(Brokerage::Oanda, "Test_Account_1".to_string());
     let mut last_side = LastSide::Flat;
-    // The engine will send a buffer of strategy events at the specified buffer interval, it will send an empty buffer if no events were buffered in the period.
+
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
-        //println!("Strategy: Buffer Received Time: {}", strategy.time_local());
-            //println!("Strategy: Buffer Event Time: {}", strategy.time_zone().from_utc_datetime(&time.naive_utc()));
         match strategy_event {
             StrategyEvent::TimeSlice(time_slice) => {
-                // here we would process the time slice events and update the strategy state accordingly.
                 for base_data in time_slice.iter() {
-                    // only data we specifically subscribe to show up here, if the data is building from ticks but we didn't subscribe to ticks specifically, ticks won't show up but the subscribed resolution will.
                     match base_data {
                         BaseDataEnum::Candle(candle) => {}
+
                         BaseDataEnum::QuoteBar(qb) => {
                             if qb.is_closed == true {
                                 let msg = format!("{} {} {} Close: {}, {}", qb.symbol.name, qb.resolution, qb.candle_type, qb.bid_close, qb.time_closed_local(strategy.time_zone()));
@@ -142,6 +140,10 @@ pub async fn on_data_received(
                                     }
                                 }
                             }
+                        }
+
+                        BaseDataEnum::Quote(q) => {
+                            println!("{}", q);
                         }
                         _ => {}
                     }
