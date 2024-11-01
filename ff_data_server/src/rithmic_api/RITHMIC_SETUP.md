@@ -24,6 +24,8 @@ To correct this just look at the print line before this message, It will contain
 ResponseLogin { template_id: 11, template_version: Some("5.29"), user_msg: [], rp_code: ["0"], fcm_id: Some("AMPClearing"), ib_id: Some("AMP"), country_code: Some("AU"), state_code: None, unique_user_id: Some("xxxxxxxx"), heartbeat_interval: Some(60.0) }:PnlPlant
 ```
 
+`rp_code: ["0"]` In any message from rithmic indicates success.
+
 Since Fund Forge is not a company, each user must do this, you can find more information at [Rithmic](https://www.rithmic.com/apis).
 
 ## Rithmic Systems For Testing
