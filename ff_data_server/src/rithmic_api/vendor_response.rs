@@ -427,13 +427,14 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         if !had_data {
                             // If no data received at all, move window forward
                             println!("No data received for 5 seconds");
-                            last_data = end_time;
+                            last_data = end_time;  // This is correct
+                            let new_end = DateTime::<Utc>::from_timestamp(end_time, 0).unwrap();  // Convert to DateTime
                             match base_data_type {
                                 BaseDataType::Ticks => {
-                                    end_time = (latest_date + Duration::minutes(15)).timestamp();
+                                    end_time = (new_end + Duration::minutes(15)).timestamp();
                                 }
                                 BaseDataType::Candles => {
-                                    end_time = (latest_date + Duration::hours(1)).timestamp();
+                                    end_time = (new_end + Duration::hours(1)).timestamp();
                                 }
                                 _ => return
                             }
@@ -464,12 +465,13 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 let current_time = Utc::now();
                 let time_difference = current_time.timestamp() - latest_date.timestamp();
                 last_data = end_time;
+                let new_end = DateTime::<Utc>::from_timestamp(end_time, 0).unwrap();  // Convert to DateTime
                 match base_data_type {
                     BaseDataType::Ticks => {
-                        end_time = (latest_date + Duration::minutes(15)).timestamp();
+                        end_time = (new_end + Duration::minutes(15)).timestamp();
                     }
                     BaseDataType::Candles => {
-                        end_time = (latest_date + Duration::hours(1)).timestamp();
+                        end_time = (new_end + Duration::hours(1)).timestamp();
                     }
                     _ => return
                 }
