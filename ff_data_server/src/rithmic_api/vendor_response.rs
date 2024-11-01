@@ -361,7 +361,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         'main_loop: loop {
             // Calculate window end based on start time
             let window_end = match base_data_type {
-                BaseDataType::Ticks => window_start + Duration::minutes(15),
+                BaseDataType::Ticks => window_start + Duration::hours(1),
                 BaseDataType::Candles => window_start + Duration::hours(1),
                 _ => return
             };
