@@ -44,6 +44,17 @@ I am using:
 - [TopstepTrader](https://www.topsteptrader.com/) I have no affiliate yet.
 - [TakeProfitTrader](https://takeprofittrader.com/) I have no affiliate yet.
 
+## Using multiple rithmic systems
+If using multiple rithmic systems only 1 system will be used for the data connection.
+The Rithmic4Colo system is priority,
+Rithmic01 is the next priority,
+If none of these systems are active, then the server will use the first rithmic system in the active files list as the data connection.
+If you are paying for data upgrades with your prop firm, you should determine which system is being used for data.
+
+If you are using Rithmic4Colo or Rithmic01 then you only need data upgrades on 1 system, the other system will use the same data feed.
+
+Multiple order and pnl connection will be maintained for each individual rithmic system, allowing you to trade multiple accounts with different brokers.
+
 ## File Structure
 The active folder will contain the credentials for the rithmic systems you intend to use.
 
