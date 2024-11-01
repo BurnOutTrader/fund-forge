@@ -54,7 +54,7 @@ use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use once_cell::sync::OnceCell;
 
 lazy_static! {
-    pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
+    pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicBrokerageClient>> = DashMap::with_capacity(16);
 }
 
 static MARKET_DATA_SYSTEM: OnceCell<RithmicSystem> = OnceCell::new();
@@ -71,7 +71,7 @@ pub fn get_rithmic_client(rithmic_system: &RithmicSystem) -> Option<Arc<RithmicB
     None
 }
 
-//todo make a seperate client for data, so we arent initializing pointless maps
+//todo make a seperate client for data, so we arent initializing pointless maps, this will also make it much more maintainable
 pub struct RithmicBrokerageClient {
     pub brokerage: Brokerage,
     pub data_vendor: DataVendor,
