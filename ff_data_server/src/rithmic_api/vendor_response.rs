@@ -394,6 +394,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
 
             let mut is_saving = false;
+            let back_up_time = window_start.clone();
             if let Some((&last_time, _)) = data_map.last_key_value() {
                 if last_time.day() != window_start.day() {
                     is_saving = true;
@@ -414,6 +415,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 if let Err(e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
                     eprintln!("Failed to save data: {}", e);
                     data_map = BTreeMap::new();
+                    window_start = back_up_time;
                     continue 'main_loop;
                 }
                 data_map = BTreeMap::new();
