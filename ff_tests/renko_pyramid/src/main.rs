@@ -120,6 +120,10 @@ pub async fn on_data_received(
                                     println!("{}", msg.as_str().bright_red());
                                 }
 
+                                if !warmup_complete {
+                                    continue;
+                                }
+
                                 if let (Some(last_block), Some(two_blocks_ago)) = (strategy.indicator_index(&renko, 1), strategy.indicator_index(&renko, 2)) {
                                     let last_close = last_block.get_plot(&close).unwrap().value;
                                     let last_open = last_block.get_plot(&open).unwrap().value;

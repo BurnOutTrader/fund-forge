@@ -10,7 +10,7 @@ use crate::strategies::strategy_events::StrategyEvent;
 
 //todo, this probably isnt needed
 
-pub(crate) fn live_order_update(
+pub(crate) fn live_order_handler(
     open_order_cache: Arc<DashMap<OrderId, Order>>, //todo, make these static or lifetimes if possible.. might not be optimal though, look it up!
     closed_order_cache: Arc<DashMap<OrderId, Order>>,
     mut order_event_receiver: Receiver<(OrderUpdateEvent, DateTime<Utc>)>,

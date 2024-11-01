@@ -107,7 +107,7 @@ pub async fn match_history_plant_id(
             if let Ok(msg) = ResponseTickBarReplay::decode(&message_buf[..]) {
                 // Tick Bar Replay Response
                 // From Server
-                //println!("Tick Bar Replay Response (Template ID: 207) from Server: {:?}", msg);
+                println!("Tick Bar Replay Response (Template ID: 207) from Server: {:?}", msg);
                 let tick = match parse_tick_response(&msg) {
                     Some(tick) => tick,
                     None => return,

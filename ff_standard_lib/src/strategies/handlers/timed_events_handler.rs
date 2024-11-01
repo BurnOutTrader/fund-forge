@@ -3,6 +3,8 @@ use std::sync::Arc;
 use chrono::{DateTime, Datelike, Duration, Timelike, Utc, Weekday};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::RwLock;
+use tokio::task;
+use tokio::time::{interval, sleep, Duration as TokioDuration};
 use crate::strategies::strategy_events::StrategyEvent;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -152,6 +154,30 @@ impl TimedEventHandler {
             .await
             .retain(|event| event.name != name);
         self.last_fired.write().await.remove(&name);
+    }
+
+    pub async fn run_time_updates(self: Arc<Self>) {
+        task::spawn(async move {
+            // Wait until the next whole second
+            let now = Utc::now();
+            let sleep_duration = TokioDuration::from_nanos(1_000_000_000 - now.timestamp_subsec_nanos() as u64);
+            sleep(sleep_duration).await;
+
+            // Create an interval that ticks every second
+            let mut interval = interval(TokioDuration::from_secs(1));
+
+            // Run indefinitely
+            loop {
+                // Wait for the next tick
+                interval.tick().await;
+
+                // Get current time
+                let current_time = Utc::now();
+
+                // Run the update
+                self.update_time(current_time).await;
+            }
+        });
     }
 
     pub async fn update_time(&self, current_time: DateTime<Utc>) {

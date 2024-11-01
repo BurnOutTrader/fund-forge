@@ -9,8 +9,7 @@ use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::strategies::client_features::client_side_brokerage::TIME_OUT;
 use crate::strategies::client_features::connection_types::ConnectionType;
-use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
-
+use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
 impl DataVendor {
     pub async fn symbols(&self, market_type: MarketType, time: Option<DateTime<Utc>>) -> Result<Vec<Symbol>, FundForgeError> {
         let time = match time {

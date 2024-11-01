@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::ops::Deref;
 use std::sync::Arc;
-use crate::standardized_types::enums::{StrategyMode};
+use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::strategies::strategy_events::StrategyEvent;
 use crate::standardized_types::subscriptions::DataSubscription;
@@ -14,25 +14,28 @@ use crate::strategies::indicators::indicator_events::IndicatorEvents;
 use crate::strategies::indicators::indicator_enum::IndicatorEnum;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::IndicatorValues;
-use crate::strategies::client_features::server_connections::{is_warmup_complete, SUBSCRIPTION_HANDLER};
+use crate::strategies::client_features::server_connections::is_warmup_complete;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
+use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 
 pub struct IndicatorHandler {
     indicators: Arc<DashMap<DataSubscription, DashMap<IndicatorName, IndicatorEnum>>>,
     strategy_mode: StrategyMode,
     subscription_map: DashMap<IndicatorName, DataSubscription>, //used to quickly find the subscription of an indicator by name.
-    strategy_event_sender: mpsc::Sender<StrategyEvent>
+    strategy_event_sender: mpsc::Sender<StrategyEvent>,
+    subscription_handler: Arc<SubscriptionHandler>
 }
 
 impl IndicatorHandler {
-    pub async fn new(strategy_mode: StrategyMode, strategy_event_sender: mpsc::Sender<StrategyEvent>) -> Self {
+    pub async fn new(strategy_mode: StrategyMode, strategy_event_sender: mpsc::Sender<StrategyEvent>, subscription_handler: Arc<SubscriptionHandler>) -> Self {
         let handler =Self {
             indicators: Default::default(),
             strategy_mode,
             subscription_map: Default::default(),
-            strategy_event_sender
+            strategy_event_sender,
+            subscription_handler
         };
         handler
     }
@@ -47,7 +50,7 @@ impl IndicatorHandler {
         let name = indicator.name().clone();
 
         let indicator = match is_warmup_complete() {
-            true => warmup(time, self.strategy_mode.clone(), indicator).await,
+            true => warmup(time, self.strategy_mode.clone(), indicator, self.subscription_handler.clone()).await,
             false => indicator,
         };
 
@@ -191,9 +194,9 @@ async fn warmup( //todo make async task version for live mode
     to_time: DateTime<Utc>,
     strategy_mode: StrategyMode,
     mut indicator: IndicatorEnum,
+     subscription_handler: Arc<SubscriptionHandler>
 ) -> IndicatorEnum {
    //1. Check if we have history for the indicator.subscription
-    let subscription_handler =   SUBSCRIPTION_HANDLER.get().unwrap();
     let subscription =  indicator.subscription();
     match subscription.base_data_type {
         BaseDataType::Ticks => {

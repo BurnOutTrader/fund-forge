@@ -7,11 +7,11 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
-use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolName};
+use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
-use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
+use ff_standard_lib::standardized_types::accounts::{Account, Currency};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -89,7 +89,7 @@ pub async fn on_data_received(
             StrategyEvent::TimeSlice(time_slice) => {
                 for base_data in time_slice.iter() {
                     match base_data {
-                        BaseDataEnum::Candle(candle) => {}
+                        BaseDataEnum::Candle(_candle) => {}
 
                         BaseDataEnum::QuoteBar(qb) => {
                             if qb.is_closed == true {

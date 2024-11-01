@@ -67,6 +67,7 @@ pub async fn on_data_received(
     let mut exit_sent = false;
     let mut count = 1;
     let mut entry_order_id = "".to_string();
+    let mut warmup_complete = false;
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         match strategy_event {
             StrategyEvent::TimeSlice(time_slice) => {
@@ -87,6 +88,9 @@ pub async fn on_data_received(
                                         true => println!("{}", msg.as_str().bright_green()),
                                         false => println!("{}", msg.as_str().bright_red()),
                                     }
+                                }
+                                if !warmup_complete {
+                                    continue;
                                 }
                                 count += 1;
                                 //LONG CONDITIONS
@@ -157,6 +161,10 @@ pub async fn on_data_received(
                     },
                     _ =>  println!("{}", msg.as_str().bright_yellow())
                 }
+            }
+            StrategyEvent::WarmUpComplete => {
+                warmup_complete = true;
+                println!("Warmup Complete");
             }
             _ => {}
         }

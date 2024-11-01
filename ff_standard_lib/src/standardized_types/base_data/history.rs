@@ -10,9 +10,9 @@ use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::{BTreeMap, HashMap};
 use tokio::sync::oneshot;
-use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
+use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
 use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 
 pub async fn get_historical_data(

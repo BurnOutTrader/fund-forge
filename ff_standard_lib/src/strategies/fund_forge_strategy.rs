@@ -10,7 +10,7 @@ use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::standardized_types::base_data::history::range_history_data;
 use crate::standardized_types::enums::{OrderSide, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
-use crate::strategies::strategy_events::{StrategyEvent};
+use crate::strategies::strategy_events::StrategyEvent;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::standardized_types::subscriptions::{DataSubscription, SymbolCode, SymbolName};
 use crate::strategies::handlers::timed_events_handler::{TimedEvent, TimedEventHandler};
@@ -20,28 +20,30 @@ use std::time::Duration;
 use dashmap::DashMap;
 use rust_decimal::Decimal;
 use tokio::sync::{mpsc, Notify};
-use tokio::sync::mpsc::{Sender};
+use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc, resolve_market_datetime_in_timezone};
-use crate::strategies::client_features::server_connections::{init_connections, init_sub_handler, initialize_static, live_subscription_handler, send_request, set_warmup_complete, StrategyRequest};
+use crate::strategies::client_features::server_connections::{init_connections, set_warmup_complete};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
 use crate::standardized_types::base_data::tick::Tick;
-use crate::messages::data_server_messaging::{DataServerRequest};
+use crate::messages::data_server_messaging::DataServerRequest;
 use crate::standardized_types::accounts::{Account, Currency};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderType, OrderUpdateType, TimeInForce};
 use crate::strategies::client_features::connection_types::ConnectionType;
+use crate::strategies::client_features::live_subscriptions::live_subscription_handler;
+use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
 use crate::strategies::handlers::market_handler::backtest_matching_engine;
 use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
-use crate::strategies::handlers::market_handler::live_order_matching::live_order_update;
+use crate::strategies::handlers::market_handler::live_order_matching::live_order_handler;
 use crate::strategies::handlers::market_handler::price_service::{price_service_request_market_fill_price, price_service_request_market_price};
 use crate::strategies::historical_engine::HistoricalEngine;
 use crate::strategies::historical_time::get_backtest_time;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
-use crate::strategies::ledgers::ledger_service::{LedgerService};
+use crate::strategies::ledgers::ledger_service::LedgerService;
 
 /// The `FundForgeStrategy` struct is the main_window struct for the FundForge strategy. It contains the state of the strategy and the callback function for data updates.
 
@@ -147,10 +149,6 @@ impl FundForgeStrategy {
 
         let timed_event_handler = Arc::new(TimedEventHandler::new(strategy_event_sender.clone()));
         let drawing_objects_handler = Arc::new(DrawingObjectHandler::new(AHashMap::new()));
-        initialize_static(
-            timed_event_handler.clone(),
-            drawing_objects_handler.clone()
-        ).await;
 
 
         let start_time = resolve_market_datetime_in_timezone(time_zone, start_date).to_utc();
@@ -163,14 +161,13 @@ impl FundForgeStrategy {
 
         let notify = Arc::new(Notify::new());
         let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode, strategy_event_sender.clone()).await);
-        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone(), strategy_event_sender.clone()).await);
+        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone(), strategy_event_sender.clone(), subscription_handler.clone()).await);
 
-        init_sub_handler(subscription_handler.clone(), indicator_handler.clone()).await;
         let (live_order_updates_sender, live_order_updates_receiver) = tokio::sync::mpsc::channel(100);
         if strategy_mode == StrategyMode::Live {
-            live_order_update(open_order_cache.clone(), closed_order_cache.clone(), live_order_updates_receiver, strategy_event_sender.clone(), ledger_service.clone(), synchronize_accounts);
+            live_order_handler(open_order_cache.clone(), closed_order_cache.clone(), live_order_updates_receiver, strategy_event_sender.clone(), ledger_service.clone(), synchronize_accounts);
         }
-        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone(), ledger_service.clone()).await;
+        init_connections(gui_enabled, buffering_duration.clone(), strategy_mode.clone(), live_order_updates_sender, synchronize_accounts, strategy_event_sender.clone(), ledger_service.clone(), indicator_handler.clone(), subscription_handler.clone()).await;
 
         subscription_handler.set_subscriptions(subscriptions, retain_history, warm_up_start_time.clone(), fill_forward, false).await;
 
@@ -191,9 +188,9 @@ impl FundForgeStrategy {
             mode: strategy_mode.clone(),
             buffer_resolution: buffering_duration.clone(),
             time_zone,
-            subscription_handler,
+            subscription_handler: subscription_handler.clone(),
             indicator_handler: indicator_handler.clone(),
-            timed_event_handler,
+            timed_event_handler: timed_event_handler.clone(),
             drawing_objects_handler,
             synchronize_accounts,
             accounts: accounts.clone(),
@@ -214,12 +211,15 @@ impl FundForgeStrategy {
                     notify,
                     paper_order_sender,
                     ledger_service.clone(),
+                    timed_event_handler,
+                    indicator_handler.clone(),
+                    subscription_handler.clone(),
                 ).await;
 
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
-                live_subscription_handler(strategy_mode.clone()).await;
+                live_subscription_handler(strategy_mode.clone(), subscription_handler).await;
             },
         }
 

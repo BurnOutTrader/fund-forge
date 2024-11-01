@@ -9,8 +9,7 @@ use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
 use crate::strategies::client_features::connection_types::ConnectionType;
-use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
-
+use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
 pub(crate) const TIME_OUT: Duration = Duration::from_secs(15);
 impl Brokerage {
     pub async fn intraday_margin_required(&self, symbol_name: SymbolName, quantity: Volume) -> Result<Option<Price>, FundForgeError> {

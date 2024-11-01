@@ -5,8 +5,7 @@ use crate::standardized_types::new_types::Price;
 use crate::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::strategies::client_features::client_side_brokerage::TIME_OUT;
 use crate::strategies::client_features::connection_types::ConnectionType;
-use crate::strategies::client_features::server_connections::{send_request, StrategyRequest};
-
+use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
 impl Symbol {
     pub async fn tick_size(&self) -> Result<Price, FundForgeError> {
         let request = DataServerRequest::TickSize {
