@@ -393,7 +393,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Skip Saturday
             if local_time.weekday() == Weekday::Sat {
-                window_start = window_start + Duration::days(1);
+                window_start = window_start + Duration::hours(1);
                 consecutive_empty_windows = 0;
                 continue;
             }
@@ -480,7 +480,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 println!("Saving {} data points", save_data.len());
                 task::spawn(async move {
                     match DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
-                        Ok(_) => {}
+                        Ok(_) => {},
                         Err(e) => {
                             eprintln!("Failed to save data: {}", e);
                         }
@@ -492,15 +492,16 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Update window_start for next iteration
             if had_data {
+                // Always move forward by the window size when we had data
                 window_start = window_end;
                 consecutive_empty_windows = 0;
             } else {
                 consecutive_empty_windows += 1;
                 if consecutive_empty_windows >= MAX_EMPTY_WINDOWS {
-                    // If we've had too many empty windows, skip ahead a day
-                    window_start = window_start + Duration::days(1);
+                    // Instead of skipping days, just move the window forward
+                    window_start = window_end;
                     consecutive_empty_windows = 0;
-                    println!("No data received for {} windows, skipping to next day: {}",
+                    println!("No data received for {} consecutive windows, moving to next window: {}",
                              MAX_EMPTY_WINDOWS, window_start);
                 } else {
                     window_start = window_end;
