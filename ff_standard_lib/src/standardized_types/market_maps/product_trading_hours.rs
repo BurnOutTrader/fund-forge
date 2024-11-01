@@ -174,6 +174,10 @@ const CME_HOURS: TradingHours = TradingHours {
         open: Some(const_time(17, 0, 0)),
         close: Some(const_time(16, 0, 0)),
     },
+    saturday: DaySession {
+        open: None,
+        close: None,
+    },
 };
 
 // CBOT Grains Schedule
@@ -203,6 +207,10 @@ const CBOT_GRAINS_HOURS: TradingHours = TradingHours {
         open: Some(const_time(19, 0, 0)),  // 7:00 PM CT
         close: Some(const_time(13, 20, 0)), // 1:20 PM CT
     },
+    saturday: DaySession {
+        open: None,
+        close: None,
+    },
 };
 
 const EUREX_HOURS: TradingHours = TradingHours {
@@ -230,6 +238,10 @@ const EUREX_HOURS: TradingHours = TradingHours {
     friday: DaySession {
         open: Some(const_time(8, 0, 0)),    // 08:00 CE(S)T
         close: Some(const_time(22, 0, 0)),  // 22:00 CE(S)T
+    },
+    saturday: DaySession {
+        open: None,
+        close: None,
     },
 };
 

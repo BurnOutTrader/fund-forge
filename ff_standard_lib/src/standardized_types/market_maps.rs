@@ -18,6 +18,7 @@ pub struct TradingHours {
     pub wednesday: DaySession,
     pub thursday: DaySession,
     pub friday: DaySession,
+    pub saturday: DaySession,
 }
 
 impl DaySession {
