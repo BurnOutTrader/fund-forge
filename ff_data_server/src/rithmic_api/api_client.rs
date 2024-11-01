@@ -809,13 +809,36 @@ impl RithmicClient {
     pub(crate) async fn init_rithmic_apis(options: ServerLaunchOptions) {
         let options = options;
         if options.disable_rithmic_server != 0 {
-            return
+            return;
         }
+
         let toml_files = RithmicClient::get_rithmic_tomls();
         if toml_files.is_empty() {
             return;
         }
+
+        // First, find the system to use for history and ticker plants
+        let market_data_system = Arc::new(
+            toml_files.iter()
+                .find(|file| {
+                    matches!(
+                    RithmicSystem::from_file_string(file),
+                    Some(RithmicSystem::Rithmic04Colo)
+                )
+                })
+                .or_else(|| toml_files.iter().find(|file| {
+                    matches!(
+                    RithmicSystem::from_file_string(file),
+                    Some(RithmicSystem::Rithmic01)
+                )
+                }))
+                .or_else(|| toml_files.first())
+                .expect("We checked for empty earlier")
+                .clone()
+        );
+
         let init_tasks = toml_files.into_iter().filter_map(|file| {
+            let market_data_system = Arc::clone(&market_data_system);
             RithmicSystem::from_file_string(file.as_str()).map(|system| {
                 task::spawn(async move {
                     let running = Arc::new(AtomicBool::new(true));
@@ -831,40 +854,34 @@ impl RithmicClient {
                     match RithmicClient::new(system).await {
                         Ok(client) => {
                             let client = Arc::new(client);
-                            match client.connect_plant(SysInfraType::TickerPlant).await {
-                                Ok(receiver) => {
-                                    RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::TickerPlant, running.clone());
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                                }
-                            }
-                            match client.connect_plant(SysInfraType::HistoryPlant).await {
-                                Ok(receiver) => {
-                                    RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::HistoryPlant, running.clone());
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+
+                            // Always connect OrderPlant and PnlPlant
+                            for plant_type in [SysInfraType::OrderPlant, SysInfraType::PnlPlant] {
+                                match client.connect_plant(plant_type).await {
+                                    Ok(receiver) => {
+                                        RITHMIC_CLIENTS.insert(system, client.clone());
+                                        handle_rithmic_responses(client.clone(), receiver, plant_type, running.clone());
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Failed to connect {:?} for system {}, reason: {}",
+                                                  plant_type, system, e);
+                                    }
                                 }
                             }
-                            match client.connect_plant(SysInfraType::OrderPlant).await {
-                                Ok(receiver) => {
-                                    RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::OrderPlant, running.clone());
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
-                                }
-                            }
-                            match client.connect_plant(SysInfraType::PnlPlant).await {
-                                Ok(receiver) => {
-                                    RITHMIC_CLIENTS.insert(system, client.clone());
-                                    handle_rithmic_responses(client.clone(), receiver, SysInfraType::PnlPlant, running.clone());
-                                }
-                                Err(e) => {
-                                    eprintln!("Failed to run rithmic client for: {}, reason: {}", system, e);
+
+                            // Only connect TickerPlant and HistoryPlant for the chosen system
+                            if file == *market_data_system {
+                                for plant_type in [SysInfraType::TickerPlant, SysInfraType::HistoryPlant] {
+                                    match client.connect_plant(plant_type).await {
+                                        Ok(receiver) => {
+                                            RITHMIC_CLIENTS.insert(system, client.clone());
+                                            handle_rithmic_responses(client.clone(), receiver, plant_type, running.clone());
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Failed to connect {:?} for system {}, reason: {}",
+                                                      plant_type, system, e);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -879,6 +896,7 @@ impl RithmicClient {
         // Wait for all initialization tasks to complete
         join_all(init_tasks).await;
 
+        // Send RMS info and trade routes requests for all clients
         for api in RITHMIC_CLIENTS.iter() {
             let api = api.value().clone();
             let rms_req = RequestAccountRmsInfo {
