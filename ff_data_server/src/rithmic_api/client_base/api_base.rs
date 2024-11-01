@@ -172,6 +172,7 @@ impl RithmicApiClient {
 
         // Login Response 11 From Server
         let response: ResponseLogin = RithmicApiClient::read_single_protobuf_message(&mut stream).await?;
+        println!("{:?}:{:?}", response, plant);
         if response.rp_code.is_empty() {
             eprintln!("{:?}",response);
         }

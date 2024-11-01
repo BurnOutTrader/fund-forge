@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestProductCodes, RequestTimeBarUpdate};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestProductCodes, RequestResumeBars, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::server_side_datavendor::VendorApiResponse;
@@ -13,7 +13,9 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
 use crate::rithmic_api::api_client::RithmicClient;
-use crate::rithmic_api::products::{get_available_symbol_names, get_symbol_info};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};
+use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
+use crate::server_features::database::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
 #[allow(dead_code)]
@@ -314,17 +316,10 @@ impl VendorApiResponse for RithmicClient {
 
     #[allow(unused)]
     async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) {
-        /*const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
+        const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         let oldest_data: DateTime<Utc> = DateTime::from_timestamp(1325376000, 0).unwrap();
         let last_time: DateTime<Utc> = match DATA_STORAGE.get().unwrap().get_latest_data_time(&symbol, &resolution, &base_data_type).await {
-            Ok(last_time) => match last_time {
-                Some(last_time) => {
-                    last_time
-                }
-                None => {
-                    oldest_data
-                }
-            }
+            Ok(last_time) => last_time.unwrap_or_else(|| oldest_data),
             Err(_e) => {
                 eprintln!("No data found for: {:?}, beginning initial download, this could take a while", symbol);
                 oldest_data
@@ -332,17 +327,13 @@ impl VendorApiResponse for RithmicClient {
         };
         let symbol_name = symbol.name.clone();
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
-            Some(exchange) => {
-                exchange
-            }
-            None => {
-                return Err(FundForgeError::ClientSideErrorDebug(format!("Exchange not found for: {}", symbol_name)))
-            }
+            Some(exchange) => exchange,
+            None => return
         };
         match base_data_type {
             BaseDataType::Candles => {
                 if resolution > Resolution::Seconds(1) {
-                    return Err(FundForgeError::ClientSideErrorDebug(format!("Unsupported resolution: {:?}", resolution)))
+                    return
                 }
                 let req = RequestTimeBarReplay {
                     template_id: 202,
@@ -351,15 +342,24 @@ impl VendorApiResponse for RithmicClient {
                     exchange: Some(exchange.to_string()),
                     bar_type: Some(BarType::SecondBar.into()),
                     bar_type_period: Some(1),
-                    start_index: Some(1),
-                    finish_index: Some(100),
+                    start_index: Some(100),
+                    finish_index: Some(1),
                     user_max_count: Some(100),
                     direction: Some(Direction::First.into()),
                     time_order: Some(TimeOrder::Forwards.into()),
                     resume_bars: Some(true),
                 };
 
-                let (sender, receiver) = tokio::sync::oneshot::channel();
+                self.send_message(&SYSTEM, req).await;
+
+                /*let req = RequestResumeBars {
+                    template_id: 203,
+                    user_msg: vec![],
+                    request_key: None,
+                };
+                self.send_message(&SYSTEM, req).await;*/
+
+                //let (sender, receiver) = tokio::sync::oneshot::channel();
                 let id = self.generate_callback_id().await;
                 //self.register_callback_and_send(&SYSTEM, id, sender, req).await;
 
@@ -391,9 +391,8 @@ impl VendorApiResponse for RithmicClient {
                     time_order: None,
                     resume_bars: None,
                 };
-                todo!()
             }
-            _ => Err(FundForgeError::ClientSideErrorDebug(format!("Unsupported base data type: {:?}", base_data_type))),
-        }*/
+            _ => {}
+        }
     }
 }

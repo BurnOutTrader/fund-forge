@@ -43,7 +43,7 @@ use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::PositionId;
 use uuid::Uuid;
 use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
-use crate::rithmic_api::client_base::api_base::RithmicApiClient;
+use crate::rithmic_api::client_base::api_base::{RithmicApiClient, TEMPLATE_VERSION};
 use crate::rithmic_api::client_base::credentials::RithmicCredentials;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTradeRoutes};
@@ -125,7 +125,7 @@ impl RithmicClient {
         let brokerage = Brokerage::Rithmic(system.clone());
         let data_vendor = DataVendor::Rithmic(system.clone());
         let credentials = RithmicClient::rithmic_credentials(&brokerage)?;
-        println!("Activating {} {} on Rithmic Server: {}", credentials.user, credentials.system_name, credentials.server_name);
+        println!("Activating {} {} on Rithmic Server: {}, Template Version: {}", credentials.user, credentials.system_name, credentials.server_name, TEMPLATE_VERSION);
         let data_folder = get_data_folder();
         let server_domains_toml = PathBuf::from(data_folder)
             .join("credentials")
@@ -439,16 +439,12 @@ impl RithmicClient {
             };
             //println!("Requesting account: {:?}", req);
             self.send_message(&SysInfraType::OrderPlant, req).await;
-
-            /*   let symbol = Symbol {
+      /*      let symbol = Symbol {
                  name: "MNQ".to_string(),
                  market_type: MarketType::Futures(FuturesExchange::CME),
                  data_vendor: DataVendor::Rithmic(RithmicSystem::Rithmic01),
-             };
-             match self.update_historical_data_for(1, symbol, BaseDataType::Candles, Resolution::Seconds(1)).await {
-                 Ok(_) => {}
-                 Err(_) => {}
-             }*/
+            };
+            self.update_historical_data_for(symbol, BaseDataType::Candles, Resolution::Seconds(1)).await;*/
         }
     }
 
