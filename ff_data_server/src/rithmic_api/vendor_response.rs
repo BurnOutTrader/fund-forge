@@ -470,9 +470,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 println!("Caught up to current time");
                 return;
             }
-
-            // Add a small delay between requests to prevent overwhelming the system
-            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
 }
