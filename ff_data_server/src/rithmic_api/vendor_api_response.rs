@@ -410,11 +410,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
 
             if is_saving {
-                let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
+                let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
                 println!("Rithmic: Saving {} data points", save_data.len());
                 if let Err(e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
                     eprintln!("Failed to save data: {}", e);
-                    data_map = BTreeMap::new();
                     window_start = back_up_time;
                     continue 'main_loop;
                 }

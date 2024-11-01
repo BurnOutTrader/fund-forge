@@ -195,46 +195,82 @@ impl VendorApiResponse for OandaClient {
                 continue;
             }
 
-            for price_data in candles {
+            // First convert candles to a Vec for indexed access
+            let candles_vec: Vec<_> = candles.into_iter().collect();
+            let mut i = 0;
+
+            while i < candles_vec.len() {
+                let price_data = &candles_vec[i];
                 let is_closed = price_data["complete"].as_bool().unwrap();
                 if !is_closed {
+                    i += 1;
                     continue;
                 }
+
                 let bar: BaseDataEnum = match base_data_type {
-                    BaseDataType::QuoteBars => match oanda_quotebar_from_candle(&price_data, symbol.clone(), resolution.clone()) {
+                    BaseDataType::QuoteBars => match oanda_quotebar_from_candle(price_data, symbol.clone(), resolution.clone()) {
                         Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
                         Err(e) => {
                             println!("Error processing quotebar: {}", e);
+                            i += 1;
                             continue
                         }
                     },
-                    BaseDataType::Candles => match candle_from_candle(&price_data, symbol.clone(), resolution.clone()) {
+                    BaseDataType::Candles => match candle_from_candle(price_data, symbol.clone(), resolution.clone()) {
                         Ok(candle) => BaseDataEnum::Candle(candle),
                         Err(e) => {
                             println!("Error processing candle: {}", e);
+                            i += 1;
                             continue
                         }
                     },
                     _ => {
                         println!("price_data_type: History not supported for broker");
+                        i += 1;
                         continue
                     }
                 };
 
-                // we need to use this time_object_unchanged() when downloading to be sure we are not changing the data on download and also again when using.
-
                 let new_bar_time = bar.time_utc();
                 if last_bar_time.day() != new_bar_time.day() && !new_data.is_empty() {
                     let data_vec: Vec<BaseDataEnum> = new_data.values().map(|x| x.clone()).collect();
-                    match DATA_STORAGE.get().unwrap().save_data_bulk(data_vec).await {
-                        Ok(_) => {},
-                        Err(e) => eprintln!("Error saving oanda data: {}", e)
+
+                    // Retry loop for saving data
+                    const MAX_RETRIES: u32 = 3;
+                    let mut retry_count = 0;
+                    let save_result = loop {
+                        match DATA_STORAGE.get().unwrap().save_data_bulk(data_vec.clone()).await {
+                            Ok(_) => break Ok(()),
+                            Err(e) => {
+                                retry_count += 1;
+                                if retry_count >= MAX_RETRIES {
+                                    break Err(e);
+                                }
+                                eprintln!("Save attempt {} failed: {}. Retrying...", retry_count, e);
+                                // Optional: Add delay between retries
+                                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                            }
+                        }
+                    };
+
+                    // Handle final save result
+                    if let Err(e) = save_result {
+                        eprintln!("Failed to save data after {} retries: {}", MAX_RETRIES, e);
+                        // Return to the start of the current day's data
+                        while i > 0 && bar.time_utc().day() == new_bar_time.day() {
+                            i -= 1;
+                        }
+                        // Move forward one to start processing from the beginning of the failed day
+                        i += 1;
+                        continue;
                     }
+
                     new_data.clear();
                 }
 
                 last_bar_time = bar.time_utc();
                 new_data.entry(new_bar_time).or_insert(bar);
+                i += 1;
             }
         }
         println!("Oanda: Completed Download of data for: {}", symbol.name);
