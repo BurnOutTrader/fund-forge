@@ -337,12 +337,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let earliest_rithmic_data = match base_data_type {
             BaseDataType::Ticks => {
-                let utc_time_string = "2020-01-02 00:00:00.000000";
+                let utc_time_string = "2019-06-01 00:00:00.000000";
                 let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
                 DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
             }
             BaseDataType::Candles => {
-                let utc_time_string = "2020-01-02 00:00:00.000000";
+                let utc_time_string = "2019-06-01 00:00:00.000000";
                 let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
                 DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
             }
@@ -422,7 +422,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Receive loop with timeout
             loop {
-                match timeout(std::time::Duration::from_secs(5), receiver.recv()).await {
+                match timeout(std::time::Duration::from_millis(250), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
                         latest_data_time = data.time_utc();
