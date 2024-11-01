@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use async_std::task::sleep;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
@@ -349,7 +350,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut receiver = match self.historical_data_broadcaster.get(&(symbol_name.clone(), base_data_type.clone())) {
             Some(broadcaster) => broadcaster.value().subscribe(),
             None => {
-                let (sender, receiver) = broadcast::channel(5000);
+                let (sender, receiver) = broadcast::channel(10000);
                 self.historical_data_broadcaster.insert((symbol_name.clone(), base_data_type.clone()), sender);
                 receiver
             }
@@ -380,6 +381,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                      symbol_name, window_start, window_end);
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
+            sleep(std::time::Duration::from_millis(50)).await;
 
             // Receive loop with timeout
             'msg_loop: loop {
