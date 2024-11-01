@@ -385,20 +385,15 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let mut last_save_day = window_start.day();
         let mut data_map = BTreeMap::new();
+        let mut consecutive_empty_windows = 0;
+        const MAX_EMPTY_WINDOWS: u32 = 24;
         'main_loop: loop {
             let local_time = window_start.with_timezone(&trading_hours.timezone);
-            if local_time.weekday() == Weekday::Sat && trading_hours.saturday.open.is_none() && trading_hours.saturday.close.is_none() {
-                if let Some(sunday_open) = trading_hours.sunday.open {
-                    // Get the current Saturday's date
-                    let sunday_date = local_time.date_naive();
-                    // Create NaiveDateTime for Sunday market open
-                    let sunday_market_open = sunday_date
-                        .and_time(sunday_open - Duration::hours(1)) //todo start 1 hour before open in case historical timezones are incorrect
-                        .and_local_timezone(trading_hours.timezone)
-                        .unwrap()
-                        .with_timezone(&Utc);
-                    window_start = sunday_market_open;
-                }
+
+            // Skip Saturday
+            if local_time.weekday() == Weekday::Sat {
+                window_start = window_start + Duration::hours(1);
+                consecutive_empty_windows = 0;
                 continue;
             }
 
@@ -461,9 +456,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Receive loop with timeout
             'msg_loop: loop {
-                match timeout(std::time::Duration::from_millis(500), receiver.recv()).await {
+                match timeout(std::time::Duration::from_secs(2), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
+                        consecutive_empty_windows = 0;
                         latest_data_time = data.time_utc();
                         data_map.insert(latest_data_time, data);
                     },
@@ -495,10 +491,20 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Update window_start for next iteration
             if had_data {
-                // Start from the last data point we received to ensure we don't miss any
+                // Always move forward by the window size when we had data
                 window_start = latest_data_time;
+                consecutive_empty_windows = 0;
             } else {
-                window_start = window_end;
+                consecutive_empty_windows += 1;
+                if consecutive_empty_windows >= MAX_EMPTY_WINDOWS {
+                    // Instead of skipping days, just move the window forward
+                    window_start = window_end;
+                    consecutive_empty_windows = 0;
+                    println!("No data received for {} consecutive windows, moving to next window: {}",
+                             MAX_EMPTY_WINDOWS, window_start);
+                } else {
+                    window_start = window_end;
+                }
             }
 
             // Check if we've caught up to current time
