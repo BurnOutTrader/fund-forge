@@ -12,7 +12,17 @@ You can find the template file in `ff_data_server/data/rithmic_credentials/inact
 
 Only credentials files in the `active` directories will be used by the server.
 
-Then you will just need to start the data server and keep it running until rithmic passes you app (the server will keep itself connected to rithmic if your details are correct)
+If you are using a real brokerage you will need the correct fcm and IB id's, these will be returned as a print line when you attempt to login to rithmic (when you launch the data server).
+If your ff_data_server prints this message "1088", "user has no permission to this account", Then you probably have the wrong FCM or IB id.
+```
+Show Orders Response (Template ID: 321) from Server: ResponseShowOrders { template_id: 321, user_msg: [], rp_code: ["1088", "user has no permission to this account"] }
+Subscribe For Order Updates Response (Template ID: 309) from Server: ResponseSubscribeForOrderUpdates { template_id: 309, user_msg: [], rp_code: ["1088", "user has no permission to this account"] }
+```
+
+To correct this just look at the print line before this message, It will contain the correct FCM and IB id's, just change these in the credentials file and restart the server.
+```
+ResponseLogin { template_id: 11, template_version: Some("5.29"), user_msg: [], rp_code: ["0"], fcm_id: Some("AMPClearing"), ib_id: Some("AMP"), country_code: Some("AU"), state_code: None, unique_user_id: Some("xxxxxxxx"), heartbeat_interval: Some(60.0) }:PnlPlant
+```
 
 Since Fund Forge is not a company, each user must do this, you can find more information at [Rithmic](https://www.rithmic.com/apis).
 
