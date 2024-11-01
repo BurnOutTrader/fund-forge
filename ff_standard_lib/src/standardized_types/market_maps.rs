@@ -19,3 +19,28 @@ pub struct TradingHours {
     pub thursday: DaySession,
     pub friday: DaySession,
 }
+
+impl DaySession {
+    pub fn is_trading_time(&self, time: NaiveTime) -> bool {
+        match (self.open, self.close) {
+            (Some(open), Some(close)) => {
+                if close > open {
+                    // Normal session (e.g., 8:00 to 16:00)
+                    time >= open && time < close
+                } else {
+                    // Overnight session (e.g., 17:00 to 16:00 next day)
+                    time >= open || time < close
+                }
+            },
+            (Some(open), None) => {
+                // Session that starts but doesn't end on this day
+                time >= open
+            },
+            (None, Some(close)) => {
+                // Session that ends but didn't start on this day
+                time < close
+            },
+            (None, None) => false,
+        }
+    }
+}

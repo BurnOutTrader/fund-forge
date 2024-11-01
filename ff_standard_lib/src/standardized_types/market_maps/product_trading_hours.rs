@@ -232,3 +232,5 @@ const EUREX_HOURS: TradingHours = TradingHours {
         close: Some(const_time(22, 0, 0)),  // 22:00 CE(S)T
     },
 };
+
+

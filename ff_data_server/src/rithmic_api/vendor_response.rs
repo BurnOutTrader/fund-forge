@@ -1,6 +1,7 @@
+use std::cmp::min;
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc, Weekday};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestProductCodes, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
@@ -12,9 +13,12 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
+use tokio::task;
 use tokio::time::{timeout};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
+use ff_standard_lib::standardized_types::market_maps::product_trading_hours::get_futures_trading_hours;
+use ff_standard_lib::standardized_types::market_maps::TradingHours;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
@@ -317,7 +321,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
         todo!()
     }
 
-    #[allow(unused)]
     async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         let symbol_name = symbol.name.clone();
@@ -326,23 +329,27 @@ impl VendorApiResponse for RithmicBrokerageClient {
             None => return
         };
 
+        // Get trading hours for the symbol
+        let trading_hours = match get_futures_trading_hours(&symbol_name) {
+            Some(hours) => hours,
+            None => {
+                println!("No trading hours found for symbol {}", symbol_name);
+                return;
+            }
+        };
+
         // Create or get broadcaster with larger buffer to prevent lagging
         let mut receiver = match self.historical_data_broadcaster.get(&(symbol_name.clone(), base_data_type.clone())) {
             Some(broadcaster) => broadcaster.value().subscribe(),
             None => {
-                let (sender, receiver) = broadcast::channel(5000); // Increased buffer size
+                let (sender, receiver) = broadcast::channel(5000);
                 self.historical_data_broadcaster.insert((symbol_name.clone(), base_data_type.clone()), sender);
                 receiver
             }
         };
 
         let earliest_rithmic_data = match base_data_type {
-            BaseDataType::Ticks => {
-                let utc_time_string = "2019-06-02 20:00:00.000000";
-                let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
-                DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
-            }
-            BaseDataType::Candles => {
+            BaseDataType::Ticks | BaseDataType::Candles => {
                 let utc_time_string = "2019-06-02 20:00:00.000000";
                 let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
                 DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
@@ -359,13 +366,21 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let mut last_save_day = window_start.day();
         let mut data_map = BTreeMap::new();
+        let mut consecutive_empty_windows = 0;
+        const MAX_EMPTY_WINDOWS: u32 = 24;
+
         'main_loop: loop {
-            // Calculate window end based on start time
-            let window_end = match base_data_type {
-                BaseDataType::Ticks => window_start + Duration::hours(1),
-                BaseDataType::Candles => window_start + Duration::hours(1),
-                _ => return
-            };
+            let local_time = window_start.with_timezone(&trading_hours.timezone);
+
+            // Skip Saturday
+            if local_time.weekday() == Weekday::Sat {
+                window_start = window_start + Duration::days(1);
+                consecutive_empty_windows = 0;
+                continue;
+            }
+
+            // Calculate window end based on start time (always 1 hour)
+            let window_end = window_start + Duration::hours(1);
 
             println!("Requesting Rithmic data for {} from {} to {}",
                      symbol_name, window_start, window_end);
@@ -415,61 +430,119 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     };
                     self.send_message(&SYSTEM, req).await;
                 }
-                _ => {}
+                _ => return
             }
 
             let mut had_data = false;
             let mut latest_data_time = window_start;
 
             // Receive loop with timeout
-            loop {
+            'msg_loop: loop {
                 match timeout(std::time::Duration::from_secs(2), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
-                        //println!("Received data: {}", data);
-                        data_map.insert(data.time_utc(), data);
+                        consecutive_empty_windows = 0;
+                        latest_data_time = data.time_utc();
+                        data_map.insert(latest_data_time, data);
                     },
                     Ok(Err(e)) => {
                         println!("Broadcast channel error: {}", e);
-                        break;
+                        continue;
                     },
                     Err(_) => { // Timeout case
-                        break;
+                        break 'msg_loop;
                     }
                 }
             }
 
+            // Handle data saving
             if !data_map.is_empty() && latest_data_time.day() != last_save_day {
-                // Now data_map is sorted by time
-                if let Some((&last_time, _)) = data_map.last_key_value() {
-                    latest_data_time = last_time;
-                }
-
-                // For saving, flatten into vec
                 let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
-
                 println!("Saving {} data points", save_data.len());
-                data_storage.save_data_bulk(save_data).await;
+                task::spawn(async move {
+                    DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await;
+                });
                 last_save_day = latest_data_time.day();
-
                 data_map = BTreeMap::new();
             }
 
             // Update window_start for next iteration
             if had_data {
-                // Move window to just after the latest data we received
-                window_start = latest_data_time;
-            } else {
-                // If no data received, move window forward
                 window_start = window_end;
+                consecutive_empty_windows = 0;
+            } else {
+                consecutive_empty_windows += 1;
+                if consecutive_empty_windows >= MAX_EMPTY_WINDOWS {
+                    // If we've had too many empty windows, skip ahead a day
+                    window_start = window_start + Duration::days(1);
+                    consecutive_empty_windows = 0;
+                    println!("No data received for {} windows, skipping to next day: {}",
+                             MAX_EMPTY_WINDOWS, window_start);
+                } else {
+                    window_start = window_end;
+                }
             }
 
             // Check if we've caught up to current time
             let current_time = Utc::now();
             if (current_time - window_start).num_seconds().abs() <= 1 {
                 println!("Caught up to current time");
-                return;
+                break 'main_loop;
             }
         }
     }
+}
+fn get_session_boundary(current_time: DateTime<Utc>, trading_hours: &TradingHours) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+    let local_time = current_time.with_timezone(&trading_hours.timezone);
+    let weekday = local_time.weekday();
+    let date = local_time.date_naive();
+
+    // Get current day's session boundaries
+    let (session_open, session_close) = match weekday {
+        Weekday::Sun => (trading_hours.sunday.open, trading_hours.sunday.close),
+        Weekday::Mon => (trading_hours.monday.open, trading_hours.monday.close),
+        Weekday::Tue => (trading_hours.tuesday.open, trading_hours.tuesday.close),
+        Weekday::Wed => (trading_hours.wednesday.open, trading_hours.wednesday.close),
+        Weekday::Thu => (trading_hours.thursday.open, trading_hours.thursday.close),
+        Weekday::Fri => (trading_hours.friday.open, trading_hours.friday.close),
+        Weekday::Sat => (None, None),
+    };
+
+    // Convert session boundaries to UTC
+    let session_start = session_open.map(|open_time| {
+        date.and_time(open_time)
+            .and_local_timezone(trading_hours.timezone)
+            .unwrap()
+            .with_timezone(&Utc)
+    });
+
+    let session_end = session_close.map(|close_time| {
+        date.and_time(close_time)
+            .and_local_timezone(trading_hours.timezone)
+            .unwrap()
+            .with_timezone(&Utc)
+    });
+
+    (session_start, session_end)
+}
+
+fn get_next_window_start(current_time: DateTime<Utc>, window_size: Duration, trading_hours: &TradingHours) -> DateTime<Utc> {
+    let next_time = current_time + window_size;
+    let local_next = next_time.with_timezone(&trading_hours.timezone);
+    let weekday = local_next.weekday();
+
+    // If it's Saturday, skip to Sunday market open
+    if weekday == Weekday::Sat {
+        let sunday_date = (local_next + Duration::days(1)).date_naive();
+        if let Some(open_time) = trading_hours.sunday.open {
+            return sunday_date
+                .and_time(open_time)
+                .and_local_timezone(trading_hours.timezone)
+                .unwrap()
+                .with_timezone(&Utc);
+        }
+    }
+
+    // For all other days, just move forward by window_size
+    next_time
 }
