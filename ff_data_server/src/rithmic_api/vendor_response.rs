@@ -387,14 +387,14 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut latest_data_time = window_start;
 
         'main_loop: loop {
-            let mut had_data = false;  // Reset each time we request a new window
-
             let local_time = window_start.with_timezone(&trading_hours.timezone);
             if local_time.weekday() == Weekday::Sat && trading_hours.saturday.open.is_none() && trading_hours.saturday.close.is_none() {
                 if let Some(sunday_open) = trading_hours.sunday.open {
+                    // Get the current Saturday's date
                     let sunday_date = local_time.date_naive();
+                    // Create NaiveDateTime for Sunday market open
                     let sunday_market_open = sunday_date
-                        .and_time(sunday_open - Duration::hours(1))
+                        .and_time(sunday_open - Duration::hours(1)) //todo start 1 hour before open in case historical timezones are incorrect
                         .and_local_timezone(trading_hours.timezone)
                         .unwrap()
                         .with_timezone(&Utc);
@@ -403,57 +403,89 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 continue;
             }
 
-            // Set window end
+            // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + Duration::hours(4);
 
             println!("Requesting Rithmic data for {} from {} to {}",
                      symbol_name, window_start, window_end);
 
-            // Send request according to data type
+            // Send the request based on data type
             match base_data_type {
-                BaseDataType::Candles => { /* Send Candle request */ },
-                BaseDataType::Ticks => { /* Send Tick request */ },
+                BaseDataType::Candles => {
+                    if resolution > Resolution::Seconds(1) {
+                        return
+                    }
+                    let req = RequestTimeBarReplay {
+                        template_id: 202,
+                        user_msg: vec![],
+                        symbol: Some(symbol_name.clone()),
+                        exchange: Some(exchange.to_string()),
+                        bar_type: Some(BarType::SecondBar.into()),
+                        bar_type_period: Some(1),
+                        start_index: Some(window_start.timestamp() as i32),
+                        finish_index: Some(window_end.timestamp() as i32),
+                        user_max_count: None,
+                        direction: Some(Direction::First.into()),
+                        time_order: Some(TimeOrder::Forwards.into()),
+                        resume_bars: Some(false),
+                    };
+                    self.send_message(&SYSTEM, req).await;
+                }
+                BaseDataType::Ticks => {
+                    if resolution != Resolution::Ticks(1) {
+                        return
+                    }
+                    let req = RequestTickBarReplay {
+                        template_id: 206,
+                        user_msg: vec![],
+                        symbol: Some(symbol_name.clone()),
+                        exchange: Some(exchange.to_string()),
+                        bar_type: Some(request_tick_bar_replay::BarType::TickBar.into()),
+                        bar_sub_type: Some(1),
+                        bar_type_specifier: Some("1".to_string()),
+                        start_index: Some(window_start.timestamp() as i32),
+                        finish_index: Some(window_end.timestamp() as i32),
+                        user_max_count: None,
+                        custom_session_open_ssm: None,
+                        custom_session_close_ssm: None,
+                        direction: Some(Direction::First.into()),
+                        time_order: Some(TimeOrder::Forwards.into()),
+                        resume_bars: None,
+                    };
+                    self.send_message(&SYSTEM, req).await;
+                }
                 _ => return
             }
 
-            // Collect incoming data with a timeout to check for end-of-data
+            let mut had_data = false;
+
+
+            // Receive loop with timeout
             'msg_loop: loop {
-                match timeout(std::time::Duration::from_secs(1), receiver.recv()).await {
+                match timeout(std::time::Duration::from_millis(500), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
-                        latest_data_time = data.time_utc();
-                        data_map.insert(latest_data_time, data);
+                        data_map.insert(data.time_utc(), data);
                     },
                     Ok(Err(e)) => {
                         println!("Broadcast channel error: {}", e);
                         continue;
                     },
-                    Err(_) => break 'msg_loop,  // Timeout, no more data for this request
+                    Err(_) => { // Timeout case
+                        break 'msg_loop;
+                    }
                 }
             }
 
-            // Update window based on whether data was received
-            if had_data {
-                if let Some((&last_time, _)) = data_map.last_key_value() {
-                    window_start = last_time;
-                    println!("Last time received: {}", last_time);
-                }
+            if let Some((&last_time, _)) = data_map.last_key_value() {
+                window_start = last_time;
+                println!("Last time: {}", last_time);
             } else {
+                // If no new data, advance window to avoid re-requesting the same interval
                 window_start = window_end;
             }
 
-            // Save data if the day has changed
-            if !data_map.is_empty() && latest_data_time.day() != last_save_day {
-                let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
-                println!("Saving {} data points", save_data.len());
-                if let Err(e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
-                    eprintln!("Failed to save data: {}", e);
-                }
-                last_save_day = latest_data_time.day();
-                data_map = BTreeMap::new();
-            }
-
-            // Check if up-to-date with current time
+            // Check if we've caught up to the desired end or current time
             if (Utc::now() - latest_data_time).num_seconds().abs() <= 1 {
                 println!("Caught up to current time");
                 break 'main_loop;
