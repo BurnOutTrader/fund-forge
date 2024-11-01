@@ -15,7 +15,6 @@ use tokio::sync::broadcast;
 use tokio::time::{timeout};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::market_maps::product_trading_hours::get_futures_trading_hours;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
 use crate::server_features::database::DATA_STORAGE;
@@ -344,15 +343,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
             Some(exchange) => exchange,
             None => return
-        };
-
-        // Get trading hours for the symbol
-        let trading_hours = match get_futures_trading_hours(&symbol_name) {
-            Some(hours) => hours,
-            None => {
-                println!("No trading hours found for symbol {}", symbol_name);
-                return;
-            }
         };
 
         // Create or get broadcaster with larger buffer to prevent lagging
