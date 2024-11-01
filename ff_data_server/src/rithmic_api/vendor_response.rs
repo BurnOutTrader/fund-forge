@@ -423,6 +423,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 break 'main_loop;
             }
         }
+        if !data_map.is_empty() {
+            let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
+            if let Err(e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
+                eprintln!("Failed to save data: {}", e);
+            }
+        }
         self.historical_data_senders.remove(&(symbol_name, base_data_type));
         Ok(())
     }
