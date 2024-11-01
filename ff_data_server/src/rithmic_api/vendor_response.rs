@@ -350,7 +350,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut receiver = match self.historical_data_broadcaster.get(&(symbol_name.clone(), base_data_type.clone())) {
             Some(broadcaster) => broadcaster.value().subscribe(),
             None => {
-                let (sender, receiver) = broadcast::channel(10000);
+                let (sender, receiver) = broadcast::channel(100000);
                 self.historical_data_broadcaster.insert((symbol_name.clone(), base_data_type.clone()), sender);
                 receiver
             }
