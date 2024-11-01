@@ -482,6 +482,7 @@ impl HybridStorage {
 
     pub fn update_history(&self) {
         let options = self.options.clone();
+        let download_tasks = self.download_tasks.clone();
         task::spawn(async move {
             let mut tasks = vec![];
             if options.disable_oanda_server == 0 {
@@ -507,6 +508,7 @@ impl HybridStorage {
                             return;
                         }
                     };
+                    //todo, make this into a function, so we can call it on indiviudal symbols
                     if let Some(client) = OANDA_CLIENT.get() {
                         let symbols = symbol_configs.symbols;
                         println!("Oanda Update: Found {} symbols to update", symbols.len());
@@ -555,6 +557,7 @@ impl HybridStorage {
                         }
                     };
 
+                    //todo, make this into a function, so we can call it on indiviudal symbols
                     if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
                         let symbols = symbol_configs.symbols;
                         println!("Rithmic Update: Found {} symbols to update", symbols.len());

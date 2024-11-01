@@ -402,7 +402,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 if last_time.day() != window_start.day() {
                     is_saving = true;
                 }
-                if last_time != window_start {
+                if last_time > window_start {
                     window_start = last_time.clone();
                 } else {
                     window_start = window_end;
