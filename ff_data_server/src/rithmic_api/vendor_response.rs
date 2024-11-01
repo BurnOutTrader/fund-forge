@@ -12,7 +12,7 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
-use tokio::time::{timeout, Instant};
+use tokio::time::{timeout};
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};
@@ -325,21 +325,22 @@ impl VendorApiResponse for RithmicBrokerageClient {
             None => return
         };
 
+        // Create or get broadcaster with larger buffer to prevent lagging
         let mut receiver = match self.historical_data_broadcaster.get(&(symbol_name.clone(), base_data_type.clone())) {
             Some(broadcaster) => broadcaster.value().subscribe(),
             None => {
-                let (sender, receiver) = broadcast::channel(100);
+                let (sender, receiver) = broadcast::channel(5000); // Increased buffer size
                 self.historical_data_broadcaster.insert((symbol_name.clone(), base_data_type.clone()), sender);
                 receiver
             }
         };
 
-        let earliest_rithmic_data =  match base_data_type {
+        let earliest_rithmic_data = match base_data_type {
             BaseDataType::Ticks => {
                 Utc::now() - Duration::days(31)
             }
             BaseDataType::Candles => {
-                let utc_time_string = "2024-01-01 00:00:00.000000";
+                let utc_time_string = "2024-01-01 20:00:00.000000";
                 let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
                 DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
             }
@@ -348,16 +349,22 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let data_storage = DATA_STORAGE.get().unwrap();
 
-        let mut latest_date = match data_storage.get_latest_data_time(&symbol, &resolution, &base_data_type).await {
+        let mut window_start = match data_storage.get_latest_data_time(&symbol, &resolution, &base_data_type).await {
             Ok(earliest_date) => earliest_date.unwrap_or_else(|| earliest_rithmic_data),
             Err(_e) => earliest_rithmic_data
         };
 
-        let mut last_data = latest_date.timestamp();
-        let mut end_time = (latest_date + Duration::hours(2)).timestamp();
-
         'main_loop: loop {
-            println!("Requesting Rithmic data for {} from {} to {}", symbol_name, DateTime::from_timestamp(last_data, 0).unwrap(), DateTime::from_timestamp(end_time, 0).unwrap());
+            // Calculate window end based on start time
+            let window_end = match base_data_type {
+                BaseDataType::Ticks => window_start + Duration::minutes(15),
+                BaseDataType::Candles => window_start + Duration::hours(1),
+                _ => return
+            };
+
+            println!("Requesting Rithmic data for {} from {} to {}",
+                     symbol_name, window_start, window_end);
+
             // Send the request based on data type
             match base_data_type {
                 BaseDataType::Candles => {
@@ -371,8 +378,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         exchange: Some(exchange.to_string()),
                         bar_type: Some(BarType::SecondBar.into()),
                         bar_type_period: Some(1),
-                        start_index: Some(last_data as i32),
-                        finish_index: Some(end_time as i32),
+                        start_index: Some(window_start.timestamp() as i32),
+                        finish_index: Some(window_end.timestamp() as i32),
                         user_max_count: Some(5000),
                         direction: Some(Direction::First.into()),
                         time_order: Some(TimeOrder::Forwards.into()),
@@ -392,8 +399,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         bar_type: Some(request_tick_bar_replay::BarType::TickBar.into()),
                         bar_sub_type: Some(1),
                         bar_type_specifier: Some("1".to_string()),
-                        start_index: Some(last_data as i32),
-                        finish_index: Some(end_time as i32),
+                        start_index: Some(window_start.timestamp() as i32),
+                        finish_index: Some(window_end.timestamp() as i32),
                         user_max_count: Some(5000),
                         custom_session_open_ssm: None,
                         custom_session_close_ssm: None,
@@ -407,48 +414,27 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
 
             let mut had_data = false;
-            let mut last_received = Instant::now();
-            let mut data_map = Vec::new();
+            let mut latest_data_time = window_start;
+            let mut data_map = Vec::with_capacity(5000);
+
             // Receive loop with timeout
             loop {
-                match timeout(core::time::Duration::from_secs(5), receiver.recv()).await {
+                match timeout(std::time::Duration::from_secs(5), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
-                        last_received = Instant::now();
-                        last_data = data.time_utc().timestamp();
-                        latest_date = data.time_utc();
+                        latest_data_time = data.time_utc();
                         data_map.push(data);
+
+                        // Break if we've collected enough data to avoid channel lag
+                        if data_map.len() >= 5000 {
+                            break;
+                        }
                     },
                     Ok(Err(e)) => {
                         println!("Broadcast channel error: {}", e);
                         break;
                     },
                     Err(_) => { // Timeout case
-                        if !had_data {
-                            // If no data received at all, move window forward
-                            println!("No data received for 5 seconds");
-                            last_data = end_time;  // This is correct
-                            let new_end = DateTime::<Utc>::from_timestamp(end_time, 0).unwrap();  // Convert to DateTime
-                            match base_data_type {
-                                BaseDataType::Ticks => {
-                                    end_time = (new_end + Duration::minutes(15)).timestamp();
-                                }
-                                BaseDataType::Candles => {
-                                    end_time = (new_end + Duration::hours(1)).timestamp();
-                                }
-                                _ => return
-                            }
-                            continue 'main_loop;
-                        }
-                        // If we had some data but now timed out, check if caught up
-                        let current_time = Utc::now();
-                        let time_difference = current_time.timestamp() - latest_date.timestamp();
-
-                        if time_difference.abs() <= 1 {
-                            println!("Caught up to current time");
-                            return;
-                        }
-                        // Not caught up, break to request next batch
                         break;
                     }
                 }
@@ -457,29 +443,26 @@ impl VendorApiResponse for RithmicBrokerageClient {
             if !data_map.is_empty() {
                 println!("Saving {} data points", data_map.len());
                 data_storage.save_data_bulk(data_map).await;
-            } else {
-                println!("No data received in this iteration");
             }
 
-            if !had_data {
-                let current_time = Utc::now();
-                let time_difference = current_time.timestamp() - latest_date.timestamp();
-                last_data = end_time;
-                let new_end = DateTime::<Utc>::from_timestamp(end_time, 0).unwrap();  // Convert to DateTime
-                match base_data_type {
-                    BaseDataType::Ticks => {
-                        end_time = (new_end + Duration::minutes(15)).timestamp();
-                    }
-                    BaseDataType::Candles => {
-                        end_time = (new_end + Duration::hours(1)).timestamp();
-                    }
-                    _ => return
-                }
-                if time_difference.abs() <= 1 {
-                    println!("Caught up to current time");
-                    return;
-                }
+            // Update window_start for next iteration
+            if had_data {
+                // Move window to just after the latest data we received
+                window_start = latest_data_time + std::time::Duration::from_secs(1);
+            } else {
+                // If no data received, move window forward
+                window_start = window_end;
             }
+
+            // Check if we've caught up to current time
+            let current_time = Utc::now();
+            if (current_time - window_start).num_seconds().abs() <= 1 {
+                println!("Caught up to current time");
+                return;
+            }
+
+            // Add a small delay between requests to prevent overwhelming the system
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
 }
