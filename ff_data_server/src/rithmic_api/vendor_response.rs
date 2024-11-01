@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc, Weekday};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
@@ -383,22 +383,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let mut data_map = BTreeMap::new();
         'main_loop: loop {
-            let local_time = window_start.clone().with_timezone(&trading_hours.timezone);
-            if local_time.weekday() == Weekday::Sat && trading_hours.saturday.open.is_none() && trading_hours.saturday.close.is_none() {
-                if let Some(sunday_open) = trading_hours.sunday.open {
-                    // Get the current Saturday's date
-                    let sunday_date = local_time.date_naive();
-                    // Create NaiveDateTime for Sunday market open
-                    let sunday_market_open = sunday_date
-                        .and_time(sunday_open - Duration::hours(1)) //todo start 1 hour before open in case historical timezones are incorrect
-                        .and_local_timezone(trading_hours.timezone)
-                        .unwrap()
-                        .with_timezone(&Utc);
-                    window_start = sunday_market_open;
-                }
-                continue;
-            }
-
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + Duration::hours(4);
 
