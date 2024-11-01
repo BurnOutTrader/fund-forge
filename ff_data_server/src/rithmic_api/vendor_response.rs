@@ -457,7 +457,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Receive loop with timeout
             'msg_loop: loop {
-                match timeout(std::time::Duration::from_secs(2), receiver.recv()).await {
+                match timeout(std::time::Duration::from_millis(500), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
                         consecutive_empty_windows = 0;
