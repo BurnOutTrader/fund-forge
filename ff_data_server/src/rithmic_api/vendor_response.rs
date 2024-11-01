@@ -422,7 +422,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
 
             // Check if we've caught up to the desired end or current time
-            if (Utc::now() - window_end).num_seconds().abs() <= 1 {
+            if (Utc::now() - window_start).num_seconds().abs() <= 1 {
                 println!("Caught up to current time");
                 break 'main_loop;
             }
