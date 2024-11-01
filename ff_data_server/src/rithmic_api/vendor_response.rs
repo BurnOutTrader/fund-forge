@@ -422,16 +422,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Receive loop with timeout
             loop {
-                match timeout(std::time::Duration::from_millis(250), receiver.recv()).await {
+                match timeout(std::time::Duration::from_millis(500), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
                         latest_data_time = data.time_utc();
                         data_map.push(data);
-
-                        // Break if we've collected enough data to avoid channel lag
-                        if data_map.len() >= 5000 {
-                            break;
-                        }
                     },
                     Ok(Err(e)) => {
                         println!("Broadcast channel error: {}", e);
