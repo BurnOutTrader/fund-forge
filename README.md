@@ -17,7 +17,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - 1/11/2024: Oanda live trading will be implemented after historical data.
 - 1/11/2024: Oanda Backtesting will become more accurate after historical data is complete, currently the value per tick is just $1 for all symbols.
 - 1/11/2024: Still some sync issues happen intermittently with rithmic live trading, be sure to monitor any live strategies.
-
+- 1/11/2024: Rithmic DataVendor no longer requires a RithmicSystem, only 1 rithmic system will be used for data connections. (since you pay for the data, there is no point paying for multiple data connections)
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).

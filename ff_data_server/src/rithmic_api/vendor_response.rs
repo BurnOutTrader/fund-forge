@@ -13,7 +13,6 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
 use tokio::time::{timeout, Instant};
-use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};

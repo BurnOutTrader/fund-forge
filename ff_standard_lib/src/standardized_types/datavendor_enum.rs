@@ -2,7 +2,6 @@ use std::fmt;
 use std::str::FromStr;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
-use crate::apis::rithmic::rithmic_systems::RithmicSystem;
 use crate::messages::data_server_messaging::FundForgeError;
 
 #[derive(Serialize, Deserialize, Clone, Eq, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Hash, PartialOrd, Ord)]
@@ -13,7 +12,7 @@ use crate::messages::data_server_messaging::FundForgeError;
 /// Each `DataVendor` implements its own logic to fetch the data from the source, this logic can be modified in the `ff_data_server` crate.
 pub enum DataVendor {
     Test, //DO NOT CHANGE ORDER
-    Rithmic(RithmicSystem),
+    Rithmic,
     Bitget,
     Oanda
 }
@@ -22,7 +21,7 @@ impl fmt::Display for DataVendor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
             DataVendor::Test => "Test".to_string(),
-            DataVendor::Rithmic(system) => format!("Rithmic {}", system.to_string()),
+            DataVendor::Rithmic => "Rithmic".to_string(),
             DataVendor::Bitget => "Bitget".to_string(),
             DataVendor::Oanda => "Oanda".to_string(),
         };
@@ -37,15 +36,7 @@ impl FromStr for DataVendor {
         if s == "Test" {
             Ok(DataVendor::Test)
         } else if s.starts_with("Rithmic") {
-            let system_name = s.trim_start_matches("Rithmic ");
-            if let Some(system) = RithmicSystem::from_string(system_name) {
-                Ok(DataVendor::Rithmic(system))
-            } else {
-                Err(FundForgeError::ClientSideErrorDebug(format!(
-                    "Unknown RithmicSystem string: {}",
-                    system_name
-                )))
-            }
+            Ok(DataVendor::Rithmic)
         } else if s == "BitGet" {
             Ok(DataVendor::Bitget)
         }  else if s == "Oanda" {

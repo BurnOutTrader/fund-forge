@@ -9,7 +9,6 @@ use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive};
 use rust_decimal_macros::dec;
-use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
@@ -347,7 +346,7 @@ fn parse_tick_response(response: &ResponseTickBarReplay) -> Option<Tick> {
     };
 
     Some(Tick {
-        symbol: Symbol::new(symbol_name.clone(), DataVendor::Rithmic(RithmicSystem::Rithmic01), MarketType::Futures(exchange)),
+        symbol: Symbol::new(symbol_name.clone(), DataVendor::Rithmic, MarketType::Futures(exchange)),
         price,
         time: datetime.to_string(),
         volume,
@@ -384,7 +383,7 @@ fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
 
 
     Some(Candle {
-        symbol: Symbol::new(symbol.clone(), DataVendor::Rithmic(RithmicSystem::Rithmic01), MarketType::Futures(exchange)),
+        symbol: Symbol::new(symbol.clone(), DataVendor::Rithmic, MarketType::Futures(exchange)),
         high: Price::from_f64(high).unwrap(),
         low: Price::from_f64(low).unwrap(),
         open: Price::from_f64(open).unwrap(),

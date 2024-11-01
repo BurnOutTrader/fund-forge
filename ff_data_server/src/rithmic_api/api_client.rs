@@ -125,7 +125,7 @@ impl RithmicClient {
         system: RithmicSystem,
     ) -> Result<Self, FundForgeError> {
         let brokerage = Brokerage::Rithmic(system.clone());
-        let data_vendor = DataVendor::Rithmic(system.clone());
+        let data_vendor = DataVendor::Rithmic;
         let credentials = RithmicClient::rithmic_credentials(&brokerage)?;
         println!("Activating {} {} on Rithmic Server: {}, Template Version: {}", credentials.user, credentials.system_name, credentials.server_name, TEMPLATE_VERSION);
         let data_folder = get_data_folder();

@@ -30,7 +30,7 @@ async fn main() {
     let symbol_name = SymbolName::from("MES");
     let subscription = DataSubscription::new(
         symbol_name.clone(),
-        DataVendor::Rithmic(RithmicSystem::Apex),
+        DataVendor::Rithmic,
         Resolution::Ticks(1),
         BaseDataType::Ticks,
         MarketType::Futures(FuturesExchange::CME),

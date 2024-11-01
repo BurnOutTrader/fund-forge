@@ -37,7 +37,7 @@ async fn main() {
         vec![
             DataSubscription::new_custom(
                 symbol_name.clone(),
-                DataVendor::Rithmic(RithmicSystem::Apex),
+                DataVendor::Rithmic,
                 Resolution::Seconds(1),
                 MarketType::Futures(FuturesExchange::CME),
                 CandleType::CandleStick

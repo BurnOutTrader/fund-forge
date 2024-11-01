@@ -6,7 +6,7 @@ use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::sync::{Arc};
 use std::time::Duration;
-use chrono::{DateTime, Datelike, NaiveDate, TimeZone, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use dashmap::DashMap;
 use futures::future;
 use futures_util::future::join_all;
@@ -16,7 +16,6 @@ use tokio::sync::{OnceCell};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
-use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::messages::data_server_messaging::{FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
@@ -118,13 +117,8 @@ impl HybridStorage {
     }
 
     fn get_base_path(&self, symbol: &Symbol, resolution: &Resolution, data_type: &BaseDataType, is_saving: bool) -> PathBuf {
-        let data_vendor = match symbol.data_vendor {
-            DataVendor::Rithmic(_) => "Rithmic".to_string(),
-            _ => symbol.data_vendor.to_string(),
-        };
-
         let base_path = self.base_path
-            .join(data_vendor)
+            .join(symbol.data_vendor.to_string())
             .join(symbol.market_type.to_string())
             .join(symbol.name.to_string())
             .join(resolution.to_string())
@@ -569,7 +563,7 @@ impl HybridStorage {
                                     return
                                 },
                             };
-                            let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic(RithmicSystem::Rithmic01), MarketType::Futures(exchange));
+                            let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic, MarketType::Futures(exchange));
                             let client = client.clone();
                             tasks.push(task::spawn(async move {
                                 let resolution = match symbol_config.base_data_type {

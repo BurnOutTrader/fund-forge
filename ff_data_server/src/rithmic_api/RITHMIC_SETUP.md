@@ -1,4 +1,8 @@
 ## Rithmic
+### Rithmic Notes
+When backtesting with rithmic, all historical data is currently saved as DataVendor::Rithmic data.
+
+### Rithmic Setup
 To use the rithmic api, you have to apply for a dev kit from rithmic and pass conformance, this is just a matter of creating a unique app name to pass into the RithmicClient;
 
 Then you just follow the information you will get from rithmic, which is essentially just:

@@ -6,7 +6,7 @@ use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, SymbolName};
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
-use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
+use crate::rithmic_api::api_client::{RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
 use crate::oanda_api::api_client::OANDA_CLIENT;
@@ -23,8 +23,8 @@ pub async fn session_market_hours_response(mode: StrategyMode, data_vendor: Data
             Err(e) => return DataServerResponse::Error {error: FundForgeError::ClientSideErrorDebug(format!("{}", e)), callback_id}
         };
         match data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+            DataVendor::Rithmic => {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0) {
                     return client.value().session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
                 }
             },
@@ -59,8 +59,8 @@ pub async fn symbols_response(
 ) -> DataServerResponse {
     let operation = async {
         match data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = get_rithmic_client(&system) {
+            DataVendor::Rithmic=> {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0){
                     return client.symbols_response(mode, stream_name, market_type, time, callback_id).await
                 }
             },
@@ -97,8 +97,8 @@ pub async fn resolutions_response(
 ) -> DataServerResponse {
     let operation = async {
         match data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = get_rithmic_client(&system) {
+            DataVendor::Rithmic => {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0){
                     return client.resolutions_response(mode, stream_name, market_type, callback_id).await
                 }
             },
@@ -130,8 +130,8 @@ pub async fn markets_response(
 ) -> DataServerResponse {
     let operation = async {
         match data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = get_rithmic_client(&system) {
+            DataVendor::Rithmic => {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0){
                     return client.markets_response(mode, stream_name, callback_id).await
                 }
             },
@@ -165,8 +165,8 @@ pub async fn decimal_accuracy_response(
 ) -> DataServerResponse {
     let operation = async {
         match data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = get_rithmic_client(&system) {
+            DataVendor::Rithmic => {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0){
                     return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
@@ -199,8 +199,8 @@ pub async fn tick_size_response(
 ) -> DataServerResponse {
     let operation = async {
         match data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = get_rithmic_client(&system) {
+            DataVendor::Rithmic => {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0){
                     return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
@@ -231,8 +231,8 @@ pub async fn data_feed_subscribe(
 ) -> DataServerResponse {
     let operation = async {
         match &subscription.symbol.data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = get_rithmic_client(system) {
+            DataVendor::Rithmic=> {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0){
                     return client.data_feed_subscribe(stream_name, subscription.clone()).await
                 }
             },
@@ -269,8 +269,8 @@ pub async fn data_feed_unsubscribe(
 ) -> DataServerResponse {
     let operation = async {
         match data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = get_rithmic_client(&system) {
+            DataVendor::Rithmic => {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0){
                     return client.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await
                 }
             },
@@ -306,8 +306,8 @@ pub async fn base_data_types_response(
 ) -> DataServerResponse {
     let operation = async {
         match data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = get_rithmic_client(&system) {
+            DataVendor::Rithmic => {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0){
                     return client.base_data_types_response(mode, stream_name, callback_id).await
                 }
             },
@@ -335,8 +335,8 @@ pub async fn base_data_types_response(
 pub async fn logout_command_vendors(data_vendor: DataVendor, stream_name: StreamName) {
     let operation = async {
         match data_vendor {
-            DataVendor::Rithmic(system) => {
-                if let Some(client) = get_rithmic_client(&system) {
+            DataVendor::Rithmic => {
+                if let Some(client) = RITHMIC_CLIENTS.iter().nth(0){
                     client.logout_command_vendors(stream_name).await
                 }
             },
