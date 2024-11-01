@@ -1,9 +1,8 @@
-use std::cmp::min;
 use std::collections::BTreeMap;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc, Weekday};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestProductCodes, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::server_side_datavendor::VendorApiResponse;
@@ -18,7 +17,6 @@ use tokio::time::{timeout};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::market_maps::product_trading_hours::get_futures_trading_hours;
-use ff_standard_lib::standardized_types::market_maps::TradingHours;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
@@ -28,8 +26,7 @@ use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 #[allow(dead_code)]
 #[async_trait]
 impl VendorApiResponse for RithmicBrokerageClient {
-    async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, _time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse{
-        const SYSTEM: SysInfraType = SysInfraType::TickerPlant;
+    async fn symbols_response(&self, _mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, _time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse{
         let names = get_available_symbol_names();
         let mut symbols = Vec::new();
         for name in names {
@@ -482,7 +479,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
                 println!("Saving {} data points", save_data.len());
                 task::spawn(async move {
-                    DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await;
+                    match DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            eprintln!("Failed to save data: {}", e);
+                        }
+                    }
                 });
                 last_save_day = latest_data_time.day();
                 data_map = BTreeMap::new();
@@ -513,58 +515,4 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
         }
     }
-}
-fn get_session_boundary(current_time: DateTime<Utc>, trading_hours: &TradingHours) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
-    let local_time = current_time.with_timezone(&trading_hours.timezone);
-    let weekday = local_time.weekday();
-    let date = local_time.date_naive();
-
-    // Get current day's session boundaries
-    let (session_open, session_close) = match weekday {
-        Weekday::Sun => (trading_hours.sunday.open, trading_hours.sunday.close),
-        Weekday::Mon => (trading_hours.monday.open, trading_hours.monday.close),
-        Weekday::Tue => (trading_hours.tuesday.open, trading_hours.tuesday.close),
-        Weekday::Wed => (trading_hours.wednesday.open, trading_hours.wednesday.close),
-        Weekday::Thu => (trading_hours.thursday.open, trading_hours.thursday.close),
-        Weekday::Fri => (trading_hours.friday.open, trading_hours.friday.close),
-        Weekday::Sat => (None, None),
-    };
-
-    // Convert session boundaries to UTC
-    let session_start = session_open.map(|open_time| {
-        date.and_time(open_time)
-            .and_local_timezone(trading_hours.timezone)
-            .unwrap()
-            .with_timezone(&Utc)
-    });
-
-    let session_end = session_close.map(|close_time| {
-        date.and_time(close_time)
-            .and_local_timezone(trading_hours.timezone)
-            .unwrap()
-            .with_timezone(&Utc)
-    });
-
-    (session_start, session_end)
-}
-
-fn get_next_window_start(current_time: DateTime<Utc>, window_size: Duration, trading_hours: &TradingHours) -> DateTime<Utc> {
-    let next_time = current_time + window_size;
-    let local_next = next_time.with_timezone(&trading_hours.timezone);
-    let weekday = local_next.weekday();
-
-    // If it's Saturday, skip to Sunday market open
-    if weekday == Weekday::Sat {
-        let sunday_date = (local_next + Duration::days(1)).date_naive();
-        if let Some(open_time) = trading_hours.sunday.open {
-            return sunday_date
-                .and_time(open_time)
-                .and_local_timezone(trading_hours.timezone)
-                .unwrap()
-                .with_timezone(&Utc);
-        }
-    }
-
-    // For all other days, just move forward by window_size
-    next_time
 }
