@@ -16,14 +16,18 @@ use tokio::sync::{OnceCell};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
+use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::messages::data_server_messaging::{FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
+use ff_standard_lib::standardized_types::enums::MarketType;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::oanda_api::api_client::OANDA_CLIENT;
+use crate::rithmic_api::api_client::RITHMIC_CLIENTS;
+use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::ServerLaunchOptions;
 
@@ -177,36 +181,6 @@ impl HybridStorage {
                 d.resolution(),
                 d.base_data_type(),
                 d.time_closed_utc().date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap()  //todo[Remove Unwrap]
-            );
-            grouped_data.entry(key).or_insert_with(Vec::new).push(d);
-        }
-
-        for ((symbol, resolution, data_type, date), group) in grouped_data {
-            let file_path = self.get_file_path(&symbol, &resolution, &data_type, &date, true);
-            self.save_data_to_file(&file_path, &group).await?;
-        }
-
-        Ok(())
-    }
-
-
-    pub async fn save_data_bulk_tree(&self, data: BTreeMap<i64, BaseDataEnum>) -> io::Result<()> {
-        if data.is_empty() {
-            return Ok(());
-        }
-
-        let mut grouped_data: HashMap<(Symbol, Resolution, BaseDataType, DateTime<Utc>), Vec<BaseDataEnum>> = HashMap::new();
-
-        for (timestamp, d) in data {
-            if !d.is_closed() {
-                continue;
-            }
-            let datetime = Utc.timestamp_nanos(timestamp);
-            let key = (
-                d.symbol().clone(),
-                d.resolution(),
-                d.base_data_type(),
-                datetime.date_naive().and_hms_opt(0, 0, 0).unwrap().and_local_timezone(Utc).unwrap()
             );
             grouped_data.entry(key).or_insert_with(Vec::new).push(d);
         }
@@ -532,7 +506,7 @@ impl HybridStorage {
                         }
                     };
 
-                    let symbol_object = match toml::from_str::<DownloadSymbols>(&content) {
+                    let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
                         Ok(symbol_object) => symbol_object,
                         Err(e) => {
                             eprintln!("Failed to parse download list: {}", e);
@@ -540,12 +514,18 @@ impl HybridStorage {
                         }
                     };
                     if let Some(client) = OANDA_CLIENT.get() {
-                        let symbols = symbol_object.symbols;
-                        for symbol in symbols {
-                            if let Some(instrument) = client.instruments.get(&symbol) {
-                                let symbol = Symbol::new(symbol, DataVendor::Oanda, instrument.market_type);
+                        let symbols = symbol_configs.symbols;
+                        println!("Oanda Update: Found {} symbols to update", symbols.len());
+                        for symbol_config in symbols {
+                            if let Some(instrument) = client.instruments.get(&symbol_config.symbol_name) {
+                                let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Oanda, instrument.market_type);
                                 tasks.push(task::spawn(async move {
-                                    client.update_historical_data_for(symbol, BaseDataType::QuoteBars, Resolution::Seconds(5)).await;
+                                    let resolution = match symbol_config.base_data_type {
+                                        BaseDataType::Ticks => Resolution::Ticks(1),
+                                        BaseDataType::QuoteBars => Resolution::Seconds(5),
+                                        _ => return,
+                                    };
+                                    client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution).await;
                                 }));
                             }
                         }
@@ -556,7 +536,53 @@ impl HybridStorage {
 
             }
             if options.disable_rithmic_server == 0 {
+                let rithmic_path = options.data_folder.clone()
+                    .join("credentials")
+                    .join("rithmic_credentials")
+                    .join("download_list.toml");
 
+                if rithmic_path.exists() {
+                    let content = match std::fs::read_to_string(&rithmic_path) {
+                        Ok(content) => content,
+                        Err(e) => {
+                            eprintln!("Failed to read download list file: {}", e);
+                            return;
+                        }
+                    };
+
+                    let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
+                        Ok(symbol_object) => symbol_object,
+                        Err(e) => {
+                            eprintln!("Failed to parse download list: {}", e);
+                            return;
+                        }
+                    };
+
+                    if let Some(client) = RITHMIC_CLIENTS.iter().nth(0) {
+                        let symbols = symbol_configs.symbols;
+                        println!("Rithmic Update: Found {} symbols to update", symbols.len());
+                        for symbol_config in symbols {
+                            let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
+                                Some(exchange) => exchange,
+                                None => {
+                                    eprintln!("DataBase Update: Failed to get exchange for symbol: {}", symbol_config.symbol_name);
+                                    return
+                                },
+                            };
+                            let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic(RithmicSystem::Rithmic01), MarketType::Futures(exchange));
+                            let client = client.clone();
+                            tasks.push(task::spawn(async move {
+                                let resolution = match symbol_config.base_data_type {
+                                    BaseDataType::Ticks => Resolution::Ticks(1),
+                                    BaseDataType::Candles => Resolution::Seconds(1),
+                                    _ => return,
+                                };
+                                println!("Updating Rithmic Data for: {}", symbol_config.symbol_name);
+                                client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution).await;
+                           }));
+                        }
+                    }
+                }
             }
             join_all(tasks).await;
         });
@@ -565,5 +591,11 @@ impl HybridStorage {
 
 #[derive(Deserialize)]
 struct DownloadSymbols {
-    symbols: Vec<SymbolName>
+    symbols: Vec<DownloadConfig>,
+}
+
+#[derive(Deserialize)]
+struct DownloadConfig {
+    symbol_name: SymbolName,
+    base_data_type: BaseDataType
 }

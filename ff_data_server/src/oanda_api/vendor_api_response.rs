@@ -237,5 +237,6 @@ impl VendorApiResponse for OandaClient {
                 new_data.entry(new_bar_time).or_insert(bar);
             }
         }
+        println!("Oanda: Completed Download of data for: {}", symbol.name);
     }
 }

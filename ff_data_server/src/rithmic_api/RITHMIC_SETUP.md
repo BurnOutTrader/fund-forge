@@ -127,14 +127,25 @@ The templates files can be found in `ff_data_server/data/rithmic_credentials/ina
 To download historical data you need to add the symbols to the download list for the specified brokerage.
 The download list can be found in ff_data-server/data/credentials/{Brokerage}_credentials/download_list.toml (see folder structure above).
 
+Keep in mind rithmic limits history to 40gb per month per user, if you go over this limit then your historical data for live warm up will not be up to date.
+Limit downloads to symbols you trade, if only backtesting, remove symbols from the list once you have the data you need.
+
 The symbols should fund forge format, in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name.
+
+We also specify the BaseDataType
+BaseDataTypes:
+Ticks,
+Quotes,
+QuoteBars,
+Candles,
+Fundamentals,
 ```toml
 symbols = [
-    "MNQ",
+    { symbol_name = "MNQ", base_data_type = "Ticks" },
 ]
 ```
 
-Since we are downloading the lowest resolution data, the full Oanda data set would be about 80Gb from 2005 to current using 5 second quote bars.
+Rithmic data starts from 2012. fund forge will only download rithmic tick data or rithmic 1 second bars.
 
 Any symbols we specify in the `download_list.toml` file will be downloaded to the data directory, the historical data will be updated every 30 minutes as long as the server is running,
 or if we actively subscribe to data it will be updated each time a new subscription event occurs.

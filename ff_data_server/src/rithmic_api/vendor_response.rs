@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestProductCodes, RequestResumeBars, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestProductCodes, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::server_side_datavendor::VendorApiResponse;
@@ -12,6 +12,9 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
+use tokio::time::{timeout, Instant};
+use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use crate::rithmic_api::api_client::RithmicClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
@@ -317,82 +320,152 @@ impl VendorApiResponse for RithmicClient {
     #[allow(unused)]
     async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
-        let oldest_data: DateTime<Utc> = DateTime::from_timestamp(1325376000, 0).unwrap();
-        let last_time: DateTime<Utc> = match DATA_STORAGE.get().unwrap().get_latest_data_time(&symbol, &resolution, &base_data_type).await {
-            Ok(last_time) => last_time.unwrap_or_else(|| oldest_data),
-            Err(_e) => {
-                eprintln!("No data found for: {:?}, beginning initial download, this could take a while", symbol);
-                oldest_data
-            }
-        };
         let symbol_name = symbol.name.clone();
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
             Some(exchange) => exchange,
             None => return
         };
-        match base_data_type {
-            BaseDataType::Candles => {
-                if resolution > Resolution::Seconds(1) {
-                    return
-                }
-                let req = RequestTimeBarReplay {
-                    template_id: 202,
-                    user_msg: vec![],
-                    symbol: Some(symbol_name),
-                    exchange: Some(exchange.to_string()),
-                    bar_type: Some(BarType::SecondBar.into()),
-                    bar_type_period: Some(1),
-                    start_index: Some(100),
-                    finish_index: Some(1),
-                    user_max_count: Some(100),
-                    direction: Some(Direction::First.into()),
-                    time_order: Some(TimeOrder::Forwards.into()),
-                    resume_bars: Some(true),
-                };
 
-                self.send_message(&SYSTEM, req).await;
-
-                /*let req = RequestResumeBars {
-                    template_id: 203,
-                    user_msg: vec![],
-                    request_key: None,
-                };
-                self.send_message(&SYSTEM, req).await;*/
-
-                //let (sender, receiver) = tokio::sync::oneshot::channel();
-                let id = self.generate_callback_id().await;
-                //self.register_callback_and_send(&SYSTEM, id, sender, req).await;
-
-                //let response = receiver.await.unwrap();
-
-                //println!("Response: {:?}", response);
-
-                //todo save all data with RithmicSystem::Rithmic01
-
+        let mut receiver = match self.historical_data_broadcaster.get(&(symbol_name.clone(), base_data_type.clone())) {
+            Some(broadcaster) => broadcaster.value().subscribe(),
+            None => {
+                let (sender, receiver) = broadcast::channel(100);
+                self.historical_data_broadcaster.insert((symbol_name.clone(), base_data_type.clone()), sender);
+                receiver
             }
+        };
+
+        let earliest_rithmic_data =  match base_data_type {
             BaseDataType::Ticks => {
-                if resolution != Resolution::Ticks(1) {
-                    return
-                }
-                let req = RequestTickBarReplay{
-                    template_id: 206,
-                    user_msg: vec![],
-                    symbol: None,
-                    exchange: None,
-                    bar_type: Some(request_tick_bar_replay::BarType::TickBar.into()),
-                    bar_sub_type: None,
-                    bar_type_specifier: None,
-                    start_index: None,
-                    finish_index: None,
-                    user_max_count: None,
-                    custom_session_open_ssm: None,
-                    custom_session_close_ssm: None,
-                    direction: None,
-                    time_order: None,
-                    resume_bars: None,
-                };
+                Utc::now() - Duration::days(31)
             }
-            _ => {}
+            BaseDataType::Candles => {
+                let utc_time_string = "2011-01-01 00:00:00.000000";
+                let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
+                DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
+            }
+            _ => return
+        };
+
+        let data_storage = DATA_STORAGE.get().unwrap();
+
+        let mut latest_date = match data_storage.get_latest_data_time(&symbol, &resolution, &base_data_type).await {
+            Ok(earliest_date) => earliest_date.unwrap_or_else(|| earliest_rithmic_data),
+            Err(_e) => earliest_rithmic_data
+        };
+
+        let mut last_data = latest_date.timestamp();
+        let mut end_time = (latest_date + Duration::hours(2)).timestamp();
+
+        'main_loop: loop {
+            println!("Requesting Rithmic data for {} from {} to {}", symbol_name, last_data, end_time);
+            // Send the request based on data type
+            match base_data_type {
+                BaseDataType::Candles => {
+                    if resolution > Resolution::Seconds(1) {
+                        return
+                    }
+                    let req = RequestTimeBarReplay {
+                        template_id: 202,
+                        user_msg: vec![],
+                        symbol: Some(symbol_name.clone()),
+                        exchange: Some(exchange.to_string()),
+                        bar_type: Some(BarType::SecondBar.into()),
+                        bar_type_period: Some(1),
+                        start_index: Some(last_data as i32),
+                        finish_index: Some(end_time as i32),
+                        user_max_count: Some(5000),
+                        direction: Some(Direction::First.into()),
+                        time_order: Some(TimeOrder::Forwards.into()),
+                        resume_bars: Some(false),
+                    };
+                    self.send_message(&SYSTEM, req).await;
+                }
+                BaseDataType::Ticks => {
+                    if resolution != Resolution::Ticks(1) {
+                        return
+                    }
+                    let req = RequestTickBarReplay {
+                        template_id: 206,
+                        user_msg: vec![],
+                        symbol: Some(symbol_name.clone()),
+                        exchange: Some(exchange.to_string()),
+                        bar_type: Some(request_tick_bar_replay::BarType::TickBar.into()),
+                        bar_sub_type: Some(1),
+                        bar_type_specifier: Some("1".to_string()),
+                        start_index: Some(last_data as i32),
+                        finish_index: Some(end_time as i32),
+                        user_max_count: Some(5000),
+                        custom_session_open_ssm: None,
+                        custom_session_close_ssm: None,
+                        direction: Some(Direction::First.into()),
+                        time_order: Some(TimeOrder::Forwards.into()),
+                        resume_bars: None,
+                    };
+                    self.send_message(&SYSTEM, req).await;
+                }
+                _ => {}
+            }
+
+            let mut had_data = false;
+            let mut last_received = Instant::now();
+            let mut data_map = Vec::new();
+            // Receive loop with timeout
+            loop {
+                match timeout(core::time::Duration::from_secs(5), receiver.recv()).await {
+                    Ok(Ok(data)) => {
+                        had_data = true;
+                        last_received = Instant::now();
+                        last_data = data.time_utc().timestamp();
+                        if data.time_utc() > latest_date {
+                            latest_date = data.time_utc();
+                            end_time = (latest_date + Duration::hours(2)).timestamp();
+                        }
+                        data_map.push(data);
+                    },
+                    Ok(Err(e)) => {
+                        println!("Broadcast channel error: {}", e);
+                        break;
+                    },
+                    Err(_) => {
+                        // No data received for 5 seconds
+                        if !had_data {
+                            println!("No data received for 10 seconds");
+                            last_data = end_time;
+                            end_time = last_data + Duration::hours(2).num_seconds();  // Calculate from last_data instead
+                            continue 'main_loop;
+                        }
+                        // If we had data but now timed out, check if we're caught up
+                        let current_time = Utc::now();
+                        let time_difference = current_time.timestamp() - latest_date.timestamp();
+
+                        if time_difference.abs() <= 1 {
+                            println!("Caught up to current time");
+                            return;
+                        }
+                        // If not caught up, break inner loop to request next batch
+                        break;
+                    }
+                }
+            }
+
+            if !data_map.is_empty() {
+                println!("Saving {} data points", data_map.len());
+                data_storage.save_data_bulk(data_map).await;
+            } else {
+                println!("No data received in this iteration");
+            }
+
+            if !had_data {
+                let current_time = Utc::now();
+                let time_difference = current_time.timestamp() - latest_date.timestamp();
+                last_data = end_time;
+                end_time = last_data + Duration::hours(2).num_seconds();  // Calculate from last_data instead
+                if time_difference.abs() <= 1 {
+                    println!("Caught up to current time");
+                    return;
+                }
+            }
         }
     }
 }

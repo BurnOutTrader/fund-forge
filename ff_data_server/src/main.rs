@@ -7,6 +7,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use async_std::task::sleep;
 use once_cell::sync::Lazy;
 use structopt::StructOpt;
 use tokio::net::TcpStream;
@@ -14,7 +15,7 @@ use tokio::{signal, task};
 use tokio::sync::{broadcast, OnceCell};
 use tokio_rustls::server::TlsStream;
 use server_features::database::{HybridStorage, DATA_STORAGE};
-use crate::oanda_api::api_client::{oanda_init, OANDA_CLIENT};
+use crate::oanda_api::api_client::{oanda_init};
 use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 
@@ -152,11 +153,10 @@ async fn main() -> io::Result<()> {
     RithmicClient::init_rithmic_apis(options.clone()).await;
     oanda_init(options.clone()).await;
 
-    if let Some(_client) = OANDA_CLIENT.get() {
-        DATA_STORAGE.get().unwrap().update_history();
-    }
-
     run_servers(config, options.clone());
+
+    sleep(Duration::from_secs(3)).await;
+    DATA_STORAGE.get().unwrap().update_history();
 
     // Wait for Ctrl+C
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");

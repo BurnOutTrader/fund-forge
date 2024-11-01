@@ -9,14 +9,15 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 <span style="color: red;">***For development and testing purposes only. live trading is in development. repo is currently unstable.***</span>
 
-## Announcements
+## Announcements: Read Before Live Trading or Backtesting
 - 24/10/2024: The folder and file structure was changed, The historical data has not changed, you can just move the historical data you have already downloaded to `ff_data_server/data/historical` and it will work as before. This was done to make set up easier for new users.
 - 31/10/2024: Oanda Brokerage and Datavendor was added, Oanda has historical data available, see the [Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md) to download data. Oanda Live trading has not been tested, backtesting with Oanda might not work until I have tested (I am downloading the data now)
-- 31/10/2024: Rithmic Live trading works but Rithmic Historical Data function is not complete and will be finished soon, I am currently working on the historical data functions for Rithmic.
-- 31/10/2024: Bitget Api Is not functional in any way and any use of Bitget will crash. I will work on this last.
-- 31/10/2024: The server will soon be upgraded to automatically keep your historical data up to date, for fast live strategy warm up and backtesting. The download print lines will be replaced with progress bars.
-- 31/10/2024: The Test Data needs to be re-parsed as the folder structure has been changed to allow faster data retrieval, it won't need to be changed again. No parser for the test data currently exists, it will need to be remade later. Set up a demo Oanda account for data. [See](#historical-data-file-structure)
-- 31/10/2024: There are some bugs in backtest after switching from Test brokerage to Oanda, likely due to updating market price directly from quote bars. It will be fixed soon.
+- 1/11/2024: Rithmic Historical data now available (ticks and Candles), I am unsure on start date for the data sets, so the server will search from 2011, which might take a long time to reach the first data point.
+- 1/11/2024: Auto update for historical data, is only on server launch, it will become a scheduled task in the future (you cant trust auto warm up to have accurate historical bars yet).
+- 1/11/2024: Oanda live trading will be implemented after historical data.
+- 1/11/2024: Oanda Backtesting will become more accurate after historical data is complete, currently the value per tick is just $1 for all symbols.
+- 1/11/2024: Still some sync issues happen intermittently with rithmic live trading, be sure to monitor any live strategies.
+
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).

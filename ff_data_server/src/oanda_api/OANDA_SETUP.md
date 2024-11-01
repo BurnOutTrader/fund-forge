@@ -28,10 +28,18 @@ mode = "Practice"  # "practice" or "live"
 To download historical data you need to add the symbols to the download list for the specified brokerage.
 The download list can be found in ff_data-server/data/credentials/{Brokerage}_credentials/download_list.toml (see folder structure above).
 
-The symbols should be in fund forge format, (in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name).
+The symbols should fund forge format, in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name.
+
+We also specify the BaseDataType
+BaseDataTypes:
+Ticks,
+Quotes,
+QuoteBars,
+Candles,
+Fundamentals,
 ```toml
 symbols = [
-    "NAS100-USD",
+    { symbol_name = "NAS100-USD", base_data_type = "QuoteBars" },
 ]
 ```
 

@@ -42,6 +42,7 @@ use ff_standard_lib::standardized_types::accounts::AccountInfo;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::PositionId;
 use uuid::Uuid;
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 use crate::rithmic_api::client_base::api_base::{RithmicApiClient, TEMPLATE_VERSION};
 use crate::rithmic_api::client_base::credentials::RithmicCredentials;
@@ -115,7 +116,8 @@ pub struct RithmicClient {
     pub bid_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
 
-    pub order_broadcaster: broadcast::Sender<DataServerResponse>
+    pub order_broadcaster: broadcast::Sender<DataServerResponse>,
+    pub historical_data_broadcaster: DashMap<(SymbolName, BaseDataType), broadcast::Sender<BaseDataEnum>>
 }
 
 impl RithmicClient {
@@ -177,6 +179,7 @@ impl RithmicClient {
             open_orders: Default::default(),
             id_to_basket_id_map: Default::default(),
             pending_order_updates: Default::default(),
+            historical_data_broadcaster: Default::default(),
         };
         Ok(client)
     }
@@ -439,12 +442,6 @@ impl RithmicClient {
             };
             //println!("Requesting account: {:?}", req);
             self.send_message(&SysInfraType::OrderPlant, req).await;
-      /*      let symbol = Symbol {
-                 name: "MNQ".to_string(),
-                 market_type: MarketType::Futures(FuturesExchange::CME),
-                 data_vendor: DataVendor::Rithmic(RithmicSystem::Rithmic01),
-            };
-            self.update_historical_data_for(symbol, BaseDataType::Candles, Resolution::Seconds(1)).await;*/
         }
     }
 

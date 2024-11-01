@@ -1,4 +1,4 @@
-# BitGet Api
+# BitGet Api (not yet implemented)
 You will need to create a bitget_credentials.toml here
 
 ![img.png](misc/img.png)
@@ -10,16 +10,22 @@ secret_key = ""
 passphrase = ""
 ```
 
-## Historical Data
-Not yet implemented for bitget, coming asap.
-
+## Historical Data (not supported for Bitget yet)
 To download historical data you need to add the symbols to the download list for the specified brokerage.
 The download list can be found in ff_data-server/data/credentials/{Brokerage}_credentials/download_list.toml (see folder structure above).
 
 The symbols should fund forge format, in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name.
+
+We also specify the BaseDataType
+BaseDataTypes:
+Ticks,
+Quotes,
+QuoteBars,
+Candles,
+Fundamentals,
 ```toml
 symbols = [
-    "BTC-USDT",
+    { symbol_name = "BTC-USDT", base_data_type = "Candles" },
 ]
 ```
 Since we are downloading the lowest resolution data, the full Oanda data set would be about 80Gb from 2005 to current using 5 second quote bars.
