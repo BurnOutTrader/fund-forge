@@ -859,7 +859,6 @@ impl RithmicClient {
                             for plant_type in [SysInfraType::OrderPlant, SysInfraType::PnlPlant] {
                                 match client.connect_plant(plant_type).await {
                                     Ok(receiver) => {
-                                        RITHMIC_CLIENTS.insert(system, client.clone());
                                         handle_rithmic_responses(client.clone(), receiver, plant_type, running.clone());
                                     }
                                     Err(e) => {
@@ -874,7 +873,6 @@ impl RithmicClient {
                                 for plant_type in [SysInfraType::TickerPlant, SysInfraType::HistoryPlant] {
                                     match client.connect_plant(plant_type).await {
                                         Ok(receiver) => {
-                                            RITHMIC_CLIENTS.insert(system, client.clone());
                                             handle_rithmic_responses(client.clone(), receiver, plant_type, running.clone());
                                         }
                                         Err(e) => {
@@ -884,11 +882,14 @@ impl RithmicClient {
                                     }
                                 }
                             }
+                            RITHMIC_CLIENTS.insert(system, client.clone());
+
                         }
                         Err(e) => {
                             eprintln!("Failed to create rithmic client for: {}, reason: {}", system, e);
                         }
                     }
+
                 })
             })
         }).collect::<Vec<_>>();

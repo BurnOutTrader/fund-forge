@@ -7,8 +7,8 @@ use strum_macros::Display;
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum RithmicSystem {
-    Rithmic01,
     Rithmic04Colo,
+    Rithmic01,
     RithmicPaperTrading,
     TopstepTrader,
     SpeedUp,
