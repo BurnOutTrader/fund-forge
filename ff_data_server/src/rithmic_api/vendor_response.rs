@@ -30,7 +30,21 @@ use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 impl VendorApiResponse for RithmicBrokerageClient {
     async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, _time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse{
         const SYSTEM: SysInfraType = SysInfraType::TickerPlant;
-        match mode {
+        let names = get_available_symbol_names();
+        let mut symbols = Vec::new();
+        for name in names {
+            let exchange = match get_exchange_by_symbol_name(name) {
+                Some(exchange) => exchange,
+                None => continue
+            };
+            symbols.push(Symbol::new(name.clone(), self.data_vendor.clone(), MarketType::Futures(exchange)));
+        }
+        DataServerResponse::Symbols {
+            callback_id,
+            symbols,
+            market_type,
+        }
+       /* match mode {
             StrategyMode::Backtest => {
 
             }
@@ -48,9 +62,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     _ => return DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("Incrorrect market type: {} for: {}", market_type, self.data_vendor))}
                 }
             }
-        }
-
-        todo!()
+        }*/
     }
 
     async fn resolutions_response(&self, _mode: StrategyMode, _stream_name: StreamName, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
