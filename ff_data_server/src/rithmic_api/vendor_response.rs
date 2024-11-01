@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestProductCodes, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
@@ -354,6 +354,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             Err(_e) => earliest_rithmic_data
         };
 
+        let mut last_save_day = window_start.day();
         'main_loop: loop {
             // Calculate window end based on start time
             let window_end = match base_data_type {
@@ -440,9 +441,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 }
             }
 
-            if !data_map.is_empty() {
+            if !data_map.is_empty() && latest_data_time.day() != last_save_day {
                 println!("Saving {} data points", data_map.len());
                 data_storage.save_data_bulk(data_map).await;
+                last_save_day = latest_data_time.day();
             }
 
             // Update window_start for next iteration
