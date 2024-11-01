@@ -492,13 +492,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Update window_start for next iteration
             if had_data {
-                // Always move forward by the window size when we had data
-                window_start = window_end;
+                // Start from the last data point we received to ensure we don't miss any
+                window_start = latest_data_time;
                 consecutive_empty_windows = 0;
             } else {
                 consecutive_empty_windows += 1;
                 if consecutive_empty_windows >= MAX_EMPTY_WINDOWS {
-                    // Instead of skipping days, just move the window forward
                     window_start = window_end;
                     consecutive_empty_windows = 0;
                     println!("No data received for {} consecutive windows, moving to next window: {}",
