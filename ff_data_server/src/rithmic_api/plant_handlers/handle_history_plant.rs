@@ -20,12 +20,12 @@ use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType};
 use ff_standard_lib::standardized_types::new_types::{Price, Volume};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, Symbol};
-use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::api_client::RithmicBrokerageClient;
 
 #[allow(dead_code, unused)]
 pub async fn match_history_plant_id(
     template_id: i32, message_buf: Vec<u8>,
-    client: Arc<RithmicClient>,
+    client: Arc<RithmicBrokerageClient>,
 ) {
     const PLANT: SysInfraType = SysInfraType::HistoryPlant;
     match template_id {
@@ -161,7 +161,7 @@ pub async fn match_history_plant_id(
     }
 }
 
-async fn handle_candle(client: Arc<RithmicClient>, msg: TimeBar) {
+async fn handle_candle(client: Arc<RithmicBrokerageClient>, msg: TimeBar) {
     //println!("Time Bar (Template ID: 250) from Server: {:?}", msg);
     let time = match deserialize_candle_time(&msg) {
         None => return,

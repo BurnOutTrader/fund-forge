@@ -5,12 +5,12 @@ use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::
 use prost::{Message as ProstMessage};
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::api_client::RithmicBrokerageClient;
 
 #[allow(dead_code)]
 pub async fn match_repo_plant_id(
     template_id: i32, message_buf: Vec<u8>,
-    _client: Arc<RithmicClient>,
+    _client: Arc<RithmicBrokerageClient>,
 ) {
     const PLANT: SysInfraType = SysInfraType::RepositoryPlant;
     match template_id {

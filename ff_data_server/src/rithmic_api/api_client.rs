@@ -64,14 +64,15 @@ pub fn get_rithmic_market_data_system() -> RithmicSystem {
 }
 
 // We do not want to initialize here, that should be done at server launch, else a strategy could sign out the client of the correct server.
-pub fn get_rithmic_client(rithmic_system: &RithmicSystem) -> Option<Arc<RithmicClient>> {
+pub fn get_rithmic_client(rithmic_system: &RithmicSystem) -> Option<Arc<RithmicBrokerageClient>> {
     if let Some(client) = RITHMIC_CLIENTS.get(&rithmic_system) {
         return Some(client.value().clone())
     }
     None
 }
 
-pub struct RithmicClient {
+//todo make a seperate client for data, so we arent initializing pointless maps
+pub struct RithmicBrokerageClient {
     pub brokerage: Brokerage,
     pub data_vendor: DataVendor,
     pub system: RithmicSystem,
@@ -112,6 +113,7 @@ pub struct RithmicClient {
     //products
     pub products: DashMap<MarketType, Vec<Symbol>>,
 
+    //todo, since only 1 connection is used for data this could all be moved, we could have a rithmic data client and a rithmic broker client
     //subscribers
     pub tick_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
@@ -127,13 +129,13 @@ pub struct RithmicClient {
     pub historical_data_broadcaster: DashMap<(SymbolName, BaseDataType), broadcast::Sender<BaseDataEnum>>
 }
 
-impl RithmicClient {
+impl RithmicBrokerageClient {
     pub async fn new(
         system: RithmicSystem,
     ) -> Result<Self, FundForgeError> {
         let brokerage = Brokerage::Rithmic(system.clone());
         let data_vendor = DataVendor::Rithmic;
-        let credentials = RithmicClient::rithmic_credentials(&brokerage)?;
+        let credentials = RithmicBrokerageClient::rithmic_credentials(&brokerage)?;
         println!("Activating {} {} on Rithmic Server: {}, Template Version: {}", credentials.user, credentials.system_name, credentials.server_name, TEMPLATE_VERSION);
         let data_folder = get_data_folder();
         let server_domains_toml = PathBuf::from(data_folder)
@@ -543,26 +545,26 @@ impl RithmicClient {
 
     pub async fn rithmic_order_details(&self, _mode: StrategyMode, stream_name: StreamName, order: &Order) -> Result<CommonRithmicOrderDetails, OrderUpdateEvent> {
         match self.is_valid_order(&order) {
-            Err(e) => return Err(RithmicClient::reject_order(&order, format!("{}",e))),
+            Err(e) => return Err(RithmicBrokerageClient::reject_order(&order, format!("{}", e))),
             Ok(_) => {}
         }
 
         let quantity = match order.quantity_open.to_i32() {
             None => {
-                return Err(RithmicClient::reject_order(&order, "Invalid quantity".to_string()))
+                return Err(RithmicBrokerageClient::reject_order(&order, "Invalid quantity".to_string()))
             }
             Some(q) => q
         };
 
         let (symbol_code, exchange): (SymbolName, FuturesExchange) = {
             match get_exchange_by_symbol_name(&order.symbol_name) {
-                None => return Err(RithmicClient::reject_order(&order, format!("Exchange Not found with {} for {}",order.account.brokerage, order.symbol_name))),
+                None => return Err(RithmicBrokerageClient::reject_order(&order, format!("Exchange Not found with {} for {}", order.account.brokerage, order.symbol_name))),
                 Some(mut exchange) => {
                     exchange = match &order.exchange {
                         None => exchange,
                         Some(preset) => {
                             match FuturesExchange::from_string(preset) {
-                                Err(e) => return Err(RithmicClient::reject_order(&order, format!("Error parsing exchange string {} {}",preset, e))),
+                                Err(e) => return Err(RithmicBrokerageClient::reject_order(&order, format!("Error parsing exchange string {} {}", preset, e))),
                                 Ok(ex) => ex.clone()
                             }
                         }
@@ -571,7 +573,7 @@ impl RithmicClient {
                         None => {
                             let front_month = match self.front_month(stream_name, order.symbol_name.clone(), exchange.clone()).await {
                                 Ok(info) => info,
-                                Err(e) => return Err(RithmicClient::reject_order(&order, format!("{}",e)))
+                                Err(e) => return Err(RithmicBrokerageClient::reject_order(&order, format!("{}", e)))
                             };
                             (front_month.symbol_code, exchange)
                         }
@@ -590,12 +592,12 @@ impl RithmicClient {
                     RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
                     => "simulator".to_string(),
                     //RithmicSystem::Rithmic01 => "globex".to_string(),
-                    _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
+                    _ => return Err(RithmicBrokerageClient::reject_order(&order, format!("Order Route Not found with {} for {}", order.account.brokerage, order.symbol_name)))
                 }
             }
             Some(route_map) => {
                 let fcm_id = match &self.credentials.fcm_id {
-                    None => return Err(RithmicClient::reject_order(&order, "Server error: fcm_id not found".to_string())),
+                    None => return Err(RithmicBrokerageClient::reject_order(&order, "Server error: fcm_id not found".to_string())),
                     Some(id) => id.clone()
                 };
                 if let Some(exchange_route) = route_map.get(&(fcm_id.clone(), exchange.clone())) {
@@ -606,7 +608,7 @@ impl RithmicClient {
                         RithmicSystem::TheTradingPit | RithmicSystem::FundedFuturesNetwork | RithmicSystem::Bulenox | RithmicSystem::PropShopTrader | RithmicSystem::FourPropTrader | RithmicSystem::FastTrackTrading
                         => "simulator".to_string(),
                         //RithmicSystem::Rithmic01 => "globex".to_string(),
-                        _ => return Err(RithmicClient::reject_order(&order, format!("Order Route Not found with {} for {}",order.account.brokerage, order.symbol_name)))
+                        _ => return Err(RithmicBrokerageClient::reject_order(&order, format!("Order Route Not found with {} for {}", order.account.brokerage, order.symbol_name)))
                     }
                 }
             },
@@ -818,7 +820,7 @@ impl RithmicClient {
             return;
         }
 
-        let toml_files = RithmicClient::get_rithmic_tomls();
+        let toml_files = RithmicBrokerageClient::get_rithmic_tomls();
         if toml_files.is_empty() {
             return;
         }
@@ -862,7 +864,7 @@ impl RithmicClient {
                         running_clone.store(false, Ordering::SeqCst);
                     });
 
-                    match RithmicClient::new(system).await {
+                    match RithmicBrokerageClient::new(system).await {
                         Ok(client) => {
                             let client = Arc::new(client);
 

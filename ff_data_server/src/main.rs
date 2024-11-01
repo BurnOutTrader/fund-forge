@@ -16,7 +16,7 @@ use tokio::sync::{broadcast, OnceCell};
 use tokio_rustls::server::TlsStream;
 use server_features::database::{HybridStorage, DATA_STORAGE};
 use crate::oanda_api::api_client::{oanda_init};
-use crate::rithmic_api::api_client::{RithmicClient, RITHMIC_CLIENTS};
+use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 
 pub mod request_handlers;
@@ -150,7 +150,7 @@ async fn main() -> io::Result<()> {
         .with_single_cert(certs, key)
         .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err))?;
 
-    RithmicClient::init_rithmic_apis(options.clone()).await;
+    RithmicBrokerageClient::init_rithmic_apis(options.clone()).await;
     oanda_init(options.clone()).await;
 
     run_servers(config, options.clone());

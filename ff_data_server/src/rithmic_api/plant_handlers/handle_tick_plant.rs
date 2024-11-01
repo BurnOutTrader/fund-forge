@@ -23,13 +23,13 @@ use ff_standard_lib::standardized_types::subscriptions::Symbol;
 use ff_standard_lib::standardized_types::symbol_info::FrontMonthInfo;
 use ff_standard_lib::standardized_types::books::BookLevel;
 use ff_standard_lib::StreamName;
-use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 
 #[allow(unused, dead_code)]
 pub async fn match_ticker_plant_id(
     template_id: i32, message_buf: Vec<u8>,
-    client: Arc<RithmicClient>,
+    client: Arc<RithmicBrokerageClient>,
 ) {
     const PLANT: SysInfraType = SysInfraType::OrderPlant;
     match template_id {
@@ -293,7 +293,7 @@ pub async fn match_ticker_plant_id(
     }
 }
 
-async fn handle_tick(client: Arc<RithmicClient>, msg: LastTrade) {
+async fn handle_tick(client: Arc<RithmicBrokerageClient>, msg: LastTrade) {
     let time = deserialize_time(&msg);
    // println!("{:?}", msg);
     let volume = match msg.trade_size {
@@ -393,7 +393,7 @@ fn deserialize_time(msg: &LastTrade) -> DateTime<Utc> {
         })
 }
 
-async fn handle_quote(client: Arc<RithmicClient>, msg: BestBidOffer) {
+async fn handle_quote(client: Arc<RithmicBrokerageClient>, msg: BestBidOffer) {
     let time = deserialize_quote_time(&msg);
     let symbol = match msg.symbol {
         None => return,

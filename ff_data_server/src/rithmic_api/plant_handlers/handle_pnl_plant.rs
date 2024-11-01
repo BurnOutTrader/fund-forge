@@ -19,7 +19,7 @@ use ff_standard_lib::standardized_types::enums::PositionSide;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::Position;
 use ff_standard_lib::standardized_types::subscriptions::{SymbolCode};
-use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
 use crate::rithmic_api::products::get_symbol_info;
@@ -32,7 +32,7 @@ lazy_static! {
 #[allow(dead_code, unused)]
 pub async fn match_pnl_plant_id(
     template_id: i32, message_buf: Vec<u8>,
-    client: Arc<RithmicClient>
+    client: Arc<RithmicBrokerageClient>
 ) {
     const PLANT: SysInfraType = SysInfraType::PnlPlant;
     match template_id {
@@ -359,7 +359,7 @@ fn update_position(
     symbol_code: &SymbolCode,
     msg_buy_qty: Option<i32>,
     msg_sell_qty: Option<i32>,
-    client: &Arc<RithmicClient>
+    client: &Arc<RithmicBrokerageClient>
 ) -> (Option<PositionSide>, i32) {
     match (msg_buy_qty, msg_sell_qty) {
         (Some(buy_quantity), None) if buy_quantity > 0 => {

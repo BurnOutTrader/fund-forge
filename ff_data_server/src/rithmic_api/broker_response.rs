@@ -12,13 +12,13 @@ use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEve
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
-use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestCancelAllOrders, RequestCancelOrder, RequestExitPosition, RequestModifyOrder};
 use crate::rithmic_api::products::{find_base_symbol, get_available_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
 
 #[async_trait]
-impl BrokerApiResponse for RithmicClient {
+impl BrokerApiResponse for RithmicBrokerageClient {
     async fn symbol_names_response(&self, _mode: StrategyMode, _time: Option<DateTime<Utc>>, _stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         let symbol_names = get_available_symbol_names();
 

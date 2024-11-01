@@ -13,7 +13,7 @@ use prost::Message as ProstMessage;
 use tokio::time::sleep;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use futures::stream::{SplitSink, SplitStream};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -32,7 +32,7 @@ use crate::rithmic_api::plant_handlers::handle_tick_plant::match_ticker_plant_id
 use crate::rithmic_api::plant_handlers::reconnect::attempt_reconnect;
 
 pub fn handle_rithmic_responses(
-    client: Arc<RithmicClient>,
+    client: Arc<RithmicBrokerageClient>,
     mut reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     plant: SysInfraType,
     running: Arc<AtomicBool>

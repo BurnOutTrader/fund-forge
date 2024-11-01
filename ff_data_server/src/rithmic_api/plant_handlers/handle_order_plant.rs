@@ -19,7 +19,7 @@ use ff_standard_lib::standardized_types::new_types::{Price, Volume};
 use ff_standard_lib::standardized_types::orders::{OrderId, OrderState, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::StreamName;
 use crate::request_handlers::RESPONSE_SENDERS;
-use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
@@ -36,7 +36,7 @@ lazy_static! {
 #[allow(unused, dead_code)]
 pub async fn match_order_plant_id(
     template_id: i32, message_buf: Vec<u8>,
-    client: Arc<RithmicClient>,
+    client: Arc<RithmicBrokerageClient>,
 ) {
     const PLANT: SysInfraType = SysInfraType::OrderPlant;
     match template_id {

@@ -6,10 +6,10 @@ use tokio::net::TcpStream;
 use std::time::Duration;
 use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc, Weekday};
 use tokio::time::sleep;
-use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::api_client::RithmicBrokerageClient;
 
 pub(crate) async fn attempt_reconnect(
-    client: &Arc<RithmicClient>,
+    client: &Arc<RithmicBrokerageClient>,
     plant: SysInfraType,
 ) -> Option<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>> {
     let mut delay = Duration::from_secs(5); // Initial retry delay

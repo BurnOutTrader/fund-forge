@@ -14,7 +14,7 @@ use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
 use tokio::time::{timeout, Instant};
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use crate::rithmic_api::api_client::RithmicClient;
+use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
 use crate::server_features::database::DATA_STORAGE;
@@ -22,7 +22,7 @@ use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
 #[allow(dead_code)]
 #[async_trait]
-impl VendorApiResponse for RithmicClient {
+impl VendorApiResponse for RithmicBrokerageClient {
     async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, _time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse{
         const SYSTEM: SysInfraType = SysInfraType::TickerPlant;
         match mode {
