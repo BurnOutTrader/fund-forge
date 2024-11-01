@@ -11,7 +11,6 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
-use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
@@ -36,12 +35,12 @@ async fn main() {
         Australia::Sydney,
         Duration::hours(1),
         vec![
-            DataSubscription::new(
+            DataSubscription::new_custom(
                 symbol_name.clone(),
                 DataVendor::Rithmic,
-                Resolution::Ticks(1),
-                BaseDataType::Ticks,
+                Resolution::Seconds(15),
                 MarketType::Futures(FuturesExchange::CME),
+                CandleType::CandleStick
             ),
         ],
         false,
@@ -74,8 +73,8 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     match base_data {
                         BaseDataEnum::Tick(tick) => {
-                            let msg = format!("{} {} Tick: {}, {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume);
-                            println!("{}", msg.as_str().cyan());
+                            //let msg = format!("{} {} Tick: {}, {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume);
+                            //println!("{}", msg.as_str().cyan());
                         }
                         BaseDataEnum::Candle(candle) => {
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
