@@ -413,6 +413,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 println!("Rithmic: Saving {} data points", save_data.len());
                 if let Err(e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
                     eprintln!("Failed to save data: {}", e);
+                    data_map = BTreeMap::new();
+                    continue 'main_loop;
                 }
                 data_map = BTreeMap::new();
             }
