@@ -411,30 +411,35 @@ impl VendorApiResponse for RithmicBrokerageClient {
             let mut data_map = Vec::new();
             // Receive loop with timeout
             loop {
-                match timeout(core::time::Duration::from_secs(2), receiver.recv()).await {
+                match timeout(core::time::Duration::from_secs(5), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
                         last_received = Instant::now();
                         last_data = data.time_utc().timestamp();
-                        if data.time_utc() > latest_date {
-                            latest_date = data.time_utc();
-                            end_time = (latest_date + Duration::hours(2)).timestamp();
-                        }
+                        latest_date = data.time_utc();
                         data_map.push(data);
                     },
                     Ok(Err(e)) => {
                         println!("Broadcast channel error: {}", e);
                         break;
                     },
-                    Err(_) => {
-                        // No data received for 5 seconds
+                    Err(_) => { // Timeout case
                         if !had_data {
-                            println!("No data received for 2 seconds");
+                            // If no data received at all, move window forward
+                            println!("No data received for 5 seconds");
                             last_data = end_time;
-                            end_time = last_data + Duration::hours(2).num_seconds();  // Calculate from last_data instead
+                            match base_data_type {
+                                BaseDataType::Ticks => {
+                                    end_time = (latest_date + Duration::minutes(15)).timestamp();
+                                }
+                                BaseDataType::Candles => {
+                                    end_time = (latest_date + Duration::hours(1)).timestamp();
+                                }
+                                _ => return
+                            }
                             continue 'main_loop;
                         }
-                        // If we had data but now timed out, check if we're caught up
+                        // If we had some data but now timed out, check if caught up
                         let current_time = Utc::now();
                         let time_difference = current_time.timestamp() - latest_date.timestamp();
 
@@ -442,7 +447,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                             println!("Caught up to current time");
                             return;
                         }
-                        // If not caught up, break inner loop to request next batch
+                        // Not caught up, break to request next batch
                         break;
                     }
                 }
@@ -459,7 +464,15 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 let current_time = Utc::now();
                 let time_difference = current_time.timestamp() - latest_date.timestamp();
                 last_data = end_time;
-                end_time = last_data + Duration::hours(2).num_seconds();  // Calculate from last_data instead
+                match base_data_type {
+                    BaseDataType::Ticks => {
+                        end_time = (latest_date + Duration::minutes(15)).timestamp();
+                    }
+                    BaseDataType::Candles => {
+                        end_time = (latest_date + Duration::hours(1)).timestamp();
+                    }
+                    _ => return
+                }
                 if time_difference.abs() <= 1 {
                     println!("Caught up to current time");
                     return;
