@@ -357,7 +357,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut end_time = (latest_date + Duration::hours(2)).timestamp();
 
         'main_loop: loop {
-            println!("Requesting Rithmic data for {} from {} to {}", symbol_name, last_data, end_time);
+            println!("Requesting Rithmic data for {} from {} to {}", symbol_name, DateTime::from_timestamp(last_data, 0).unwrap(), DateTime::from_timestamp(end_time, 0).unwrap());
             // Send the request based on data type
             match base_data_type {
                 BaseDataType::Candles => {
