@@ -13,6 +13,7 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use tokio::sync::broadcast;
 use tokio::time::{timeout};
+use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};
@@ -357,7 +358,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         };
 
         let mut last_save_day = window_start.day();
-        let mut data_map = Vec::new();
+        let mut data_map = BTreeMap::new();
         'main_loop: loop {
             // Calculate window end based on start time
             let window_end = match base_data_type {
@@ -384,7 +385,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         bar_type_period: Some(1),
                         start_index: Some(window_start.timestamp() as i32),
                         finish_index: Some(window_end.timestamp() as i32),
-                        user_max_count: Some(5000),
+                        user_max_count: None,
                         direction: Some(Direction::First.into()),
                         time_order: Some(TimeOrder::Forwards.into()),
                         resume_bars: Some(false),
@@ -405,7 +406,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         bar_type_specifier: Some("1".to_string()),
                         start_index: Some(window_start.timestamp() as i32),
                         finish_index: Some(window_end.timestamp() as i32),
-                        user_max_count: Some(5000),
+                        user_max_count: None,
                         custom_session_open_ssm: None,
                         custom_session_close_ssm: None,
                         direction: Some(Direction::First.into()),
@@ -422,11 +423,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Receive loop with timeout
             loop {
-                match timeout(std::time::Duration::from_millis(500), receiver.recv()).await {
+                match timeout(std::time::Duration::from_secs(2), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
-                        latest_data_time = data.time_utc();
-                        data_map.push(data);
+                        println!("Received data: {}", data);
+                        data_map.insert(data.time_utc(), data);
                     },
                     Ok(Err(e)) => {
                         println!("Broadcast channel error: {}", e);
@@ -439,10 +440,19 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
 
             if !data_map.is_empty() && latest_data_time.day() != last_save_day {
-                println!("Saving {} data points", data_map.len());
-                data_storage.save_data_bulk(data_map).await;
-                data_map = Vec::new();
+                // Now data_map is sorted by time
+                if let Some((&last_time, _)) = data_map.last_key_value() {
+                    latest_data_time = last_time;
+                }
+
+                // For saving, flatten into vec
+                let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
+
+                println!("Saving {} data points", save_data.len());
+                data_storage.save_data_bulk(save_data).await;
                 last_save_day = latest_data_time.day();
+
+                data_map = BTreeMap::new();
             }
 
             // Update window_start for next iteration
