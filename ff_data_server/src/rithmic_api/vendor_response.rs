@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc, Weekday};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::server_side_datavendor::VendorApiResponse;
@@ -17,7 +17,6 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::market_maps::product_trading_hours::get_futures_trading_hours;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_tick_bar_replay::{Direction, TimeOrder};
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
 use crate::server_features::database::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
@@ -408,12 +407,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
 
-            let mut had_data = false;
             // Receive loop with timeout
             'msg_loop: loop {
                 match timeout(std::time::Duration::from_secs(1), receiver.recv()).await {
                     Ok(Ok(data)) => {
-                        had_data = true;
                         data_map.insert(data.time_utc(), data);
                     },
                     Ok(Err(e)) => {
@@ -427,7 +424,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
 
             if let Some((&last_time, _)) = data_map.last_key_value() {
-                window_start = last_time.clone();
+                if last_time != window_start {
+                    window_start = last_time.clone();
+                } else {
+                    window_start = window_end;
+                }
                 let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
                 println!("Rithmic: Saving {} data points", save_data.len());
                 if let Err(e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
