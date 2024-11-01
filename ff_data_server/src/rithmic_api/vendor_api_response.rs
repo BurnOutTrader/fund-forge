@@ -338,6 +338,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
         todo!()
     }
 
+    //todo # start date is optional { symbol_name = "MNQ", base_data_type = "Ticks", start_date = "01-01-2024"},
+    //     # If no start date is input we will start from the earliest date available,
+    //     # If you change to an earlier date the server update to the new date. this is not yet implemented
+    //      we would need to run the download fn twice, once to update the earlier data to the first current saved time, then again to get the rest of the data.
     async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         let symbol_name = symbol.name.clone();

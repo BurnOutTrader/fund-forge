@@ -600,5 +600,7 @@ struct DownloadSymbols {
 #[derive(Deserialize)]
 struct DownloadConfig {
     symbol_name: SymbolName,
-    base_data_type: BaseDataType
+    base_data_type: BaseDataType,
+    #[allow(unused)]
+    start_date: Option<NaiveDate>,
 }

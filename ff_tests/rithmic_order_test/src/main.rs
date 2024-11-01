@@ -11,6 +11,7 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
@@ -27,20 +28,20 @@ async fn main() {
     symbol_code.push_str("Z4");
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::LivePaperTrading,
+        StrategyMode::Backtest,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2024, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2020, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2020, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(1),
         vec![
-            DataSubscription::new_custom(
+            DataSubscription::new(
                 symbol_name.clone(),
                 DataVendor::Rithmic,
-                Resolution::Seconds(1),
+                Resolution::Ticks(1),
+                BaseDataType::Ticks,
                 MarketType::Futures(FuturesExchange::CME),
-                CandleType::CandleStick
             ),
         ],
         false,
@@ -72,6 +73,10 @@ pub async fn on_data_received(
             StrategyEvent::TimeSlice(time_slice) => {
                 for base_data in time_slice.iter() {
                     match base_data {
+                        BaseDataEnum::Tick(tick) => {
+                            let msg = format!("{} {} Tick: {}, {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume);
+                            println!("{}", msg.as_str().cyan());
+                        }
                         BaseDataEnum::Candle(candle) => {
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
                             if candle.is_closed == true {
