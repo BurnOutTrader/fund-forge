@@ -88,8 +88,8 @@ pub async fn match_history_plant_id(
                     None => return,
                 };
                 const BASE_DATA_TYPE: BaseDataType = BaseDataType::Candles;
-                if let Some(broadcaster) = client.historical_data_broadcaster.get(&(candle.symbol.name.clone(), BASE_DATA_TYPE)) {
-                    match broadcaster.value().send(BaseDataEnum::Candle(candle)) {
+                if let Some(sender) = client.historical_data_senders.get(&(candle.symbol.name.clone(), BASE_DATA_TYPE)) {
+                    match sender.value().send(BaseDataEnum::Candle(candle)).await {
                         Ok(_) => {}
                         Err(_) => {}
                     }
@@ -113,8 +113,8 @@ pub async fn match_history_plant_id(
                     None => return,
                 };
                 const BASE_DATA_TYPE: BaseDataType = BaseDataType::Ticks;
-                if let Some(broadcaster) = client.historical_data_broadcaster.get(&(tick.symbol.name.clone(), BASE_DATA_TYPE)) {
-                    match broadcaster.value().send(BaseDataEnum::Tick(tick)) {
+                if let Some(sender) = client.historical_data_senders.get(&(tick.symbol.name.clone(), BASE_DATA_TYPE)) {
+                    match sender.value().send(BaseDataEnum::Tick(tick)).await {
                         Ok(_) => {}
                         Err(_) => {}
                     }

@@ -12,7 +12,7 @@ use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, St
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, mpsc};
 use tokio::time::{timeout};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
@@ -346,15 +346,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
             None => return Err(FundForgeError::ClientSideErrorDebug(format!("Exchange not found for symbol: {}", symbol_name)))
         };
 
-        // Create or get broadcaster with larger buffer to prevent lagging
-        let mut receiver = match self.historical_data_broadcaster.get(&(symbol_name.clone(), base_data_type.clone())) {
-            Some(broadcaster) => broadcaster.value().subscribe(),
-            None => {
-                let (sender, receiver) = broadcast::channel(1000000);
-                self.historical_data_broadcaster.insert((symbol_name.clone(), base_data_type.clone()), sender);
-                receiver
-            }
-        };
+        let (sender, mut receiver) = mpsc::channel(1000000);
+        self.historical_data_senders.insert((symbol_name.clone(), base_data_type.clone()), sender);
 
         let earliest_rithmic_data = match base_data_type {
             BaseDataType::Ticks | BaseDataType::Candles => {
@@ -386,11 +379,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
             // Receive loop with timeout
             'msg_loop: loop {
                 match timeout(std::time::Duration::from_millis(200), receiver.recv()).await {
-                    Ok(Ok(data)) => {
+                    Ok(Some(data)) => {
                         data_map.insert(data.time_utc(), data);
                     },
-                    Ok(Err(e)) => {
-                        println!("Broadcast channel error: {}", e);
+                    Ok(None) => {
+                        // Channel closed
+                        println!("Channel closed");
                         break 'main_loop;
                     },
                     Err(_) => { // Timeout case
@@ -429,6 +423,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 break 'main_loop;
             }
         }
+        self.historical_data_senders.remove(&(symbol_name, base_data_type));
         Ok(())
     }
 }

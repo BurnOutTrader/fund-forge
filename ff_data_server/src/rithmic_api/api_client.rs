@@ -52,6 +52,7 @@ use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_new_ord
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use once_cell::sync::OnceCell;
+use tokio::sync::mpsc::Sender;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::{BarType, Direction, TimeOrder};
 
@@ -128,7 +129,7 @@ pub struct RithmicBrokerageClient {
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
 
     pub order_broadcaster: broadcast::Sender<DataServerResponse>,
-    pub historical_data_broadcaster: DashMap<(SymbolName, BaseDataType), broadcast::Sender<BaseDataEnum>>
+    pub historical_data_senders: DashMap<(SymbolName, BaseDataType), Sender<BaseDataEnum>>
 }
 
 impl RithmicBrokerageClient {
@@ -190,7 +191,7 @@ impl RithmicBrokerageClient {
             open_orders: Default::default(),
             id_to_basket_id_map: Default::default(),
             pending_order_updates: Default::default(),
-            historical_data_broadcaster: Default::default(),
+            historical_data_senders: Default::default(),
         };
         Ok(client)
     }
