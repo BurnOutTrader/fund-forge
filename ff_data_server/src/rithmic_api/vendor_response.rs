@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestMarketDataUpdate, RequestProductCodes, RequestTickBarReplay, RequestTimeBarReplay, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
@@ -325,11 +325,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
             None => return
         };
 
-        // Create or get broadcaster with larger buffer to prevent lagging
         let mut receiver = match self.historical_data_broadcaster.get(&(symbol_name.clone(), base_data_type.clone())) {
             Some(broadcaster) => broadcaster.value().subscribe(),
             None => {
-                let (sender, receiver) = broadcast::channel(5000); // Increased buffer size
+                let (sender, receiver) = broadcast::channel(5000);
                 self.historical_data_broadcaster.insert((symbol_name.clone(), base_data_type.clone()), sender);
                 receiver
             }
@@ -337,12 +336,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let earliest_rithmic_data = match base_data_type {
             BaseDataType::Ticks => {
-                let utc_time_string = "2020-01-02 00:00:00.000000";
-                let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
-                DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
+                Utc::now() - Duration::days(31)
             }
             BaseDataType::Candles => {
-                let utc_time_string = "2020-01-02 00:00:00.000000";
+                let utc_time_string = "2024-01-01 00:00:00.000000";
                 let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
                 DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
             }
@@ -356,19 +353,17 @@ impl VendorApiResponse for RithmicBrokerageClient {
             Err(_e) => earliest_rithmic_data
         };
 
-        let mut last_save_day = window_start.day();
         'main_loop: loop {
-            // Calculate window end based on start time
-            let window_end = match base_data_type {
-                BaseDataType::Ticks => window_start + Duration::minutes(15),
-                BaseDataType::Candles => window_start + Duration::hours(1),
+            let window_duration = match base_data_type {
+                BaseDataType::Ticks => Duration::minutes(15),
+                BaseDataType::Candles => Duration::hours(1),
                 _ => return
             };
+            let window_end = window_start + window_duration;
 
             println!("Requesting Rithmic data for {} from {} to {}",
                      symbol_name, window_start, window_end);
 
-            // Send the request based on data type
             match base_data_type {
                 BaseDataType::Candles => {
                     if resolution > Resolution::Seconds(1) {
@@ -417,18 +412,20 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
 
             let mut had_data = false;
-            let mut latest_data_time = window_start;
             let mut data_map = Vec::with_capacity(5000);
+            let mut latest_data_time = window_start;
 
             // Receive loop with timeout
             loop {
                 match timeout(std::time::Duration::from_secs(5), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
-                        latest_data_time = data.time_utc();
+                        let data_time = data.time_utc();
+                        if data_time > latest_data_time {
+                            latest_data_time = data_time;
+                        }
                         data_map.push(data);
 
-                        // Break if we've collected enough data to avoid channel lag
                         if data_map.len() >= 5000 {
                             break;
                         }
@@ -437,24 +434,23 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         println!("Broadcast channel error: {}", e);
                         break;
                     },
-                    Err(_) => { // Timeout case
+                    Err(_) => {
                         break;
                     }
                 }
             }
 
-            if !data_map.is_empty() && latest_data_time.day() != last_save_day {
+            if !data_map.is_empty() {
                 println!("Saving {} data points", data_map.len());
                 data_storage.save_data_bulk(data_map).await;
-                last_save_day = latest_data_time.day();
             }
 
-            // Update window_start for next iteration
+            // Update window_start based on received data
             if had_data {
-                // Move window to just after the latest data we received
-                window_start = latest_data_time + std::time::Duration::from_secs(1);
+                // Use the latest actual data time for the next window
+                window_start = latest_data_time;
             } else {
-                // If no data received, move window forward
+                // If no data received, just move the window forward
                 window_start = window_end;
             }
 
@@ -465,7 +461,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 return;
             }
 
-            // Add a small delay between requests to prevent overwhelming the system
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
