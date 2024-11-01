@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
@@ -397,22 +397,29 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 }
             }
 
+            let mut is_saving = false;
             if let Some((&last_time, _)) = data_map.last_key_value() {
+                if last_time.day() != window_start.day() {
+                    is_saving = true;
+                }
                 if last_time != window_start {
                     window_start = last_time.clone();
                 } else {
                     window_start = window_end;
                 }
+            } else {
+                // If no new data, advance window to avoid re-requesting the same interval
+                window_start = window_end;
+            };
+
+            if is_saving {
                 let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
                 println!("Rithmic: Saving {} data points", save_data.len());
                 if let Err(e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
                     eprintln!("Failed to save data: {}", e);
                 }
                 data_map = BTreeMap::new();
-            } else {
-                // If no new data, advance window to avoid re-requesting the same interval
-                window_start = window_end;
-            };
+            }
 
             // Check if we've caught up to the desired end or current time
             if (Utc::now() - window_end).num_seconds().abs() <= 1 {
