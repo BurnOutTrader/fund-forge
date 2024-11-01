@@ -519,7 +519,10 @@ impl HybridStorage {
                                         BaseDataType::QuoteBars => Resolution::Seconds(5),
                                         _ => return,
                                     };
-                                    client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution).await;
+                                    match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution).await {
+                                        Ok(_) => println!("Oanda Update: Successfully updated data for: {}", symbol_config.symbol_name),
+                                        Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
+                                    }
                                 }));
                             }
                         }
@@ -572,7 +575,10 @@ impl HybridStorage {
                                     _ => return,
                                 };
                                 println!("Updating Rithmic Data for: {}", symbol_config.symbol_name);
-                                client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution).await;
+                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution).await {
+                                    Ok(_) => println!("Rithmic Update: Successfully updated data for: {}", symbol_config.symbol_name),
+                                    Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
+                                }
                            }));
                         }
                     }

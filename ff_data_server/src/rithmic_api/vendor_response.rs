@@ -337,12 +337,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
         todo!()
     }
 
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) {
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         let symbol_name = symbol.name.clone();
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
             Some(exchange) => exchange,
-            None => return
+            None => return Err(FundForgeError::ClientSideErrorDebug(format!("Exchange not found for symbol: {}", symbol_name)))
         };
 
         // Create or get broadcaster with larger buffer to prevent lagging
@@ -361,7 +361,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
                 DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
             }
-            _ => return
+            _ => return Err(FundForgeError::ClientSideErrorDebug(format!("Unsupported base data type: {}", base_data_type)))
         };
 
         let data_storage = DATA_STORAGE.get().unwrap();
@@ -427,5 +427,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 break 'main_loop;
             }
         }
+        Ok(())
     }
 }

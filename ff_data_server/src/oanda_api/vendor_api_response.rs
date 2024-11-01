@@ -158,7 +158,7 @@ impl VendorApiResponse for OandaClient {
     }
 
     #[allow(unused)]
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) {
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) -> Result<(), FundForgeError>  {
         println!("Downloading historical data for: {}", symbol.name);
         let earliest_oanda_data = || {
             let utc_time_string = "2005-01-01 00:00:00.000000";
@@ -238,5 +238,6 @@ impl VendorApiResponse for OandaClient {
             }
         }
         println!("Oanda: Completed Download of data for: {}", symbol.name);
+        Ok(())
     }
 }
