@@ -47,11 +47,13 @@ use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 use crate::rithmic_api::client_base::api_base::{RithmicApiClient, TEMPLATE_VERSION};
 use crate::rithmic_api::client_base::credentials::RithmicCredentials;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTradeRoutes};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTickBarReplay, RequestTimeBarReplay, RequestTradeRoutes};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_new_order::{OrderPlacement, PriceType, TransactionType};
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use once_cell::sync::OnceCell;
+use ff_standard_lib::standardized_types::resolution::Resolution;
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::{BarType, Direction, TimeOrder};
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicBrokerageClient>> = DashMap::with_capacity(16);
@@ -928,6 +930,58 @@ impl RithmicBrokerageClient {
                 subscribe_for_updates: Some(true),
             };
             api.send_message(&SysInfraType::OrderPlant, routes).await;
+        }
+    }
+
+
+    pub(crate) async fn send_replay_request(&self, base_data_type: BaseDataType, resolution: Resolution, symbol_name: SymbolName, exchange: FuturesExchange, window_start: DateTime<Utc>, window_end: DateTime<Utc>) {
+        // Send the request based on data type
+        const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
+        match base_data_type {
+            BaseDataType::Candles => {
+                if resolution > Resolution::Seconds(1) {
+                    return
+                }
+                let req = RequestTimeBarReplay {
+                    template_id: 202,
+                    user_msg: vec![],
+                    symbol: Some(symbol_name.clone()),
+                    exchange: Some(exchange.to_string()),
+                    bar_type: Some(BarType::SecondBar.into()),
+                    bar_type_period: Some(1),
+                    start_index: Some(window_start.timestamp() as i32),
+                    finish_index: Some(window_end.timestamp() as i32),
+                    user_max_count: None,
+                    direction: Some(Direction::First.into()),
+                    time_order: Some(TimeOrder::Forwards.into()),
+                    resume_bars: Some(true),
+                };
+                self.send_message(&SYSTEM, req).await;
+            }
+            BaseDataType::Ticks => {
+                if resolution != Resolution::Ticks(1) {
+                    return
+                }
+                let req = RequestTickBarReplay {
+                    template_id: 206,
+                    user_msg: vec![],
+                    symbol: Some(symbol_name.clone()),
+                    exchange: Some(exchange.to_string()),
+                    bar_type: Some(request_tick_bar_replay::BarType::TickBar.into()),
+                    bar_sub_type: Some(1),
+                    bar_type_specifier: Some("1".to_string()),
+                    start_index: Some(window_start.timestamp() as i32),
+                    finish_index: Some(window_end.timestamp() as i32),
+                    user_max_count: None,
+                    custom_session_open_ssm: None,
+                    custom_session_close_ssm: None,
+                    direction: Some(request_tick_bar_replay::Direction::First.into()),
+                    time_order: Some(request_tick_bar_replay::TimeOrder::Forwards.into()),
+                    resume_bars: Some(true),
+                };
+                self.send_message(&SYSTEM, req).await;
+            }
+            _ => return
         }
     }
 }
