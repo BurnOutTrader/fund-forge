@@ -199,6 +199,7 @@ impl VendorApiResponse for OandaClient {
             let candles_vec: Vec<_> = candles.into_iter().collect();
             let mut i = 0;
 
+            let mut attempts = 0;
             while i < candles_vec.len() {
                 let price_data = &candles_vec[i];
                 let is_closed = price_data["complete"].as_bool().unwrap();
@@ -234,13 +235,12 @@ impl VendorApiResponse for OandaClient {
                 let new_bar_time = bar.time_utc();
                 if last_bar_time.day() != new_bar_time.day() && !new_data.is_empty() {
                     let data_vec: Vec<BaseDataEnum> = new_data.values().map(|x| x.clone()).collect();
-
                     // Retry loop for saving data
                     const MAX_RETRIES: u32 = 3;
                     let mut retry_count = 0;
-                    let save_result = loop {
+                    let save_result = 'save_loop: loop {
                         match DATA_STORAGE.get().unwrap().save_data_bulk(data_vec.clone()).await {
-                            Ok(_) => break Ok(()),
+                            Ok(_) => break 'save_loop Ok(()),
                             Err(e) => {
                                 retry_count += 1;
                                 if retry_count >= MAX_RETRIES {

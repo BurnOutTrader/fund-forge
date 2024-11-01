@@ -366,6 +366,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         };
 
         let mut data_map = BTreeMap::new();
+        let mut save_attempts = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + Duration::hours(4);
@@ -415,8 +416,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 if let Err(e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
                     eprintln!("Failed to save data: {}", e);
                     window_start = back_up_time;
-                    continue 'main_loop;
+                    if save_attempts < 3 {
+                        save_attempts += 1;
+                        continue 'main_loop;
+                    }
                 }
+                save_attempts = 0;
                 data_map = BTreeMap::new();
             }
 
