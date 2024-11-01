@@ -482,7 +482,7 @@ impl HybridStorage {
 
     pub fn update_history(&self) {
         let options = self.options.clone();
-        let download_tasks = self.download_tasks.clone();
+        //let download_tasks = self.download_tasks.clone();
         task::spawn(async move {
             let mut tasks = vec![];
             if options.disable_oanda_server == 0 {

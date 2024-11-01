@@ -383,7 +383,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Receive loop with timeout
             'msg_loop: loop {
-                match timeout(std::time::Duration::from_secs(1), receiver.recv()).await {
+                match timeout(std::time::Duration::from_millis(200), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         data_map.insert(data.time_utc(), data);
                     },
