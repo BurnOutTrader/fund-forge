@@ -339,7 +339,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 Utc::now() - Duration::days(31)
             }
             BaseDataType::Candles => {
-                let utc_time_string = "2011-01-01 00:00:00.000000";
+                let utc_time_string = "2024-01-01 00:00:00.000000";
                 let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
                 DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
             }
