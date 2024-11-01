@@ -25,7 +25,7 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::oanda_api::api_client::OANDA_CLIENT;
-use crate::rithmic_api::api_client::RITHMIC_CLIENTS;
+use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS};
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::ServerLaunchOptions;
@@ -552,7 +552,7 @@ impl HybridStorage {
                         }
                     };
 
-                    if let Some(client) = RITHMIC_CLIENTS.iter().nth(0) {
+                    if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
                         let symbols = symbol_configs.symbols;
                         println!("Rithmic Update: Found {} symbols to update", symbols.len());
                         for symbol_config in symbols {

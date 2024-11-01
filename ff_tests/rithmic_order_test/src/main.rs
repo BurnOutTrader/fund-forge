@@ -27,7 +27,7 @@ async fn main() {
     symbol_code.push_str("Z4");
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Live,
+        StrategyMode::LivePaperTrading,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),

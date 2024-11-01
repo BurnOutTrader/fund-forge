@@ -51,9 +51,16 @@ use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestAccount
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_new_order::{OrderPlacement, PriceType, TransactionType};
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
+use once_cell::sync::OnceCell;
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicClient>> = DashMap::with_capacity(16);
+}
+
+static MARKET_DATA_SYSTEM: OnceCell<RithmicSystem> = OnceCell::new();
+
+pub fn get_rithmic_market_data_system() -> RithmicSystem {
+    MARKET_DATA_SYSTEM.get().unwrap().clone()
 }
 
 // We do not want to initialize here, that should be done at server launch, else a strategy could sign out the client of the correct server.
@@ -224,7 +231,6 @@ impl RithmicClient {
     }
 
     pub async fn connect_plant(&self, system: SysInfraType) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, FundForgeError> {
-
         match self.client.connect_and_login(system.clone()).await {
             Ok(r) => {
                 let (writer, receiver) = r.split();
@@ -822,19 +828,24 @@ impl RithmicClient {
             toml_files.iter()
                 .find(|file| {
                     matches!(
-                    RithmicSystem::from_file_string(file),
-                    Some(RithmicSystem::Rithmic04Colo)
-                )
+                RithmicSystem::from_file_string(file),
+                Some(RithmicSystem::Rithmic04Colo)
+            )
                 })
                 .or_else(|| toml_files.iter().find(|file| {
                     matches!(
-                    RithmicSystem::from_file_string(file),
-                    Some(RithmicSystem::Rithmic01)
-                )
+                RithmicSystem::from_file_string(file),
+                Some(RithmicSystem::Rithmic01)
+            )
                 }))
                 .or_else(|| toml_files.first())
                 .expect("We checked for empty earlier")
                 .clone()
+        );
+
+        MARKET_DATA_SYSTEM.get_or_init(||
+            RithmicSystem::from_file_string(&market_data_system)
+                .expect("Failed to get RithmicSystem from file string")
         );
 
         let init_tasks = toml_files.into_iter().filter_map(|file| {
