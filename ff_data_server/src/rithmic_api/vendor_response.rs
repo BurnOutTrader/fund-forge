@@ -411,7 +411,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             let mut data_map = Vec::new();
             // Receive loop with timeout
             loop {
-                match timeout(core::time::Duration::from_secs(5), receiver.recv()).await {
+                match timeout(core::time::Duration::from_secs(2), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
                         last_received = Instant::now();
@@ -429,7 +429,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     Err(_) => {
                         // No data received for 5 seconds
                         if !had_data {
-                            println!("No data received for 10 seconds");
+                            println!("No data received for 2 seconds");
                             last_data = end_time;
                             end_time = last_data + Duration::hours(2).num_seconds();  // Calculate from last_data instead
                             continue 'main_loop;
