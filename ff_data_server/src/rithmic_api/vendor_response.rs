@@ -381,7 +381,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                      symbol_name, window_start, window_end);
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            sleep(std::time::Duration::from_millis(50)).await;
+            sleep(std::time::Duration::from_millis(200)).await;
 
             // Receive loop with timeout
             'msg_loop: loop {
