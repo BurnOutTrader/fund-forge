@@ -65,11 +65,21 @@ impl VendorApiResponse for RithmicBrokerageClient {
         }*/
     }
 
-    async fn resolutions_response(&self, _mode: StrategyMode, _stream_name: StreamName, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
+    async fn resolutions_response(&self, mode: StrategyMode, _stream_name: StreamName, _market_type: MarketType, callback_id: u64) -> DataServerResponse {
         let mut resolutions = Vec::new();
-        resolutions.push(SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes));
-        resolutions.push(SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
-        resolutions.push(SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles));
+        match mode {
+            StrategyMode::Backtest => {
+                //todo, we need a better way to handle historical, primary data sources, we need a way to check for each symbol, which historical data is available.
+                // to achieve this this fn should be split, resolutions should also be determined by symbol name when historical data is requested, so we can check the data we actually have available.
+                resolutions.push(SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
+            }
+            StrategyMode::LivePaperTrading |  StrategyMode::Live => {
+                resolutions.push(SubscriptionResolutionType::new(Resolution::Ticks(1), BaseDataType::Ticks));
+                resolutions.push(SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes));
+                resolutions.push(SubscriptionResolutionType::new(Resolution::Seconds(1), BaseDataType::Candles));
+            }
+        }
+
         DataServerResponse::Resolutions {
             callback_id,
             subscription_resolutions_types: resolutions,

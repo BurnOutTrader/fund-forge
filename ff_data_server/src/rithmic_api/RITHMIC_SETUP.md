@@ -160,8 +160,9 @@ symbols = [
 ]
 ```
 
-Rithmic data starts from 2012. fund forge will only download rithmic tick data or rithmic 1 second bars, the tick and 1 second bars seem to start from 2/6/2019.
+Rithmic data starts from 2012, the tick seems to start from 2/6/2019.
 If we want earlier data we will probably need to buy data sets and parse into fund forge format, I will make tools for this in the future.
+I will also work on support for other historical resolutions, like 1 min.
 
 Any symbols we specify in the `download_list.toml` file will be downloaded to the data directory, the historical data will be updated every 30 minutes as long as the server is running,
 or if we actively subscribe to data it will be updated each time a new subscription event occurs.
