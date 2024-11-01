@@ -426,7 +426,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 match timeout(std::time::Duration::from_secs(2), receiver.recv()).await {
                     Ok(Ok(data)) => {
                         had_data = true;
-                        println!("Received data: {}", data);
+                        //println!("Received data: {}", data);
                         data_map.insert(data.time_utc(), data);
                     },
                     Ok(Err(e)) => {
