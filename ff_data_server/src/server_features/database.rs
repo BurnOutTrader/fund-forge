@@ -550,7 +550,7 @@ impl HybridStorage {
                 overall_pb.set_style(ProgressStyle::default_bar()
                     .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
                     .unwrap());
-                overall_pb.set_prefix("Move Back Historical Data Availability");
+                overall_pb.set_prefix(format!("{} Move Back Historical Data Availability", Utc::now()));
                 Some(overall_pb)
             }
             false => None
@@ -838,7 +838,7 @@ impl HybridStorage {
                     overall_pb.set_style(ProgressStyle::default_bar()
                         .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
                         .unwrap());
-                    overall_pb.set_prefix("Update Historical Data");
+                    overall_pb.set_prefix(format!("{} Update Historical Data", Utc::now()));
                     Some(overall_pb)
                 }
                 false => None
