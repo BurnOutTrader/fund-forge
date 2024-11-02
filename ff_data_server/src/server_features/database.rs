@@ -44,7 +44,7 @@ pub struct HybridStorage {
     options: ServerLaunchOptions,
     multi_bar: MultiProgress,
     download_semaphore: Arc<Semaphore>,
-    rithmic_download_semaphore: Arc<Semaphore>,
+    rithmic_download_semaphore: Arc<Semaphore>, //todo, this could possible go in the rithmic client
     update_seconds: u64,
 }
 
