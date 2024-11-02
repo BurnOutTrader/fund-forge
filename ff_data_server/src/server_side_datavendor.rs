@@ -24,7 +24,11 @@ pub async fn session_market_hours_response(mode: StrategyMode, data_vendor: Data
         };
         match data_vendor {
             DataVendor::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::Error {error: FundForgeError::ServerErrorDebug("Rithmic market data system not found".to_string()), callback_id}
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     return client.value().session_market_hours_response(mode, stream_name, symbol_name, time, callback_id).await
                 }
             },
@@ -60,7 +64,11 @@ pub async fn symbols_response(
     let operation = async {
         match data_vendor {
             DataVendor::Rithmic=> {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::Error {error: FundForgeError::ServerErrorDebug("Rithmic market data system not found".to_string()), callback_id}
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     return client.symbols_response(mode, stream_name, market_type, time, callback_id).await
                 }
             },
@@ -98,7 +106,11 @@ pub async fn resolutions_response(
     let operation = async {
         match data_vendor {
             DataVendor::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::Error {error: FundForgeError::ServerErrorDebug("Rithmic market data system not found".to_string()), callback_id}
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     return client.resolutions_response(mode, stream_name, market_type, callback_id).await
                 }
             },
@@ -131,7 +143,11 @@ pub async fn markets_response(
     let operation = async {
         match data_vendor {
             DataVendor::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::Error {error: FundForgeError::ServerErrorDebug("Rithmic market data system not found".to_string()), callback_id}
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     return client.markets_response(mode, stream_name, callback_id).await
                 }
             },
@@ -166,7 +182,11 @@ pub async fn decimal_accuracy_response(
     let operation = async {
         match data_vendor {
             DataVendor::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::Error {error: FundForgeError::ServerErrorDebug("Rithmic market data system not found".to_string()), callback_id}
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     return client.decimal_accuracy_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
@@ -200,7 +220,11 @@ pub async fn tick_size_response(
     let operation = async {
         match data_vendor {
             DataVendor::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::Error {error: FundForgeError::ServerErrorDebug("Rithmic market data system not found".to_string()), callback_id}
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     return client.tick_size_response(mode, stream_name, symbol_name, callback_id).await
                 }
             },
@@ -227,12 +251,16 @@ pub async fn tick_size_response(
 /// The caller does not await this method, but it lets the strategy know if the subscription was successful.
 pub async fn data_feed_subscribe(
     stream_name: StreamName,
-    subscription: DataSubscription
+    subscription: DataSubscription,
 ) -> DataServerResponse {
     let operation = async {
         match &subscription.symbol.data_vendor {
             DataVendor::Rithmic=> {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("Unable to find api client instance for: {}", subscription.symbol.data_vendor))}
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     return client.data_feed_subscribe(stream_name, subscription.clone()).await
                 }
             },
@@ -270,7 +298,11 @@ pub async fn data_feed_unsubscribe(
     let operation = async {
         match data_vendor {
             DataVendor::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("Unable to find api client instance for: {}", data_vendor))}
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     return client.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await
                 }
             },
@@ -307,7 +339,11 @@ pub async fn base_data_types_response(
     let operation = async {
         match data_vendor {
             DataVendor::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return DataServerResponse::Error {error: FundForgeError::ServerErrorDebug("Rithmic market data system not found".to_string()), callback_id}
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     return client.base_data_types_response(mode, stream_name, callback_id).await
                 }
             },
@@ -336,7 +372,11 @@ pub async fn logout_command_vendors(data_vendor: DataVendor, stream_name: Stream
     let operation = async {
         match data_vendor {
             DataVendor::Rithmic => {
-                if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
+                let system = match get_rithmic_market_data_system() {
+                    Some(system) => system,
+                    None => return
+                };
+                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
                     client.logout_command_vendors(stream_name).await
                 }
             },

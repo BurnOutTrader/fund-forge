@@ -62,8 +62,11 @@ lazy_static! {
 
 static MARKET_DATA_SYSTEM: OnceCell<RithmicSystem> = OnceCell::new();
 
-pub fn get_rithmic_market_data_system() -> RithmicSystem {
-    MARKET_DATA_SYSTEM.get().unwrap().clone()
+pub fn get_rithmic_market_data_system() -> Option<RithmicSystem> {
+    match MARKET_DATA_SYSTEM.get() {
+        Some(system) => Some(system.clone()),
+        None => None
+    }
 }
 
 // We do not want to initialize here, that should be done at server launch, else a strategy could sign out the client of the correct server.

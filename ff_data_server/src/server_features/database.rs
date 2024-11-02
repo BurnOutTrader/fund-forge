@@ -10,6 +10,7 @@ use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use dashmap::DashMap;
 use futures::future;
 use futures_util::future::join_all;
+use indicatif::{MultiProgress};
 use memmap2::{Mmap};
 use serde_derive::Deserialize;
 use tokio::sync::{OnceCell};
@@ -484,6 +485,7 @@ impl HybridStorage {
         let options = self.options.clone();
         //let download_tasks = self.download_tasks.clone();
         task::spawn(async move {
+            let multi_bar = MultiProgress::new();
             let mut tasks = vec![];
             if options.disable_oanda_server == 0 {
                 //update oanda history
@@ -500,7 +502,6 @@ impl HybridStorage {
                             return;
                         }
                     };
-
                     let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
                         Ok(symbol_object) => symbol_object,
                         Err(e) => {
@@ -515,13 +516,14 @@ impl HybridStorage {
                         for symbol_config in symbols {
                             if let Some(instrument) = client.instruments.get(&symbol_config.symbol_name) {
                                 let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Oanda, instrument.market_type);
+                                let multi_bar = multi_bar.clone();
                                 tasks.push(task::spawn(async move {
                                     let resolution = match symbol_config.base_data_type {
                                         BaseDataType::Ticks => Resolution::Ticks(1),
                                         BaseDataType::QuoteBars => Resolution::Seconds(5),
                                         _ => return,
                                     };
-                                    match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution).await {
+                                    match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, multi_bar.clone()).await {
                                         Ok(_) => println!("Oanda Update: Successfully updated data for: {}", symbol_config.symbol_name),
                                         Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
                                     }
@@ -556,35 +558,40 @@ impl HybridStorage {
                             return;
                         }
                     };
-
-                    //todo, make this into a function, so we can call it on indiviudal symbols
-                    if let Some(client) = RITHMIC_CLIENTS.get(&get_rithmic_market_data_system()) {
-                        let symbols = symbol_configs.symbols;
-                        println!("Rithmic Update: Found {} symbols to update", symbols.len());
-                        for symbol_config in symbols {
-                            let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
-                                Some(exchange) => exchange,
-                                None => {
-                                    eprintln!("DataBase Update: Failed to get exchange for symbol: {}", symbol_config.symbol_name);
-                                    return
-                                },
-                            };
-                            let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic, MarketType::Futures(exchange));
-                            let client = client.clone();
-                            tasks.push(task::spawn(async move {
-                                let resolution = match symbol_config.base_data_type {
-                                    BaseDataType::Ticks => Resolution::Ticks(1),
-                                    BaseDataType::Candles => Resolution::Seconds(1),
-                                    _ => return,
-                                };
-                                println!("Updating Rithmic Data for: {}", symbol_config.symbol_name);
-                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution).await {
-                                    Ok(_) => println!("Rithmic Update: Successfully updated data for: {}", symbol_config.symbol_name),
-                                    Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
+                    match get_rithmic_market_data_system() {
+                        Some(system) => {
+                            //todo, make this into a function, so we can call it on indiviudal symbols
+                            if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                                let symbols = symbol_configs.symbols;
+                                println!("Rithmic Update: Found {} symbols to update", symbols.len());
+                                for symbol_config in symbols {
+                                    let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
+                                        Some(exchange) => exchange,
+                                        None => {
+                                            eprintln!("DataBase Update: Failed to get exchange for symbol: {}", symbol_config.symbol_name);
+                                            return
+                                        },
+                                    };
+                                    let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic, MarketType::Futures(exchange));
+                                    let client = client.clone();
+                                    let multi_bar = multi_bar.clone();
+                                    tasks.push(task::spawn(async move {
+                                        let resolution = match symbol_config.base_data_type {
+                                            BaseDataType::Ticks => Resolution::Ticks(1),
+                                            BaseDataType::Candles => Resolution::Seconds(1),
+                                            _ => return,
+                                        };
+                                        println!("Updating Rithmic Data for: {}", symbol_config.symbol_name);
+                                        match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, multi_bar.clone()).await {
+                                            Ok(_) => println!("Rithmic Update: Successfully updated data for: {}", symbol_config.symbol_name),
+                                            Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
+                                        }
+                                    }));
                                 }
-                           }));
-                        }
-                    }
+                            }
+                        },
+                        None => {}
+                    };
                 }
             }
             join_all(tasks).await;

@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rust_decimal::Decimal;
 use tokio::sync::broadcast;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
@@ -158,8 +159,7 @@ impl VendorApiResponse for OandaClient {
     }
 
     #[allow(unused)]
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution) -> Result<(), FundForgeError>  {
-        println!("Downloading historical data for: {}", symbol.name);
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, multi_progress: MultiProgress) -> Result<(), FundForgeError>  {
         let earliest_oanda_data = || {
             let utc_time_string = "2005-01-01 00:00:00.000000";
             let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
@@ -178,9 +178,14 @@ impl VendorApiResponse for OandaClient {
 
         let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, &last_bar_time).await;
 
+        let pb1 = multi_progress.add(ProgressBar::new(urls.len() as u64));
+        pb1.set_style(ProgressStyle::default_bar()
+            .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
+            .unwrap());
+        pb1.set_message(format!("Downloading Oanda Data: {}: {}: {}", symbol.name, resolution, base_data_type));
+
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         for url in &urls {
-            println!("Downloading data from: {}", url);
             let response = self.send_rest_request(&url).await.unwrap();
 
             if !response.status().is_success() {
@@ -212,7 +217,6 @@ impl VendorApiResponse for OandaClient {
                     BaseDataType::QuoteBars => match oanda_quotebar_from_candle(price_data, symbol.clone(), resolution.clone()) {
                         Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
                         Err(e) => {
-                            println!("Error processing quotebar: {}", e);
                             i += 1;
                             continue
                         }
@@ -220,13 +224,11 @@ impl VendorApiResponse for OandaClient {
                     BaseDataType::Candles => match candle_from_candle(price_data, symbol.clone(), resolution.clone()) {
                         Ok(candle) => BaseDataEnum::Candle(candle),
                         Err(e) => {
-                            println!("Error processing candle: {}", e);
                             i += 1;
                             continue
                         }
                     },
                     _ => {
-                        println!("price_data_type: History not supported for broker");
                         i += 1;
                         continue
                     }
@@ -246,7 +248,6 @@ impl VendorApiResponse for OandaClient {
                                 if retry_count >= MAX_RETRIES {
                                     break Err(e);
                                 }
-                                eprintln!("Save attempt {} failed: {}. Retrying...", retry_count, e);
                                 // Optional: Add delay between retries
                                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                             }
@@ -255,7 +256,6 @@ impl VendorApiResponse for OandaClient {
 
                     // Handle final save result
                     if let Err(e) = save_result {
-                        eprintln!("Failed to save data after {} retries: {}", MAX_RETRIES, e);
                         // Return to the start of the current day's data
                         while i > 0 && bar.time_utc().day() == new_bar_time.day() {
                             i -= 1;
@@ -271,9 +271,11 @@ impl VendorApiResponse for OandaClient {
                 last_bar_time = bar.time_utc();
                 new_data.entry(new_bar_time).or_insert(bar);
                 i += 1;
+                pb1.inc(1);
             }
         }
-        println!("Oanda: Completed Download of data for: {}", symbol.name);
+        let msg = format!("Oanda: Completed Download of data for: {}", symbol.name);
+        pb1.finish_with_message(msg);
         Ok(())
     }
 }

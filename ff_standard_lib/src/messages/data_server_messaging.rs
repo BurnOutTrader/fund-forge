@@ -223,6 +223,10 @@ DataServerResponse {
         error: FundForgeError
     },
 
+    AsyncError {
+        error: FundForgeError
+    },
+
     AccountInfo {
         callback_id: u64,
         account_info: AccountInfo
@@ -350,7 +354,8 @@ impl DataServerResponse {
             DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
-            DataServerResponse::LivePositionUpdates { .. } => None
+            DataServerResponse::LivePositionUpdates { .. } => None,
+            DataServerResponse::AsyncError { .. } => None
         }
     }
 }
