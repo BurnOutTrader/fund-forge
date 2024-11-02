@@ -67,7 +67,7 @@ You can download data that I have already parsed [here](https://1drv.ms/f/s!Allv
 
 The Oanda folder should be put into the following directory "ff_data_server/data/historical/".
 
-### For more testing and development data
+### For More Free Historical Data
 #### Oanda Data
 The server will sutomatically download historical data for you, this will depend on what symbols and data types you request in you credentials/{Bokerage}_credentials/download_list.toml file.
 
