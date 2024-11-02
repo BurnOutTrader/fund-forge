@@ -200,7 +200,8 @@ impl VendorApiResponse for OandaClient {
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         loop {
-            let url = generate_url(&last_bar_time.naive_utc(), &(last_bar_time + add_time).naive_utc(), &instrument, &interval, &base_data_type);
+            let to_time = last_bar_time + add_time;
+            let url = generate_url(&last_bar_time.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
             let response = self.send_rest_request(&url).await.unwrap();
 
             if !response.status().is_success() {
@@ -287,7 +288,7 @@ impl VendorApiResponse for OandaClient {
                 new_data.entry(new_bar_time).or_insert(bar);
                 i += 1;
             }
-            if last_bar_time >= Utc::now() - Duration::seconds(5) {
+            if to_time >= Utc::now() - Duration::seconds(5) {
                 break;
             }
             progress_bar.inc(1);
@@ -401,6 +402,10 @@ impl VendorApiResponse for OandaClient {
                 i += 1;
             }
             progress_bar.inc(1);
+
+            if last_bar_time >= to {
+                break
+            }
         }
         let msg = format!("Oanda: Completed Moving Historical Data Availability Backwards for: {}, {} {}", symbol.name, resolution, base_data_type);
         progress_bar.finish_with_message(msg);
