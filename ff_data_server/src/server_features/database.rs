@@ -16,7 +16,6 @@ use memmap2::{Mmap};
 use serde_derive::Deserialize;
 use tokio::sync::{OnceCell, RwLock, Semaphore};
 use tokio::task;
-use tokio::task::JoinHandle;
 use tokio::time::interval;
 use ff_standard_lib::messages::data_server_messaging::{FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
@@ -68,21 +67,18 @@ impl HybridStorage {
     pub fn run_update_schedule(self: Arc<Self>) {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60 * 15)); // 15 minutes
+
             loop {
                 interval.tick().await;  // Wait for next interval
+                // First run and complete move_back_available_history
                 match HybridStorage::move_back_available_history(self.clone()).await {
-                    Ok((handles, progress_bar)) => {
-                        join_all(handles).await;
-                        if let Some(pb) = progress_bar {
-                            pb.finish_with_message("All updates completed");
-                        }
+                    Ok(_) => {
+                        HybridStorage::update_history(self.clone());
                     }
-                    Err(e) => eprintln!("History move back failed: {}", e),
+                    Err(_) => {
+                        HybridStorage::update_history(self.clone());
+                    }
                 };
-
-                // Run update_history
-                HybridStorage::update_history(self.clone());
-
             }
         });
     }
@@ -501,7 +497,7 @@ impl HybridStorage {
         Ok(combined_data)
     }
 
-    pub async fn move_back_available_history(self: Arc<Self>) -> Result<(Vec<JoinHandle<()>>, Option<ProgressBar>), FundForgeError> {
+    pub async fn move_back_available_history(self: Arc<Self>) -> Result<(), FundForgeError> {
         let options = self.options.clone();
         let multi_bar = self.multi_bar.clone();
         let mut tasks = vec![];
@@ -781,7 +777,11 @@ impl HybridStorage {
                 }
             }
         }
-        Ok((tasks, overall_pb))
+        join_all(tasks).await;
+        if let Some(pb) = overall_pb {
+            pb.finish_with_message("Historical data move back completed");
+        }
+        Ok(())
     }
 
     pub fn update_history(self: Arc<Self>) {
