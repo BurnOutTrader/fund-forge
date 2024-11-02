@@ -101,6 +101,9 @@ pub fn handle_rithmic_responses(
                 }
                 Some(Err(e)) => {
                     eprintln!("WebSocket error: {:?}", e);
+                    if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
+                        RITHMIC_DATA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                    }
                     if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
                         if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
                             RITHMIC_DATA_IS_CONNECTED.store(true, Ordering::SeqCst);
@@ -112,6 +115,9 @@ pub fn handle_rithmic_responses(
                 }
                 None => {
                     println!("WebSocket stream ended");
+                    if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
+                        RITHMIC_DATA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                    }
                     if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
                         reader = new_reader;
                         if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
@@ -125,6 +131,9 @@ pub fn handle_rithmic_responses(
         }
 
         println!("Shutting down Rithmic response handler for plant: {:?}", plant);
+        if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
+            RITHMIC_DATA_IS_CONNECTED.store(false, Ordering::SeqCst);
+        }
         if let Some((_, writer)) = client.writers.remove(&plant) {
             if let Err(e) = shutdown_plant(writer).await {
                 eprintln!("Error shutting down plant: {:?}", e);

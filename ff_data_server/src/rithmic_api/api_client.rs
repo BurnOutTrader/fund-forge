@@ -332,14 +332,7 @@ impl RithmicBrokerageClient {
 
             let mut write_stream = write_stream.lock().await;
             match write_stream.send(Message::Binary(prefixed_msg.clone())).await {
-                Ok(_) => {
-                    match plant {
-                        SysInfraType::HistoryPlant | SysInfraType::TickerPlant => {
-                            RITHMIC_DATA_IS_CONNECTED.store(true, Ordering::SeqCst);
-                        },
-                        _ => {}
-                    }
-                },
+                Ok(_) => {},
                 Err(e) => {
                     match plant {
                         SysInfraType::HistoryPlant | SysInfraType::TickerPlant => {
@@ -909,10 +902,12 @@ impl RithmicBrokerageClient {
                                     match client.connect_plant(plant_type).await {
                                         Ok(receiver) => {
                                             handle_rithmic_responses(client.clone(), receiver, plant_type, running.clone());
+                                            RITHMIC_DATA_IS_CONNECTED.store(true, Ordering::SeqCst);
                                         }
                                         Err(e) => {
                                             eprintln!("Failed to connect {:?} for system {}, reason: {}",
                                                       plant_type, system, e);
+                                            RITHMIC_DATA_IS_CONNECTED.store(false, Ordering::SeqCst);
                                         }
                                     }
                                 }
