@@ -271,8 +271,8 @@ impl VendorApiResponse for OandaClient {
                 last_bar_time = bar.time_utc();
                 new_data.entry(new_bar_time).or_insert(bar);
                 i += 1;
-                pb1.inc(1);
             }
+            pb1.inc(1);
         }
         let msg = format!("Oanda: Completed Download of data for: {}", symbol.name);
         pb1.finish_with_message(msg);
