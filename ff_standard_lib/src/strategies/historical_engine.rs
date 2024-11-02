@@ -277,7 +277,6 @@ impl HistoricalEngine {
         println!("Historical Engine: Warming up the strategy...");
         let market_price_sender = get_price_service_sender();
         // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
-        let mut warm_up_complete = false;
         let mut primary_subscriptions = self.subscription_handler.primary_subscriptions().await;
 
         for subscription in &primary_subscriptions {
@@ -326,17 +325,15 @@ impl HistoricalEngine {
             let mut time = last_time;
             'day_loop: while time <= to_time {
                 time += buffer_duration;
-                if !warm_up_complete {
-                    if time >= Utc::now() - Duration::from_secs(1) {
-                        warm_up_complete = true;
-                        set_warmup_complete();
-                        let event = StrategyEvent::WarmUpComplete;
-                        match self.strategy_event_sender.send(event).await {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
-                        }
-                        break 'main_loop
+
+                if time >= Utc::now() {
+                    set_warmup_complete();
+                    let event = StrategyEvent::WarmUpComplete;
+                    match self.strategy_event_sender.send(event).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
                     }
+                    break 'main_loop
                 }
 
                 // we interrupt if we have a new subscription event so we can fetch the correct data, we will resume from the last time processed.
