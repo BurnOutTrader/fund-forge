@@ -15,7 +15,7 @@ use crate::rithmic_api::client_base::credentials::RithmicCredentials;
 use crate::rithmic_api::client_base::errors::RithmicApiError;
 use crate::rithmic_api::client_base::servers::{server_domains, RithmicServer};
 
-pub const TEMPLATE_VERSION: &str = "5.27";
+pub const TEMPLATE_VERSION: &str = "5.29";
 
 ///Server uses Big Endian format for binary data
 pub struct RithmicApiClient {
