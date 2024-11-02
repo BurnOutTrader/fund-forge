@@ -84,7 +84,7 @@ async fn receive_and_process(
 ) {
     const LENGTH: usize = 4;
     let mut length_bytes = [0u8; LENGTH];
-    let mut warmup_complete = WARMUP_COMPLETE.subscribe();
+    let mut warmup_complete = WARMUP_COMPLETE_BROADCASTER.subscribe();
 
     // First phase: Buffer data during warmup
     loop {
