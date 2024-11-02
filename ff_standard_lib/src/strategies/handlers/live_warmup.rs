@@ -17,7 +17,7 @@ use crate::strategies::ledgers::ledger_service::LedgerService;
 use crate::strategies::strategy_events::StrategyEvent;
 
 lazy_static! {
-    pub(crate) static ref WARMUP_COMPLETE: broadcast::Sender<()> = {
+    pub(crate) static ref WARMUP_COMPLETE_BROADCASTER: broadcast::Sender<()> = {
         let (tx, _) = broadcast::channel(1);
         tx
     };

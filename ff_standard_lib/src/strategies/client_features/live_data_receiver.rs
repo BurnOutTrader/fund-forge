@@ -15,7 +15,7 @@ use crate::strategies::client_features::connection_settings::client_settings::Co
 use crate::strategies::client_features::init_clients::create_async_api_client;
 use crate::strategies::client_features::server_connections::set_warmup_complete;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
-use crate::strategies::handlers::live_warmup::WARMUP_COMPLETE;
+use crate::strategies::handlers::live_warmup::WARMUP_COMPLETE_BROADCASTER;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::strategies::ledgers::ledger_service::LedgerService;
