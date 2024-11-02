@@ -13,7 +13,7 @@ use futures_util::future::join_all;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use memmap2::{Mmap};
 use serde_derive::Deserialize;
-use tokio::sync::{OnceCell};
+use tokio::sync::{OnceCell, Semaphore};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
@@ -486,6 +486,8 @@ impl HybridStorage {
         task::spawn(async move {
             let multi_bar = MultiProgress::new();
             let mut tasks = vec![];
+            // Create a semaphore to limit concurrent downloads
+            let semaphore = Arc::new(Semaphore::new(20));
 
             // Calculate total symbols from available vendors only
             let total_symbols = {
@@ -581,13 +583,14 @@ impl HybridStorage {
                                         let overall_pb = overall_pb.clone();
                                         let oanda_pb = oanda_pb.clone();
                                         let multi_bar = multi_bar.clone();
+                                        let semaphore = semaphore.clone();
                                         tasks.push(task::spawn(async move {
                                             let resolution = match symbol_config.base_data_type {
                                                 BaseDataType::Ticks => Resolution::Ticks(1),
                                                 BaseDataType::QuoteBars => Resolution::Seconds(5),
                                                 _ => return,
                                             };
-
+                                            let _permit = semaphore.acquire().await.unwrap();
                                             // Create and configure symbol progress bar
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));
                                             symbol_pb.set_style(ProgressStyle::default_bar()
@@ -663,14 +666,14 @@ impl HybridStorage {
                                         let multi_bar = multi_bar.clone();
                                         let overall_pb = overall_pb.clone();
                                         let rithmic_pb = rithmic_pb.clone();
-
+                                        let semaphore = semaphore.clone();
                                         tasks.push(task::spawn(async move {
                                             let resolution = match symbol_config.base_data_type {
                                                 BaseDataType::Ticks => Resolution::Ticks(1),
                                                 BaseDataType::Candles => Resolution::Seconds(1),
                                                 _ => return,
                                             };
-
+                                            let _permit = semaphore.acquire().await.unwrap();
                                             // Create a new progress bar for this symbol
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
                                             match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
