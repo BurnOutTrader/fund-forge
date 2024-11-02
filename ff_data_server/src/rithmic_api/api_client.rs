@@ -58,6 +58,7 @@ use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_ba
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicBrokerageClient>> = DashMap::with_capacity(16);
+    pub static ref RITHMIC_DATA_IS_CONNECTED: AtomicBool = AtomicBool::new(false);
 }
 
 static MARKET_DATA_SYSTEM: OnceCell<RithmicSystem> = OnceCell::new();
@@ -332,7 +333,15 @@ impl RithmicBrokerageClient {
             let mut write_stream = write_stream.lock().await;
             match write_stream.send(Message::Binary(prefixed_msg.clone())).await {
                 Ok(_) => {},
-                Err(e) => eprintln!("Failed to send message to {:?}: {}. Retrying...", plant, e),
+                Err(e) => {
+                    match plant {
+                        SysInfraType::HistoryPlant | SysInfraType::TickerPlant => {
+                            RITHMIC_DATA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                        },
+                        _ => {}
+                    }
+                    eprintln!("Failed to send message to {:?}: {}. Retrying...", plant, e)
+                },
             }
         } else {
             eprintln!("No write stream available for {:?}. Retrying...", plant);

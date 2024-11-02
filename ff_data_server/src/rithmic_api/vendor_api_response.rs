@@ -17,7 +17,7 @@ use tokio::sync::{broadcast, mpsc};
 use tokio::time::{timeout};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use crate::rithmic_api::api_client::RithmicBrokerageClient;
+use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
 use crate::server_features::database::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
@@ -128,6 +128,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
     }
 
     async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+        if !RITHMIC_DATA_IS_CONNECTED.load(std::sync::atomic::Ordering::SeqCst) {
+            return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("{} is not connected", self.data_vendor))}
+        }
+
         let exchange = match subscription.market_type {
             MarketType::Futures(exchange) => {
                 exchange.to_string()

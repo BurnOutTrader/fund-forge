@@ -13,7 +13,7 @@ use prost::Message as ProstMessage;
 use tokio::time::sleep;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use crate::rithmic_api::api_client::RithmicBrokerageClient;
+use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_DATA_IS_CONNECTED};
 use futures::stream::{SplitSink, SplitStream};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -102,6 +102,9 @@ pub fn handle_rithmic_responses(
                 Some(Err(e)) => {
                     eprintln!("WebSocket error: {:?}", e);
                     if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
+                        if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
+                            RITHMIC_DATA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                        }
                         reader = new_reader;
                     } else {
                         break;
@@ -111,6 +114,9 @@ pub fn handle_rithmic_responses(
                     println!("WebSocket stream ended");
                     if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
                         reader = new_reader;
+                        if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
+                            RITHMIC_DATA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                        }
                     } else {
                         break;
                     }

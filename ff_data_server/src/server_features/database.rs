@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::sync::{Arc};
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use dashmap::DashMap;
@@ -26,7 +27,7 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::oanda_api::api_client::OANDA_CLIENT;
-use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS};
+use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::ServerLaunchOptions;
@@ -640,58 +641,58 @@ impl HybridStorage {
                                 return;
                             }
                         };
+                        if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) {
+                            match get_rithmic_market_data_system() {
+                                Some(system) => {
+                                    if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                                        let symbols = symbol_configs.symbols;
 
-                        match get_rithmic_market_data_system() {
-                            Some(system) => {
-                                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                                    let symbols = symbol_configs.symbols;
+                                        let rithmic_pb = multi_bar.add(ProgressBar::new(symbols.len() as u64));
+                                        rithmic_pb.set_style(ProgressStyle::default_bar()
+                                            .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
+                                            .unwrap());
+                                        rithmic_pb.set_prefix("Rithmic Progress");
 
-                                    let rithmic_pb = multi_bar.add(ProgressBar::new(symbols.len() as u64));
-                                    rithmic_pb.set_style(ProgressStyle::default_bar()
-                                        .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                                        .unwrap());
-                                    rithmic_pb.set_prefix("Rithmic Progress");
-
-                                    for symbol_config in symbols {
-                                        let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
-                                            Some(exchange) => exchange,
-                                            None => {
-                                                eprintln!("DataBase Update: Failed to get exchange for symbol: {}", symbol_config.symbol_name);
-                                                continue;
-                                            },
-                                        };
-
-                                        let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic, MarketType::Futures(exchange));
-                                        let client = client.clone();
-                                        let multi_bar = multi_bar.clone();
-                                        let overall_pb = overall_pb.clone();
-                                        let rithmic_pb = rithmic_pb.clone();
-                                        let semaphore = semaphore.clone();
-                                        tasks.push(task::spawn(async move {
-                                            let resolution = match symbol_config.base_data_type {
-                                                BaseDataType::Ticks => Resolution::Ticks(1),
-                                                BaseDataType::Candles => Resolution::Seconds(1),
-                                                _ => return,
-                                            };
-                                            let _permit = semaphore.acquire().await.unwrap();
-                                            // Create a new progress bar for this symbol
-                                            let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
-                                            match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
-                                                Ok(_) => {
-                                                    overall_pb.inc(1);
-                                                    rithmic_pb.inc(1);
+                                        for symbol_config in symbols {
+                                            let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
+                                                Some(exchange) => exchange,
+                                                None => {
+                                                    eprintln!("DataBase Update: Failed to get exchange for symbol: {}", symbol_config.symbol_name);
+                                                    continue;
                                                 },
-                                                Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
-                                            }
-                                        }));
+                                            };
+
+                                            let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic, MarketType::Futures(exchange));
+                                            let client = client.clone();
+                                            let multi_bar = multi_bar.clone();
+                                            let overall_pb = overall_pb.clone();
+                                            let rithmic_pb = rithmic_pb.clone();
+                                            let semaphore = semaphore.clone();
+                                            tasks.push(task::spawn(async move {
+                                                let resolution = match symbol_config.base_data_type {
+                                                    BaseDataType::Ticks => Resolution::Ticks(1),
+                                                    BaseDataType::Candles => Resolution::Seconds(1),
+                                                    _ => return,
+                                                };
+                                                let _permit = semaphore.acquire().await.unwrap();
+                                                // Create a new progress bar for this symbol
+                                                let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
+                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
+                                                    Ok(_) => {
+                                                        overall_pb.inc(1);
+                                                        rithmic_pb.inc(1);
+                                                    },
+                                                    Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
+                                                }
+                                            }));
+                                        }
                                     }
-                                }
-                            },
-                            None => {}
-                        };
+                                },
+                                None => {}
+                            }
+                        }
                     }
                 }
-
                 join_all(tasks).await;
                 overall_pb.finish_with_message("All updates completed");
             }
