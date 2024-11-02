@@ -115,7 +115,7 @@ impl IndicatorHandler {
     /// When using this fn, no lagging indicator update should slow a more performant indicator.
     // Since the strategy receiver takes indicator updates directly, we can handle occasions when having the latest indicator value is crucial for logic.
     pub async fn live_update_time_slice(&self, strategy_sender: Sender<StrategyEvent>) -> Sender<TimeSlice> {
-        let (sender, mut receiver) = tokio::sync::mpsc::channel::<TimeSlice>(1000);
+        let (sender, mut receiver) = tokio::sync::mpsc::channel::<TimeSlice>(100);
         while let Some(time_slice) = receiver.recv().await {
             let indicators = self.indicators.clone();
             let strategy_sender = strategy_sender.clone();
