@@ -779,7 +779,6 @@ impl HybridStorage {
         }
         join_all(tasks).await;
         if let Some(pb) = overall_pb {
-            pb.finish_with_message("Historical data move back completed");
             pb.finish_and_clear();
         }
         Ok(())
@@ -1012,7 +1011,6 @@ impl HybridStorage {
                     }
                 }
                 join_all(tasks).await;
-                overall_pb.finish_with_message("All updates completed");
                 overall_pb.finish_and_clear();
             }
         });
