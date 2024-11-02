@@ -126,7 +126,7 @@ impl HistoricalEngine {
     ) {
         println!("Historical Engine: Warming up the strategy...");
         let market_price_sender = get_price_service_sender();
-        // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
+        // here we are looping through 1 day at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
         let mut warm_up_complete = false;
         let mut primary_subscriptions = self.subscription_handler.primary_subscriptions().await;
 

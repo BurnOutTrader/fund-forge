@@ -35,7 +35,7 @@ pub(crate) async fn live_warm_up(
 ) {
     println!("Historical Engine: Warming up the strategy...");
     let market_price_sender = get_price_service_sender();
-    // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
+    // here we are looping through 1 day at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
     let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
     let mut primary_subscription_update_receiver = subscription_handler.subscribe_primary_subscription_updates();
     for subscription in &primary_subscriptions {
