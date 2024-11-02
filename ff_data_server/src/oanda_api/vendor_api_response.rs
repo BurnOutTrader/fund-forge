@@ -175,8 +175,10 @@ impl VendorApiResponse for OandaClient {
             let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
             DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
         };
+
+        let data_storage = DATA_STORAGE.get().unwrap();
         // if we have data start from last time, else start from oanda's earliest date
-        let mut last_bar_time = match DATA_STORAGE.get().unwrap().get_latest_data_time(&symbol, &resolution, &base_data_type).await {
+        let mut last_bar_time = match data_storage.get_latest_data_time(&symbol, &resolution, &base_data_type).await {
             // if we have no data, we start from the earliest date available on oanda
             Err(_) => earliest_oanda_data(),
             // if we have data, we start from the last time in the data
@@ -190,12 +192,15 @@ impl VendorApiResponse for OandaClient {
         let interval = resolution_to_oanda_interval(&resolution);
         let instrument  = oanda_clean_instrument(&symbol.name).await;
 
-        let num_days = (last_bar_time - Utc::now()).num_days();
+        let add_time = add_time_to_date(&interval);
+
+        let mut num_days = ((Utc::now() - last_bar_time).num_seconds() / (60*60*5)).abs();
         progress_bar.set_length(num_days as u64);
+
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         loop {
-            let url = generate_url(&last_bar_time.naive_utc(), &(last_bar_time + add_time_to_date(&interval)).naive_utc(), &instrument, &interval, &base_data_type);
+            let url = generate_url(&last_bar_time.naive_utc(), &(last_bar_time + add_time).naive_utc(), &instrument, &interval, &base_data_type);
             let response = self.send_rest_request(&url).await.unwrap();
 
             if !response.status().is_success() {
@@ -251,7 +256,7 @@ impl VendorApiResponse for OandaClient {
                     const MAX_RETRIES: u32 = 3;
                     let mut retry_count = 0;
                     let save_result = 'save_loop: loop {
-                        match DATA_STORAGE.get().unwrap().save_data_bulk(data_vec.clone()).await {
+                        match data_storage.save_data_bulk(data_vec.clone()).await {
                             Ok(_) => break 'save_loop Ok(()),
                             Err(e) => {
                                 retry_count += 1;
@@ -303,6 +308,7 @@ impl VendorApiResponse for OandaClient {
             from = earliest_oanda_data;
         }
 
+        let data_storage = DATA_STORAGE.get().unwrap();
         let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, from, to).await;
         progress_bar.set_length(urls.len() as u64);
 
@@ -327,7 +333,6 @@ impl VendorApiResponse for OandaClient {
             let candles_vec: Vec<_> = candles.into_iter().collect();
             let mut i = 0;
 
-            let mut attempts = 0;
             while i < candles_vec.len() {
                 let price_data = &candles_vec[i];
                 let is_closed = price_data["complete"].as_bool().unwrap();
@@ -339,14 +344,14 @@ impl VendorApiResponse for OandaClient {
                 let bar: BaseDataEnum = match base_data_type {
                     BaseDataType::QuoteBars => match oanda_quotebar_from_candle(price_data, symbol.clone(), resolution.clone()) {
                         Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
-                        Err(e) => {
+                        Err(_) => {
                             i += 1;
                             continue
                         }
                     },
                     BaseDataType::Candles => match candle_from_candle(price_data, symbol.clone(), resolution.clone()) {
                         Ok(candle) => BaseDataEnum::Candle(candle),
-                        Err(e) => {
+                        Err(_) => {
                             i += 1;
                             continue
                         }
@@ -364,7 +369,7 @@ impl VendorApiResponse for OandaClient {
                     const MAX_RETRIES: u32 = 3;
                     let mut retry_count = 0;
                     let save_result = 'save_loop: loop {
-                        match DATA_STORAGE.get().unwrap().save_data_bulk(data_vec.clone()).await {
+                        match data_storage.save_data_bulk(data_vec.clone()).await {
                             Ok(_) => break 'save_loop Ok(()),
                             Err(e) => {
                                 retry_count += 1;
@@ -378,7 +383,7 @@ impl VendorApiResponse for OandaClient {
                     };
 
                     // Handle final save result
-                    if let Err(e) = save_result {
+                    if let Err(_) = save_result {
                         // Return to the start of the current day's data
                         while i > 0 && bar.time_utc().day() == new_bar_time.day() {
                             i -= 1;
