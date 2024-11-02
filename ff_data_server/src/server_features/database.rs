@@ -67,18 +67,18 @@ impl HybridStorage {
     pub fn run_update_schedule(self: Arc<Self>) {
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(60 * 15)); // 15 minutes
-
             loop {
                 interval.tick().await;  // Wait for next interval
                 // First run and complete move_back_available_history
                 match HybridStorage::move_back_available_history(self.clone()).await {
-                    Ok(_) => {
-                        HybridStorage::update_history(self.clone());
-                    }
-                    Err(_) => {
-                        HybridStorage::update_history(self.clone());
-                    }
+                    Ok(_) => {}
+                    Err(_) => {}
                 };
+                match self.multi_bar.clear() {
+                    Ok(_) => {},
+                    Err(e) => eprintln!("Failed to clear multi bar: {}", e),
+                }
+                HybridStorage::update_history(self.clone());
             }
         });
     }
@@ -550,7 +550,7 @@ impl HybridStorage {
                 overall_pb.set_style(ProgressStyle::default_bar()
                     .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
                     .unwrap());
-                overall_pb.set_prefix(format!("{} Move Back Historical Data Availability", Utc::now()));
+                overall_pb.set_prefix(format!("{} Move Back Historical Data Availability", Utc::now().format("%Y-%m-%d %H:%M")));
                 Some(overall_pb)
             }
             false => None
@@ -780,6 +780,7 @@ impl HybridStorage {
         join_all(tasks).await;
         if let Some(pb) = overall_pb {
             pb.finish_with_message("Historical data move back completed");
+            pb.finish_and_clear();
         }
         Ok(())
     }
@@ -838,7 +839,7 @@ impl HybridStorage {
                     overall_pb.set_style(ProgressStyle::default_bar()
                         .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
                         .unwrap());
-                    overall_pb.set_prefix(format!("{} Update Historical Data", Utc::now()));
+                    overall_pb.set_prefix(format!("{} Update Historical Data", Utc::now().format("%Y-%m-%d %H:%M")));
                     Some(overall_pb)
                 }
                 false => None
@@ -1012,6 +1013,7 @@ impl HybridStorage {
                 }
                 join_all(tasks).await;
                 overall_pb.finish_with_message("All updates completed");
+                overall_pb.finish_and_clear();
             }
         });
     }
