@@ -597,7 +597,7 @@ All data transferred between strategies and the data server or strategy registry
 The TLS handshake requires both server and client authentication certificates.
 
 An api instance for a `DataVendor` is just an object that implements `VendorApiResponse` trait
-All 'DataVendor' and `Brokerage` Responses are `DataServerResponse` enum variants.
+All `DataVendor` and `Brokerage` Responses are `DataServerResponse` enum variants.
 You can implement your api however you like, as long as you return all the required functions implemented by the specific trait, if your DataVendor or Brokerage doesn't have the ability to return the required data, simple return `DataServerResponse::Error{error: String}`.
 
 Brokerages utilize the `BrokerApiResponse` trait.
