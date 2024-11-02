@@ -252,7 +252,12 @@ impl HistoricalEngine {
 
                 if !strategy_time_slice.is_empty() {
                     // Update indicators and get any generated events.
-                    self.indicator_handler.update_time_slice(&strategy_time_slice).await;
+                    if let Some(events) = self.indicator_handler.update_time_slice(&strategy_time_slice).await {
+                        match self.strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                        }
+                    }
 
                     let slice_event = StrategyEvent::TimeSlice(
                         strategy_time_slice,

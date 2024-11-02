@@ -157,7 +157,7 @@ impl FundForgeStrategy {
 
         let notify = Arc::new(Notify::new());
         let subscription_handler = Arc::new(SubscriptionHandler::new(strategy_mode, strategy_event_sender.clone()).await);
-        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone(), strategy_event_sender.clone(), subscription_handler.clone()).await);
+        let indicator_handler = Arc::new(IndicatorHandler::new(strategy_mode.clone(), subscription_handler.clone()).await);
 
         let (live_order_updates_sender, live_order_updates_receiver) = tokio::sync::mpsc::channel(100);
         if strategy_mode == StrategyMode::Live {

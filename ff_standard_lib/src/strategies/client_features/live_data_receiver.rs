@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
-use tokio::sync::mpsc::{Receiver, Sender};
+use tokio::sync::mpsc::{Sender};
 use std::sync::Arc;
 use chrono::Utc;
 use tokio::runtime::Runtime;
@@ -13,12 +13,14 @@ use crate::standardized_types::bytes_trait::Bytes;
 use crate::standardized_types::time_slices::TimeSlice;
 use crate::strategies::client_features::connection_settings::client_settings::ConnectionSettings;
 use crate::strategies::client_features::init_clients::create_async_api_client;
-use crate::strategies::client_features::server_connections::is_warmup_complete;
+use crate::strategies::client_features::server_connections::set_warmup_complete;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
+use crate::strategies::handlers::live_warmup::WARMUP_COMPLETE;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::strategies::ledgers::ledger_service::LedgerService;
 use crate::strategies::strategy_events::StrategyEvent;
+
 pub async fn handle_live_data(
     connection_settings: ConnectionSettings,
     stream_name: u16,
@@ -28,7 +30,7 @@ pub async fn handle_live_data(
     indicator_handler: Arc<IndicatorHandler>,
     subscription_handler: Arc<SubscriptionHandler>,
 ) {
-    // Initial stream setup
+
     let mut stream_client = match create_async_api_client(&connection_settings, true).await {
         Ok(client) => client,
         Err(e) => {
@@ -56,165 +58,96 @@ pub async fn handle_live_data(
     let _ = tokio::task::spawn_blocking(move || {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            let (buffer_sender, buffer_receiver) = tokio::sync::mpsc::channel::<TimeSlice>(10000);
-
-            // Spawn data receiver on the same runtime
-            let receiver_handle = rt.spawn(async move {
-                receive_data(stream_client, buffer_sender).await;
-            });
-
-            // Process data with phase transitions
-            process_data_with_transition(
-                buffer_receiver,
-                buffer_duration,
+            let mut buffered_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
+            let price_service_sender = get_price_service_sender();
+            receive_and_process(
+                stream_client,
+                &mut buffered_data,
                 strategy_event_sender,
                 ledger_service,
                 indicator_handler,
                 subscription_handler,
+                price_service_sender,
             ).await;
-
-            receiver_handle.abort();
         });
     });
 }
 
-async fn receive_data(
+async fn receive_and_process(
     mut stream_client: TlsStream<TcpStream>,
-    buffer_sender: Sender<TimeSlice>,
-) {
-    const LENGTH: usize = 4;
-    let mut length_bytes = [0u8; LENGTH];
-
-    loop {
-        match stream_client.read_exact(&mut length_bytes).await {
-            Ok(_) => {
-                let msg_length = u32::from_be_bytes(length_bytes) as usize;
-                let mut message_body = vec![0u8; msg_length];
-
-                if let Err(e) = stream_client.read_exact(&mut message_body).await {
-                    eprintln!("Error reading message body: {}", e);
-                    continue;
-                }
-
-                match TimeSlice::from_bytes(&message_body) {
-                    Ok(time_slice) => {
-                        if let Err(e) = buffer_sender.send(time_slice).await {
-                            eprintln!("Error sending to buffer: {}", e);
-                            break;
-                        }
-                    }
-                    Err(e) => eprintln!("Error parsing TimeSlice: {}", e),
-                }
-            }
-            Err(e) => {
-                eprintln!("Error reading length bytes: {}", e);
-                break;
-            }
-        }
-    }
-}
-
-async fn process_data_with_transition(
-    mut buffer_receiver: Receiver<TimeSlice>,
-    buffer_duration: Duration,
+    buffered_data: &mut BTreeMap<i64, TimeSlice>,
     strategy_event_sender: Sender<StrategyEvent>,
     ledger_service: Arc<LedgerService>,
     indicator_handler: Arc<IndicatorHandler>,
     subscription_handler: Arc<SubscriptionHandler>,
+    price_service_sender: Sender<PriceServiceMessage>,
 ) {
-    println!("Starting data processing");
-    let mut buffered_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
+    const LENGTH: usize = 4;
+    let mut length_bytes = [0u8; LENGTH];
+    let mut warmup_complete = WARMUP_COMPLETE.subscribe();
 
-    // Phase 1: Collect during warmup
-    println!("Phase 1: Collecting warmup data");
-    while !is_warmup_complete() {
-        if let Some(time_slice) = buffer_receiver.recv().await {
-            for data in time_slice.iter() {
-                let timestamp = data.time_closed_utc().timestamp_nanos_opt().unwrap();
-                buffered_data.entry(timestamp)
-                    .and_modify(|slice| slice.extend(time_slice.clone()))
-                    .or_insert_with(|| {
-                        let mut new_slice = TimeSlice::new();
-                        new_slice.extend(time_slice.clone());
-                        new_slice
-                    });
+    // First phase: Buffer data during warmup
+    loop {
+        tokio::select! {
+            result = stream_client.read_exact(&mut length_bytes) => {
+                match result {
+                    Ok(_) => {
+                        let msg_length = u32::from_be_bytes(length_bytes) as usize;
+                        let mut message_body = vec![0u8; msg_length];
+
+                        if let Err(e) = stream_client.read_exact(&mut message_body).await {
+                            eprintln!("Error reading message body: {}", e);
+                            continue;
+                        }
+
+                        if let Ok(time_slice) = TimeSlice::from_bytes(&message_body) {
+                            for data in time_slice.iter() {
+                                let timestamp = data.time_closed_utc().timestamp_nanos_opt().unwrap();
+                                buffered_data.entry(timestamp)
+                                    .and_modify(|slice| slice.extend(time_slice.clone()))
+                                    .or_insert_with(|| {
+                                        let mut new_slice = TimeSlice::new();
+                                        new_slice.extend(time_slice.clone());
+                                        new_slice
+                                    });
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error reading length bytes: {}", e);
+                        return;
+                    }
+                }
+            }
+            Ok(_) = warmup_complete.recv() => {
+                set_warmup_complete();
+                break;
             }
         }
     }
 
-    // Phase 2: Process buffer
-    if !buffered_data.is_empty() {
-        println!("Phase 2: Processing buffered data");
-        process_buffered_data(
-            buffered_data,
-            buffer_duration,
-            &strategy_event_sender,
-            &ledger_service,
-            &subscription_handler,
-            &indicator_handler,
-        ).await;
-    }
-
-    // Phase 3: Live processing
-    println!("Phase 3: Switching to live processing");
-    process_live_data(
-        buffer_receiver,
-        &strategy_event_sender,
-        &ledger_service,
-        &subscription_handler,
-        &indicator_handler,
-    ).await;
-}
-
-async fn process_buffered_data(
-    buffered_data: BTreeMap<i64, TimeSlice>,
-    buffer_duration: Duration,
-    strategy_event_sender: &Sender<StrategyEvent>,
-    ledger_service: &Arc<LedgerService>,
-    subscription_handler: &Arc<SubscriptionHandler>,
-    indicator_handler: &Arc<IndicatorHandler>,
-) {
-    println!("Processing {} buffered data points", buffered_data.len());
-    let price_service_sender = get_price_service_sender();
-    let mut interval = tokio::time::interval(buffer_duration);
-
-    for (_, time_slice) in buffered_data {
-        interval.tick().await;
-
+    // Process buffered data
+    let buffer_to_process = std::mem::take(buffered_data);
+    for (_, slice) in buffer_to_process {
         let mut strategy_time_slice = TimeSlice::new();
-        if !time_slice.is_empty() {
-            let arc_slice = Arc::new(time_slice.clone());
-
-            if let Err(e) = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await {
-                eprintln!("Buffer processing: Price service error: {}", e);
-                continue;
-            }
-
+        if !slice.is_empty() {
+            let arc_slice = Arc::new(slice.clone());
+            let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
             ledger_service.timeslice_updates(Utc::now(), arc_slice.clone()).await;
 
             if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
                 strategy_time_slice.extend(consolidated_data);
             }
-            strategy_time_slice.extend(time_slice);
+            strategy_time_slice.extend(slice);
 
-            indicator_handler.update_time_slice(&strategy_time_slice).await;
-            if let Err(e) = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await {
-                eprintln!("Buffer processing: Strategy event error: {}", e);
+            if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
+                let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
             }
+            let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
         }
     }
-    println!("Buffer processing complete");
-}
 
-async fn process_live_data(
-    mut buffer_receiver: Receiver<TimeSlice>,
-    strategy_event_sender: &Sender<StrategyEvent>,
-    ledger_service: &Arc<LedgerService>,
-    subscription_handler: &Arc<SubscriptionHandler>,
-    indicator_handler: &Arc<IndicatorHandler>,
-) {
-    println!("Switching to live processing");
-    let price_service_sender = get_price_service_sender();
+    // Switch to live processing
     let mut interval = tokio::time::interval(Duration::from_secs(1));
 
     loop {
@@ -222,46 +155,58 @@ async fn process_live_data(
             _ = interval.tick() => {
                 let now = Utc::now();
                 if let Some(consolidated_data) = subscription_handler.update_consolidators_time(now).await {
-                      indicator_handler.update_time_slice(&consolidated_data).await;
-                    if let Err(e) = strategy_event_sender.send(StrategyEvent::TimeSlice(consolidated_data)).await {
-                        eprintln!("Live processing: Consolidator update error: {}", e);
+                    if let Some(events) = indicator_handler.update_time_slice(&consolidated_data).await {
+                        let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
+                    }
+                    let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(consolidated_data)).await;
+                }
+            }
+            result = stream_client.read_exact(&mut length_bytes) => {
+                match result {
+                    Ok(_) => {
+                        let msg_length = u32::from_be_bytes(length_bytes) as usize;
+                        let mut message_body = vec![0u8; msg_length];
+
+                        if let Err(e) = stream_client.read_exact(&mut message_body).await {
+                            eprintln!("Error reading message body: {}", e);
+                            continue;
+                        }
+
+                        if let Ok(time_slice) = TimeSlice::from_bytes(&message_body) {
+                             let mut strategy_time_slice = TimeSlice::new();
+                            if !time_slice.is_empty() {
+                                let arc_slice = Arc::new(time_slice.clone());
+                                let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
+                                ledger_service.timeslice_updates(Utc::now(), arc_slice.clone()).await;
+
+                                if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
+                                    strategy_time_slice.extend(consolidated_data);
+                                }
+                                strategy_time_slice.extend(time_slice);
+
+                                if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
+                                    let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
+                                }
+                                let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("Error reading length bytes: {}", e);
+                        break;
                     }
                 }
             }
-            Some(time_slice) = buffer_receiver.recv() => {
-                let mut strategy_time_slice = TimeSlice::new();
-                if !time_slice.is_empty() {
-                    let arc_slice = Arc::new(time_slice.clone());
-
-                    if let Err(e) = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await {
-                        eprintln!("Live processing: Price service error: {}", e);
-                        continue;
-                    }
-
-                    ledger_service.timeslice_updates(Utc::now(), arc_slice.clone()).await;
-
-                    if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
-                        strategy_time_slice.extend(consolidated_data);
-                    }
-                    strategy_time_slice.extend(time_slice);
-
-                    indicator_handler.update_time_slice(&strategy_time_slice).await;
-                    if let Err(e) = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await {
-                        eprintln!("Live processing: Strategy event error: {}", e);
-                    }
-                }
-            }
-            else => break
         }
     }
 
-    if let Err(e) = strategy_event_sender
+    let _ = strategy_event_sender
         .send(StrategyEvent::ShutdownEvent(String::from("Live stream disconnected")))
-        .await
-    {
-        eprintln!("Failed to send shutdown event: {}", e);
-    }
+        .await;
 }
+
+
+
 
 //old
 /*

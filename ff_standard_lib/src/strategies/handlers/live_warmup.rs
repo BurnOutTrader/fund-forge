@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use chrono::{DateTime, Datelike, NaiveTime, TimeZone, Utc};
+use lazy_static::lazy_static;
+use tokio::sync::broadcast;
 use tokio::sync::mpsc::Sender;
 use crate::standardized_types::base_data::history::get_historical_data;
 use crate::standardized_types::time_slices::TimeSlice;
@@ -13,6 +15,13 @@ use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
 use crate::strategies::historical_time::update_backtest_time;
 use crate::strategies::ledgers::ledger_service::LedgerService;
 use crate::strategies::strategy_events::StrategyEvent;
+
+lazy_static! {
+    pub(crate) static ref WARMUP_COMPLETE: broadcast::Sender<()> = {
+        let (tx, _) = broadcast::channel(1);
+        tx
+    };
+}
 
 pub(crate) async fn live_warm_up(
     warm_up_start_time: DateTime<Utc>,
@@ -84,7 +93,7 @@ pub(crate) async fn live_warm_up(
             time += buffer_duration;
 
             if time >= Utc::now() {
-                set_warmup_complete();
+                WARMUP_COMPLETE.send(()).unwrap();
                 let event = StrategyEvent::WarmUpComplete;
                 match strategy_event_sender.send(event).await {
                     Ok(_) => {}
@@ -146,7 +155,12 @@ pub(crate) async fn live_warm_up(
 
             if !strategy_time_slice.is_empty() {
                 // Update indicators and get any generated events.
-                indicator_handler.update_time_slice(&strategy_time_slice).await;
+                if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
+                    match strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                    }
+                }
 
                 let slice_event = StrategyEvent::TimeSlice(
                     strategy_time_slice,

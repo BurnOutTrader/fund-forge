@@ -34,7 +34,8 @@ pub async fn response_handler(
     strategy_event_sender: Sender<StrategyEvent>,
     ledger_service: Arc<LedgerService>, //it is better to do this than use messaging, because using a direct fn call we can concurrently update individual ledgers and have a que per ledger. sending a msg here would cause a bottleneck with more ledgers.
     indicator_handler: Arc<IndicatorHandler>,
-    subscription_handler: Arc<SubscriptionHandler>
+    subscription_handler: Arc<SubscriptionHandler>,
+
 ) {
     for (connection, settings) in &settings_map {
         let order_updates_sender = order_updates_sender.clone();
