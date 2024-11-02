@@ -120,7 +120,6 @@ async fn receive_and_process(
                 }
             }
             Ok(_) = warmup_complete.recv() => {
-                set_warmup_complete();
                 break;
             }
         }
@@ -145,6 +144,7 @@ async fn receive_and_process(
             }
             let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
         }
+        set_warmup_complete();
     }
 
     // Switch to live processing
