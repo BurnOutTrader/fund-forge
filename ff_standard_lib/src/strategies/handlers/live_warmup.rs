@@ -17,7 +17,7 @@ use crate::strategies::ledgers::ledger_service::LedgerService;
 use crate::strategies::strategy_events::StrategyEvent;
 
 lazy_static! {
-    pub(crate) static ref WARMUP_COMPLETE_BROADCASTER: broadcast::Sender<()> = {
+    pub(crate) static ref WARMUP_COMPLETE_BROADCASTER: broadcast::Sender<DateTime<Utc>> = {
         let (tx, _) = broadcast::channel(1);
         tx
     };
@@ -94,7 +94,7 @@ pub(crate) async fn live_warm_up(
                 time += buffer_duration;
 
                 if time >= Utc::now() {
-                    WARMUP_COMPLETE_BROADCASTER.send(()).unwrap();
+                    WARMUP_COMPLETE_BROADCASTER.send(time).unwrap();
                     let event = StrategyEvent::WarmUpComplete;
                     match strategy_event_sender.send(event).await {
                         Ok(_) => {}

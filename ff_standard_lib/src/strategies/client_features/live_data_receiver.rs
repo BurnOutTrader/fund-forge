@@ -84,8 +84,8 @@ async fn receive_and_process(
 ) {
     const LENGTH: usize = 4;
     let mut length_bytes = [0u8; LENGTH];
-    let mut warmup_complete = WARMUP_COMPLETE_BROADCASTER.subscribe();
-
+    let mut warmup_completion_receiver = WARMUP_COMPLETE_BROADCASTER.subscribe();
+    let mut warm_up_end = None;
     // First phase: Buffer data during warmup
     loop {
         tokio::select! {
@@ -119,7 +119,8 @@ async fn receive_and_process(
                     }
                 }
             }
-            Ok(_) = warmup_complete.recv() => {
+            Ok(time) = warmup_completion_receiver.recv() => {
+                warm_up_end = Some(time);
                 break;
             }
         }
@@ -127,6 +128,11 @@ async fn receive_and_process(
 
     // Process buffered data
     let buffer_to_process = std::mem::take(buffered_data);
+    let values: Vec<_> = buffer_to_process
+        .range(warm_up_end.unwrap().timestamp()..=Utc::now().timestamp())
+        .map(|(_, value)| value)
+        .collect();
+
     for (_, slice) in buffer_to_process {
         let mut strategy_time_slice = TimeSlice::new();
         if !slice.is_empty() {
@@ -146,6 +152,7 @@ async fn receive_and_process(
         }
         set_warmup_complete();
     }
+    drop(warmup_completion_receiver);
 
     // Switch to live processing
     let mut interval = tokio::time::interval(Duration::from_secs(1));
