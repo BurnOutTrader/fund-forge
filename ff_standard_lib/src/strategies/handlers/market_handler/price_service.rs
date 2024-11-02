@@ -149,60 +149,76 @@ impl MarketPriceService {
                                 last_price.insert(candle.symbol.name.clone(), candle.close);
                             }
                             BaseDataEnum::QuoteBar(quotebar) => {
-                                if has_quotes.contains_key(&quotebar.symbol.name) {
+                                let symbol_name = &quotebar.symbol.name;
+                                // Early continue if we already have quotes
+                                if has_quotes.contains_key(symbol_name) {
                                     continue 'data_loop;
                                 }
-                                if !bid_books.contains_key(&quotebar.symbol.name) {
-                                    bid_books.insert(quotebar.symbol.name.clone(), BTreeMap::new());
-                                }
-                                if let Some(bid_book) = bid_books.get_mut(&quotebar.symbol.name) {
-                                    bid_book.insert(0, BookLevel::new(0, quotebar.bid_close, dec!(0.0)));
-                                }
-                                if !ask_books.contains_key(&quotebar.symbol.name) {
-                                    ask_books.insert(quotebar.symbol.name.clone(), BTreeMap::new());
-                                }
-                                if let Some(ask_book) = ask_books.get_mut(&quotebar.symbol.name) {
-                                    ask_book.insert(0,  BookLevel::new(0, quotebar.ask_close, dec!(0.0)));
-                                }
+
+                                // Initialize books if needed - do this once for both bid and ask
+                                let (bid_book, ask_book) = match (bid_books.get_mut(symbol_name), ask_books.get_mut(symbol_name)) {
+                                    (Some(bid), Some(ask)) => (bid, ask),
+                                    _ => {
+                                        bid_books.entry(symbol_name.clone()).or_insert_with(BTreeMap::new);
+                                        ask_books.entry(symbol_name.clone()).or_insert_with(BTreeMap::new);
+                                        (
+                                            bid_books.get_mut(symbol_name).unwrap(),
+                                            ask_books.get_mut(symbol_name).unwrap()
+                                        )
+                                    }
+                                };
+
+                                // Update both books
+                                bid_book.insert(0, BookLevel::new(0, quotebar.bid_close, dec!(0.0)));
+                                ask_book.insert(0, BookLevel::new(0, quotebar.ask_close, dec!(0.0)));
                             }
                             BaseDataEnum::Tick(tick) => {
-                                last_price.insert(tick.symbol.name.clone(), tick.price);
-                                // in the event we only have tick data and no quote data, if the tick data specifies an aggressor we can use this info to estimate the current best bid and offer
-                                if tick.aggressor != Aggressor::None && !has_quotes.contains_key(&tick.symbol.name) {
-                                    if !bid_books.contains_key(&tick.symbol.name) {
-                                        bid_books.insert(tick.symbol.name.clone(), BTreeMap::new());
-                                    }
-                                    if !ask_books.contains_key(&tick.symbol.name) {
-                                        ask_books.insert(tick.symbol.name.clone(), BTreeMap::new());
-                                    }
+                                let symbol_name = &tick.symbol.name;
+                                last_price.insert(symbol_name.clone(), tick.price);
+
+                                // Process tick data only if we don't have quotes and there's an aggressor
+                                if tick.aggressor != Aggressor::None && !has_quotes.contains_key(symbol_name) {
+                                    // Initialize books if needed - do this once
+                                    let (bid_book, ask_book) = match (bid_books.get_mut(symbol_name), ask_books.get_mut(symbol_name)) {
+                                        (Some(bid), Some(ask)) => (bid, ask),
+                                        _ => {
+                                            bid_books.entry(symbol_name.clone()).or_insert_with(BTreeMap::new);
+                                            ask_books.entry(symbol_name.clone()).or_insert_with(BTreeMap::new);
+                                            (
+                                                bid_books.get_mut(symbol_name).unwrap(),
+                                                ask_books.get_mut(symbol_name).unwrap()
+                                            )
+                                        }
+                                    };
+
+                                    // Update appropriate book based on aggressor
                                     match tick.aggressor {
-                                        Aggressor::Buy => {
-                                            // Buy aggressor -> should update ask_book because they hit the ask
-                                            if let Some(ask_book) = ask_books.get_mut(&tick.symbol.name) {
-                                                ask_book.insert(0, BookLevel::new(0, tick.price, dec!(0.0)));
-                                            }
-                                        }
-                                        Aggressor::Sell => {
-                                            // Sell aggressor -> should update bid_book because they hit the bid
-                                            if let Some(bid_book) = bid_books.get_mut(&tick.symbol.name) {
-                                                bid_book.insert(0, BookLevel::new(0, tick.price, dec!(0.0)));
-                                            }
-                                        }
-                                        _ => {}
-                                    }
+                                        Aggressor::Buy => ask_book.insert(0, BookLevel::new(0, tick.price, dec!(0.0))),
+                                        Aggressor::Sell => bid_book.insert(0, BookLevel::new(0, tick.price, dec!(0.0))),
+                                        _ => None,
+                                    };
                                 }
                             }
                             BaseDataEnum::Quote(quote) => {
-                                if !has_quotes.contains_key(&quote.symbol.name) {
-                                    has_quotes.insert(quote.symbol.name.clone(), true);
-                                    bid_books.insert(quote.symbol.name.clone(), BTreeMap::new());
-                                    ask_books.insert(quote.symbol.name.clone(), BTreeMap::new());
-                                }
-                                if let Some(bid_book) = bid_books.get_mut(&quote.symbol.name) {
+                                let symbol_name = &quote.symbol.name;
+                                // Initialize books and set has_quotes flag if needed
+                                if !has_quotes.contains_key(symbol_name) {
+                                    has_quotes.insert(symbol_name.clone(), true);
+                                    let (bid_book, ask_book) = match (bid_books.get_mut(symbol_name), ask_books.get_mut(symbol_name)) {
+                                        (Some(bid), Some(ask)) => (bid, ask),
+                                        _ => {
+                                            bid_books.entry(symbol_name.clone()).or_insert_with(BTreeMap::new);
+                                            ask_books.entry(symbol_name.clone()).or_insert_with(BTreeMap::new);
+                                            (
+                                                bid_books.get_mut(symbol_name).unwrap(),
+                                                ask_books.get_mut(symbol_name).unwrap()
+                                            )
+                                        }
+                                    };
+
+                                    // Update both books
                                     bid_book.insert(0, BookLevel::new(0, quote.bid, quote.bid_volume));
-                                }
-                                if let Some(ask_book) = ask_books.get_mut(&quote.symbol.name) {
-                                    ask_book.insert(0,  BookLevel::new(0, quote.ask, quote.ask_volume));
+                                    ask_book.insert(0, BookLevel::new(0, quote.ask, quote.ask_volume));
                                 }
                             }
                             _ => eprintln!("Market Price Service: Incorrect data type in Market Updates: {}", base_data.base_data_type())
