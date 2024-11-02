@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use async_std::task::sleep;
-use futures_util::future::join_all;
 use once_cell::sync::Lazy;
 use structopt::StructOpt;
 use tokio::net::TcpStream;
@@ -158,16 +157,7 @@ async fn main() -> io::Result<()> {
 
     sleep(Duration::from_secs(3)).await;
 
-   match DATA_STORAGE.get().unwrap().move_back_available_history().await {
-        Ok((handles, progress_bar)) => {
-            join_all(handles).await;
-            if let Some(pb) = progress_bar {
-                pb.finish_with_message("All updates completed");
-            }
-        }
-        Err(e) => eprintln!("History move back failed: {}", e),
-    };
-    DATA_STORAGE.get().unwrap().update_history();
+    HybridStorage::run_update_schedule(DATA_STORAGE.get().unwrap().clone());
 
     // Wait for Ctrl+C
     signal::ctrl_c().await.expect("Failed to listen for ctrl-c");

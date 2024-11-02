@@ -14,7 +14,7 @@ use futures_util::future::join_all;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use memmap2::{Mmap};
 use serde_derive::Deserialize;
-use tokio::sync::{OnceCell, Semaphore};
+use tokio::sync::{OnceCell, RwLock, Semaphore};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
@@ -32,13 +32,6 @@ use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::ServerLaunchOptions;
 
-#[derive(Eq, PartialEq, Clone, Hash, Debug)]
-pub struct UpdateTask {
-    pub symbol: Symbol,
-    pub resolution: Resolution,
-    pub base_data_type: BaseDataType,
-}
-
 pub static DATA_STORAGE: OnceCell<Arc<HybridStorage>> = OnceCell::const_new();
 
 #[allow(unused)]
@@ -48,7 +41,7 @@ pub struct HybridStorage {
     cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
     cache_is_updated: Arc<DashMap<String, bool>>,
     clear_cache_duration: Duration,
-    download_tasks: Arc<DashMap<UpdateTask, JoinHandle<()>>>,
+    download_tasks: Arc<RwLock<Vec<(SymbolName, BaseDataType)>>>,
     options: ServerLaunchOptions,
     multi_bar: MultiProgress
 }
@@ -61,7 +54,7 @@ impl HybridStorage {
             cache_last_accessed: Arc::new(DashMap::new()),
             cache_is_updated: Arc::new(DashMap::new()),
             clear_cache_duration,
-            download_tasks: Arc::new(DashMap::new()),
+            download_tasks:Default::default(),
             options,
             multi_bar: MultiProgress::new()
         };
@@ -70,6 +63,28 @@ impl HybridStorage {
         storage.start_cache_management();
 
         storage
+    }
+
+    pub fn run_update_schedule(self: Arc<Self>) {
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60 * 15)); // 15 minutes
+            loop {
+                interval.tick().await;  // Wait for next interval
+                match HybridStorage::move_back_available_history(self.clone()).await {
+                    Ok((handles, progress_bar)) => {
+                        join_all(handles).await;
+                        if let Some(pb) = progress_bar {
+                            pb.finish_with_message("All updates completed");
+                        }
+                    }
+                    Err(e) => eprintln!("History move back failed: {}", e),
+                };
+
+                // Run update_history
+                HybridStorage::update_history(self.clone());
+
+            }
+        });
     }
 
     fn start_cache_management(&self) {
@@ -486,7 +501,7 @@ impl HybridStorage {
         Ok(combined_data)
     }
 
-    pub async fn move_back_available_history(&self) -> Result<(Vec<JoinHandle<()>>, Option<ProgressBar>), FundForgeError> {
+    pub async fn move_back_available_history(self: Arc<Self>) -> Result<(Vec<JoinHandle<()>>, Option<ProgressBar>), FundForgeError> {
         let options = self.options.clone();
         let multi_bar = self.multi_bar.clone();
         let mut tasks = vec![];
@@ -580,6 +595,9 @@ impl HybridStorage {
                                 oanda_pb.set_prefix("OANDA Move Historical Start Date");
 
                                 for symbol_config in symbols {
+                                    if self.download_tasks.read().await.iter().any(|(name, _)| name == &symbol_config.symbol_name) {
+                                        continue;
+                                    }
                                     let start_date = match symbol_config.start_date {
                                         Some(date) => date,
                                         None => continue,
@@ -616,11 +634,13 @@ impl HybridStorage {
                                         let oanda_pb = oanda_pb.clone();
                                         let multi_bar = multi_bar.clone();
                                         let semaphore = semaphore.clone();
+                                        let download_tasks = self.download_tasks.clone();
                                         tasks.push(task::spawn(async move {
                                             let resolution = match symbol_config.base_data_type {
                                                 BaseDataType::QuoteBars => Resolution::Seconds(5),
                                                 _ => return,
                                             };
+                                            download_tasks.write().await.push((symbol_name.clone(), symbol_config.base_data_type.clone()));
                                             let _permit = semaphore.acquire().await.unwrap();
                                             // Create and configure symbol progress bar
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));
@@ -637,6 +657,7 @@ impl HybridStorage {
                                                 },
                                                 Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_name, e),
                                             }
+                                            download_tasks.write().await.retain(|(name, _)| name != &symbol_name);
                                         }));
                                     }
                                 }
@@ -684,6 +705,9 @@ impl HybridStorage {
                                     rithmic_pb.set_prefix("Rithmic Move Historical Start Date");
 
                                     for symbol_config in symbols {
+                                        if self.download_tasks.read().await.iter().any(|(name, _)| name == &symbol_config.symbol_name) {
+                                            continue;
+                                        }
                                         let start_date = match symbol_config.start_date {
                                             Some(date) => date,
                                             None => continue
@@ -728,12 +752,14 @@ impl HybridStorage {
                                         let overall_pb = overall_pb.clone();
                                         let rithmic_pb = rithmic_pb.clone();
                                         let semaphore = semaphore.clone();
+                                        let download_tasks = self.download_tasks.clone();
                                         tasks.push(task::spawn(async move {
                                             let resolution = match symbol_config.base_data_type {
                                                 BaseDataType::Ticks => Resolution::Ticks(1),
                                                 BaseDataType::Candles => Resolution::Seconds(1),
                                                 _ => return,
                                             };
+                                            download_tasks.write().await.push((symbol_config.symbol_name.clone(), symbol_config.base_data_type.clone()));
                                             let _permit = semaphore.acquire().await.unwrap();
                                             // Create a new progress bar for this symbol
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
@@ -744,6 +770,7 @@ impl HybridStorage {
                                                 },
                                                 Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
                                             }
+                                            download_tasks.write().await.retain(|(name, _)| name != &symbol_config.symbol_name);
                                         }));
                                     }
                                 }
@@ -757,7 +784,7 @@ impl HybridStorage {
         Ok((tasks, overall_pb))
     }
 
-    pub fn update_history(&self) {
+    pub fn update_history(self: Arc<Self>) {
         let options = self.options.clone();
         let multi_bar = self.multi_bar.clone();
         task::spawn(async move {
@@ -854,6 +881,9 @@ impl HybridStorage {
                                     oanda_pb.set_prefix("OANDA Update Historical Data");
 
                                     for symbol_config in symbols {
+                                        if self.download_tasks.read().await.iter().any(|(name, _)| name == &symbol_config.symbol_name) {
+                                            continue;
+                                        }
                                         if let Some(instrument) = client.instruments.get(&symbol_config.symbol_name) {
                                             let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Oanda, instrument.market_type);
                                             let symbol_name = symbol_config.symbol_name.clone();
@@ -861,12 +891,14 @@ impl HybridStorage {
                                             let oanda_pb = oanda_pb.clone();
                                             let multi_bar = multi_bar.clone();
                                             let semaphore = semaphore.clone();
+                                            let download_tasks = self.download_tasks.clone();
                                             tasks.push(task::spawn(async move {
                                                 let resolution = match symbol_config.base_data_type {
                                                     BaseDataType::Ticks => Resolution::Ticks(1),
                                                     BaseDataType::QuoteBars => Resolution::Seconds(5),
                                                     _ => return,
                                                 };
+                                                download_tasks.write().await.push((symbol_name.clone(), symbol_config.base_data_type.clone()));
                                                 let _permit = semaphore.acquire().await.unwrap();
                                                 // Create and configure symbol progress bar
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));
@@ -883,6 +915,7 @@ impl HybridStorage {
                                                     },
                                                     Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_name, e),
                                                 }
+                                                download_tasks.write().await.retain(|(name, _)| name != &symbol_name);
                                             }));
                                         }
                                     }
@@ -931,6 +964,10 @@ impl HybridStorage {
                                         rithmic_pb.set_prefix("Rithmic Update Historical Data");
 
                                         for symbol_config in symbols {
+                                            if self.download_tasks.read().await.iter().any(|(name, _)| name == &symbol_config.symbol_name) {
+                                                continue;
+                                            }
+
                                             let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
                                                 Some(exchange) => exchange,
                                                 None => {
@@ -945,12 +982,14 @@ impl HybridStorage {
                                             let overall_pb = overall_pb.clone();
                                             let rithmic_pb = rithmic_pb.clone();
                                             let semaphore = semaphore.clone();
+                                            let download_tasks = self.download_tasks.clone();
                                             tasks.push(task::spawn(async move {
                                                 let resolution = match symbol_config.base_data_type {
                                                     BaseDataType::Ticks => Resolution::Ticks(1),
                                                     BaseDataType::Candles => Resolution::Seconds(1),
                                                     _ => return,
                                                 };
+                                                download_tasks.write().await.push((symbol_config.symbol_name.clone(), symbol_config.base_data_type.clone()));
                                                 let _permit = semaphore.acquire().await.unwrap();
                                                 // Create a new progress bar for this symbol
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
@@ -961,6 +1000,7 @@ impl HybridStorage {
                                                     },
                                                     Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
                                                 }
+                                                download_tasks.write().await.retain(|(name, _)| name != &symbol_config.symbol_name);
                                             }));
                                         }
                                     }
