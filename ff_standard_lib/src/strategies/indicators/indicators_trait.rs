@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use crate::strategies::indicators::indicator_values::IndicatorValues;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::rolling_window::RollingWindow;
@@ -5,6 +6,11 @@ use crate::standardized_types::subscriptions::DataSubscription;
 
 pub type IndicatorLongName = String;
 pub type IndicatorName = String;
+
+#[async_trait]
+pub trait AsyncIndicators {
+    async fn update_base_data(&self, ) -> Option<Vec<IndicatorValues>>;
+}
 
 pub trait Indicators {
     fn name(&self) -> IndicatorName;

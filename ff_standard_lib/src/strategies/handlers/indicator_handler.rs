@@ -7,6 +7,7 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use futures::StreamExt;
 use tokio::sync::mpsc::Sender;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
@@ -24,7 +25,7 @@ pub struct IndicatorHandler {
     indicators: Arc<DashMap<DataSubscription, DashMap<IndicatorName, IndicatorEnum>>>,
     strategy_mode: StrategyMode,
     subscription_map: DashMap<IndicatorName, DataSubscription>, //used to quickly find the subscription of an indicator by name.
-    subscription_handler: Arc<SubscriptionHandler>
+    subscription_handler: Arc<SubscriptionHandler>,
 }
 
 impl IndicatorHandler {
@@ -33,7 +34,7 @@ impl IndicatorHandler {
             indicators: Default::default(),
             strategy_mode,
             subscription_map: Default::default(),
-            subscription_handler
+            subscription_handler,
         };
         handler
     }
@@ -114,25 +115,46 @@ impl IndicatorHandler {
     pub async fn live_update_time_slice(&self, strategy_sender: Sender<StrategyEvent>) -> Sender<TimeSlice> {
         let (sender, mut receiver) = tokio::sync::mpsc::channel::<TimeSlice>(1000);
         while let Some(time_slice) = receiver.recv().await {
-            let mut results: BTreeMap<IndicatorName, Vec<IndicatorValues>> = BTreeMap::new();
             let indicators = self.indicators.clone();
-
-            for data in time_slice.iter() {
-                let subscription = data.subscription();
-                if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
-                    for mut indicators_dash_map in indicators_by_sub.iter_mut() {
-                        if let Some(indicator_data) = indicators_dash_map.value_mut().update_base_data(data) {
-                            results.entry(indicators_dash_map.key().clone())
-                                .or_insert_with(Vec::new)
-                                .extend(indicator_data);
-                        }
+            let updates = time_slice
+                .iter()
+                .flat_map(|data| {
+                    let subscription = data.subscription();
+                    if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
+                        indicators_by_sub
+                            .iter_mut()
+                            .map({
+                                let data = data.clone();
+                                move |mut indicators_dash_map| {
+                                    let mut indicator = indicators_dash_map.value_mut().clone();
+                                    tokio::spawn({
+                                    let value = data.clone();
+                                    async move {
+                                        indicator.update_base_data(&value)
+                                    }
+                                    })
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                    } else {
+                        Vec::new()
                     }
-                }
-            }
-            if !results.is_empty() {
-                let results_vec: Vec<IndicatorValues> = results.into_values().flatten().collect();
-                let _ = strategy_sender.send(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await;
-            }
+                })
+                .collect::<Vec<_>>();
+
+            // Process results as they complete
+            futures::stream::iter(updates)
+                .buffer_unordered(32)  // Process up to 32 concurrently
+                .for_each(|result| async {
+                    if let Ok(Some(indicator_data)) = result {
+                        let _ = strategy_sender
+                            .send(StrategyEvent::IndicatorEvent(
+                                IndicatorEvents::IndicatorTimeSlice(indicator_data)
+                            ))
+                            .await;
+                    }
+                })
+                .await;
         }
         sender
     }

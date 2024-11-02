@@ -201,6 +201,7 @@ async fn receive_and_process(
                                     strategy_time_slice.extend(consolidated_data);
                                 }
                                 strategy_time_slice.extend(time_slice);
+                                //the indicator update will not be garanteed to be in sync with the time slice, but it should be close enough and this prevents very resource intense indicators from slowing down the strategy.
                                 let _ = indicator_sender.send(strategy_time_slice.clone()).await;
                                 let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
                             }
