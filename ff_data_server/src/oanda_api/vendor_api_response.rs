@@ -199,8 +199,13 @@ impl VendorApiResponse for OandaClient {
 
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
+        let mut last_to_time = Utc::now() - Duration::seconds(5);
         loop {
             let to_time = last_bar_time + add_time;
+            if to_time == last_to_time {
+                break
+            }
+            last_to_time == to_time;
             let url = generate_url(&last_bar_time.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
             let response = self.send_rest_request(&url).await.unwrap();
 
