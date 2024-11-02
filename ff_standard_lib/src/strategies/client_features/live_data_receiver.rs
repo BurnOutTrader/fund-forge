@@ -153,17 +153,15 @@ async fn receive_and_process(
     set_warmup_complete();
     drop(warmup_completion_receiver);
 
+    // Switch to live processing
+    let mut interval = tokio::time::interval(Duration::from_secs(1));
+
     let now = tokio::time::Instant::now();
     let nanos_into_second = now.elapsed().subsec_nanos();
     if nanos_into_second > 0 {
         let wait_nanos = 1_000_000_000 - nanos_into_second;
         tokio::time::sleep(Duration::from_nanos(wait_nanos as u64)).await;
     }
-
-
-    // Switch to live processing
-    let mut interval = tokio::time::interval(Duration::from_secs(1));
-
     loop {
         tokio::select! {
             _ = interval.tick() => {
