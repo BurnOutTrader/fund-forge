@@ -31,7 +31,7 @@ The download list can be found in ff_data-server/data/credentials/{Brokerage}_cr
 The symbols should fund forge format, in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name.
 
 We also specify the BaseDataType
-BaseDataTypes:
+Oanda Historical BaseDataTypes:
 QuoteBars,
 
 ```toml

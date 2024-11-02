@@ -148,12 +148,9 @@ Limit downloads to symbols you trade, if only backtesting, remove symbols from t
 The symbols should fund forge format, in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name.
 
 We also specify the BaseDataType
-BaseDataTypes:
+Rithmic Historical BaseDataTypes:
 Ticks,
-Quotes,
-QuoteBars,
 Candles,
-Fundamentals,
 ```toml
 symbols = [
     { symbol_name = "MNQ", base_data_type = "Ticks"},
