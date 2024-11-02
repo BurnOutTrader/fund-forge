@@ -389,27 +389,29 @@ impl HybridStorage {
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
 
-        // Get earliest year
-        let mut years: Vec<_> = fs::read_dir(&base_path)?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().is_dir())
-            .collect();
+        // Attempt to get the earliest year directory
+        let mut years: Vec<_> = match fs::read_dir(&base_path) {
+            Ok(entries) => entries.filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).collect(),
+            Err(_) => return Ok(None), // No directory for this path, return None
+        };
         years.sort_by_key(|e| e.path());
 
         if let Some(year_dir) = years.first() {
-            // Get earliest month in earliest year
-            let mut months: Vec<_> = fs::read_dir(year_dir.path())?
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path().is_dir())
-                .collect();
+            // Attempt to get the earliest month directory within the earliest year
+            let mut months: Vec<_> = match fs::read_dir(year_dir.path()) {
+                Ok(entries) => entries.filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).collect(),
+                Err(_) => return Ok(None), // No month directory, return None
+            };
             months.sort_by_key(|e| e.path());
 
             if let Some(month_dir) = months.first() {
-                // Get earliest day file in earliest month
-                let mut days: Vec<_> = fs::read_dir(month_dir.path())?
-                    .filter_map(|e| e.ok())
-                    .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
-                    .collect();
+                // Attempt to get the earliest day file within the earliest month
+                let mut days: Vec<_> = match fs::read_dir(month_dir.path()) {
+                    Ok(entries) => entries.filter_map(|e| e.ok())
+                        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
+                        .collect(),
+                    Err(_) => return Ok(None), // No day files, return None
+                };
                 days.sort_by_key(|e| e.path());
 
                 if let Some(earliest_file) = days.first() {
@@ -421,7 +423,7 @@ impl HybridStorage {
                 }
             }
         }
-        Ok(None)
+        Ok(None) // No data found, return None
     }
 
     fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
@@ -580,7 +582,7 @@ impl HybridStorage {
                                 for symbol_config in symbols {
                                     let start_date = match symbol_config.start_date {
                                         Some(date) => date,
-                                        None => continue
+                                        None => continue,
                                     };
 
                                     let start_time = DateTime::<Utc>::from_naive_utc_and_offset(
@@ -590,29 +592,24 @@ impl HybridStorage {
 
                                     if let Some(instrument) = client.instruments.get(&symbol_config.symbol_name) {
                                         let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Oanda, instrument.market_type);
-                                        let end_time: DateTime<Utc> = if let Some(start_date) = symbol_config.start_date {
-                                            let resolution = match symbol_config.base_data_type {
-                                                BaseDataType::Ticks => Resolution::Ticks(1),
-                                                BaseDataType::QuoteBars => Resolution::Seconds(5),
-                                                _ => continue,
-                                            };
+                                        let resolution = match symbol_config.base_data_type {
+                                            BaseDataType::QuoteBars => Resolution::Seconds(5),
+                                            _ => continue,
+                                        };
 
-                                            match self.get_earliest_data_time(&symbol, &resolution, &symbol_config.base_data_type).await {
-                                                Ok(maybe_date) => {
-                                                    match maybe_date {
-                                                        Some(date) => {
-                                                            if date <= start_time {  // This is backwards
-                                                                continue;
-                                                            }
-                                                            date
+                                        let end_time = match self.get_earliest_data_time(&symbol, &resolution, &symbol_config.base_data_type).await {
+                                            Ok(maybe_date) => {
+                                                match maybe_date {
+                                                    Some(date) => {
+                                                        if date <= start_time {
+                                                            continue;
                                                         }
-                                                        None => Utc::now()
+                                                        date
                                                     }
-                                                },
-                                                Err(_) => continue,
-                                            }
-                                        } else {
-                                            Utc::now()
+                                                    None => Utc::now()
+                                                }
+                                            },
+                                            Err(_) =>  continue,
                                         };
                                         let symbol_name = symbol_config.symbol_name.clone();
                                         let overall_pb = overall_pb.clone();
@@ -621,7 +618,6 @@ impl HybridStorage {
                                         let semaphore = semaphore.clone();
                                         tasks.push(task::spawn(async move {
                                             let resolution = match symbol_config.base_data_type {
-                                                BaseDataType::Ticks => Resolution::Ticks(1),
                                                 BaseDataType::QuoteBars => Resolution::Seconds(5),
                                                 _ => return,
                                             };
@@ -697,7 +693,6 @@ impl HybridStorage {
                                             Utc
                                         );
 
-
                                         let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
                                             Some(exchange) => exchange,
                                             None => {
@@ -707,31 +702,25 @@ impl HybridStorage {
                                         };
 
                                         let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic, MarketType::Futures(exchange));
+                                        let resolution = match symbol_config.base_data_type {
+                                            BaseDataType::Ticks => Resolution::Ticks(1),
+                                            BaseDataType::Candles => Resolution::Seconds(1),
+                                            _ => continue,
+                                        };
 
-
-                                        let end_time: DateTime<Utc> = if let Some(start_date) = symbol_config.start_date {
-                                            let resolution = match symbol_config.base_data_type {
-                                                BaseDataType::Ticks => Resolution::Ticks(1),
-                                                BaseDataType::QuoteBars => Resolution::Seconds(1),
-                                                _ => continue,
-                                            };
-
-                                            match self.get_earliest_data_time(&symbol, &resolution, &symbol_config.base_data_type).await {
-                                                Ok(maybe_date) => {
-                                                    match maybe_date {
-                                                        Some(date) => {
-                                                            if date <= start_time {  // This is backwards
-                                                                continue;
-                                                            }
-                                                            date
+                                        let end_time: DateTime<Utc> = match self.get_earliest_data_time(&symbol, &resolution, &symbol_config.base_data_type).await {
+                                            Ok(maybe_date) => {
+                                                match maybe_date {
+                                                    Some(date) => {
+                                                        if date <= start_time {  // This is backwards
+                                                            continue;
                                                         }
-                                                        None => Utc::now()
+                                                        date
                                                     }
-                                                },
-                                                Err(_) => continue,
-                                            }
-                                        } else {
-                                            Utc::now()
+                                                    None => Utc::now()
+                                                }
+                                            },
+                                            Err(_) => continue,
                                         };
 
                                         let client = client.clone();
@@ -999,6 +988,5 @@ struct DownloadSymbols {
 struct DownloadConfig {
     symbol_name: SymbolName,
     base_data_type: BaseDataType,
-    #[allow(unused)]
     start_date: Option<NaiveDate>,
 }

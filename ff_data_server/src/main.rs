@@ -157,10 +157,10 @@ async fn main() -> io::Result<()> {
 
     sleep(Duration::from_secs(3)).await;
 
-/*    match DATA_STORAGE.get().unwrap().move_back_available_history().await {
+   match DATA_STORAGE.get().unwrap().move_back_available_history().await {
         Ok(_) => eprintln!("History moved back successfully"),
         Err(e) => eprintln!("History move back failed: {}", e),
-    };*/
+    };
     DATA_STORAGE.get().unwrap().update_history();
 
     // Wait for Ctrl+C
