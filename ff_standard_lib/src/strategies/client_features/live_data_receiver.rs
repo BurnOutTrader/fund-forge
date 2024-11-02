@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::time::Duration;
 use tokio::sync::mpsc::{Sender};
 use std::sync::Arc;
-use chrono::Utc;
+use chrono::{Utc};
 use tokio::runtime::Runtime;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -152,6 +152,14 @@ async fn receive_and_process(
     drop(buffer_to_process);
     set_warmup_complete();
     drop(warmup_completion_receiver);
+
+    let now = tokio::time::Instant::now();
+    let nanos_into_second = now.elapsed().subsec_nanos();
+    if nanos_into_second > 0 {
+        let wait_nanos = 1_000_000_000 - nanos_into_second;
+        tokio::time::sleep(Duration::from_nanos(wait_nanos as u64)).await;
+    }
+
 
     // Switch to live processing
     let mut interval = tokio::time::interval(Duration::from_secs(1));
