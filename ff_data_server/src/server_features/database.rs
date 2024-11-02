@@ -486,7 +486,7 @@ impl HybridStorage {
         Ok(combined_data)
     }
 
-    pub async fn move_back_available_history(&self) -> Result<(), FundForgeError> {
+    pub async fn move_back_available_history(&self) -> Result<(Vec<JoinHandle<()>>, Option<ProgressBar>), FundForgeError> {
         let options = self.options.clone();
         let multi_bar = self.multi_bar.clone();
         let mut tasks = vec![];
@@ -545,7 +545,7 @@ impl HybridStorage {
             false => None
         };
 
-        if let Some(overall_pb) = overall_pb {
+        if let Some(ref overall_pb) = overall_pb {
             if options.disable_oanda_server == 0 {
                 let oanda_path = options.data_folder.clone()
                     .join("credentials")
@@ -753,10 +753,8 @@ impl HybridStorage {
                     }
                 }
             }
-            join_all(tasks).await;
-            overall_pb.finish_with_message("All updates completed");
         }
-        Ok(())
+        Ok((tasks, overall_pb))
     }
 
     pub fn update_history(&self) {
