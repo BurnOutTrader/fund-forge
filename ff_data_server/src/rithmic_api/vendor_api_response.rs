@@ -385,8 +385,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + Duration::hours(4);
 
-            let _permit = match permits.acquire().await {
-                Ok(_) => {}
+            let permit = match permits.acquire().await {
+                Ok(permit) => permit,
                 Err(e) => {
                     progress_bar.finish_and_clear();
                     eprintln!("Rithmic download error acquiring permit: {}", e);
@@ -421,6 +421,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     }
                 }
             }
+            drop(permit);
 
             let mut is_saving = false;
             let back_up_time = window_start.clone();
@@ -488,7 +489,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let mut window_start = from;
 
-        let bar_len = ((Utc::now() - window_start).num_seconds() / 60) as u64;
+        let bar_len = ((to - from).num_seconds() / 240) as u64;
         progress_bar.set_length(bar_len);
 
         let mut data_map = BTreeMap::new();
@@ -501,8 +502,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 window_end = to;
             }
 
-            let _permit = match permits.acquire().await {
-                Ok(_) => {}
+            let permit = match permits.acquire().await {
+                Ok(permit) => permit,
                 Err(e) => {
                     progress_bar.finish_and_clear();
                     eprintln!("Rithmic download error acquiring permit: {}", e);
@@ -538,6 +539,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     }
                 }
             }
+            drop(permit);
 
             let mut is_saving = false;
             let mut is_end = false;

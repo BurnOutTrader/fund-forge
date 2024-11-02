@@ -642,7 +642,12 @@ impl HybridStorage {
                                             };
                                             download_tasks.write().await.push((symbol_name.clone(), symbol_config.base_data_type.clone()));
 
-                                            let _permit = semaphore.acquire().await.unwrap();
+                                            let permit = match semaphore.acquire().await {
+                                                Ok(permit) => permit,
+                                                Err(e) => {
+                                                    return
+                                                }
+                                            };
                                             // Create and configure symbol progress bar
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));
                                             symbol_pb.set_style(ProgressStyle::default_bar()
@@ -659,6 +664,7 @@ impl HybridStorage {
                                                 Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_name, e),
                                             }
                                             download_tasks.write().await.retain(|(name, _)| name != &symbol_name);
+                                            drop(permit);
                                         }));
                                     }
                                 }
@@ -761,7 +767,12 @@ impl HybridStorage {
                                                 _ => return,
                                             };
                                             download_tasks.write().await.push((symbol_config.symbol_name.clone(), symbol_config.base_data_type.clone()));
-                                            let _permit = semaphore.acquire().await.unwrap();
+                                            let permit = match semaphore.acquire().await {
+                                                Ok(permit) => permit,
+                                                Err(e) => {
+                                                    return
+                                                }
+                                            };
                                             // Create a new progress bar for this symbol
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
                                             match client.update_historical_data_to(symbol, symbol_config.base_data_type, resolution, start_time, end_time, symbol_pb).await {
@@ -772,6 +783,7 @@ impl HybridStorage {
                                                 Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
                                             }
                                             download_tasks.write().await.retain(|(name, _)| name != &symbol_config.symbol_name);
+                                            drop(permit);
                                         }));
                                     }
                                 }
@@ -904,7 +916,12 @@ impl HybridStorage {
                                                     _ => return,
                                                 };
                                                 download_tasks.write().await.push((symbol_name.clone(), symbol_config.base_data_type.clone()));
-                                                let _permit = semaphore.acquire().await.unwrap();
+                                                let permit = match semaphore.acquire().await {
+                                                    Ok(permit) => permit,
+                                                    Err(e) => {
+                                                        return
+                                                    }
+                                                };
                                                 // Create and configure symbol progress bar
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));
                                                 symbol_pb.set_style(ProgressStyle::default_bar()
@@ -921,6 +938,7 @@ impl HybridStorage {
                                                     Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_name, e),
                                                 }
                                                 download_tasks.write().await.retain(|(name, _)| name != &symbol_name);
+                                                drop(permit);
                                             }));
                                         }
                                     }
@@ -995,7 +1013,12 @@ impl HybridStorage {
                                                     _ => return,
                                                 };
                                                 download_tasks.write().await.push((symbol_config.symbol_name.clone(), symbol_config.base_data_type.clone()));
-                                                let _permit = semaphore.acquire().await.unwrap();
+                                                let permit = match semaphore.acquire().await {
+                                                    Ok(permit) => permit,
+                                                    Err(e) => {
+                                                        return
+                                                    }
+                                                };
                                                 // Create a new progress bar for this symbol
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
                                                 match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
@@ -1006,6 +1029,7 @@ impl HybridStorage {
                                                     Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
                                                 }
                                                 download_tasks.write().await.retain(|(name, _)| name != &symbol_config.symbol_name);
+                                                drop(permit);
                                             }));
                                         }
                                     }
