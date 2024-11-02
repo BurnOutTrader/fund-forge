@@ -12,13 +12,10 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 ## Announcements: Read Before Live Trading or Backtesting
 - 24/10/2024: The folder and file structure was changed, The historical data has not changed, you can just move the historical data you have already downloaded to `ff_data_server/data/historical` and it will work as before. This was done to make set up easier for new users.
 - 31/10/2024: Oanda Brokerage and Datavendor was added, Oanda has historical data available, see the [Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md) to download data. Oanda Live trading has not been tested, backtesting with Oanda might not work until I have tested (I am downloading the data now)
-- 1/11/2024: Rithmic Historical data now available (ticks and Candles), I am unsure on start date for the data sets, so the server will search from 2011, which might take a long time to reach the first data point.
-- 1/11/2024: Auto update for historical data, is only on server launch, it will become a scheduled task in the future (you cant trust auto warm up to have accurate historical bars yet).
-- 1/11/2024: Oanda live trading will be implemented after historical data.
 - 1/11/2024: Oanda Backtesting will become more accurate after historical data is complete, currently the value per tick is just $1 for all symbols.
 - 1/11/2024: Still some sync issues happen intermittently with rithmic live trading, be sure to monitor any live strategies.
-- 1/11/2024: Rithmic DataVendor no longer requires a RithmicSystem, only 1 rithmic system will be used for data connections. (since you pay for the data, there is no point paying for multiple data connections)
-- 1/11/2024: The integrity of historical data still needs to be verified, I will be building a test strategy to verify the data integrity, of the downloaded data.
+- 2/11/2024: Rithmic and Oanda historical data can be downloaded and kept up to date automatically by the server, it is possible to specify a start date for historical data to avoid downloading to much data, the start date can be move backwards if you need more data.
+- 2/11/2024: The next development step is live warm up, to have instant history access from  historical data.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
