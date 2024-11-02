@@ -442,11 +442,114 @@ impl VendorApiResponse for RithmicBrokerageClient {
         }
         if !data_map.is_empty() {
             let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
-            if let Err(_e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
+            if let Err(_e) = data_storage.save_data_bulk(save_data).await {
                 //eprintln!("Failed to save data: {}", e);
             }
         }
         let msg = format!("Rithmic: Completed Download of data for: {}", symbol.name);
+        progress_bar.finish_with_message(msg);
+        self.historical_data_senders.remove(&(symbol_name, base_data_type));
+        Ok(())
+    }
+
+    async fn update_historical_data_to(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, mut from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+        const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
+        let symbol_name = symbol.name.clone();
+        let exchange = match get_exchange_by_symbol_name(&symbol_name) {
+            Some(exchange) => exchange,
+            None => return Err(FundForgeError::ClientSideErrorDebug(format!("Exchange not found for symbol: {}", symbol_name)))
+        };
+
+        let (sender, mut receiver) = mpsc::channel(1000000);
+        self.historical_data_senders.insert((symbol_name.clone(), base_data_type.clone()), sender);
+
+        let data_storage = DATA_STORAGE.get().unwrap();
+
+        let mut window_start = from;
+
+        let bar_len = ((Utc::now() - window_start).num_seconds() / 60) as u64;
+        progress_bar.set_length(bar_len);
+
+        let mut data_map = BTreeMap::new();
+        let mut save_attempts = 0;
+        'main_loop: loop {
+            // Calculate window end based on start time (always 1 hour)
+            let mut window_end = window_start + Duration::hours(4);
+            if window_end > to {
+                window_end = to;
+            }
+
+            self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
+            sleep(std::time::Duration::from_millis(50)).await;
+
+            // Receive loop with timeout
+            'msg_loop: loop {
+                match timeout(std::time::Duration::from_millis(200), receiver.recv()).await {
+                    Ok(Some(data)) => {
+                        data_map.insert(data.time_utc(), data);
+                    },
+                    Ok(None) => {
+                        // Channel closed
+                        //println!("Channel closed");
+                        break 'main_loop;
+                    },
+                    Err(_) => { // Timeout case
+                        break 'msg_loop;
+                    }
+                }
+            }
+
+            let mut is_saving = false;
+            let mut is_end = false;
+            let back_up_time = window_start.clone();
+            if let Some((&last_time, _)) = data_map.last_key_value() {
+                if last_time.day() != window_start.day() {
+                    is_saving = true;
+                }
+                if last_time > window_start {
+                    window_start = last_time.clone();
+                } else {
+                    window_start = window_end;
+                }
+                if last_time >= to {
+                    is_end = true;
+                }
+            } else {
+                // If no new data, advance window to avoid re-requesting the same interval
+                window_start = window_end;
+                if window_start > to {
+                    is_end = true;
+                }
+            };
+
+            if is_saving {
+                let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
+                //println!("Rithmic: Saving {} data points", save_data.len());
+                if let Err(_e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
+                    //eprintln!("Failed to save data: {}", e);
+                    window_start = back_up_time;
+                    if save_attempts < 3 {
+                        save_attempts += 1;
+                        continue 'main_loop;
+                    }
+                }
+                save_attempts = 0;
+                data_map = BTreeMap::new();
+            }
+
+            // Check if we've caught up to the desired end or current time
+            if is_end {
+                break 'main_loop;
+            }
+            progress_bar.inc(1);
+        }
+        if !data_map.is_empty() {
+            let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
+            if let Err(_e) = data_storage.save_data_bulk(save_data).await {
+                //eprintln!("Failed to save data: {}", e);
+            }
+        }
+        let msg = format!("Rithmic: Completed Moving Historical Data Availability Backwards for: {}, {} {}", symbol.name, resolution, base_data_type);
         progress_bar.finish_with_message(msg);
         self.historical_data_senders.remove(&(symbol_name, base_data_type));
         Ok(())

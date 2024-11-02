@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use async_trait::async_trait;
-use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
 use indicatif::ProgressBar;
 use rust_decimal::Decimal;
 use tokio::sync::broadcast;
@@ -18,7 +18,9 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::{OandaClient, OANDA_IS_CONNECTED};
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
-use crate::oanda_api::download::generate_urls;
+use crate::oanda_api::download::{generate_url, generate_urls};
+use crate::oanda_api::get_requests::oanda_clean_instrument;
+use crate::oanda_api::support_and_conversions::{add_time_to_date, resolution_to_oanda_interval};
 use crate::server_features::database::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
@@ -184,10 +186,128 @@ impl VendorApiResponse for OandaClient {
             }
         };
 
-        let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, &last_bar_time).await;
+        //let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, last_bar_time, Utc::now()).await;
+        let interval = resolution_to_oanda_interval(&resolution);
+        let instrument  = oanda_clean_instrument(&symbol.name).await;
+
+        let num_days = (last_bar_time - Utc::now()).num_days();
+        progress_bar.set_length(num_days as u64);
+
+        let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
+        loop {
+            let url = generate_url(&last_bar_time.naive_utc(), &(last_bar_time + add_time_to_date(&interval)).naive_utc(), &instrument, &interval, &base_data_type);
+            let response = self.send_rest_request(&url).await.unwrap();
+
+            if !response.status().is_success() {
+                continue;
+            }
+
+            let content = response.text().await.unwrap();
+            let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+            let candles = json["candles"].as_array().unwrap();
+
+            if candles.len() == 0 {
+                continue;
+            }
+
+            // First convert candles to a Vec for indexed access
+            let candles_vec: Vec<_> = candles.into_iter().collect();
+            let mut i = 0;
+
+            let mut attempts = 0;
+            while i < candles_vec.len() {
+                let price_data = &candles_vec[i];
+                let is_closed = price_data["complete"].as_bool().unwrap();
+                if !is_closed {
+                    i += 1;
+                    continue;
+                }
+
+                let bar: BaseDataEnum = match base_data_type {
+                    BaseDataType::QuoteBars => match oanda_quotebar_from_candle(price_data, symbol.clone(), resolution.clone()) {
+                        Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
+                        Err(e) => {
+                            i += 1;
+                            continue
+                        }
+                    },
+                    BaseDataType::Candles => match candle_from_candle(price_data, symbol.clone(), resolution.clone()) {
+                        Ok(candle) => BaseDataEnum::Candle(candle),
+                        Err(e) => {
+                            i += 1;
+                            continue
+                        }
+                    },
+                    _ => {
+                        i += 1;
+                        continue
+                    }
+                };
+
+                let new_bar_time = bar.time_utc();
+                if last_bar_time.day() != new_bar_time.day() && !new_data.is_empty() {
+                    let data_vec: Vec<BaseDataEnum> = new_data.values().map(|x| x.clone()).collect();
+                    // Retry loop for saving data
+                    const MAX_RETRIES: u32 = 3;
+                    let mut retry_count = 0;
+                    let save_result = 'save_loop: loop {
+                        match DATA_STORAGE.get().unwrap().save_data_bulk(data_vec.clone()).await {
+                            Ok(_) => break 'save_loop Ok(()),
+                            Err(e) => {
+                                retry_count += 1;
+                                if retry_count >= MAX_RETRIES {
+                                    break Err(e);
+                                }
+                                // Optional: Add delay between retries
+                                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                            }
+                        }
+                    };
+
+                    // Handle final save result
+                    if let Err(e) = save_result {
+                        // Return to the start of the current day's data
+                        while i > 0 && bar.time_utc().day() == new_bar_time.day() {
+                            i -= 1;
+                        }
+                        // Move forward one to start processing from the beginning of the failed day
+                        i += 1;
+                        continue;
+                    }
+
+                    new_data.clear();
+                }
+
+                last_bar_time = bar.time_utc();
+                new_data.entry(new_bar_time).or_insert(bar);
+                i += 1;
+            }
+            if last_bar_time >= Utc::now() - Duration::seconds(5) {
+                break;
+            }
+            progress_bar.inc(1);
+        }
+        let msg = format!("Oanda: Completed Download of data for: {}, {} {}", symbol.name, resolution, base_data_type);
+        progress_bar.finish_with_message(msg);
+        Ok(())
+    }
+
+    async fn update_historical_data_to(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, mut from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+        let earliest_oanda_data = {
+            let utc_time_string = "2005-01-01 00:00:00.000000";
+            let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
+            DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
+        };
+
+        if from < earliest_oanda_data {
+            from = earliest_oanda_data;
+        }
+
+        let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, from, to).await;
         progress_bar.set_length(urls.len() as u64);
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
+        let mut last_bar_time = from;
         for url in &urls {
             let response = self.send_rest_request(&url).await.unwrap();
 
@@ -277,8 +397,8 @@ impl VendorApiResponse for OandaClient {
             }
             progress_bar.inc(1);
         }
-        let msg = format!("Oanda: Completed Download of data for: {}", symbol.name);
-        progress_bar.finish_with_message(format!("Completed {}: {}: {}", symbol.name, resolution, base_data_type));
+        let msg = format!("Oanda: Completed Moving Historical Data Availability Backwards for: {}, {} {}", symbol.name, resolution, base_data_type);
+        progress_bar.finish_with_message(msg);
         Ok(())
     }
 }

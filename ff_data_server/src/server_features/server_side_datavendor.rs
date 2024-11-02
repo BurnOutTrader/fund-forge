@@ -225,4 +225,15 @@ pub trait VendorApiResponse: Sync + Send {
         resolution: Resolution,
         progress_bar: ProgressBar
     ) -> Result<(), FundForgeError>;
+
+    /// Updates the historical data from the new required earliest data time to the previous earliest save
+    async fn update_historical_data_to(
+        &self,
+        symbol: Symbol,
+        base_data_type: BaseDataType,
+        resolution: Resolution,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+        progress_bar: ProgressBar
+    ) -> Result<(), FundForgeError>;
 }

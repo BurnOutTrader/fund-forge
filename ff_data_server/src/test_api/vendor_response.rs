@@ -190,4 +190,8 @@ impl VendorApiResponse for TestApiClient {
     async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, progress_bar: ProgressBar) -> Result<(), FundForgeError>  {
         todo!()
     }
+    #[allow(unused)]
+    async fn update_historical_data_to(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+        todo!()
+    }
 }
