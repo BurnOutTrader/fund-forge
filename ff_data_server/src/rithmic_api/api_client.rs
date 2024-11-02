@@ -332,7 +332,14 @@ impl RithmicBrokerageClient {
 
             let mut write_stream = write_stream.lock().await;
             match write_stream.send(Message::Binary(prefixed_msg.clone())).await {
-                Ok(_) => {},
+                Ok(_) => {
+                    match plant {
+                        SysInfraType::HistoryPlant | SysInfraType::TickerPlant => {
+                            RITHMIC_DATA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                        },
+                        _ => {}
+                    }
+                },
                 Err(e) => {
                     match plant {
                         SysInfraType::HistoryPlant | SysInfraType::TickerPlant => {
