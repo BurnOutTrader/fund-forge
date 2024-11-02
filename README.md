@@ -14,7 +14,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - 1/11/2024: Still some sync issues happen intermittently with rithmic live trading, be sure to monitor any live strategies.
 - 2/11/2024: Rithmic and Oanda historical data can be downloaded and kept up to date automatically by the server, it is possible to specify a start date for historical data to avoid downloading to much data, the start date can be moved backwards if you need more data. see the setup for the specific broker for more info.
 - 2/11/2024: Live warm up should now work, if you have historical data, but has not been tested (it is the weekend and market is closed)
-- 2/11/2024: The next development step is to finish live data for Oanda.
+- 2/11/2024: The next development step is to finish live data for Oanda, then backtesting accuracy for Oanda, then support for more historical resolutions and data sets, by improving subscription functions.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
