@@ -585,7 +585,7 @@ see tests [here](ff_data_server/README.md)
 
 I have opted for hard code using `impl` over `dyn` or dynamic dispatch, using enums instead of inheritance when possible for better run time performance at the cost of slightly more hardcoding for new implementations.
 
-'ff_strategy_registry': decouples the strategy instance to allow front end Gui implementations in any programming language.
+`ff_strategy_registry`: decouples the strategy instance to allow front end Gui implementations in any programming language.
 
 `ff_data_servers`: decouples api instances from any specific server and allows a microservices approach to maintaining api connections.
 If no settings are provided in the `resources/server_settings.toml` then that brokerage or vendor will use the default server addresses, this way we have the option for maximum and minimum segregation of api instances.
