@@ -566,7 +566,7 @@ pub type Price = rust_decimal::decimal::Decimal;
 ## Architecture
 I have tried to maintain a reasonable separation of concerns throughout the code base to allow any backend implementations to be upgraded without effecting existing strategies.
 
-Some of the current implementations are crude implementations that act as placeholders for more performant designs in the future, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
+I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
 Anything can be improved and optimized once a stable platform is built.
 
 The big advantage of the architecture is that everything can be upgraded in the future, fund forge will never be tied down by obsolete dependencies or outdated code.
