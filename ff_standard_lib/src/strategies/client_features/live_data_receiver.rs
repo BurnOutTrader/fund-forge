@@ -149,7 +149,7 @@ async fn receive_and_process(
         }
         let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
     }
-    //drop(buffer_to_process);
+    drop(buffer_to_process);
     set_warmup_complete();
     drop(warmup_completion_receiver);
 
