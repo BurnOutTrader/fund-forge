@@ -569,6 +569,9 @@ I have tried to maintain a reasonable separation of concerns throughout the code
 Some of the current implementations are crude implementations that act as placeholders for more performant designs in the future, as a solo developer with limited rust experience I decided to just keep pushing forward and worry about optimization and perfection of various functions once I have a product capable of live testing.
 Anything can be improved and optimized once a stable platform is built.
 
+The big advantage of the architecture is that everything can be upgraded in the future, fund forge will never be tied down by obsolete dependencies or outdated code.
+The entire GUI can be replaced with a new GUI without changing the backend, the entire backend can be replaced without changing the strategies, and the strategies can be replaced without changing the backend or GUI.
+
 All strategy functionality is accessed by calling the `FundForgeStrategy` object's associated functions, there is a complete decoupling of strategy instance from the backend so that
 upgrades can be implemented in the engine and handlers without causing breaking changes to strategies.
 
