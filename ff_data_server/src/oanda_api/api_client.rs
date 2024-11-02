@@ -4,12 +4,14 @@ use std::time::{Duration};
 use futures::stream::{Stream};
 use tokio::sync::{broadcast, OnceCell, Semaphore};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use crate::oanda_api::settings::{OandaApiMode, OandaSettings};
 use crate::rate_limiter::RateLimiter;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use futures_util::TryStreamExt;
+use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use serde_json::{Value};
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -23,6 +25,10 @@ use crate::oanda_api::get_requests::{oanda_account_summary, oanda_accounts_list,
 use crate::oanda_api::instruments::OandaInstrument;
 use crate::oanda_api::models::position::OandaPosition;
 use crate::ServerLaunchOptions;
+
+lazy_static! {
+    pub static ref OANDA_IS_CONNECTED: AtomicBool = AtomicBool::new(false);
+}
 
 pub(crate) static OANDA_CLIENT: OnceCell<Arc<OandaClient>> = OnceCell::const_new();
 pub fn get_oanda_client() -> Option<Arc<OandaClient>> {
@@ -63,12 +69,15 @@ impl OandaClient {
         // Acquire a permit asynchronously. The permit will be automatically released when dropped.
         let _permit = self.rate_limiter.acquire().await;
 
-        let response = self.client.get(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .send()
-            .await?;
-
-        Ok(response)
+        match self.client.get(&url).header("Authorization", format!("Bearer {}", self.api_key)).send().await {
+            Ok(response) => {
+                Ok(response)
+            }
+            Err(e) => {
+                OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                Err(e)
+            }
+        }
     }
 }
 
@@ -129,6 +138,7 @@ async fn handle_price_stream(
 
                     match establish_stream(&client, &stream_endpoint, &suffix, &stream_limit, &api_key).await {
                         Ok(mut stream) => {
+                             OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
                             while let Ok(Some(chunk)) = stream.try_next().await {
                                 if let Ok(text) = String::from_utf8(chunk.to_vec()) {
                                     let json: Value = match serde_json::from_str(&text) {
@@ -243,6 +253,7 @@ async fn handle_price_stream(
                         }
                         Err(e) => {
                             eprintln!("Stream error: {}", e);
+                             OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
                             tokio::time::sleep(Duration::from_secs(5)).await;
                         }
                     }
@@ -274,8 +285,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         }
     };
 
-    let client = Arc::new(Client::builder()
-        .default_headers({
+    let client = match Client::builder().default_headers({
             let mut headers = reqwest::header::HeaderMap::new();
             headers.insert(
                 reqwest::header::AUTHORIZATION,
@@ -284,7 +294,19 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
             headers
         })
         .http2_keep_alive_while_idle(true)
-        .build().unwrap());
+        .build()
+    {
+        Ok(client) => {
+            OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+            client
+        }
+        Err(_) => {
+            OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+            return;
+        }
+    };
+
+    let client = Arc::new(client);
 
     let rate_limiter = RateLimiter::new(120, Duration::from_secs(1));
     let (sender, receiver) = tokio::sync::mpsc::channel(5);

@@ -26,7 +26,7 @@ use ff_standard_lib::standardized_types::enums::MarketType;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use crate::oanda_api::api_client::OANDA_CLIENT;
+use crate::oanda_api::api_client::{OANDA_CLIENT, OANDA_IS_CONNECTED};
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
@@ -566,48 +566,50 @@ impl HybridStorage {
                             }
                         };
 
-                        if let Some(client) = OANDA_CLIENT.get() {
-                            let symbols = symbol_configs.symbols;
-                            if !symbols.is_empty() {
+                        if OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
+                            if let Some(client) = OANDA_CLIENT.get() {
+                                let symbols = symbol_configs.symbols;
+                                if !symbols.is_empty() {
 
-                                // Create OANDA progress bar once, outside the loop
-                                let oanda_pb = multi_bar.add(ProgressBar::new(symbols.len() as u64));
-                                oanda_pb.set_style(ProgressStyle::default_bar()
-                                    .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                                    .unwrap());
-                                oanda_pb.set_prefix("OANDA Progress");
+                                    // Create OANDA progress bar once, outside the loop
+                                    let oanda_pb = multi_bar.add(ProgressBar::new(symbols.len() as u64));
+                                    oanda_pb.set_style(ProgressStyle::default_bar()
+                                        .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
+                                        .unwrap());
+                                    oanda_pb.set_prefix("OANDA Progress");
 
-                                for symbol_config in symbols {
-                                    if let Some(instrument) = client.instruments.get(&symbol_config.symbol_name) {
-                                        let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Oanda, instrument.market_type);
-                                        let symbol_name = symbol_config.symbol_name.clone();
-                                        let overall_pb = overall_pb.clone();
-                                        let oanda_pb = oanda_pb.clone();
-                                        let multi_bar = multi_bar.clone();
-                                        let semaphore = semaphore.clone();
-                                        tasks.push(task::spawn(async move {
-                                            let resolution = match symbol_config.base_data_type {
-                                                BaseDataType::Ticks => Resolution::Ticks(1),
-                                                BaseDataType::QuoteBars => Resolution::Seconds(5),
-                                                _ => return,
-                                            };
-                                            let _permit = semaphore.acquire().await.unwrap();
-                                            // Create and configure symbol progress bar
-                                            let symbol_pb = multi_bar.add(ProgressBar::new(0));
-                                            symbol_pb.set_style(ProgressStyle::default_bar()
-                                                .template("{prefix:.bold} {msg} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                                                .unwrap());
-                                            symbol_pb.set_prefix(symbol_name.clone());
-                                            symbol_pb.set_message(format!("({}: {})", resolution, symbol_config.base_data_type));
+                                    for symbol_config in symbols {
+                                        if let Some(instrument) = client.instruments.get(&symbol_config.symbol_name) {
+                                            let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Oanda, instrument.market_type);
+                                            let symbol_name = symbol_config.symbol_name.clone();
+                                            let overall_pb = overall_pb.clone();
+                                            let oanda_pb = oanda_pb.clone();
+                                            let multi_bar = multi_bar.clone();
+                                            let semaphore = semaphore.clone();
+                                            tasks.push(task::spawn(async move {
+                                                let resolution = match symbol_config.base_data_type {
+                                                    BaseDataType::Ticks => Resolution::Ticks(1),
+                                                    BaseDataType::QuoteBars => Resolution::Seconds(5),
+                                                    _ => return,
+                                                };
+                                                let _permit = semaphore.acquire().await.unwrap();
+                                                // Create and configure symbol progress bar
+                                                let symbol_pb = multi_bar.add(ProgressBar::new(0));
+                                                symbol_pb.set_style(ProgressStyle::default_bar()
+                                                    .template("{prefix:.bold} {msg} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
+                                                    .unwrap());
+                                                symbol_pb.set_prefix(symbol_name.clone());
+                                                symbol_pb.set_message(format!("({}: {})", resolution, symbol_config.base_data_type));
 
-                                            match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
-                                                Ok(_) => {
-                                                    overall_pb.inc(1);
-                                                    oanda_pb.inc(1);
-                                                },
-                                                Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_name, e),
-                                            }
-                                        }));
+                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
+                                                    Ok(_) => {
+                                                        overall_pb.inc(1);
+                                                        oanda_pb.inc(1);
+                                                    },
+                                                    Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_name, e),
+                                                }
+                                            }));
+                                        }
                                     }
                                 }
                             }
