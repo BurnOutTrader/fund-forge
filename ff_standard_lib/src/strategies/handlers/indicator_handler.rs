@@ -118,45 +118,47 @@ impl IndicatorHandler {
         let (sender, mut receiver) = tokio::sync::mpsc::channel::<TimeSlice>(1000);
         while let Some(time_slice) = receiver.recv().await {
             let indicators = self.indicators.clone();
-            let updates = time_slice
-                .iter()
-                .flat_map(|data| {
-                    let subscription = data.subscription();
-                    if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
-                        indicators_by_sub
-                            .iter_mut()
-                            .map({
-                                let data = data.clone();
-                                move |mut indicators_dash_map| {
-                                    let mut indicator = indicators_dash_map.value_mut().clone();
-                                    tokio::spawn({
-                                        let value = data.clone();
-                                        async move {
-                                            indicator.update_base_data(&value)
-                                        }
-                                    })
-                                }
-                            })
-                            .collect::<Vec<_>>()
-                    } else {
-                        Vec::new()
-                    }
-                })
-                .collect::<Vec<_>>();
+            let strategy_sender = strategy_sender.clone();
 
-            // Process results as they complete
-            futures::stream::iter(updates)
-                .buffer_unordered(32)  // Process up to 32 concurrently
-                .for_each(|result| async {
-                    if let Ok(Some(indicator_data)) = result {
-                        let _ = strategy_sender
-                            .send(StrategyEvent::IndicatorEvent(
-                                IndicatorEvents::IndicatorTimeSlice(indicator_data)
-                            ))
-                            .await;
-                    }
-                })
-                .await;
+            tokio::spawn(async move {
+                let updates = time_slice
+                    .iter()
+                    .flat_map(|data| {
+                        let subscription = data.subscription();
+                        if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
+                            indicators_by_sub
+                                .iter_mut()
+                                .map({
+                                    move |mut indicators_dash_map| {
+                                        let mut indicator = indicators_dash_map.value_mut().clone();
+                                        tokio::spawn({
+                                            let value = data.clone();
+                                            async move {
+                                                indicator.update_base_data(&value)
+                                            }
+                                        })
+                                    }
+                                })
+                                .collect::<Vec<_>>()
+                        } else {
+                            Vec::new()
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                futures::stream::iter(updates)
+                    .buffer_unordered(32)
+                    .for_each(|result| async {
+                        if let Ok(Some(indicator_data)) = result {
+                            let _ = strategy_sender
+                                .send(StrategyEvent::IndicatorEvent(
+                                    IndicatorEvents::IndicatorTimeSlice(indicator_data)
+                                ))
+                                .await;
+                        }
+                    })
+                    .await;
+            });
         }
         sender
     }
