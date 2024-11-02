@@ -113,7 +113,7 @@ pub struct ServerLaunchOptions {
     #[structopt(
         short = "u",
         long = "updates",
-        default_value = "20"
+        default_value = "900"
     )]
     pub update_seconds: u64,
 }
