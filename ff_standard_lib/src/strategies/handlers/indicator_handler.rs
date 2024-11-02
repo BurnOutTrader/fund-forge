@@ -130,10 +130,10 @@ impl IndicatorHandler {
                                 move |mut indicators_dash_map| {
                                     let mut indicator = indicators_dash_map.value_mut().clone();
                                     tokio::spawn({
-                                    let value = data.clone();
-                                    async move {
-                                        indicator.update_base_data(&value)
-                                    }
+                                        let value = data.clone();
+                                        async move {
+                                            indicator.update_base_data(&value)
+                                        }
                                     })
                                 }
                             })
