@@ -68,7 +68,6 @@ pub(crate) async fn live_warm_up(
                         continue 'main_loop
                     }
                     if to_time.day() == Utc::now().day() {
-                        set_warmup_complete();
                         let event = StrategyEvent::WarmUpComplete;
                         match strategy_event_sender.send(event).await {
                             Ok(_) => {}
