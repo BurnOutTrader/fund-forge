@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::sync::atomic::Ordering;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
 use indicatif::ProgressBar;
@@ -15,7 +16,7 @@ use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode, Subsc
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
-use crate::oanda_api::api_client::OandaClient;
+use crate::oanda_api::api_client::{OandaClient, OANDA_IS_CONNECTED};
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
 use crate::oanda_api::download::generate_urls;
 use crate::server_features::database::DATA_STORAGE;
@@ -92,6 +93,13 @@ impl VendorApiResponse for OandaClient {
     }
     #[allow(unused)]
     async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+        if !OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
+            return DataServerResponse::SubscribeResponse {
+                success: false,
+                subscription,
+                reason: Some("Oanda is not connected".to_string()),
+            };
+        }
         if subscription.subscription_resolution_type() != SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes) {
             return DataServerResponse::UnSubscribeResponse {
                 success: false,
