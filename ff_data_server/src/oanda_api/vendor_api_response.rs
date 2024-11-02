@@ -197,7 +197,7 @@ impl VendorApiResponse for OandaClient {
 
         // Keep track of empty responses to prevent infinite loops
         let mut consecutive_empty_responses = 0;
-        const MAX_EMPTY_RESPONSES: u32 = 3;
+        const MAX_EMPTY_RESPONSES: u32 = 20;
 
         loop {
             let to_time = (last_bar_time + add_time).min(current_time);
@@ -331,17 +331,7 @@ impl VendorApiResponse for OandaClient {
         Ok(())
     }
 
-    async fn update_historical_data_to(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, mut from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
-        let earliest_oanda_data = {
-            let utc_time_string = "2005-01-01 00:00:00.000000";
-            let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
-            DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
-        };
-
-        if from < earliest_oanda_data {
-            from = earliest_oanda_data;
-        }
-
+    async fn update_historical_data_to(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         let data_storage = DATA_STORAGE.get().unwrap();
         let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, from, to).await;
         progress_bar.set_length(urls.len() as u64);

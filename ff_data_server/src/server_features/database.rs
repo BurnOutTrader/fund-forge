@@ -484,223 +484,290 @@ impl HybridStorage {
         Ok(combined_data)
     }
 
-    pub fn move_back_available_history(&self) {
+    pub async fn move_back_available_history(&self) -> Result<(), FundForgeError> {
         let options = self.options.clone();
         let multi_bar = self.multi_bar.clone();
-        task::spawn(async move {
-            let mut tasks = vec![];
-            // Create a semaphore to limit concurrent downloads
-            let semaphore = Arc::new(Semaphore::new(20));
+        let mut tasks = vec![];
+        // Create a semaphore to limit concurrent downloads
+        let semaphore = Arc::new(Semaphore::new(20));
 
-            // Calculate total symbols from available vendors only
-            let total_symbols = {
-                let mut count = 0;
+        // Calculate total symbols from available vendors only
+        let total_symbols = {
+            let mut count = 0;
 
-                // Only count OANDA symbols if enabled and config exists
-                if OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
-                    if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
-                        .join("credentials")
-                        .join("oanda_credentials")
-                        .join("download_list.toml"))
-                    {
-                        if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
-                            if OANDA_CLIENT.get().is_some() {
+            // Only count OANDA symbols if enabled and config exists
+            if OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
+                if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
+                    .join("credentials")
+                    .join("oanda_credentials")
+                    .join("download_list.toml"))
+                {
+                    if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
+                        if OANDA_CLIENT.get().is_some() {
+                            count += config.symbols.len();
+                        }
+                    }
+                }
+            }
+
+            // Only count Rithmic symbols if enabled and client exists
+            if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) {
+                if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
+                    .join("credentials")
+                    .join("rithmic_credentials")
+                    .join("download_list.toml"))
+                {
+                    if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
+                        if let Some(system) = get_rithmic_market_data_system() {
+                            if RITHMIC_CLIENTS.get(&system).is_some() {
                                 count += config.symbols.len();
                             }
                         }
                     }
                 }
+            }
 
-                // Only count Rithmic symbols if enabled and client exists
-                if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) {
-                    if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
-                        .join("credentials")
-                        .join("rithmic_credentials")
-                        .join("download_list.toml"))
-                    {
-                        if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
-                            if let Some(system) = get_rithmic_market_data_system() {
-                                if RITHMIC_CLIENTS.get(&system).is_some() {
-                                    count += config.symbols.len();
-                                }
-                            }
+            count as u64
+        };
+
+        // Only create overall progress if we have symbols to process
+        let overall_pb = match total_symbols > 0 {
+            true => {
+                let overall_pb = multi_bar.add(ProgressBar::new(total_symbols));
+                overall_pb.set_style(ProgressStyle::default_bar()
+                    .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
+                    .unwrap());
+                overall_pb.set_prefix("Move Back Historical Data Availability");
+                Some(overall_pb)
+            }
+            false => None
+        };
+
+        if let Some(overall_pb) = overall_pb {
+            if options.disable_oanda_server == 0 {
+                let oanda_path = options.data_folder.clone()
+                    .join("credentials")
+                    .join("oanda_credentials")
+                    .join("download_list.toml");
+
+                if oanda_path.exists() {
+                    let content = match std::fs::read_to_string(&oanda_path) {
+                        Ok(content) => content,
+                        Err(e) => {
+                            return Err(FundForgeError::ServerErrorDebug(e.to_string()));
                         }
-                    }
-                }
+                    };
 
-                count as u64
-            };
-
-            // Only create overall progress if we have symbols to process
-            let overall_pb = match total_symbols > 0 {
-                true => {
-                    let overall_pb = multi_bar.add(ProgressBar::new(total_symbols));
-                    overall_pb.set_style(ProgressStyle::default_bar()
-                        .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                        .unwrap());
-                    overall_pb.set_prefix("Total Progress");
-                    Some(overall_pb)
-                }
-                false => None
-            };
-
-            if let Some(overall_pb) = overall_pb {
-                if options.disable_oanda_server == 0 {
-                    let oanda_path = options.data_folder.clone()
-                        .join("credentials")
-                        .join("oanda_credentials")
-                        .join("download_list.toml");
-
-                    if oanda_path.exists() {
-                        let content = match std::fs::read_to_string(&oanda_path) {
-                            Ok(content) => content,
-                            Err(e) => {
-                                eprintln!("Failed to read download list file: {}", e);
-                                return;
-                            }
-                        };
-
-                        let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
-                            Ok(symbol_object) => symbol_object,
-                            Err(e) => {
-                                eprintln!("Failed to parse download list: {}", e);
-                                return;
-                            }
-                        };
-
-                        if OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
-                            if let Some(client) = OANDA_CLIENT.get() {
-                                let symbols = symbol_configs.symbols;
-                                if !symbols.is_empty() {
-
-                                    // Create OANDA progress bar once, outside the loop
-                                    let oanda_pb = multi_bar.add(ProgressBar::new(symbols.len() as u64));
-                                    oanda_pb.set_style(ProgressStyle::default_bar()
-                                        .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                                        .unwrap());
-                                    oanda_pb.set_prefix("OANDA Progress");
-
-                                    for symbol_config in symbols {
-                                        if let Some(instrument) = client.instruments.get(&symbol_config.symbol_name) {
-                                            let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Oanda, instrument.market_type);
-                                            let symbol_name = symbol_config.symbol_name.clone();
-                                            let overall_pb = overall_pb.clone();
-                                            let oanda_pb = oanda_pb.clone();
-                                            let multi_bar = multi_bar.clone();
-                                            let semaphore = semaphore.clone();
-                                            tasks.push(task::spawn(async move {
-                                                let resolution = match symbol_config.base_data_type {
-                                                    BaseDataType::Ticks => Resolution::Ticks(1),
-                                                    BaseDataType::QuoteBars => Resolution::Seconds(5),
-                                                    _ => return,
-                                                };
-                                                let _permit = semaphore.acquire().await.unwrap();
-                                                // Create and configure symbol progress bar
-                                                let symbol_pb = multi_bar.add(ProgressBar::new(0));
-                                                symbol_pb.set_style(ProgressStyle::default_bar()
-                                                    .template("{prefix:.bold} {msg} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                                                    .unwrap());
-                                                symbol_pb.set_prefix(symbol_name.clone());
-                                                symbol_pb.set_message(format!("({}: {})", resolution, symbol_config.base_data_type));
-
-                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
-                                                    Ok(_) => {
-                                                        overall_pb.inc(1);
-                                                        oanda_pb.inc(1);
-                                                    },
-                                                    Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_name, e),
-                                                }
-                                            }));
-                                        }
-                                    }
-                                }
-                            }
+                    let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
+                        Ok(symbol_object) => symbol_object,
+                        Err(e) => {
+                            return Err(FundForgeError::ServerErrorDebug(e.to_string()));
                         }
-                    }
-                }
+                    };
 
-                if options.disable_bitget_server == 0 {
-                    // Bitget implementation here if needed
-                }
 
-                if options.disable_rithmic_server == 0 {
-                    let rithmic_path = options.data_folder.clone()
-                        .join("credentials")
-                        .join("rithmic_credentials")
-                        .join("download_list.toml");
+                    if OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
+                        if let Some(client) = OANDA_CLIENT.get() {
+                            let symbols = symbol_configs.symbols;
+                            if !symbols.is_empty() {
+                                // Create OANDA progress bar once, outside the loop
+                                let oanda_pb = multi_bar.add(ProgressBar::new(symbols.len() as u64));
+                                oanda_pb.set_style(ProgressStyle::default_bar()
+                                    .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
+                                    .unwrap());
+                                oanda_pb.set_prefix("OANDA Move Historical Start Date");
 
-                    if rithmic_path.exists() {
-                        let content = match std::fs::read_to_string(&rithmic_path) {
-                            Ok(content) => content,
-                            Err(e) => {
-                                eprintln!("Failed to read download list file: {}", e);
-                                return;
-                            }
-                        };
+                                for symbol_config in symbols {
+                                    let start_date = match symbol_config.start_date {
+                                        Some(date) => date,
+                                        None => continue
+                                    };
 
-                        let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
-                            Ok(symbol_object) => symbol_object,
-                            Err(e) => {
-                                eprintln!("Failed to parse download list: {}", e);
-                                return;
-                            }
-                        };
-                        if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) {
-                            match get_rithmic_market_data_system() {
-                                Some(system) => {
-                                    if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                                        let symbols = symbol_configs.symbols;
+                                    let start_time = DateTime::<Utc>::from_naive_utc_and_offset(
+                                        start_date.and_hms_opt(0, 0, 0).unwrap(),
+                                        Utc
+                                    );
 
-                                        let rithmic_pb = multi_bar.add(ProgressBar::new(symbols.len() as u64));
-                                        rithmic_pb.set_style(ProgressStyle::default_bar()
-                                            .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                                            .unwrap());
-                                        rithmic_pb.set_prefix("Rithmic Progress");
-
-                                        for symbol_config in symbols {
-                                            let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
-                                                Some(exchange) => exchange,
-                                                None => {
-                                                    eprintln!("DataBase Update: Failed to get exchange for symbol: {}", symbol_config.symbol_name);
-                                                    continue;
-                                                },
+                                    if let Some(instrument) = client.instruments.get(&symbol_config.symbol_name) {
+                                        let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Oanda, instrument.market_type);
+                                        let end_time: DateTime<Utc> = if let Some(start_date) = symbol_config.start_date {
+                                            let resolution = match symbol_config.base_data_type {
+                                                BaseDataType::Ticks => Resolution::Ticks(1),
+                                                BaseDataType::QuoteBars => Resolution::Seconds(5),
+                                                _ => continue,
                                             };
 
-                                            let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic, MarketType::Futures(exchange));
-                                            let client = client.clone();
-                                            let multi_bar = multi_bar.clone();
-                                            let overall_pb = overall_pb.clone();
-                                            let rithmic_pb = rithmic_pb.clone();
-                                            let semaphore = semaphore.clone();
-                                            tasks.push(task::spawn(async move {
-                                                let resolution = match symbol_config.base_data_type {
-                                                    BaseDataType::Ticks => Resolution::Ticks(1),
-                                                    BaseDataType::Candles => Resolution::Seconds(1),
-                                                    _ => return,
-                                                };
-                                                let _permit = semaphore.acquire().await.unwrap();
-                                                // Create a new progress bar for this symbol
-                                                let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
-                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
-                                                    Ok(_) => {
-                                                        overall_pb.inc(1);
-                                                        rithmic_pb.inc(1);
-                                                    },
-                                                    Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
-                                                }
-                                            }));
-                                        }
+                                            match self.get_earliest_data_time(&symbol, &resolution, &symbol_config.base_data_type).await {
+                                                Ok(maybe_date) => {
+                                                    match maybe_date {
+                                                        Some(date) => {
+                                                            if date <= start_time {  // This is backwards
+                                                                continue;
+                                                            }
+                                                            date
+                                                        }
+                                                        None => Utc::now()
+                                                    }
+                                                },
+                                                Err(_) => continue,
+                                            }
+                                        } else {
+                                            Utc::now()
+                                        };
+                                        let symbol_name = symbol_config.symbol_name.clone();
+                                        let overall_pb = overall_pb.clone();
+                                        let oanda_pb = oanda_pb.clone();
+                                        let multi_bar = multi_bar.clone();
+                                        let semaphore = semaphore.clone();
+                                        tasks.push(task::spawn(async move {
+                                            let resolution = match symbol_config.base_data_type {
+                                                BaseDataType::Ticks => Resolution::Ticks(1),
+                                                BaseDataType::QuoteBars => Resolution::Seconds(5),
+                                                _ => return,
+                                            };
+                                            let _permit = semaphore.acquire().await.unwrap();
+                                            // Create and configure symbol progress bar
+                                            let symbol_pb = multi_bar.add(ProgressBar::new(0));
+                                            symbol_pb.set_style(ProgressStyle::default_bar()
+                                                .template("{prefix:.bold} {msg} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
+                                                .unwrap());
+                                            symbol_pb.set_prefix(symbol_name.clone());
+                                            symbol_pb.set_message(format!("({}: {})", resolution, symbol_config.base_data_type));
+
+                                            match client.update_historical_data_to(symbol, symbol_config.base_data_type, resolution, start_time, end_time, symbol_pb).await {
+                                                Ok(_) => {
+                                                    overall_pb.inc(1);
+                                                    oanda_pb.inc(1);
+                                                },
+                                                Err(e) => eprintln!("Oanda Update: Failed to update data for: {} - {}", symbol_name, e),
+                                            }
+                                        }));
                                     }
-                                },
-                                None => {}
+                                }
                             }
                         }
                     }
                 }
-                join_all(tasks).await;
-                overall_pb.finish_with_message("All updates completed");
             }
-        });
+
+            if options.disable_bitget_server == 0 {
+                // Bitget implementation here if needed
+            }
+
+            if options.disable_rithmic_server == 0 {
+                let rithmic_path = options.data_folder.clone()
+                    .join("credentials")
+                    .join("rithmic_credentials")
+                    .join("download_list.toml");
+
+                if rithmic_path.exists() {
+                    let content = match std::fs::read_to_string(&rithmic_path) {
+                        Ok(content) => content,
+                        Err(e) => {
+                            return Err(FundForgeError::ServerErrorDebug(e.to_string()));
+                        }
+                    };
+
+                    let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
+                        Ok(symbol_object) => symbol_object,
+                        Err(e) => {
+                            return Err(FundForgeError::ServerErrorDebug(e.to_string()));
+                        }
+                    };
+
+                    if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) {
+                        match get_rithmic_market_data_system() {
+                            Some(system) => {
+                                if let Some(client) = RITHMIC_CLIENTS.get(&system) {
+                                    let symbols = symbol_configs.symbols;
+
+                                    let rithmic_pb = multi_bar.add(ProgressBar::new(symbols.len() as u64));
+                                    rithmic_pb.set_style(ProgressStyle::default_bar()
+                                        .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
+                                        .unwrap());
+                                    rithmic_pb.set_prefix("Rithmic Move Historical Start Date");
+
+                                    for symbol_config in symbols {
+                                        let start_date = match symbol_config.start_date {
+                                            Some(date) => date,
+                                            None => continue
+                                        };
+                                        let start_time = DateTime::<Utc>::from_naive_utc_and_offset(
+                                            start_date.and_hms_opt(0, 0, 0).unwrap(),
+                                            Utc
+                                        );
+
+
+                                        let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
+                                            Some(exchange) => exchange,
+                                            None => {
+                                                eprintln!("DataBase Update: Failed to get exchange for symbol: {}", symbol_config.symbol_name);
+                                                continue;
+                                            },
+                                        };
+
+                                        let symbol = Symbol::new(symbol_config.symbol_name.clone(), DataVendor::Rithmic, MarketType::Futures(exchange));
+
+
+                                        let end_time: DateTime<Utc> = if let Some(start_date) = symbol_config.start_date {
+                                            let resolution = match symbol_config.base_data_type {
+                                                BaseDataType::Ticks => Resolution::Ticks(1),
+                                                BaseDataType::QuoteBars => Resolution::Seconds(1),
+                                                _ => continue,
+                                            };
+
+                                            match self.get_earliest_data_time(&symbol, &resolution, &symbol_config.base_data_type).await {
+                                                Ok(maybe_date) => {
+                                                    match maybe_date {
+                                                        Some(date) => {
+                                                            if date <= start_time {  // This is backwards
+                                                                continue;
+                                                            }
+                                                            date
+                                                        }
+                                                        None => Utc::now()
+                                                    }
+                                                },
+                                                Err(_) => continue,
+                                            }
+                                        } else {
+                                            Utc::now()
+                                        };
+
+                                        let client = client.clone();
+                                        let multi_bar = multi_bar.clone();
+                                        let overall_pb = overall_pb.clone();
+                                        let rithmic_pb = rithmic_pb.clone();
+                                        let semaphore = semaphore.clone();
+                                        tasks.push(task::spawn(async move {
+                                            let resolution = match symbol_config.base_data_type {
+                                                BaseDataType::Ticks => Resolution::Ticks(1),
+                                                BaseDataType::Candles => Resolution::Seconds(1),
+                                                _ => return,
+                                            };
+                                            let _permit = semaphore.acquire().await.unwrap();
+                                            // Create a new progress bar for this symbol
+                                            let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
+                                            match client.update_historical_data_to(symbol, symbol_config.base_data_type, resolution, start_time, end_time, symbol_pb).await {
+                                                Ok(_) => {
+                                                    overall_pb.inc(1);
+                                                    rithmic_pb.inc(1);
+                                                },
+                                                Err(e) => eprintln!("Rithmic Update: Failed to update data for: {} - {}", symbol_config.symbol_name, e),
+                                            }
+                                        }));
+                                    }
+                                }
+                            },
+                            None => {}
+                        }
+                    }
+                }
+            }
+            join_all(tasks).await;
+            overall_pb.finish_with_message("All updates completed");
+        }
+        Ok(())
     }
 
     pub fn update_history(&self) {
@@ -757,7 +824,7 @@ impl HybridStorage {
                     overall_pb.set_style(ProgressStyle::default_bar()
                         .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
                         .unwrap());
-                    overall_pb.set_prefix("Total Progress");
+                    overall_pb.set_prefix("Update Historical Data");
                     Some(overall_pb)
                 }
                 false => None
@@ -797,7 +864,7 @@ impl HybridStorage {
                                     oanda_pb.set_style(ProgressStyle::default_bar()
                                         .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
                                         .unwrap());
-                                    oanda_pb.set_prefix("OANDA Progress");
+                                    oanda_pb.set_prefix("OANDA Update Historical Data");
 
                                     for symbol_config in symbols {
                                         if let Some(instrument) = client.instruments.get(&symbol_config.symbol_name) {
@@ -874,7 +941,7 @@ impl HybridStorage {
                                         rithmic_pb.set_style(ProgressStyle::default_bar()
                                             .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
                                             .unwrap());
-                                        rithmic_pb.set_prefix("Rithmic Progress");
+                                        rithmic_pb.set_prefix("Rithmic Update Historical Data");
 
                                         for symbol_config in symbols {
                                             let exchange = match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
