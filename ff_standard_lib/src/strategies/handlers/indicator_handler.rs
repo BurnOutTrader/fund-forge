@@ -7,6 +7,7 @@ use crate::standardized_types::subscriptions::DataSubscription;
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use tokio::sync::mpsc::Sender;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 use crate::strategies::indicators::indicator_events::IndicatorEvents;
 use crate::strategies::indicators::indicator_enum::IndicatorEnum;
@@ -17,6 +18,7 @@ use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
+use crate::strategies::strategy_events::StrategyEvent;
 
 pub struct IndicatorHandler {
     indicators: Arc<DashMap<DataSubscription, DashMap<IndicatorName, IndicatorEnum>>>,
@@ -107,6 +109,32 @@ impl IndicatorHandler {
             return Some(IndicatorEvents::IndicatorTimeSlice(results_vec))
         }
         None
+    }
+
+    pub async fn live_update_time_slice(&self, strategy_sender: Sender<StrategyEvent>) -> Sender<TimeSlice> {
+        let (sender, mut receiver) = tokio::sync::mpsc::channel::<TimeSlice>(1000);
+        while let Some(time_slice) = receiver.recv().await {
+            let mut results: BTreeMap<IndicatorName, Vec<IndicatorValues>> = BTreeMap::new();
+            let indicators = self.indicators.clone();
+
+            for data in time_slice.iter() {
+                let subscription = data.subscription();
+                if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
+                    for mut indicators_dash_map in indicators_by_sub.iter_mut() {
+                        if let Some(indicator_data) = indicators_dash_map.value_mut().update_base_data(data) {
+                            results.entry(indicators_dash_map.key().clone())
+                                .or_insert_with(Vec::new)
+                                .extend(indicator_data);
+                        }
+                    }
+                }
+            }
+            if !results.is_empty() {
+                let results_vec: Vec<IndicatorValues> = results.into_values().flatten().collect();
+                let _ = strategy_sender.send(StrategyEvent::IndicatorEvent(IndicatorEvents::IndicatorTimeSlice(results_vec))).await;
+            }
+        }
+        sender
     }
 
     pub async fn history(&self, name: IndicatorName) -> Option<RollingWindow<IndicatorValues>> {

@@ -163,6 +163,7 @@ async fn receive_and_process(
     // Switch to live processing
     let mut interval = tokio::time::interval(Duration::from_secs(1));
     let mut last_update_second = Utc::now().timestamp();
+    let indicator_sender =indicator_handler.live_update_time_slice(strategy_event_sender.clone()).await;
     loop {
         tokio::select! {
             _ = interval.tick() => {
@@ -171,9 +172,7 @@ async fn receive_and_process(
                 // Only update if we haven't processed data for this second
                 if current_second > last_update_second {
                     if let Some(consolidated_data) = subscription_handler.update_consolidators_time(now).await {
-                        if let Some(events) = indicator_handler.update_time_slice(&consolidated_data).await {
-                            let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
-                        }
+                        let _ = indicator_sender.send(consolidated_data.clone()).await;
                         let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(consolidated_data)).await;
                     }
                     last_update_second = current_second;
@@ -202,10 +201,7 @@ async fn receive_and_process(
                                     strategy_time_slice.extend(consolidated_data);
                                 }
                                 strategy_time_slice.extend(time_slice);
-
-                                if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
-                                    let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
-                                }
+                                let _ = indicator_sender.send(strategy_time_slice.clone()).await;
                                 let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
                             }
                         }
