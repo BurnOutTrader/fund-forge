@@ -14,7 +14,7 @@ use futures::future::join_all;
 use futures::stream::{SplitSink, SplitStream};
 #[allow(unused_imports)]
 use structopt::lazy_static::lazy_static;
-use tokio::sync::{broadcast, oneshot, Mutex};
+use tokio::sync::{broadcast, oneshot, Mutex, Semaphore};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
@@ -133,7 +133,9 @@ pub struct RithmicBrokerageClient {
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
 
     pub order_broadcaster: broadcast::Sender<DataServerResponse>,
-    pub historical_data_senders: DashMap<(SymbolName, BaseDataType), Sender<BaseDataEnum>>
+    pub historical_data_senders: DashMap<(SymbolName, BaseDataType), Sender<BaseDataEnum>>,
+
+    pub download_semaphore: Arc<Semaphore>,
 }
 
 impl RithmicBrokerageClient {
@@ -196,6 +198,7 @@ impl RithmicBrokerageClient {
             id_to_basket_id_map: Default::default(),
             pending_order_updates: Default::default(),
             historical_data_senders: Default::default(),
+            download_semaphore: Arc::new(Semaphore::new(1))
         };
         Ok(client)
     }

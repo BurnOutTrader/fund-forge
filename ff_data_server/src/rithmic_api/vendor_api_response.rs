@@ -13,7 +13,7 @@ use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, St
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, AcquireError, SemaphorePermit};
 use tokio::time::{timeout};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
@@ -456,7 +456,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let symbol_name = symbol.name.clone();
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
             Some(exchange) => exchange,
-            None => return Err(FundForgeError::ClientSideErrorDebug(format!("Exchange not found for symbol: {}", symbol_name)))
+            None => {
+                progress_bar.finish_and_clear();
+                return Err(FundForgeError::ClientSideErrorDebug(format!("Exchange not found for symbol: {}", symbol_name)))
+            }
         };
 
         let (sender, mut receiver) = mpsc::channel(1000000);
@@ -471,12 +474,22 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
+        let permits = self.download_semaphore.clone();
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let mut window_end = window_start + Duration::hours(4);
             if window_end > to {
                 window_end = to;
             }
+
+            let _permit = match permits.acquire().await {
+                Ok(_) => {}
+                Err(e) => {
+                    progress_bar.finish_and_clear();
+                    eprintln!("Rithmic download error acquiring permit: {}", e);
+                    break 'main_loop
+                }
+            };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
             sleep(std::time::Duration::from_millis(50)).await;

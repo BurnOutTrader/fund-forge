@@ -44,7 +44,6 @@ pub struct HybridStorage {
     options: ServerLaunchOptions,
     multi_bar: MultiProgress,
     download_semaphore: Arc<Semaphore>,
-    rithmic_download_semaphore: Arc<Semaphore>, //todo, this could possible go in the rithmic client
     update_seconds: u64,
 }
 
@@ -60,7 +59,6 @@ impl HybridStorage {
             options,
             multi_bar: MultiProgress::new(),
             download_semaphore: Arc::new(Semaphore::new(max_concurrent_downloads)),
-            rithmic_download_semaphore: Arc::new(Semaphore::new(1)),
             update_seconds
         };
 
@@ -756,7 +754,6 @@ impl HybridStorage {
                                         let rithmic_pb = rithmic_pb.clone();
                                         let semaphore = semaphore.clone();
                                         let download_tasks = self.download_tasks.clone();
-                                        let rithmic_permits = self.rithmic_download_semaphore.clone();
                                         tasks.push(task::spawn(async move {
                                             let resolution = match symbol_config.base_data_type {
                                                 BaseDataType::Ticks => Resolution::Ticks(1),
@@ -764,7 +761,6 @@ impl HybridStorage {
                                                 _ => return,
                                             };
                                             download_tasks.write().await.push((symbol_config.symbol_name.clone(), symbol_config.base_data_type.clone()));
-                                            let _rithmic_permit = rithmic_permits.acquire().await.unwrap();
                                             let _permit = semaphore.acquire().await.unwrap();
                                             // Create a new progress bar for this symbol
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
@@ -992,7 +988,6 @@ impl HybridStorage {
                                             let rithmic_pb = rithmic_pb.clone();
                                             let semaphore = semaphore.clone();
                                             let download_tasks = self.download_tasks.clone();
-                                            let rithmic_permits = self.rithmic_download_semaphore.clone();
                                             tasks.push(task::spawn(async move {
                                                 let resolution = match symbol_config.base_data_type {
                                                     BaseDataType::Ticks => Resolution::Ticks(1),
@@ -1000,7 +995,6 @@ impl HybridStorage {
                                                     _ => return,
                                                 };
                                                 download_tasks.write().await.push((symbol_config.symbol_name.clone(), symbol_config.base_data_type.clone()));
-                                                let _rithmic_permit = rithmic_permits.acquire().await.unwrap();
                                                 let _permit = semaphore.acquire().await.unwrap();
                                                 // Create a new progress bar for this symbol
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
