@@ -12,7 +12,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 ## Announcements: Read Before Live Trading or Backtesting
 - 24/10/2024: The folder and file structure was changed, The historical data has not changed, you can just move the historical data you have already downloaded to `ff_data_server/data/historical` and it will work as before. This was done to make set up easier for new users.
 - 31/10/2024: Oanda Brokerage and Datavendor was added, Oanda has historical data available, see the [Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md) to download data. Oanda Live trading has not been tested, backtesting with Oanda might not work until I have tested (I am downloading the data now)
-- 1/11/2024: Oanda Backtesting will become more accurate after historical data is complete, currently the value per tick is just $1 for all symbols.
+- 1/11/2024: Oanda Backtesting will be made more accurate after historical data is complete, currently the value per tick is just $1 for all symbols.
 - 1/11/2024: Still some sync issues happen intermittently with rithmic live trading, be sure to monitor any live strategies.
 - 2/11/2024: Rithmic and Oanda historical data can be downloaded and kept up to date automatically by the server, it is possible to specify a start date for historical data to avoid downloading to much data, the start date can be move backwards if you need more data.
 - 2/11/2024: The next development step is live warm up, to have instant history access from  historical data.
