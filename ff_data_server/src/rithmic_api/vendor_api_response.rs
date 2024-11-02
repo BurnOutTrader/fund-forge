@@ -394,11 +394,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            sleep(std::time::Duration::from_millis(50)).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
             // Receive loop with timeout
             'msg_loop: loop {
-                match timeout(std::time::Duration::from_millis(200), receiver.recv()).await {
+                match timeout(std::time::Duration::from_millis(500), receiver.recv()).await {
                     Ok(Some(data)) => {
                         data_map.insert(data.time_utc(), data);
                     },
@@ -502,11 +502,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            sleep(std::time::Duration::from_millis(50)).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
             // Receive loop with timeout
             'msg_loop: loop {
-                match timeout(std::time::Duration::from_millis(200), receiver.recv()).await {
+                match timeout(std::time::Duration::from_millis(500), receiver.recv()).await {
                     Ok(Some(data)) => {
                         data_map.insert(data.time_utc(), data);
                     },
