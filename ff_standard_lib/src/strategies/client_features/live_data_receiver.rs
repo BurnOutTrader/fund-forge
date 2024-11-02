@@ -150,8 +150,8 @@ async fn receive_and_process(
             }
             let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
         }
-        set_warmup_complete();
     }
+    set_warmup_complete();
     drop(warmup_completion_receiver);
 
     // Switch to live processing
