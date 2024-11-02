@@ -446,8 +446,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 //eprintln!("Failed to save data: {}", e);
             }
         }
-        let msg = format!("Rithmic: Completed Download Update Historical Data: {}", symbol.name);
-        progress_bar.finish_with_message(msg);
+        progress_bar.finish_and_clear();
         self.historical_data_senders.remove(&(symbol_name, base_data_type));
         Ok(())
     }
@@ -549,9 +548,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 //eprintln!("Failed to save data: {}", e);
             }
         }
-        let msg = format!("Rithmic: Completed Moving Historical Data Availability Backwards: {}, {} {}", symbol.name, resolution, base_data_type);
-        progress_bar.finish_with_message(msg);
         self.historical_data_senders.remove(&(symbol_name, base_data_type));
+        progress_bar.finish_and_clear();
         Ok(())
     }
 }

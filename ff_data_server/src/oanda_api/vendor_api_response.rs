@@ -325,9 +325,7 @@ impl VendorApiResponse for OandaClient {
                 Err(_) => {}
             }
         }
-
-        let msg = format!("Oanda: Completed Update Historical Data: {}, {} {}", symbol.name, resolution, base_data_type);
-        progress_bar.finish_with_message(msg);
+        progress_bar.finish_and_clear();
         Ok(())
     }
 
@@ -430,8 +428,7 @@ impl VendorApiResponse for OandaClient {
                 break
             }
         }
-        let msg = format!("Oanda: Completed Moving Historical Data Availability Backwards: {}, {} {}", symbol.name, resolution, base_data_type);
-        progress_bar.finish_with_message(msg);
+        progress_bar.finish_and_clear();
         Ok(())
     }
 }
