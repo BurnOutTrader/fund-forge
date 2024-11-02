@@ -32,14 +32,16 @@ The symbols should fund forge format, in fund forge `-` is used to replace `/` o
 
 We also specify the BaseDataType
 BaseDataTypes:
-Ticks,
-Quotes,
 QuoteBars,
-Candles,
-Fundamentals,
+
 ```toml
 symbols = [
     { symbol_name = "NAS100-USD", base_data_type = "QuoteBars" },
+
+    # If you want to specify a start date for the historical data, to avoid getting all the data, the server will only update from this date forwards.
+    # You can change this date at any time in the toml, and on the next server launch the server will start downloading from the new date, up to the start of any existing data.
+    # The server will also do this at run time, during its update cycle if you don't want to stop the server.
+    { symbol_name = "NAS100-USD", base_data_type = "QuoteBars", start_date = "2024-06-01"}
 ]
 ```
 
