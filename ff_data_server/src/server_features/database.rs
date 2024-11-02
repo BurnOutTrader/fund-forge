@@ -42,11 +42,13 @@ pub struct HybridStorage {
     clear_cache_duration: Duration,
     download_tasks: Arc<RwLock<Vec<(SymbolName, BaseDataType)>>>,
     options: ServerLaunchOptions,
-    multi_bar: MultiProgress
+    multi_bar: MultiProgress,
+    download_semaphore: Arc<Semaphore>,
+    update_seconds: u64,
 }
 
 impl HybridStorage {
-    pub fn new(clear_cache_duration: Duration, options: ServerLaunchOptions) -> Self {
+    pub fn new(clear_cache_duration: Duration, options: ServerLaunchOptions, max_concurrent_downloads: usize, update_seconds: u64) -> Self {
         let storage = Self {
             base_path: options.data_folder.clone().join("historical"),
             mmap_cache: Arc::new(DashMap::new()),
@@ -55,7 +57,9 @@ impl HybridStorage {
             clear_cache_duration,
             download_tasks:Default::default(),
             options,
-            multi_bar: MultiProgress::new()
+            multi_bar: MultiProgress::new(),
+            download_semaphore: Arc::new(Semaphore::new(max_concurrent_downloads)),
+            update_seconds
         };
 
         // Start the background task for cache management
@@ -66,7 +70,7 @@ impl HybridStorage {
 
     pub fn run_update_schedule(self: Arc<Self>) {
         tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(60 * 15)); // 15 minutes
+            let mut interval = tokio::time::interval(Duration::from_secs(self.update_seconds)); // 15 minutes
             loop {
                 interval.tick().await;  // Wait for next interval
                 // First run and complete move_back_available_history
@@ -502,7 +506,7 @@ impl HybridStorage {
         let multi_bar = self.multi_bar.clone();
         let mut tasks = vec![];
         // Create a semaphore to limit concurrent downloads
-        let semaphore = Arc::new(Semaphore::new(20));
+        let semaphore = self.download_semaphore.clone();
 
         // Calculate total symbols from available vendors only
         let total_symbols = {
@@ -790,7 +794,7 @@ impl HybridStorage {
         task::spawn(async move {
             let mut tasks = vec![];
             // Create a semaphore to limit concurrent downloads
-            let semaphore = Arc::new(Semaphore::new(20));
+            let semaphore = self.download_semaphore.clone();
 
             // Calculate total symbols from available vendors only
             let total_symbols = {
