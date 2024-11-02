@@ -2,10 +2,10 @@ use chrono::{DateTime, Utc};
 use crate::standardized_types::enums::StrategyMode;
 use crate::strategies::strategy_events::{StrategyEventBuffer};
 use crate::standardized_types::subscriptions::DataSubscription;
-#[allow(unused_variables)]
+#[allow(unused_variables, dead_code)]
 pub struct RegistryHandler {}
 
-#[allow(unused_variables)]
+#[allow(unused_variables, dead_code)]
 impl RegistryHandler {
     pub async fn new() -> Self {
         Self {

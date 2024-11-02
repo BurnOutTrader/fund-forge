@@ -125,7 +125,6 @@ impl TimedEvent {
 
 pub struct TimedEventHandler {
     pub(crate) schedule: Arc<RwLock<Vec<TimedEvent>>>,
-    is_warmed_up: RwLock<bool>,
     last_fired: Arc<RwLock<HashMap<String, DateTime<Utc>>>>,
     strategy_event_sender: Sender<StrategyEvent>
 }
@@ -134,14 +133,9 @@ impl TimedEventHandler {
     pub fn new(strategy_event_sender: Sender<StrategyEvent>) -> Self {
         TimedEventHandler {
             schedule: Default::default(),
-            is_warmed_up: RwLock::new(false),
             last_fired: Arc::new(RwLock::new(HashMap::new())),
             strategy_event_sender
         }
-    }
-
-    pub async fn set_warmup_complete(&self) {
-        *self.is_warmed_up.write().await = true;
     }
 
     pub async fn add_event(&self, scheduled_event: TimedEvent) {

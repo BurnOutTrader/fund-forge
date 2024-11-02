@@ -26,12 +26,6 @@ impl DrawingObjectHandler {
         }
     }
 
-    pub fn default() -> Self {
-        Self {
-            drawing_objects: Arc::new(RwLock::new(AHashMap::new())),
-        }
-    }
-
     pub async fn drawing_tools(
         &self,
     ) -> RwLockReadGuard<AHashMap<DataSubscription, Vec<DrawingTool>>> {

@@ -23,7 +23,7 @@ use tokio::sync::{mpsc, Notify};
 use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 use crate::helpers::converters::{naive_date_time_to_tz, naive_date_time_to_utc, resolve_market_datetime_in_timezone};
-use crate::strategies::client_features::server_connections::{init_connections, set_warmup_complete};
+use crate::strategies::client_features::server_connections::{init_connections, is_warmup_complete};
 use crate::standardized_types::base_data::candle::Candle;
 use crate::standardized_types::base_data::quote::Quote;
 use crate::standardized_types::base_data::quotebar::QuoteBar;
@@ -36,6 +36,7 @@ use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderType,
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::live_subscriptions::live_subscription_handler;
 use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
+use crate::strategies::handlers::live_warmup::live_warm_up;
 use crate::strategies::handlers::market_handler::backtest_matching_engine;
 use crate::strategies::handlers::market_handler::backtest_matching_engine::BackTestEngineMessage;
 use crate::strategies::handlers::market_handler::live_order_matching::live_order_handler;
@@ -140,11 +141,6 @@ impl FundForgeStrategy {
         accounts: Vec<Account>
     ) -> FundForgeStrategy {
 
-        //todo! THIS HAS TO BE REMOVED ONCE LIVE WARM UP IS BUILT
-        if strategy_mode != StrategyMode::Backtest {
-            set_warmup_complete();
-        }
-
         let ledger_service = Arc::new(LedgerService::new(strategy_event_sender.clone()));
 
         let timed_event_handler = Arc::new(TimedEventHandler::new(strategy_event_sender.clone()));
@@ -211,7 +207,7 @@ impl FundForgeStrategy {
                     notify,
                     paper_order_sender,
                     ledger_service.clone(),
-                    timed_event_handler,
+                    timed_event_handler.clone(),
                     indicator_handler.clone(),
                     subscription_handler.clone(),
                 ).await;
@@ -219,12 +215,17 @@ impl FundForgeStrategy {
                 HistoricalEngine::launch(engine).await;
             }
             StrategyMode::LivePaperTrading | StrategyMode::Live  => {
-                live_subscription_handler(strategy_mode.clone(), subscription_handler).await;
+                TimedEventHandler::run_time_updates(timed_event_handler.clone()).await;
+                live_subscription_handler(strategy_mode.clone(), subscription_handler.clone()).await;
             },
         }
 
         for account in accounts {
             ledger_service.init_ledger(&account,strategy_mode, synchronize_accounts, backtest_accounts_starting_cash, backtest_account_currency).await;
+        }
+
+        if strategy_mode != StrategyMode::Backtest {
+            live_warm_up(warm_up_start_time, buffering_duration, tick_over_no_data, subscription_handler, strategy_event_sender, timed_event_handler, ledger_service, indicator_handler).await;
         }
         strategy
     }
@@ -956,22 +957,22 @@ impl FundForgeStrategy {
         self.subscription_handler.open_candle(subscription)
     }
 
-    /// Returns `Candle` at the specified index, where 0 is current closed `Candle` and 1 is last closed and 10 closed 10 candles ago.
+    /// Returns `Candle` at the specified index, where 0 is current closed `Candle` and 1 is last closed and 10 closed 10 candles ago (11th).
     pub fn candle_index(&self, subscription: &DataSubscription, index: usize) -> Option<Candle> {
         self.subscription_handler.candle_index(subscription, index)
     }
 
-    /// Returns `QuoteBar` at the specified index, where 0 is current closed `QuoteBar` and 1 is last closed and 10 closed 10 `QuoteBar`s ago.
+    /// Returns `QuoteBar` at the specified index, where 0 is current closed `QuoteBar` and 1 is last closed and 10 closed 10 `QuoteBar`s ago (11th).
     pub fn bar_index(&self, subscription: &DataSubscription, index: usize) -> Option<QuoteBar> {
         self.subscription_handler.bar_index(subscription, index)
     }
 
-    /// Returns `Tick` at the specified index, where 0 is last `Tick` and 1 is 2nd last `Tick` and 10 is 10 `Ticks`s ago.
+    /// Returns `Tick` at the specified index, where 0 is current `Tick` and 1 is 2nd last `Tick` and 10 is 10 `Ticks`s ago (11th).
     pub fn tick_index(&self, subscription: &DataSubscription, index: usize) -> Option<Tick> {
         self.subscription_handler.tick_index(subscription, index)
     }
 
-    /// Returns `Quote` at the specified index, where 0 is last `Quote` and 1 is 2nd last `Quote` and 10 is 10 `Quote`s ago.
+    /// Returns `Quote` at the specified index, where 0 is current `Quote` and 1 is 2nd last `Quote` and 10 is 10 `Quote`s ago (11th).
     pub fn quote_index(&self, subscription: &DataSubscription, index: usize) -> Option<Quote> {
         self.subscription_handler.quote_index(subscription, index)
     }
@@ -990,9 +991,12 @@ impl FundForgeStrategy {
     /// Current Utc time, depends on the `StrategyMode`. \
     /// Backtest will return the last data point time, live will return the current time.
     pub fn time_utc(&self) -> DateTime<Utc> {
-        match self.mode {
-            StrategyMode::Backtest => get_backtest_time(),
-            _ => Utc::now(),
+        match is_warmup_complete() {
+            true => match self.mode {
+                StrategyMode::Backtest => get_backtest_time(),
+                _ => Utc::now(),
+            },
+            false => get_backtest_time(),
         }
     }
 

@@ -101,6 +101,7 @@ impl PriceServiceResponse {
         }
     }
 
+    #[allow(dead_code)]
     pub fn volume_filled(&self) -> Option<Volume> {
         match self {
             PriceServiceResponse::FillPriceEstimate(_) => None,

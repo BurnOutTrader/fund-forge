@@ -10,6 +10,7 @@ use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::strategies::handlers::timed_events_handler::TimedEventHandler;
+use crate::strategies::historical_time::update_backtest_time;
 use crate::strategies::ledgers::ledger_service::LedgerService;
 use crate::strategies::strategy_events::StrategyEvent;
 
@@ -27,7 +28,7 @@ pub(crate) async fn live_warm_up(
     let market_price_sender = get_price_service_sender();
     // here we are looping through 1 month at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
     let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
-    let mut primary_subscription_update_receiver = subscription_handler.subscribe_primary_subscription_updates().await;
+    let mut primary_subscription_update_receiver = subscription_handler.subscribe_primary_subscription_updates();
     for subscription in &primary_subscriptions {
         println!("Historical Engine: Primary Subscription: {}", subscription);
     }
@@ -118,6 +119,7 @@ pub(crate) async fn live_warm_up(
                     time_slice.extend(data);
                 }
             }
+            update_backtest_time(time.clone());
 
             let mut strategy_time_slice: TimeSlice = TimeSlice::new();
             // update our consolidators and create the strategies time slice with any new data or just create empty slice.
