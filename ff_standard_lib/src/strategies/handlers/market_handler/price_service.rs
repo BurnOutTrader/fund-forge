@@ -14,6 +14,7 @@ use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::subscriptions::SymbolName;
 use crate::standardized_types::time_slices::TimeSlice;
 use once_cell::sync::Lazy;
+use crate::standardized_types::base_data::tick::Aggressor;
 
 static MARKET_PRICE_SERVICE: Lazy<MarketPriceService> = Lazy::new(|| {
     MarketPriceService::new()
@@ -166,6 +167,30 @@ impl MarketPriceService {
                             }
                             BaseDataEnum::Tick(tick) => {
                                 last_price.insert(tick.symbol.name.clone(), tick.price);
+                                // in the event we only have tick data and no quote data, if the tick data specifies an aggressor we can use this info to estimate the current best bid and offer
+                                if tick.aggressor != Aggressor::None && !has_quotes.contains_key(&tick.symbol.name) {
+                                    if !bid_books.contains_key(&tick.symbol.name) {
+                                        bid_books.insert(tick.symbol.name.clone(), BTreeMap::new());
+                                    }
+                                    if !ask_books.contains_key(&tick.symbol.name) {
+                                        ask_books.insert(tick.symbol.name.clone(), BTreeMap::new());
+                                    }
+                                    match tick.aggressor {
+                                        Aggressor::Buy => {
+                                            // Buy aggressor -> should update ask_book because they hit the ask
+                                            if let Some(ask_book) = ask_books.get_mut(&tick.symbol.name) {
+                                                ask_book.insert(0, BookLevel::new(0, tick.price, dec!(0.0)));
+                                            }
+                                        }
+                                        Aggressor::Sell => {
+                                            // Sell aggressor -> should update bid_book because they hit the bid
+                                            if let Some(bid_book) = bid_books.get_mut(&tick.symbol.name) {
+                                                bid_book.insert(0, BookLevel::new(0, tick.price, dec!(0.0)));
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
                             }
                             BaseDataEnum::Quote(quote) => {
                                 if !has_quotes.contains_key(&quote.symbol.name) {
