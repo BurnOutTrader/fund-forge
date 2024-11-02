@@ -375,7 +375,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             Err(_e) => earliest_rithmic_data
         };
 
-        let bar_len = ((Utc::now() - window_start).num_seconds() / 60) as u64;
+        let bar_len = ((Utc::now() - window_start).num_seconds() / 240) as u64;
         progress_bar.set_length(bar_len);
 
         let mut data_map = BTreeMap::new();
