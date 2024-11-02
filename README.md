@@ -67,25 +67,27 @@ You can download data that I have already parsed [here](https://1drv.ms/f/s!Allv
 
 The Oanda folder should be put into the following directory "ff_data_server/data/historical/".
 
+### For more testing and development data
+#### Oanda Data
+The server will sutomatically download historical data for you, this will depend on what symbols and data types you request in you credentials/{Bokerage}_credentials/download_list.toml file.
+
+[Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md)
+
+See the Oanda file [here](ff_data_server/data/credentials/oanda_credentials/download_list.toml) for an example.
+
+#### Rithmic Data
+The server will sutomatically download historical data for you, this will depend on what symbols and data types you request in you credentials/{Bokerage}_credentials/download_list.toml file.
+
+[Rithmic Setup](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md)
+
+See the Rithmic file [here](ff_data_server/data/credentials/rithmic_credentials/download_list.toml) for an example.
+
 ## File and Folder Structure
 1 file per day for base data, since we focus on keeping only the lowest resolution data available with each vendor.
 
 In the example image 'Test' represents `DataVendor::Test`
 
 ![folder_structure.png](misc/folder_structure.png)
-
-### For more testing and development data
-Oanda is currently the only api which has historical data, see the setup to download data. (oanda live trading in development)
-[Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md)
-
-The Initial download for each symbol will take a long time, since we start from 2005, with 5 second quote bars, the full data set (all symbols) would be about 80Gb.
-Each time the server restarts it will resume the download from the last saved data point forwards.
-It will never have to re-download data if you don't delete the data directory.
-
-Auto update functions will be developed soon to keep data history updating every 15 minutes.
-Download progress bars will replace print lines to keep the server terminal clean.
-
-Rithmic historical data functions will be completed soon.
 
 ## Current State of Live Trading
 ***The server now properly handles multiple connects and disconnects when using rithmic, the problem was in shutting down rithmic broadcasters (removing broadcaster while holding a mut ref)***
