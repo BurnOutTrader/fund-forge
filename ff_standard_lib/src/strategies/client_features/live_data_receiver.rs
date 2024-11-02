@@ -153,24 +153,30 @@ async fn receive_and_process(
     set_warmup_complete();
     drop(warmup_completion_receiver);
 
-    // Switch to live processing
-    let mut interval = tokio::time::interval(Duration::from_secs(1));
-
     let now = tokio::time::Instant::now();
     let nanos_into_second = now.elapsed().subsec_nanos();
     if nanos_into_second > 0 {
         let wait_nanos = 1_000_000_000 - nanos_into_second;
         tokio::time::sleep(Duration::from_nanos(wait_nanos as u64)).await;
     }
+
+    // Switch to live processing
+    let mut interval = tokio::time::interval(Duration::from_secs(1));
+    let mut last_update_second = Utc::now().timestamp();
     loop {
         tokio::select! {
             _ = interval.tick() => {
                 let now = Utc::now();
-                if let Some(consolidated_data) = subscription_handler.update_consolidators_time(now).await {
-                    if let Some(events) = indicator_handler.update_time_slice(&consolidated_data).await {
-                        let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
+                let current_second = now.timestamp();
+                // Only update if we haven't processed data for this second
+                if current_second > last_update_second {
+                    if let Some(consolidated_data) = subscription_handler.update_consolidators_time(now).await {
+                        if let Some(events) = indicator_handler.update_time_slice(&consolidated_data).await {
+                            let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
+                        }
+                        let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(consolidated_data)).await;
                     }
-                    let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(consolidated_data)).await;
+                    last_update_second = current_second;
                 }
             }
             result = stream_client.read_exact(&mut length_bytes) => {
@@ -187,6 +193,7 @@ async fn receive_and_process(
                         if let Ok(time_slice) = TimeSlice::from_bytes(&message_body) {
                              let mut strategy_time_slice = TimeSlice::new();
                             if !time_slice.is_empty() {
+                                last_update_second =  Utc::now().timestamp();  // Mark this second as updated
                                 let arc_slice = Arc::new(time_slice.clone());
                                 let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
                                 ledger_service.timeslice_updates(Utc::now(), arc_slice.clone()).await;
