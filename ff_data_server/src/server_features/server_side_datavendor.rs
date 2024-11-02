@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use indicatif::MultiProgress;
+use indicatif::{ProgressBar};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode};
@@ -223,6 +223,6 @@ pub trait VendorApiResponse: Sync + Send {
         symbol: Symbol,
         base_data_type: BaseDataType,
         resolution: Resolution,
-        multi_progress: MultiProgress
+        progress_bar: ProgressBar
     ) -> Result<(), FundForgeError>;
 }

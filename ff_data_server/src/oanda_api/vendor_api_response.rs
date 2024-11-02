@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 use rust_decimal::Decimal;
 use tokio::sync::broadcast;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
@@ -159,7 +159,7 @@ impl VendorApiResponse for OandaClient {
     }
 
     #[allow(unused)]
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, multi_progress: MultiProgress) -> Result<(), FundForgeError>  {
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, progress_bar: ProgressBar) -> Result<(), FundForgeError>  {
         let earliest_oanda_data = || {
             let utc_time_string = "2005-01-01 00:00:00.000000";
             let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
@@ -177,12 +177,12 @@ impl VendorApiResponse for OandaClient {
         };
 
         let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, &last_bar_time).await;
-
-        let pb1 = multi_progress.add(ProgressBar::new(urls.len() as u64));
-        pb1.set_style(ProgressStyle::default_bar()
+        progress_bar.set_length(urls.len() as u64);
+        progress_bar.set_style(ProgressStyle::default_bar()
             .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
             .unwrap());
-        pb1.set_message(format!("Downloading Oanda Data: {}: {}: {}", symbol.name, resolution, base_data_type));
+        progress_bar.set_prefix(symbol.name.clone());
+        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         for url in &urls {
@@ -272,10 +272,10 @@ impl VendorApiResponse for OandaClient {
                 new_data.entry(new_bar_time).or_insert(bar);
                 i += 1;
             }
-            pb1.inc(1);
+            progress_bar.inc(1);
         }
         let msg = format!("Oanda: Completed Download of data for: {}", symbol.name);
-        pb1.finish_with_message(msg);
+        progress_bar.finish_with_message(format!("Completed {}: {}: {}", symbol.name, resolution, base_data_type));
         Ok(())
     }
 }

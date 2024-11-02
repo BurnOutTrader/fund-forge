@@ -565,7 +565,9 @@ impl HybridStorage {
                                         _ => return,
                                     };
 
-                                    match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, multi_bar).await {
+                                    // Create a new progress bar for this symbol
+                                    let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
+                                    match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
                                         Ok(_) => {
                                             println!("Oanda Update: Successfully updated data for: {}", symbol_config.symbol_name);
                                             overall_pb.inc(1);
@@ -642,7 +644,9 @@ impl HybridStorage {
                                         };
 
                                         println!("Updating Rithmic Data for: {}", symbol_config.symbol_name);
-                                        match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, multi_bar).await {
+                                        // Create a new progress bar for this symbol
+                                        let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
+                                        match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
                                             Ok(_) => {
                                                 println!("Rithmic Update: Successfully updated data for: {}", symbol_config.symbol_name);
                                                 overall_pb.inc(1);

@@ -13,7 +13,7 @@ use chrono::{DateTime, NaiveDate, TimeZone, Utc};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use tokio::time::sleep;
 use std::time::Duration;
-use indicatif::MultiProgress;
+use indicatif::{ProgressBar};
 use rust_decimal_macros::dec;
 use crate::server_features::database::DATA_STORAGE;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
@@ -187,7 +187,7 @@ impl VendorApiResponse for TestApiClient {
     }
 
     #[allow(unused)]
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, multi_progress: MultiProgress) -> Result<(), FundForgeError>  {
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, progress_bar: ProgressBar) -> Result<(), FundForgeError>  {
         todo!()
     }
 }

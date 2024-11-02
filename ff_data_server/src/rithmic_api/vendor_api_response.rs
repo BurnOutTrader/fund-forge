@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use async_std::task::sleep;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
@@ -343,7 +343,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
     //     # If no start date is input we will start from the earliest date available,
     //     # If you change to an earlier date the server update to the new date. this is not yet implemented
     //      we would need to run the download fn twice, once to update the earlier data to the first current saved time, then again to get the rest of the data.
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, multi_progress: MultiProgress) -> Result<(), FundForgeError> {
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         let symbol_name = symbol.name.clone();
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
@@ -371,12 +371,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
         };
 
         let bar_len = ((Utc::now() - window_start).num_seconds() / 60) as u64;
-        let pb1 = multi_progress.add(ProgressBar::new(bar_len));
-        pb1.set_style(ProgressStyle::default_bar()
+        progress_bar.set_length(bar_len);
+        progress_bar.set_style(ProgressStyle::default_bar()
             .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
             .unwrap());
-        let msg = format!("Downloading Oanda Data: {}: {}: {}", symbol.name, resolution, base_data_type);
-        pb1.set_message(msg);
+        progress_bar.set_prefix(symbol.name.clone());
+        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
 
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
@@ -437,11 +437,9 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             // Check if we've caught up to the desired end or current time
             if (Utc::now() - window_start).num_seconds().abs() <= 1 {
-                let msg = format!("Caught up to current time: {}: {}: {}", symbol_name, resolution, base_data_type);
-                pb1.finish_with_message(msg);
                 break 'main_loop;
             }
-            pb1.inc(1);
+            progress_bar.inc(1);
         }
         if !data_map.is_empty() {
             let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
@@ -449,6 +447,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 //eprintln!("Failed to save data: {}", e);
             }
         }
+        let msg = format!("Rithmic: Completed Download of data for: {}", symbol.name);
+        progress_bar.finish_with_message(msg);
         self.historical_data_senders.remove(&(symbol_name, base_data_type));
         Ok(())
     }
