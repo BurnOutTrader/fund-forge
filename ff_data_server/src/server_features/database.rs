@@ -644,7 +644,7 @@ impl HybridStorage {
 
                                             let permit = match semaphore.acquire().await {
                                                 Ok(permit) => permit,
-                                                Err(e) => {
+                                                Err(_) => {
                                                     return
                                                 }
                                             };
@@ -769,7 +769,7 @@ impl HybridStorage {
                                             download_tasks.write().await.push((symbol_config.symbol_name.clone(), symbol_config.base_data_type.clone()));
                                             let permit = match semaphore.acquire().await {
                                                 Ok(permit) => permit,
-                                                Err(e) => {
+                                                Err(_) => {
                                                     return
                                                 }
                                             };
@@ -918,7 +918,7 @@ impl HybridStorage {
                                                 download_tasks.write().await.push((symbol_name.clone(), symbol_config.base_data_type.clone()));
                                                 let permit = match semaphore.acquire().await {
                                                     Ok(permit) => permit,
-                                                    Err(e) => {
+                                                    Err(_) => {
                                                         return
                                                     }
                                                 };
@@ -1015,7 +1015,7 @@ impl HybridStorage {
                                                 download_tasks.write().await.push((symbol_config.symbol_name.clone(), symbol_config.base_data_type.clone()));
                                                 let permit = match semaphore.acquire().await {
                                                     Ok(permit) => permit,
-                                                    Err(e) => {
+                                                    Err(_) => {
                                                         return
                                                     }
                                                 };
