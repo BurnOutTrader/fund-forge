@@ -7,7 +7,6 @@ use tokio::sync::broadcast;
 use tokio::sync::mpsc::Sender;
 use crate::standardized_types::base_data::history::get_historical_data;
 use crate::standardized_types::time_slices::TimeSlice;
-use crate::strategies::client_features::server_connections::set_warmup_complete;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;

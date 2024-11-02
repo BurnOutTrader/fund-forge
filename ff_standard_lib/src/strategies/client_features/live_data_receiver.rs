@@ -85,7 +85,8 @@ async fn receive_and_process(
     const LENGTH: usize = 4;
     let mut length_bytes = [0u8; LENGTH];
     let mut warmup_completion_receiver = WARMUP_COMPLETE_BROADCASTER.subscribe();
-    let mut warm_up_end = None;
+    #[allow(unused_assignments)]
+    let mut warm_up_end = Utc::now();
     // First phase: Buffer data during warmup
     loop {
         tokio::select! {
@@ -120,7 +121,7 @@ async fn receive_and_process(
                 }
             }
             Ok(time) = warmup_completion_receiver.recv() => {
-                warm_up_end = Some(time);
+                warm_up_end = time;
                 break;
             }
         }
@@ -128,12 +129,12 @@ async fn receive_and_process(
 
     // Process buffered data
     let buffer_to_process = std::mem::take(buffered_data);
-    let values: Vec<_> = buffer_to_process
-        .range(warm_up_end.unwrap().timestamp()..=Utc::now().timestamp())
-        .map(|(_, value)| value)
+    let values: Vec<TimeSlice> = buffer_to_process
+        .range(warm_up_end.timestamp()..=Utc::now().timestamp())
+        .map(|(_, value)| value.clone()) // Clone to get owned TimeSlice
         .collect();
 
-    for (_, slice) in buffer_to_process {
+    for slice in values {  // Now we iterate over owned TimeSlices
         let mut strategy_time_slice = TimeSlice::new();
         if !slice.is_empty() {
             let arc_slice = Arc::new(slice.clone());
@@ -143,7 +144,7 @@ async fn receive_and_process(
             if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
                 strategy_time_slice.extend(consolidated_data);
             }
-            strategy_time_slice.extend(slice);
+            strategy_time_slice.extend(slice);  // Extend with a reference
 
             if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
                 let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
