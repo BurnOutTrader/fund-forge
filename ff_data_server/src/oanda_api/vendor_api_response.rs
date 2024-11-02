@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, NaiveDateTime, Utc};
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
 use rust_decimal::Decimal;
 use tokio::sync::broadcast;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
@@ -178,11 +178,6 @@ impl VendorApiResponse for OandaClient {
 
         let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, &last_bar_time).await;
         progress_bar.set_length(urls.len() as u64);
-        progress_bar.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-            .unwrap());
-        progress_bar.set_prefix(symbol.name.clone());
-        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         for url in &urls {

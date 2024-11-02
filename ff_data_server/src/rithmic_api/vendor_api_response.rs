@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use async_std::task::sleep;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::ProgressBar;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
@@ -372,11 +372,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let bar_len = ((Utc::now() - window_start).num_seconds() / 60) as u64;
         progress_bar.set_length(bar_len);
-        progress_bar.set_style(ProgressStyle::default_bar()
-            .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-            .unwrap());
-        progress_bar.set_prefix(symbol.name.clone());
-        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
 
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
