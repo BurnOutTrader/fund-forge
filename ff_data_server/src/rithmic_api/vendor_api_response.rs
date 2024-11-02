@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::time::Instant;
 use async_std::task::sleep;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
@@ -396,19 +397,27 @@ impl VendorApiResponse for RithmicBrokerageClient {
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
             sleep(std::time::Duration::from_millis(100)).await;
 
-            // Receive loop with timeout
+            let mut last_message_time = Instant::now();
+            let timeout_duration = std::time::Duration::from_millis(100);
+            let message_gap_threshold = std::time::Duration::from_millis(500);
+
             'msg_loop: loop {
-                match timeout(std::time::Duration::from_millis(500), receiver.recv()).await {
+                match timeout(timeout_duration, receiver.recv()).await {
                     Ok(Some(data)) => {
                         data_map.insert(data.time_utc(), data);
+                        last_message_time = Instant::now();
                     },
                     Ok(None) => {
                         // Channel closed
-                        //println!("Channel closed");
                         break 'main_loop;
                     },
                     Err(_) => { // Timeout case
-                        break 'msg_loop;
+                        // Only break if we haven't received a message for the gap threshold
+                        if last_message_time.elapsed() > message_gap_threshold {
+                            break 'msg_loop;
+                        }
+                        // Otherwise continue waiting for more messages
+                        continue 'msg_loop;
                     }
                 }
             }
@@ -504,19 +513,28 @@ impl VendorApiResponse for RithmicBrokerageClient {
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
             sleep(std::time::Duration::from_millis(100)).await;
 
-            // Receive loop with timeout
+            // Receive loop with timeout and message gap detection
+            let mut last_message_time = Instant::now();
+            let timeout_duration = std::time::Duration::from_millis(100);
+            let message_gap_threshold = std::time::Duration::from_millis(500);
+
             'msg_loop: loop {
-                match timeout(std::time::Duration::from_millis(500), receiver.recv()).await {
+                match timeout(timeout_duration, receiver.recv()).await {
                     Ok(Some(data)) => {
                         data_map.insert(data.time_utc(), data);
+                        last_message_time = Instant::now();
                     },
                     Ok(None) => {
                         // Channel closed
-                        //println!("Channel closed");
                         break 'main_loop;
                     },
                     Err(_) => { // Timeout case
-                        break 'msg_loop;
+                        // Only break if we haven't received a message for the gap threshold
+                        if last_message_time.elapsed() > message_gap_threshold {
+                            break 'msg_loop;
+                        }
+                        // Otherwise continue waiting for more messages
+                        continue 'msg_loop;
                     }
                 }
             }
