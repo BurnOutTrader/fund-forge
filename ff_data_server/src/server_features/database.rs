@@ -80,11 +80,11 @@ impl HybridStorage {
             loop {
                 interval.tick().await;  // Wait for next interval
 
-                println!("Starting historical data update...");  // Debug log
+                //println!("Starting historical data update...");  // Debug log
 
                 // Run backward update first
                 match HybridStorage::update_data(self.clone(), true).await {
-                    Ok(_) => println!("Backward update completed successfully"),
+                    Ok(_) => {}//println!("Backward update completed successfully"),
                     Err(e) => eprintln!("Backward update failed: {}", e),
                 }
 
@@ -93,7 +93,7 @@ impl HybridStorage {
 
                 // Run forward update
                 match HybridStorage::update_data(self.clone(), false).await {
-                    Ok(_) => println!("Forward update completed successfully"),
+                    Ok(_) => {}//println!("Forward update completed successfully"),
                     Err(e) => eprintln!("Forward update failed: {}", e),
                 }
             }
@@ -576,12 +576,16 @@ impl HybridStorage {
                 }
             };
 
+            let prefix = match from_back {
+                true => "Moving Historical Data Start Date Backwards",
+                false => "Moving Historical Data End Date Forwards",
+            };
             // Create and configure symbol progress bar with an initial length
             let symbol_pb = multi_bar.add(ProgressBar::new(100));
             symbol_pb.set_style(ProgressStyle::default_bar()
                 .template("{prefix:.bold} [{bar:40.cyan/blue}] {pos}/{len}")
                 .unwrap());
-            symbol_pb.set_prefix(format!("Downloading {}", symbol.name));
+            symbol_pb.set_prefix(format!("{} {}", prefix, symbol.name));
 
             match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb.clone()).await {
                 Ok(_) => {
