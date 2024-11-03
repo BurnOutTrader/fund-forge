@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::collections::BTreeMap;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, Utc};
@@ -378,14 +379,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
-            let mut window_end = window_start + Duration::hours(4);
-            if window_end > to {
-                window_end = to;
-            }
+            let window_end = window_start + min(Duration::hours(4), Utc::now() - window_start);
             let to = match from_back {
                 true => to,
                 false => Utc::now(),
             };
+
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to.format("%Y-%m-%d %H:%M:%S")));
             let (sender, receiver) = oneshot::channel();
 
@@ -455,7 +454,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
 
             // Check if we've caught up to the desired end or current time
-            if is_end {
+            if is_end || window_start >= to - TIME_NEGATIVE || window_end >= to - TIME_NEGATIVE {  // Added additional check
                 break 'main_loop;
             }
             progress_bar.inc(1);
