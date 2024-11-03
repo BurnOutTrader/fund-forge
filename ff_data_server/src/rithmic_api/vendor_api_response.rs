@@ -396,7 +396,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end, sender).await;
-            const TIME_OUT: std::time::Duration = std::time::Duration::from_secs(60);
+            const TIME_OUT: std::time::Duration = std::time::Duration::from_secs(180);
             let data_map = match timeout(TIME_OUT, receiver).await {
                 Ok(receiver_result) => match receiver_result {
                     Ok(response) => {

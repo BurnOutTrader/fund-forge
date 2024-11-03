@@ -81,6 +81,12 @@ impl HybridStorage {
                 interval.tick().await;  // Wait for next interval
 
                 //println!("Starting historical data update...");  // Debug log
+                if !self.download_tasks.read().await.is_empty() {
+                    interval = tokio::time::interval(Duration::from_secs(60));
+                    continue;
+                } else {
+                    interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
+                }
 
                 // Run backward update first
                 match HybridStorage::update_data(self.clone(), true).await {
@@ -520,6 +526,7 @@ impl HybridStorage {
 
         Ok(combined_data)
     }
+
     pub async fn update_symbol(
         download_tasks: Arc<RwLock<Vec<(SymbolName, BaseDataType)>>>,
         download_semaphore: Arc<Semaphore>,
@@ -576,16 +583,10 @@ impl HybridStorage {
                 }
             };
 
-            let prefix = match from_back {
-                true => "Moving Historical Data Start Date Backwards",
-                false => "Moving Historical Data End Date Forwards",
-            };
+
             // Create and configure symbol progress bar with an initial length
-            let symbol_pb = multi_bar.add(ProgressBar::new(100));
-            symbol_pb.set_style(ProgressStyle::default_bar()
-                .template("{prefix:.bold} [{bar:40.cyan/blue}] {pos}/{len}")
-                .unwrap());
-            symbol_pb.set_prefix(format!("{} {}", prefix, symbol.name));
+            let symbol_pb = multi_bar.add(ProgressBar::new(1));
+            symbol_pb.set_prefix(format!("{}", symbol.name));
 
             match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb.clone()).await {
                 Ok(_) => {
@@ -593,9 +594,8 @@ impl HybridStorage {
                     vendor_progress_bar.inc(1);
                     symbol_pb.finish_and_clear();
                 },
-                Err(e) => {
-                    eprintln!("Update failed for {}: {}", symbol.name, e);
-                    symbol_pb.abandon_with_message(format!("Failed: {}", symbol.name));
+                Err(_) => {
+                    symbol_pb.finish_and_clear();
                 }
             }
 
@@ -649,6 +649,10 @@ impl HybridStorage {
             eprintln!("Total Symbols: {}", count);
             count as u64
         };
+        let prefix = match from_back {
+            true => "Moving Historical Data Start Date Backwards",
+            false => "Moving Historical Data End Date Forwards",
+        };
 
         // Only create overall progress if we have symbols to process
         let overall_pb = match total_symbols > 0 {
@@ -657,7 +661,7 @@ impl HybridStorage {
                 overall_pb.set_style(ProgressStyle::default_bar()
                     .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
                     .unwrap());
-                overall_pb.set_prefix(format!("{} Utc, Historical Data Update", Utc::now().format("%Y-%m-%d %H:%M")));
+                overall_pb.set_prefix(format!("{} {} Utc",prefix, Utc::now().format("%Y-%m-%d %H:%M")));
                 overall_pb
             }
             false => return Ok(()),
