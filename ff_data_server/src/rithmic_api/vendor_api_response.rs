@@ -341,8 +341,9 @@ impl VendorApiResponse for RithmicBrokerageClient {
         todo!()
     }
 
-    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
+        const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(1);
         let symbol_name = symbol.name.clone();
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
             Some(exchange) => exchange,
@@ -375,7 +376,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
         progress_bar.set_prefix(symbol_name.clone());
 
         let mut save_attempts = 0;
-
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
@@ -383,7 +383,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
             if window_end > to {
                 window_end = to;
             }
-            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to));
+            let to = match from_back {
+                true => to,
+                false => Utc::now(),
+            };
+            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to.format("%Y-%m-%d %H:%M:%S")));
             let (sender, receiver) = oneshot::channel();
 
             let permit = match self.historical_permits.acquire().await {
@@ -424,13 +428,14 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 } else {
                     window_start = window_end;
                 }
-                if last_time >= to {
+
+                if last_time >= to - TIME_NEGATIVE {
                     is_end = true;
                 }
             } else {
                 // If no new data, advance window to avoid re-requesting the same interval
                 window_start = window_end;
-                if window_start > to {
+                if window_start > to - TIME_NEGATIVE {
                     is_end = true;
                 }
             };

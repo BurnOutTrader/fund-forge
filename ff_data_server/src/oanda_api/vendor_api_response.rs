@@ -169,7 +169,7 @@ impl VendorApiResponse for OandaClient {
     }
 
     #[allow(unused)]
-    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         let data_storage = DATA_STORAGE.get().unwrap();
         let interval = resolution_to_oanda_interval(&resolution);
         let instrument = oanda_clean_instrument(&symbol.name).await;
@@ -191,6 +191,7 @@ impl VendorApiResponse for OandaClient {
         // Keep track of empty responses to prevent infinite loops
         let mut consecutive_empty_responses = 0;
         const MAX_EMPTY_RESPONSES: u32 = 20;
+        const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(1);
         let mut last_bar_time = from;
         loop {
             let to_time = (last_bar_time + add_time).min(current_time);
@@ -199,7 +200,16 @@ impl VendorApiResponse for OandaClient {
             if last_bar_time >= current_time {
                 break;
             }
-            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, last_bar_time, Utc::now().format("%Y-%m-%d %H:%M:%S")));
+            let to = match from_back {
+                true => to,
+                false => Utc::now(),
+            };
+
+            if last_bar_time >= to - TIME_NEGATIVE {
+                break;
+            }
+
+            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, last_bar_time, to.format("%Y-%m-%d %H:%M:%S")));
             let url = generate_url(&last_bar_time.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
             let response = match self.send_rest_request(&url).await {
                 Ok(resp) => resp,
