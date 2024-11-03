@@ -102,6 +102,7 @@ pub async fn match_history_plant_id(
         },
         203 => {
             if let Ok(msg) = ResponseTimeBarReplay::decode(&message_buf[..]) {
+                let mut buffer = HISTORICAL_BUFFER.lock().await;
                 const BASE_DATA_TYPE: BaseDataType = BaseDataType::Candles;
                 // Time Bar Replay Response
                 //println!("Time Bar Replay Response (Template ID: 203) from Server: {:?}", msg);
@@ -115,8 +116,6 @@ pub async fn match_history_plant_id(
                     Some(candle) => Some(candle),
                     None => None,
                 };
-
-                let mut buffer = HISTORICAL_BUFFER.lock().await;
 
                 if !finished {
                     // More messages coming, buffer the data
@@ -153,6 +152,7 @@ pub async fn match_history_plant_id(
         207 => {
             const BASE_DATA_TYPE: BaseDataType = BaseDataType::Ticks;
             if let Ok(msg) = ResponseTickBarReplay::decode(&message_buf[..]) {
+                let mut buffer = HISTORICAL_BUFFER.lock().await;
                 // Tick Bar Replay Response
                 // From Server
                 //println!("Tick Bar Replay Response (Template ID: 207) from Server: {:?}", msg);
@@ -167,7 +167,7 @@ pub async fn match_history_plant_id(
                     None => None,
                 };
 
-                let mut buffer = HISTORICAL_BUFFER.lock().await;
+
 
                 if !finished {
                     // More messages coming, buffer the data

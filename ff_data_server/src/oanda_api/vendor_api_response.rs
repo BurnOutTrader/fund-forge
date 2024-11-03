@@ -176,7 +176,6 @@ impl VendorApiResponse for OandaClient {
         let add_time = add_time_to_date(&interval);
 
         let mut num_days = ((Utc::now() - from).num_seconds() / (60*60*5)).abs();
-
         progress_bar.set_length(num_days as u64);
         progress_bar.set_style(
             ProgressStyle::default_bar()
@@ -184,6 +183,7 @@ impl VendorApiResponse for OandaClient {
                 .unwrap()
                 .progress_chars("=>-")
         );
+        progress_bar.set_prefix(symbol.name.clone());
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         let current_time = Utc::now() - Duration::seconds(5);
