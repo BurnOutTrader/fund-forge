@@ -136,7 +136,10 @@ pub async fn match_history_plant_id(
                     }
                 }
                 if send_buffer {
-                    if let Some(((_, sender), buffer)) = (client.historical_callbacks.remove(&user_msg), HISTORICAL_BUFFER.remove(&user_msg)) {
+                    if let (Some((_, sender)), Some((_, buffer))) = (
+                        client.historical_callbacks.remove(&user_msg),
+                        HISTORICAL_BUFFER.remove(&user_msg)
+                    ) {
                         let _ = sender.send(buffer);
                     }
                 }
@@ -185,7 +188,10 @@ pub async fn match_history_plant_id(
                         send_buffer = true;
                     }
                     if send_buffer {
-                        if let Some(((_, sender), buffer)) = (client.historical_callbacks.remove(&user_msg), HISTORICAL_BUFFER.remove(&user_msg)) {
+                        if let (Some((_, sender)), Some((_, buffer))) = (
+                            client.historical_callbacks.remove(&user_msg),
+                            HISTORICAL_BUFFER.remove(&user_msg)
+                        ) {
                             let _ = sender.send(buffer);
                         }
                     }
