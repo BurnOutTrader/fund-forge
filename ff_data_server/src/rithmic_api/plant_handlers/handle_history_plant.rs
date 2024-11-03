@@ -130,22 +130,15 @@ pub async fn match_history_plant_id(
                 } else if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
                         if let Some(candle) = candle {
-                            // Add final message
                             buffer.insert(candle.time_utc(), BaseDataEnum::Candle(candle));
                         }
-
-                        // Take ownership of the buffer and replace it with empty vec
-                        let data_to_send = std::mem::take(&mut *buffer);
-
-                        // Send all data
-                        if let Some((_, sender)) = client.historical_callbacks.remove(&user_msg) {
-                            is_sent = true;
-                            let _ = sender.send(data_to_send);
-                        }
+                        is_sent = true;
                     }
                 }
                 if is_sent {
-                    HISTORICAL_BUFFER.remove(&user_msg);
+                    if let Some(((_, sender), buffer)) = (client.historical_callbacks.remove(&user_msg), HISTORICAL_BUFFER.remove(&user_msg)) {
+                        let _ = sender.send(buffer);
+                    }
                 }
             }
         },
@@ -186,25 +179,17 @@ pub async fn match_history_plant_id(
                     }
                 } else if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
-                        // Add final message
                         if let Some(tick) = tick {
                             buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
                         }
-
-                        // Take ownership of the buffer and replace it with empty vec
-                        let data_to_send = std::mem::take(&mut *buffer);
-
-                        // Release buffer lock before trying to send
-                        drop(buffer);
-
-                        // Send all data
-                        if let Some((_, sender)) = client.historical_callbacks.remove(&user_msg) {
-                            is_sent = true;
-                            let _ = sender.send(data_to_send);
-                        }
+                        is_sent = true;
                     }
                     if is_sent {
-                        HISTORICAL_BUFFER.remove(&user_msg);
+                        if is_sent {
+                            if let Some(((_, sender), buffer)) = (client.historical_callbacks.remove(&user_msg), HISTORICAL_BUFFER.remove(&user_msg)) {
+                                let _ = sender.send(buffer);
+                            }
+                        }
                     }
                 }
             }
