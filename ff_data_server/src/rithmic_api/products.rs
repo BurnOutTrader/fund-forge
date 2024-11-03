@@ -147,7 +147,7 @@ lazy_static! {
         let mut map = HashMap::new();
 
         // CBOT contracts
-        for code in ["XC", "XK", "XW", "YM", "ZB", "ZC", "ZF", "ZL", "ZM", "ZN", "ZO", "ZR", "ZS", "ZT", "ZW"] {
+        for code in ["XC", "XK", "XW", "YM", "ZB", "ZC", "ZF", "ZL", "ZM", "ZN", "ZO", "ZR", "ZS", "ZT", "ZW",  "MYM"] {
             map.insert(code, FuturesExchange::CBOT);
         }
 
@@ -157,17 +157,17 @@ lazy_static! {
         }
 
         // COMEX contracts
-        for code in ["GC", "HG", "QI", "QQ", "SI"] {
+        for code in ["GC", "HG", "QI", "QQ", "SI", "MGC", "SIL"] {
             map.insert(code, FuturesExchange::COMEX);
         }
 
         // NYMEX contracts
-        for code in ["CL", "HO", "NG", "PA", "PL", "QG", "QM", "RB"] {
+        for code in ["CL", "HO", "NG", "PA", "PL", "QG", "QM", "RB", "MCL", "MBT"] {
             map.insert(code, FuturesExchange::NYMEX);
         }
 
         // Micro Futures
-        for code in ["MES", "MNQ", "M2K", "MYM", "MGC", "SIL", "MCL", "MBT", "M6A", "M6B", "M6E", "MJY"] {
+        for code in ["MES", "MNQ", "M2K", "MYM", "M6A", "M6B", "M6E", "MJY"] {
             map.insert(code, FuturesExchange::CME); // All micro contracts are typically on CME
         }
 
