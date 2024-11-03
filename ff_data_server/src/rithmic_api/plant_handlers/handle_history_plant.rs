@@ -157,7 +157,7 @@ pub async fn match_history_plant_id(
             if let Ok(msg) = ResponseTickBarReplay::decode(&message_buf[..]) {
                 // Tick Bar Replay Response
                 // From Server
-                //println!("Tick Bar Replay Response (Template ID: 207) from Server: {:?}", msg);
+                println!("Tick Bar Replay Response (Template ID: 207) from Server: {:?}", msg);
 
                 let mut finished = false;
                 if !msg.rp_code.is_empty() || msg.rq_handler_rp_code.is_empty() {
@@ -187,13 +187,13 @@ pub async fn match_history_plant_id(
                         }
                         send_buffer = true;
                     }
-                    if send_buffer {
-                        if let (Some((_, sender)), Some((_, buffer))) = (
-                            client.historical_callbacks.remove(&user_msg),
-                            HISTORICAL_BUFFER.remove(&user_msg)
-                        ) {
-                            let _ = sender.send(buffer);
-                        }
+                }
+                if send_buffer {
+                    if let (Some((_, sender)), Some((_, buffer))) = (
+                        client.historical_callbacks.remove(&user_msg),
+                        HISTORICAL_BUFFER.remove(&user_msg)
+                    ) {
+                        let _ = sender.send(buffer);
                     }
                 }
             }
