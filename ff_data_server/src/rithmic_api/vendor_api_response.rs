@@ -412,13 +412,14 @@ impl VendorApiResponse for RithmicBrokerageClient {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + Duration::hours(4);
 
+
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, Utc::now().format("%Y-%m-%d %H:%M:%S")));
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
 
             let (timeout_duration, message_gap_threshold) = if let Some(latency) = self.heartbeat_latency.get(&SYSTEM) {
                 // Add some buffer to the latency for timeouts
-                let timeout_ms = latency.value() + 150;  // base latency + 50ms buffer
-                let gap_ms = latency.value() + 300;     // base latency + 150ms buffer for message gaps
+                let timeout_ms = latency.value() + 50;  // base latency + 50ms buffer
+                let gap_ms = latency.value() + 150;     // base latency + 150ms buffer for message gaps
 
                 // Set minimum and maximum bounds
                 let timeout_ms = timeout_ms.clamp(100, 500);  // min 100ms, max 500ms
@@ -567,8 +568,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
             let (timeout_duration, message_gap_threshold) = if let Some(latency) = self.heartbeat_latency.get(&SYSTEM) {
                 // Add some buffer to the latency for timeouts
-                let timeout_ms = latency.value() + 200;  // base latency + 50ms buffer
-                let gap_ms = latency.value() + 200;     // base latency + 150ms buffer for message gaps
+                let timeout_ms = latency.value() + 50;  // base latency + 50ms buffer
+                let gap_ms = latency.value() + 150;     // base latency + 150ms buffer for message gaps
 
                 // Set minimum and maximum bounds
                 let timeout_ms = timeout_ms.clamp(100, 500);  // min 100ms, max 500ms
