@@ -354,11 +354,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
         };
 
-        let permit = match self.historical_permits.acquire().await {
-            Ok(permit) => permit,
-            Err(_) => return Err(FundForgeError::ClientSideErrorDebug("Failed to acquire semaphore permit".to_string()))
-        };
-
         let data_storage = DATA_STORAGE.get().unwrap();
 
         let mut window_start = from;
@@ -380,6 +375,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
 
+        let permit = match self.historical_permits.acquire().await {
+            Ok(permit) => permit,
+            Err(_) => return Err(FundForgeError::ClientSideErrorDebug("Failed to acquire semaphore permit".to_string()))
+        };
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
