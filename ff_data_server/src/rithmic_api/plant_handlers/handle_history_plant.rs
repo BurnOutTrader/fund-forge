@@ -115,7 +115,7 @@ pub async fn match_history_plant_id(
                     Some(candle) => Some(candle),
                     None => None,
                 };
-                let mut is_sent = false;
+                let mut send_buffer = false;
                 let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap();
                 if !finished {
                     if !HISTORICAL_BUFFER.contains_key(&user_msg) {
@@ -132,10 +132,10 @@ pub async fn match_history_plant_id(
                         if let Some(candle) = candle {
                             buffer.insert(candle.time_utc(), BaseDataEnum::Candle(candle));
                         }
-                        is_sent = true;
+                        send_buffer = true;
                     }
                 }
-                if is_sent {
+                if send_buffer {
                     if let Some(((_, sender), buffer)) = (client.historical_callbacks.remove(&user_msg), HISTORICAL_BUFFER.remove(&user_msg)) {
                         let _ = sender.send(buffer);
                     }
@@ -165,7 +165,7 @@ pub async fn match_history_plant_id(
                     Some(tick) => Some(tick),
                     None => None,
                 };
-                let mut is_sent = false;
+                let mut send_buffer = false;
                 let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap();
                 if !finished {
                     if !HISTORICAL_BUFFER.contains_key(&user_msg) {
@@ -182,13 +182,11 @@ pub async fn match_history_plant_id(
                         if let Some(tick) = tick {
                             buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
                         }
-                        is_sent = true;
+                        send_buffer = true;
                     }
-                    if is_sent {
-                        if is_sent {
-                            if let Some(((_, sender), buffer)) = (client.historical_callbacks.remove(&user_msg), HISTORICAL_BUFFER.remove(&user_msg)) {
-                                let _ = sender.send(buffer);
-                            }
+                    if send_buffer {
+                        if let Some(((_, sender), buffer)) = (client.historical_callbacks.remove(&user_msg), HISTORICAL_BUFFER.remove(&user_msg)) {
+                            let _ = sender.send(buffer);
                         }
                     }
                 }
