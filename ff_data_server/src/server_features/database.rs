@@ -530,11 +530,10 @@ impl HybridStorage {
     pub async fn update_symbol(
         download_tasks: Arc<RwLock<Vec<(SymbolName, BaseDataType)>>>,
         download_semaphore: Arc<Semaphore>,
-        multi_progress: MultiProgress,
-        overall_pb: ProgressBar,
         symbol: Symbol,
         resolution: Resolution,
         base_data_type: BaseDataType,
+        symbol_pb: ProgressBar,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         from_back: bool,
@@ -563,8 +562,6 @@ impl HybridStorage {
             }
         }
 
-        let overall_pb = overall_pb.clone();
-        let multi_bar = multi_progress.clone();
         let semaphore = download_semaphore.clone();
         let download_tasks = download_tasks.clone();
 
@@ -581,15 +578,10 @@ impl HybridStorage {
                 }
             };
 
-
-            // Create and configure symbol progress bar with an initial length
-            let symbol_pb = multi_bar.add(ProgressBar::new(1));
             symbol_pb.set_prefix(format!("{}", symbol.name));
 
             match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb).await {
-                Ok(_) => {
-                    overall_pb.inc(1);
-                },
+                Ok(_) => {},
                 Err(_) => {
                 }
             }
@@ -755,19 +747,18 @@ impl HybridStorage {
                             continue;
                         }
 
-                        let overall_pb = overall_pb.clone();
-                        let multi_bar = multi_bar.clone();
                         let semaphore = semaphore.clone();
                         let download_tasks = self.download_tasks.clone();
                         // Directly spawn the update_symbol task
+                        // Create and configure symbol progress bar with an initial length
+                        let symbol_pb = multi_bar.add(ProgressBar::new(1));
                         if let Some(spawn_handle) = HybridStorage::update_symbol(
                             download_tasks,
                             semaphore,
-                            multi_bar,
-                            overall_pb,
                             symbol.clone(),
                             symbol_config.resolution,
                             symbol_config.base_data_type.clone(),
+                            symbol_pb,
                             start_time,
                             end_time,
                             from_back

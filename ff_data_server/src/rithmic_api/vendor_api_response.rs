@@ -435,7 +435,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             } else {
                 // If no new data, advance window to avoid re-requesting the same interval
                 window_start = window_end;
-                if window_start > to - TIME_NEGATIVE {
+                if window_start >= to - TIME_NEGATIVE || window_end >= to - TIME_NEGATIVE {
                     is_end = true;
                 }
             };
