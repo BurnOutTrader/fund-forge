@@ -8,7 +8,7 @@ use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::str::FromStr;
 use std::sync::{Arc};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{Ordering};
 use std::time::Duration;
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use dashmap::DashMap;
@@ -75,7 +75,7 @@ impl HybridStorage {
     pub fn run_update_schedule(self: Arc<Self>) {
         println!("Initializing update schedule with {} second interval", self.update_seconds);
 
-        let handle = tokio::spawn(async move {
+        let _ = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
             interval.tick().await; // First tick happens immediately, so consume it
 

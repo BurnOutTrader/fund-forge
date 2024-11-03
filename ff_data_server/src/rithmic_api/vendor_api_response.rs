@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Datelike, Duration, Utc};
+use chrono::{DateTime, Duration, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
@@ -375,11 +375,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
 
-        let mut save_attempts = 0;
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
-            let mut window_end = window_start + min(Duration::hours(4), Utc::now() - window_start);
+            let window_end = window_start + min(Duration::hours(4), Utc::now() - window_start);
             let to = match from_back {
                 true => to,
                 false => Utc::now(),
@@ -415,9 +414,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
             drop(permit);
 
-            let mut is_saving = false;
             let mut is_end = false;
-            let back_up_time = window_start.clone();
             if let Some((&last_time, _)) = data_map.last_key_value() {
                 if last_time > window_start {
                     window_start = last_time.clone();
@@ -436,12 +433,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 }
             };
 
-            let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
-            //println!("Rithmic: Saving {} data points", save_data.len());
-            if let Err(_e) = data_storage.save_data_bulk(save_data).await {
-               break 'main_loop;
+            if !data_map.is_empty() {
+                let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
+                if let Err(_e) = data_storage.save_data_bulk(save_data).await {
+                    break 'main_loop;
+                }
             }
-            save_attempts = 0;
 
             // Check if we've caught up to the desired end or current time
             if is_end || window_start >= to - TIME_NEGATIVE || window_end >= to - TIME_NEGATIVE {  // Added additional check
