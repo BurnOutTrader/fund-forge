@@ -3,7 +3,7 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use rust_decimal::Decimal;
 use tokio::sync::broadcast;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
@@ -191,6 +191,13 @@ impl VendorApiResponse for OandaClient {
 
         let mut num_days = ((Utc::now() - last_bar_time).num_seconds() / (60*60*5)).abs();
         progress_bar.set_length(num_days as u64);
+        progress_bar.set_style(
+            ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({eta})")
+                .unwrap()
+                .progress_chars("=>-")
+        );
+
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         let current_time = Utc::now() - Duration::seconds(5);
@@ -333,6 +340,12 @@ impl VendorApiResponse for OandaClient {
         let data_storage = DATA_STORAGE.get().unwrap();
         let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, from, to).await;
         progress_bar.set_length(urls.len() as u64);
+        progress_bar.set_style(
+            ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({eta})")
+                .unwrap()
+                .progress_chars("=>-")
+        );
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         let mut last_bar_time = from;
