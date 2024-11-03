@@ -200,8 +200,6 @@ impl VendorApiResponse for OandaClient {
                 .progress_chars("=>-")
         );
         progress_bar.set_prefix(symbol.name.clone());
-        progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, last_bar_time, Utc::now().format("%Y-%m-%d %H:%M:%S")));
-
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         let current_time = Utc::now() - Duration::seconds(5);
@@ -217,7 +215,7 @@ impl VendorApiResponse for OandaClient {
             if last_bar_time >= current_time {
                 break;
             }
-
+            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, last_bar_time, Utc::now().format("%Y-%m-%d %H:%M:%S")));
             let url = generate_url(&last_bar_time.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
             let response = match self.send_rest_request(&url).await {
                 Ok(resp) => resp,
@@ -351,13 +349,12 @@ impl VendorApiResponse for OandaClient {
                 .progress_chars("=>-")
         );
         progress_bar.set_prefix(symbol.name.clone());
-        progress_bar.set_message(format!("Updating: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to));
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         let mut last_bar_time = from;
         for url in &urls {
             let response = self.send_rest_request(&url).await.unwrap();
-
+            progress_bar.set_message(format!("Updating: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to));
             if !response.status().is_success() {
                 continue;
             }

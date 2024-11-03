@@ -412,7 +412,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + Duration::hours(4);
 
-
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, Utc::now().format("%Y-%m-%d %H:%M:%S")));
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
 
