@@ -400,44 +400,27 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
         let permits = self.download_semaphore.clone();
-        let permit = match permits.acquire().await {
-            Ok(permit) => permit,
-            Err(e) => {
-                progress_bar.finish_and_clear();
-                eprintln!("Rithmic download error acquiring permit: {}", e);
-                return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to acquire permit: {}", e)))
-            }
-        };
+        let mut empty_windows = 0;
+        let timeout_duration = std::time::Duration::from_secs(1);
+        let message_gap_threshold = std::time::Duration::from_secs(1);
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + Duration::hours(4);
 
-
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, Utc::now().format("%Y-%m-%d %H:%M:%S")));
+
+            let permit = match permits.acquire().await {
+                Ok(permit) => permit,
+                Err(e) => {
+                    progress_bar.finish_and_clear();
+                    eprintln!("Rithmic download error acquiring permit: {}", e);
+                    return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to acquire permit: {}", e)))
+                }
+            };
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
 
-            let (timeout_duration, message_gap_threshold) = if let Some(latency) = self.heartbeat_latency.get(&SYSTEM) {
-                // Add some buffer to the latency for timeouts
-                let timeout_ms = latency.value() + 50;  // base latency + 50ms buffer
-                let gap_ms = latency.value() + 150;     // base latency + 150ms buffer for message gaps
-
-                // Set minimum and maximum bounds
-                let timeout_ms = timeout_ms.clamp(100, 500);  // min 100ms, max 500ms
-                let gap_ms = gap_ms.clamp(200, 1000);        // min 200ms, max 1000ms
-
-                (
-                    std::time::Duration::from_millis(timeout_ms as u64),
-                    std::time::Duration::from_millis(gap_ms as u64)
-                )
-            } else {
-                // Default values when we don't have latency information
-                (
-                    std::time::Duration::from_millis(200),  // default timeout
-                    std::time::Duration::from_millis(1000)   // default message gap
-                )
-            };
-
             let mut last_message_time = Instant::now();
+
             'msg_loop: loop {
                 match timeout(timeout_duration, receiver.recv()).await {
                     Ok(Some(data)) => {
@@ -452,6 +435,14 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         // Only break if we haven't received a message for the gap threshold
                         if last_message_time.elapsed() > message_gap_threshold {
                             break 'msg_loop;
+                        }
+                        if data_map.is_empty() {
+                            empty_windows += 1;
+                            if empty_windows > 100 {
+                                break 'main_loop;
+                            }
+                        } else {
+                            empty_windows = 0;
                         }
                         // Otherwise continue waiting for more messages
                         continue 'msg_loop;
@@ -475,6 +466,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 // If no new data, advance window to avoid re-requesting the same interval
                 window_start = window_end;
             };
+            drop(permit);
 
             if is_saving {
                 let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
@@ -505,7 +497,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
         }
         progress_bar.finish_and_clear();
         self.historical_data_senders.remove(&(symbol_name, base_data_type));
-        drop(permit);
         Ok(())
     }
 
@@ -549,14 +540,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
         let permits = self.download_semaphore.clone();
-        let permit = match permits.acquire().await {
-            Ok(permit) => permit,
-            Err(e) => {
-                progress_bar.finish_and_clear();
-                eprintln!("Rithmic download error acquiring permit: {}", e);
-                return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to acquire permit: {}", e)))
-            }
-        };
+
+        let timeout_duration = std::time::Duration::from_secs(1);
+        let message_gap_threshold = std::time::Duration::from_secs(1);
+        let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let mut window_end = window_start + Duration::hours(4);
@@ -564,28 +551,16 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 window_end = to;
             }
 
+            let permit = match permits.acquire().await {
+                Ok(permit) => permit,
+                Err(e) => {
+                    progress_bar.finish_and_clear();
+                    eprintln!("Rithmic download error acquiring permit: {}", e);
+                    return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to acquire permit: {}", e)))
+                }
+            };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            let (timeout_duration, message_gap_threshold) = if let Some(latency) = self.heartbeat_latency.get(&SYSTEM) {
-                // Add some buffer to the latency for timeouts
-                let timeout_ms = latency.value() + 50;  // base latency + 50ms buffer
-                let gap_ms = latency.value() + 150;     // base latency + 150ms buffer for message gaps
-
-                // Set minimum and maximum bounds
-                let timeout_ms = timeout_ms.clamp(100, 500);  // min 100ms, max 500ms
-                let gap_ms = gap_ms.clamp(200, 1000);        // min 200ms, max 1000ms
-
-                (
-                    std::time::Duration::from_millis(timeout_ms as u64),
-                    std::time::Duration::from_millis(gap_ms as u64)
-                )
-            } else {
-                // Default values when we don't have latency information
-                (
-                    std::time::Duration::from_millis(200),  // default timeout
-                    std::time::Duration::from_millis(1000)   // default message gap
-                )
-            };
 
             // Receive loop with timeout and message gap detection
             let mut last_message_time = Instant::now();
@@ -603,6 +578,14 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         // Only break if we haven't received a message for the gap threshold
                         if last_message_time.elapsed() > message_gap_threshold {
                             break 'msg_loop;
+                        }
+                        if data_map.is_empty() {
+                            empty_windows += 1;
+                            if empty_windows > 100 {
+                                break 'main_loop;
+                            }
+                        } else {
+                            empty_windows = 0;
                         }
                         // Otherwise continue waiting for more messages
                         continue 'msg_loop;
@@ -632,6 +615,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     is_end = true;
                 }
             };
+            drop(permit);
 
             if is_saving {
                 let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
@@ -662,7 +646,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
         }
         self.historical_data_senders.remove(&(symbol_name, base_data_type));
         progress_bar.finish_and_clear();
-        drop(permit);
         Ok(())
     }
 }
