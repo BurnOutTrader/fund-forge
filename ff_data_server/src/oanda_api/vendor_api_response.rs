@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use async_trait::async_trait;
-use chrono::{DateTime, Datelike,  Utc};
+use chrono::{DateTime, Datelike, Duration, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
 use rust_decimal::Decimal;
 use tokio::sync::broadcast;
@@ -18,7 +18,9 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::{OandaClient, OANDA_IS_CONNECTED};
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
-use crate::oanda_api::download::{generate_urls};
+use crate::oanda_api::download::{generate_url};
+use crate::oanda_api::get_requests::oanda_clean_instrument;
+use crate::oanda_api::support_and_conversions::{add_time_to_date, resolution_to_oanda_interval};
 use crate::server_features::database::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
@@ -166,10 +168,15 @@ impl VendorApiResponse for OandaClient {
         todo!()
     }
 
+    #[allow(unused)]
     async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         let data_storage = DATA_STORAGE.get().unwrap();
-        let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, from, to).await;
-        progress_bar.set_length(urls.len() as u64);
+        let interval = resolution_to_oanda_interval(&resolution);
+        let instrument = oanda_clean_instrument(&symbol.name).await;
+        let add_time = add_time_to_date(&interval);
+
+        let mut num_days = ((Utc::now() - from).num_seconds() / (60*60*5)).abs();
+        progress_bar.set_length(num_days as u64);
         progress_bar.set_style(
             ProgressStyle::default_bar()
                 .template("{prefix:.green} [{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg} ({eta})")
@@ -178,17 +185,33 @@ impl VendorApiResponse for OandaClient {
         );
         progress_bar.set_prefix(symbol.name.clone());
 
-
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
+        let current_time = Utc::now() - Duration::seconds(5);
+
+        // Keep track of empty responses to prevent infinite loops
+        let mut consecutive_empty_responses = 0;
+        const MAX_EMPTY_RESPONSES: u32 = 20;
         let mut last_bar_time = from;
-        for url in &urls {
-            let response = self.send_rest_request(&url).await.unwrap();
-            let to = match to.date_naive() == Utc::now().date_naive() {
-                true => Utc::now(),
-                false => to
+        loop {
+            let to_time = (last_bar_time + add_time).min(current_time);
+
+            // Break if we've reached or passed current time
+            if last_bar_time >= current_time {
+                break;
+            }
+            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, last_bar_time, Utc::now().format("%Y-%m-%d %H:%M:%S")));
+            let url = generate_url(&last_bar_time.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
+            let response = match self.send_rest_request(&url).await {
+                Ok(resp) => resp,
+                Err(_) => {
+                    // On error, advance time window and continue
+                    last_bar_time = to_time;
+                    continue;
+                }
             };
-            progress_bar.set_message(format!("Updating: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to));
+
             if !response.status().is_success() {
+                last_bar_time = to_time;
                 continue;
             }
 
@@ -196,11 +219,21 @@ impl VendorApiResponse for OandaClient {
             let json: serde_json::Value = serde_json::from_str(&content).unwrap();
             let candles = json["candles"].as_array().unwrap();
 
-            if candles.len() == 0 {
+            if candles.is_empty() {
+                consecutive_empty_responses += 1;
+                if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
+                    // If we get multiple empty responses, assume we've reached the end of available data
+                    break;
+                }
+                // Advance time window even when no data is found
+                last_bar_time = to_time;
                 continue;
             }
 
-            // First convert candles to a Vec for indexed access
+            // Reset empty response counter when we get data
+            consecutive_empty_responses = 0;
+
+            // Process candles
             let candles_vec: Vec<_> = candles.into_iter().collect();
             let mut i = 0;
 
@@ -235,7 +268,8 @@ impl VendorApiResponse for OandaClient {
 
                 let new_bar_time = bar.time_utc();
                 if last_bar_time.day() != new_bar_time.day() && !new_data.is_empty() {
-                    let data_vec: Vec<BaseDataEnum> = new_data.values().map(|x| x.clone()).collect();
+                    let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
+
                     // Retry loop for saving data
                     const MAX_RETRIES: u32 = 3;
                     let mut retry_count = 0;
@@ -245,22 +279,17 @@ impl VendorApiResponse for OandaClient {
                             Err(e) => {
                                 retry_count += 1;
                                 if retry_count >= MAX_RETRIES {
-                                    progress_bar.finish_and_clear();
                                     break Err(e);
                                 }
-                                // Optional: Add delay between retries
                                 tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
                             }
                         }
                     };
 
-                    // Handle final save result
-                    if let Err(_) = save_result {
-                        // Return to the start of the current day's data
+                    if let Err(e) = save_result {
                         while i > 0 && bar.time_utc().day() == new_bar_time.day() {
                             i -= 1;
                         }
-                        // Move forward one to start processing from the beginning of the failed day
                         i += 1;
                         continue;
                     }
@@ -272,10 +301,21 @@ impl VendorApiResponse for OandaClient {
                 new_data.entry(new_bar_time).or_insert(bar);
                 i += 1;
             }
-            progress_bar.inc(1);
 
-            if last_bar_time >= to {
-                break
+            // Update last_bar_time to the end of the current window if no data was processed
+            if last_bar_time < to_time {
+                last_bar_time = to_time;
+            }
+
+            progress_bar.inc(1);
+        }
+
+        // Save any remaining data
+        if !new_data.is_empty() {
+            let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
+            match data_storage.save_data_bulk(data_vec).await {
+                Ok(_) => {}
+                Err(_) => {}
             }
         }
         progress_bar.finish_and_clear();
