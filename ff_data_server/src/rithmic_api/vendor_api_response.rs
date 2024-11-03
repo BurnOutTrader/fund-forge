@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::time::Instant;
-use async_std::task::sleep;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -411,11 +410,30 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            sleep(std::time::Duration::from_millis(300)).await;
+
+            let (timeout_duration, message_gap_threshold) = if let Some(latency) = self.heartbeat_latency.get(&SYSTEM) {
+                // Add some buffer to the latency for timeouts
+                let timeout_ms = latency.value() + 50;  // base latency + 50ms buffer
+                let gap_ms = latency.value() + 150;     // base latency + 150ms buffer for message gaps
+
+                // Set minimum and maximum bounds
+                let timeout_ms = timeout_ms.clamp(100, 500);  // min 100ms, max 500ms
+                let gap_ms = gap_ms.clamp(200, 1000);        // min 200ms, max 1000ms
+
+                (
+                    std::time::Duration::from_millis(timeout_ms as u64),
+                    std::time::Duration::from_millis(gap_ms as u64)
+                )
+            } else {
+                // Default values when we don't have latency information
+                (
+                    std::time::Duration::from_millis(200),  // default timeout
+                    std::time::Duration::from_millis(1000)   // default message gap
+                )
+            };
 
             let mut last_message_time = Instant::now();
-            let timeout_duration = std::time::Duration::from_millis(150);
-            let message_gap_threshold = std::time::Duration::from_millis(450);
+
             let mut last_data_time= window_start.clone();
             'msg_loop: loop {
                 match timeout(timeout_duration, receiver.recv()).await {
@@ -548,12 +566,29 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            sleep(std::time::Duration::from_millis(300)).await;
+            let (timeout_duration, message_gap_threshold) = if let Some(latency) = self.heartbeat_latency.get(&SYSTEM) {
+                // Add some buffer to the latency for timeouts
+                let timeout_ms = latency.value() + 50;  // base latency + 50ms buffer
+                let gap_ms = latency.value() + 150;     // base latency + 150ms buffer for message gaps
+
+                // Set minimum and maximum bounds
+                let timeout_ms = timeout_ms.clamp(100, 500);  // min 100ms, max 500ms
+                let gap_ms = gap_ms.clamp(200, 1000);        // min 200ms, max 1000ms
+
+                (
+                    std::time::Duration::from_millis(timeout_ms as u64),
+                    std::time::Duration::from_millis(gap_ms as u64)
+                )
+            } else {
+                // Default values when we don't have latency information
+                (
+                    std::time::Duration::from_millis(200),  // default timeout
+                    std::time::Duration::from_millis(1000)   // default message gap
+                )
+            };
 
             // Receive loop with timeout and message gap detection
             let mut last_message_time = Instant::now();
-            let timeout_duration = std::time::Duration::from_millis(150);
-            let message_gap_threshold = std::time::Duration::from_millis(450);
             let mut last_data_time = from.clone();
             'msg_loop: loop {
                 match timeout(timeout_duration, receiver.recv()).await {

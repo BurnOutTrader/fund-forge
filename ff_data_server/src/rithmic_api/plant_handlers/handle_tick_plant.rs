@@ -73,6 +73,21 @@ pub async fn match_ticker_plant_id(
                 // Response Heartbeat
                 // From Server
                 //println!("Response Heartbeat (Template ID: 19) from Server: {:?}", msg);
+                if let (Some(ssboe), Some(usecs)) = (msg.ssboe, msg.usecs) {
+                    // Convert heartbeat timestamp to DateTime<Utc>
+                    let heartbeat_time = match Utc.timestamp_opt(ssboe as i64, (usecs * 1000) as u32) {
+                        chrono::LocalResult::Single(dt) => dt,
+                        _ => return, // Skip if timestamp is invalid
+                    };
+
+                    // Calculate latency
+                    let now = Utc::now();
+                    let latency = now.signed_duration_since(heartbeat_time);
+
+                    // Store both the send time and latency
+                    client.heartbeat_times.insert(PLANT, now);
+                    client.heartbeat_latency.insert(PLANT, latency.num_milliseconds());
+                }
             }
         },
         101 => {

@@ -92,6 +92,7 @@ pub struct RithmicBrokerageClient {
     pub callback_id: Arc<Mutex<u64>>,
     pub writers: DashMap<SysInfraType, Arc<Mutex<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
     pub heartbeat_times: Arc<DashMap<SysInfraType, DateTime<Utc>>>,
+    pub heartbeat_latency: Arc<DashMap<SysInfraType, i64>>,
     pub heartbeat_tasks: Arc<DashMap<SysInfraType, JoinHandle<()>>>,
     /// Rithmic clients
     pub client: Arc<RithmicApiClient>,
@@ -169,6 +170,7 @@ impl RithmicBrokerageClient {
             callback_id: Arc::new(Mutex::new(0)),
             writers: DashMap::with_capacity(5),
             heartbeat_times: Arc::new(DashMap::with_capacity(5)),
+            heartbeat_latency: Arc::new(DashMap::with_capacity(5)),
             heartbeat_tasks: Arc::new(DashMap::with_capacity(5)),
             client: Arc::new(client),
             front_month_info: Default::default(),
@@ -375,55 +377,56 @@ impl RithmicBrokerageClient {
             let mut shutdown_receiver = subscribe_server_shutdown();
             'heartbeat_loop: loop {
                 select! {
-                _ = interval.tick() => {
-                    let now = Utc::now();
-                    let skip_heartbeat = match plant {
-                        SysInfraType::TickerPlant => {
-                            !quote_broadcasters.is_empty() || !tick_feed_broadcasters.is_empty()
-                        }
-                        SysInfraType::HistoryPlant => {
-                            !candle_broadcasters.is_empty()
-                        }
-                        _ => false
-                    };
-
-                    if !skip_heartbeat {
-                        let request = RequestHeartbeat {
-                            template_id: 18,
-                            user_msg: vec![],
-                            ssboe: Some(now.timestamp() as i32),
-                            usecs: Some(now.timestamp_subsec_micros() as i32),
-                        };
-                        let mut buf = Vec::new();
-                        if let Err(e) = request.encode(&mut buf) {
-                            eprintln!("Failed to encode message for {:?}: {}", plant, e);
-                            continue 'heartbeat_loop;
-                        }
-
-                        let length = buf.len() as u32;
-                        let mut prefixed_msg = length.to_be_bytes().to_vec();
-                        prefixed_msg.extend(buf);
-
-                        let mut write_stream = write_stream.lock().await;
-                        match write_stream.send(Message::Binary(prefixed_msg)).await {
-                            Ok(_) => {
-                                heartbeat_times.insert(plant.clone(), now);
-                                //eprintln!("Heartbeat sent for {:?} at {:?}", plant, now);
-                            },
-                            Err(e) => {
-                                eprintln!("Failed to send heartbeat to {:?}: {}", plant, e);
-                                break 'heartbeat_loop;
+                    _ = interval.tick() => {
+                        let now = Utc::now();
+                        let skip_heartbeat = match plant {
+                            SysInfraType::TickerPlant => {
+                                !quote_broadcasters.is_empty() || !tick_feed_broadcasters.is_empty()
                             }
+                            SysInfraType::HistoryPlant => {
+                                !candle_broadcasters.is_empty()
+                            }
+                            _ => false
+                        };
+
+                        if !skip_heartbeat {
+                            let request = RequestHeartbeat {
+                                template_id: 18,
+                                user_msg: vec![],
+                                ssboe: Some(now.timestamp() as i32),
+                                usecs: Some(now.timestamp_subsec_micros() as i32),
+                            };
+                            let mut buf = Vec::new();
+                            if let Err(e) = request.encode(&mut buf) {
+                                eprintln!("Failed to encode message for {:?}: {}", plant, e);
+                                continue 'heartbeat_loop;
+                            }
+
+                            let length = buf.len() as u32;
+                            let mut prefixed_msg = length.to_be_bytes().to_vec();
+                            prefixed_msg.extend(buf);
+
+                            let mut write_stream = write_stream.lock().await;
+                            match write_stream.send(Message::Binary(prefixed_msg)).await {
+                                Ok(_) => {
+                                    heartbeat_times.insert(plant.clone(), now);
+                                    //eprintln!("Heartbeat sent for {:?} at {:?}", plant, now);
+                                },
+                                Err(e) => {
+                                    eprintln!("Failed to send heartbeat to {:?}: {}", plant, e);
+                                    break 'heartbeat_loop;
+                                }
+                            }
+                            heartbeat_times.insert(plant.clone(), now);
+                        } else {
+                            //eprintln!("Skipping heartbeat for {:?} due to active broadcasters at {:?}", plant, now);
                         }
-                    } else {
-                        //eprintln!("Skipping heartbeat for {:?} due to active broadcasters at {:?}", plant, now);
+                    }
+                    _ = shutdown_receiver.recv() => {
+                        println!("Shutting down heartbeat task for system {:?}", plant);
+                        break 'heartbeat_loop;
                     }
                 }
-                _ = shutdown_receiver.recv() => {
-                    println!("Shutting down heartbeat task for system {:?}", plant);
-                    break 'heartbeat_loop;
-                }
-            }
             }
         });
         self.heartbeat_tasks.insert(plant, task);
