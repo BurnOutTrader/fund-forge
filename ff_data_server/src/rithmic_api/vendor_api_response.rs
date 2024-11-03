@@ -451,9 +451,9 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         if last_message_time.elapsed() > message_gap_threshold {
                             break 'msg_loop;
                         }
-                        if last_data_time >= window_end {
+                    /*    if last_data_time >= window_end {
                             break 'msg_loop;
-                        }
+                        }*/
                         // Otherwise continue waiting for more messages
                         continue 'msg_loop;
                     }
@@ -606,9 +606,9 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         if last_message_time.elapsed() > message_gap_threshold {
                             break 'msg_loop;
                         }
-                        if last_data_time >= window_end {
+                     /*   if last_data_time >= window_end {
                             break 'msg_loop;
-                        }
+                        }*/
                         // Otherwise continue waiting for more messages
                         continue 'msg_loop;
                     }
