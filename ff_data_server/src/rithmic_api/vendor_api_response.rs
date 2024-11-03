@@ -414,10 +414,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
             let mut last_message_time = Instant::now();
             let timeout_duration = std::time::Duration::from_millis(100);
             let message_gap_threshold = std::time::Duration::from_millis(500);
-
+            let mut last_data_time= window_start.clone();
             'msg_loop: loop {
                 match timeout(timeout_duration, receiver.recv()).await {
                     Ok(Some(data)) => {
+                        last_data_time = data.time_utc();
                         data_map.insert(data.time_utc(), data);
                         last_message_time = Instant::now();
                     },
@@ -428,6 +429,9 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     Err(_) => { // Timeout case
                         // Only break if we haven't received a message for the gap threshold
                         if last_message_time.elapsed() > message_gap_threshold {
+                            break 'msg_loop;
+                        }
+                        if last_data_time >= window_end {
                             break 'msg_loop;
                         }
                         // Otherwise continue waiting for more messages
@@ -546,10 +550,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
             let mut last_message_time = Instant::now();
             let timeout_duration = std::time::Duration::from_millis(100);
             let message_gap_threshold = std::time::Duration::from_millis(500);
-
+            let mut last_data_time = from.clone();
             'msg_loop: loop {
                 match timeout(timeout_duration, receiver.recv()).await {
                     Ok(Some(data)) => {
+                        last_data_time = data.time_utc();
                         data_map.insert(data.time_utc(), data);
                         last_message_time = Instant::now();
                     },
@@ -560,6 +565,9 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     Err(_) => { // Timeout case
                         // Only break if we haven't received a message for the gap threshold
                         if last_message_time.elapsed() > message_gap_threshold {
+                            break 'msg_loop;
+                        }
+                        if last_data_time >= window_end {
                             break 'msg_loop;
                         }
                         // Otherwise continue waiting for more messages
