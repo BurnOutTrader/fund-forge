@@ -400,7 +400,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         if response.is_empty() {
                             empty_windows += 1;
                             //eprintln!("Empty window: {} - {}", window_start, window_end);
-                            if empty_windows > 200 {
+                            if empty_windows > 50 {
                                 break 'main_loop;
                             }
                         } else {
