@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::sync::{Arc};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use dashmap::DashMap;
 use futures::future;
 use futures_util::future::join_all;
@@ -732,13 +732,10 @@ impl HybridStorage {
                                 match self.get_latest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
                                     Ok(Some(date)) => date,
                                     Err(_) | Ok(None) => {
-                                        let utc_time_string = match vendor {
-                                            DataVendor::Oanda => "2005-01-01 00:00:00.000000",
-                                            DataVendor::Rithmic => "2019-01-02 21:00:00.000000",
-                                            _ => continue
-                                        };
-                                        let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
-                                        DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
+                                        DateTime::<Utc>::from_naive_utc_and_offset(
+                                            symbol_config.start_date.and_hms_opt(0, 0, 0).unwrap(),
+                                            Utc
+                                        )
                                     }
                                 }
                             }

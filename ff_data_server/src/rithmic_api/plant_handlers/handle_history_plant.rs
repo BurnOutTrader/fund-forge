@@ -123,7 +123,7 @@ pub async fn match_history_plant_id(
                     if let Some(candle) = candle {
                         buffer.insert(candle.time_utc(), BaseDataEnum::Candle(candle));
                     }
-                } else {
+                } else if (msg.symbol.is_none() || buffer.len() == 0) || buffer.len() > 0 {
                     if let Some(candle) = candle {
                         // Add final message
                         buffer.insert(candle.time_utc(), BaseDataEnum::Candle(candle));
@@ -174,7 +174,7 @@ pub async fn match_history_plant_id(
                     if let Some(tick) = tick {
                         buffer.insert(tick.time_utc(),BaseDataEnum::Tick(tick));
                     }
-                } else {
+                } else if (msg.symbol.is_none() || buffer.len() == 0) || buffer.len() > 0 {
                     // Add final message
                     if let Some(tick) = tick {
                         buffer.insert(tick.time_utc(),BaseDataEnum::Tick(tick));

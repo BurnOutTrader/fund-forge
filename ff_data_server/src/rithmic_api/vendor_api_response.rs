@@ -402,7 +402,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     Ok(response) => {
                         if response.is_empty() {
                             empty_windows += 1;
-                            if empty_windows > 100 {
+                            if empty_windows > 200 {
                                 break 'main_loop;
                             }
                         } else {
