@@ -413,7 +413,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             let mut last_message_time = Instant::now();
             let timeout_duration = std::time::Duration::from_millis(100);
-            let message_gap_threshold = std::time::Duration::from_millis(500);
+            let message_gap_threshold = std::time::Duration::from_millis(1000);
             let mut last_data_time= window_start.clone();
             'msg_loop: loop {
                 match timeout(timeout_duration, receiver.recv()).await {
@@ -549,7 +549,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             // Receive loop with timeout and message gap detection
             let mut last_message_time = Instant::now();
             let timeout_duration = std::time::Duration::from_millis(100);
-            let message_gap_threshold = std::time::Duration::from_millis(500);
+            let message_gap_threshold = std::time::Duration::from_millis(1000);
             let mut last_data_time = from.clone();
             'msg_loop: loop {
                 match timeout(timeout_duration, receiver.recv()).await {
