@@ -7,7 +7,7 @@ use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::sync::{Arc};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use chrono::{DateTime, Datelike, NaiveDate, Utc};
+use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, Utc};
 use dashmap::DashMap;
 use futures::future;
 use futures_util::future::join_all;
@@ -74,10 +74,10 @@ impl HybridStorage {
             loop {
                 interval.tick().await;  // Wait for next interval
                 // First run and complete move_back_available_history
-                match HybridStorage::move_back_available_history(self.clone()).await {
+             /*   match HybridStorage::move_back_available_history(self.clone()).await {
                     Ok(_) => {}
                     Err(_) => {}
-                };
+                };*/
                 match self.multi_bar.clear() {
                     Ok(_) => {},
                     Err(e) => eprintln!("Failed to clear multi bar: {}", e),
@@ -656,7 +656,7 @@ impl HybridStorage {
                                             // Create and configure symbol progress bar
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));
 
-                                            match client.update_historical_data_to(symbol, symbol_config.base_data_type, resolution, start_time, end_time, symbol_pb).await {
+                                            match client.update_historical_data(symbol, symbol_config.base_data_type, resolution, start_time, end_time, symbol_pb).await {
                                                 Ok(_) => {
                                                     overall_pb.inc(1);
                                                     oanda_pb.inc(1);
@@ -779,7 +779,7 @@ impl HybridStorage {
                                             };
                                             // Create a new progress bar for this symbol
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
-                                            match client.update_historical_data_to(symbol, symbol_config.base_data_type, resolution, start_time, end_time, symbol_pb).await {
+                                            match client.update_historical_data(symbol, symbol_config.base_data_type, resolution, start_time, end_time, symbol_pb).await {
                                                 Ok(_) => {
                                                     overall_pb.inc(1);
                                                     rithmic_pb.inc(1);
@@ -929,23 +929,22 @@ impl HybridStorage {
                                                 // Create and configure symbol progress bar
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));
 
-                                                let start_date = match symbol_config.start_date {
-                                                    Some(date) => {
-                                                        //convert to datetime utc
-                                                        let date = match date.and_hms_opt(0, 0, 0) {
-                                                            Some(date) => date,
-                                                            None => {
-                                                                return
-                                                            }
-                                                        };
-                                                        Some(DateTime::from_naive_utc_and_offset(date, Utc))
-                                                    },
-                                                    None => {
-                                                        None
-                                                    }
+                                                let earliest_oanda_data = if let Some(start_time) = symbol_config.start_date {
+                                                    DateTime::<Utc>::from_naive_utc_and_offset(start_time.and_hms_opt(0,0,0).unwrap(), Utc)
+                                                } else {
+                                                    let utc_time_string = "2005-01-01 00:00:00.000000";
+                                                    let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
+                                                    DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
                                                 };
 
-                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, start_date, symbol_pb).await {
+                                                let data_storage = DATA_STORAGE.get().unwrap();
+
+                                                let last_bar_time = match data_storage.get_latest_data_time(&symbol, &resolution, &symbol_config.base_data_type).await {
+                                                    Err(_) => earliest_oanda_data,
+                                                    Ok(time) => time.unwrap_or_else(|| earliest_oanda_data)
+                                                };
+
+                                                match client.update_historical_data(symbol, symbol_config.base_data_type, resolution, last_bar_time, Utc::now(), symbol_pb).await {
                                                     Ok(_) => {
                                                         overall_pb.inc(1);
                                                         oanda_pb.inc(1);
@@ -1034,25 +1033,25 @@ impl HybridStorage {
                                                         return
                                                     }
                                                 };
-                                                let start_date = match symbol_config.start_date {
-                                                    Some(date) => {
-                                                        //convert to datetime utc
-                                                        let date = match date.and_hms_opt(0, 0, 0) {
-                                                            Some(date) => date,
-                                                            None => {
-                                                                return
-                                                            }
-                                                        };
-                                                        Some(DateTime::from_naive_utc_and_offset(date, Utc))
-                                                    },
-                                                    None => {
-                                                        None
-                                                    }
+                                                let earliest_oanda_data = if let Some(start_time) = symbol_config.start_date {
+                                                    DateTime::<Utc>::from_naive_utc_and_offset(start_time.and_hms_opt(0,0,0).unwrap(), Utc)
+                                                } else {
+                                                    let utc_time_string = "2019-06-02 00:00:00.000000";
+                                                    let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
+                                                    DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
+                                                };
+
+                                                let data_storage = DATA_STORAGE.get().unwrap();
+
+                                                let last_bar_time = match data_storage.get_latest_data_time(&symbol, &resolution, &symbol_config.base_data_type).await {
+                                                    Err(_) => earliest_oanda_data,
+                                                    Ok(time) => time.unwrap_or_else(|| earliest_oanda_data)
                                                 };
                                                 // Create a new progress bar for this symbol
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
-                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, start_date, symbol_pb).await {
+                                                match client.update_historical_data(symbol, symbol_config.base_data_type, resolution, last_bar_time, Utc::now(), symbol_pb).await {
                                                     Ok(_) => {
+                                                        eprintln!("Oanda Update: Updated data for");
                                                         overall_pb.inc(1);
                                                         rithmic_pb.inc(1);
                                                     },
