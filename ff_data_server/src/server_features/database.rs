@@ -650,11 +650,6 @@ impl HybridStorage {
                                             };
                                             // Create and configure symbol progress bar
                                             let symbol_pb = multi_bar.add(ProgressBar::new(0));
-                                            symbol_pb.set_style(ProgressStyle::default_bar()
-                                                .template("{prefix:.bold} {msg} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                                                .unwrap());
-                                            symbol_pb.set_prefix(symbol_name.clone());
-                                            symbol_pb.set_message(format!("({}: {})", resolution, symbol_config.base_data_type));
 
                                             match client.update_historical_data_to(symbol, symbol_config.base_data_type, resolution, start_time, end_time, symbol_pb).await {
                                                 Ok(_) => {
@@ -924,11 +919,6 @@ impl HybridStorage {
                                                 };
                                                 // Create and configure symbol progress bar
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));
-                                                symbol_pb.set_style(ProgressStyle::default_bar()
-                                                    .template("{prefix:.bold} {msg} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                                                    .unwrap());
-                                                symbol_pb.set_prefix(symbol_name.clone());
-                                                symbol_pb.set_message(format!("({}: {})", resolution, symbol_config.base_data_type));
 
                                                 match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
                                                     Ok(_) => {

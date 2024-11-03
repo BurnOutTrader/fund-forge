@@ -387,10 +387,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
         progress_bar.set_length(bar_len);
         progress_bar.set_style(
             ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({eta})")
+                .template("{prefix:.green} [{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg} ({eta})")
                 .unwrap()
                 .progress_chars("=>-")
         );
+        progress_bar.set_prefix(symbol_name.clone());
+        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
 
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
@@ -519,10 +521,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
         progress_bar.set_length(bar_len);
         progress_bar.set_style(
             ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({eta})")
+                .template("{prefix:.green} [{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg} ({eta})")
                 .unwrap()
                 .progress_chars("=>-")
         );
+        progress_bar.set_prefix(symbol_name.clone());
+        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
 
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;

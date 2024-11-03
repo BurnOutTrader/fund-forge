@@ -193,10 +193,12 @@ impl VendorApiResponse for OandaClient {
         progress_bar.set_length(num_days as u64);
         progress_bar.set_style(
             ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({eta})")
+                .template("{prefix:.green} [{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg} ({eta})")
                 .unwrap()
                 .progress_chars("=>-")
         );
+        progress_bar.set_prefix(symbol.name.clone());
+        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
 
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
@@ -342,10 +344,12 @@ impl VendorApiResponse for OandaClient {
         progress_bar.set_length(urls.len() as u64);
         progress_bar.set_style(
             ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} ({eta})")
+                .template("{prefix:.green} [{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg} ({eta})")
                 .unwrap()
                 .progress_chars("=>-")
         );
+        progress_bar.set_prefix(symbol.name.clone());
+        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         let mut last_bar_time = from;
