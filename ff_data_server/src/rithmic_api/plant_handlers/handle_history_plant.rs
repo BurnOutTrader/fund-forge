@@ -115,7 +115,6 @@ pub async fn match_history_plant_id(
                     Some(candle) => Some(candle),
                     None => None,
                 };
-                let mut send_buffer = false;
                 let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap();
                 if !HISTORICAL_BUFFER.contains_key(&user_msg) {
                     HISTORICAL_BUFFER.insert(user_msg, BTreeMap::new());
@@ -126,21 +125,16 @@ pub async fn match_history_plant_id(
                         if let Some(candle) = candle {
                             buffer.insert(candle.time_utc(), BaseDataEnum::Candle(candle));
                         }
+                        return
                     }
-                } else if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
+                } else if let Some((id, mut buffer)) = HISTORICAL_BUFFER.remove(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
                         if let Some(candle) = candle {
                             buffer.insert(candle.time_utc(), BaseDataEnum::Candle(candle));
                         }
-                        send_buffer = true;
-                    }
-                }
-                if send_buffer {
-                    if let (Some((_, sender)), Some((_, buffer))) = (
-                        client.historical_callbacks.remove(&user_msg),
-                        HISTORICAL_BUFFER.remove(&user_msg)
-                    ) {
-                        let _ = sender.send(buffer);
+                        if let Some((_, mut sender)) = client.historical_callbacks.remove(&id) {
+                            let _ = sender.send(buffer);
+                        }
                     }
                 }
             }
@@ -168,7 +162,6 @@ pub async fn match_history_plant_id(
                     Some(tick) => Some(tick),
                     None => None,
                 };
-                let mut send_buffer = false;
                 let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap();
                 if !HISTORICAL_BUFFER.contains_key(&user_msg) {
                     HISTORICAL_BUFFER.insert(user_msg, BTreeMap::new());
@@ -179,21 +172,16 @@ pub async fn match_history_plant_id(
                         if let Some(tick) = tick {
                             buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
                         }
+                        return
                     }
-                } else if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
+                } else if let Some((id, mut buffer)) = HISTORICAL_BUFFER.remove(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
                         if let Some(tick) = tick {
                             buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
                         }
-                        send_buffer = true;
-                    }
-                }
-                if send_buffer {
-                    if let (Some((_, sender)), Some((_, buffer))) = (
-                        client.historical_callbacks.remove(&user_msg),
-                        HISTORICAL_BUFFER.remove(&user_msg)
-                    ) {
-                        let _ = sender.send(buffer);
+                        if let Some((_, mut sender)) = client.historical_callbacks.remove(&id) {
+                            let _ = sender.send(buffer);
+                        }
                     }
                 }
             }
