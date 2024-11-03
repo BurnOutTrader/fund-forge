@@ -531,6 +531,7 @@ impl HybridStorage {
         base_data_type: BaseDataType,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
+        from_back: bool,
     ) -> Option<JoinHandle<()>> {
         let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
             DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
@@ -582,7 +583,7 @@ impl HybridStorage {
                 .unwrap());
             symbol_pb.set_prefix(format!("Downloading {}", symbol.name));
 
-            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, symbol_pb.clone()).await {
+            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb.clone()).await {
                 Ok(_) => {
                     overall_pb.inc(1);
                     vendor_progress_bar.inc(1);
@@ -779,6 +780,7 @@ impl HybridStorage {
                             symbol_config.base_data_type.clone(),
                             start_time,
                             end_time,
+                            from_back
                         ).await {
                             tasks.push(spawn_handle);
                         }
