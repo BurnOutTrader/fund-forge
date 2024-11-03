@@ -198,7 +198,7 @@ impl VendorApiResponse for OandaClient {
                 .progress_chars("=>-")
         );
         progress_bar.set_prefix(symbol.name.clone());
-        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
+        progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, last_bar_time, Utc::now().format("%Y-%m-%d %H:%M:%S")));
 
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
@@ -349,7 +349,7 @@ impl VendorApiResponse for OandaClient {
                 .progress_chars("=>-")
         );
         progress_bar.set_prefix(symbol.name.clone());
-        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
+        progress_bar.set_message(format!("Updating: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to));
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         let mut last_bar_time = from;

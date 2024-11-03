@@ -619,7 +619,7 @@ impl HybridStorage {
                                             Ok(maybe_date) => {
                                                 match maybe_date {
                                                     Some(date) => {
-                                                        if date <= start_time {
+                                                        if date -chrono::Duration::days(1) <= start_time {
                                                             continue;
                                                         }
                                                         date
@@ -629,6 +629,11 @@ impl HybridStorage {
                                             },
                                             Err(_) =>  continue,
                                         };
+
+                                        if start_time - end_time < chrono::Duration::days(1) {
+                                            continue;
+                                        }
+
                                         let symbol_name = symbol_config.symbol_name.clone();
                                         let overall_pb = overall_pb.clone();
                                         let oanda_pb = oanda_pb.clone();
@@ -738,7 +743,7 @@ impl HybridStorage {
                                             Ok(maybe_date) => {
                                                 match maybe_date {
                                                     Some(date) => {
-                                                        if date <= start_time {  // This is backwards
+                                                        if date -chrono::Duration::days(1) <= start_time {  // This is backwards
                                                             continue;
                                                         }
                                                         date
@@ -748,6 +753,10 @@ impl HybridStorage {
                                             },
                                             Err(_) => continue,
                                         };
+
+                                        if start_time - end_time < chrono::Duration::days(1) {
+                                            continue;
+                                        }
 
                                         let client = client.clone();
                                         let multi_bar = multi_bar.clone();

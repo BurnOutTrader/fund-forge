@@ -391,7 +391,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
         progress_bar.set_prefix(symbol_name.clone());
-        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
+        progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, Utc::now().format("%Y-%m-%d %H:%M:%S")));
 
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
@@ -538,7 +538,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
         progress_bar.set_prefix(symbol_name.clone());
-        progress_bar.set_message(format!("({}: {})", resolution, base_data_type));
+        progress_bar.set_message(format!("Updating: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to));
 
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
