@@ -16,6 +16,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 - 2/11/2024: Live warm up should now work, if you have historical data, but has not been tested (it is the weekend and market is closed)
 - 2/11/2024: The next development step is to finish live data for Oanda, then backtesting accuracy for Oanda, then support for more historical resolutions and data sets, by improving subscription functions.
 - 03/11/2024: Rithmic Historical data improved to avoid missing data due to poor latency, unsure if there is a max concurrent download limit for rithmic, so it is set to 1 request response at a time, I have done this to avoid download a bunch of gapped data, I will talk to rithmic and find out if i can make concurrent requests.
+- 03/11/2024: Live warm up should work, but it wont have the lastest data unless you restart the server right before launching a strategy, fns will be made this week to update data before starting the strategy warm up engine.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
