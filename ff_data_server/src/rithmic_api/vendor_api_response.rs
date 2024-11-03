@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::time::Instant;
+use async_std::task::sleep;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -401,8 +402,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut save_attempts = 0;
         let permits = self.download_semaphore.clone();
         let mut empty_windows = 0;
-        let timeout_duration = std::time::Duration::from_secs(1);
-        let message_gap_threshold = std::time::Duration::from_secs(1);
+        let timeout_duration = std::time::Duration::from_millis(300);
+        let message_gap_threshold = std::time::Duration::from_millis(250);
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + Duration::hours(4);
@@ -418,6 +419,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 }
             };
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
             let mut last_message_time = Instant::now();
 
@@ -541,8 +543,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut save_attempts = 0;
         let permits = self.download_semaphore.clone();
 
-        let timeout_duration = std::time::Duration::from_secs(1);
-        let message_gap_threshold = std::time::Duration::from_secs(1);
+        let timeout_duration = std::time::Duration::from_millis(300);
+        let message_gap_threshold = std::time::Duration::from_millis(250);
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
@@ -561,6 +563,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
+            sleep(std::time::Duration::from_millis(100)).await;
 
             // Receive loop with timeout and message gap detection
             let mut last_message_time = Instant::now();
