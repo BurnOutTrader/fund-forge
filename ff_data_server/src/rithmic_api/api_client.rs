@@ -52,7 +52,6 @@ use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_new_ord
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use once_cell::sync::OnceCell;
-use tokio::sync::mpsc::Sender;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::{BarType, Direction, TimeOrder};
 
@@ -120,6 +119,8 @@ pub struct RithmicBrokerageClient {
 
     //products
     pub products: DashMap<MarketType, Vec<Symbol>>,
+    pub historical_callbacks: DashMap<u64, oneshot::Sender<BTreeMap<DateTime<Utc>,BaseDataEnum>>>,
+    pub historical_permits: Arc<Semaphore>,
 
     //todo, since only 1 connection is used for data this could all be moved, we could have a rithmic data client and a rithmic broker client
     //subscribers
@@ -134,9 +135,6 @@ pub struct RithmicBrokerageClient {
     pub ask_book: DashMap<SymbolName, BTreeMap<u16, BookLevel>>,
 
     pub order_broadcaster: broadcast::Sender<DataServerResponse>,
-    pub historical_data_senders: DashMap<(SymbolName, BaseDataType), Sender<BaseDataEnum>>,
-
-    pub download_semaphore: Arc<Semaphore>,
 }
 
 impl RithmicBrokerageClient {
@@ -199,8 +197,8 @@ impl RithmicBrokerageClient {
             open_orders: Default::default(),
             id_to_basket_id_map: Default::default(),
             pending_order_updates: Default::default(),
-            historical_data_senders: Default::default(),
-            download_semaphore: Arc::new(Semaphore::new(1))
+            historical_callbacks: Default::default(),
+            historical_permits: Arc::new(Semaphore::new(1)),
         };
         Ok(client)
     }
@@ -260,7 +258,7 @@ impl RithmicBrokerageClient {
         }
     }
 
-    pub async fn send_callback(&self, stream_name: StreamName, callback_id: u64, response: DataServerResponse) {
+    pub async fn return_callback(&self, stream_name: StreamName, callback_id: u64, response: DataServerResponse) {
         let mut disconnected = false;
         if let Some(mut stream_map) = self.callbacks.get_mut(&stream_name) {
             if let Some(sender) = stream_map.value_mut().remove(&callback_id) {
@@ -955,9 +953,12 @@ impl RithmicBrokerageClient {
     }
 
 
-    pub(crate) async fn send_replay_request(&self, base_data_type: BaseDataType, resolution: Resolution, symbol_name: SymbolName, exchange: FuturesExchange, window_start: DateTime<Utc>, window_end: DateTime<Utc>) {
-        // Send the request based on data type
+    pub(crate) async fn send_replay_request(&self, base_data_type: BaseDataType, resolution: Resolution, symbol_name: SymbolName, exchange: FuturesExchange, window_start: DateTime<Utc>, window_end: DateTime<Utc>, sender: oneshot::Sender<BTreeMap<DateTime<Utc>,BaseDataEnum>>) {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
+        // Send the request based on data type
+        let callback_id = self.generate_callback_id().await;
+        self.historical_callbacks.insert(callback_id.clone(), sender);
+
         match base_data_type {
             BaseDataType::Candles => {
                 if resolution > Resolution::Seconds(1) {
@@ -965,7 +966,7 @@ impl RithmicBrokerageClient {
                 }
                 let req = RequestTimeBarReplay {
                     template_id: 202,
-                    user_msg: vec![],
+                    user_msg: vec![callback_id.to_string()],
                     symbol: Some(symbol_name.clone()),
                     exchange: Some(exchange.to_string()),
                     bar_type: Some(BarType::SecondBar.into()),
@@ -985,7 +986,7 @@ impl RithmicBrokerageClient {
                 }
                 let req = RequestTickBarReplay {
                     template_id: 206,
-                    user_msg: vec![],
+                    user_msg: vec![callback_id.to_string()],
                     symbol: Some(symbol_name.clone()),
                     exchange: Some(exchange.to_string()),
                     bar_type: Some(request_tick_bar_replay::BarType::TickBar.into()),

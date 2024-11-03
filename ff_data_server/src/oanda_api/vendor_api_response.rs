@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use async_trait::async_trait;
-use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike,  Utc};
 use indicatif::{ProgressBar, ProgressStyle};
 use rust_decimal::Decimal;
 use tokio::sync::broadcast;
@@ -18,9 +18,7 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::{OandaClient, OANDA_IS_CONNECTED};
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
-use crate::oanda_api::download::{generate_url, generate_urls};
-use crate::oanda_api::get_requests::oanda_clean_instrument;
-use crate::oanda_api::support_and_conversions::{add_time_to_date, resolution_to_oanda_interval};
+use crate::oanda_api::download::{generate_urls};
 use crate::server_features::database::DATA_STORAGE;
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
@@ -167,7 +165,7 @@ impl VendorApiResponse for OandaClient {
     async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
         todo!()
     }
-
+/*
     #[allow(unused)]
     async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, start_date: Option<DateTime<Utc>>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         let earliest_oanda_data = if let Some(start_time) = start_date {
@@ -337,8 +335,8 @@ impl VendorApiResponse for OandaClient {
         progress_bar.finish_and_clear();
         Ok(())
     }
-
-    async fn update_historical_data_to(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+*/
+    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         let data_storage = DATA_STORAGE.get().unwrap();
         let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, from, to).await;
         progress_bar.set_length(urls.len() as u64);
@@ -350,10 +348,15 @@ impl VendorApiResponse for OandaClient {
         );
         progress_bar.set_prefix(symbol.name.clone());
 
+
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         let mut last_bar_time = from;
         for url in &urls {
             let response = self.send_rest_request(&url).await.unwrap();
+            let to = match to.date_naive() == Utc::now().date_naive() {
+                true => Utc::now(),
+                false => to
+            };
             progress_bar.set_message(format!("Updating: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to));
             if !response.status().is_success() {
                 continue;
@@ -412,6 +415,7 @@ impl VendorApiResponse for OandaClient {
                             Err(e) => {
                                 retry_count += 1;
                                 if retry_count >= MAX_RETRIES {
+                                    progress_bar.finish_and_clear();
                                     break Err(e);
                                 }
                                 // Optional: Add delay between retries

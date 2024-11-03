@@ -3,7 +3,7 @@ use chrono_tz::Australia;
 use colored::Colorize;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolCode, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -11,9 +11,10 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc;
 use ff_standard_lib::apis::rithmic::rithmic_systems::RithmicSystem;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
+use ff_standard_lib::standardized_types::base_data::tick::Aggressor;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
+use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 
@@ -64,9 +65,9 @@ pub async fn on_data_received(
     symbol_code: SymbolCode
 ) {
     let account_1 = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), AccountId::from("APEX-3396-168"));
-    let mut exit_sent = false;
+/*    let mut exit_sent = false;
     let mut count = 1;
-    let mut entry_order_id = "".to_string();
+    let mut entry_order_id = "".to_string();*/
     let mut warmup_complete = false;
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         match strategy_event {
@@ -74,12 +75,23 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     match base_data {
                         BaseDataEnum::Tick(tick) => {
-                            //let msg = format!("{} {} Tick: {}, {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume);
-                            //println!("{}", msg.as_str().cyan());
+                            let msg = format!("{} {} Tick: {}, {}, Aggressor: {}", tick.symbol.name, tick.time_local(strategy.time_zone()), tick.price, tick.volume, tick.aggressor);
+                            match tick.aggressor {
+                                Aggressor::Buy => {
+                                    println!("{}", msg.as_str().bright_green());
+                                },
+                                Aggressor::Sell => {
+                                    println!("{}", msg.as_str().bright_red());
+
+                                },
+                                Aggressor::None => {
+                                    println!("{}", msg.as_str().cyan());
+                                },
+                            }
                         }
                         BaseDataEnum::Candle(candle) => {
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
-                            if candle.is_closed == true {
+                           /* if candle.is_closed == true {
                                 let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
                                 if candle.close == candle.open {
                                     println!("{}", msg.as_str().blue())
@@ -123,7 +135,7 @@ pub async fn on_data_received(
                                     println!("TEST PASSED");
                                     break 'strategy_loop;
                                 }
-                            }
+                            }*/
                         }
                         _ => {}
                     }

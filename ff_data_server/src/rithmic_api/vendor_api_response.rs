@@ -1,8 +1,6 @@
 use std::collections::BTreeMap;
-use std::time::Instant;
-use async_std::task::sleep;
 use async_trait::async_trait;
-use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
+use chrono::{DateTime, Datelike, Duration, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
@@ -14,10 +12,9 @@ use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, St
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, oneshot};
 use tokio::time::{timeout};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
-use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
 use crate::server_features::database::{DATA_STORAGE};
@@ -344,165 +341,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         todo!()
     }
 
-    //todo # start date is optional { symbol_name = "MNQ", base_data_type = "Ticks", start_date = "01-01-2024"},
-    //     # If no start date is input we will start from the earliest date available,
-    //     # If you change to an earlier date the server update to the new date. this is not yet implemented
-    //      we would need to run the download fn twice, once to update the earlier data to the first current saved time, then again to get the rest of the data.
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, start_date: Option<DateTime<Utc>>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
-        const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
-        let symbol_name = symbol.name.clone();
-        let exchange = match get_exchange_by_symbol_name(&symbol_name) {
-            Some(exchange) => exchange,
-            None => return Err(FundForgeError::ClientSideErrorDebug(format!("Exchange not found for symbol: {}", symbol_name)))
-        };
-
-        let (sender, mut receiver) = mpsc::channel(1000000);
-        self.historical_data_senders.insert((symbol_name.clone(), base_data_type.clone()), sender);
-
-        let earliest_rithmic_data = if let Some(start_time) = start_date {
-            start_time
-        } else {
-            match base_data_type {
-                BaseDataType::Ticks | BaseDataType::Candles => {
-                    let utc_time_string = "2019-06-02 20:00:00.000000";
-                    let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
-                    DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
-                }
-                _ => return Err(FundForgeError::ClientSideErrorDebug(format!("Unsupported base data type: {}", base_data_type)))
-            }
-        };
-
-        let data_storage = DATA_STORAGE.get().unwrap();
-
-        let mut window_start = match data_storage.get_latest_data_time(&symbol, &resolution, &base_data_type).await {
-            Ok(earliest_date) => earliest_date.unwrap_or_else(|| earliest_rithmic_data),
-            Err(_e) => earliest_rithmic_data
-        };
-
-        let total_seconds = (Utc::now() - window_start).num_seconds();
-        let bar_len = match resolution {
-            Resolution::Ticks(_) => (total_seconds / (4 * 3600)) as u64 + 1,  // 4-hour chunks
-            Resolution::Seconds(interval) => ((total_seconds / interval as i64) / 3600) as u64 + 1,  // hourly chunks adjusted by interval
-            Resolution::Minutes(interval) => ((total_seconds / (interval as i64 * 60)) / (24 * 3600)) as u64 + 1,  // daily chunks adjusted by interval
-            Resolution::Hours(interval) => ((total_seconds / (interval as i64 * 3600)) / (7 * 24 * 3600)) as u64 + 1,  // weekly chunks adjusted by interval
-            _ => (total_seconds / (4 * 3600)) as u64 + 1,  // default to tick chunks
-        };
-
-        progress_bar.set_length(bar_len);
-        progress_bar.set_style(
-            ProgressStyle::default_bar()
-                .template("{prefix:.green} [{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg} ({eta})")
-                .unwrap()
-                .progress_chars("=>-")
-        );
-        progress_bar.set_prefix(symbol_name.clone());
-
-
-        let mut data_map = BTreeMap::new();
-        let mut save_attempts = 0;
-        let permits = self.download_semaphore.clone();
-        let mut empty_windows = 0;
-        let timeout_duration = std::time::Duration::from_millis(300);
-        let message_gap_threshold = std::time::Duration::from_millis(250);
-        'main_loop: loop {
-            // Calculate window end based on start time (always 1 hour)
-            let window_end = window_start + Duration::hours(4);
-
-            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, Utc::now().format("%Y-%m-%d %H:%M:%S")));
-
-            let permit = match permits.acquire().await {
-                Ok(permit) => permit,
-                Err(e) => {
-                    progress_bar.finish_and_clear();
-                    eprintln!("Rithmic download error acquiring permit: {}", e);
-                    return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to acquire permit: {}", e)))
-                }
-            };
-            self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            sleep(std::time::Duration::from_millis(100)).await;
-
-            let mut last_message_time = Instant::now();
-
-            'msg_loop: loop {
-                match timeout(timeout_duration, receiver.recv()).await {
-                    Ok(Some(data)) => {
-                        data_map.insert(data.time_utc(), data);
-                        last_message_time = Instant::now();
-                    },
-                    Ok(None) => {
-                        // Channel closed
-                        break 'main_loop;
-                    },
-                    Err(_) => { // Timeout case
-                        // Only break if we haven't received a message for the gap threshold
-                        if last_message_time.elapsed() > message_gap_threshold {
-                            break 'msg_loop;
-                        }
-                        if data_map.is_empty() {
-                            empty_windows += 1;
-                            if empty_windows > 100 {
-                                break 'main_loop;
-                            }
-                        } else {
-                            empty_windows = 0;
-                        }
-                        // Otherwise continue waiting for more messages
-                        continue 'msg_loop;
-                    }
-                }
-            }
-
-
-            let mut is_saving = false;
-            let back_up_time = window_start.clone();
-            if let Some((&last_time, _)) = data_map.last_key_value() {
-                if last_time.day() != window_start.day() {
-                    is_saving = true;
-                }
-                if last_time > window_start {
-                    window_start = last_time.clone();
-                } else {
-                    window_start = window_end;
-                }
-            } else {
-                // If no new data, advance window to avoid re-requesting the same interval
-                window_start = window_end;
-            };
-            drop(permit);
-
-            if is_saving {
-                let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
-                //println!("Rithmic: Saving {} data points", save_data.len());
-                if let Err(_e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
-                    //eprintln!("Failed to save data: {}", e);
-                    window_start = back_up_time;
-                    if save_attempts < 3 {
-                        save_attempts += 1;
-                        continue 'main_loop;
-                    }
-                }
-                save_attempts = 0;
-                data_map = BTreeMap::new();
-            }
-
-            // Check if we've caught up to the desired end or current time
-            if (Utc::now() - window_start).num_seconds().abs() <= 1 {
-                break 'main_loop;
-            }
-            progress_bar.inc(1);
-        }
-        if !data_map.is_empty() {
-            let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
-            if let Err(_e) = data_storage.save_data_bulk(save_data).await {
-                //eprintln!("Failed to save data: {}", e);
-            }
-        }
-        progress_bar.finish_and_clear();
-        self.historical_data_senders.remove(&(symbol_name, base_data_type));
-        Ok(())
-    }
-
-    async fn update_historical_data_to(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         let symbol_name = symbol.name.clone();
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
@@ -512,9 +351,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 return Err(FundForgeError::ClientSideErrorDebug(format!("Exchange not found for symbol: {}", symbol_name)))
             }
         };
-
-        let (sender, mut receiver) = mpsc::channel(1000000);
-        self.historical_data_senders.insert((symbol_name.clone(), base_data_type.clone()), sender);
 
         let data_storage = DATA_STORAGE.get().unwrap();
 
@@ -537,14 +373,9 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
         progress_bar.set_prefix(symbol_name.clone());
-        progress_bar.set_message(format!("Updating: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to));
 
-        let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
-        let permits = self.download_semaphore.clone();
 
-        let timeout_duration = std::time::Duration::from_millis(300);
-        let message_gap_threshold = std::time::Duration::from_millis(250);
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
@@ -552,37 +383,20 @@ impl VendorApiResponse for RithmicBrokerageClient {
             if window_end > to {
                 window_end = to;
             }
+            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to));
+            let (sender, receiver) = oneshot::channel();
 
-            let permit = match permits.acquire().await {
+            let permit = match self.historical_permits.acquire().await {
                 Ok(permit) => permit,
-                Err(e) => {
-                    progress_bar.finish_and_clear();
-                    eprintln!("Rithmic download error acquiring permit: {}", e);
-                    return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to acquire permit: {}", e)))
-                }
+                Err(_) => return Err(FundForgeError::ClientSideErrorDebug("Failed to acquire semaphore permit".to_string()))
             };
 
-            self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            sleep(std::time::Duration::from_millis(100)).await;
-
-            // Receive loop with timeout and message gap detection
-            let mut last_message_time = Instant::now();
-            'msg_loop: loop {
-                match timeout(timeout_duration, receiver.recv()).await {
-                    Ok(Some(data)) => {
-                        data_map.insert(data.time_utc(), data);
-                        last_message_time = Instant::now();
-                    },
-                    Ok(None) => {
-                        // Channel closed
-                        break 'main_loop;
-                    },
-                    Err(_) => { // Timeout case
-                        // Only break if we haven't received a message for the gap threshold
-                        if last_message_time.elapsed() > message_gap_threshold {
-                            break 'msg_loop;
-                        }
-                        if data_map.is_empty() {
+            self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end, sender).await;
+            const TIME_OUT: std::time::Duration = std::time::Duration::from_secs(30);
+            let data_map = match timeout(TIME_OUT, receiver).await {
+                Ok(receiver_result) => match receiver_result {
+                    Ok(response) => {
+                        if response.is_empty() {
                             empty_windows += 1;
                             if empty_windows > 100 {
                                 break 'main_loop;
@@ -590,11 +404,13 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         } else {
                             empty_windows = 0;
                         }
-                        // Otherwise continue waiting for more messages
-                        continue 'msg_loop;
-                    }
-                }
-            }
+                        response
+                    },
+                    Err(_) => break 'main_loop
+                },
+                Err(_) => break 'main_loop
+            };
+            drop(permit);
 
             let mut is_saving = false;
             let mut is_end = false;
@@ -618,12 +434,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     is_end = true;
                 }
             };
-            drop(permit);
 
             if is_saving {
                 let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
                 //println!("Rithmic: Saving {} data points", save_data.len());
-                if let Err(_e) = DATA_STORAGE.get().unwrap().save_data_bulk(save_data).await {
+                if let Err(_e) = data_storage.save_data_bulk(save_data).await {
                     //eprintln!("Failed to save data: {}", e);
                     window_start = back_up_time;
                     if save_attempts < 3 {
@@ -632,7 +447,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     }
                 }
                 save_attempts = 0;
-                data_map = BTreeMap::new();
             }
 
             // Check if we've caught up to the desired end or current time
@@ -641,13 +455,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
             progress_bar.inc(1);
         }
-        if !data_map.is_empty() {
-            let save_data: Vec<BaseDataEnum> = data_map.into_values().collect();
-            if let Err(_e) = data_storage.save_data_bulk(save_data).await {
-                //eprintln!("Failed to save data: {}", e);
-            }
-        }
-        self.historical_data_senders.remove(&(symbol_name, base_data_type));
         progress_bar.finish_and_clear();
         Ok(())
     }

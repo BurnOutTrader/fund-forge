@@ -170,7 +170,7 @@ pub async fn match_ticker_plant_id(
                                         Err(_) => return
                                     };
                                     let response = DataServerResponse::FrontMonthInfo {callback_id: id.clone(), info: front_month_info.clone()};
-                                    client.send_callback(stream_name, id, response).await;
+                                    client.return_callback(stream_name, id, response).await;
                                 }
                             }
                         }

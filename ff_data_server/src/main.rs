@@ -171,7 +171,7 @@ async fn main() -> io::Result<()> {
 
     run_servers(config, options.clone());
 
-    sleep(Duration::from_secs(3)).await;
+    sleep(Duration::from_secs(5)).await;
 
     HybridStorage::run_update_schedule(DATA_STORAGE.get().unwrap().clone());
 

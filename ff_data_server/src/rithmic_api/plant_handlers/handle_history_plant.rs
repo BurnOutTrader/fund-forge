@@ -1,5 +1,8 @@
+use std::collections::BTreeMap;
+use std::str::FromStr;
 use std::sync::Arc;
 use chrono::{DateTime, TimeZone, Utc};
+use lazy_static::lazy_static;
 #[allow(unused_imports)]
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::Reject;
@@ -9,18 +12,22 @@ use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive};
 use rust_decimal_macros::dec;
+use tokio::sync::Mutex;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::candle::Candle;
 use ff_standard_lib::standardized_types::base_data::tick::{Aggressor, Tick};
-#[allow(unused_imports)]
-use ff_standard_lib::standardized_types::broker_enum::Brokerage;
+use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType};
 use ff_standard_lib::standardized_types::new_types::{Price, Volume};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, Symbol};
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
+
+lazy_static! {
+    pub static ref HISTORICAL_BUFFER: Arc<Mutex<BTreeMap<DateTime<Utc>, BaseDataEnum>>> = Default::default();
+}
 
 #[allow(dead_code, unused)]
 pub async fn match_history_plant_id(
@@ -95,18 +102,43 @@ pub async fn match_history_plant_id(
         },
         203 => {
             if let Ok(msg) = ResponseTimeBarReplay::decode(&message_buf[..]) {
-                // Time Bar Replay Response
-                // From Server
-                //println!("Time Bar Replay Response (Template ID: 203) from Server: {:?}", msg);
-                let candle = match parse_time_bar(&msg) {
-                    Some(tick) => tick,
-                    None => return,
-                };
                 const BASE_DATA_TYPE: BaseDataType = BaseDataType::Candles;
-                if let Some(sender) = client.historical_data_senders.get(&(candle.symbol.name.clone(), BASE_DATA_TYPE)) {
-                    match sender.value().send(BaseDataEnum::Candle(candle)).await {
-                        Ok(_) => {}
-                        Err(_) => {}
+                // Time Bar Replay Response
+                //println!("Time Bar Replay Response (Template ID: 203) from Server: {:?}", msg);
+
+                let mut finished = false;
+                if !msg.rp_code.is_empty() || msg.rq_handler_rp_code.is_empty() {
+                    finished = true;
+                }
+
+                let candle = match parse_time_bar(&msg) {
+                    Some(candle) => Some(candle),
+                    None => None,
+                };
+
+                let mut buffer = HISTORICAL_BUFFER.lock().await;
+
+                if !finished {
+                    // More messages coming, buffer the data
+                    if let Some(candle) = candle {
+                        buffer.insert(candle.time_utc(), BaseDataEnum::Candle(candle));
+                    }
+                } else {
+                    if let Some(candle) = candle {
+                        // Add final message
+                        buffer.insert(candle.time_utc(), BaseDataEnum::Candle(candle));
+                    }
+
+                    // Take ownership of the buffer and replace it with empty vec
+                    let data_to_send = std::mem::take(&mut *buffer);
+
+                    // Release buffer lock before trying to send
+                    drop(buffer);
+                    if let Some(user_message) = msg.user_msg.get(0) {
+                        // Send all data
+                        if let Some((_,sender)) = client.historical_callbacks.remove(&u64::from_str(user_message).unwrap()) {
+                            let _ = sender.send(data_to_send);
+                        }
                     }
                 }
             }
@@ -119,19 +151,46 @@ pub async fn match_history_plant_id(
             }
         },
         207 => {
+            const BASE_DATA_TYPE: BaseDataType = BaseDataType::Ticks;
             if let Ok(msg) = ResponseTickBarReplay::decode(&message_buf[..]) {
                 // Tick Bar Replay Response
                 // From Server
                 //println!("Tick Bar Replay Response (Template ID: 207) from Server: {:?}", msg);
+
+                let mut finished = false;
+                if !msg.rp_code.is_empty() || msg.rq_handler_rp_code.is_empty() {
+                    finished = true;
+                }
+
                 let tick = match parse_tick_response(&msg) {
-                    Some(tick) => tick,
-                    None => return,
+                    Some(tick) => Some(tick),
+                    None => None,
                 };
-                const BASE_DATA_TYPE: BaseDataType = BaseDataType::Ticks;
-                if let Some(sender) = client.historical_data_senders.get(&(tick.symbol.name.clone(), BASE_DATA_TYPE)) {
-                    match sender.value().send(BaseDataEnum::Tick(tick)).await {
-                        Ok(_) => {}
-                        Err(_) => {}
+
+                let mut buffer = HISTORICAL_BUFFER.lock().await;
+
+                if !finished {
+                    // More messages coming, buffer the data
+                    if let Some(tick) = tick {
+                        buffer.insert(tick.time_utc(),BaseDataEnum::Tick(tick));
+                    }
+                } else {
+                    // Add final message
+                    if let Some(tick) = tick {
+                        buffer.insert(tick.time_utc(),BaseDataEnum::Tick(tick));
+                    }
+
+                    // Take ownership of the buffer and replace it with empty vec
+                    let data_to_send = std::mem::take(&mut *buffer);
+
+                    // Release buffer lock before trying to send
+                    drop(buffer);
+
+                    if let Some(user_message) = msg.user_msg.get(0) {
+                        // Send all data
+                        if let Some((_,sender)) = client.historical_callbacks.remove(&u64::from_str(user_message).unwrap()) {
+                            let _ = sender.send(data_to_send);
+                        }
                     }
                 }
             }
