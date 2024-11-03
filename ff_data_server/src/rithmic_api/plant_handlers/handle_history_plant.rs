@@ -115,6 +115,7 @@ pub async fn match_history_plant_id(
                     Some(candle) => Some(candle),
                     None => None,
                 };
+                let mut is_sent = false;
                 let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap();
                 if !finished {
                     if !HISTORICAL_BUFFER.contains_key(&user_msg) {
@@ -138,10 +139,13 @@ pub async fn match_history_plant_id(
 
                         // Send all data
                         if let Some((_, sender)) = client.historical_callbacks.remove(&user_msg) {
+                            is_sent = true;
                             let _ = sender.send(data_to_send);
                         }
-
                     }
+                }
+                if is_sent {
+                    HISTORICAL_BUFFER.remove(&user_msg);
                 }
             }
         },
@@ -168,6 +172,7 @@ pub async fn match_history_plant_id(
                     Some(tick) => Some(tick),
                     None => None,
                 };
+                let mut is_sent = false;
                 let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap();
                 if !finished {
                     if !HISTORICAL_BUFFER.contains_key(&user_msg) {
@@ -194,8 +199,12 @@ pub async fn match_history_plant_id(
 
                         // Send all data
                         if let Some((_, sender)) = client.historical_callbacks.remove(&user_msg) {
+                            is_sent = true;
                             let _ = sender.send(data_to_send);
                         }
+                    }
+                    if is_sent {
+                        HISTORICAL_BUFFER.remove(&user_msg);
                     }
                 }
             }
