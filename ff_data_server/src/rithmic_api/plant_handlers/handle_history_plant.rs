@@ -167,8 +167,6 @@ pub async fn match_history_plant_id(
                     None => None,
                 };
 
-
-
                 if !finished {
                     // More messages coming, buffer the data
                     if let Some(tick) = tick {
