@@ -395,30 +395,31 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
         progress_bar.set_prefix(symbol_name.clone());
-        progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, Utc::now().format("%Y-%m-%d %H:%M:%S")));
+
 
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
         let permits = self.download_semaphore.clone();
+        let permit = match permits.acquire().await {
+            Ok(permit) => permit,
+            Err(e) => {
+                progress_bar.finish_and_clear();
+                eprintln!("Rithmic download error acquiring permit: {}", e);
+                return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to acquire permit: {}", e)))
+            }
+        };
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + Duration::hours(4);
 
-            let permit = match permits.acquire().await {
-                Ok(permit) => permit,
-                Err(e) => {
-                    progress_bar.finish_and_clear();
-                    eprintln!("Rithmic download error acquiring permit: {}", e);
-                    break 'main_loop
-                }
-            };
 
+            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, Utc::now().format("%Y-%m-%d %H:%M:%S")));
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
 
             let (timeout_duration, message_gap_threshold) = if let Some(latency) = self.heartbeat_latency.get(&SYSTEM) {
                 // Add some buffer to the latency for timeouts
-                let timeout_ms = latency.value() + 50;  // base latency + 50ms buffer
-                let gap_ms = latency.value() + 150;     // base latency + 150ms buffer for message gaps
+                let timeout_ms = latency.value() + 150;  // base latency + 50ms buffer
+                let gap_ms = latency.value() + 300;     // base latency + 150ms buffer for message gaps
 
                 // Set minimum and maximum bounds
                 let timeout_ms = timeout_ms.clamp(100, 500);  // min 100ms, max 500ms
@@ -457,7 +458,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     }
                 }
             }
-            drop(permit);
+
 
             let mut is_saving = false;
             let back_up_time = window_start.clone();
@@ -504,6 +505,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         }
         progress_bar.finish_and_clear();
         self.historical_data_senders.remove(&(symbol_name, base_data_type));
+        drop(permit);
         Ok(())
     }
 
@@ -547,6 +549,14 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut data_map = BTreeMap::new();
         let mut save_attempts = 0;
         let permits = self.download_semaphore.clone();
+        let permit = match permits.acquire().await {
+            Ok(permit) => permit,
+            Err(e) => {
+                progress_bar.finish_and_clear();
+                eprintln!("Rithmic download error acquiring permit: {}", e);
+                return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to acquire permit: {}", e)))
+            }
+        };
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let mut window_end = window_start + Duration::hours(4);
@@ -554,20 +564,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 window_end = to;
             }
 
-            let permit = match permits.acquire().await {
-                Ok(permit) => permit,
-                Err(e) => {
-                    progress_bar.finish_and_clear();
-                    eprintln!("Rithmic download error acquiring permit: {}", e);
-                    break 'main_loop
-                }
-            };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
             let (timeout_duration, message_gap_threshold) = if let Some(latency) = self.heartbeat_latency.get(&SYSTEM) {
                 // Add some buffer to the latency for timeouts
-                let timeout_ms = latency.value() + 50;  // base latency + 50ms buffer
-                let gap_ms = latency.value() + 150;     // base latency + 150ms buffer for message gaps
+                let timeout_ms = latency.value() + 200;  // base latency + 50ms buffer
+                let gap_ms = latency.value() + 200;     // base latency + 150ms buffer for message gaps
 
                 // Set minimum and maximum bounds
                 let timeout_ms = timeout_ms.clamp(100, 500);  // min 100ms, max 500ms
@@ -607,7 +609,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     }
                 }
             }
-            drop(permit);
 
             let mut is_saving = false;
             let mut is_end = false;
@@ -661,6 +662,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         }
         self.historical_data_senders.remove(&(symbol_name, base_data_type));
         progress_bar.finish_and_clear();
+        drop(permit);
         Ok(())
     }
 }
