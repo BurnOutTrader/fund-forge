@@ -976,7 +976,7 @@ impl RithmicBrokerageClient {
                     user_max_count: None,
                     direction: Some(Direction::First.into()),
                     time_order: Some(TimeOrder::Forwards.into()),
-                    resume_bars: Some(true),
+                    resume_bars: Some(false),
                 };
                 self.send_message(&SYSTEM, req).await;
             }
@@ -999,7 +999,7 @@ impl RithmicBrokerageClient {
                     custom_session_close_ssm: None,
                     direction: Some(request_tick_bar_replay::Direction::First.into()),
                     time_order: Some(request_tick_bar_replay::TimeOrder::Forwards.into()),
-                    resume_bars: Some(true),
+                    resume_bars: Some(false),
                 };
                 self.send_message(&SYSTEM, req).await;
             }

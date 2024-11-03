@@ -354,6 +354,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
         };
 
+        let permit = match self.historical_permits.acquire().await {
+            Ok(permit) => permit,
+            Err(_) => return Err(FundForgeError::ClientSideErrorDebug("Failed to acquire semaphore permit".to_string()))
+        };
+
         let data_storage = DATA_STORAGE.get().unwrap();
 
         let mut window_start = from;
@@ -387,11 +392,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to.format("%Y-%m-%d %H:%M:%S")));
             let (sender, receiver) = oneshot::channel();
 
-            let permit = match self.historical_permits.acquire().await {
-                Ok(permit) => permit,
-                Err(_) => return Err(FundForgeError::ClientSideErrorDebug("Failed to acquire semaphore permit".to_string()))
-            };
-
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end, sender).await;
             const TIME_OUT: std::time::Duration = std::time::Duration::from_secs(180);
             let data_map = match timeout(TIME_OUT, receiver).await {
@@ -412,7 +412,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 },
                 Err(_) => break 'main_loop
             };
-            drop(permit);
+
 
             let mut is_end = false;
             if let Some((&last_time, _)) = data_map.last_key_value() {
@@ -447,6 +447,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             progress_bar.inc(1);
         }
         progress_bar.finish_and_clear();
+        drop(permit);
         Ok(())
     }
 }
