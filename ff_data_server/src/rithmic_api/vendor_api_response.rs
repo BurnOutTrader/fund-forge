@@ -3,7 +3,7 @@ use std::time::Instant;
 use async_std::task::sleep;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, NaiveDateTime, Utc};
-use indicatif::ProgressBar;
+use indicatif::{ProgressBar, ProgressStyle};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_update::BarType;
@@ -375,7 +375,15 @@ impl VendorApiResponse for RithmicBrokerageClient {
             Err(_e) => earliest_rithmic_data
         };
 
-        let bar_len = ((Utc::now() - window_start).num_seconds() / 240) as u64;
+        let total_seconds = (Utc::now() - window_start).num_seconds();
+        let bar_len = match resolution {
+            Resolution::Ticks(_) => (total_seconds / (4 * 3600)) as u64 + 1,  // 4-hour chunks
+            Resolution::Seconds(interval) => ((total_seconds / interval as i64) / 3600) as u64 + 1,  // hourly chunks adjusted by interval
+            Resolution::Minutes(interval) => ((total_seconds / (interval as i64 * 60)) / (24 * 3600)) as u64 + 1,  // daily chunks adjusted by interval
+            Resolution::Hours(interval) => ((total_seconds / (interval as i64 * 3600)) / (7 * 24 * 3600)) as u64 + 1,  // weekly chunks adjusted by interval
+            _ => (total_seconds / (4 * 3600)) as u64 + 1,  // default to tick chunks
+        };
+
         progress_bar.set_length(bar_len);
 
         let mut data_map = BTreeMap::new();
@@ -489,7 +497,15 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let mut window_start = from;
 
-        let bar_len = ((to - from).num_seconds() / 240) as u64;
+        let total_seconds = (Utc::now() - window_start).num_seconds();
+        let bar_len = match resolution {
+            Resolution::Ticks(_) => (total_seconds / (4 * 3600)) as u64 + 1,  // 4-hour chunks
+            Resolution::Seconds(interval) => ((total_seconds / interval as i64) / 3600) as u64 + 1,  // hourly chunks adjusted by interval
+            Resolution::Minutes(interval) => ((total_seconds / (interval as i64 * 60)) / (24 * 3600)) as u64 + 1,  // daily chunks adjusted by interval
+            Resolution::Hours(interval) => ((total_seconds / (interval as i64 * 3600)) / (7 * 24 * 3600)) as u64 + 1,  // weekly chunks adjusted by interval
+            _ => (total_seconds / (4 * 3600)) as u64 + 1,  // default to tick chunks
+        };
+
         progress_bar.set_length(bar_len);
 
         let mut data_map = BTreeMap::new();
