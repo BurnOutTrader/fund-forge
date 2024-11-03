@@ -373,7 +373,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .unwrap()
                 .progress_chars("=>-")
         );
-        progress_bar.set_prefix(symbol_name.clone());
 
         let mut save_attempts = 0;
         let mut empty_windows = 0;
@@ -402,7 +401,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     Ok(response) => {
                         if response.is_empty() {
                             empty_windows += 1;
-                            //eprintln!("Empty window: {} - {}", window_start, window_end);
+                            eprintln!("Empty window: {} - {}", window_start, window_end);
                             if empty_windows > 200 {
                                 break 'main_loop;
                             }

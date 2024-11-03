@@ -532,7 +532,6 @@ impl HybridStorage {
         download_semaphore: Arc<Semaphore>,
         multi_progress: MultiProgress,
         overall_pb: ProgressBar,
-        vendor_progress_bar: ProgressBar,
         symbol: Symbol,
         resolution: Resolution,
         base_data_type: BaseDataType,
@@ -565,7 +564,6 @@ impl HybridStorage {
         }
 
         let overall_pb = overall_pb.clone();
-        let vendor_progress_bar = vendor_progress_bar.clone();
         let multi_bar = multi_progress.clone();
         let semaphore = download_semaphore.clone();
         let download_tasks = download_tasks.clone();
@@ -588,14 +586,11 @@ impl HybridStorage {
             let symbol_pb = multi_bar.add(ProgressBar::new(1));
             symbol_pb.set_prefix(format!("{}", symbol.name));
 
-            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb.clone()).await {
+            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb).await {
                 Ok(_) => {
                     overall_pb.inc(1);
-                    vendor_progress_bar.inc(1);
-                    symbol_pb.finish_and_clear();
                 },
                 Err(_) => {
-                    symbol_pb.finish_and_clear();
                 }
             }
 
@@ -646,12 +641,12 @@ impl HybridStorage {
                     }
                 }
             }
-            eprintln!("Total Symbols: {}", count);
+            //eprintln!("Total Symbols: {}", count);
             count as u64
         };
         let prefix = match from_back {
-            true => "Moving Historical Data Start Date Backwards",
-            false => "Moving Historical Data End Date Forwards",
+            true => "Downloads Moving Historical Data Start Date Backwards",
+            false => "Downloads Moving Historical Data End Date Forwards",
         };
 
         // Only create overall progress if we have symbols to process
@@ -661,12 +656,11 @@ impl HybridStorage {
                 overall_pb.set_style(ProgressStyle::default_bar()
                     .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
                     .unwrap());
-                overall_pb.set_prefix(format!("{} {} Utc",prefix, Utc::now().format("%Y-%m-%d %H:%M")));
+                overall_pb.set_prefix(format!("{} @ {} Utc",prefix, Utc::now().format("%Y-%m-%d %H:%M")));
                 overall_pb
             }
             false => return Ok(()),
         };
-
         for vendor in DataVendor::iter() {
             match vendor {
                 DataVendor::Rithmic if !RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => continue,
@@ -676,7 +670,7 @@ impl HybridStorage {
             }
             // choose the path based on the vendor
             let path =  options.data_folder.clone().join("credentials").join(format!("{}_credentials", vendor.to_string().to_lowercase())).join("download_list.toml");
-            eprintln!("Path: {:?}", path);
+            //eprintln!("Path: {:?}", path);
 
             if path.exists() {
                 let content = match std::fs::read_to_string(&path) {
@@ -692,13 +686,6 @@ impl HybridStorage {
                         return Err(FundForgeError::ServerErrorDebug(e.to_string()));
                     }
                 };
-
-                // Create OANDA progress bar once, outside the loop
-                let vendor_bar = multi_bar.add(ProgressBar::new(symbol_configs.len() as u64));
-                vendor_bar.set_style(ProgressStyle::default_bar()
-                    .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                    .unwrap());
-                vendor_bar.set_prefix(format!("{} Update Historical Data", vendor));
 
                 if !symbol_configs.is_empty() {
                     for symbol_config in symbol_configs {
@@ -769,7 +756,6 @@ impl HybridStorage {
                         }
 
                         let overall_pb = overall_pb.clone();
-                        let vendor_bar = vendor_bar.clone();
                         let multi_bar = multi_bar.clone();
                         let semaphore = semaphore.clone();
                         let download_tasks = self.download_tasks.clone();
@@ -779,7 +765,6 @@ impl HybridStorage {
                             semaphore,
                             multi_bar,
                             overall_pb,
-                            vendor_bar,
                             symbol.clone(),
                             symbol_config.resolution,
                             symbol_config.base_data_type.clone(),
