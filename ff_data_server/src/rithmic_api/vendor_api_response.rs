@@ -19,7 +19,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
-use crate::server_features::database::DATA_STORAGE;
+use crate::server_features::database::{DATA_STORAGE};
 use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 
 #[allow(dead_code)]
@@ -347,7 +347,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
     //     # If no start date is input we will start from the earliest date available,
     //     # If you change to an earlier date the server update to the new date. this is not yet implemented
     //      we would need to run the download fn twice, once to update the earlier data to the first current saved time, then again to get the rest of the data.
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, start_date: Option<DateTime<Utc>>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         const SYSTEM: SysInfraType = SysInfraType::HistoryPlant;
         let symbol_name = symbol.name.clone();
         let exchange = match get_exchange_by_symbol_name(&symbol_name) {
@@ -358,13 +358,17 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let (sender, mut receiver) = mpsc::channel(1000000);
         self.historical_data_senders.insert((symbol_name.clone(), base_data_type.clone()), sender);
 
-        let earliest_rithmic_data = match base_data_type {
-            BaseDataType::Ticks | BaseDataType::Candles => {
-                let utc_time_string = "2019-06-02 20:00:00.000000";
-                let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
-                DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
+        let earliest_rithmic_data = if let Some(start_time) = start_date {
+            start_time
+        } else {
+            match base_data_type {
+                BaseDataType::Ticks | BaseDataType::Candles => {
+                    let utc_time_string = "2019-06-02 20:00:00.000000";
+                    let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
+                    DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
+                }
+                _ => return Err(FundForgeError::ClientSideErrorDebug(format!("Unsupported base data type: {}", base_data_type)))
             }
-            _ => return Err(FundForgeError::ClientSideErrorDebug(format!("Unsupported base data type: {}", base_data_type)))
         };
 
         let data_storage = DATA_STORAGE.get().unwrap();

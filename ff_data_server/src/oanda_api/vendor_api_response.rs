@@ -169,8 +169,10 @@ impl VendorApiResponse for OandaClient {
     }
 
     #[allow(unused)]
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
-        let earliest_oanda_data = || {
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, start_date: Option<DateTime<Utc>>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+        let earliest_oanda_data = if let Some(start_time) = start_date {
+            start_time
+        } else {
             let utc_time_string = "2005-01-01 00:00:00.000000";
             let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
             DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
@@ -178,10 +180,10 @@ impl VendorApiResponse for OandaClient {
 
         let data_storage = DATA_STORAGE.get().unwrap();
         let mut last_bar_time = match data_storage.get_latest_data_time(&symbol, &resolution, &base_data_type).await {
-            Err(_) => earliest_oanda_data(),
+            Err(_) => earliest_oanda_data,
             Ok(time) => match time {
                 Some(time) => time,
-                None => earliest_oanda_data()
+                None => earliest_oanda_data
             }
         };
 

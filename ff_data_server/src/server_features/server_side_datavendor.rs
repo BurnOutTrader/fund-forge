@@ -223,6 +223,7 @@ pub trait VendorApiResponse: Sync + Send {
         symbol: Symbol,
         base_data_type: BaseDataType,
         resolution: Resolution,
+        start_date: Option<DateTime<Utc>>,
         progress_bar: ProgressBar
     ) -> Result<(), FundForgeError>;
 

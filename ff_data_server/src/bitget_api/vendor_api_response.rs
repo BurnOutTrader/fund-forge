@@ -55,7 +55,7 @@ impl VendorApiResponse for BitgetClient {
     }
 
     #[allow(unused)]
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, progress_bar: ProgressBar) -> Result<(), FundForgeError>  {
+    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, start_date: Option<DateTime<Utc>>, progress_bar: ProgressBar) -> Result<(), FundForgeError>  {
         todo!()
     }
     #[allow(unused)]

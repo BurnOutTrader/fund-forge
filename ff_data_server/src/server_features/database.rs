@@ -929,7 +929,23 @@ impl HybridStorage {
                                                 // Create and configure symbol progress bar
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));
 
-                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
+                                                let start_date = match symbol_config.start_date {
+                                                    Some(date) => {
+                                                        //convert to datetime utc
+                                                        let date = match date.and_hms_opt(0, 0, 0) {
+                                                            Some(date) => date,
+                                                            None => {
+                                                                return
+                                                            }
+                                                        };
+                                                        Some(DateTime::from_naive_utc_and_offset(date, Utc))
+                                                    },
+                                                    None => {
+                                                        None
+                                                    }
+                                                };
+
+                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, start_date, symbol_pb).await {
                                                     Ok(_) => {
                                                         overall_pb.inc(1);
                                                         oanda_pb.inc(1);
@@ -1018,9 +1034,24 @@ impl HybridStorage {
                                                         return
                                                     }
                                                 };
+                                                let start_date = match symbol_config.start_date {
+                                                    Some(date) => {
+                                                        //convert to datetime utc
+                                                        let date = match date.and_hms_opt(0, 0, 0) {
+                                                            Some(date) => date,
+                                                            None => {
+                                                                return
+                                                            }
+                                                        };
+                                                        Some(DateTime::from_naive_utc_and_offset(date, Utc))
+                                                    },
+                                                    None => {
+                                                        None
+                                                    }
+                                                };
                                                 // Create a new progress bar for this symbol
                                                 let symbol_pb = multi_bar.add(ProgressBar::new(0));  // Length will be set in the function
-                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, symbol_pb).await {
+                                                match client.update_historical_data_for(symbol, symbol_config.base_data_type, resolution, start_date, symbol_pb).await {
                                                     Ok(_) => {
                                                         overall_pb.inc(1);
                                                         rithmic_pb.inc(1);
@@ -1051,8 +1082,8 @@ struct DownloadSymbols {
 }
 
 #[derive(Deserialize)]
-struct DownloadConfig {
-    symbol_name: SymbolName,
-    base_data_type: BaseDataType,
-    start_date: Option<NaiveDate>,
+pub struct DownloadConfig {
+    pub symbol_name: SymbolName,
+    pub base_data_type: BaseDataType,
+    pub start_date: Option<NaiveDate>,
 }
