@@ -117,10 +117,10 @@ pub async fn match_history_plant_id(
                 };
                 let mut send_buffer = false;
                 let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap();
+                if !HISTORICAL_BUFFER.contains_key(&user_msg) {
+                    HISTORICAL_BUFFER.insert(user_msg, BTreeMap::new());
+                }
                 if !finished {
-                    if !HISTORICAL_BUFFER.contains_key(&user_msg) {
-                        HISTORICAL_BUFFER.insert(user_msg, BTreeMap::new());
-                    }
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         // More messages coming, buffer the data
                         if let Some(candle) = candle {
@@ -170,10 +170,10 @@ pub async fn match_history_plant_id(
                 };
                 let mut send_buffer = false;
                 let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap();
+                if !HISTORICAL_BUFFER.contains_key(&user_msg) {
+                    HISTORICAL_BUFFER.insert(user_msg, BTreeMap::new());
+                }
                 if !finished {
-                    if !HISTORICAL_BUFFER.contains_key(&user_msg) {
-                        HISTORICAL_BUFFER.insert(user_msg, BTreeMap::new());
-                    }
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         // More messages coming, buffer the data
                         if let Some(tick) = tick {
