@@ -8,7 +8,7 @@ use std::fs::{create_dir_all, File, OpenOptions};
 use std::io::{self, Read, Write, Seek, SeekFrom};
 use std::str::FromStr;
 use std::sync::{Arc};
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use dashmap::DashMap;
@@ -73,42 +73,35 @@ impl HybridStorage {
     }
 
     pub fn run_update_schedule(self: Arc<Self>) {
-        // Spawn the task and store the join handle
+        println!("Initializing update schedule with {} second interval", self.update_seconds);
+
         let handle = tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
+            interval.tick().await; // First tick happens immediately, so consume it
 
             loop {
-                interval.tick().await;  // Wait for next interval
-
-                //println!("Starting historical data update...");  // Debug log
                 if !self.download_tasks.read().await.is_empty() {
-                    interval = tokio::time::interval(Duration::from_secs(60));
+                    println!("Active downloads detected, waiting 60s");
+                    tokio::time::sleep(Duration::from_secs(60)).await;
                     continue;
-                } else {
-                    interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
                 }
 
                 // Run backward update first
                 match HybridStorage::update_data(self.clone(), true).await {
-                    Ok(_) => {}//println!("Backward update completed successfully"),
+                    Ok(_) => println!("Backward update completed"),
                     Err(e) => eprintln!("Backward update failed: {}", e),
                 }
 
-                // Small delay between updates
-                tokio::time::sleep(Duration::from_secs(1)).await;
+                tokio::time::sleep(Duration::from_secs(2)).await;
 
                 // Run forward update
                 match HybridStorage::update_data(self.clone(), false).await {
-                    Ok(_) => {}//println!("Forward update completed successfully"),
+                    Ok(_) => println!("Forward update completed"),
                     Err(e) => eprintln!("Forward update failed: {}", e),
                 }
-            }
-        });
 
-        // Spawn a separate task to handle the join handle
-        tokio::spawn(async move {
-            if let Err(e) = handle.await {
-                eprintln!("Update schedule task failed: {}", e);
+                println!("Update cycle completed, waiting {} seconds", self.update_seconds);
+                interval.tick().await;
             }
         });
     }
@@ -770,6 +763,7 @@ impl HybridStorage {
             }
         }
         join_all(tasks).await;
+        overall_pb.set_position(total_symbols); // Set to total before clearing
         overall_pb.finish_and_clear();
         Ok(())
     }

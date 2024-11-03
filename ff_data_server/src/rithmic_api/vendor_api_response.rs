@@ -355,10 +355,13 @@ impl VendorApiResponse for RithmicBrokerageClient {
         };
 
         let data_storage = DATA_STORAGE.get().unwrap();
-
         let mut window_start = from;
+        let current_to = match from_back {
+            true => to,
+            false => Utc::now(),
+        };
 
-        let total_seconds = (Utc::now() - window_start).num_seconds();
+        let total_seconds = (current_to - from).num_seconds().abs();
         let bar_len = match resolution {
             Resolution::Ticks(_) => (total_seconds / (4 * 3600)) as u64 + 1,  // 4-hour chunks
             Resolution::Seconds(interval) => ((total_seconds / interval as i64) / 3600) as u64 + 1,  // hourly chunks adjusted by interval
@@ -378,14 +381,15 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut save_attempts = 0;
         let mut empty_windows = 0;
         'main_loop: loop {
-            // Calculate window end based on start time (always 1 hour)
-            let window_end = window_start + min(Duration::hours(4), Utc::now() - window_start);
-            let to = match from_back {
-                true => to,
-                false => Utc::now(),
-            };
+            if window_start >= current_to - TIME_NEGATIVE {
+                break 'main_loop;
+            }
 
-            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to.format("%Y-%m-%d %H:%M:%S")));
+            let window_end = window_start + min(Duration::hours(4), current_to - window_start);
+
+            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}",
+                                             resolution, base_data_type, from, current_to.format("%Y-%m-%d %H:%M:%S")));
+
             let (sender, receiver) = oneshot::channel();
 
             let permit = match self.historical_permits.acquire().await {
@@ -400,7 +404,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     Ok(response) => {
                         if response.is_empty() {
                             empty_windows += 1;
-                            //eprintln!("Empty window: {} - {}", window_start, window_end);
                             if empty_windows > 200 {
                                 break 'main_loop;
                             }
@@ -423,27 +426,24 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     is_saving = true;
                 }
                 if last_time > window_start {
-                    window_start = last_time.clone();
+                    window_start = last_time;
                 } else {
                     window_start = window_end;
                 }
 
-                if last_time >= to - TIME_NEGATIVE {
+                if last_time >= current_to - TIME_NEGATIVE {
                     is_end = true;
                 }
             } else {
-                // If no new data, advance window to avoid re-requesting the same interval
                 window_start = window_end;
-                if window_start >= to - TIME_NEGATIVE || window_end >= to - TIME_NEGATIVE {
+                if window_start >= current_to - TIME_NEGATIVE {
                     is_end = true;
                 }
             };
 
             if is_saving {
                 let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
-                //println!("Rithmic: Saving {} data points", save_data.len());
                 if let Err(_e) = data_storage.save_data_bulk(save_data).await {
-                    //eprintln!("Failed to save data: {}", e);
                     window_start = back_up_time;
                     if save_attempts < 3 {
                         save_attempts += 1;
@@ -453,8 +453,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 save_attempts = 0;
             }
 
-            // Check if we've caught up to the desired end or current time
-            if is_end || window_start >= to - TIME_NEGATIVE || window_end >= to - TIME_NEGATIVE {  // Added additional check
+            if is_end {
                 break 'main_loop;
             }
             progress_bar.inc(1);
