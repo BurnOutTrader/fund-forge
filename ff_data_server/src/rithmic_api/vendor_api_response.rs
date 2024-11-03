@@ -411,7 +411,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            sleep(std::time::Duration::from_millis(100)).await;
+            sleep(std::time::Duration::from_millis(300)).await;
 
             let mut last_message_time = Instant::now();
             let timeout_duration = std::time::Duration::from_millis(150);
@@ -548,7 +548,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end).await;
-            sleep(std::time::Duration::from_millis(100)).await;
+            sleep(std::time::Duration::from_millis(300)).await;
 
             // Receive loop with timeout and message gap detection
             let mut last_message_time = Instant::now();
