@@ -27,7 +27,7 @@ impl VendorApiResponse for OandaClient {
     #[allow(unused)]
     async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse {
         let mut symbols: Vec<Symbol> = Vec::new();
-        for symbol in &self.instruments {
+        for symbol in &self.instruments_map {
             let symbol = Symbol::new(symbol.key().clone(), DataVendor::Oanda, symbol.value().market_type.clone());
             symbols.push(symbol);
         }
@@ -61,7 +61,7 @@ impl VendorApiResponse for OandaClient {
 
     #[allow(unused)]
     async fn decimal_accuracy_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        if let Some(instrument) = self.instruments.get(&symbol_name) {
+        if let Some(instrument) = self.instruments_map.get(&symbol_name) {
             DataServerResponse::DecimalAccuracy {
                 callback_id,
                 accuracy: instrument.display_precision.clone(),
@@ -75,7 +75,7 @@ impl VendorApiResponse for OandaClient {
     }
     #[allow(unused)]
     async fn tick_size_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        let instrument = match self.instruments.get(&symbol_name) {
+        let instrument = match self.instruments_map.get(&symbol_name) {
             Some(i) => i,
             None => return DataServerResponse::Error{callback_id, error: FundForgeError::ClientSideErrorDebug(format!("Instrument not found: {}", symbol_name))},
         };
@@ -165,177 +165,7 @@ impl VendorApiResponse for OandaClient {
     async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
         todo!()
     }
-/*
-    #[allow(unused)]
-    async fn update_historical_data_for(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, start_date: Option<DateTime<Utc>>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
-        let earliest_oanda_data = if let Some(start_time) = start_date {
-            start_time
-        } else {
-            let utc_time_string = "2005-01-01 00:00:00.000000";
-            let utc_time_naive = NaiveDateTime::parse_from_str(utc_time_string, "%Y-%m-%d %H:%M:%S%.f").unwrap();
-            DateTime::<Utc>::from_naive_utc_and_offset(utc_time_naive, Utc)
-        };
 
-        let data_storage = DATA_STORAGE.get().unwrap();
-        let mut last_bar_time = match data_storage.get_latest_data_time(&symbol, &resolution, &base_data_type).await {
-            Err(_) => earliest_oanda_data,
-            Ok(time) => match time {
-                Some(time) => time,
-                None => earliest_oanda_data
-            }
-        };
-
-        let interval = resolution_to_oanda_interval(&resolution);
-        let instrument = oanda_clean_instrument(&symbol.name).await;
-        let add_time = add_time_to_date(&interval);
-
-        let mut num_days = ((Utc::now() - last_bar_time).num_seconds() / (60*60*5)).abs();
-        progress_bar.set_length(num_days as u64);
-        progress_bar.set_style(
-            ProgressStyle::default_bar()
-                .template("{prefix:.green} [{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len} {msg} ({eta})")
-                .unwrap()
-                .progress_chars("=>-")
-        );
-        progress_bar.set_prefix(symbol.name.clone());
-
-        let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
-        let current_time = Utc::now() - Duration::seconds(5);
-
-        // Keep track of empty responses to prevent infinite loops
-        let mut consecutive_empty_responses = 0;
-        const MAX_EMPTY_RESPONSES: u32 = 20;
-
-        loop {
-            let to_time = (last_bar_time + add_time).min(current_time);
-
-            // Break if we've reached or passed current time
-            if last_bar_time >= current_time {
-                break;
-            }
-            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, last_bar_time, Utc::now().format("%Y-%m-%d %H:%M:%S")));
-            let url = generate_url(&last_bar_time.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
-            let response = match self.send_rest_request(&url).await {
-                Ok(resp) => resp,
-                Err(_) => {
-                    // On error, advance time window and continue
-                    last_bar_time = to_time;
-                    continue;
-                }
-            };
-
-            if !response.status().is_success() {
-                last_bar_time = to_time;
-                continue;
-            }
-
-            let content = response.text().await.unwrap();
-            let json: serde_json::Value = serde_json::from_str(&content).unwrap();
-            let candles = json["candles"].as_array().unwrap();
-
-            if candles.is_empty() {
-                consecutive_empty_responses += 1;
-                if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
-                    // If we get multiple empty responses, assume we've reached the end of available data
-                    break;
-                }
-                // Advance time window even when no data is found
-                last_bar_time = to_time;
-                continue;
-            }
-
-            // Reset empty response counter when we get data
-            consecutive_empty_responses = 0;
-
-            // Process candles
-            let candles_vec: Vec<_> = candles.into_iter().collect();
-            let mut i = 0;
-
-            while i < candles_vec.len() {
-                let price_data = &candles_vec[i];
-                let is_closed = price_data["complete"].as_bool().unwrap();
-                if !is_closed {
-                    i += 1;
-                    continue;
-                }
-
-                let bar: BaseDataEnum = match base_data_type {
-                    BaseDataType::QuoteBars => match oanda_quotebar_from_candle(price_data, symbol.clone(), resolution.clone()) {
-                        Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
-                        Err(_) => {
-                            i += 1;
-                            continue
-                        }
-                    },
-                    BaseDataType::Candles => match candle_from_candle(price_data, symbol.clone(), resolution.clone()) {
-                        Ok(candle) => BaseDataEnum::Candle(candle),
-                        Err(_) => {
-                            i += 1;
-                            continue
-                        }
-                    },
-                    _ => {
-                        i += 1;
-                        continue
-                    }
-                };
-
-                let new_bar_time = bar.time_utc();
-                if last_bar_time.day() != new_bar_time.day() && !new_data.is_empty() {
-                    let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
-
-                    // Retry loop for saving data
-                    const MAX_RETRIES: u32 = 3;
-                    let mut retry_count = 0;
-                    let save_result = 'save_loop: loop {
-                        match data_storage.save_data_bulk(data_vec.clone()).await {
-                            Ok(_) => break 'save_loop Ok(()),
-                            Err(e) => {
-                                retry_count += 1;
-                                if retry_count >= MAX_RETRIES {
-                                    break Err(e);
-                                }
-                                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                            }
-                        }
-                    };
-
-                    if let Err(e) = save_result {
-                        while i > 0 && bar.time_utc().day() == new_bar_time.day() {
-                            i -= 1;
-                        }
-                        i += 1;
-                        continue;
-                    }
-
-                    new_data.clear();
-                }
-
-                last_bar_time = bar.time_utc();
-                new_data.entry(new_bar_time).or_insert(bar);
-                i += 1;
-            }
-
-            // Update last_bar_time to the end of the current window if no data was processed
-            if last_bar_time < to_time {
-                last_bar_time = to_time;
-            }
-
-            progress_bar.inc(1);
-        }
-
-        // Save any remaining data
-        if !new_data.is_empty() {
-            let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
-            match data_storage.save_data_bulk(data_vec).await {
-                Ok(_) => {}
-                Err(_) => {}
-            }
-        }
-        progress_bar.finish_and_clear();
-        Ok(())
-    }
-*/
     async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         let data_storage = DATA_STORAGE.get().unwrap();
         let urls = generate_urls(symbol.clone(), resolution.clone(), base_data_type, from, to).await;

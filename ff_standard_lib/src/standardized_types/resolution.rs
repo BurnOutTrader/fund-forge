@@ -1,4 +1,5 @@
 use std::fmt;
+use std::str::FromStr;
 use chrono::Duration;
 use serde_derive::{Deserialize, Serialize};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
@@ -19,6 +20,41 @@ pub enum Resolution {
 impl Default for Resolution {
     fn default() -> Self {
         Resolution::Instant
+    }
+}
+
+impl FromStr for Resolution {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let resolution_string = s.to_uppercase();
+
+        // Handle both "-" and "_" separators
+        let parts: Vec<&str> = if resolution_string.contains('-') {
+            resolution_string.split('-').collect()
+        } else if resolution_string.contains('_') {
+            resolution_string.split('_').collect()
+        } else {
+            return Err(format!("Invalid format: no separator found in {}", s));
+        };
+
+        if parts.len() != 2 {
+            return Err(format!("Invalid format: expected 2 parts in {}", s));
+        }
+
+        let number = parts[0].parse::<u64>()
+            .map_err(|_| format!("Invalid number in {}", s))?;
+
+        // Trim any whitespace and get first character
+        match parts[1].trim().chars().next() {
+            Some('I') => Ok(Resolution::Instant),
+            Some('T') => Ok(Resolution::Ticks(number)),
+            Some('S') => Ok(Resolution::Seconds(number)),
+            Some('M') => Ok(Resolution::Minutes(number)),
+            Some('H') => Ok(Resolution::Hours(number)),
+            Some(c) => Err(format!("Invalid resolution type '{}' in {}", c, s)),
+            None => Err(format!("Empty resolution type in {}", s)),
+        }
     }
 }
 
@@ -61,21 +97,6 @@ impl Resolution {
 
     pub fn is_greater_or_equal(&self, other: &Resolution) -> bool {
         self.as_duration() >= other.as_duration()
-    }
-
-    pub fn from_str(resolution_string: &str) -> Option<Self> {
-        let resolution_string = resolution_string.to_uppercase().clone();
-        let split_string = resolution_string.split("_").collect::<Vec<&str>>();
-        let (number, res) = split_string.split_at(1);
-        let number = number[0].parse::<u64>().unwrap();
-        match res[0] {
-            "I" => Some(Resolution::Instant),
-            "T" => Some(Resolution::Ticks(number)),
-            "S" => Some(Resolution::Seconds(number)),
-            "M" => Some(Resolution::Minutes(number)),
-            "H" => Some(Resolution::Hours(number)),
-            _ => None,
-        }
     }
 
     pub fn to_string(&self) -> String {

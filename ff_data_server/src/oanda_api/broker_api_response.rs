@@ -18,7 +18,7 @@ impl BrokerApiResponse for OandaClient {
     #[allow(unused)]
     async fn symbol_names_response(&self, mode: StrategyMode, time: Option<DateTime<Utc>>, stream_name: StreamName, callback_id: u64) -> DataServerResponse {
         let mut symbol_names: Vec<SymbolName> = Vec::new();
-        for symbol in &self.instruments {
+        for symbol in &self.instruments_map {
             symbol_names.push(symbol.key().clone());
         }
         DataServerResponse::SymbolNames {
@@ -43,7 +43,7 @@ impl BrokerApiResponse for OandaClient {
 
     #[allow(unused)]
     async fn symbol_info_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        if let Some(instrument) = self.instruments.get(&symbol_name) {
+        if let Some(instrument) = self.instruments_map.get(&symbol_name) {
             let tick_size = dec!(1) / dec!(10).powi(instrument.display_precision as i64);
             //let currency = instrument.
             let info = SymbolInfo {

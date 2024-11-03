@@ -2,9 +2,10 @@ use std::fmt;
 use std::str::FromStr;
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use serde_derive::{Deserialize, Serialize};
+use strum_macros::EnumIter;
 use crate::messages::data_server_messaging::FundForgeError;
 
-#[derive(Serialize, Deserialize, Clone, Eq, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Hash, PartialOrd, Ord)]
+#[derive(Serialize, Deserialize, Clone, Eq, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Hash, PartialOrd, Ord, EnumIter)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 /// A `DataVendor` enum is a company that provides the data that is used to feed the algorithm.

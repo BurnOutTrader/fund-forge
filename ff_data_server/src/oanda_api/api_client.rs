@@ -53,7 +53,7 @@ pub struct OandaClient {
     pub api_key: String,
     pub base_endpoint: String,
     pub stream_endpoint: String,
-    pub instruments: DashMap<SymbolName, OandaInstrument>,
+    pub instruments_map: DashMap<SymbolName, OandaInstrument>,
     pub accounts: Vec<Account>,
     pub account_info: DashMap<AccountId, AccountInfo>,
     pub positions: DashMap<AccountId, OandaPosition>,
@@ -322,7 +322,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
             OandaApiMode::Live => "https://stream-fxtrade.oanda.com/v3",
             OandaApiMode::Practice => "https://stream-fxpractice.oanda.com/v3",
         }.to_string(),
-        instruments: Default::default(),
+        instruments_map: Default::default(),
         accounts: vec![],
         account_info: Default::default(),
         positions: Default::default(),
@@ -338,7 +338,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         let instruments = oanda_instruments_download(&oanda_client, &account.account_id).await.unwrap_or_else(|| vec![]);
         for instrument in instruments {
             oanda_client.instrument_symbol_map.insert(instrument.name.clone(), Symbol::new(instrument.symbol_name.clone(), DataVendor::Oanda, instrument.market_type.clone()));
-            oanda_client.instruments.insert(instrument.symbol_name.clone(), instrument);
+            oanda_client.instruments_map.insert(instrument.symbol_name.clone(), instrument);
         }
     }
     for account in &oanda_client.accounts {
