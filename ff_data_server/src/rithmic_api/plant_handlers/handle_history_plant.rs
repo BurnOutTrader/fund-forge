@@ -8,7 +8,6 @@ use lazy_static::lazy_static;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::Reject;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::time_bar::BarType;
 use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive};
@@ -286,15 +285,17 @@ async fn handle_candle(client: Arc<RithmicBrokerageClient>, msg: TimeBar) {
 
         let resolution = match msg.r#type.clone() {
             Some(num) => {
-                let bar_type = match BarType::try_from(num) {
-                    Ok(bar_type) => bar_type,
-                    Err(_) => return, // Exit if bar type conversion fails
-                };
-
-                match (bar_type, period) {
-                    (BarType::SecondBar, p) => Resolution::Seconds(p),
-                    (BarType::MinuteBar, p) => Resolution::Minutes(p),
-                    (BarType::DailyBar, _) | (BarType::WeeklyBar, _) => return, // Unsupported bar types
+                match num {
+                    1 => {
+                        // If we get seconds but period is divisible by 60, convert to minutes
+                        if period % 60 == 0 {
+                            Resolution::Minutes(period as u64 / 60)
+                        } else {
+                            Resolution::Seconds(period as u64)
+                        }
+                    },
+                    2 => Resolution::Minutes(period as u64),
+                    _ => return, // Unsupported bar types
                 }
             }
             None => return, // Exit if msg.r#type is None
@@ -420,6 +421,7 @@ fn parse_tick_response(response: &ResponseTickBarReplay) -> Option<Tick> {
 }
 
 fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
+    //println!("ResponseTimeBarReplay: {:?}", response);
     // Check if all required price fields are present
     let (open, high, low, close) = match (
         response.open_price,
@@ -447,7 +449,7 @@ fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
     let datetime = Utc.timestamp_opt(marker as i64, 0).single()?;
 
     let period = match response.period.clone() {
-        Some(p) => match p.parse::<u64>().ok() {
+        Some(p) => match p.parse::<i32>().ok() {
             None => return None,
             Some(period) => period
         },
@@ -456,19 +458,23 @@ fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
 
     let resolution = match response.r#type.clone() {
         Some(num) => {
-            let bar_type = match BarType::try_from(num) {
-                Ok(bar_type) => bar_type,
-                Err(_) => return None, // Exit if bar type conversion fails
-            };
-
-            match (bar_type, period) {
-                (BarType::SecondBar, p) => Resolution::Seconds(p),
-                (BarType::MinuteBar, p) => Resolution::Minutes(p),
-                (BarType::DailyBar, _) | (BarType::WeeklyBar, _) => return None, // Unsupported bar types
+            match num {
+                1 => {
+                    // If we get seconds but period is divisible by 60, convert to minutes
+                    if period % 60 == 0 {
+                        Resolution::Minutes(period as u64 / 60)
+                    } else {
+                        Resolution::Seconds(period as u64)
+                    }
+                },
+                2 => Resolution::Minutes(period as u64),
+                _ => return None, // Unsupported bar types
             }
         }
         None => return None, // Exit if msg.r#type is None
     };
+
+    //println!("resolution: {:?}", resolution);
 
     Some(Candle {
         symbol: Symbol::new(symbol.clone(), DataVendor::Rithmic, MarketType::Futures(exchange)),

@@ -53,7 +53,7 @@ use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use once_cell::sync::OnceCell;
 use ff_standard_lib::standardized_types::resolution::Resolution;
-use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::{BarType, Direction, TimeOrder};
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::{Direction, TimeOrder};
 
 lazy_static! {
     pub static ref RITHMIC_CLIENTS: DashMap<RithmicSystem , Arc<RithmicBrokerageClient>> = DashMap::with_capacity(16);
@@ -961,17 +961,17 @@ impl RithmicBrokerageClient {
         match base_data_type {
             BaseDataType::Candles => {
                 let (num, res_type) = match resolution {
-                    Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
-                    Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
-                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar),
+                    Resolution::Seconds(num) => (num as i32, 1),
+                    Resolution::Minutes(num) => (num as i32, 2),
                     _ => return
                 };
+                //println!("Requesting candles for {} {} {} {} {} {}", symbol_name, exchange, window_start, window_end, num, res_type);
                 let req = RequestTimeBarReplay {
                     template_id: 202,
                     user_msg: vec![callback_id.to_string()],
                     symbol: Some(symbol_name.clone()),
                     exchange: Some(exchange.to_string()),
-                    bar_type: Some(res_type.into()),
+                    bar_type: Some(res_type),
                     bar_type_period: Some(num),
                     start_index: Some(window_start.timestamp() as i32),
                     finish_index: Some(window_end.timestamp() as i32),
