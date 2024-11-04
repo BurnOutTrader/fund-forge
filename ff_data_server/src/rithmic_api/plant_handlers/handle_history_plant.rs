@@ -8,6 +8,7 @@ use lazy_static::lazy_static;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::Reject;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
+use crate::rithmic_api::client_base::rithmic_proto_objects::rti::time_bar::BarType;
 use prost::{Message as ProstMessage};
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive};
@@ -284,20 +285,24 @@ async fn handle_candle(client: Arc<RithmicBrokerageClient>, msg: TimeBar) {
         };
 
         let resolution = match msg.r#type.clone() {
-            Some(num) => {
-                match num {
-                    1 => {
-                        // If we get seconds but period is divisible by 60, convert to minutes
-                        if period % 60 == 0 {
-                            Resolution::Minutes(period as u64 / 60)
-                        } else {
-                            Resolution::Seconds(period as u64)
-                        }
-                    },
+            Some(val) => {
+                match val {
+                    1 => Resolution::Seconds(period as u64),
                     2 => Resolution::Minutes(period as u64),
-                    _ => return, // Unsupported bar types
+                    _ => // Try parsing as i32 first
+                        match i32::from_str(val.to_string().as_str()) {
+                            Ok(1) => Resolution::Seconds(period as u64),
+                            Ok(2) => Resolution::Minutes(period as u64),
+                            // If parsing as number fails, try as bar type string
+                            _ => match BarType::from_str_name(&val.to_string().as_str()) {
+                                Some(BarType::SecondBar) => Resolution::Seconds(period),
+                                Some(BarType::MinuteBar) => Resolution::Minutes(period),
+                                Some(BarType::DailyBar) | Some(BarType::WeeklyBar) => return, // Unsupported bar types
+                                None => return, // Unknown bar type
+                            }
+                        }
                 }
-            }
+            },
             None => return, // Exit if msg.r#type is None
         };
 
@@ -457,21 +462,25 @@ fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
     };
 
     let resolution = match response.r#type.clone() {
-        Some(num) => {
-            match num {
-                1 => {
-                    // If we get seconds but period is divisible by 60, convert to minutes
-                    if period % 60 == 0 {
-                        Resolution::Minutes(period as u64 / 60)
-                    } else {
-                        Resolution::Seconds(period as u64)
+        Some(type_str) => {
+            // Try parsing as BarType first
+            match BarType::from_str_name(type_str.to_string().as_str()) {
+                Some(BarType::MinuteBar) => Resolution::Minutes(period as u64),
+                Some(BarType::SecondBar) => Resolution::Seconds(period as u64),
+                None => {
+                    // Fall back to numeric checks if not a recognized bar type string
+                    match type_str{
+                        1 => {
+                           Resolution::Seconds(period as u64)
+                        },
+                        2 => Resolution::Minutes(period as u64),
+                        _ => return None, // Unsupported bar types
                     }
-                },
-                2 => Resolution::Minutes(period as u64),
+                }
                 _ => return None, // Unsupported bar types
             }
         }
-        None => return None, // Exit if msg.r#type is None
+        None => return None,
     };
 
     //println!("resolution: {:?}", resolution);
