@@ -1,7 +1,6 @@
-use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::{DateTime, Datelike, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, NaiveTime, TimeZone, Utc};
 use lazy_static::lazy_static;
 use tokio::sync::broadcast;
 use tokio::sync::mpsc::Sender;
@@ -70,6 +69,14 @@ pub(crate) async fn live_warm_up(
                 Utc.from_utc_datetime(&end_of_day_naive).max(last_time)
             };
             first_iteration = false;
+
+            if last_time >= Utc::now() {
+                WARMUP_COMPLETE_BROADCASTER.send(last_time).unwrap();
+                if let Err(e) = strategy_event_sender.send(StrategyEvent::WarmUpComplete).await {
+                    eprintln!("Live Warmup: Failed to send event: {}", e);
+                }
+                break 'main_loop;
+            }
 
             let mut time_slices = match get_historical_data(primary_subscriptions.clone(), last_time, to_time).await {
                 Ok(time_slices) => {

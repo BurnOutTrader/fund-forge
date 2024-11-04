@@ -58,7 +58,7 @@ async fn main() {
     let sub = DataSubscription::new_custom(
         symbol_name.clone(),
         DataVendor::Rithmic,
-        Resolution::Minutes(1),
+        Resolution::Seconds(1),
         MarketType::Futures(FuturesExchange::CME),
         CandleType::CandleStick
     );
