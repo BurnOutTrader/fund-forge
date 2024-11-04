@@ -7,6 +7,9 @@ Focused on backtesting, live trading and charting (soon). With an emphasis for a
 
 fund-forge is built to allow simple abstractions for common strategy functionality: trade multiple symbols from multiple brokers, with multiple data streams.
 
+## Limitless Free Historical Data
+See below for all the free historical data you will ever need.
+
 <span style="color: red;">***For development and testing purposes only. live trading is in development. repo is currently unstable.***</span>
 
 ## Announcements: Read Before Live Trading or Backtesting
@@ -20,7 +23,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
-2. For Test data you will need to set up a practice account with oanda then follow the [Oanda setup instructions](ff_data_server/src/oanda_api/OANDA_SETUP.md). Or you can download some data I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=nzilot)
+2. You can download some data I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=nzilot), or you need to set up a [Rithmic account](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md) or [Oanda account](ff_data_server/src/oanda_api/OANDA_SETUP.md). [Free Historical Data](#historical-data)
 3. Put the test data into the correct directory. [instructions below](#file-and-folder-structure)
 4. Navigate to [ff_data_server](./ff_data_server) directory and `cargo build` then `cargo run` (don't run the server in your IDE, it will have issues (more issues than normal :) )
     - to run the server with rithmic apis connected use `cargo run -- --rithmic "0"`.
@@ -54,6 +57,7 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 - [Rithmic Setup](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md)
 - [Bitget Setup](ff_data_server/src/bitget_api/BITGET_SETUP.md)
 - [Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md)
+- [Historical Data](#historical-data)
 - [Back Test Accuracy](ff_standard_lib/src/strategies/ACCURACY_README.md)
 - [Developing Engine](DEV_README.md)
 - [Current Development Tasks](DEV_TODO_ISSUES.md)
@@ -65,12 +69,38 @@ See [Live Trading](#current-state-of-live-trading) & [Rithmic Setup](ff_data_ser
 
 [more on architecture](#Architecture)
 
-## Demonstration Testing Data
+## Historical Data
 You can download data that I have already parsed [here](https://1drv.ms/f/s!AllvRPz1aHoThKQU2hQbLEBqZyQ5RA?e=nzilot)
 
 The Oanda folder should be put into the following directory "ff_data_server/data/historical/".
 
-### For More Free Historical Data
+Historical Oanda Data is Available as QuoteBars
+```rust
+Resolution::Seconds(5),
+Resolution::Minutes(1),
+Resolution::Hours(1),
+```
+Live Oanda Data is only avalable as `Resolution::Instant` because the live feed is a Quote feed, I will try to make a bar feed later.
+
+Rithmic Data is historical data available as
+```rust
+Resolution::Ticks(1),  //1 tick history
+Resolution::Seconds(1) to Resolution::Seconds(60),
+Resolution::Minutes(1) to Resolution::Minutes(60),
+Resolution::Hours(1) to Resolution::Hours(24), // please dont try to build daily bars by using 24 hours, special consolidators will be build for daily, weekly, yearly etc later.
+```
+Rithmic Data is live data available as all of the above plus quotes
+```rust
+Resolution::Instant // for Quote feeds
+Resolution::Ticks(1), //1 tick feed
+Resolution::Seconds(1) to Resolution::Seconds(60),
+Resolution::Minutes(1) to Resolution::Minutes(60),
+Resolution::Hours(1) to Resolution::Hours(24), // please dont try to build daily bars by using 24 hours, special consolidators will be build for daily, weekly, yearly etc later.
+```
+By default the engine will try to use the lowest suitable resolution data as primary data feeds, both in historical testing and live mode.
+You can override the default engine logic when making subscriptions to force the engine to use the historical data of you choosing, see [Strategies](ff_standard_lib/src/strategies/STRATEGIES_README.md/#subscribe-override) for more info.
+
+### For Free Historical Data
 #### Oanda Data
 The server will automatically download historical data for your, this will depend on what symbols and data types you request in you credentials/{Bokerage}_credentials/download_list.toml file.
 
