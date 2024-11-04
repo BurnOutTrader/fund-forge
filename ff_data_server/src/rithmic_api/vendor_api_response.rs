@@ -16,6 +16,7 @@ use ff_standard_lib::StreamName;
 use tokio::sync::{broadcast, oneshot};
 use tokio::time::{timeout};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use crate::rithmic_api;
 use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
 use crate::server_features::database::{DATA_STORAGE};
@@ -210,11 +211,17 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 self.send_message(&PLANT, req).await;
             } else if subscription.base_data_type == BaseDataType::Candles {
                 let (num, res_type) = match subscription.resolution {
-                    Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
-                    Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
-                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar),
+                    Resolution::Seconds(num) => (num as i32, BarType::SecondBar.into()),
+                    Resolution::Minutes(num) =>
+                        if num == 1 {
+                            (60, BarType::SecondBar.into())
+                        }else {
+                            (num as i32, BarType::MinuteBar.into())
+                        }
+                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar.into()),  // Convert hours to minutes
                     _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", self.data_vendor,subscription)) }
                 };
+
                 let req =RequestTimeBarUpdate {
                     template_id: 200,
                     user_msg: vec![],
@@ -285,9 +292,14 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 }
             } else if subscription.base_data_type == BaseDataType::Candles {
                 let (num, res_type) = match subscription.resolution {
-                    Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
-                    Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
-                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar),
+                    Resolution::Seconds(num) => (num as i32, BarType::SecondBar.into()),
+                    Resolution::Minutes(num) =>
+                        if num == 1 {
+                            (60, BarType::SecondBar.into())
+                        }else {
+                            (num as i32, BarType::MinuteBar.into())
+                        }
+                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar.into()),  // Convert hours to minutes
                     _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", self.data_vendor,subscription)) }
                 };
                 let req =RequestTimeBarUpdate {
