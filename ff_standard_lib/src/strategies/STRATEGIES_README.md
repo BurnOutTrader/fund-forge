@@ -452,13 +452,11 @@ In live trading this will happen in the background as an async task, and the str
 
 The SubscriptionHandler will automatically build data from the lowest suitable resolution.
 
-The engine will automatically use any primary data available with the data vendor in historical mode, to speed up backtests and prevent using consolidators.
-
-So we can have historical data in all resolutions to make backtests faster.
+The engine will prefer using feeds or historical data of the lowest resolutions.
 
 In live mode the engine will subscribe to the lowest possible resolution data for data feeds: tick and quote is priority or lastly the lowest resolution candles or quotebars.
 
-this is done so that when live streaming with mutlple strategies we only need to maintain 1 live data feed per symbol, no matter the number of strategies and resolutions subscribed.
+this is done so that when live streaming with multiple strategies we only need to maintain 1 live data feed per symbol, no matter the number of strategies and resolutions subscribed.
 ```rust
 // we can access resolution as a Duration with resolution.as_duration() or resolution.as_seconds();
 pub enum Resolution {
