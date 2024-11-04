@@ -725,8 +725,8 @@ impl HybridStorage {
                             Utc::now()
                         } else {
                             let earliest = match self.get_earliest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
-                                Ok(Some(date)) if date - chrono::Duration::days(1) > start_time => Some(date),
-                                Ok(None) => Some(Utc::now()),
+                                Ok(Some(date)) if date > start_time => Some(date), // If we have data and it's after our target start time
+                                Ok(None) => Some(Utc::now()),  // If we have no data
                                 _ => None,
                             };
 
@@ -736,7 +736,8 @@ impl HybridStorage {
                             }
                         };
 
-                        if from_back && start_time - end_time < chrono::Duration::days(1) {
+                        // Only skip if we're moving backwards and we've already reached our target
+                        if from_back && start_time >= end_time {
                             continue;
                         }
 
