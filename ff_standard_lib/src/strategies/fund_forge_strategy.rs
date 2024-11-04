@@ -281,6 +281,11 @@ impl FundForgeStrategy {
         )
     }
 
+    pub async fn subscribe_override(&self, subscription: DataSubscription, history_to_retain: usize) {
+        let _event = self.subscription_handler.subscribe_override(subscription, self.time_utc(), history_to_retain, true).await.unwrap_or_else(|event| event);
+        //todo broadcast to strategy receiver
+    }
+
     //todo[Strategy]
     pub async fn custom_order(&self, _order: Order, _order_type: OrderType) -> OrderId {
         todo!("Make a fn that takes an order and figures out what to do with it")
@@ -883,32 +888,16 @@ impl FundForgeStrategy {
     pub async fn subscribe(&self, subscription: DataSubscription, history_to_retain: usize, fill_forward: bool) {
         match self.mode {
             StrategyMode::Backtest => {
-                let result = self.subscription_handler
+                let _ = self.subscription_handler
                     .subscribe(subscription.clone(), self.time_utc(), fill_forward, history_to_retain, true)
                     .await;
-                match &result {
-                    Ok(_sub_result) => {
-                        //add_buffer(self.time_utc(), StrategyEvent::DataSubscriptionEvent(sub_result.to_owned())).await;
-                    },
-                    Err(_sub_result) =>  {
-                        //add_buffer(self.time_utc(), StrategyEvent::DataSubscriptionEvent(sub_result.to_owned())).await;
-                    }
-                }
             }
             StrategyMode::Live | StrategyMode::LivePaperTrading => {
                 let handler = self.subscription_handler.clone();
                 //tokio::task::spawn(async move{
-                    let result = handler
+                    let _ = handler
                         .subscribe(subscription.clone(), Utc::now(), fill_forward, history_to_retain, true)
                         .await;
-                    match &result {
-                        Ok(_sub_result) => {
-                            //add_buffer(Utc::now(), StrategyEvent::DataSubscriptionEvent(sub_result.to_owned())).await;
-                        },
-                        Err(_sub_result) =>  {
-                            //add_buffer(Utc::now(), StrategyEvent::DataSubscriptionEvent(sub_result.to_owned())).await;
-                        }
-                    }
                 //});
             }
         }

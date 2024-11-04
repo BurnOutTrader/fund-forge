@@ -77,6 +77,103 @@ impl SubscriptionHandler {
         strategy_subscriptions.clone()
     }
 
+    pub(crate) async fn subscribe_override(
+        &self,
+        new_subscription: DataSubscription,
+        warm_up_to_time: DateTime<Utc>,
+        history_to_retain: usize,
+        broadcast: bool
+    ) -> Result<DataSubscriptionEvent, DataSubscriptionEvent>  {
+        if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
+            let symbol_handler = SymbolSubscriptionHandler::new(
+                new_subscription.symbol.clone(),
+                self.strategy_event_sender.clone(),
+            ).await;
+            self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
+        }
+
+        let symbol_subscriptions = self.symbol_subscriptions.get(&new_subscription.symbol).unwrap();
+        let result = symbol_subscriptions.value().subscribe_override(
+            new_subscription.clone(),
+            warm_up_to_time,
+            history_to_retain,
+        ).await;
+
+        match result {
+            Ok((window, event)) => {
+                match new_subscription.base_data_type {
+                    BaseDataType::Ticks => {
+                        self.tick_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let Some(mut tick_window) = self.tick_history.get_mut(&new_subscription) {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::Tick(tick) => tick_window.value_mut().add(tick),
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    BaseDataType::Quotes => {
+                        self.quote_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let Some(mut quote_window) = self.quote_history.get_mut(&new_subscription) {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::Quote(quote) => quote_window.value_mut().add(quote),
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    BaseDataType::QuoteBars => {
+                        self.bar_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let Some(mut bar_window) = self.bar_history.get_mut(&new_subscription) {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::QuoteBar(quote) => bar_window.value_mut().add(quote),
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    BaseDataType::Candles => {
+                        self.candle_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let Some(mut candle_window) = self.candle_history.get_mut(&new_subscription) {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::Candle(candle) => candle_window.value_mut().add(candle),
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                    BaseDataType::Fundamentals => {
+                        self.fundamental_history.insert(new_subscription.clone(), RollingWindow::new(history_to_retain));
+                        if let Some(mut fundamental_window) = self.fundamental_history.get_mut(&new_subscription) {
+                            for data in window.history {
+                                match data {
+                                    BaseDataEnum::Fundamental(funda) => fundamental_window.value_mut().add(funda),
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if broadcast {
+                    let subscriptions = self.primary_subscriptions().await;
+                    match self.primary_subscriptions_broadcaster.send(subscriptions) {
+                        Ok(_) => {}
+                        Err(_) => {}
+                    }
+                }
+                Ok(event)
+            }
+            Err(e) => {
+                Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription, e.to_string()))
+            }
+        }
+    }
+
     /// Subscribes to a new data subscription
     /// 'new_subscription: DataSubscription' The new subscription to subscribe to.
     /// 'history_to_retain: usize' The number of bars to retain in the history.
@@ -644,6 +741,42 @@ impl SymbolSubscriptionHandler {
         }
     }
 
+    pub(crate) async fn subscribe_override(
+        &self,
+        new_subscription: DataSubscription,
+        warm_up_to_time: DateTime<Utc>,
+        history_to_retain: usize,
+    ) -> Result<(RollingWindow<BaseDataEnum>, DataSubscriptionEvent), DataSubscriptionEvent> {
+        if let Some(subscription) = self.primary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
+            if *subscription.value() == new_subscription {
+                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
+            }
+        }
+        let is_warmed_up =   is_warmup_complete();
+        if is_warmed_up {
+            let from_time = match new_subscription.resolution == Resolution::Instant {
+                true => {
+                    let subtract_duration: Duration = Duration::seconds(1) * history_to_retain as i32;
+                    warm_up_to_time - subtract_duration - Duration::days(3)
+                }
+                false => {
+                    let subtract_duration: Duration = new_subscription.resolution.as_duration() * history_to_retain as i32;
+                    warm_up_to_time - subtract_duration - Duration::days(3)
+                }
+            };
+            let data = block_on(get_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
+            let mut history = RollingWindow::new(history_to_retain);
+            for (_, slice) in data {
+                for data in slice.iter() {
+                    history.add(data.clone());
+                }
+            }
+
+            return Ok((history, DataSubscriptionEvent::Subscribed(new_subscription)))
+        }
+        Ok((RollingWindow::new(history_to_retain), DataSubscriptionEvent::Subscribed(new_subscription)))
+    }
+
     //todo, add a fn to DataVendor Server Side, to return the correct primary resolution for a subscription, this way we can handle on a vendor by vendor basis.
     /// Currently This function works in 1 of 2 ways,
     /// 1. Backtesting, it will try to subscribe directly to any historical data directly available from the data server, the downside to this would be that you will not have open bars for that subscription as they will always be closed.
@@ -669,6 +802,7 @@ impl SymbolSubscriptionHandler {
                 return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
             }
         }
+
         if let Some(subscriptions) = self.secondary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
             if let Some(_subscription) = subscriptions.get(&new_subscription) {
                 return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
@@ -682,11 +816,11 @@ impl SymbolSubscriptionHandler {
                 let from_time = match closure_subscription.resolution == Resolution::Instant {
                     true => {
                         let subtract_duration: Duration = Duration::seconds(1) * history_to_retain as i32;
-                        warm_up_to_time - subtract_duration - Duration::days(5)
+                        warm_up_to_time - subtract_duration - Duration::days(3)
                     }
                     false => {
                         let subtract_duration: Duration = closure_subscription.resolution.as_duration() * history_to_retain as i32;
-                        warm_up_to_time - subtract_duration - Duration::days(5)
+                        warm_up_to_time - subtract_duration - Duration::days(3)
                     }
                 };
                 let data = block_on(get_historical_data(vec![closure_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());

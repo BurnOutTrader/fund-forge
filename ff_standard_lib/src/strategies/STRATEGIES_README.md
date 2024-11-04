@@ -419,6 +419,32 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
 ```
 
 ## Subscriptions
+The engine defines subscriptions as 2 kinds:
+1. Primary Subscriptions: These are the subscriptions we use to consolidate data to the other resolutions.
+2. Secondary Subscriptions: These are the subscriptions we consolidate from primary data, If our DataVendor only provides 1-second Candles, we can still subscribe to 15 second candles because the engine will build them for us.
+
+Subscribe using default logic.
+```rust
+let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+let history_to_retain: usize = 100;
+strategy.subscribe(aud_usd_15m.clone(), history_to_retain).await;
+```
+
+### Subscribe Override
+By default, the engine will attempt to allocate subscriptions to either primary or secondary based on data availability, but the logic can only do so much, you can override the default logic and force the engine to make a subscription primary, 
+if you know you have historical data for the period, or if you know the data vendor has the live data feed.
+
+Subscribe using override logic.
+```rust
+let aud_usd_15m = DataSubscription::new("AUD-USD".to_string(), DataVendor::Test, Resolution::Minutes(15), BaseDataType::Candles, MarketType::Forex);
+let history_to_retain: usize = 100;
+strategy.subscribe_override(aud_usd_15m.clone(), history_to_retain).await;
+```
+Using subscribe_override() the engine will not perform any check to make sure the data is available as a historical or live feed.
+
+If you want to override the default logic and force the engine to make a subscription primary, you need to do it after the strategy is Initialized.
+
+### Runtime Subscription Updates
 Subscriptions can be updated at any time, and the engine will handle the consolidation of data to the required resolution.
 
 The engine will also warm up indicators and consolidators after the initial warm up cycle, this may result in a momentary pause in the strategy runtime during back tests, while the data is fetched, consolidated etc.
@@ -493,6 +519,8 @@ pub async fn on_data_received(strategy: FundForgeStrategy, notify: Arc<Notify>, 
     }
 }
 ```
+
+
 
 ### Futures Subscriptions
 You can subscribe using the `SymbolName` eg "MNQ" or the `SymbolCode` eg "MNQZ4".
