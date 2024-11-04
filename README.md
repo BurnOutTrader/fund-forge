@@ -87,6 +87,7 @@ Live Oanda Data is only available as `Resolution::Instant` because the live feed
 
 ### Rithmic Data
 Rithmic historical data is available as candles and ticks.
+
 Live feeds are available as candles, ticks and quotes for live data, when live you can subscribe to quotebars as the engine will consolidate them from quotes.
 ```rust
 Resolution::Instant // for Quote feeds, not available as historical data, yet. (until order books are implemented)
