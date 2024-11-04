@@ -390,7 +390,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 false => Utc::now(),
             };
 
-            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, from, to.format("%Y-%m-%d %H:%M:%S")));
+            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, to.format("%Y-%m-%d %H:%M:%S")));
             let (sender, receiver) = oneshot::channel();
 
             let permit = match self.historical_permits.acquire().await {
