@@ -143,16 +143,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
 
-        let mut resolutions = Vec::new();
-        resolutions.push(Resolution::Instant);
-        resolutions.push(Resolution::Ticks(1));
-        resolutions.push(Resolution::Seconds(1));
-        //we can pass in live here because backtest never calls this fn
-
-        if !resolutions.contains(&subscription.resolution) {
-            return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
-        }
-
         const BASEDATA_TYPES: &[BaseDataType] = &[BaseDataType::Ticks, BaseDataType::Quotes, BaseDataType::Candles];
         if !BASEDATA_TYPES.contains(&subscription.base_data_type) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
@@ -222,6 +212,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 let (num, res_type) = match subscription.resolution {
                     Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
                     Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
+                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar),
                     _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", self.data_vendor,subscription)) }
                 };
                 let req =RequestTimeBarUpdate {
@@ -293,14 +284,20 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     self.bid_book.remove(&symbol);
                 }
             } else if subscription.base_data_type == BaseDataType::Candles {
+                let (num, res_type) = match subscription.resolution {
+                    Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
+                    Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
+                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar),
+                    _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", self.data_vendor,subscription)) }
+                };
                 let req =RequestTimeBarUpdate {
                     template_id: 200,
                     user_msg: vec![],
                     symbol: Some(subscription.symbol.name.to_string()),
                     exchange: Some(exchange),
                     request: Some(2), //1 subscribe 2 unsubscribe
-                    bar_type: Some(BarType::SecondBar.into()),
-                    bar_type_period: Some(1),
+                    bar_type: Some(res_type.into()),
+                    bar_type_period: Some(num),
                 };
                 const PLANT: SysInfraType = SysInfraType::HistoryPlant;
                 self.send_message(&PLANT, req).await;
@@ -353,6 +350,11 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 return Err(FundForgeError::ClientSideErrorDebug(format!("Exchange not found for symbol: {}", symbol_name)))
             }
         };
+
+        if base_data_type == BaseDataType::Ticks && resolution != Resolution::Ticks(1) {
+            progress_bar.finish_and_clear();
+            return Err(FundForgeError::ClientSideErrorDebug(format!("{}, Ticks data can only be requested with 1 tick resolution", symbol_name)))
+        }
 
         let data_storage = DATA_STORAGE.get().unwrap();
 
