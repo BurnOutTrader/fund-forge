@@ -778,6 +778,7 @@ impl SymbolSubscriptionHandler {
             }
             return Ok((history, DataSubscriptionEvent::Subscribed(new_subscription)))
         }
+        self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
         let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
         match self.strategy_event_sender.send(event).await {
             Ok(_) => {}

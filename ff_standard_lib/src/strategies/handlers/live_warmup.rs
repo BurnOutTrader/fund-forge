@@ -33,13 +33,21 @@ pub(crate) async fn live_warm_up(
     indicator_handler: Arc<IndicatorHandler>
 ) {
     tokio::task::spawn(async move {
-        println!("Historical Engine: Warming up the strategy...");
+        println!("Live Warmup: Warming up the strategy...");
         let market_price_sender = get_price_service_sender();
         // here we are looping through 1 day at a time, if the strategy updates its subscriptions we will stop the data feed, download the historical data again to include updated symbols, and resume from the next time to be processed.
-        let mut primary_subscriptions = subscription_handler.primary_subscriptions().await;
+        let mut primary_subscriptions = loop {
+            let subscriptions = subscription_handler.primary_subscriptions().await;
+            if !subscriptions.is_empty() {
+                break subscriptions;
+            }
+            println!("Live Warmup: Waiting for primary subscriptions...");
+            tokio::time::sleep(Duration::from_millis(200)).await;
+        };
+
         let mut primary_subscription_update_receiver = subscription_handler.subscribe_primary_subscription_updates();
         for subscription in &primary_subscriptions {
-            println!("Historical Engine: Primary Subscription: {}", subscription);
+            println!("Live Warmup: Primary Subscription: {}", subscription);
         }
         let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
         for subscription in &strategy_subscriptions {
@@ -61,8 +69,9 @@ pub(crate) async fn live_warm_up(
             let mut time_slices = match get_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
                     if time_slices.is_empty() && tick_over_no_data {
-                        println!("Warm Up Engine: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
+                        println!("Live Warmup: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
                     } else if time_slices.is_empty() && !tick_over_no_data {
+                        println!("Live Warmup: No data period, weekend or holiday: skipping to next day");
                         last_time = to_time + buffer_duration;
                         continue 'main_loop
                     }
@@ -78,7 +87,7 @@ pub(crate) async fn live_warm_up(
                 },
                 Err(e) => {
                     if tick_over_no_data {
-                        println!("Historical Engine: Error getting data: {}", e);
+                        println!("Live Warmup: Error getting data: {}", e);
                     } else if !tick_over_no_data {
                         last_time = to_time + buffer_duration;
                         continue 'main_loop
@@ -96,7 +105,7 @@ pub(crate) async fn live_warm_up(
                     let event = StrategyEvent::WarmUpComplete;
                     match strategy_event_sender.send(event).await {
                         Ok(_) => {}
-                        Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                        Err(e) => eprintln!("Live Warmup: Failed to send event: {}", e)
                     }
                     break 'main_loop
                 }
@@ -135,7 +144,7 @@ pub(crate) async fn live_warm_up(
                     let arc_slice = Arc::new(time_slice.clone());
                     match market_price_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await {
                         Ok(_) => {}
-                        Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
+                        Err(e) => panic!("Live Warmup: Error sending backtest message: {}", e)
                     }
                     ledger_service.timeslice_updates(time, arc_slice.clone()).await;
 
@@ -157,7 +166,7 @@ pub(crate) async fn live_warm_up(
                     if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
                         match strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await {
                             Ok(_) => {}
-                            Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                            Err(e) => eprintln!("Live Warmup: Failed to send event: {}", e)
                         }
                     }
 
@@ -166,7 +175,7 @@ pub(crate) async fn live_warm_up(
                     );
                     match strategy_event_sender.send(slice_event).await {
                         Ok(_) => {}
-                        Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
+                        Err(e) => eprintln!("Live Warmup: Failed to send event: {}", e)
                     }
                 }
 

@@ -1,9 +1,10 @@
 use chrono::{Duration, NaiveDate};
 use chrono_tz::Australia;
 use colored::Colorize;
+use rust_decimal::Decimal;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
-use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType, OrderSide, StrategyMode};
 use ff_standard_lib::strategies::strategy_events::{StrategyEvent};
 use ff_standard_lib::standardized_types::subscriptions::{CandleType, DataSubscription, SymbolCode, SymbolName};
 use ff_standard_lib::strategies::fund_forge_strategy::FundForgeStrategy;
@@ -14,7 +15,7 @@ use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency
 use ff_standard_lib::standardized_types::base_data::tick::Aggressor;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent};
+use ff_standard_lib::standardized_types::orders::{OrderUpdateEvent, TimeInForce};
 use ff_standard_lib::standardized_types::position::PositionUpdateEvent;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 
@@ -28,11 +29,11 @@ async fn main() {
     symbol_code.push_str("Z4");
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Backtest,
+        StrategyMode::LivePaperTrading,
         dec!(100000),
         Currency::USD,
-        NaiveDate::from_ymd_opt(2020, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
-        NaiveDate::from_ymd_opt(2020, 6, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 10, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
+        NaiveDate::from_ymd_opt(2024, 11, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
         Duration::hours(1),
         vec![
@@ -54,6 +55,15 @@ async fn main() {
         vec![Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string())]
     ).await;
 
+    let sub = DataSubscription::new_custom(
+        symbol_name.clone(),
+        DataVendor::Rithmic,
+        Resolution::Minutes(1),
+        MarketType::Futures(FuturesExchange::CME),
+        CandleType::CandleStick
+    );
+    strategy.subscribe_override(sub, 100).await;
+
     on_data_received(strategy, strategy_event_receiver, symbol_name, symbol_code).await;
 }
 
@@ -65,9 +75,9 @@ pub async fn on_data_received(
     symbol_code: SymbolCode
 ) {
     let account_1 = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), AccountId::from("APEX-3396-168"));
-/*    let mut exit_sent = false;
+    let mut exit_sent = false;
     let mut count = 1;
-    let mut entry_order_id = "".to_string();*/
+    let mut entry_order_id = "".to_string();
     let mut warmup_complete = false;
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {
         match strategy_event {
@@ -91,7 +101,7 @@ pub async fn on_data_received(
                         }
                         BaseDataEnum::Candle(candle) => {
                             // Place trades based on the AUD-CAD Heikin Ashi Candles
-                           /* if candle.is_closed == true {
+                            if candle.is_closed == true {
                                 let msg = format!("{} {} {} Close: {}, {}", candle.symbol.name, candle.resolution, candle.candle_type, candle.close, candle.time_closed_local(strategy.time_zone()));
                                 if candle.close == candle.open {
                                     println!("{}", msg.as_str().blue())
@@ -120,9 +130,9 @@ pub async fn on_data_received(
                                     if count == 10 && !exit_sent {
                                         exit_sent = true;
                                         strategy.cancel_orders_account(account_1.clone()).await;
-                                        /*let position_size: Decimal = strategy.position_size(&account_1, &symbol_code);
+                                        let position_size: Decimal = strategy.position_size(&account_1, &symbol_code);
                                         println!("Strategy: Exit Long, Time {}: Size: {}", strategy.time_local(), position_size);
-                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long")).await;*/
+                                        let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long")).await;
                                     }
                                 }
 
@@ -135,7 +145,7 @@ pub async fn on_data_received(
                                     println!("TEST PASSED");
                                     break 'strategy_loop;
                                 }
-                            }*/
+                            }
                         }
                         _ => {}
                     }
