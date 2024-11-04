@@ -284,7 +284,7 @@ async fn handle_candle(client: Arc<RithmicBrokerageClient>, msg: TimeBar) {
             None => return,  // Exit if close price is invalid
         };
 
-        let resolution = match msg.r#type.clone() {
+        let mut resolution = match msg.r#type.clone() {
             Some(val) => {
                 match val {
                     1 => Resolution::Seconds(period as u64),
@@ -305,6 +305,15 @@ async fn handle_candle(client: Arc<RithmicBrokerageClient>, msg: TimeBar) {
             },
             None => return, // Exit if msg.r#type is None
         };
+
+        // Convert resolution if needed
+        if let Resolution::Minutes(mins) = resolution {
+            if mins >= 60 && mins % 60 == 0 {
+                resolution = Resolution::Hours(mins / 60);
+            }
+        } else if resolution == Resolution::Seconds(60) {
+            resolution = Resolution::Minutes(1);
+        }
 
         let ask_volume= msg.ask_volume.and_then(Decimal::from_u64).unwrap_or_else(|| dec!(0.0));
 
