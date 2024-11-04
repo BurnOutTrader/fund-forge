@@ -472,10 +472,8 @@ fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
                     Some(BarType::SecondBar) => Resolution::Seconds(period as u64),
                     None => {
                         // Fall back to numeric checks if not a recognized bar type string
-                        match type_str{
-                            1 => {
-                               Resolution::Seconds(period as u64)
-                            },
+                        match type_str {
+                            1 => Resolution::Seconds(period as u64),
                             2 => Resolution::Minutes(period as u64),
                             _ => return None, // Unsupported bar types
                         }
@@ -493,7 +491,12 @@ fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
         None => return None,
     };
 
-    if resolution == Resolution::Seconds(60) {
+    // Convert resolution if needed
+    if let Resolution::Minutes(mins) = resolution {
+        if mins >= 60 && mins % 60 == 0 {
+            resolution = Resolution::Hours(mins / 60);
+        }
+    } else if resolution == Resolution::Seconds(60) {
         resolution = Resolution::Minutes(1);
     }
 
