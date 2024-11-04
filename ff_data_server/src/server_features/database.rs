@@ -73,7 +73,6 @@ impl HybridStorage {
 
     pub fn run_update_schedule(self: Arc<Self>) {
         //println!("Initializing update schedule with {} second interval", self.update_seconds);
-
         let mut shutdown_receiver = subscribe_server_shutdown();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
