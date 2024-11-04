@@ -78,6 +78,25 @@ impl HybridStorage {
         let mut shutdown_receiver = subscribe_server_shutdown();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
+            interval.tick().await;
+
+            // Initial update on startup - first forward then backward
+            match HybridStorage::update_data(self.clone(), false).await {
+                Ok(_) => println!("Initial forward update completed"),
+                Err(e) => eprintln!("Initial forward update failed: {}", e),
+            }
+
+            // Wait for all forward tasks to complete
+            while !self.download_tasks.is_empty() {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+
+            // Run backward update after forward completes
+            match HybridStorage::update_data(self.clone(), true).await {
+                Ok(_) => println!("Initial backward update completed"),
+                Err(e) => eprintln!("Initial backward update failed: {}", e),
+            }
+
             loop {
                 tokio::select! {
                     _ = shutdown_receiver.recv() => {
@@ -101,6 +120,17 @@ impl HybridStorage {
                         match HybridStorage::update_data(self.clone(), false).await {
                             Ok(_) => println!("Forward update completed"),
                             Err(e) => eprintln!("Forward update failed: {}", e),
+                        }
+
+                        // Wait for all forward tasks to complete
+                        while !self.download_tasks.is_empty() {
+                            tokio::time::sleep(Duration::from_secs(5)).await;
+                        }
+
+                        // Run backward update after forward completes
+                        match HybridStorage::update_data(self.clone(), true).await {
+                            Ok(_) => println!("Backward update completed"),
+                            Err(e) => eprintln!("Backward update failed: {}", e),
                         }
 
                         println!("Update cycle completed, waiting {} seconds", self.update_seconds);
@@ -278,7 +308,7 @@ impl HybridStorage {
                         }
 
                         // Only skip if we're moving backwards and we've already reached our target
-                        if from_back && start_time >= end_time - Duration::from_secs(60*60*24) {
+                        if from_back && start_time >= end_time - Duration::from_secs(60*60*72) {
                             continue;
                         }
 
