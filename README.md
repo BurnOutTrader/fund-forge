@@ -21,6 +21,8 @@ See below for all the free historical data you will ever need.
 - 03/11/2024: Rithmic Historical data improved to avoid missing data due to poor latency, unsure if there is a max concurrent download limit for rithmic, so it is set to 1 request response at a time, I have done this to avoid download a bunch of gapped data, I will talk to rithmic and find out if i can make concurrent requests.
 - 03/11/2024: Live warm up should work, but it wont have the lastest data unless you restart the server right before launching a strategy, fns will be made this week to update data before starting the strategy warm up engine.
 - 04/11/2024: You can now download historical data in many reoslutions and force the engine to use the historical data for historical data feed or a set specific resolution for live streams, overriding the default behaviour of using the lowest resolution data feed.
+- 04/11/2024: I will need to build an exchange map file for each rithmic broker/system, so that we can correctly get the exchange for symbols that trade on multiple exchanges, this will be done in the future.
+- 04/11/2024: I will build a margin and commissions file for each rithmic broker/system, so that we can correctly calculate margin and commissions for each symbol, this will be done in the future.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
