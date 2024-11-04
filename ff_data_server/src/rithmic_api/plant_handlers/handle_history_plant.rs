@@ -426,7 +426,7 @@ fn parse_tick_response(response: &ResponseTickBarReplay) -> Option<Tick> {
 }
 
 fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
-    println!("ResponseTimeBarReplay: {:?}", response);
+    //println!("ResponseTimeBarReplay: {:?}", response);
     // Check if all required price fields are present
     let (open, high, low, close) = match (
         response.open_price,
