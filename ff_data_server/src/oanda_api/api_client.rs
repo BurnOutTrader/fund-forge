@@ -27,7 +27,11 @@ use crate::oanda_api::models::position::OandaPosition;
 use crate::ServerLaunchOptions;
 
 lazy_static! {
-    pub static ref OANDA_IS_CONNECTED: AtomicBool = AtomicBool::new(false);
+    static ref OANDA_IS_CONNECTED: AtomicBool = AtomicBool::new(false);
+}
+
+pub fn oanda_connected() -> bool {
+    OANDA_IS_CONNECTED.load(Ordering::SeqCst)
 }
 
 pub(crate) static OANDA_CLIENT: OnceCell<Arc<OandaClient>> = OnceCell::const_new();
@@ -265,6 +269,7 @@ async fn handle_price_stream(
 
 pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
     if options.disable_oanda_server != 0 {
+        OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
         return;
     }
     let path = options.data_folder.clone()
@@ -274,12 +279,14 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         .join("oanda_credentials.toml");
 
     if !path.exists() {
+        OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
         return;
     }
 
     let settings: OandaSettings = match OandaSettings::from_file(path) {
         Some(s) => s,
         None => {
+            OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
             eprintln!("No oanda settings retrieved");
             return;
         }
@@ -373,6 +380,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
     if let Some(account) = oanda_client.accounts.get(0) {
         handle_price_stream(oanda_client.client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone()).await;
     }
+    OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
     let _ = OANDA_CLIENT.set(Arc::new(oanda_client));
 }
 

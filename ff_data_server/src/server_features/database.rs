@@ -29,7 +29,7 @@ use ff_standard_lib::standardized_types::enums::MarketType;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use crate::oanda_api::api_client::{OANDA_CLIENT, OANDA_IS_CONNECTED};
+use crate::oanda_api::api_client::{oanda_connected, OANDA_CLIENT};
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
@@ -86,18 +86,17 @@ impl HybridStorage {
                     continue;
                 }
 
-                // Run backward update first
-              /*  match HybridStorage::update_data(self.clone(), true).await {
-                    Ok(_) => println!("Backward update completed"),
-                    Err(e) => eprintln!("Backward update failed: {}", e),
-                }*/
-
-                tokio::time::sleep(Duration::from_secs(2)).await;
-
                 // Run forward update
                 match HybridStorage::update_data(self.clone(), false).await {
                     Ok(_) => println!("Forward update completed"),
                     Err(e) => eprintln!("Forward update failed: {}", e),
+                }
+
+                tokio::time::sleep(Duration::from_secs(2)).await;
+                // Run backward update first
+                match HybridStorage::update_data(self.clone(), true).await {
+                    Ok(_) => println!("Backward update completed"),
+                    Err(e) => eprintln!("Backward update failed: {}", e),
                 }
 
                 println!("Update cycle completed, waiting {} seconds", self.update_seconds);
@@ -121,16 +120,25 @@ impl HybridStorage {
             DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
                 match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
                     Some(client) => client.clone(),
-                    None => return None,
+                    None => {
+                        download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+                        return None
+                    },
                 }
             }
-            DataVendor::Oanda if OANDA_IS_CONNECTED.load(Ordering::SeqCst) => {
+            DataVendor::Oanda if oanda_connected()=> {
                 match OANDA_CLIENT.get() {
                     Some(client) => client.clone(),
-                    None => return None,
+                    None => {
+                        download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+                        return None
+                    },
                 }
             }
-            _ => return None,
+            _ => {
+                download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+                return None
+            },
         };
 
         // Check if already downloading
@@ -146,7 +154,9 @@ impl HybridStorage {
 
         Some(task::spawn(async move {
             // Add to download tasks first
-            download_tasks.write().await.push((symbol.name.clone(), base_data_type));
+            {
+                download_tasks.write().await.push((symbol.name.clone(), base_data_type));
+            }
 
             let _permit = match semaphore.acquire().await {
                 Ok(permit) => permit,
@@ -182,7 +192,7 @@ impl HybridStorage {
             let mut count = 0;
 
             // Only count OANDA symbols if enabled and config exists
-            if OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
+            if oanda_connected() {
                 if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
                     .join("credentials")
                     .join("oanda_credentials")
@@ -212,7 +222,7 @@ impl HybridStorage {
                     }
                 }
             }
-            //eprintln!("Total Symbols: {}", count);
+            eprintln!("Total Symbols: {}", count);
             count as u64
         };
         let prefix = match from_back {
@@ -235,15 +245,12 @@ impl HybridStorage {
         for vendor in DataVendor::iter() {
             match vendor {
                 DataVendor::Rithmic if !RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
-                    overall_pb.inc(1);
                     continue
                 },
-                DataVendor::Oanda if !OANDA_IS_CONNECTED.load(Ordering::SeqCst) => {
-                    overall_pb.inc(1);
+                DataVendor::Oanda if !oanda_connected() => {
                     continue
                 },
                 DataVendor::Test | DataVendor::Bitget => {
-                    overall_pb.inc(1);
                     continue
                 },
                 _ => (),
@@ -380,9 +387,13 @@ impl HybridStorage {
                 }
             }
         }
-        join_all(tasks).await;
-        overall_pb.set_position(total_symbols); // Set to total before clearing
+
+        if !tasks.is_empty() {
+            join_all(tasks).await;
+        }
+        overall_pb.set_position(total_symbols);
         overall_pb.finish_and_clear();
+
         Ok(())
     }
 
