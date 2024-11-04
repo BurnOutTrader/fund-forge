@@ -84,14 +84,14 @@ Resolution::Hours(1)
 ```
 Live Oanda Data is only avalable as `Resolution::Instant` because the live feed is a Quote feed, I will try to make a bar feed later.
 
-Rithmic Data is historical data available as
+Oanda historical data is available as
 ```rust
 Resolution::Ticks(1)  //1 tick history
 Resolution::Seconds(1) to Resolution::Seconds(60)
 Resolution::Minutes(1) to Resolution::Minutes(60)
 Resolution::Hours(1) to Resolution::Hours(24) // please dont try to build daily bars by using 24 hours, special consolidators will be build for daily, weekly, yearly etc later.
 ```
-Rithmic Data is live data available as all of the above plus quotes
+Rithmic historical data is available as all of the above plus quotes
 ```rust
 Resolution::Instant // for Quote feeds
 Resolution::Ticks(1) //1 tick feed
