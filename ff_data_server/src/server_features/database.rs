@@ -160,7 +160,7 @@ impl HybridStorage {
                 download_tasks.write().await.push((symbol.name.clone(), base_data_type));
             }
 
-            let _permit = match semaphore.acquire().await {
+            let permit = match semaphore.acquire().await {
                 Ok(permit) => permit,
                 Err(_) => {
                     // Remove from tasks if we couldn't get a permit
@@ -178,6 +178,7 @@ impl HybridStorage {
 
             // Remove from active tasks
             download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+            drop(permit);
         }))
     }
 
@@ -223,7 +224,7 @@ impl HybridStorage {
                     }
                 }
             }
-            eprintln!("Total Symbols: {}", count);
+            //eprintln!("Total Symbols: {}", count);
             count as u64
         };
         let prefix = match from_back {
@@ -360,7 +361,7 @@ impl HybridStorage {
                         }
 
                         // Only skip if we're moving backwards and we've already reached our target
-                        if from_back && start_time >= end_time - Duration::from_secs(60*60*72) {
+                        if from_back && start_time >= end_time - Duration::from_secs(60*60*120) {
                             overall_pb.inc(1);
                             continue;
                         }
