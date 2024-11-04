@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, TimeDelta, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
@@ -143,16 +143,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }
 
-        let mut resolutions = Vec::new();
-        resolutions.push(Resolution::Instant);
-        resolutions.push(Resolution::Ticks(1));
-        resolutions.push(Resolution::Seconds(1));
-        //we can pass in live here because backtest never calls this fn
-
-        if !resolutions.contains(&subscription.resolution) {
-            return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
-        }
-
         const BASEDATA_TYPES: &[BaseDataType] = &[BaseDataType::Ticks, BaseDataType::Quotes, BaseDataType::Candles];
         if !BASEDATA_TYPES.contains(&subscription.base_data_type) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
@@ -222,6 +212,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 let (num, res_type) = match subscription.resolution {
                     Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
                     Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
+                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar),
                     _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", self.data_vendor,subscription)) }
                 };
                 let req =RequestTimeBarUpdate {
@@ -293,14 +284,20 @@ impl VendorApiResponse for RithmicBrokerageClient {
                     self.bid_book.remove(&symbol);
                 }
             } else if subscription.base_data_type == BaseDataType::Candles {
+                let (num, res_type) = match subscription.resolution {
+                    Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
+                    Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
+                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar),
+                    _ => return DataServerResponse::SubscribeResponse { success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", self.data_vendor,subscription)) }
+                };
                 let req =RequestTimeBarUpdate {
                     template_id: 200,
                     user_msg: vec![],
                     symbol: Some(subscription.symbol.name.to_string()),
                     exchange: Some(exchange),
                     request: Some(2), //1 subscribe 2 unsubscribe
-                    bar_type: Some(BarType::SecondBar.into()),
-                    bar_type_period: Some(1),
+                    bar_type: Some(res_type.into()),
+                    bar_type_period: Some(num),
                 };
                 const PLANT: SysInfraType = SysInfraType::HistoryPlant;
                 self.send_message(&PLANT, req).await;
@@ -354,18 +351,26 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
         };
 
+        if base_data_type == BaseDataType::Ticks && resolution != Resolution::Ticks(1) {
+            progress_bar.finish_and_clear();
+            return Err(FundForgeError::ClientSideErrorDebug(format!("{}, Ticks data can only be requested with 1 tick resolution", symbol_name)))
+        }
+
         let data_storage = DATA_STORAGE.get().unwrap();
 
         let mut window_start = from;
 
-        let total_seconds = (Utc::now() - window_start).num_seconds();
-        let bar_len = match resolution {
-            Resolution::Ticks(_) => (total_seconds / (4 * 3600)) as u64 + 1,  // 4-hour chunks
-            Resolution::Seconds(interval) => ((total_seconds / interval as i64) / 3600) as u64 + 1,  // hourly chunks adjusted by interval
-            Resolution::Minutes(interval) => ((total_seconds / (interval as i64 * 60)) / (24 * 3600)) as u64 + 1,  // daily chunks adjusted by interval
-            Resolution::Hours(interval) => ((total_seconds / (interval as i64 * 3600)) / (7 * 24 * 3600)) as u64 + 1,  // weekly chunks adjusted by interval
-            _ => (total_seconds / (4 * 3600)) as u64 + 1,  // default to tick chunks
+        let total_seconds = (to - window_start).num_seconds();
+
+        let resolution_multiplier: TimeDelta = match resolution {
+            Resolution::Seconds(interval) => min(Duration::hours(4 * interval as i64), Duration::hours(24)),
+            Resolution::Minutes(interval) => min(Duration::hours(4 * interval as i64), Duration::hours(48)),
+            Resolution::Hours(interval) => min(Duration::hours(24 * interval as i64), Duration::hours(2000)),
+            _ => Duration::hours(4),
         };
+
+        // Calculate how many complete download windows we need
+        let bar_len = ((total_seconds as f64 / resolution_multiplier.num_seconds() as f64).ceil()) as u64;
 
         progress_bar.set_length(bar_len);
         progress_bar.set_style(
@@ -379,7 +384,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
-            let window_end = window_start + min(Duration::hours(4), Utc::now() - window_start);
+            let window_end = window_start + min(resolution_multiplier, Utc::now() - window_start);
             let to = match from_back {
                 true => to,
                 false => Utc::now(),

@@ -958,19 +958,21 @@ impl RithmicBrokerageClient {
         // Send the request based on data type
         let callback_id = self.generate_callback_id().await;
         self.historical_callbacks.insert(callback_id.clone(), sender);
-
         match base_data_type {
             BaseDataType::Candles => {
-                if resolution > Resolution::Seconds(1) {
-                    return
-                }
+                let (num, res_type) = match resolution {
+                    Resolution::Seconds(num) => (num as i32, BarType::SecondBar),
+                    Resolution::Minutes(num) => (num as i32, BarType::MinuteBar),
+                    Resolution::Hours(num) => (num as i32 * 60, BarType::MinuteBar),
+                    _ => return
+                };
                 let req = RequestTimeBarReplay {
                     template_id: 202,
                     user_msg: vec![callback_id.to_string()],
                     symbol: Some(symbol_name.clone()),
                     exchange: Some(exchange.to_string()),
-                    bar_type: Some(BarType::SecondBar.into()),
-                    bar_type_period: Some(1),
+                    bar_type: Some(res_type.into()),
+                    bar_type_period: Some(num),
                     start_index: Some(window_start.timestamp() as i32),
                     finish_index: Some(window_end.timestamp() as i32),
                     user_max_count: None,
