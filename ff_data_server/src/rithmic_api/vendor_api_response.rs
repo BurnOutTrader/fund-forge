@@ -406,7 +406,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             let permit = match self.historical_permits.acquire().await {
                 Ok(permit) => permit,
-                Err(_) => return Err(FundForgeError::ClientSideErrorDebug("Failed to acquire semaphore permit".to_string()))
+                Err(_) => {
+                    progress_bar.finish_and_clear();
+                    return Err(FundForgeError::ClientSideErrorDebug("Failed to acquire semaphore permit".to_string()))
+                }
             };
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end, sender).await;
@@ -464,7 +467,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
             progress_bar.inc(1);
         }
         progress_bar.finish_and_clear();
-
         Ok(())
     }
 }

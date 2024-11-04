@@ -713,72 +713,74 @@ impl HybridStorage {
         resolution: &Resolution,
         data_type: &BaseDataType,
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
+        // Start from Jan 1st of the earliest year in base_path
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
 
-        // Use tokio's async fs operations
-        let mut years: Vec<_> = match tokio::fs::read_dir(&base_path).await {
-            Ok(mut entries) => {
-                let mut dirs = Vec::new();
-                while let Ok(Some(entry)) = entries.next_entry().await {
-                    if entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false) {
-                        dirs.push(entry);
-                    }
-                }
-                dirs
-            },
-            Err(_) => return Ok(None),
-        };
-        years.sort_by_key(|e| e.path());
-
-        if let Some(year_dir) = years.first() {
-            let mut months: Vec<_> = match tokio::fs::read_dir(year_dir.path()).await {
-                Ok(mut entries) => {
-                    let mut dirs = Vec::new();
-                    while let Ok(Some(entry)) = entries.next_entry().await {
-                        if entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false) {
-                            dirs.push(entry);
-                        }
-                    }
-                    dirs
-                },
-                Err(_) => return Ok(None),
-            };
-            months.sort_by_key(|e| e.path());
-
-            if let Some(month_dir) = months.first() {
-                let mut days: Vec<_> = match tokio::fs::read_dir(month_dir.path()).await {
-                    Ok(mut entries) => {
-                        let mut files = Vec::new();
-                        while let Ok(Some(entry)) = entries.next_entry().await {
-                            if entry.file_name().to_string_lossy().ends_with(".bin") {
-                                files.push(entry);
-                            }
-                        }
-                        files
-                    },
-                    Err(_) => return Ok(None),
-                };
-                days.sort_by_key(|e| e.path());
-
-                if let Some(earliest_file) = days.first() {
-                    // Use a separate block to ensure mmap is dropped quickly
-                    let earliest_time = {
-                        if let Ok(mmap) = self.get_or_create_mmap(&earliest_file.path()) {
-                            if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
-                                day_data.into_iter().map(|d| d.time_closed_utc()).min()
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        }
-                    };
-                    return Ok(earliest_time);
-                }
+        // Get earliest year directory
+        let mut entries = tokio::fs::read_dir(&base_path).await?;
+        let mut years = Vec::new();
+        while let Ok(Some(entry)) = entries.next_entry().await {
+            if entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false) {
+                years.push(entry);
             }
         }
+
+        if years.is_empty() {
+            return Ok(None);
+        }
+
+        // Sort to get earliest year
+        let years = tokio::task::spawn_blocking(move || {
+            let mut years = years;
+            years.sort_by_key(|e| e.path());
+            years
+        }).await?;
+
+        // Start with January 1st of the earliest year
+        if let Some(year_dir) = years.first() {
+            let year: i32 = year_dir.file_name()
+                .to_string_lossy()
+                .parse()
+                .unwrap_or(2000);
+
+            let mut current_date = DateTime::<Utc>::from_naive_utc_and_offset(
+                NaiveDate::from_ymd_opt(year, 1, 1)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+                Utc,
+            );
+
+            // Try each day until we find data or reach end of year
+            while current_date.year() == year {
+                let file_path = self.get_file_path(symbol, resolution, data_type, &current_date, false);
+
+                if file_path.exists() {
+                    if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
+                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
+                            if let Some(earliest) = day_data.into_iter()
+                                .map(|d| d.time_closed_utc())
+                                .min() {
+                                return Ok(Some(earliest));
+                            }
+                        }
+                    }
+                }
+
+                current_date = DateTime::<Utc>::from_naive_utc_and_offset(
+                    current_date.date_naive()
+                        .succ_opt() // This properly handles month/year boundaries
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap(),
+                    Utc,
+                );
+            }
+        }
+
         Ok(None)
     }
+
 
     fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
         let path_str = file_path.to_string_lossy().to_string();
