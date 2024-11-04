@@ -17,7 +17,7 @@ use futures_util::future::join_all;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use memmap2::{Mmap};
 use serde::{Deserialize, Deserializer};
-use tokio::sync::{OnceCell, RwLock, Semaphore};
+use tokio::sync::{OnceCell, Semaphore};
 use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
@@ -44,7 +44,7 @@ pub struct HybridStorage {
     cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
     cache_is_updated: Arc<DashMap<String, bool>>,
     clear_cache_duration: Duration,
-    download_tasks: Arc<RwLock<Vec<(SymbolName, BaseDataType)>>>,
+    download_tasks: Arc<DashMap<(SymbolName, BaseDataType), JoinHandle<()>>>,
     options: ServerLaunchOptions,
     multi_bar: MultiProgress,
     download_semaphore: Arc<Semaphore>,
@@ -84,10 +84,13 @@ impl HybridStorage {
                 tokio::select! {
                 _ = shutdown_receiver.recv() => {
                     println!("Received shutdown signal, stopping update schedule");
+                        for task in self.download_tasks.iter() {
+                            task.value().abort();
+                        }
                     break;
                 }
                 _ = interval.tick() => {
-                    if !self.download_tasks.read().await.is_empty() {
+                    if !self.download_tasks.is_empty() {
                         println!("Active downloads detected, waiting 60s");
                         tokio::time::sleep(Duration::from_secs(60)).await;
                         continue;
@@ -107,7 +110,7 @@ impl HybridStorage {
     }
 
     pub async fn update_symbol(
-        download_tasks: Arc<RwLock<Vec<(SymbolName, BaseDataType)>>>,
+        download_tasks: Arc<DashMap<(SymbolName, BaseDataType), JoinHandle<()>>>,
         download_semaphore: Arc<Semaphore>,
         symbol: Symbol,
         resolution: Resolution,
@@ -122,7 +125,7 @@ impl HybridStorage {
                 match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
                     Some(client) => client.clone(),
                     None => {
-                        download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+                        download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
                         return None
                     },
                 }
@@ -131,21 +134,21 @@ impl HybridStorage {
                 match OANDA_CLIENT.get() {
                     Some(client) => client.clone(),
                     None => {
-                        download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+                        download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
                         return None
                     },
                 }
             }
             _ => {
-                download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+                download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
                 return None
             },
         };
 
         // Check if already downloading
         {
-            let tasks = download_tasks.read().await;
-            if tasks.iter().any(|(name, _)| name == &symbol.name) {
+
+            if download_tasks.contains_key(&(symbol.name.clone(), base_data_type.clone())) {
                 return None;
             }
         }
@@ -156,14 +159,14 @@ impl HybridStorage {
         Some(task::spawn(async move {
             // Add to download tasks first
             {
-                download_tasks.write().await.push((symbol.name.clone(), base_data_type));
+                download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
             }
 
             let permit = match semaphore.acquire().await {
                 Ok(permit) => permit,
                 Err(_) => {
                     // Remove from tasks if we couldn't get a permit
-                    download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+                    download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
                     return;
                 }
             };
@@ -176,7 +179,7 @@ impl HybridStorage {
             }
 
             // Remove from active tasks
-            download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+            download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
             drop(permit);
         }))
     }
@@ -279,11 +282,6 @@ impl HybridStorage {
 
                 if !symbol_configs.is_empty() {
                     for symbol_config in symbol_configs {
-                        if self.download_tasks.read().await.iter().any(|(name, _)| name == &symbol_config.symbol_name) {
-                            overall_pb.inc(1);
-                            continue;
-                        }
-
                         let market_type = match vendor {
                             DataVendor::Oanda => {
                                 if let Some(client) = OANDA_CLIENT.get() {
