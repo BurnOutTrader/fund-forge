@@ -98,14 +98,14 @@ You can override the default engine logic when making subscriptions to force the
 
 ### For Free Historical Data
 #### Oanda Data
-The server will automatically download historical data for your, this will depend on what symbols and data types you request in you credentials/{Bokerage}_credentials/download_list.toml file.
+The server will automatically download historical data for you, this will depend on what symbols and data types you request in you credentials/{Bokerage}_credentials/download_list.toml file.
 
 [Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md)
 
 See the Oanda file [here](ff_data_server/data/credentials/oanda_credentials/download_list.toml) for an example.
 
 #### Rithmic Data
-The server will automatically download historical data for your, this will depend on what symbols and data types you request in you credentials/{Bokerage}_credentials/download_list.toml file.
+The server will automatically download historical data for you, this will depend on what symbols and data types you request in you credentials/{Bokerage}_credentials/download_list.toml file.
 
 [Rithmic Setup](ff_data_server/src/rithmic_api/RITHMIC_SETUP.md)
 
