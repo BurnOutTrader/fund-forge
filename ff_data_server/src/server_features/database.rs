@@ -92,11 +92,11 @@ impl HybridStorage {
                     Err(e) => eprintln!("Forward update failed: {}", e),
                 }
 
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                //tokio::time::sleep(Duration::from_secs(2)).await;
 
                 //todo, moving data back is causing some sort of lock contention, no fucking idea.
                 // Run backward update first
-            /*    match HybridStorage::update_data(self.clone(), true).await {
+             /*   match HybridStorage::update_data(self.clone(), true).await {
                     Ok(_) => println!("Backward update completed"),
                     Err(e) => eprintln!("Backward update failed: {}", e),
                 }*/
@@ -361,7 +361,7 @@ impl HybridStorage {
                         }
 
                         // Only skip if we're moving backwards and we've already reached our target
-                        if from_back && start_time >= end_time - Duration::from_secs(60*60*120) {
+                        if from_back && start_time >= end_time - Duration::from_secs(60*60*24) {
                             overall_pb.inc(1);
                             continue;
                         }
