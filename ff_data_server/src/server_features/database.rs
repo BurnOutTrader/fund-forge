@@ -171,8 +171,7 @@ impl HybridStorage {
 
             match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb).await {
                 Ok(_) => {},
-                Err(_) => {
-                }
+                Err(_) => {}
             }
 
             // Remove from active tasks
@@ -714,41 +713,69 @@ impl HybridStorage {
     ) -> Result<Option<DateTime<Utc>>, Box<dyn std::error::Error>> {
         let base_path = self.get_base_path(symbol, resolution, data_type, false);
 
-        // Attempt to get the earliest year directory
-        let mut years: Vec<_> = match fs::read_dir(&base_path) {
-            Ok(entries) => entries.filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).collect(),
-            Err(_) => return Ok(None), // No directory for this path, return None
+        // Use tokio's async fs operations
+        let mut years: Vec<_> = match tokio::fs::read_dir(&base_path).await {
+            Ok(mut entries) => {
+                let mut dirs = Vec::new();
+                while let Ok(Some(entry)) = entries.next_entry().await {
+                    if entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false) {
+                        dirs.push(entry);
+                    }
+                }
+                dirs
+            },
+            Err(_) => return Ok(None),
         };
         years.sort_by_key(|e| e.path());
 
         if let Some(year_dir) = years.first() {
-            // Attempt to get the earliest month directory within the earliest year
-            let mut months: Vec<_> = match fs::read_dir(year_dir.path()) {
-                Ok(entries) => entries.filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).collect(),
-                Err(_) => return Ok(None), // No month directory, return None
+            let mut months: Vec<_> = match tokio::fs::read_dir(year_dir.path()).await {
+                Ok(mut entries) => {
+                    let mut dirs = Vec::new();
+                    while let Ok(Some(entry)) = entries.next_entry().await {
+                        if entry.file_type().await.map(|ft| ft.is_dir()).unwrap_or(false) {
+                            dirs.push(entry);
+                        }
+                    }
+                    dirs
+                },
+                Err(_) => return Ok(None),
             };
             months.sort_by_key(|e| e.path());
 
             if let Some(month_dir) = months.first() {
-                // Attempt to get the earliest day file within the earliest month
-                let mut days: Vec<_> = match fs::read_dir(month_dir.path()) {
-                    Ok(entries) => entries.filter_map(|e| e.ok())
-                        .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("bin"))
-                        .collect(),
-                    Err(_) => return Ok(None), // No day files, return None
+                let mut days: Vec<_> = match tokio::fs::read_dir(month_dir.path()).await {
+                    Ok(mut entries) => {
+                        let mut files = Vec::new();
+                        while let Ok(Some(entry)) = entries.next_entry().await {
+                            if entry.file_name().to_string_lossy().ends_with(".bin") {
+                                files.push(entry);
+                            }
+                        }
+                        files
+                    },
+                    Err(_) => return Ok(None),
                 };
                 days.sort_by_key(|e| e.path());
 
                 if let Some(earliest_file) = days.first() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&earliest_file.path()) {
-                        if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
-                            return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).min());
+                    // Use a separate block to ensure mmap is dropped quickly
+                    let earliest_time = {
+                        if let Ok(mmap) = self.get_or_create_mmap(&earliest_file.path()) {
+                            if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
+                                day_data.into_iter().map(|d| d.time_closed_utc()).min()
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
                         }
-                    }
+                    };
+                    return Ok(earliest_time);
                 }
             }
         }
-        Ok(None) // No data found, return None
+        Ok(None)
     }
 
     fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
