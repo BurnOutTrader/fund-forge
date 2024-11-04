@@ -771,8 +771,17 @@ impl SymbolSubscriptionHandler {
                     history.add(data.clone());
                 }
             }
-
+            let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+            match self.strategy_event_sender.send(event).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
+            }
             return Ok((history, DataSubscriptionEvent::Subscribed(new_subscription)))
+        }
+        let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
+        match self.strategy_event_sender.send(event).await {
+            Ok(_) => {}
+            Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
         }
         Ok((RollingWindow::new(history_to_retain), DataSubscriptionEvent::Subscribed(new_subscription)))
     }
