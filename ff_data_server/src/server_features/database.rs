@@ -78,33 +78,34 @@ impl HybridStorage {
         let mut shutdown_receiver = subscribe_server_shutdown();
         tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
-            interval.tick().await; // First tick happens immediately, so consume it
-
             loop {
                 tokio::select! {
-                _ = shutdown_receiver.recv() => {
-                    println!("Received shutdown signal, stopping update schedule");
+                    _ = shutdown_receiver.recv() => {
+                        println!("Received shutdown signal, stopping update schedule");
                         for task in self.download_tasks.iter() {
                             task.value().abort();
                         }
-                    break;
-                }
-                _ = interval.tick() => {
-                    if !self.download_tasks.is_empty() {
-                        println!("Active downloads detected, waiting 60s");
-                        tokio::time::sleep(Duration::from_secs(60)).await;
-                        continue;
+                        break;
                     }
+                    _ = interval.tick() => {
+                        if !self.download_tasks.is_empty() {
+                            println!("Active downloads detected, waiting 60s");
+                            tokio::time::sleep(Duration::from_secs(60)).await;
+                            interval = tokio::time::interval(Duration::from_secs(60));
+                            continue;
+                        } else {
+                            interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
+                        }
 
-                    // Run forward update
-                    match HybridStorage::update_data(self.clone(), false).await {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Forward update failed: {}", e),
+                        // Run forward update
+                        match HybridStorage::update_data(self.clone(), false).await {
+                            Ok(_) => println!("Forward update completed"),
+                            Err(e) => eprintln!("Forward update failed: {}", e),
+                        }
+
+                        println!("Update cycle completed, waiting {} seconds", self.update_seconds);
                     }
-
-                    println!("Update cycle completed, waiting {} seconds", self.update_seconds);
                 }
-            }
             }
         });
     }
@@ -124,44 +125,27 @@ impl HybridStorage {
             DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
                 match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
                     Some(client) => client.clone(),
-                    None => {
-                        download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
-                        return None
-                    },
+                    None => return None,
                 }
             }
             DataVendor::Oanda if oanda_connected()=> {
                 match OANDA_CLIENT.get() {
                     Some(client) => client.clone(),
-                    None => {
-                        download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
-                        return None
-                    },
+                    None => return None,
                 }
             }
-            _ => {
-                download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
-                return None
-            },
+            _ => return None,
         };
 
-        // Check if already downloading
-        {
 
-            if download_tasks.contains_key(&(symbol.name.clone(), base_data_type.clone())) {
-                return None;
-            }
+        if download_tasks.contains_key(&(symbol.name.clone(), base_data_type.clone())) {
+            return None;
         }
 
         let semaphore = download_semaphore.clone();
         let download_tasks = download_tasks.clone();
 
         Some(task::spawn(async move {
-            // Add to download tasks first
-            {
-                download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
-            }
-
             let permit = match semaphore.acquire().await {
                 Ok(permit) => permit,
                 Err(_) => {
@@ -187,65 +171,9 @@ impl HybridStorage {
     pub async fn update_data(self: Arc<Self>, from_back: bool) -> Result<(), FundForgeError> {
         let options = self.options.clone();
         let multi_bar = self.multi_bar.clone();
-        let mut tasks = vec![];
         // Create a semaphore to limit concurrent downloads
         let semaphore = self.download_semaphore.clone();
 
-        // Calculate total symbols from available vendors only
-        let total_symbols = {
-            let mut count = 0;
-
-            // Only count OANDA symbols if enabled and config exists
-            if oanda_connected() {
-                if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
-                    .join("credentials")
-                    .join("oanda_credentials")
-                    .join("download_list.toml"))
-                {
-                    if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
-                        if OANDA_CLIENT.get().is_some() {
-                            count += config.symbols.len();
-                        }
-                    }
-                }
-            }
-
-            // Only count Rithmic symbols if enabled and client exists
-            if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) {
-                if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
-                    .join("credentials")
-                    .join("rithmic_credentials")
-                    .join("download_list.toml"))
-                {
-                    if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
-                        if let Some(system) = get_rithmic_market_data_system() {
-                            if RITHMIC_CLIENTS.get(&system).is_some() {
-                                count += config.symbols.len();
-                            }
-                        }
-                    }
-                }
-            }
-            //eprintln!("Total Symbols: {}", count);
-            count as u64
-        };
-        let prefix = match from_back {
-            true => "Downloads Moving Historical Data Start Date Backwards",
-            false => "Downloads Moving Historical Data End Date Forwards",
-        };
-
-        // Only create overall progress if we have symbols to process
-        let overall_pb = match total_symbols > 0 {
-            true => {
-                let overall_pb = multi_bar.add(ProgressBar::new(total_symbols));
-                overall_pb.set_style(ProgressStyle::default_bar()
-                    .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                    .unwrap());
-                overall_pb.set_prefix(format!("{} @ {} Utc",prefix, Utc::now().format("%Y-%m-%d %H:%M")));
-                overall_pb
-            }
-            false => return Ok(()),
-        };
         for vendor in DataVendor::iter() {
             match vendor {
                 DataVendor::Rithmic if !RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
@@ -267,7 +195,6 @@ impl HybridStorage {
                 let content = match std::fs::read_to_string(&path) {
                     Ok(content) => content,
                     Err(e) => {
-                        overall_pb.finish_and_clear();
                         return Err(FundForgeError::ServerErrorDebug(e.to_string()));
                     }
                 };
@@ -275,7 +202,6 @@ impl HybridStorage {
                 let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
                     Ok(symbol_object) => symbol_object.symbols,
                     Err(e) => {
-                        overall_pb.finish_and_clear();
                         return Err(FundForgeError::ServerErrorDebug(e.to_string()));
                     }
                 };
@@ -288,11 +214,9 @@ impl HybridStorage {
                                     if let Some(instrument) = client.instruments_map.get(&symbol_config.symbol_name) {
                                         instrument.value().market_type
                                     } else {
-                                        overall_pb.inc(1);
                                         continue;
                                     }
                                 } else {
-                                    overall_pb.inc(1);
                                     continue;
                                 }
                             },
@@ -300,13 +224,11 @@ impl HybridStorage {
                                 match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
                                     Some(exchange) => MarketType::Futures(exchange),
                                     None => {
-                                        overall_pb.inc(1);
                                         continue
                                     },
                                 }
                             }
                             _ => {
-                                overall_pb.inc(1);
                                 continue
                             }
                         };
@@ -345,7 +267,6 @@ impl HybridStorage {
                             match earliest {
                                 Some(time) => time,
                                 None => {
-                                    overall_pb.inc(1);
                                     continue
                                 },
                             }
@@ -353,13 +274,11 @@ impl HybridStorage {
 
                         // Verify chronological order for backwards downloads
                         if end_time <= start_time {
-                            overall_pb.inc(1);
                             continue;
                         }
 
                         // Only skip if we're moving backwards and we've already reached our target
                         if from_back && start_time >= end_time - Duration::from_secs(60*60*24) {
-                            overall_pb.inc(1);
                             continue;
                         }
 
@@ -369,7 +288,7 @@ impl HybridStorage {
                         // Create and configure symbol progress bar with an initial length
                         let symbol_pb = multi_bar.add(ProgressBar::new(1));
                         if let Some(spawn_handle) = HybridStorage::update_symbol(
-                            download_tasks,
+                            download_tasks.clone(),
                             semaphore,
                             symbol.clone(),
                             symbol_config.resolution,
@@ -379,20 +298,12 @@ impl HybridStorage {
                             end_time,
                             from_back
                         ).await {
-                            tasks.push(spawn_handle);
+                            download_tasks.insert((symbol_config.symbol_name, symbol_config.base_data_type), spawn_handle);
                         }
-                        overall_pb.inc(1);
                     }
                 }
             }
         }
-
-        if !tasks.is_empty() {
-            join_all(tasks).await;
-        }
-        overall_pb.set_position(total_symbols);
-        overall_pb.finish_and_clear();
-
         Ok(())
     }
 
