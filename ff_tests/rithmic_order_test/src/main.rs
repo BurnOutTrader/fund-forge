@@ -35,15 +35,15 @@ async fn main() {
         NaiveDate::from_ymd_opt(2024, 10, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         NaiveDate::from_ymd_opt(2024, 11, 15).unwrap().and_hms_opt(0, 0, 0).unwrap(),
         Australia::Sydney,
-        Duration::hours(1),
+        Duration::hours(8),
         vec![
-            DataSubscription::new_custom(
+     /*       DataSubscription::new_custom(
                 symbol_name.clone(),
                 DataVendor::Rithmic,
                 Resolution::Seconds(15),
                 MarketType::Futures(FuturesExchange::CME),
                 CandleType::CandleStick
-            ),
+            ),*/
         ],
         false,
         100,
@@ -118,20 +118,20 @@ pub async fn on_data_received(
                                 //LONG CONDITIONS
                                 {
                                     if count == 5 {
-                                        println!("Strategy: Enter Long, Time {}", strategy.time_local());
+                                        println!("Rithmic Order Test: Enter Long, Time {}", strategy.time_local());
                                         entry_order_id = strategy.limit_order(&candle.symbol.name, None ,&account_1, None, dec!(1), OrderSide::Buy, candle.low - dec!(10), TimeInForce::GTC, String::from("Enter Long")).await;
                                     }
 
                                     let open_pnl = strategy.pnl(&account_1, &symbol_code);
                                     let is_long = strategy.is_long(&account_1, &symbol_code);
-                                    println!("Strategy Long = {}, Pnl = {}", is_long, open_pnl);
+                                    println!("Rithmic Order Test Long = {}, Pnl = {}", is_long, open_pnl);
 
                                     // Remove order_placed from exit condition
                                     if count == 10 && !exit_sent {
                                         exit_sent = true;
                                         strategy.cancel_orders_account(account_1.clone()).await;
                                         let position_size: Decimal = strategy.position_size(&account_1, &symbol_code);
-                                        println!("Strategy: Exit Long, Time {}: Size: {}", strategy.time_local(), position_size);
+                                        println!("Rithmic Order Test: Exit Long, Time {}: Size: {}", strategy.time_local(), position_size);
                                         let _exit_order_id = strategy.exit_long(&candle.symbol.name, None, &account_1, None, position_size, String::from("Exit Long")).await;
                                     }
                                 }
@@ -172,10 +172,10 @@ pub async fn on_data_received(
                 let quantity = strategy.position_size(&account_1, &symbol_code);
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                 println!("{}", msg.as_str().purple());
-                println!("Strategy: Open Quantity: {}", quantity);
+                println!("Rithmic Order Test: Open Quantity: {}", quantity);
             }
             StrategyEvent::OrderEvents(event) => {
-                let msg = format!("Strategy: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
+                let msg = format!("Rithmic Order Test: Order Event: {}, Time: {}", event, event.time_local(strategy.time_zone()));
                 match event {
                     OrderUpdateEvent::OrderRejected { .. } | OrderUpdateEvent::OrderUpdateRejected { .. } => {
                         strategy.print_ledger(event.account()).await;
@@ -186,7 +186,7 @@ pub async fn on_data_received(
             }
             StrategyEvent::WarmUpComplete => {
                 warmup_complete = true;
-                println!("Warmup Complete");
+                println!("Rithmic Order Test: Warmup Complete");
             }
             _ => {}
         }

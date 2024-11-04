@@ -51,7 +51,7 @@ pub(crate) async fn live_warm_up(
         }
         let strategy_subscriptions = subscription_handler.strategy_subscriptions().await;
         for subscription in &strategy_subscriptions {
-            println!("Historical Engine: Strategy Subscription: {}", subscription);
+            println!("Live Warmup: Strategy Subscription: {}", subscription);
         }
         let mut last_time = warm_up_start_time.clone();
         let mut first_iteration = true;
@@ -68,20 +68,10 @@ pub(crate) async fn live_warm_up(
             }
             let mut time_slices = match get_historical_data(primary_subscriptions.clone(), last_time.clone(), to_time).await {
                 Ok(time_slices) => {
-                    if time_slices.is_empty() && tick_over_no_data {
-                        println!("Live Warmup: No data period, weekend or holiday: ticking through at buffering resolution, data will resume shortly");
-                    } else if time_slices.is_empty() && !tick_over_no_data {
+                    if time_slices.is_empty() {
                         println!("Live Warmup: No data period, weekend or holiday: skipping to next day");
                         last_time = to_time + buffer_duration;
                         continue 'main_loop
-                    }
-                    if to_time.day() == Utc::now().day() {
-                        let event = StrategyEvent::WarmUpComplete;
-                        match strategy_event_sender.send(event).await {
-                            Ok(_) => {}
-                            Err(e) => eprintln!("Historical Engine: Failed to send event: {}", e)
-                        }
-                        break 'main_loop
                     }
                     time_slices
                 },
