@@ -94,10 +94,10 @@ impl HybridStorage {
 
                 tokio::time::sleep(Duration::from_secs(2)).await;
                 // Run backward update first
-                match HybridStorage::update_data(self.clone(), true).await {
+            /*    match HybridStorage::update_data(self.clone(), true).await {
                     Ok(_) => println!("Backward update completed"),
                     Err(e) => eprintln!("Backward update failed: {}", e),
-                }
+                }*/
 
                 println!("Update cycle completed, waiting {} seconds", self.update_seconds);
                 interval.tick().await;
