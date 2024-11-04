@@ -13,8 +13,7 @@ use std::time::Duration;
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use dashmap::DashMap;
 use futures::future;
-use futures_util::future::join_all;
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar};
 use memmap2::{Mmap};
 use serde::{Deserialize, Deserializer};
 use tokio::sync::{OnceCell, Semaphore};
@@ -73,7 +72,7 @@ impl HybridStorage {
     }
 
     pub fn run_update_schedule(self: Arc<Self>) {
-        println!("Initializing update schedule with {} second interval", self.update_seconds);
+        //println!("Initializing update schedule with {} second interval", self.update_seconds);
 
         let mut shutdown_receiver = subscribe_server_shutdown();
         tokio::spawn(async move {
@@ -82,7 +81,7 @@ impl HybridStorage {
 
             // Initial update on startup - first forward then backward
             match HybridStorage::update_data(self.clone(), false).await {
-                Ok(_) => println!("Initial forward update completed"),
+                Ok(_) => { }
                 Err(e) => eprintln!("Initial forward update failed: {}", e),
             }
 
@@ -93,7 +92,7 @@ impl HybridStorage {
 
             // Run backward update after forward completes
             match HybridStorage::update_data(self.clone(), true).await {
-                Ok(_) => println!("Initial backward update completed"),
+                Ok(_) => {},
                 Err(e) => eprintln!("Initial backward update failed: {}", e),
             }
 
@@ -108,7 +107,6 @@ impl HybridStorage {
                     }
                     _ = interval.tick() => {
                         if !self.download_tasks.is_empty() {
-                            println!("Active downloads detected, waiting 60s");
                             tokio::time::sleep(Duration::from_secs(60)).await;
                             interval = tokio::time::interval(Duration::from_secs(60));
                             continue;
@@ -118,7 +116,7 @@ impl HybridStorage {
 
                         // Run forward update
                         match HybridStorage::update_data(self.clone(), false).await {
-                            Ok(_) => println!("Forward update completed"),
+                            Ok(_) => {},
                             Err(e) => eprintln!("Forward update failed: {}", e),
                         }
 
@@ -129,11 +127,9 @@ impl HybridStorage {
 
                         // Run backward update after forward completes
                         match HybridStorage::update_data(self.clone(), true).await {
-                            Ok(_) => println!("Backward update completed"),
+                            Ok(_) => {},
                             Err(e) => eprintln!("Backward update failed: {}", e),
                         }
-
-                        println!("Update cycle completed, waiting {} seconds", self.update_seconds);
                     }
                 }
             }
