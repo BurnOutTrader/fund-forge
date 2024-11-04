@@ -93,6 +93,8 @@ impl HybridStorage {
                 }
 
                 tokio::time::sleep(Duration::from_secs(2)).await;
+
+                //todo, moving data back is causing some sort of lock contention, no fucking idea.
                 // Run backward update first
             /*    match HybridStorage::update_data(self.clone(), true).await {
                     Ok(_) => println!("Backward update completed"),
