@@ -426,7 +426,7 @@ fn parse_tick_response(response: &ResponseTickBarReplay) -> Option<Tick> {
 }
 
 fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
-    //println!("ResponseTimeBarReplay: {:?}", response);
+    println!("ResponseTimeBarReplay: {:?}", response);
     // Check if all required price fields are present
     let (open, high, low, close) = match (
         response.open_price,
@@ -461,27 +461,41 @@ fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
         None => return None,
     };
 
-    let resolution = match response.r#type.clone() {
+    let mut resolution = match response.r#type.clone() {
         Some(type_str) => {
-            // Try parsing as BarType first
-            match BarType::from_str_name(type_str.to_string().as_str()) {
-                Some(BarType::MinuteBar) => Resolution::Minutes(period as u64),
-                Some(BarType::SecondBar) => Resolution::Seconds(period as u64),
-                None => {
-                    // Fall back to numeric checks if not a recognized bar type string
-                    match type_str{
-                        1 => {
-                           Resolution::Seconds(period as u64)
-                        },
-                        2 => Resolution::Minutes(period as u64),
-                        _ => return None, // Unsupported bar types
+            match type_str {
+                1 => Resolution::Seconds(period as u64),
+                2 => Resolution::Minutes(period as u64),
+                // Try parsing as BarType first
+                _ => match BarType::from_str_name(type_str.to_string().as_str()) {
+                    Some(BarType::MinuteBar) => Resolution::Minutes(period as u64),
+                    Some(BarType::SecondBar) => Resolution::Seconds(period as u64),
+                    None => {
+                        // Fall back to numeric checks if not a recognized bar type string
+                        match type_str{
+                            1 => {
+                               Resolution::Seconds(period as u64)
+                            },
+                            2 => Resolution::Minutes(period as u64),
+                            _ => return None, // Unsupported bar types
+                        }
                     }
+                    _ => {
+                        match i32::from_str(type_str.to_string().as_str()) {
+                            Ok(1) => Resolution::Seconds(period as u64),
+                            Ok(2) => Resolution::Minutes(period as u64),
+                            _ => return None, // Unsupported bar types
+                        }
+                    }, // Unsupported bar types
                 }
-                _ => return None, // Unsupported bar types
             }
         }
         None => return None,
     };
+
+    if resolution == Resolution::Seconds(60) {
+        resolution = Resolution::Minutes(1);
+    }
 
     //println!("resolution: {:?}", resolution);
 

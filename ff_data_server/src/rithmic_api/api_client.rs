@@ -43,7 +43,7 @@ use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::position::PositionId;
 use uuid::Uuid;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
+use crate::{get_data_folder, rithmic_api, subscribe_server_shutdown, ServerLaunchOptions};
 use crate::rithmic_api::client_base::api_base::{RithmicApiClient, TEMPLATE_VERSION};
 use crate::rithmic_api::client_base::credentials::RithmicCredentials;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
@@ -961,8 +961,13 @@ impl RithmicBrokerageClient {
         match base_data_type {
             BaseDataType::Candles => {
                 let (num, res_type) = match resolution {
-                    Resolution::Seconds(num) => (num as i32, 1),
-                    Resolution::Minutes(num) => (num as i32, 2),
+                    Resolution::Seconds(num) => (num as i32, rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::BarType::SecondBar.into()),
+                    Resolution::Minutes(num) =>
+                        if num == 1 {
+                            (60, rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::BarType::SecondBar.into())
+                        }else {
+                            (num as i32, rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::BarType::MinuteBar.into())
+                        }
                     _ => return
                 };
                 //println!("Requesting candles for {} {} {} {} {} {}", symbol_name, exchange, window_start, window_end, num, res_type);
