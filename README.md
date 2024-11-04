@@ -94,7 +94,7 @@ Resolution::Seconds(1) to Resolution::Seconds(60)
 Resolution::Minutes(1) to Resolution::Minutes(?)
 ```
 By default the engine will try to use the lowest suitable resolution data as primary data feeds, both in historical testing and live mode.
-You can override the default engine logic when making subscriptions to force the engine to use the historical data of you choosing, see [Strategies](ff_standard_lib/src/strategies/STRATEGIES_README.md/#subscribe-override) for more info.
+You can override the default engine logic when making subscriptions to force the engine to use the live feed or historical data of your choosing, see [Strategies](ff_standard_lib/src/strategies/STRATEGIES_README.md/#subscribe-override) for more info.
 
 ### For Free Historical Data
 #### Oanda Data
