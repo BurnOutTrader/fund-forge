@@ -1,7 +1,7 @@
 use std::cmp::min;
 use std::collections::BTreeMap;
 use async_trait::async_trait;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Duration, TimeDelta, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{RequestMarketDataUpdate, RequestTimeBarUpdate};
@@ -360,14 +360,17 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let mut window_start = from;
 
-        let total_seconds = (Utc::now() - window_start).num_seconds();
-        let bar_len = match resolution {
-            Resolution::Ticks(_) => (total_seconds / (4 * 3600)) as u64 + 1,  // 4-hour chunks
-            Resolution::Seconds(interval) => ((total_seconds / interval as i64) / 3600) as u64 + 1,  // hourly chunks adjusted by interval
-            Resolution::Minutes(interval) => ((total_seconds / (interval as i64 * 60)) / (24 * 3600)) as u64 + 1,  // daily chunks adjusted by interval
-            Resolution::Hours(interval) => ((total_seconds / (interval as i64 * 3600)) / (7 * 24 * 3600)) as u64 + 1,  // weekly chunks adjusted by interval
-            _ => (total_seconds / (4 * 3600)) as u64 + 1,  // default to tick chunks
+        let total_seconds = (to - window_start).num_seconds();
+
+        let resolution_multiplier: TimeDelta = match resolution {
+            Resolution::Seconds(interval) => min(Duration::hours(4 * interval as i64), Duration::hours(24)),
+            Resolution::Minutes(interval) => min(Duration::hours(4 * interval as i64), Duration::hours(48)),
+            Resolution::Hours(interval) => min(Duration::hours(24 * interval as i64), Duration::hours(2000)),
+            _ => Duration::hours(4),
         };
+
+        // Calculate how many complete download windows we need
+        let bar_len = ((total_seconds as f64 / resolution_multiplier.num_seconds() as f64).ceil()) as u64;
 
         progress_bar.set_length(bar_len);
         progress_bar.set_style(
@@ -381,7 +384,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
-            let window_end = window_start + min(Duration::hours(4), Utc::now() - window_start);
+            let window_end = window_start + min(resolution_multiplier, Utc::now() - window_start);
             let to = match from_back {
                 true => to,
                 false => Utc::now(),
