@@ -365,8 +365,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let resolution_multiplier: TimeDelta = match resolution {
             Resolution::Seconds(interval) => min(Duration::hours(4 * interval as i64), Duration::hours(24)),
             Resolution::Minutes(interval) => min(Duration::hours(4 * interval as i64), Duration::hours(48)),
-            Resolution::Hours(interval) => min(Duration::hours(24 * interval as i64), Duration::hours(2000)),
-            _ => Duration::hours(4),
+            Resolution::Hours(_) => return Err(FundForgeError::ClientSideErrorDebug("Hours resolution not supported for historical data".to_string())),
+            Resolution::Ticks(_) | Resolution::Instant => Duration::hours(4),
         };
 
         // Calculate how many complete download windows we need

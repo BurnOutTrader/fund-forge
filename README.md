@@ -89,15 +89,13 @@ Oanda historical data is available as
 Resolution::Ticks(1)  //1 tick history
 Resolution::Seconds(1) to Resolution::Seconds(60)
 Resolution::Minutes(1) to Resolution::Minutes(60)
-Resolution::Hours(1) to Resolution::Hours(24) // please dont try to build daily bars by using 24 hours, special consolidators will be build for daily, weekly, yearly etc later.
 ```
 Rithmic historical data is available as all of the above plus quotes
 ```rust
 Resolution::Instant // for Quote feeds
 Resolution::Ticks(1) //1 tick feed
 Resolution::Seconds(1) to Resolution::Seconds(60)
-Resolution::Minutes(1) to Resolution::Minutes(60)
-Resolution::Hours(1) to Resolution::Hours(24) // please dont try to build daily bars by using 24 hours, special consolidators will be build for daily, weekly, yearly etc later.
+Resolution::Minutes(1) to Resolution::Minutes(?)
 ```
 By default the engine will try to use the lowest suitable resolution data as primary data feeds, both in historical testing and live mode.
 You can override the default engine logic when making subscriptions to force the engine to use the historical data of you choosing, see [Strategies](ff_standard_lib/src/strategies/STRATEGIES_README.md/#subscribe-override) for more info.

@@ -446,6 +446,29 @@ fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
     let marker = response.marker?;
     let datetime = Utc.timestamp_opt(marker as i64, 0).single()?;
 
+    let period = match response.period.clone() {
+        Some(p) => match p.parse::<u64>().ok() {
+            None => return None,
+            Some(period) => period
+        },
+        None => return None,
+    };
+
+    let resolution = match response.r#type.clone() {
+        Some(num) => {
+            let bar_type = match BarType::try_from(num) {
+                Ok(bar_type) => bar_type,
+                Err(_) => return None, // Exit if bar type conversion fails
+            };
+
+            match (bar_type, period) {
+                (BarType::SecondBar, p) => Resolution::Seconds(p),
+                (BarType::MinuteBar, p) => Resolution::Minutes(p),
+                (BarType::DailyBar, _) | (BarType::WeeklyBar, _) => return None, // Unsupported bar types
+            }
+        }
+        None => return None, // Exit if msg.r#type is None
+    };
 
     Some(Candle {
         symbol: Symbol::new(symbol.clone(), DataVendor::Rithmic, MarketType::Futures(exchange)),
@@ -459,7 +482,7 @@ fn parse_time_bar(response: &ResponseTimeBarReplay) -> Option<Candle> {
         range: Price::from_f64(range).unwrap(),
         time: datetime.to_string(),
         is_closed: true,
-        resolution: Resolution::Seconds(1),
+        resolution,
         candle_type: CandleType::CandleStick,
     })
 }
