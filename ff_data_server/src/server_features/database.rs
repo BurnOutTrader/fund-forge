@@ -33,7 +33,7 @@ use crate::oanda_api::api_client::{oanda_connected, OANDA_CLIENT};
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
-use crate::ServerLaunchOptions;
+use crate::{subscribe_server_shutdown, ServerLaunchOptions};
 
 pub static DATA_STORAGE: OnceCell<Arc<HybridStorage>> = OnceCell::const_new();
 
@@ -75,34 +75,33 @@ impl HybridStorage {
     pub fn run_update_schedule(self: Arc<Self>) {
         println!("Initializing update schedule with {} second interval", self.update_seconds);
 
-        let _ = tokio::spawn(async move {
+        let mut shutdown_receiver = subscribe_server_shutdown();
+        tokio::spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
             interval.tick().await; // First tick happens immediately, so consume it
 
             loop {
-                if !self.download_tasks.read().await.is_empty() {
-                    println!("Active downloads detected, waiting 60s");
-                    tokio::time::sleep(Duration::from_secs(60)).await;
-                    continue;
+                tokio::select! {
+                _ = shutdown_receiver.recv() => {
+                    println!("Received shutdown signal, stopping update schedule");
+                    break;
                 }
+                _ = interval.tick() => {
+                    if !self.download_tasks.read().await.is_empty() {
+                        println!("Active downloads detected, waiting 60s");
+                        tokio::time::sleep(Duration::from_secs(60)).await;
+                        continue;
+                    }
 
-                // Run forward update
-                match HybridStorage::update_data(self.clone(), false).await {
-                    Ok(_) => println!("Forward update completed"),
-                    Err(e) => eprintln!("Forward update failed: {}", e),
+                    // Run forward update
+                    match HybridStorage::update_data(self.clone(), false).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Forward update failed: {}", e),
+                    }
+
+                    println!("Update cycle completed, waiting {} seconds", self.update_seconds);
                 }
-
-                //tokio::time::sleep(Duration::from_secs(2)).await;
-
-                //todo, moving data back is causing some sort of lock contention, no fucking idea.
-                // Run backward update first
-             /*   match HybridStorage::update_data(self.clone(), true).await {
-                    Ok(_) => println!("Backward update completed"),
-                    Err(e) => eprintln!("Backward update failed: {}", e),
-                }*/
-
-                println!("Update cycle completed, waiting {} seconds", self.update_seconds);
-                interval.tick().await;
+            }
             }
         });
     }

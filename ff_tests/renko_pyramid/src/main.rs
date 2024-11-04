@@ -74,9 +74,9 @@ const MAX_SIZE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(5);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(50);
 const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60;
-const TRADING_LONG: bool = false;
-const TRADING_SHORT: bool = true;
-const MOMENTUM: bool = false; //if true we will enter on 2 blocks (2 bull blocks for bull entry), if false we will enter on reversal (1 bear block then 2 bull blocks)
+const TRADING_LONG: bool = true;
+const TRADING_SHORT: bool = false;
+const MOMENTUM: bool = true; //if true we will enter on 2 blocks (2 bull blocks for bull entry), if false we will enter on reversal (1 bear block then 2 bull blocks)
 
 #[allow(clippy::const_err)]
 pub async fn on_data_received(
