@@ -7,10 +7,10 @@ Focused on backtesting, live trading and charting (soon). With an emphasis for a
 
 fund-forge is built to allow simple abstractions for common strategy functionality: trade multiple symbols from multiple brokers, with multiple data streams.
 
+<span style="color: red;">***For development and testing purposes only. live trading is in development/testing phase, please monitor live strategies. repo is currently unstable.***</span>
+
 ## Limitless Free Historical Data
 See below for all the free historical data you will ever need.
-
-<span style="color: red;">***For development and testing purposes only. live trading is in development. repo is currently unstable.***</span>
 
 ## Announcements: Read Before Live Trading or Backtesting
 - 1/11/2024: Oanda Backtesting will be made more accurate after historical data is complete, currently the value per tick is just $1 for all symbols and margin is 1 to 1. Rithmic backtesting has not been tested but should be accurate excluding commissions.
@@ -76,23 +76,19 @@ You can download data that I have already parsed [here](https://1drv.ms/f/s!Allv
 Or you can configure the data server to download any desired data for you automatically.
 Just see the setup guide for your data vendor/brokerage.
 
+### Oanda Data
 Historical Oanda Data is Available as QuoteBars
 ```rust
 Resolution::Seconds(5)
 Resolution::Minutes(1)
 Resolution::Hours(1)
 ```
-Live Oanda Data is only avalable as `Resolution::Instant` because the live feed is a Quote feed, I will try to make a bar feed later.
+Live Oanda Data is only available as `Resolution::Instant` because the live feed is a Quote feed, I will try to make a bar feed later.
 
-Oanda historical data is available as
-```rust
-Resolution::Ticks(1)  //1 tick history
-Resolution::Seconds(1) to Resolution::Seconds(60)
-Resolution::Minutes(1) to Resolution::Minutes(60)
-```
+### Rithmic Data
 Rithmic historical data is available as all of the above plus quotes
 ```rust
-Resolution::Instant // for Quote feeds
+Resolution::Instant // for Quote feeds, not available as historical data, yet. (until order books are implemented)
 Resolution::Ticks(1) //1 tick feed
 Resolution::Seconds(1) to Resolution::Seconds(60)
 Resolution::Minutes(1) to Resolution::Minutes(?)
