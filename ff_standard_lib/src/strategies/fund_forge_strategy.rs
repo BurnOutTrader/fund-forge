@@ -225,7 +225,7 @@ impl FundForgeStrategy {
         }
 
         if strategy_mode != StrategyMode::Backtest {
-            live_warm_up(Utc::now() - warmup_duration, buffering_duration, tick_over_no_data, subscription_handler, strategy_event_sender, timed_event_handler, ledger_service, indicator_handler).await;
+            live_warm_up(Utc::now() - warmup_duration, buffering_duration, subscription_handler, strategy_event_sender, timed_event_handler, ledger_service, indicator_handler).await;
         }
         strategy
     }

@@ -24,7 +24,6 @@ lazy_static! {
 pub(crate) async fn live_warm_up(
     warm_up_start_time: DateTime<Utc>,
     buffer_duration: Duration,
-    tick_over_no_data: bool,
     subscription_handler: Arc<SubscriptionHandler>,
     strategy_event_sender: Sender<StrategyEvent>,
     timed_event_handler: Arc<TimedEventHandler>,
