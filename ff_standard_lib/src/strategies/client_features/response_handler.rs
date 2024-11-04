@@ -117,6 +117,7 @@ pub async fn response_handler(
                                     }
                                 }
                                 DataServerResponse::RegistrationResponse(port) => {
+                                    println!("Connected to server port: {}", port);
                                     if mode != StrategyMode::Backtest {
                                         live_data_receiver::handle_live_data(settings.clone(), port, buffer_duration, strategy_event_sender.clone(), ledger_service.clone(), indicator_handler.clone(), subscription_handler.clone()).await;
                                     }

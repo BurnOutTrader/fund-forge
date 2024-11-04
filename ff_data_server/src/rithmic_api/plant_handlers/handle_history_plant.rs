@@ -339,6 +339,7 @@ async fn handle_candle(client: Arc<RithmicBrokerageClient>, msg: TimeBar) {
         });
 
 
+        //println!("Candle: {:?}", data);
         // Send the candle data
         if let Err(_) = broadcaster.send(data) {
             if broadcaster.receiver_count() == 0 {

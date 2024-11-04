@@ -115,51 +115,54 @@ impl IndicatorHandler {
     /// When using this fn, no lagging indicator update should slow a more performant indicator.
     // Since the strategy receiver takes indicator updates directly, we can handle occasions when having the latest indicator value is crucial for logic.
     pub async fn live_update_time_slice(&self, strategy_sender: Sender<StrategyEvent>) -> Sender<TimeSlice> {
+        let indicators = self.indicators.clone();
         let (sender, mut receiver) = tokio::sync::mpsc::channel::<TimeSlice>(100);
-        while let Some(time_slice) = receiver.recv().await {
-            let indicators = self.indicators.clone();
-            let strategy_sender = strategy_sender.clone();
+        tokio::spawn(async move {
+            while let Some(time_slice) = receiver.recv().await {
 
-            tokio::spawn(async move {
-                let updates = time_slice
-                    .iter()
-                    .flat_map(|data| {
-                        let subscription = data.subscription();
-                        if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
-                            indicators_by_sub
-                                .iter_mut()
-                                .map({
-                                    move |mut indicators_dash_map| {
-                                        let mut indicator = indicators_dash_map.value_mut().clone();
-                                        tokio::spawn({
-                                            let value = data.clone();
-                                            async move {
-                                                indicator.update_base_data(&value)
-                                            }
-                                        })
-                                    }
-                                })
-                                .collect::<Vec<_>>()
-                        } else {
-                            Vec::new()
-                        }
-                    })
-                    .collect::<Vec<_>>();
+                let strategy_sender = strategy_sender.clone();
+                let indicators = indicators.clone();
+                tokio::spawn(async move {
+                    let updates = time_slice
+                        .iter()
+                        .flat_map(|data| {
+                            let subscription = data.subscription();
+                            if let Some(indicators_by_sub) = indicators.get_mut(&subscription) {
+                                indicators_by_sub
+                                    .iter_mut()
+                                    .map({
+                                        move |mut indicators_dash_map| {
+                                            let mut indicator = indicators_dash_map.value_mut().clone();
+                                            tokio::spawn({
+                                                let value = data.clone();
+                                                async move {
+                                                    indicator.update_base_data(&value)
+                                                }
+                                            })
+                                        }
+                                    })
+                                    .collect::<Vec<_>>()
+                            } else {
+                                Vec::new()
+                            }
+                        })
+                        .collect::<Vec<_>>();
 
-                futures::stream::iter(updates)
-                    .buffer_unordered(32)
-                    .for_each(|result| async {
-                        if let Ok(Some(indicator_data)) = result {
-                            let _ = strategy_sender
-                                .send(StrategyEvent::IndicatorEvent(
-                                    IndicatorEvents::IndicatorTimeSlice(indicator_data)
-                                ))
-                                .await;
-                        }
-                    })
-                    .await;
-            });
-        }
+                    futures::stream::iter(updates)
+                        .buffer_unordered(32)
+                        .for_each(|result| async {
+                            if let Ok(Some(indicator_data)) = result {
+                                let _ = strategy_sender
+                                    .send(StrategyEvent::IndicatorEvent(
+                                        IndicatorEvents::IndicatorTimeSlice(indicator_data)
+                                    ))
+                                    .await;
+                            }
+                        })
+                        .await;
+                });
+            }
+        });
         sender
     }
 

@@ -131,7 +131,7 @@ pub(crate) async fn live_warm_up(
                     let arc_slice = Arc::new(time_slice.clone());
 
                     // Send updates in parallel using join
-                    let (market_result, ledger_result, subscription_result) = tokio::join!(
+                    let (market_result, _ledger_result, subscription_result) = tokio::join!(
                         market_price_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())),
                         ledger_service.timeslice_updates(time, arc_slice.clone()),
                         subscription_handler.update_time_slice(arc_slice)
