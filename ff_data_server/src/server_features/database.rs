@@ -87,10 +87,10 @@ impl HybridStorage {
                 }
 
                 // Run backward update first
-                match HybridStorage::update_data(self.clone(), true).await {
+              /*  match HybridStorage::update_data(self.clone(), true).await {
                     Ok(_) => println!("Backward update completed"),
                     Err(e) => eprintln!("Backward update failed: {}", e),
-                }
+                }*/
 
                 tokio::time::sleep(Duration::from_secs(2)).await;
 
@@ -104,6 +104,286 @@ impl HybridStorage {
                 interval.tick().await;
             }
         });
+    }
+
+    pub async fn update_symbol(
+        download_tasks: Arc<RwLock<Vec<(SymbolName, BaseDataType)>>>,
+        download_semaphore: Arc<Semaphore>,
+        symbol: Symbol,
+        resolution: Resolution,
+        base_data_type: BaseDataType,
+        symbol_pb: ProgressBar,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+        from_back: bool,
+    ) -> Option<JoinHandle<()>> {
+        let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
+            DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
+                match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
+                    Some(client) => client.clone(),
+                    None => return None,
+                }
+            }
+            DataVendor::Oanda if OANDA_IS_CONNECTED.load(Ordering::SeqCst) => {
+                match OANDA_CLIENT.get() {
+                    Some(client) => client.clone(),
+                    None => return None,
+                }
+            }
+            _ => return None,
+        };
+
+        // Check if already downloading
+        {
+            let tasks = download_tasks.read().await;
+            if tasks.iter().any(|(name, _)| name == &symbol.name) {
+                return None;
+            }
+        }
+
+        let semaphore = download_semaphore.clone();
+        let download_tasks = download_tasks.clone();
+
+        Some(task::spawn(async move {
+            // Add to download tasks first
+            download_tasks.write().await.push((symbol.name.clone(), base_data_type));
+
+            let _permit = match semaphore.acquire().await {
+                Ok(permit) => permit,
+                Err(_) => {
+                    // Remove from tasks if we couldn't get a permit
+                    download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+                    return;
+                }
+            };
+
+            symbol_pb.set_prefix(format!("{}", symbol.name));
+
+            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb).await {
+                Ok(_) => {},
+                Err(_) => {
+                }
+            }
+
+            // Remove from active tasks
+            download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
+        }))
+    }
+
+    pub async fn update_data(self: Arc<Self>, from_back: bool) -> Result<(), FundForgeError> {
+        let options = self.options.clone();
+        let multi_bar = self.multi_bar.clone();
+        let mut tasks = vec![];
+        // Create a semaphore to limit concurrent downloads
+        let semaphore = self.download_semaphore.clone();
+
+        // Calculate total symbols from available vendors only
+        let total_symbols = {
+            let mut count = 0;
+
+            // Only count OANDA symbols if enabled and config exists
+            if OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
+                if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
+                    .join("credentials")
+                    .join("oanda_credentials")
+                    .join("download_list.toml"))
+                {
+                    if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
+                        if OANDA_CLIENT.get().is_some() {
+                            count += config.symbols.len();
+                        }
+                    }
+                }
+            }
+
+            // Only count Rithmic symbols if enabled and client exists
+            if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) {
+                if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
+                    .join("credentials")
+                    .join("rithmic_credentials")
+                    .join("download_list.toml"))
+                {
+                    if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
+                        if let Some(system) = get_rithmic_market_data_system() {
+                            if RITHMIC_CLIENTS.get(&system).is_some() {
+                                count += config.symbols.len();
+                            }
+                        }
+                    }
+                }
+            }
+            //eprintln!("Total Symbols: {}", count);
+            count as u64
+        };
+        let prefix = match from_back {
+            true => "Downloads Moving Historical Data Start Date Backwards",
+            false => "Downloads Moving Historical Data End Date Forwards",
+        };
+
+        // Only create overall progress if we have symbols to process
+        let overall_pb = match total_symbols > 0 {
+            true => {
+                let overall_pb = multi_bar.add(ProgressBar::new(total_symbols));
+                overall_pb.set_style(ProgressStyle::default_bar()
+                    .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
+                    .unwrap());
+                overall_pb.set_prefix(format!("{} @ {} Utc",prefix, Utc::now().format("%Y-%m-%d %H:%M")));
+                overall_pb
+            }
+            false => return Ok(()),
+        };
+        for vendor in DataVendor::iter() {
+            match vendor {
+                DataVendor::Rithmic if !RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
+                    overall_pb.inc(1);
+                    continue
+                },
+                DataVendor::Oanda if !OANDA_IS_CONNECTED.load(Ordering::SeqCst) => {
+                    overall_pb.inc(1);
+                    continue
+                },
+                DataVendor::Test | DataVendor::Bitget => {
+                    overall_pb.inc(1);
+                    continue
+                },
+                _ => (),
+            }
+            // choose the path based on the vendor
+            let path =  options.data_folder.clone().join("credentials").join(format!("{}_credentials", vendor.to_string().to_lowercase())).join("download_list.toml");
+            //eprintln!("Path: {:?}", path);
+
+            if path.exists() {
+                let content = match std::fs::read_to_string(&path) {
+                    Ok(content) => content,
+                    Err(e) => {
+                        overall_pb.finish_and_clear();
+                        return Err(FundForgeError::ServerErrorDebug(e.to_string()));
+                    }
+                };
+
+                let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
+                    Ok(symbol_object) => symbol_object.symbols,
+                    Err(e) => {
+                        overall_pb.finish_and_clear();
+                        return Err(FundForgeError::ServerErrorDebug(e.to_string()));
+                    }
+                };
+
+                if !symbol_configs.is_empty() {
+                    for symbol_config in symbol_configs {
+                        if self.download_tasks.read().await.iter().any(|(name, _)| name == &symbol_config.symbol_name) {
+                            overall_pb.inc(1);
+                            continue;
+                        }
+
+                        let market_type = match vendor {
+                            DataVendor::Oanda => {
+                                if let Some(client) = OANDA_CLIENT.get() {
+                                    if let Some(instrument) = client.instruments_map.get(&symbol_config.symbol_name) {
+                                        instrument.value().market_type
+                                    } else {
+                                        overall_pb.inc(1);
+                                        continue;
+                                    }
+                                } else {
+                                    overall_pb.inc(1);
+                                    continue;
+                                }
+                            },
+                            DataVendor::Rithmic => {
+                                match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
+                                    Some(exchange) => MarketType::Futures(exchange),
+                                    None => {
+                                        overall_pb.inc(1);
+                                        continue
+                                    },
+                                }
+                            }
+                            _ => {
+                                overall_pb.inc(1);
+                                continue
+                            }
+                        };
+
+                        let symbol = Symbol::new(symbol_config.symbol_name.clone(), vendor.clone(), market_type);
+
+                        let start_time = match from_back {
+                            true => {
+                                DateTime::<Utc>::from_naive_utc_and_offset(
+                                    symbol_config.start_date.and_hms_opt(0, 0, 0).unwrap(),
+                                    Utc
+                                )
+                            },
+                            false => {
+                                match self.get_latest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
+                                    Ok(Some(date)) => date,
+                                    Err(_) | Ok(None) => {
+                                        DateTime::<Utc>::from_naive_utc_and_offset(
+                                            symbol_config.start_date.and_hms_opt(0, 0, 0).unwrap(),
+                                            Utc
+                                        )
+                                    }
+                                }
+                            }
+                        };
+
+                        let end_time = if !from_back {
+                            Utc::now()
+                        } else {
+                            let earliest = match self.get_earliest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
+                                Ok(Some(date)) if date > start_time => Some(date), // If we have data and it's after our target start time
+                                Ok(None) => Some(Utc::now()),  // If we have no data
+                                _ => None,
+                            };
+
+                            match earliest {
+                                Some(time) => time,
+                                None => {
+                                    overall_pb.inc(1);
+                                    continue
+                                },
+                            }
+                        };
+
+                        // Verify chronological order for backwards downloads
+                        if end_time <= start_time {
+                            overall_pb.inc(1);
+                            continue;
+                        }
+
+                        // Only skip if we're moving backwards and we've already reached our target
+                        if from_back && start_time >= end_time - Duration::from_secs(60*60*72) {
+                            overall_pb.inc(1);
+                            continue;
+                        }
+
+                        let semaphore = semaphore.clone();
+                        let download_tasks = self.download_tasks.clone();
+                        // Directly spawn the update_symbol task
+                        // Create and configure symbol progress bar with an initial length
+                        let symbol_pb = multi_bar.add(ProgressBar::new(1));
+                        if let Some(spawn_handle) = HybridStorage::update_symbol(
+                            download_tasks,
+                            semaphore,
+                            symbol.clone(),
+                            symbol_config.resolution,
+                            symbol_config.base_data_type.clone(),
+                            symbol_pb,
+                            start_time,
+                            end_time,
+                            from_back
+                        ).await {
+                            tasks.push(spawn_handle);
+                        }
+                        overall_pb.inc(1);
+                    }
+                }
+            }
+        }
+        join_all(tasks).await;
+        overall_pb.set_position(total_symbols); // Set to total before clearing
+        overall_pb.finish_and_clear();
+        Ok(())
     }
 
     fn start_cache_management(&self) {
@@ -518,255 +798,6 @@ impl HybridStorage {
         }
 
         Ok(combined_data)
-    }
-
-    pub async fn update_symbol(
-        download_tasks: Arc<RwLock<Vec<(SymbolName, BaseDataType)>>>,
-        download_semaphore: Arc<Semaphore>,
-        symbol: Symbol,
-        resolution: Resolution,
-        base_data_type: BaseDataType,
-        symbol_pb: ProgressBar,
-        from: DateTime<Utc>,
-        to: DateTime<Utc>,
-        from_back: bool,
-    ) -> Option<JoinHandle<()>> {
-        let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
-            DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
-                match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
-                    Some(client) => client.clone(),
-                    None => return None,
-                }
-            }
-            DataVendor::Oanda if OANDA_IS_CONNECTED.load(Ordering::SeqCst) => {
-                match OANDA_CLIENT.get() {
-                    Some(client) => client.clone(),
-                    None => return None,
-                }
-            }
-            _ => return None,
-        };
-
-        // Check if already downloading
-        {
-            let tasks = download_tasks.read().await;
-            if tasks.iter().any(|(name, _)| name == &symbol.name) {
-                return None;
-            }
-        }
-
-        let semaphore = download_semaphore.clone();
-        let download_tasks = download_tasks.clone();
-
-        Some(task::spawn(async move {
-            // Add to download tasks first
-            download_tasks.write().await.push((symbol.name.clone(), base_data_type));
-
-            let _permit = match semaphore.acquire().await {
-                Ok(permit) => permit,
-                Err(_) => {
-                    // Remove from tasks if we couldn't get a permit
-                    download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
-                    return;
-                }
-            };
-
-            symbol_pb.set_prefix(format!("{}", symbol.name));
-
-            match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb).await {
-                Ok(_) => {},
-                Err(_) => {
-                }
-            }
-
-            // Remove from active tasks
-            download_tasks.write().await.retain(|(name, _)| name != &symbol.name);
-        }))
-    }
-
-    pub async fn update_data(self: Arc<Self>, from_back: bool) -> Result<(), FundForgeError> {
-        let options = self.options.clone();
-        let multi_bar = self.multi_bar.clone();
-        let mut tasks = vec![];
-        // Create a semaphore to limit concurrent downloads
-        let semaphore = self.download_semaphore.clone();
-
-        // Calculate total symbols from available vendors only
-        let total_symbols = {
-            let mut count = 0;
-
-            // Only count OANDA symbols if enabled and config exists
-            if OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
-                if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
-                    .join("credentials")
-                    .join("oanda_credentials")
-                    .join("download_list.toml"))
-                {
-                    if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
-                        if OANDA_CLIENT.get().is_some() {
-                            count += config.symbols.len();
-                        }
-                    }
-                }
-            }
-
-            // Only count Rithmic symbols if enabled and client exists
-            if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) {
-                if let Ok(content) = std::fs::read_to_string(&options.data_folder.clone()
-                    .join("credentials")
-                    .join("rithmic_credentials")
-                    .join("download_list.toml"))
-                {
-                    if let Ok(config) = toml::from_str::<DownloadSymbols>(&content) {
-                        if let Some(system) = get_rithmic_market_data_system() {
-                            if RITHMIC_CLIENTS.get(&system).is_some() {
-                                count += config.symbols.len();
-                            }
-                        }
-                    }
-                }
-            }
-            //eprintln!("Total Symbols: {}", count);
-            count as u64
-        };
-        let prefix = match from_back {
-            true => "Downloads Moving Historical Data Start Date Backwards",
-            false => "Downloads Moving Historical Data End Date Forwards",
-        };
-
-        // Only create overall progress if we have symbols to process
-        let overall_pb = match total_symbols > 0 {
-            true => {
-                let overall_pb = multi_bar.add(ProgressBar::new(total_symbols));
-                overall_pb.set_style(ProgressStyle::default_bar()
-                    .template("{prefix:.bold} {spinner:.green} [{bar:40.cyan/blue}] {pos}/{len}")
-                    .unwrap());
-                overall_pb.set_prefix(format!("{} @ {} Utc",prefix, Utc::now().format("%Y-%m-%d %H:%M")));
-                overall_pb
-            }
-            false => return Ok(()),
-        };
-        for vendor in DataVendor::iter() {
-            match vendor {
-                DataVendor::Rithmic if !RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => continue,
-                DataVendor::Oanda if !OANDA_IS_CONNECTED.load(Ordering::SeqCst) => continue,
-                DataVendor::Test | DataVendor::Bitget => continue,
-                _ => (),
-            }
-            // choose the path based on the vendor
-            let path =  options.data_folder.clone().join("credentials").join(format!("{}_credentials", vendor.to_string().to_lowercase())).join("download_list.toml");
-            //eprintln!("Path: {:?}", path);
-
-            if path.exists() {
-                let content = match std::fs::read_to_string(&path) {
-                    Ok(content) => content,
-                    Err(e) => {
-                        return Err(FundForgeError::ServerErrorDebug(e.to_string()));
-                    }
-                };
-
-                let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
-                    Ok(symbol_object) => symbol_object.symbols,
-                    Err(e) => {
-                        return Err(FundForgeError::ServerErrorDebug(e.to_string()));
-                    }
-                };
-
-                if !symbol_configs.is_empty() {
-                    for symbol_config in symbol_configs {
-                        if self.download_tasks.read().await.iter().any(|(name, _)| name == &symbol_config.symbol_name) {
-                            continue;
-                        }
-
-                        let market_type = match vendor {
-                            DataVendor::Oanda => {
-                                if let Some(client) = OANDA_CLIENT.get() {
-                                    if let Some(instrument) = client.instruments_map.get(&symbol_config.symbol_name) {
-                                        instrument.value().market_type
-                                    } else {
-                                        continue;
-                                    }
-                                } else {
-                                    continue;
-                                }
-                            },
-                            DataVendor::Rithmic => {
-                                match get_exchange_by_symbol_name(&symbol_config.symbol_name) {
-                                    Some(exchange) => MarketType::Futures(exchange),
-                                    None => continue,
-                                }
-                            }
-                            _ => continue
-                        };
-
-                        let symbol = Symbol::new(symbol_config.symbol_name.clone(), vendor.clone(), market_type);
-
-                        let start_time = match from_back {
-                            true => {
-                                DateTime::<Utc>::from_naive_utc_and_offset(
-                                    symbol_config.start_date.and_hms_opt(0, 0, 0).unwrap(),
-                                    Utc
-                                )
-                            },
-                            false => {
-                                match self.get_latest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
-                                    Ok(Some(date)) => date,
-                                    Err(_) | Ok(None) => {
-                                        DateTime::<Utc>::from_naive_utc_and_offset(
-                                            symbol_config.start_date.and_hms_opt(0, 0, 0).unwrap(),
-                                            Utc
-                                        )
-                                    }
-                                }
-                            }
-                        };
-
-                        let end_time = if !from_back {
-                            Utc::now()
-                        } else {
-                            let earliest = match self.get_earliest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
-                                Ok(Some(date)) if date > start_time => Some(date), // If we have data and it's after our target start time
-                                Ok(None) => Some(Utc::now()),  // If we have no data
-                                _ => None,
-                            };
-
-                            match earliest {
-                                Some(time) => time,
-                                None => continue,
-                            }
-                        };
-
-                        // Only skip if we're moving backwards and we've already reached our target
-                        if from_back && start_time >= end_time {
-                            continue;
-                        }
-
-                        let semaphore = semaphore.clone();
-                        let download_tasks = self.download_tasks.clone();
-                        // Directly spawn the update_symbol task
-                        // Create and configure symbol progress bar with an initial length
-                        let symbol_pb = multi_bar.add(ProgressBar::new(1));
-                        if let Some(spawn_handle) = HybridStorage::update_symbol(
-                            download_tasks,
-                            semaphore,
-                            symbol.clone(),
-                            symbol_config.resolution,
-                            symbol_config.base_data_type.clone(),
-                            symbol_pb,
-                            start_time,
-                            end_time,
-                            from_back
-                        ).await {
-                            tasks.push(spawn_handle);
-                        }
-                    }
-                }
-            }
-        }
-        join_all(tasks).await;
-        overall_pb.set_position(total_symbols); // Set to total before clearing
-        overall_pb.finish_and_clear();
-        Ok(())
     }
 }
 
