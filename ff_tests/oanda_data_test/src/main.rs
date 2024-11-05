@@ -31,8 +31,9 @@ async fn main() {
         BaseDataType::QuoteBars,
         MarketType::CFD
     );
+
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Backtest, // Backtest, Live, LivePaper
+        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 10, 8).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
@@ -56,7 +57,6 @@ async fn main() {
         // Buffer Duration
         //strategy resolution in milliseconds, all data at a lower resolution will be consolidated to this resolution, if using tick data, you will want to set this at 100 or less depending on the data granularity
         core::time::Duration::from_millis(100),
-
 
         // Enabled will launch the strategy registry handler to connect to a GUI, currently will crash if enabled
         false,
