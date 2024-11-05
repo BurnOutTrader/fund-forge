@@ -603,6 +603,25 @@ async fn fill_order(
 
         match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code.clone(), order_id.clone(), order.quantity_filled.clone(), order.side.clone(), time.clone(), market_price, order.tag.clone()).await {
             Ok(events) => {
+
+                if order.state != OrderState::Accepted && order.state != OrderState::Filled && order.state != OrderState::PartiallyFilled {
+                    order.state = OrderState::Accepted;
+                    order.time_created_utc = time.to_string();
+
+                    let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
+                        order_id: order.id.clone(),
+                        account: order.account.clone(),
+                        symbol_name: order.symbol_name.clone(),
+                        tag: order.tag.clone(),
+                        time: time.to_string(),
+                        symbol_code: order.symbol_name.clone(),
+                    });
+                    match strategy_event_sender.send(event).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+                    }
+                }
+
                 //todo, need to send an accepted event first if the order state != accepted
                 let order_event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderFilled {
                     account: order.account.clone(),
@@ -684,6 +703,23 @@ async fn partially_fill_order(
         match ledger_service.update_or_create_paper_position(&order.account, order.symbol_name.clone(), symbol_code, order_id.clone(), fill_volume, order.side.clone(), time, fill_price, order.tag.clone()).await {
             Ok(events) => {
                 if let Some(order_event) = Some(order_event) {
+                    if order.state != OrderState::Accepted && order.state != OrderState::Filled && order.state != OrderState::PartiallyFilled {
+                        order.state = OrderState::Accepted;
+                        order.time_created_utc = time.to_string();
+
+                        let event = StrategyEvent::OrderEvents(OrderUpdateEvent::OrderAccepted {
+                            order_id: order.id.clone(),
+                            account: order.account.clone(),
+                            symbol_name: order.symbol_name.clone(),
+                            tag: order.tag.clone(),
+                            time: time.to_string(),
+                            symbol_code: order.symbol_name.clone(),
+                        });
+                        match strategy_event_sender.send(event).await {
+                            Ok(_) => {}
+                            Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
+                        }
+                    }
                     match strategy_event_sender.send(StrategyEvent::OrderEvents(order_event)).await {
                         Ok(_) => {}
                         Err(e) => eprintln!("Backtest Matching Engine: Failed to send event: {}", e)
