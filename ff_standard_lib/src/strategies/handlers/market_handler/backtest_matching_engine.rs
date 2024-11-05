@@ -514,7 +514,7 @@ pub(crate) async fn simulated_order_matching (
                     rejected.push((order.id.clone(), reason));
                     continue;
                 };
-                let adjusted_size = match order.quantity_open > long_quantity && is_long {
+                let adjusted_size = match order.quantity_open > long_quantity {
                     true => long_quantity,
                     false => order.quantity_open
                 };
@@ -525,12 +525,8 @@ pub(crate) async fn simulated_order_matching (
                     }
                     Err(_) => continue,
                 };
-                if is_long {
-                    filled.push((order.id.clone(), market_fill_price));
-                } else {
-                    let reason = "No Long Position To Exit".to_string();
-                    rejected.push((order.id.clone(), reason));
-                }
+
+                filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::ExitShort => {
                 let short_quantity = ledger_service.position_size(&order.account, &order.symbol_name);
@@ -540,7 +536,7 @@ pub(crate) async fn simulated_order_matching (
                     rejected.push((order.id.clone(), reason));
                     continue;
                 };
-                let adjusted_size = match order.quantity_open > short_quantity && is_short {
+                let adjusted_size = match order.quantity_open > short_quantity {
                     true => short_quantity,
                     false => order.quantity_open
                 };
@@ -551,12 +547,7 @@ pub(crate) async fn simulated_order_matching (
                     }
                     Err(_) => continue,
                 };
-                if is_short {
-                   filled.push((order.id.clone(), market_fill_price));
-                } else {
-                    let reason = "No Short Position To Exit".to_string();
-                    rejected.push((order.id.clone(), reason));
-                }
+                filled.push((order.id.clone(), market_fill_price));
             }
         }
     }

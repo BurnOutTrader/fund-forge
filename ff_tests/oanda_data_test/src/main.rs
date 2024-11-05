@@ -23,8 +23,16 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
+
+    let data_subscription = DataSubscription::new(
+        SymbolName::from("NAS100-USD"),
+        DataVendor::Oanda,
+        Resolution::Seconds(5),
+        BaseDataType::QuoteBars,
+        MarketType::CFD
+    );
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
+        StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 10, 8).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
@@ -33,13 +41,7 @@ async fn main() {
         Duration::hours(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
-            DataSubscription::new(
-                SymbolName::from("NAS100-USD"),
-                DataVendor::Oanda,
-                Resolution::Instant,
-                BaseDataType::Quotes,
-                MarketType::CFD
-            ),
+            data_subscription.clone()
         ],
 
         //fill forward
@@ -65,7 +67,7 @@ async fn main() {
         vec![Account::new(Brokerage::Oanda, "Test_Account_1".to_string()), Account::new(Brokerage::Oanda, "Test_Account_2".to_string())]
     ).await;
 
-    on_data_received(strategy, strategy_event_receiver).await;
+    on_data_received(strategy, strategy_event_receiver, data_subscription).await;
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -78,6 +80,7 @@ enum LastSide {
 pub async fn on_data_received(
     strategy: FundForgeStrategy,
     mut event_receiver: mpsc::Receiver<StrategyEvent>,
+    data_subscription: DataSubscription
 ) {
 
     let mut warmup_complete = false;
@@ -90,7 +93,7 @@ pub async fn on_data_received(
                 for base_data in time_slice.iter() {
                     match base_data {
                         BaseDataEnum::QuoteBar(qb) => {
-                            if qb.is_closed == true {
+                            if qb.is_closed == true && qb.resolution == data_subscription.resolution  && qb.symbol == data_subscription.symbol {
                                 let msg = format!("{} {} {} Close: {}, {}", qb.symbol.name, qb.resolution, qb.candle_type, qb.bid_close, qb.time_closed_local(strategy.time_zone()));
                                 if qb.bid_close == qb.bid_open {
                                     println!("{}", msg.as_str().blue())
@@ -136,6 +139,11 @@ pub async fn on_data_received(
                                         println!("Strategy: Exit Long Take Loss, Time {}", strategy.time_local());
                                     }
                                 }
+
+                                if strategy.is_short(&account_1, &qb.symbol.name) {
+                                    println!("Short position detected");
+                                    break 'strategy_loop;
+                                }
                             }
                         }
 
@@ -160,16 +168,16 @@ pub async fn on_data_received(
                 let msg = String::from("Strategy: Warmup Complete");
                 println!("{}", msg.as_str().bright_magenta());
                 warmup_complete = true;
-                let sub = DataSubscription::new(
+             /*   let sub = DataSubscription::new(
                     SymbolName::from("NAS100-USD"),
                     DataVendor::Oanda,
-                    Resolution::Seconds(5),
+                    Resolution::Minutes(5),
                     BaseDataType::QuoteBars,
                     MarketType::CFD
                 );
                 strategy.subscribe(sub.clone(), 100, false).await;
                 let data = strategy.bar_index(&sub, 0);
-                println!("Strategy: Bar Index: {:?}", data);
+                println!("Strategy: Bar Index: {:?}", data);*/
             }
 
             StrategyEvent::PositionEvents(event) => {
