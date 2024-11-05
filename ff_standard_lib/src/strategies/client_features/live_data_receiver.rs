@@ -163,7 +163,6 @@ async fn receive_and_process(
 
     // Switch to live processing
     let mut interval = tokio::time::interval(Duration::from_secs(1));
-    let mut last_update_second = Utc::now().timestamp();
 
     //todo, we should possibly have an option for strategies to use this fn, or a fn that implements sequential processing indicators updates at the cost of potentially having a lagging data feed.
     let indicator_sender =indicator_handler.live_update_time_slice(strategy_event_sender.clone()).await;
@@ -171,14 +170,9 @@ async fn receive_and_process(
         tokio::select! {
             _ = interval.tick() => {
                 let now = Utc::now();
-                let current_second = now.timestamp();
-                // Only update if we haven't processed data for this second
-                if current_second > last_update_second {
-                    if let Some(consolidated_data) = subscription_handler.update_consolidators_time(now).await {
-                        let _ = indicator_sender.send(consolidated_data.clone()).await;
-                        let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(consolidated_data)).await;
-                    }
-                    last_update_second = current_second;
+                if let Some(consolidated_data) = subscription_handler.update_consolidators_time(now).await {
+                    let _ = indicator_sender.send(consolidated_data.clone()).await;
+                    let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(consolidated_data)).await;
                 }
                 update_backtest_time(now);
             }
@@ -196,7 +190,6 @@ async fn receive_and_process(
                         if let Ok(time_slice) = TimeSlice::from_bytes(&message_body) {
                              let mut strategy_time_slice = TimeSlice::new();
                             if !time_slice.is_empty() {
-                                last_update_second =  Utc::now().timestamp();  // Mark this second as updated
                                 let arc_slice = Arc::new(time_slice.clone());
                                 let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
                                 ledger_service.timeslice_updates(Utc::now(), arc_slice.clone()).await;
