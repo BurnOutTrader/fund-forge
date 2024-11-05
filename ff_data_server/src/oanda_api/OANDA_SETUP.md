@@ -61,6 +61,7 @@ Use the Warm-up complete strategy event for this:
     let msg = String::from("Strategy: Warmup Complete");
     println!("{}", msg.as_str().bright_magenta());
     warmup_complete = true;
+
     let sub = DataSubscription::new(
         SymbolName::from("NAS100-USD"),
         DataVendor::Oanda,
