@@ -10,7 +10,8 @@ use std::time::Duration;
 use tokio::io::AsyncReadExt;
 use ff_standard_lib::StreamName;
 use crate::{subscribe_server_shutdown};
-use crate::server_side_datavendor::{data_feed_subscribe};
+use crate::server_features::database::DATA_STORAGE;
+use crate::server_side_datavendor::{data_feed_subscribe, data_feed_unsubscribe};
 use crate::stream_tasks::initialize_streamer;
 
 pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
@@ -98,14 +99,13 @@ async fn handle_stream_connection(mut tls_stream: TlsStream<TcpStream>, peer_add
 
 pub async fn stream_response(stream_name: StreamName, request: StreamRequest) -> DataServerResponse {
     match request {
-        StreamRequest::AccountUpdates(_, _) => {
-            panic!()
-        }
         StreamRequest::Subscribe(subscription) => {
-            data_feed_subscribe(stream_name, subscription.clone()).await
+            //download latest data and await
+            DATA_STORAGE.get().unwrap().pre_subscribe_updates(subscription.symbol.clone(), subscription.resolution, subscription.base_data_type).await;
+            data_feed_subscribe(stream_name, subscription).await
         }
-        StreamRequest::Unsubscribe(_) => {
-            panic!()
+        StreamRequest::Unsubscribe(sub) => {
+            data_feed_unsubscribe(sub.symbol.data_vendor.clone(), stream_name, sub).await
         }
     }
 }
