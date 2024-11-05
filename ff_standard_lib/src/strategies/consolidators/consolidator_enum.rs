@@ -189,7 +189,7 @@ impl ConsolidatorEnum {
                 if let Some(closed_data) = consolidated_data.closed_data {
                     history.add(closed_data);
                 }
-                println!("time: {}", base_data.time_local(&Australia__Brisbane));
+               // println!("time: {}", base_data.time_local(&Australia__Brisbane));
             }
         }
         //eprintln!("Warmup complete: {}", history.len());

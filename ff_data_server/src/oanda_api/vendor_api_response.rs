@@ -322,6 +322,10 @@ impl VendorApiResponse for OandaClient {
             progress_bar.inc(1);
         }
 
+        if !from_back {
+
+        }
+
         // Save any remaining data
         if !new_data.is_empty() {
             let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
