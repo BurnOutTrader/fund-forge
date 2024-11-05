@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::str::FromStr;
+use std::sync::atomic::Ordering;
 use async_trait::async_trait;
 use chrono::{DateTime, Datelike, Duration, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -15,7 +16,7 @@ use ff_standard_lib::standardized_types::enums::{MarketType, StrategyMode, Subsc
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
-use crate::oanda_api::api_client::{oanda_connected, OandaClient};
+use crate::oanda_api::api_client::{OandaClient, OANDA_IS_CONNECTED};
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
 use crate::oanda_api::download::{generate_url};
 use crate::oanda_api::get_requests::oanda_clean_instrument;
@@ -41,7 +42,7 @@ impl VendorApiResponse for OandaClient {
     #[allow(unused)]
     async fn resolutions_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, callback_id: u64) -> DataServerResponse {
         let subscription_resolutions_types = match mode {
-            StrategyMode::Backtest => vec![SubscriptionResolutionType::new(Resolution::Seconds(5), BaseDataType::QuoteBars)],
+            StrategyMode::Backtest => vec![SubscriptionResolutionType::new(Resolution::Seconds(5), BaseDataType::QuoteBars), SubscriptionResolutionType::new(Resolution::Minutes(1), BaseDataType::QuoteBars),SubscriptionResolutionType::new(Resolution::Hours(1), BaseDataType::QuoteBars)],
             StrategyMode::LivePaperTrading | StrategyMode::Live => vec![SubscriptionResolutionType::new(Resolution::Instant, BaseDataType::Quotes)],
         };
 
@@ -94,7 +95,7 @@ impl VendorApiResponse for OandaClient {
     }
     #[allow(unused)]
     async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
-        if !oanda_connected() {
+        if !OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
             return DataServerResponse::SubscribeResponse {
                 success: false,
                 subscription,
