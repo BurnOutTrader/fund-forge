@@ -28,7 +28,7 @@ On the client/strategy side, warming up data feeds etc is not currently done asy
 - 05/11/2024: Since Oanda Uses quote data, but there is no historical quote data, live warm up does not work with Oanda. Indicators and DataSubscriptions can still have instant history, if you subscribe after the strategy is warmed up. Use the Warm-up complete strategy event for this, OR you can subscribe directly to the resolution if you know you have historical data for the subscription. [see Oanda Setup](ff_data_server/src/oanda_api/OANDA_SETUP.md/#live-oanda-strategies)
 If you use the second option before launching the on_data_received function, you will still get warm up data, just pass in an empty vec in strategy initialize.
 - 05/11/2024: Fixed divide by 0 bug in backtesting engine, from using order quantity filled instead of quantity open in backtest matching engine.
-- 05/11/2024: Data download function are now working perfectly, as far as I can tell.
+- 05/11/2024: Data download functions are now working perfectly, as far as I can tell.
 
 Please report any issues, some bugs I don't notice after I change code because there are so many possible states to test, backtesting, live trading, live paper * 2 brokerages.
 
