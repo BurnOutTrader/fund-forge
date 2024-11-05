@@ -14,7 +14,7 @@ See below for all the free historical data you will ever need.
 
 ## Announcements: Read Before Live Trading or Backtesting
 - 1/11/2024: Oanda Backtesting will be made more accurate after historical data is complete, currently the value per tick is just $1 for all symbols and margin is 1 to 1. Rithmic backtesting has not been tested but should be accurate excluding commissions.
-- 1/11/2024: Still some sync issues happen intermittently with rithmic live trading, be sure to monitor any live strategies.
+- 1/11/2024: Occasionally there are some very minor position sync issues with rithmic live trading, be sure to monitor any live strategies.
 - 2/11/2024: Rithmic and Oanda historical data can be downloaded and kept up to date automatically by the server, it is possible to specify a start date for historical data to avoid downloading to much data, the start date can be moved backwards if you need more data. see the setup for the specific broker for more info.
 - 2/11/2024: Live warm up should now work, if you have historical data, but has not been tested (it is the weekend and market is closed)
 - 2/11/2024: The next development step is to finish live data for Oanda, then backtesting accuracy for Oanda, then support for more historical resolutions and data sets, by improving subscription functions.
@@ -27,6 +27,9 @@ On the client/strategy side, warming up data feeds etc is not currently done asy
 - 05/11/2024: My next task is live data and trading for Oanda. Then I will focus on making backtests more accurate and finishing backtest related functionality for all brokers/vendors, then I will focus on any live trading bugs, finnally i will add the bitget api, then some fundamental data provider apis, and finally add an equities/etf/options brokerage.
 - 05/11/2024: Since Oanda Uses quote data, but there is no historical quote data, live warm up does not work with Oanda. Indicators and DataSubscriptions can still have instant history, if you subscribe after the strategy is warmed up. Use the Warm-up complete strategy event for this, OR you can subscribe directly to the resolution if you know you have historical data for the subscription.
 - 05/11/2024: Fixed divide by 0 bug in backtesting engine, from using order quantity filled instead of quantity open in backtest matching engine.
+- 05/11/2024: Data download function are now working perfectly, as far as I can tell.
+
+Please report any issues, some bugs I don't notice after I change code because there are so many possible states to test, backtesting, live trading, live paper * 2 brokerages.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
