@@ -103,6 +103,7 @@ pub fn handle_rithmic_responses(
                 // Shutdown receiver waits here until a message is received, effectively signaling shutdown
                 _ = shutdown_receiver.recv() => {
                     println!("Shutdown signal received. Stopping Rithmic response handler.");
+                    drop(reader);
                     break;
                 }
             }
