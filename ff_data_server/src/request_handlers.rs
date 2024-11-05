@@ -37,7 +37,7 @@ pub async fn base_data_response(
     let from_time: DateTime<Utc> = from_time.parse().unwrap();
     let to_time: DateTime<Utc> = to_time.parse().unwrap();
 
-    if to_time.date_naive() == Utc::now().date_naive() {
+    if to_time.date_naive() >= Utc::now().date_naive() {
         let mut tasks = vec![];
         for subscription in &subscriptions {
             tasks.push(DATA_STORAGE.get().unwrap().pre_subscribe_updates(subscription.symbol.clone(), subscription.resolution, subscription.base_data_type))
