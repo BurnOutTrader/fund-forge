@@ -14,7 +14,7 @@ use futures::future::join_all;
 use futures::stream::{SplitSink, SplitStream};
 #[allow(unused_imports)]
 use structopt::lazy_static::lazy_static;
-use tokio::sync::{broadcast, oneshot, Mutex, Semaphore};
+use tokio::sync::{broadcast, oneshot, Mutex};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
@@ -120,7 +120,6 @@ pub struct RithmicBrokerageClient {
     //products
     pub products: DashMap<MarketType, Vec<Symbol>>,
     pub historical_callbacks: DashMap<u64, oneshot::Sender<BTreeMap<DateTime<Utc>,BaseDataEnum>>>,
-    pub historical_permits: Arc<Semaphore>,
 
     //todo, since only 1 connection is used for data this could all be moved, we could have a rithmic data client and a rithmic broker client
     //subscribers
@@ -198,7 +197,6 @@ impl RithmicBrokerageClient {
             id_to_basket_id_map: Default::default(),
             pending_order_updates: Default::default(),
             historical_callbacks: Default::default(),
-            historical_permits: Arc::new(Semaphore::new(1)),
         };
         Ok(client)
     }
@@ -310,7 +308,6 @@ impl RithmicBrokerageClient {
             _ => Err(FundForgeError::ServerErrorDebug(format!("{} Incorrect brokerage to load rithmic credentials", broker)))
         }
     }
-
 
     pub async fn send_message<T: ProstMessage>(
         &self,
