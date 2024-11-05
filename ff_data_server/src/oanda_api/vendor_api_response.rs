@@ -322,10 +322,6 @@ impl VendorApiResponse for OandaClient {
             progress_bar.inc(1);
         }
 
-        if !from_back {
-            self.update_latest_bars(symbol.clone(), base_data_type, resolution).await?;
-        }
-
         // Save any remaining data
         if !new_data.is_empty() {
             let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
@@ -334,6 +330,11 @@ impl VendorApiResponse for OandaClient {
                 Err(_) => {}
             }
         }
+
+        if !from_back {
+            self.update_latest_bars(symbol.clone(), base_data_type, resolution).await?;
+        }
+
         progress_bar.finish_and_clear();
         Ok(())
     }
