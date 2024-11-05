@@ -212,7 +212,7 @@ impl HybridStorage {
         let symbol_pb = self.multi_bar.add(ProgressBar::new(1));
         symbol_pb.set_prefix(format!("{}", symbol.name));
 
-        match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now(), false, symbol_pb).await {
+        match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now() + Duration::from_secs(15), false, symbol_pb).await {
             Ok(_) => {},
             Err(_) => {}
         }
