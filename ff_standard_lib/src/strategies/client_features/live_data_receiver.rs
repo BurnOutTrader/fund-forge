@@ -18,6 +18,7 @@ use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::live_warmup::WARMUP_COMPLETE_BROADCASTER;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
+use crate::strategies::historical_time::update_backtest_time;
 use crate::strategies::ledgers::ledger_service::LedgerService;
 use crate::strategies::strategy_events::StrategyEvent;
 
@@ -179,6 +180,7 @@ async fn receive_and_process(
                     }
                     last_update_second = current_second;
                 }
+                update_backtest_time(now);
             }
             result = stream_client.read_exact(&mut length_bytes) => {
                 match result {
