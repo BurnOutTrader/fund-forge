@@ -1051,7 +1051,8 @@ impl SymbolSubscriptionHandler {
                                 }
                             };
                             let data = get_historical_data(vec![warm_up_sub], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
-                            let mut history = RollingWindow::new(history_to_retain);
+                            let multiplier = new_subscription.resolution.as_seconds() / warm_up_sub.resolution.as_seconds();
+                            let mut history = RollingWindow::new(multiplier as usize * history_to_retain);
                             for (_, slice) in data {
                                 for data in slice.iter() {
                                     history.add(data.clone());
