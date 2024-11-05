@@ -482,8 +482,6 @@ lazy_static! {
             decimal_accuracy: 2,
         });
 
-
-
         m.insert("US30-USD".to_string(), SymbolInfo {
             symbol_name: "US30-USD".to_string(),
             pnl_currency: Currency::USD,
