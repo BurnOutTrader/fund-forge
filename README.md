@@ -13,14 +13,7 @@ fund-forge is built to allow simple abstractions for common strategy functionali
 See below for all the free historical data you will ever need.
 
 ## Announcements: Read Before Live Trading or Backtesting
-- 1/11/2024: Oanda Backtesting will be made more accurate after historical data is complete, currently the value per tick is just $1 for all symbols and margin is 1 to 1. Rithmic backtesting has not been tested but should be accurate excluding commissions.
 - 1/11/2024: Occasionally there are some very minor position sync issues with rithmic live trading, be sure to monitor any live strategies.
-- 2/11/2024: Rithmic and Oanda historical data can be downloaded and kept up to date automatically by the server, it is possible to specify a start date for historical data to avoid downloading to much data, the start date can be moved backwards if you need more data. see the setup for the specific broker for more info.
-- 2/11/2024: Live warm up should now work, if you have historical data, but has not been tested (it is the weekend and market is closed)
-- 2/11/2024: The next development step is to finish live data for Oanda, then backtesting accuracy for Oanda, then support for more historical resolutions and data sets, by improving subscription functions.
-- 04/11/2024: You can now download historical data in many resolutions and force the engine to use the historical data for historical data feed or a set specific resolution for live streams, overriding the default behaviour of using the lowest resolution data feed.
-- 04/11/2024: I will need to build an exchange map file for each rithmic broker/system, so that we can correctly get the exchange for symbols that trade on multiple exchanges, this will be done in the future.
-- 04/11/2024: I will build a margin and commissions file for each rithmic broker/system, so that we can correctly calculate margin and commissions for each symbol, this will be done in the future.
 - 05/11/2024: Live warm up now works up until the last few seconds of data, when a history request is made by the engine for data that includes the present date, the server will first update the historical data to get the latest data, this means you need to have at least minimal historical data specified in you download_list.toml file for any symbols you trade live.
 On the client/strategy side, warming up data feeds etc is not currently done async, so you might see a pause in strategies if subscribing at run time (after strategy start), this will be async in the future as a background task, but I don't want to implement that until I have let the current implementation test for a little while.
 - 05/11/2024: My next task is live data and trading for Oanda. Then I will focus on making backtests more accurate and finishing backtest related functionality for all brokers/vendors, then I will focus on any live trading bugs, finnally i will add the bitget api, then some fundamental data provider apis, and finally add an equities/etf/options brokerage.
@@ -28,6 +21,8 @@ On the client/strategy side, warming up data feeds etc is not currently done asy
 If you use the second option before launching the on_data_received function, you will still get warm up data, just pass in an empty vec in strategy initialize.
 - 05/11/2024: Fixed divide by 0 bug in backtesting engine, from using order quantity filled instead of quantity open in backtest matching engine.
 - 05/11/2024: Data download functions are now working perfectly, as far as I can tell.
+- 05-11-2024: Oanda backtesting accuracy should now be as good as it can be, using a symbol info map for tick size, value and decimal accuracy, and using the best bid, offer for fills.
+- 05-11-2024: Next Task, live trading for Oanda.
 
 Please report any issues, some bugs I don't notice after I change code because there are so many possible states to test, backtesting, live trading, live paper * 2 brokerages.
 
