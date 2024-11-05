@@ -1,3 +1,4 @@
+use std::pin::Pin;
 use std::str::FromStr;
 use reqwest::{Client, Error, Response};
 use std::time::{Duration};
@@ -13,7 +14,6 @@ use dashmap::DashMap;
 use futures_util::TryStreamExt;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
-use serde_json::{Value};
 use tokio::sync::mpsc::{Receiver, Sender};
 use ff_standard_lib::messages::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo};
@@ -29,9 +29,10 @@ use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_
 use crate::oanda_api::get_requests::{oanda_account_summary, oanda_accounts_list, oanda_clean_instrument, oanda_instruments_download};
 use crate::oanda_api::instruments::OandaInstrument;
 use crate::oanda_api::models::position::OandaPosition;
+use crate::oanda_api::models::pricing_common::PriceStreamResponse;
 use crate::oanda_api::support_and_conversions::resolution_to_oanda_interval;
 use crate::server_features::database::DATA_STORAGE;
-use crate::ServerLaunchOptions;
+use crate::{subscribe_server_shutdown, ServerLaunchOptions};
 
 lazy_static! {
     pub static ref OANDA_IS_CONNECTED: AtomicBool = AtomicBool::new(false);
@@ -61,7 +62,7 @@ pub struct OandaClient {
     pub api_key: String,
     pub base_endpoint: String,
     pub stream_endpoint: String,
-    pub instruments_map: DashMap<SymbolName, OandaInstrument>,
+    pub instruments_map: Arc<DashMap<SymbolName, OandaInstrument>>,
     pub accounts: Vec<Account>,
     pub account_info: DashMap<AccountId, AccountInfo>,
     pub positions: DashMap<AccountId, OandaPosition>,
@@ -247,24 +248,56 @@ impl OandaClient {
 
 /// Establishes a streaming connection to the specified endpoint suffix.
 /// This method respects the `stream_limit` semaphore.
-pub async fn establish_stream(client: &Arc<Client>, stream_endpoint: &str, stream_endpoint_suffix: &str, stream_limit: &Arc<Semaphore>, api_key: &str) -> Result<impl Stream<Item = Result<Bytes, reqwest::Error>>, Error> {
+pub async fn establish_stream(
+    client: &Arc<Client>,
+    stream_endpoint: &str,
+    stream_endpoint_suffix: &str,
+    stream_limit: &Arc<Semaphore>,
+    api_key: &str
+) -> Result<impl Stream<Item = Result<Bytes, reqwest::Error>>, FundForgeError> {
     let url = format!("{}{}", stream_endpoint, stream_endpoint_suffix);
+    eprintln!("Attempting to connect to URL: {}", url);
 
     // Acquire a stream permit asynchronously.
     let _stream_permit = stream_limit.acquire().await.expect("Failed to acquire stream permit");
 
     // Make a GET request to the streaming endpoint
-    let response: Response = client.get(&url)
+    let response: Response = match client.get(&url)
         .header("Authorization", format!("Bearer {}", api_key))
-        .send().await?;
+        .send()
+        .await {
+        Ok(response) => response,
+        Err(e) => {
+            eprintln!("Stream request failed: {}", e);
+            return Err(FundForgeError::ServerErrorDebug(format!("Stream request failed: {}", e)));
+        }
+    };
 
-    // Return the stream of bytes to the caller
+    // Check response status
+    let status = response.status();
+    eprintln!("Stream response status: {}", status);
+
+    if !status.is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "Could not get error text".to_string());
+        eprintln!("Stream request failed: {}", error_text);
+        return Err(FundForgeError::ServerErrorDebug(format!(
+            "Stream request failed with status {}: {}",
+            status,
+            error_text
+        )));
+    }
+
+    // Log headers for debugging
+    eprintln!("Response headers: {:?}", response.headers());
+
+    OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
     Ok(response.bytes_stream())
 }
 
 async fn handle_price_stream(
     client: Arc<Client>,
     instrument_symbol_map: Arc<DashMap<String, Symbol>>,
+    instruments_map: Arc<DashMap<SymbolName, OandaInstrument>>,
     quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
     mut subscription_receiver: Receiver<Vec<SymbolName>>,
     account: Account,
@@ -273,84 +306,135 @@ async fn handle_price_stream(
     api_key: String
 ) {
     tokio::spawn(async move {
+        let mut current_stream: Option<Pin<Box<dyn Stream<Item = Result<Bytes, reqwest::Error>> + Send>>> = None;
         let mut current_subscriptions = Vec::new();
-        let mut consecutive_failures = 0;
-        let max_consecutive_failures = 5;
-        let base_delay = Duration::from_secs(1);
+        let mut shutdown_receiver = subscribe_server_shutdown();
 
         loop {
             tokio::select! {
+                Ok(_) = shutdown_receiver.recv() => break,
+
                 Some(new_subscriptions) = subscription_receiver.recv() => {
                     let mut cleaned_new_subscriptions = vec![];
+
                     for sub in new_subscriptions {
-                        if let Some(instrument) = instrument_symbol_map.get(&sub) {
-                            cleaned_new_subscriptions.push(instrument.name.clone());
+                        if let Some(instrument) = instruments_map.get(&sub) {
+                            if let Some(broadcaster) = quote_feed_broadcasters.get(&sub) {
+                                if broadcaster.receiver_count() > 0 {
+                                    cleaned_new_subscriptions.push(instrument.name.clone());
+                                }
+                            }
                         }
                     }
+
                     if cleaned_new_subscriptions != current_subscriptions {
-                        current_subscriptions = cleaned_new_subscriptions;
-                        consecutive_failures = 0; // Reset failure count on subscription change
-                        continue;
+                        if !cleaned_new_subscriptions.is_empty() {
+                            let suffix = format!("/accounts/{}/pricing/stream?instruments={}",
+                                account.account_id,
+                                cleaned_new_subscriptions.join("%2C")
+                            );
+
+                            match establish_stream(&client, &stream_endpoint, &suffix, &stream_limit, &api_key).await {
+                                Ok(stream) => {
+                                    current_stream = Some(Box::pin(stream));
+                                    current_subscriptions = cleaned_new_subscriptions;
+                                    OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                                }
+                                Err(e) => {
+                                    eprintln!("Failed to establish stream: {}", e);
+                                    OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                                }
+                            }
+                        } else {
+                            current_stream = None;
+                            current_subscriptions.clear();
+                            OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                        }
                     }
                 }
 
-                _ = async {
-                    if current_subscriptions.is_empty() {
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                        return;
+                Some(chunk_result) = async {
+                    match &mut current_stream {
+                        Some(stream) => stream.try_next().await.transpose(),
+                        None => {
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                            Some(Ok(Bytes::new()))
+                        }
                     }
+                } => {
+                    match chunk_result {
+                        Ok(chunk) => {
+                            if chunk.is_empty() {
+                                continue;
+                            }
 
-                    let suffix = format!("{}/pricing/stream?instruments={}",
-                        account.account_id,
-                        current_subscriptions.join("%2C")
-                    );
+                            let text = match String::from_utf8(chunk.to_vec()) {
+                                Ok(t) => t,
+                                Err(e) => {
+                                    eprintln!("Invalid UTF-8 in chunk: {}", e);
+                                    continue;
+                                }
+                            };
 
-                    match establish_stream(&client, &stream_endpoint, &suffix, &stream_limit, &api_key).await {
-                        Ok(mut stream) => {
-                            OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
-                            consecutive_failures = 0; // Reset failure count on successful connection
+                            if text.starts_with("<html>") || text.contains("404 Not Found") {
+                                eprintln!("Received HTML error response, clearing stream");
+                                current_stream = None;
+                                OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                                continue;
+                            }
 
-                            while let Ok(Some(chunk)) = stream.try_next().await {
-                                if let Ok(text) = String::from_utf8(chunk.to_vec()) {
-                                    // Process stream data...
-                                    match process_stream_data(
-                                        &text,
-                                        &instrument_symbol_map,
-                                        &quote_feed_broadcasters
-                                    ).await {
-                                        Ok(_) => continue,
-                                        Err(e) => {
-                                            eprintln!("Error processing stream data: {}", e);
-                                            break; // Break the stream loop to trigger reconnection
+                            match process_stream_data(
+                                &text,
+                                &instrument_symbol_map,
+                                &quote_feed_broadcasters
+                            ).await {
+                                Ok(_) => {},
+                                Err(e) => {
+                                    match e {
+                                        FundForgeError::ConnectionNotFound(_) => {
+                                            // Clean dead subscriptions
+                                            current_subscriptions.retain(|sub| {
+                                                if let Some(broadcaster) = quote_feed_broadcasters.get(sub) {
+                                                    broadcaster.receiver_count() > 0
+                                                } else {
+                                                    false
+                                                }
+                                            });
+
+                                            // Force stream reconnection if we still have subscriptions
+                                            if !current_subscriptions.is_empty() {
+                                                let suffix = format!("/accounts/{}/pricing/stream?instruments={}",
+                                                    account.account_id,
+                                                    current_subscriptions.join("%2C")
+                                                );
+
+                                                match establish_stream(&client, &stream_endpoint, &suffix, &stream_limit, &api_key).await {
+                                                    Ok(stream) => {
+                                                        current_stream = Some(Box::pin(stream));
+                                                        OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                                                    }
+                                                    Err(e) => {
+                                                        eprintln!("Failed to reestablish stream: {}", e);
+                                                        current_stream = None;
+                                                        OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                                                    }
+                                                }
+                                            } else {
+                                                current_stream = None;
+                                                OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                                            }
                                         }
+                                        _ => {}
                                     }
                                 }
                             }
                         }
-                        Err(e) => {
-                            consecutive_failures += 1;
+                        Err(_) => {
+                            current_stream = None;
                             OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
-                            eprintln!("Stream error (attempt {}/{}): {}",
-                                consecutive_failures,
-                                max_consecutive_failures,
-                                e
-                            );
-
-                            if consecutive_failures >= max_consecutive_failures {
-                                eprintln!("Max consecutive failures reached. Implementing extended backoff...");
-                                // Extended backoff for repeated failures
-                                let delay = base_delay * 2u32.pow(consecutive_failures as u32);
-                                let max_delay = Duration::from_secs(300); // 5 minutes max
-                                let final_delay = std::cmp::min(delay, max_delay);
-                                tokio::time::sleep(final_delay).await;
-                            } else {
-                                // Regular backoff for occasional failures
-                                let delay = base_delay * 2u32.pow(consecutive_failures as u32);
-                                tokio::time::sleep(delay).await;
-                            }
                         }
                     }
-                } => {}
+                }
             }
         }
     });
@@ -360,77 +444,83 @@ async fn process_stream_data(
     text: &str,
     instrument_symbol_map: &Arc<DashMap<String, Symbol>>,
     quote_feed_broadcasters: &Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>
-) -> Result<(), Box<dyn std::error::Error>> {
-    let json: Value = serde_json::from_str(text)?;
-    println!("{:?}", json);
-    // Extract and validate ask price
-    let raw_ask = json["closeoutAsk"]
-        .as_str()
-        .ok_or("closeoutAsk missing")?;
-    let closeout_ask = Decimal::from_str(raw_ask)?;
-
-    // Extract and validate bid price
-    let raw_bid = json["closeoutBid"]
-        .as_str()
-        .ok_or("closeoutBid missing")?;
-    let closeout_bid = Decimal::from_str(raw_bid)?;
-
-    // Extract and validate volume/liquidity
-    let raw_volume = json["liquidity"]
-        .as_str()
-        .ok_or("liquidity missing")?;
-    let volume = Decimal::from_str(raw_volume)?;
-
-    // Extract instrument name
-    let instrument = json["instrument"]
-        .as_str()
-        .ok_or("instrument missing")?;
-
-    // Extract and parse timestamp
-    let time_str = json["time"]
-        .as_str()
-        .ok_or("time missing")?;
-    let time = DateTime::parse_from_rfc3339(time_str)?
-        .with_timezone(&Utc);
-
-    // Look up the symbol in our map
-    let symbol = match instrument_symbol_map.get(instrument) {
-        Some(symbol) => symbol.clone(),
-        None => {
-            return Err(format!("Symbol not found in map: {}", instrument).into());
+) -> Result<(), FundForgeError> {
+    // Parse the incoming JSON
+    let price_data: PriceStreamResponse = match serde_json::from_str(text) {
+        Ok(data) => data,
+        Err(e) => {
+            return Err(FundForgeError::ServerErrorDebug(format!("Failed to parse JSON: {}", e).into()));
         }
     };
 
-    // Check if we have any subscribers for this symbol
+    // Skip heartbeat messages
+    if price_data.r#type.as_deref() == Some("HEARTBEAT") {
+        return Ok(());
+    }
+
+    // Get the best prices from the order book
+    let (best_ask, best_ask_liquidity) = price_data.asks.first()
+        .map(|bucket| (bucket.price, bucket.liquidity))
+        .unwrap_or_else(|| {
+            // Fallback to closeout prices if no order book
+            let price = Decimal::from_str(&price_data.closeout_ask).unwrap_or_default();
+            (price, Decimal::default())
+        });
+
+    let (best_bid, best_bid_liquidity) = price_data.bids.first()
+        .map(|bucket| (bucket.price, bucket.liquidity))
+        .unwrap_or_else(|| {
+            // Fallback to closeout prices if no order book
+            let price = Decimal::from_str(&price_data.closeout_bid).unwrap_or_default();
+            (price, Decimal::default())
+        });
+
+    // Parse timestamp
+    let time = match DateTime::parse_from_rfc3339(&price_data.time) {
+        Ok(time) => time.with_timezone(&Utc),
+        Err(e) => {
+            return Err(FundForgeError::ServerErrorDebug(format!("Failed to parse timestamp: {}", e).into()));
+        }
+    }.with_timezone(&Utc);
+
+    // Look up the symbol
+    let symbol = match instrument_symbol_map.get(&price_data.instrument) {
+        Some(symbol) => symbol.clone(),
+        None => {
+            return Err(FundForgeError::ServerErrorDebug(format!("Symbol not found in map: {}", price_data.instrument).into()));
+        }
+    };
+
+    // Check if we have subscribers and broadcast if we do
+    let mut remove_broadcaster = false;
+
     if let Some(broadcaster) = quote_feed_broadcasters.get(&symbol.name) {
-        // Create the quote object
         let quote = BaseDataEnum::Quote(Quote::new(
             symbol.clone(),
-            closeout_ask,
-            closeout_bid,
-            volume.clone(), // Ask volume
-            volume,         // Bid volume
-            time.to_string()
+            best_ask,
+            best_bid,
+            best_ask_liquidity,
+            best_bid_liquidity,
+            time.to_string(),
         ));
 
-        // Send the quote to subscribers
         match broadcaster.send(quote) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                // Check if we should remove the broadcaster due to no receivers
+            Ok(_) => {}
+            Err(_) => {
+                // Mark broadcaster for removal if there are no receivers
                 if broadcaster.receiver_count() == 0 {
-                    quote_feed_broadcasters.remove(&symbol.name);
-                    Ok(()) // Not treating this as an error since it's a normal cleanup
-                } else {
-                    // Only treat as error if there were supposed to be receivers
-                    Err(format!("Failed to broadcast quote: {}", e).into())
+                    remove_broadcaster = true;
                 }
             }
         }
-    } else {
-        // No subscribers, but this isn't an error condition
-        Ok(())
     }
+
+    if remove_broadcaster {
+        quote_feed_broadcasters.remove(&symbol.name);
+        return Err(FundForgeError::ConnectionNotFound("Broadcaster removed due to no receivers".into()));
+    }
+
+    Ok(())
 }
 
 pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
@@ -573,7 +663,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
     }
     let stream_limit = Arc::new(Semaphore::new(20));
     if let Some(account) = oanda_client.accounts.get(0) {
-        handle_price_stream(oanda_client.streaming_client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone()).await;
+        handle_price_stream(oanda_client.streaming_client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.instruments_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone()).await;
     }
     eprintln!("Oanda client initialized");
     let _ = OANDA_CLIENT.set(Arc::new(oanda_client));

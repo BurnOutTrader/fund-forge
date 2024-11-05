@@ -52,3 +52,37 @@ or if we actively subscribe to data it will be updated each time a new subscript
 
 You don't need to stop the server to add new symbols to the download list, just add the symbols to the list and the server will start downloading the new symbols at the next download interval.
 
+## Live Oanda Strategies
+Since Oanda Uses quote data, but there is no historical quote data, live warm up does not work with Oanda.
+Indicators and DataSubscriptions can still have instant history, if you subscribe after the strategy is warmed up.
+Use the Warm-up complete strategy event for this: 
+```rust
+ StrategyEvent::WarmUpComplete => {
+    let msg = String::from("Strategy: Warmup Complete");
+    println!("{}", msg.as_str().bright_magenta());
+    warmup_complete = true;
+    let sub = DataSubscription::new(
+        SymbolName::from("NAS100-USD"),
+        DataVendor::Oanda,
+        Resolution::Seconds(5),
+        BaseDataType::QuoteBars,
+        MarketType::CFD
+    );
+    strategy.subscribe(sub.clone(), 100, false).await;
+    let data = strategy.bar_index(&sub, 0);
+    println!("Strategy: Bar Index: {:?}", data);
+}
+```
+
+OR you can subscribe directly to the resolution if you know you have historical data for the subscription.
+```rust
+let sub = DataSubscription::new(
+    SymbolName::from("NAS100-USD"),
+    DataVendor::Oanda,
+    Resolution::Seconds(5),
+    BaseDataType::QuoteBars,
+    MarketType::CFD
+);
+strategy.subscribe_override(sub.clone(), 100, false).await;
+```
+

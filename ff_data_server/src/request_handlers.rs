@@ -50,7 +50,7 @@ pub async fn base_data_response(
         Ok(data) => data
     };
 
-    eprintln!("Data: {:?}", data.len());
+    //eprintln!("Data: {:?}", data.len());
 
     DataServerResponse::HistoricalBaseData {callback_id, payload: data}
 }

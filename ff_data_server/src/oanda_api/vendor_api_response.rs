@@ -29,7 +29,7 @@ impl VendorApiResponse for OandaClient {
     #[allow(unused)]
     async fn symbols_response(&self, mode: StrategyMode, stream_name: StreamName, market_type: MarketType, time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse {
         let mut symbols: Vec<Symbol> = Vec::new();
-        for symbol in &self.instruments_map {
+        for symbol in self.instruments_map.iter() {
             let symbol = Symbol::new(symbol.key().clone(), DataVendor::Oanda, symbol.value().market_type.clone());
             symbols.push(symbol);
         }
@@ -95,6 +95,14 @@ impl VendorApiResponse for OandaClient {
     }
     #[allow(unused)]
     async fn data_feed_subscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+        if subscription.resolution != Resolution::Instant {
+            return DataServerResponse::UnSubscribeResponse {
+                success: false,
+                subscription,
+                reason: Some("Oanda".to_string()),
+            };
+        }
+
         if !OANDA_IS_CONNECTED.load(Ordering::SeqCst) {
             return DataServerResponse::SubscribeResponse {
                 success: false,
@@ -115,6 +123,13 @@ impl VendorApiResponse for OandaClient {
             let receiver = broadcaster.value().subscribe();
             subscribe_stream(&stream_name, subscription.clone(), receiver).await;
         } else {
+            if self.quote_feed_broadcasters.len() == 20 {
+                return DataServerResponse::UnSubscribeResponse {
+                    success: false,
+                    subscription,
+                    reason: Some("Max number of subscriptions reached".to_string()),
+                };
+            }
             let (sender, receiver) = broadcast::channel(500);
             self.quote_feed_broadcasters.insert(subscription.symbol.name.clone(), sender);
             subscribe_stream(&stream_name, subscription.clone(), receiver).await;
@@ -123,14 +138,6 @@ impl VendorApiResponse for OandaClient {
 
         if !is_subscribed {
             let mut keys: Vec<SymbolName> = self.quote_feed_broadcasters.iter().map(|entry| entry.key().clone()).collect();
-            if keys.len() == 20 {
-                return DataServerResponse::UnSubscribeResponse {
-                    success: false,
-                    subscription,
-                    reason: Some("Max number of subscriptions reached".to_string()),
-                };
-            }
-            keys.push(subscription.symbol.name.clone());
             self.subscription_sender.send(keys).await;
         }
         DataServerResponse::SubscribeResponse {

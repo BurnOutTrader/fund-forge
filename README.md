@@ -25,6 +25,8 @@ See below for all the free historical data you will ever need.
 - 05/11/2024: Live warm up now works up until the last few seconds of data, when a history request is made by the engine for data that includes the present date, the server will first update the historical data to get the latest data, this means you need to have at least minimal historical data specified in you download_list.toml file for any symbols you trade live.
 On the client/strategy side, warming up data feeds etc is not currently done async, so you might see a pause in strategies if subscribing at run time (after strategy start), this will be async in the future as a background task, but I don't want to implement that until I have let the current implementation test for a little while.
 - 05/11/2024: My next task is live data and trading for Oanda. Then I will focus on making backtests more accurate and finishing backtest related functionality for all brokers/vendors, then I will focus on any live trading bugs, finnally i will add the bitget api, then some fundamental data provider apis, and finally add an equities/etf/options brokerage.
+- 05/11/2024: Since Oanda Uses quote data, but there is no historical quote data, live warm up does not work with Oanda. Indicators and DataSubscriptions can still have instant history, if you subscribe after the strategy is warmed up. Use the Warm-up complete strategy event for this, OR you can subscribe directly to the resolution if you know you have historical data for the subscription.
+- 05/11/2024: Fixed divide by 0 bug in backtesting engine, from using order quantity filled instead of quantity open in backtest matching engine.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).

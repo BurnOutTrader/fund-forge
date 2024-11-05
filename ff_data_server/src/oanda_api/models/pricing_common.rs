@@ -15,3 +15,21 @@ pub struct PriceBucket {
     /// using Rust's Decimal type for precision.
     pub liquidity: Decimal,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct PriceStreamResponse {
+    #[serde(default)]
+    pub asks: Vec<PriceBucket>,
+    #[serde(default)]
+    pub bids: Vec<PriceBucket>,
+    #[serde(rename = "closeoutAsk", default)]
+    pub closeout_ask: String,
+    #[serde(rename = "closeoutBid", default)]
+    pub closeout_bid: String,
+    pub instrument: String,
+    pub time: String,
+    #[serde(default)]
+    pub status: String,
+    #[serde(rename = "type", default)]
+    pub r#type: Option<String>,  // For heartbeat messages
+}
