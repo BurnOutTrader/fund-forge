@@ -7,6 +7,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use dashmap::DashMap;
+use futures_util::future::join_all;
 use lazy_static::lazy_static;
 use tokio::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt, WriteHalf};
@@ -35,6 +36,14 @@ pub async fn base_data_response(
 ) -> DataServerResponse {
     let from_time: DateTime<Utc> = from_time.parse().unwrap();
     let to_time: DateTime<Utc> = to_time.parse().unwrap();
+
+    if to_time.date_naive() == Utc::now().date_naive() {
+        let mut tasks = vec![];
+        for subscription in &subscriptions {
+            tasks.push(DATA_STORAGE.get().unwrap().pre_subscribe_updates(subscription.symbol.clone(), subscription.resolution, subscription.base_data_type))
+        }
+        join_all(tasks).await;
+    }
 
     let data = match DATA_STORAGE.get().expect("data folder not initialized").get_bulk_data(&subscriptions, from_time, to_time).await {
         Err(e) => return  DataServerResponse::Error { callback_id, error: FundForgeError::ServerErrorDebug(e.to_string())},
@@ -113,10 +122,22 @@ pub async fn manage_async_requests(
                         subscriptions,
                         from_time,
                         to_time
-                    } => handle_callback(
-                        || base_data_response(subscriptions, from_time, to_time, callback_id),
-                        sender.clone()
-                    ).await,
+                    } => {
+                        match strategy_mode {
+                            StrategyMode::Backtest => {
+                                handle_callback(
+                                    || base_data_response(subscriptions, from_time, to_time, callback_id),
+                                    sender.clone()
+                                ).await
+                            }
+                            StrategyMode::Live | StrategyMode::LivePaperTrading => {
+                                handle_callback_no_timeouts(
+                                    || base_data_response(subscriptions, from_time, to_time, callback_id),
+                                    sender.clone()
+                                ).await
+                            }
+                        }
+                    },
 
                     DataServerRequest::SymbolsVendor {
                         data_vendor,

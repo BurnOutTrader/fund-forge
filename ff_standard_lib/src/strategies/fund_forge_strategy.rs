@@ -282,7 +282,7 @@ impl FundForgeStrategy {
     }
 
     pub async fn subscribe_override(&self, subscription: DataSubscription, history_to_retain: usize) {
-        let _event = self.subscription_handler.subscribe_override(subscription, self.time_utc(), history_to_retain, true).await.unwrap_or_else(|event| event);
+        self.subscription_handler.subscribe_override(subscription, self.time_utc(), history_to_retain, true).await;
         //todo broadcast to strategy receiver
     }
 
@@ -772,15 +772,7 @@ impl FundForgeStrategy {
                     if !subscriptions.contains(&indicator.subscription()) {
                         match auto_subscribe {
                             true => {
-                                let result = handler.subscribe(indicator.subscription().clone(), Utc::now(),false, (indicator.data_required_warmup() + 1) as usize, true).await;
-                                match result {
-                                    Ok(_) => {
-                                       // add_buffer(Utc::now(), StrategyEvent::DataSubscriptionEvent(sub_result)).await;
-                                    },
-                                    Err(_) =>  {
-                                       // add_buffer(Utc::now(), StrategyEvent::DataSubscriptionEvent(sub_result)).await;
-                                    },
-                                }
+                                handler.subscribe(indicator.subscription().clone(), Utc::now(),false, (indicator.data_required_warmup() + 1) as usize, true).await;
                             }
                             false => eprintln!("You have no subscription: {}, for the indicator subscription {} and AutoSubscribe is not enabled", indicator.subscription(), indicator.name())
                         }

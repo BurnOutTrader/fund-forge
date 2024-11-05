@@ -20,6 +20,7 @@ lazy_static! {
         tx
     };
 }
+
 pub(crate) async fn live_warm_up(
     warm_up_start_time: DateTime<Utc>,
     buffer_duration: Duration,
