@@ -509,7 +509,7 @@ pub(crate) async fn simulated_order_matching (
             OrderType::ExitLong => {
                 let long_quantity = ledger_service.position_size(&order.account, &order.symbol_name);
                 let is_long = ledger_service.is_long(&order.account, &order.symbol_name);
-                if long_quantity == dec!(0.0) && is_long {
+                if long_quantity <= dec!(0.0) || !is_long {
                     let reason = "No Long Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
                     continue;
@@ -535,7 +535,7 @@ pub(crate) async fn simulated_order_matching (
             OrderType::ExitShort => {
                 let short_quantity = ledger_service.position_size(&order.account, &order.symbol_name);
                 let is_short = ledger_service.is_short(&order.account, &order.symbol_name);
-                if short_quantity == dec!(0.0) && is_short {
+                if short_quantity <= dec!(0.0) || !is_short {
                     let reason = "No Short Position To Exit".to_string();
                     rejected.push((order.id.clone(), reason));
                     continue;
