@@ -22,12 +22,12 @@ impl Interval {
     }
 }
 
-pub(crate) fn resolution_to_oanda_interval(resolution: &Resolution) -> Interval {
+pub(crate) fn resolution_to_oanda_interval(resolution: &Resolution) -> Option<Interval> {
     match resolution {
-        Resolution::Seconds(5) => Interval::S5,
-        Resolution::Minutes(1) => Interval::M1,
-        Resolution::Hours(1) => Interval::H1,
-        _ => panic!("Unsupported resolution for oanda brokerage data"),
+        Resolution::Seconds(5) => Some(Interval::S5),
+        Resolution::Minutes(1) => Some(Interval::M1),
+        Resolution::Hours(1) => Some(Interval::H1),
+        _ => None,
     }
 }
 

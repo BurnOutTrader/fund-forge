@@ -29,7 +29,7 @@ use ff_standard_lib::standardized_types::enums::MarketType;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
-use crate::oanda_api::api_client::{oanda_connected, OANDA_CLIENT};
+use crate::oanda_api::api_client::{OANDA_CLIENT, OANDA_IS_CONNECTED};
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
@@ -44,7 +44,7 @@ pub struct HybridStorage {
     cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
     cache_is_updated: Arc<DashMap<String, bool>>,
     clear_cache_duration: Duration,
-    download_tasks: Arc<DashMap<(SymbolName, BaseDataType), JoinHandle<()>>>,
+    download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
     options: ServerLaunchOptions,
     multi_bar: MultiProgress,
     download_semaphore: Arc<Semaphore>,
@@ -144,7 +144,7 @@ impl HybridStorage {
                     None => return,
                 }
             }
-            DataVendor::Oanda if oanda_connected()=> {
+            DataVendor::Oanda if OANDA_IS_CONNECTED.load(Ordering::SeqCst)=> {
                 match OANDA_CLIENT.get() {
                     Some(client) => client.clone(),
                     None => return,
@@ -189,7 +189,7 @@ impl HybridStorage {
                 }
             }
         };
-        let key = (symbol.name.clone(), base_data_type.clone());
+        let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
 
         let mut was_downloading = false;
         while self.download_tasks.contains_key(&key) {
@@ -223,7 +223,7 @@ impl HybridStorage {
     }
 
     async fn update_symbol(
-        download_tasks: Arc<DashMap<(SymbolName, BaseDataType), JoinHandle<()>>>,
+        download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
         download_semaphore: Arc<Semaphore>,
         symbol: Symbol,
         resolution: Resolution,
@@ -240,7 +240,7 @@ impl HybridStorage {
                     None => return None,
                 }
             }
-            DataVendor::Oanda if oanda_connected()=> {
+            DataVendor::Oanda if OANDA_IS_CONNECTED.load(Ordering::SeqCst)=> {
                 match OANDA_CLIENT.get() {
                     Some(client) => client.clone(),
                     None => return None,
@@ -249,7 +249,7 @@ impl HybridStorage {
             _ => return None,
         };
 
-        let key = (symbol.name.clone(), base_data_type.clone());
+        let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
         if download_tasks.contains_key(&key) {
             return None;
         }
@@ -291,7 +291,7 @@ impl HybridStorage {
                 DataVendor::Rithmic if !RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
                     continue
                 },
-                DataVendor::Oanda if !oanda_connected() => {
+                DataVendor::Oanda if !OANDA_IS_CONNECTED.load(Ordering::SeqCst) => {
                     continue
                 },
                 DataVendor::Test | DataVendor::Bitget => {
@@ -320,6 +320,7 @@ impl HybridStorage {
 
                 if !symbol_configs.is_empty() {
                     for symbol_config in symbol_configs {
+                        //eprintln!("Symbol: {:?}", symbol_config);
                         let market_type = match vendor {
                             DataVendor::Oanda => {
                                 if let Some(client) = OANDA_CLIENT.get() {
@@ -410,7 +411,7 @@ impl HybridStorage {
                             end_time,
                             from_back
                         ).await {
-                            download_tasks.insert((symbol_config.symbol_name, symbol_config.base_data_type), spawn_handle);
+                            download_tasks.insert((symbol_config.symbol_name, symbol_config.base_data_type, symbol_config.resolution.clone()), spawn_handle);
                         }
                     }
                 }
@@ -869,7 +870,7 @@ struct DownloadSymbols {
     symbols: Vec<DownloadConfig>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 pub struct DownloadConfig {
     pub symbol_name: SymbolName,
     pub base_data_type: BaseDataType,

@@ -10,7 +10,10 @@ use crate::oanda_api::support_and_conversions::{add_time_to_date, resolution_to_
 #[allow(dead_code)]
 pub(crate) async fn generate_urls(symbol: Symbol, resolution: Resolution, base_data_type: BaseDataType, start_time: DateTime<Utc>, end_time: DateTime<Utc>) -> Vec<String> {
     let mut urls: Vec<String> = Vec::new();
-    let interval = resolution_to_oanda_interval(&resolution);
+    let interval = match resolution_to_oanda_interval(&resolution) {
+        Some(interval) => interval,
+        None => return vec![],
+    };
 
     let instrument  = oanda_clean_instrument(&symbol.name).await;
 

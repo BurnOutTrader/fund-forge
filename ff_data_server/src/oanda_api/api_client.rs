@@ -27,11 +27,7 @@ use crate::oanda_api::models::position::OandaPosition;
 use crate::ServerLaunchOptions;
 
 lazy_static! {
-    static ref OANDA_IS_CONNECTED: AtomicBool = AtomicBool::new(false);
-}
-
-pub fn oanda_connected() -> bool {
-    OANDA_IS_CONNECTED.load(Ordering::SeqCst)
+    pub static ref OANDA_IS_CONNECTED: AtomicBool = AtomicBool::new(false);
 }
 
 pub(crate) static OANDA_CLIENT: OnceCell<Arc<OandaClient>> = OnceCell::const_new();
@@ -53,6 +49,7 @@ pub fn get_oanda_client_ref() -> &'static Arc<OandaClient> {
 /// * `rate_limit` - The rate limit semaphore 120 per second
 pub struct OandaClient {
     pub client: Arc<Client>,
+    pub streaming_client: Arc<Client>,
     pub rate_limiter: Arc<RateLimiter>,
     pub api_key: String,
     pub base_endpoint: String,
@@ -69,17 +66,38 @@ pub struct OandaClient {
 impl OandaClient {
     pub async fn send_rest_request(&self, endpoint: &str) -> Result<Response, Error> {
         let url = format!("{}{}", self.base_endpoint, endpoint);
+        let mut retries = 0;
+        let max_retries = 50;
+        let base_delay = Duration::from_secs(1);
 
-        // Acquire a permit asynchronously. The permit will be automatically released when dropped.
-        let _permit = self.rate_limiter.acquire().await;
+        loop {
+            // Acquire a permit asynchronously
+            let _permit = self.rate_limiter.acquire().await;
 
-        match self.client.get(&url).header("Authorization", format!("Bearer {}", self.api_key)).send().await {
-            Ok(response) => {
-                Ok(response)
-            }
-            Err(e) => {
-                OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
-                Err(e)
+            match self.client.get(&url)
+                .header("Authorization", format!("Bearer {}", self.api_key))
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                    return Ok(response);
+                }
+                Err(e) => {
+                    OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                    if retries >= max_retries {
+                        return Err(e);
+                    }
+
+                    // Exponential backoff with jitter
+                    let delay = base_delay * 2u32.pow(retries as u32);
+                    let jitter = Duration::from_millis(rand::random::<u64>() % 1000);
+                    tokio::time::sleep(delay + jitter).await;
+
+                    retries += 1;
+                    eprintln!("REST request failed, attempt {}/{}: {}", retries, max_retries, e);
+                    continue;
+                }
             }
         }
     }
@@ -114,11 +132,13 @@ async fn handle_price_stream(
 ) {
     tokio::spawn(async move {
         let mut current_subscriptions = Vec::new();
+        let mut consecutive_failures = 0;
+        let max_consecutive_failures = 5;
+        let base_delay = Duration::from_secs(1);
+
         loop {
             tokio::select! {
-                // Check for subscription updates
                 Some(new_subscriptions) = subscription_receiver.recv() => {
-                    // Only establish new stream if subscriptions changed
                     let mut cleaned_new_subscriptions = vec![];
                     for sub in new_subscriptions {
                         if let Some(instrument) = instrument_symbol_map.get(&sub) {
@@ -127,144 +147,148 @@ async fn handle_price_stream(
                     }
                     if cleaned_new_subscriptions != current_subscriptions {
                         current_subscriptions = cleaned_new_subscriptions;
-                        continue; // This will break the inner stream loop and create new stream
+                        consecutive_failures = 0; // Reset failure count on subscription change
+                        continue;
                     }
                 }
 
                 _ = async {
                     if current_subscriptions.is_empty() {
-                        // Wait for subscriptions if none exist
                         tokio::time::sleep(Duration::from_secs(1)).await;
                         return;
                     }
-                    //accounts/<ACCOUNT>/pricing/stream?instruments=EUR_USD%2CUSD_CAD"
-                    let suffix = format!("{}/pricing/stream?instruments={}", account.account_id, current_subscriptions.join("%2C"));
+
+                    let suffix = format!("{}/pricing/stream?instruments={}",
+                        account.account_id,
+                        current_subscriptions.join("%2C")
+                    );
 
                     match establish_stream(&client, &stream_endpoint, &suffix, &stream_limit, &api_key).await {
                         Ok(mut stream) => {
-                             OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                            OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                            consecutive_failures = 0; // Reset failure count on successful connection
+
                             while let Ok(Some(chunk)) = stream.try_next().await {
                                 if let Ok(text) = String::from_utf8(chunk.to_vec()) {
-                                    let json: Value = match serde_json::from_str(&text) {
-                                        Ok(j) => j,
+                                    // Process stream data...
+                                    match process_stream_data(
+                                        &text,
+                                        &instrument_symbol_map,
+                                        &quote_feed_broadcasters
+                                    ).await {
+                                        Ok(_) => continue,
                                         Err(e) => {
-                                            eprintln!("Failed to parse JSON: {}", e);
-                                            continue;
+                                            eprintln!("Error processing stream data: {}", e);
+                                            break; // Break the stream loop to trigger reconnection
                                         }
-                                    };
-
-                                    let raw_ask = match json["closeoutAsk"].as_str().ok_or("closeoutAsk") {
-                                        Ok(ask) => ask,
-                                        Err(e) => {
-                                            eprintln!("Failed to parse closeoutAsk: {}", e);
-                                            continue;
-                                        }
-                                    };
-                                    let closeout_ask = match Decimal::from_str(raw_ask) {
-                                        Ok(b) => b,
-                                        Err(e) => {
-                                            eprintln!("Failed to parse closeoutAsk: {}", e);
-                                            continue;
-                                        }
-                                    };
-
-                                    let raw_bid = match json["closeoutBid"].as_str().ok_or("closeoutBid") {
-                                        Ok(bid) => bid,
-                                        Err(e) => {
-                                            eprintln!("Failed to parse closeoutBid: {}", e);
-                                            continue;
-                                        }
-                                    };
-                                    let closeout_bid = match Decimal::from_str(raw_bid) {
-                                        Ok(b) => b,
-                                        Err(e) => {
-                                            eprintln!("Failed to parse closeoutBid: {}", e);
-                                            continue;
-                                        }
-                                    };
-
-                                     let raw_volume = match json["closeoutBid"].as_str().ok_or("liquidity") {
-                                        Ok(vol) => vol,
-                                        Err(e) => {
-                                            eprintln!("Failed to parse closeoutBid: {}", e);
-                                            continue;
-                                        }
-                                    };
-                                    let volume = match Decimal::from_str(raw_volume) {
-                                        Ok(b) => b,
-                                        Err(e) => {
-                                            eprintln!("Failed to parse closeoutBid: {}", e);
-                                            continue;
-                                        }
-                                    };
-
-                                    let instrument = match json["instrument"].as_str().ok_or("instrument") {
-                                        Ok(i) => i,
-                                        Err(e) => {
-                                            eprintln!("Failed to parse instrument: {}", e);
-                                            continue;
-                                        }
-                                    };
-
-                                    let time_str = match json["time"].as_str().ok_or("time") {
-                                        Ok(t) => t,
-                                        Err(e) => {
-                                            eprintln!("Failed to parse time: {}", e);
-                                            continue;
-                                        }
-                                    };
-                                    let time = match DateTime::parse_from_rfc3339(time_str) {
-                                        Ok(t) => t.with_timezone(&Utc),
-                                        Err(e) => {
-                                            eprintln!("Failed to parse time: {}", e);
-                                            continue;
-                                        }
-                                    };
-
-                                    let symbol = match instrument_symbol_map.get(instrument) {
-                                        Some(symbol) => symbol.clone(),
-                                        None => {
-                                            eprintln!("Symbol not found: {}", instrument);
-                                            continue;
-                                        }
-                                    };
-
-                                    // Broadcast if we have subscribers
-                                    let mut dead_broadcast = false;
-                                    if let Some(broadcaster) = quote_feed_broadcasters.get(&symbol.name) {
-                                        let quote = BaseDataEnum::Quote(Quote::new(
-                                            symbol.clone(),
-                                            closeout_ask,
-                                            closeout_bid,
-                                            volume.clone(),
-                                            volume,
-                                            time.to_string()
-                                        ));
-                                        match broadcaster.send(quote) {
-                                            Ok(_) => {}
-                                            Err(_e) => {
-                                                if broadcaster.receiver_count() == 0 {
-                                                    dead_broadcast = true;
-                                                }
-                                            }
-                                        }
-                                    }
-                                    if dead_broadcast {
-                                        quote_feed_broadcasters.remove(&symbol.name);
                                     }
                                 }
                             }
                         }
                         Err(e) => {
-                            eprintln!("Stream error: {}", e);
-                             OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
-                            tokio::time::sleep(Duration::from_secs(5)).await;
+                            consecutive_failures += 1;
+                            OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                            eprintln!("Stream error (attempt {}/{}): {}",
+                                consecutive_failures,
+                                max_consecutive_failures,
+                                e
+                            );
+
+                            if consecutive_failures >= max_consecutive_failures {
+                                eprintln!("Max consecutive failures reached. Implementing extended backoff...");
+                                // Extended backoff for repeated failures
+                                let delay = base_delay * 2u32.pow(consecutive_failures as u32);
+                                let max_delay = Duration::from_secs(300); // 5 minutes max
+                                let final_delay = std::cmp::min(delay, max_delay);
+                                tokio::time::sleep(final_delay).await;
+                            } else {
+                                // Regular backoff for occasional failures
+                                let delay = base_delay * 2u32.pow(consecutive_failures as u32);
+                                tokio::time::sleep(delay).await;
+                            }
                         }
                     }
                 } => {}
             }
         }
     });
+}
+
+async fn process_stream_data(
+    text: &str,
+    instrument_symbol_map: &Arc<DashMap<String, Symbol>>,
+    quote_feed_broadcasters: &Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>
+) -> Result<(), Box<dyn std::error::Error>> {
+    let json: Value = serde_json::from_str(text)?;
+    println!("{:?}", json);
+    // Extract and validate ask price
+    let raw_ask = json["closeoutAsk"]
+        .as_str()
+        .ok_or("closeoutAsk missing")?;
+    let closeout_ask = Decimal::from_str(raw_ask)?;
+
+    // Extract and validate bid price
+    let raw_bid = json["closeoutBid"]
+        .as_str()
+        .ok_or("closeoutBid missing")?;
+    let closeout_bid = Decimal::from_str(raw_bid)?;
+
+    // Extract and validate volume/liquidity
+    let raw_volume = json["liquidity"]
+        .as_str()
+        .ok_or("liquidity missing")?;
+    let volume = Decimal::from_str(raw_volume)?;
+
+    // Extract instrument name
+    let instrument = json["instrument"]
+        .as_str()
+        .ok_or("instrument missing")?;
+
+    // Extract and parse timestamp
+    let time_str = json["time"]
+        .as_str()
+        .ok_or("time missing")?;
+    let time = DateTime::parse_from_rfc3339(time_str)?
+        .with_timezone(&Utc);
+
+    // Look up the symbol in our map
+    let symbol = match instrument_symbol_map.get(instrument) {
+        Some(symbol) => symbol.clone(),
+        None => {
+            return Err(format!("Symbol not found in map: {}", instrument).into());
+        }
+    };
+
+    // Check if we have any subscribers for this symbol
+    if let Some(broadcaster) = quote_feed_broadcasters.get(&symbol.name) {
+        // Create the quote object
+        let quote = BaseDataEnum::Quote(Quote::new(
+            symbol.clone(),
+            closeout_ask,
+            closeout_bid,
+            volume.clone(), // Ask volume
+            volume,         // Bid volume
+            time.to_string()
+        ));
+
+        // Send the quote to subscribers
+        match broadcaster.send(quote) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // Check if we should remove the broadcaster due to no receivers
+                if broadcaster.receiver_count() == 0 {
+                    quote_feed_broadcasters.remove(&symbol.name);
+                    Ok(()) // Not treating this as an error since it's a normal cleanup
+                } else {
+                    // Only treat as error if there were supposed to be receivers
+                    Err(format!("Failed to broadcast quote: {}", e).into())
+                }
+            }
+        }
+    } else {
+        // No subscribers, but this isn't an error condition
+        Ok(())
+    }
 }
 
 pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
@@ -292,6 +316,34 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         }
     };
 
+    // Create dedicated streaming client with different settings
+    let streaming_client = match Client::builder()
+        .default_headers({
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                reqwest::header::AUTHORIZATION,
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", settings.api_key)).unwrap(),
+            );
+            headers
+        })
+        .http2_keep_alive_while_idle(true)  // Important for streaming
+        .http2_keep_alive_interval(Duration::from_secs(5))
+        .http2_keep_alive_timeout(Duration::from_secs(20))
+        .build()
+    {
+        Ok(client) => {
+            eprintln!("Oanda streaming client connected");
+            OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+            client
+        }
+        Err(_) => {
+            eprintln!("Oanda streaming client failed to connect");
+            OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+            return;
+        }
+    };
+    let streaming_client = Arc::new(streaming_client);
+
     let client = match Client::builder().default_headers({
             let mut headers = reqwest::header::HeaderMap::new();
             headers.insert(
@@ -304,21 +356,22 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         .build()
     {
         Ok(client) => {
-            OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+            eprintln!("Oanda client connected");
             client
         }
         Err(_) => {
+            eprintln!("Oanda client failed to connect");
             OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
             return;
         }
     };
-
     let client = Arc::new(client);
 
     let rate_limiter = RateLimiter::new(120, Duration::from_secs(1));
     let (sender, receiver) = tokio::sync::mpsc::channel(5);
     let mut oanda_client = OandaClient {
         client,
+        streaming_client,
         rate_limiter,
         api_key: settings.api_key.clone(),
         base_endpoint: match &settings.mode {
@@ -378,8 +431,8 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
     }
     let stream_limit = Arc::new(Semaphore::new(20));
     if let Some(account) = oanda_client.accounts.get(0) {
-        handle_price_stream(oanda_client.client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone()).await;
+        handle_price_stream(oanda_client.streaming_client.clone(), oanda_client.instrument_symbol_map.clone(), oanda_client.quote_feed_broadcasters.clone(), receiver, account.clone(), stream_limit.clone(), oanda_client.stream_endpoint.clone(), oanda_client.api_key.clone()).await;
     }
-    OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+    eprintln!("Oanda client initialized");
     let _ = OANDA_CLIENT.set(Arc::new(oanda_client));
 }

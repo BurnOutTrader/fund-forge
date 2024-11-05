@@ -171,7 +171,10 @@ impl VendorApiResponse for OandaClient {
     #[allow(unused)]
     async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
         let data_storage = DATA_STORAGE.get().unwrap();
-        let interval = resolution_to_oanda_interval(&resolution);
+        let interval = match resolution_to_oanda_interval(&resolution) {
+            Some(interval) => interval,
+            None => return Err(FundForgeError::ClientSideErrorDebug("Invalid resolution".to_string())),
+        };
         let instrument = oanda_clean_instrument(&symbol.name).await;
         let add_time = add_time_to_date(&interval);
 
@@ -196,10 +199,7 @@ impl VendorApiResponse for OandaClient {
         loop {
             let to_time = (last_bar_time + add_time).min(current_time + Duration::seconds(15));
 
-            // Break if we've reached or passed current time
-            if last_bar_time >= current_time {
-                break;
-            }
+
             let to = match from_back {
                 true => to,
                 false => Utc::now(),
@@ -216,6 +216,8 @@ impl VendorApiResponse for OandaClient {
                 Err(_) => {
                     // On error, advance time window and continue
                     last_bar_time = to_time;
+                    consecutive_empty_responses += 1;
+                    eprintln!("Error downloading data for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time);
                     continue;
                 }
             };

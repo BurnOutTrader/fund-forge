@@ -50,6 +50,8 @@ pub async fn base_data_response(
         Ok(data) => data
     };
 
+    eprintln!("Data: {:?}", data.len());
+
     DataServerResponse::HistoricalBaseData {callback_id, payload: data}
 }
 
@@ -164,6 +166,16 @@ pub async fn manage_async_requests(
                         market_type,
                     } => handle_callback(
                         || resolutions_response(data_vendor, mode, stream_name, market_type, callback_id),
+                        sender.clone()
+                    ).await,
+
+                    DataServerRequest::WarmUpResolutions {
+                        callback_id,
+                        data_vendor,
+                        market_type,
+                    } => handle_callback(
+                        // we always use backtest mode for warmup so that way we return the resolutions we have serialized data for
+                        || resolutions_response(data_vendor, StrategyMode::Backtest, stream_name, market_type, callback_id),
                         sender.clone()
                     ).await,
 

@@ -87,6 +87,30 @@ impl DataVendor {
         }
     }
 
+    pub async fn warm_up_resolutions(&self, market_type: MarketType) -> Result<Vec<SubscriptionResolutionType>, FundForgeError> {
+        let request = DataServerRequest::WarmUpResolutions {
+            callback_id: 0,
+            data_vendor: self.clone(),
+            market_type,
+        };
+        let (sender, receiver) = oneshot::channel();
+        let msg = StrategyRequest::CallBack(ConnectionType::Vendor(self.clone()), request,sender);
+        send_request(msg).await;
+        match timeout(TIME_OUT, receiver).await {
+            Ok(receiver_result) => match receiver_result {
+                Ok(response) => {
+                    match response {
+                        DataServerResponse::Resolutions { subscription_resolutions_types, .. } => Ok(subscription_resolutions_types),
+                        DataServerResponse::Error {error,..} => Err(error),
+                        _ => Err(FundForgeError::ClientSideErrorDebug("Incorrect response received at callback".to_string()))
+                    }
+                },
+                Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Receiver error at callback recv: {}", e)))
+            },
+            Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Operation timed out after {} seconds", e)))
+        }
+    }
+
     pub async fn markets(&self) -> Result<Vec<MarketType>, FundForgeError> {
         let request = DataServerRequest::Markets {
             callback_id: 0,

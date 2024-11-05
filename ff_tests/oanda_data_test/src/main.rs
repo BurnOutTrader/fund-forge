@@ -40,13 +40,6 @@ async fn main() {
                 BaseDataType::Quotes,
                 MarketType::CFD
             ),
-            DataSubscription::new(
-                SymbolName::from("NAS100-USD"),
-                DataVendor::Oanda,
-                Resolution::Seconds(5),
-                BaseDataType::QuoteBars,
-                MarketType::CFD
-            ),
         ],
 
         //fill forward
@@ -96,8 +89,6 @@ pub async fn on_data_received(
             StrategyEvent::TimeSlice(time_slice) => {
                 for base_data in time_slice.iter() {
                     match base_data {
-                        BaseDataEnum::Candle(_candle) => {}
-
                         BaseDataEnum::QuoteBar(qb) => {
                             if qb.is_closed == true {
                                 let msg = format!("{} {} {} Close: {}, {}", qb.symbol.name, qb.resolution, qb.candle_type, qb.bid_close, qb.time_closed_local(strategy.time_zone()));
@@ -169,6 +160,14 @@ pub async fn on_data_received(
                 let msg = String::from("Strategy: Warmup Complete");
                 println!("{}", msg.as_str().bright_magenta());
                 warmup_complete = true;
+                let sub = DataSubscription::new(
+                    SymbolName::from("NAS100-USD"),
+                    DataVendor::Oanda,
+                    Resolution::Seconds(5),
+                    BaseDataType::QuoteBars,
+                    MarketType::CFD
+                );
+                strategy.subscribe(sub, 10000, false).await;
             }
 
             StrategyEvent::PositionEvents(event) => {
@@ -182,7 +181,7 @@ pub async fn on_data_received(
                         strategy.print_ledger(event.account()).await
                     },
                 }
-                let quantity = strategy.position_size(&account_1, &"EUR-USD".to_string());
+                let quantity = strategy.position_size(&account_1, &"NAS100-USD".to_string());
                 let msg = format!("{}, Time Local: {}", event, event.time_local(strategy.time_zone()));
                 println!("{}", msg.as_str().purple());
                 println!("Strategy: Open Quantity: {}", quantity);

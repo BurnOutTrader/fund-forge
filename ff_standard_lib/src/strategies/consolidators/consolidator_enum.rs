@@ -6,8 +6,10 @@ use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Datelike, Duration, Utc, Weekday};
+use chrono_tz::Tz::Australia__Brisbane;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::get_historical_data;
+use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::futures_products::extract_symbol_from_contract;
 
@@ -129,11 +131,13 @@ impl ConsolidatorEnum {
             subscription
                 .symbol
                 .data_vendor
-                .resolutions(subscription.market_type.clone())
+                .warm_up_resolutions(subscription.market_type.clone())
                 .await
                 .unwrap(),
             consolidator.subscription().resolution,
         );
+
+        //eprintln!("Vendor resolutions: {:?}", vendor_resolutions);
 
         if subscription.candle_type == Some(CandleType::HeikinAshi) {
             vendor_resolutions.retain(|base_subscription| {
@@ -143,12 +147,15 @@ impl ConsolidatorEnum {
         }
         let max_resolution = vendor_resolutions.iter().max_by_key(|r| r.resolution);
         let min_resolution = match max_resolution.is_none() {
-            true => panic!(
-                "{} does not have any resolutions available",
-                subscription.symbol.data_vendor
-            ),
-            false => max_resolution.unwrap(),
+            true => {
+                return (consolidator, RollingWindow::new(history_to_retain as usize));
+            },
+            false => match max_resolution {
+                Some(res) => res,
+                None => return (consolidator, RollingWindow::new(history_to_retain as usize)),
+            },
         };
+        //eprintln!("Min resolution: {:?}", min_resolution);
 
         let subtract_duration: Duration = consolidator.resolution().as_duration() * history_to_retain;
         let mut from_time = to_time - subtract_duration ;
@@ -166,6 +173,7 @@ impl ConsolidatorEnum {
         );
 
         let mut history = RollingWindow::new(history_to_retain as usize);
+        //eprintln!("Warmup from: {} to: {}", from_time, to_time);
         let data = match get_historical_data(vec![base_subscription.clone()], from_time, to_time).await {
             Ok(data) => data,
             Err(e) => {
@@ -173,6 +181,7 @@ impl ConsolidatorEnum {
                 return  (consolidator, history)
             }
         };
+        //eprintln!("Data length: {}", data.len());
 
         for (_time, time_slice) in data {
             for base_data in time_slice.iter() {
@@ -180,8 +189,10 @@ impl ConsolidatorEnum {
                 if let Some(closed_data) = consolidated_data.closed_data {
                     history.add(closed_data);
                 }
+                println!("time: {}", base_data.time_local(&Australia__Brisbane));
             }
         }
+        //eprintln!("Warmup complete: {}", history.len());
         (consolidator, history)
     }
 }

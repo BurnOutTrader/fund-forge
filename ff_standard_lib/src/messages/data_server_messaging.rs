@@ -81,6 +81,11 @@ pub enum DataServerRequest {
         data_vendor: DataVendor,
         market_type: MarketType
     },
+    WarmUpResolutions {
+        callback_id: u64,
+        data_vendor: DataVendor,
+        market_type: MarketType
+    },
     AccountInfo {
         callback_id: u64,
         brokerage: Brokerage,
@@ -172,6 +177,7 @@ impl DataServerRequest {
             DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
             DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::WarmUpResolutions { callback_id, .. } => {*callback_id = id}
         }
     }
 }
