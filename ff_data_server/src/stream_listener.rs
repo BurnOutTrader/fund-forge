@@ -22,19 +22,18 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
             return;
         }
     };
-
+    let mut listener = Some(listener);
     let mut shutdown_receiver = subscribe_server_shutdown();
     println!("Stream: Listening on: {}", addr);
 
     loop {
         tokio::select! {
             // Accept new connection
-            Ok((stream, peer_addr)) = listener.accept() => {
-                println!("Stream: {}, peer_addr: {:?}", Utc::now(), peer_addr);
-                let acceptor = acceptor.clone();
-
-                tokio::spawn(async move {
-                    match acceptor.accept(stream).await {
+            Ok((stream, peer_addr)) = listener.as_ref().unwrap().accept() => {
+            println!("Stream: {}, peer_addr: {:?}", Utc::now(), peer_addr);
+            let acceptor = acceptor.clone();
+            tokio::spawn(async move {
+                match acceptor.accept(stream).await {
                         Ok(tls_stream) => {
                             handle_stream_connection(tls_stream, peer_addr).await;
                         }
@@ -48,6 +47,7 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
             // Listen for shutdown signal
             _ = shutdown_receiver.recv() => {
                 println!("Stream: Shutdown signal received, stopping server.");
+                 listener = None;
                 break;
             }
         }

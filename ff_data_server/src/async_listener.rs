@@ -26,10 +26,11 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
     // Subscribe to the shutdown signal
     let mut shutdown_receiver = subscribe_server_shutdown();
 
+    let mut listener = Some(listener);
+
     loop {
         tokio::select! {
-            // Handle incoming connections
-            result = listener.accept() => {
+            result = listener.as_ref().unwrap().accept() => {
                 match result {
                     Ok((stream, peer_addr)) => {
                         println!("Server: {}, peer_addr: {:?}", Utc::now(), peer_addr);
@@ -53,16 +54,15 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
                 }
             },
 
-            // Wait for shutdown signal
             _ = shutdown_receiver.recv() => {
                 println!("Server: Shutdown signal received.");
+                listener = None;  // Explicitly drop the listener
                 break;
             }
         }
     }
-
-    println!("Server: Shutting down.");
 }
+
 
 async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr: SocketAddr) {
     const LENGTH: usize = 8;
