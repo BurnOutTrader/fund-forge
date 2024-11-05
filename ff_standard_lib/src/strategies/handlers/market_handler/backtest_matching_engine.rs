@@ -238,7 +238,7 @@ pub(crate) async fn simulated_order_matching (
                     OrderSide::Buy => market_price <= order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.limit_price.unwrap()
                 };
-                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.quantity_open, order.quantity_open).await {
+                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.quantity_open, limit_price).await {
                     Ok(price_volume) => {
                         match price_volume {
                             PriceServiceResponse::LimitFillPriceEstimate { fill_price, fill_volume } => {
@@ -263,7 +263,7 @@ pub(crate) async fn simulated_order_matching (
                 }
             }
             OrderType::Market => {
-                let market_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
+                let market_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_open).await {
                     Ok(price) => {
                         match price.price() {
                             None =>  continue,
@@ -313,7 +313,7 @@ pub(crate) async fn simulated_order_matching (
                     OrderSide::Sell => market_price <= trigger_price,
                 };
 
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
+                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_open).await {
                     Ok(price) => match price.price() {
                         None => continue,
                         Some(price) => price
@@ -367,7 +367,7 @@ pub(crate) async fn simulated_order_matching (
                     OrderSide::Sell => market_price >= trigger_price,
                 };
 
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
+                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_open).await {
                     Ok(price) => match price.price() {
                         None => continue,
                         Some(price) => price
@@ -446,7 +446,7 @@ pub(crate) async fn simulated_order_matching (
                     OrderSide::Buy => market_price <= order.trigger_price.unwrap() && market_price > order.limit_price.unwrap(),
                     OrderSide::Sell => market_price >= order.trigger_price.unwrap() && market_price < order.limit_price.unwrap()
                 };
-                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.quantity_open, order.quantity_open).await {
+                let (market_price, volume_filled) = match price_service_request_limit_fill_price_quantity(order.side, order.symbol_name.clone(), order.quantity_open, limit_price).await {
                     Ok(price_volume) => {
                         match price_volume {
                             PriceServiceResponse::LimitFillPriceEstimate { fill_price, fill_volume } => {
@@ -471,7 +471,7 @@ pub(crate) async fn simulated_order_matching (
                 }
             },
             OrderType::EnterLong => {
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
+                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_open).await {
                     Ok(price) => match price.price() {
                         None => continue,
                         Some(price) => price
@@ -489,7 +489,7 @@ pub(crate) async fn simulated_order_matching (
                 filled.push((order.id.clone(), market_fill_price));
             }
             OrderType::EnterShort => {
-                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_filled).await {
+                let market_fill_price = match price_service_request_market_fill_price(order.side, order.symbol_name.clone(), order.quantity_open).await {
                     Ok(price) => match price.price() {
                         None => continue,
                         Some(price) => price
