@@ -176,7 +176,7 @@ impl ConsolidatorEnum {
         //eprintln!("Warmup from: {} to: {}", from_time, to_time);
         let data = match get_historical_data(vec![base_subscription.clone()], from_time, to_time).await {
             Ok(data) => data,
-            Err(e) => {
+            Err(_) => {
                 //eprintln!("No data available or error: {}", e);
                 return  (consolidator, history)
             }
