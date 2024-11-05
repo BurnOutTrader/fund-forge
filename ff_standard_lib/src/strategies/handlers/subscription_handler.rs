@@ -1050,7 +1050,7 @@ impl SymbolSubscriptionHandler {
                                     }
                                 }
                             };
-                            let data = get_historical_data(vec![warm_up_sub], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
+                            let data = get_historical_data(vec![warm_up_sub.clone()], from_time, warm_up_to_time).await.unwrap_or_else(|_e| BTreeMap::new());
                             let multiplier = new_subscription.resolution.as_seconds() / warm_up_sub.resolution.as_seconds();
                             let mut history = RollingWindow::new(multiplier as usize * history_to_retain);
                             for (_, slice) in data {
