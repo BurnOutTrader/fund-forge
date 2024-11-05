@@ -870,15 +870,6 @@ impl RithmicBrokerageClient {
             let market_data_system = Arc::clone(&market_data_system);
             RithmicSystem::from_file_string(file.as_str()).map(|system| {
                 task::spawn(async move {
-                    let running = Arc::new(AtomicBool::new(true));
-                    let running_clone = running.clone();
-
-                    // Task 1: Handle shutdown signal
-                    tokio::spawn(async move {
-                        let mut shutdown_receiver = subscribe_server_shutdown();
-                        let _ = shutdown_receiver.recv().await;
-                        running_clone.store(false, Ordering::SeqCst);
-                    });
 
                     match RithmicBrokerageClient::new(system).await {
                         Ok(client) => {
@@ -888,7 +879,7 @@ impl RithmicBrokerageClient {
                             for plant_type in [SysInfraType::OrderPlant, SysInfraType::PnlPlant] {
                                 match client.connect_plant(plant_type).await {
                                     Ok(receiver) => {
-                                        handle_rithmic_responses(client.clone(), receiver, plant_type, running.clone());
+                                        handle_rithmic_responses(client.clone(), receiver, plant_type);
                                     }
                                     Err(e) => {
                                         eprintln!("Failed to connect {:?} for system {}, reason: {}",
@@ -902,7 +893,7 @@ impl RithmicBrokerageClient {
                                 for plant_type in [SysInfraType::TickerPlant, SysInfraType::HistoryPlant] {
                                     match client.connect_plant(plant_type).await {
                                         Ok(receiver) => {
-                                            handle_rithmic_responses(client.clone(), receiver, plant_type, running.clone());
+                                            handle_rithmic_responses(client.clone(), receiver, plant_type);
                                             RITHMIC_DATA_IS_CONNECTED.store(true, Ordering::SeqCst);
                                         }
                                         Err(e) => {

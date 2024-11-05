@@ -12,6 +12,7 @@ use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use crate::request_handlers::manage_async_requests;
 use crate::subscribe_server_shutdown;
 
+#[allow(unused_assignments)]
 pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
     let acceptor = TlsAcceptor::from(Arc::new(config));
     let listener = match TcpListener::bind(&addr).await {

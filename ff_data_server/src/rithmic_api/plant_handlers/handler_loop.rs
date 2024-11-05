@@ -1,6 +1,5 @@
 use std::io::Cursor;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
 #[allow(unused_imports)]
 use std::time::Duration;
 use async_std::stream::StreamExt;
@@ -13,7 +12,7 @@ use prost::Message as ProstMessage;
 use tokio::time::sleep;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_DATA_IS_CONNECTED};
+use crate::rithmic_api::api_client::{RithmicBrokerageClient};
 use futures::stream::{SplitSink, SplitStream};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
@@ -30,18 +29,20 @@ use crate::rithmic_api::plant_handlers::handle_pnl_plant::match_pnl_plant_id;
 use crate::rithmic_api::plant_handlers::handle_repo_plant::match_repo_plant_id;
 use crate::rithmic_api::plant_handlers::handle_tick_plant::match_ticker_plant_id;
 use crate::rithmic_api::plant_handlers::reconnect::attempt_reconnect;
+use crate::subscribe_server_shutdown;
 
 pub fn handle_rithmic_responses(
     client: Arc<RithmicBrokerageClient>,
     mut reader: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     plant: SysInfraType,
-    running: Arc<AtomicBool>
 ) {
-    // Task 2: Handle Rithmic responses
+    // Assume `subscribe_server_shutdown()` returns a `tokio::sync::mpsc::Receiver<()>`
+    let mut shutdown_receiver = subscribe_server_shutdown();
+
     tokio::spawn(async move {
-        while running.load(Ordering::SeqCst) {
-            match reader.next().await {
-                Some(Ok(message)) => {
+        loop {
+            tokio::select! {
+                Some(Ok(message)) = reader.next() => {
                     match message {
                         Message::Binary(bytes) => {
                             let client = client.clone();
@@ -98,42 +99,16 @@ pub fn handle_rithmic_responses(
                             }
                         }
                     }
-                }
-                Some(Err(e)) => {
-                    eprintln!("WebSocket error: {:?}", e);
-                    if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
-                        RITHMIC_DATA_IS_CONNECTED.store(false, Ordering::SeqCst);
-                    }
-                    if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
-                        if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
-                            RITHMIC_DATA_IS_CONNECTED.store(true, Ordering::SeqCst);
-                        }
-                        reader = new_reader;
-                    } else {
-                        break;
-                    }
-                }
-                None => {
-                    println!("WebSocket stream ended");
-                    if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
-                        RITHMIC_DATA_IS_CONNECTED.store(false, Ordering::SeqCst);
-                    }
-                    if let Some(new_reader) = attempt_reconnect(&client, plant.clone()).await {
-                        reader = new_reader;
-                        if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
-                            RITHMIC_DATA_IS_CONNECTED.store(true, Ordering::SeqCst);
-                        }
-                    } else {
-                        break;
-                    }
+                },
+                // Shutdown receiver waits here until a message is received, effectively signaling shutdown
+                _ = shutdown_receiver.recv() => {
+                    println!("Shutdown signal received. Stopping Rithmic response handler.");
+                    break;
                 }
             }
         }
 
-        println!("Shutting down Rithmic response handler for plant: {:?}", plant);
-        if plant == SysInfraType::TickerPlant || plant == SysInfraType::HistoryPlant {
-            RITHMIC_DATA_IS_CONNECTED.store(false, Ordering::SeqCst);
-        }
+        println!("Cleaning up Rithmic response handler for plant: {:?}", plant);
         if let Some((_, writer)) = client.writers.remove(&plant) {
             if let Err(e) = shutdown_plant(writer).await {
                 eprintln!("Error shutting down plant: {:?}", e);

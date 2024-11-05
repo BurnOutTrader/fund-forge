@@ -13,6 +13,7 @@ use crate::{subscribe_server_shutdown};
 use crate::server_side_datavendor::{data_feed_subscribe, data_feed_unsubscribe};
 use crate::stream_tasks::initialize_streamer;
 
+#[allow(unused_assignments)]
 pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
     let acceptor = TlsAcceptor::from(Arc::new(config));
     let listener = match TcpListener::bind(&addr).await {
