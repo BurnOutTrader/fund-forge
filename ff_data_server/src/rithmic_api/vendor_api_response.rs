@@ -452,7 +452,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             }
 
             // Check if we've caught up to the desired end or current time
-            if is_end || window_start >= to - TIME_NEGATIVE || window_end >= to - TIME_NEGATIVE {  // Added additional check
+            if is_end {  // Added additional check
                 break 'main_loop;
             }
             progress_bar.inc(1);

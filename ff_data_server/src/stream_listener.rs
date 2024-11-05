@@ -100,8 +100,7 @@ async fn handle_stream_connection(mut tls_stream: TlsStream<TcpStream>, peer_add
 pub async fn stream_response(stream_name: StreamName, request: StreamRequest) -> DataServerResponse {
     match request {
         StreamRequest::Subscribe(subscription) => {
-            //download latest data and await
-            DATA_STORAGE.get().unwrap().pre_subscribe_updates(subscription.symbol.clone(), subscription.resolution, subscription.base_data_type).await;
+            //it is not when we subscribe that we need to update data, only when we request historical data
             data_feed_subscribe(stream_name, subscription).await
         }
         StreamRequest::Unsubscribe(sub) => {

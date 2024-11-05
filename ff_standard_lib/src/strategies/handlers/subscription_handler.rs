@@ -83,11 +83,10 @@ impl SubscriptionHandler {
         warm_up_to_time: DateTime<Utc>,
         history_to_retain: usize,
         broadcast: bool
-    ) -> Result<DataSubscriptionEvent, DataSubscriptionEvent>  {
+    ) {
         if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
             let symbol_handler = SymbolSubscriptionHandler::new(
                 new_subscription.symbol.clone(),
-                self.strategy_event_sender.clone(),
             ).await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
         }
@@ -166,10 +165,10 @@ impl SubscriptionHandler {
                         Err(_) => {}
                     }
                 }
-                Ok(event)
+                let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(event)).await;
             }
             Err(e) => {
-                Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription, e.to_string()))
+                let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(e)).await;
             }
         }
     }
@@ -186,13 +185,14 @@ impl SubscriptionHandler {
         fill_forward: bool,
         history_to_retain: usize,
         broadcast: bool
-    ) -> Result<DataSubscriptionEvent, DataSubscriptionEvent> {
+    ) {
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         if !strategy_subscriptions.contains(&new_subscription) {
             strategy_subscriptions.push(new_subscription.clone());
         } else {
             let msg = format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name);
-            return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), msg));
+            let event = DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), msg);
+            let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(event)).await;
         }
 
         let _ = strategy_subscriptions.deref();
@@ -207,13 +207,13 @@ impl SubscriptionHandler {
                 Ok(_) => {}
                 Err(_) => {}
             }
-            return Ok(DataSubscriptionEvent::Subscribed(new_subscription));
+            let event = DataSubscriptionEvent::Subscribed(new_subscription.clone());
+            let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(event)).await;
         }
 
         if !self.symbol_subscriptions.contains_key(&new_subscription.symbol) {
             let symbol_handler = SymbolSubscriptionHandler::new(
                 new_subscription.symbol.clone(),
-                self.strategy_event_sender.clone(),
             ).await;
             self.symbol_subscriptions.insert(new_subscription.symbol.clone(), symbol_handler);
         }
@@ -296,10 +296,11 @@ impl SubscriptionHandler {
                         Err(_) => {}
                     }
                 }
-                Ok(DataSubscriptionEvent::Subscribed(new_subscription))
+                let event = DataSubscriptionEvent::Subscribed(new_subscription.clone());
+                let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(event)).await;
             }
             Err(e) => {
-                Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription, e.to_string()))
+                let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(e)).await;
             }
         }
     }
@@ -319,11 +320,7 @@ impl SubscriptionHandler {
             }
         }
         for sub in new_subscription {
-           let result = self.subscribe(sub.clone(), current_time.clone(), fill_forward, history_to_retain, false).await;
-            match result {
-                Ok(sub_result) => println!("{}", sub_result),
-                Err(sub_result) =>  eprintln!("{}", sub_result),
-            }
+           self.subscribe(sub.clone(), current_time.clone(), fill_forward, history_to_retain, false).await;
         }
         if broadcast {
             let subscriptions = self.primary_subscriptions().await;
@@ -358,7 +355,9 @@ impl SubscriptionHandler {
             return;
         }
 
-        self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
+        let event =  self.symbol_subscriptions.get(&subscription.symbol).unwrap().unsubscribe(&subscription).await;
+        let _ = self.strategy_event_sender.send(StrategyEvent::DataSubscriptionEvent(event)).await;
+
         let mut strategy_subscriptions = self.strategy_subscriptions.write().await;
         strategy_subscriptions.retain(|x| x != &subscription);
         if self.symbol_subscriptions.get(&subscription.symbol).unwrap().active_count() == 0 {
@@ -677,18 +676,15 @@ pub struct SymbolSubscriptionHandler {
     secondary_subscriptions: DashMap<SubscriptionResolutionType, AHashMap<DataSubscription, ConsolidatorEnum>>,
     vendor_primary_resolutions: Vec<SubscriptionResolutionType>,
     vendor_data_types: Vec<BaseDataType>,
-    strategy_event_sender: Sender<StrategyEvent>
 }
 
 impl SymbolSubscriptionHandler {
     pub async fn new(
         symbol: Symbol,
-        strategy_event_sender: Sender<StrategyEvent>
     ) -> Self {
         let vendor_primary_resolutions = symbol.data_vendor.resolutions(symbol.market_type.clone()).await.unwrap();
         let vendor_data_types = symbol.data_vendor.base_data_types().await.unwrap();
         let handler = SymbolSubscriptionHandler {
-            strategy_event_sender,
             primary_subscriptions: DashMap::new(),
             secondary_subscriptions: DashMap::new(),
             vendor_primary_resolutions,
@@ -771,21 +767,56 @@ impl SymbolSubscriptionHandler {
                     history.add(data.clone());
                 }
             }
-            let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
-            match self.strategy_event_sender.send(event).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
+            return Ok((history, DataSubscriptionEvent::Subscribed(new_subscription)))
+        }
+        self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
+        Ok((RollingWindow::new(history_to_retain), DataSubscriptionEvent::Subscribed(new_subscription)))
+    }
+
+  /*  pub(crate) async fn subscribe_consolidate(
+        &self,
+        primary_resolution: SubscriptionResolutionType,
+        new_subscription: DataSubscription,
+        warm_up_to_time: DateTime<Utc>,
+        history_to_retain: usize,
+    ) -> Result<(RollingWindow<BaseDataEnum>, DataSubscriptionEvent), DataSubscriptionEvent> {
+        if let Some(subscription) = self.primary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
+            if *subscription.value() == new_subscription {
+                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
+            }
+        }
+        if let Some(subscriptions) = self.secondary_subscriptions.get(&new_subscription.subscription_resolution_type()) {
+            if let Some(_subscription) = subscriptions.get(&new_subscription) {
+                return Err(DataSubscriptionEvent::FailedToSubscribe(new_subscription.clone(), format!("{}: Already subscribed: {}", new_subscription.symbol.data_vendor, new_subscription.symbol.name)))
+            }
+        }
+        let is_warmed_up = is_warmup_complete();
+        if is_warmed_up {
+            let from_time = match new_subscription.resolution == Resolution::Instant {
+                true => {
+                    let subtract_duration: Duration = Duration::seconds(1) * history_to_retain as i32;
+                    warm_up_to_time - subtract_duration - Duration::days(3)
+                }
+                false => {
+                    let subtract_duration: Duration = new_subscription.resolution.as_duration() * history_to_retain as i32;
+                    warm_up_to_time - subtract_duration - Duration::days(3)
+                }
+            };
+
+            self.pr
+
+            let data = block_on(get_historical_data(vec![new_subscription.clone()], from_time, warm_up_to_time)).unwrap_or_else(|_e| BTreeMap::new());
+            let mut history = RollingWindow::new(history_to_retain);
+            for (_, slice) in data {
+                for data in slice.iter() {
+                    history.add(data.clone());
+                }
             }
             return Ok((history, DataSubscriptionEvent::Subscribed(new_subscription)))
         }
         self.primary_subscriptions.insert(new_subscription.subscription_resolution_type(), new_subscription.clone());
-        let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
-        match self.strategy_event_sender.send(event).await {
-            Ok(_) => {}
-            Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
-        }
         Ok((RollingWindow::new(history_to_retain), DataSubscriptionEvent::Subscribed(new_subscription)))
-    }
+    }*/
 
     //todo, add a fn to DataVendor Server Side, to return the correct primary resolution for a subscription, this way we can handle on a vendor by vendor basis.
     /// Currently This function works in 1 of 2 ways,
@@ -1012,11 +1043,6 @@ impl SymbolSubscriptionHandler {
                         map.value_mut().insert(consolidator.subscription().clone(), consolidator);
                     }
                     returned_windows.insert(new_subscription.clone(), window);
-                    let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Subscribed(new_subscription.clone()));
-                    match self.strategy_event_sender.send(event).await {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
-                    }
                     Ok(returned_windows)
                 } else {
                     let mut returned_windows = AHashMap::new();
@@ -1068,7 +1094,7 @@ impl SymbolSubscriptionHandler {
         }
     }
 
-    async fn unsubscribe(&self, subscription: &DataSubscription) {
+    async fn unsubscribe(&self, subscription: &DataSubscription) -> DataSubscriptionEvent {
         let sub_res_type = subscription.subscription_resolution_type();
         if self.primary_subscriptions.contains_key(&sub_res_type) {
             //determine if we have secondaries for this
@@ -1078,27 +1104,15 @@ impl SymbolSubscriptionHandler {
                 }
                 self.secondary_subscriptions.remove(&sub_res_type);
             }
-            let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
-            match self.strategy_event_sender.send(event).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
-            }
+            DataSubscriptionEvent::Unsubscribed(subscription.clone())
         } else if let Some(mut map) = self.secondary_subscriptions.get_mut(&sub_res_type) {
             let sub = map.remove(&subscription);
-            let event = match sub {
-                None => StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::FailedUnSubscribed(subscription.clone(), "No subscription to unsubscribe".to_string())),
-                Some(_consolidator) => StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone())),
-            };
-            match self.strategy_event_sender.send(event).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
+            match sub {
+                None => DataSubscriptionEvent::FailedUnSubscribed(subscription.clone(), "No subscription to unsubscribe".to_string()),
+                Some(_consolidator) => DataSubscriptionEvent::Unsubscribed(subscription.clone()),
             }
         } else {
-            let event = StrategyEvent::DataSubscriptionEvent(DataSubscriptionEvent::Unsubscribed(subscription.clone()));
-            match self.strategy_event_sender.send(event).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Symbol Subscription Handler: Failed to send event: {}", e)
-            }
+            DataSubscriptionEvent::Unsubscribed(subscription.clone())
         }
     }
 
