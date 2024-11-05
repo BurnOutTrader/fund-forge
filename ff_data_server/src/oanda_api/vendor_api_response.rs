@@ -140,7 +140,7 @@ impl VendorApiResponse for OandaClient {
     }
 
     #[allow(unused)]
-    async fn data_feed_unsubscribe(&self, mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         unsubscribe_stream(&stream_name, &subscription).await;
         DataServerResponse::UnSubscribeResponse {
             success: true,

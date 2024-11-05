@@ -140,7 +140,7 @@ impl VendorApiResponse for TestApiClient {
         DataServerResponse::SubscribeResponse{ success: true, subscription: subscription_clone_2.clone(), reason: None}
     }
 
-    async fn data_feed_unsubscribe(&self,  _mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         let mut empty_broadcaster = false;
         let mut success = false;
         unsubscribe_stream(&stream_name, &subscription).await;

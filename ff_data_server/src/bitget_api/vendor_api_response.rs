@@ -37,7 +37,7 @@ impl VendorApiResponse for BitgetClient {
         todo!()
     }
     #[allow(unused)]
-    async fn data_feed_unsubscribe(&self, mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         todo!()
     }
     #[allow(unused)]

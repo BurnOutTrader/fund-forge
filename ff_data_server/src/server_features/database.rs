@@ -10,6 +10,7 @@ use std::str::FromStr;
 use std::sync::{Arc};
 use std::sync::atomic::{Ordering};
 use std::time::Duration;
+use async_std::task::sleep;
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use dashmap::DashMap;
 use futures::future;
@@ -32,7 +33,7 @@ use crate::oanda_api::api_client::{oanda_connected, OANDA_CLIENT};
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS, RITHMIC_DATA_IS_CONNECTED};
 use crate::rithmic_api::products::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
-use crate::{subscribe_server_shutdown, ServerLaunchOptions};
+use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 
 pub static DATA_STORAGE: OnceCell<Arc<HybridStorage>> = OnceCell::const_new();
 
@@ -135,7 +136,94 @@ impl HybridStorage {
         });
     }
 
-    pub async fn update_symbol(
+
+    pub async fn pre_subscribe_updates(&self, symbol: Symbol, resolution: Resolution, base_data_type: BaseDataType) {
+        let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
+            DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
+                match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
+                    Some(client) => client.clone(),
+                    None => return,
+                }
+            }
+            DataVendor::Oanda if oanda_connected()=> {
+                match OANDA_CLIENT.get() {
+                    Some(client) => client.clone(),
+                    None => return,
+                }
+            }
+            _ => return,
+        };
+
+        let start_time = match self.get_latest_data_time(&symbol, &resolution, &base_data_type).await {
+            Ok(Some(date)) => date,
+            Err(_) | Ok(None) => {
+                let path = get_data_folder()
+                    .join("credentials")
+                    .join(format!("{}_credentials", symbol.data_vendor.to_string().to_lowercase()))
+                    .join("download_list.toml");
+
+                if path.exists() {
+                    let content = match std::fs::read_to_string(&path) {
+                        Ok(content) => content,
+                        Err(_) => return, // Exit the entire function
+                    };
+
+                    let symbol_configs = match toml::from_str::<DownloadSymbols>(&content) {
+                        Ok(symbol_object) => symbol_object.symbols,
+                        Err(_) => return, // Exit the entire function
+                    };
+
+                    let symbol_config = match symbol_configs.iter().find(|s| {
+                        s.symbol_name == symbol.name && s.resolution == resolution && s.base_data_type == base_data_type
+                    }) {
+                        Some(config) => config,
+                        None => return, // Exit the entire function
+                    };
+
+                    // Return the correct time if we have one
+                    DateTime::<Utc>::from_naive_utc_and_offset(
+                        symbol_config.start_date.and_hms_opt(0, 0, 0).unwrap(),
+                        Utc,
+                    )
+                } else {
+                    return; // Exit the entire function if the path does not exist
+                }
+            }
+        };
+        let key = (symbol.name.clone(), base_data_type.clone());
+
+        let mut was_downloading = false;
+        while self.download_tasks.contains_key(&key) {
+            was_downloading = true;
+            sleep(Duration::from_secs(1)).await;
+        }
+        if was_downloading {
+            return;
+        }
+
+        let permit = match self.download_semaphore.acquire().await {
+            Ok(permit) => permit,
+            Err(_) => {
+                // Remove from tasks if we couldn't get a permit
+                self.download_tasks.remove(&key);
+                return;
+            }
+        };
+
+        let symbol_pb = self.multi_bar.add(ProgressBar::new(1));
+        symbol_pb.set_prefix(format!("{}", symbol.name));
+
+        match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now(), false, symbol_pb).await {
+            Ok(_) => {},
+            Err(_) => {}
+        }
+
+        // Remove from active tasks
+        self.download_tasks.remove(&key);
+        drop(permit);
+    }
+
+    async fn update_symbol(
         download_tasks: Arc<DashMap<(SymbolName, BaseDataType), JoinHandle<()>>>,
         download_semaphore: Arc<Semaphore>,
         symbol: Symbol,
@@ -162,8 +250,8 @@ impl HybridStorage {
             _ => return None,
         };
 
-
-        if download_tasks.contains_key(&(symbol.name.clone(), base_data_type.clone())) {
+        let key = (symbol.name.clone(), base_data_type.clone());
+        if download_tasks.contains_key(&key) {
             return None;
         }
 
@@ -175,7 +263,7 @@ impl HybridStorage {
                 Ok(permit) => permit,
                 Err(_) => {
                     // Remove from tasks if we couldn't get a permit
-                    download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
+                    download_tasks.remove(&key);
                     return;
                 }
             };
@@ -188,12 +276,12 @@ impl HybridStorage {
             }
 
             // Remove from active tasks
-            download_tasks.remove(&(symbol.name.clone(), base_data_type.clone()));
+            download_tasks.remove(&key);
             drop(permit);
         }))
     }
 
-    pub async fn update_data(self: Arc<Self>, from_back: bool) -> Result<(), FundForgeError> {
+    async fn update_data(self: Arc<Self>, from_back: bool) -> Result<(), FundForgeError> {
         let options = self.options.clone();
         let multi_bar = self.multi_bar.clone();
         // Create a semaphore to limit concurrent downloads

@@ -291,7 +291,6 @@ pub async fn data_feed_subscribe(
 /// The caller does not await this method, but it lets the strategy know if the subscription was successful.
 pub async fn data_feed_unsubscribe(
     data_vendor: DataVendor,
-    mode: StrategyMode,
     stream_name: StreamName,
     subscription: DataSubscription
 ) -> DataServerResponse {
@@ -303,18 +302,18 @@ pub async fn data_feed_unsubscribe(
                     None => return DataServerResponse::UnSubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("Unable to find api client instance for: {}", data_vendor))}
                 };
                 if let Some(client) = RITHMIC_CLIENTS.get(&system) {
-                    return client.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await
+                    return client.data_feed_unsubscribe(stream_name, subscription.clone()).await
                 }
             },
-            DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await,
+            DataVendor::Test => return TEST_CLIENT.data_feed_unsubscribe(stream_name, subscription.clone()).await,
             DataVendor::Bitget => {
                 if let Some(client) = BITGET_CLIENT.get() {
-                    return client.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await;
+                    return client.data_feed_unsubscribe(stream_name, subscription.clone()).await;
                 }
             }
             DataVendor::Oanda => {
                 if let Some(client) = OANDA_CLIENT.get() {
-                    return client.data_feed_unsubscribe(mode, stream_name, subscription.clone()).await;
+                    return client.data_feed_unsubscribe(stream_name, subscription.clone()).await;
                 }
             }
         }

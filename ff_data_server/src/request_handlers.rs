@@ -229,8 +229,9 @@ pub async fn manage_async_requests(
                             eprintln!("Incorrect strategy mode for stream: {:?}", strategy_mode);
                             return
                         }
-                        println!("{:?}", request);
-                        handle_callback(
+                        //1. download latest data and await
+                        //println!("{:?}", request);
+                        handle_callback_no_timeouts(
                             || stream_listener::stream_response(stream_name, request),
                             sender.clone()).await
                     },
@@ -242,7 +243,7 @@ pub async fn manage_async_requests(
                             eprintln!("Incorrect strategy mode for orders: {:?}", strategy_mode);
                             return;
                         }
-                        println!("{:?}", request);
+                        //println!("{:?}", request);
                         order_response(stream_name, mode, request, sender.clone()).await;
                     },
 
@@ -331,6 +332,24 @@ where
             // Handle timeout (e.g., log it or take recovery action)
             println!("Operation timed out after {:?}", TIMEOUT_DURATION);
         }
+    }
+}
+
+async fn handle_callback_no_timeouts<F, Fut>(
+    callback: F,
+    sender: tokio::sync::mpsc::Sender<DataServerResponse>,
+)
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = DataServerResponse>,
+{
+    // Directly await the callback future without a timeout
+    let response = callback().await;
+
+    // Try sending the response to the stream handler
+    if let Err(e) = sender.send(response).await {
+        // Handle send error (e.g., log it)
+        println!("Failed to send response to stream handler: {:?}", e);
     }
 }
 

@@ -96,7 +96,6 @@ pub trait VendorApiResponse: Sync + Send {
     /// The caller does not await this method, but it lets the strategy know if the subscription was successful.
     async fn data_feed_unsubscribe(
         &self,
-        mode: StrategyMode,
         // The `stream_name` is just the u16 port number of the strategy which the server is connecting to,
         // it is used to link the streaming port to a async port, you just need to know it represents a single strategy instance.
         stream_name: StreamName,

@@ -238,7 +238,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
         DataServerResponse::SubscribeResponse{ success: true, subscription: subscription.clone(), reason: None}
     }
 
-    async fn data_feed_unsubscribe(&self, _mode: StrategyMode, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
+    async fn data_feed_unsubscribe(&self, stream_name: StreamName, subscription: DataSubscription) -> DataServerResponse {
         let exchange = match subscription.market_type {
             MarketType::Futures(exchange) => exchange.to_string(),
             _ => return DataServerResponse::UnSubscribeResponse {
@@ -371,12 +371,12 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
         let mut window_start = from;
 
-        let total_seconds = (to - window_start).num_seconds();
+        let total_seconds = (to - window_start).num_seconds().abs();
 
         let resolution_multiplier: TimeDelta = match resolution {
             Resolution::Seconds(interval) => min(Duration::hours(8 * interval as i64), Duration::hours(24)),
             Resolution::Minutes(interval) => min(Duration::hours(24 * interval as i64), Duration::hours(48)),
-            Resolution::Hours(_) => return Err(FundForgeError::ClientSideErrorDebug("Hours resolution not supported for historical data".to_string())),
+            Resolution::Hours(interval) => min(Duration::hours(72 * interval as i64), Duration::hours(48)),
             Resolution::Ticks(_) | Resolution::Instant => Duration::hours(4),
         };
 
@@ -404,14 +404,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, to.format("%Y-%m-%d %H:%M:%S")));
             let (sender, receiver) = oneshot::channel();
 
-            let permit = match self.historical_permits.acquire().await {
-                Ok(permit) => permit,
-                Err(_) => {
-                    progress_bar.finish_and_clear();
-                    return Err(FundForgeError::ClientSideErrorDebug("Failed to acquire semaphore permit".to_string()))
-                }
-            };
-
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end, sender).await;
             const TIME_OUT: std::time::Duration = std::time::Duration::from_secs(180);
             let data_map = match timeout(TIME_OUT, receiver).await {
@@ -432,7 +424,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 },
                 Err(_) => break 'main_loop
             };
-            drop(permit);
 
             let mut is_end = false;
             if let Some((&last_time, _)) = data_map.last_key_value() {
