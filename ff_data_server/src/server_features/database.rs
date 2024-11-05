@@ -136,7 +136,6 @@ impl HybridStorage {
         });
     }
 
-
     pub async fn pre_subscribe_updates(&self, symbol: Symbol, resolution: Resolution, base_data_type: BaseDataType) {
         let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
             DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {

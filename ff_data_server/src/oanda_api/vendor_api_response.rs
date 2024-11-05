@@ -193,7 +193,7 @@ impl VendorApiResponse for OandaClient {
         const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(1);
         let mut last_bar_time = from;
         loop {
-            let to_time = (last_bar_time + add_time).min(current_time);
+            let to_time = (last_bar_time + add_time).min(current_time + Duration::seconds(15));
 
             // Break if we've reached or passed current time
             if last_bar_time >= current_time {
