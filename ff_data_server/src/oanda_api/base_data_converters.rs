@@ -55,6 +55,7 @@ fn parse_oanda_time(time: &str) -> Result<DateTime<Utc>, Box<dyn std::error::Err
     // Since the format is ISO 8601, we can use chrono `DateTime::parse_from_rfc3339`
     // which supports parsing the Zulu time (Z) directly.
     let parsed_time = DateTime::parse_from_rfc3339(time)?;
+    //eprintln!("parsed_time: {:?}", parsed_time);
 
     // Convert the parsed DateTime to UTC
     Ok(parsed_time.with_timezone(&Utc))

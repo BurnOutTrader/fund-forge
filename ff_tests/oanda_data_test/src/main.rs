@@ -167,7 +167,7 @@ pub async fn on_data_received(
                     BaseDataType::QuoteBars,
                     MarketType::CFD
                 );
-                strategy.subscribe(sub, 10000, false).await;
+                strategy.subscribe(sub, 100, false).await;
             }
 
             StrategyEvent::PositionEvents(event) => {
