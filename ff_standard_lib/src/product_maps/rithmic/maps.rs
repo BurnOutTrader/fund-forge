@@ -1,5 +1,6 @@
 use ahash::AHashMap;
-use rust_decimal_macros::dec;
+use crate::standardized_types::subscriptions::SymbolName;
+
 
 lazy_static! {
     static ref AVAILABLE_SYMBOL_NAMES: Vec<String> = vec![
@@ -105,9 +106,10 @@ lazy_static! {
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
-use ff_standard_lib::standardized_types::enums::FuturesExchange;
-use ff_standard_lib::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
-use ff_standard_lib::standardized_types::accounts::Currency;
+use rust_decimal_macros::dec;
+use crate::standardized_types::enums::FuturesExchange;
+use crate::standardized_types::symbol_info::{CommissionInfo, SymbolInfo};
+use crate::standardized_types::accounts::Currency;
 lazy_static! {
     static ref CODE_TO_EXCHANGE_MAP: HashMap<&'static str, FuturesExchange> = {
         let mut map = HashMap::new();
@@ -485,5 +487,65 @@ lazy_static! {
     };
 }
 
+pub fn find_base_symbol(symbol: SymbolName) -> Option<String> {
+    // Check if the full symbol is in the list
+    if AVAILABLE_SYMBOL_NAMES.contains(&symbol) {
+        return Some(symbol.to_string());
+    }
 
+    // Check if the first three characters of the symbol are in the list
+    if symbol.len() >= 3 {
+        let first_three = &symbol[..3];
+        if AVAILABLE_SYMBOL_NAMES.iter().any(|s| s.as_str() == first_three) {
+            return Some(first_three.to_string());
+        }
+    }
 
+    // Check if the symbol without the last two characters is in the list
+    if symbol.len() > 2 {
+        let without_last_two = &symbol[..symbol.len() - 2];
+        if AVAILABLE_SYMBOL_NAMES.iter().any(|s| s.as_str() == without_last_two) {
+            return Some(without_last_two.to_string());
+        }
+    }
+
+    None
+}
+
+pub fn get_available_symbol_names() -> &'static Vec<String> {
+    &AVAILABLE_SYMBOL_NAMES
+}
+
+#[allow(dead_code)]
+pub fn futures_code_to_name() -> &'static AHashMap<&'static str, &'static str> {
+    &FUTURES_CODE_TO_NAME
+}
+
+#[allow(dead_code)]
+pub fn get_exchange_by_symbol_name(code: &str) -> Option<FuturesExchange> {
+    match CODE_TO_EXCHANGE_MAP.get(code) {
+        Some(exchange) => Some(*exchange),
+        None => None,
+    }
+}
+
+pub fn get_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
+    SYMBOL_INFO_MAP.get(symbol)
+        .cloned()
+        .ok_or_else(|| format!("{} not found", symbol))
+}
+
+pub fn get_intraday_margin(symbol: &str) -> Option<Decimal> {
+    INTRADAY_MARGINS.get(symbol).cloned()
+}
+
+pub fn get_overnight_margin(symbol: &str) -> Option<Decimal> {
+    OVERNIGHT_MARGINS.get(symbol).cloned()
+}
+
+pub fn get_futures_commissions_info(symbol_name: &SymbolName) -> Result<CommissionInfo, String> {
+    if let Some(commission_info) = COMMISSION_PER_CONTRACT.get(symbol_name.as_str()) {
+        return Ok(commission_info.clone())
+    }
+    Err(format!("No Symbol Found: {}", symbol_name))
+}

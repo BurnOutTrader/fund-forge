@@ -24,7 +24,7 @@ use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
-use crate::rithmic_api::products::find_base_symbol;
+use ff_standard_lib::product_maps::rithmic::maps::find_base_symbol;
 
 type BasketId = String;
 lazy_static! {

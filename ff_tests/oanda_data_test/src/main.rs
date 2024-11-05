@@ -24,7 +24,7 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(1000);
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::LivePaperTrading, // Backtest, Live, LivePaper
+        StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 10, 8).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
@@ -36,8 +36,8 @@ async fn main() {
             DataSubscription::new(
                 SymbolName::from("NAS100-USD"),
                 DataVendor::Oanda,
-                Resolution::Instant,
-                BaseDataType::Quotes,
+                Resolution::Seconds(5),
+                BaseDataType::QuoteBars,
                 MarketType::CFD
             ),
         ],

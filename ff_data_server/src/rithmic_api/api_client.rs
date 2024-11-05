@@ -50,7 +50,7 @@ use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{request_tick_bar_replay, RequestAccountRmsInfo, RequestFrontMonthContract, RequestHeartbeat, RequestNewOrder, RequestPnLPositionUpdates, RequestShowOrders, RequestSubscribeForOrderUpdates, RequestTickBarReplay, RequestTimeBarReplay, RequestTradeRoutes};
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_new_order::{OrderPlacement, PriceType, TransactionType};
 use crate::rithmic_api::plant_handlers::handler_loop::handle_rithmic_responses;
-use crate::rithmic_api::products::get_exchange_by_symbol_name;
+use ff_standard_lib::product_maps::rithmic::maps::get_exchange_by_symbol_name;
 use once_cell::sync::OnceCell;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_time_bar_replay::{Direction, TimeOrder};

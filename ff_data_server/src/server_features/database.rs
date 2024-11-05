@@ -31,7 +31,7 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::oanda_api::api_client::{OANDA_CLIENT, OANDA_IS_CONNECTED};
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS, RITHMIC_DATA_IS_CONNECTED};
-use crate::rithmic_api::products::get_exchange_by_symbol_name;
+use ff_standard_lib::product_maps::rithmic::maps::get_exchange_by_symbol_name;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 

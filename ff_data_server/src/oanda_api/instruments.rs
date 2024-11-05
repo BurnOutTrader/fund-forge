@@ -6,7 +6,6 @@ use ff_standard_lib::helpers::converters::fund_forge_formatted_symbol_name;
 use ff_standard_lib::standardized_types::enums::MarketType;
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use crate::oanda_api::models::account::enums::GuaranteedStopLossOrderMode;
-
 use crate::oanda_api::models::primitives::{GuaranteedStopLossOrderLevelRestriction, InstrumentCommission, InstrumentFinancing};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -125,3 +124,4 @@ impl OandaInstrument {
         })
     }
 }
+

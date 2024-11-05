@@ -10,6 +10,8 @@ use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Receiver, Sender};
 use uuid::Uuid;
+use crate::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
+use crate::product_maps::rithmic::maps::{find_base_symbol, get_symbol_info};
 use crate::standardized_types::accounts::{Account, AccountInfo, Currency};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::broker_enum::Brokerage;
@@ -337,14 +339,36 @@ impl Ledger {
     }
 
     pub async fn symbol_info(&self, brokerage: Brokerage, symbol_name: &SymbolName) -> SymbolInfo {
+        match self.mode {
+            StrategyMode::Backtest => {
+                match brokerage {
+                    Brokerage::Rithmic(_) => {
+                        if let Some(symbol) = find_base_symbol(symbol_name.clone()) {
+                            return match get_symbol_info(&symbol) {
+                                Ok(info) => info,
+                                Err(_) => panic!("Ledgers: Error getting symbol info: {}, {}", brokerage, symbol_name),
+                            };
+                        }
+                    }
+                    Brokerage::Oanda => {
+                        if let Some(info) = OANDA_SYMBOL_INFO.get(symbol_name) {
+                            return info.clone();
+                        } else {
+                            panic!("Ledgers: Error getting symbol info: {}, {}", brokerage, symbol_name);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+
         match self.symbol_info.get(symbol_name) {
             None => match brokerage.symbol_info(symbol_name.clone()).await {
                 Ok(info) => info,
-                Err(e) => panic!("Ledgers: Error getting symbol infor: {}, {}: {}", brokerage, symbol_name, e)
-            }
-            Some(info) => {
-                info.value().clone()
-            }
+                Err(e) => panic!("Ledgers: Error getting symbol info: {}, {}: {}", brokerage, symbol_name, e),
+            },
+            Some(info) => info.value().clone(),
         }
     }
 

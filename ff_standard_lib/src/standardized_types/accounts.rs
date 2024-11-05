@@ -64,7 +64,21 @@ pub enum Currency {
     CAD,
     EUR,
     JPY,
-    USDT
+    USDT,
+    CHF,
+    GBP,
+    SEK,
+    NOK,
+    TRY,
+    PLN,
+    HUF,
+    CZK,
+    MXN,
+    ZAR,
+    HKD,
+    SGD,
+    NZD,
+    CNH,
 }
 
 impl Currency {

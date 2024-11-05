@@ -1,15 +1,13 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use rust_decimal::MathematicalOps;
-use rust_decimal_macros::dec;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
+use ff_standard_lib::product_maps::oanda::maps::{calculate_oanda_margin, OANDA_SYMBOL_INFO};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
-use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
+use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
-use ff_standard_lib::standardized_types::symbol_info::SymbolInfo;
 use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::OandaClient;
 
@@ -43,19 +41,10 @@ impl BrokerApiResponse for OandaClient {
 
     #[allow(unused)]
     async fn symbol_info_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        if let Some(instrument) = self.instruments_map.get(&symbol_name) {
-            let tick_size = dec!(1) / dec!(10).powi(instrument.display_precision as i64);
-            //let currency = instrument.
-            let info = SymbolInfo {
-                symbol_name,
-                pnl_currency: Currency::USD, //todo need to do dynamically
-                value_per_tick: dec!(1), //todo might need a hard coded list, cant find dynamic info
-                tick_size,
-                decimal_accuracy: instrument.pip_location,
-            };
+        if let Some(info) = OANDA_SYMBOL_INFO.get(&symbol_name) { //todo this will all be replaced, for live only, the backtesting info will come from the coded maps
             return DataServerResponse::SymbolInfo {
                 callback_id,
-                symbol_info: info,
+                symbol_info: info.clone(),
             }
         }
         DataServerResponse::Error {
@@ -66,16 +55,24 @@ impl BrokerApiResponse for OandaClient {
 
     #[allow(unused)]
     async fn intraday_margin_required_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-        DataServerResponse::IntradayMarginRequired {
+        // Calculate the margin required based on symbol and position size
+        if let Some(margin_used) = calculate_oanda_margin(&symbol_name, quantity, quantity) { //todo this will all be replaced, for live only, the backtesting info will come from the coded maps
+            return DataServerResponse::IntradayMarginRequired {
+                callback_id,
+                symbol_name,
+                price: Some(margin_used),
+            }
+        }
+
+        DataServerResponse::Error {
             callback_id,
-            symbol_name,
-            price: None, //todo fix
+            error: FundForgeError::ClientSideErrorDebug(format!("Symbol not found in margin map: {}", symbol_name)),
         }
     }
 
     #[allow(unused)]
     async fn overnight_margin_required_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-        todo!()
+        self.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
     }
 
     #[allow(unused)]
