@@ -24,6 +24,7 @@ See below for all the free historical data you will ever need.
 - 04/11/2024: I will build a margin and commissions file for each rithmic broker/system, so that we can correctly calculate margin and commissions for each symbol, this will be done in the future.
 - 05/11/2024: Live warm up now works up until the last few seconds of data, when a history request is made by the engine for data that includes the present date, the server will first update the historical data to get the latest data, this means you need to have at least minimal historical data specified in you download_list.toml file for any symbols you trade live.
 On the client/strategy side, warming up data feeds etc is not currently done async, so you might see a pause in strategies if subscribing at run time (after strategy start), this will be async in the future as a background task, but I don't want to implement that until I have let the current implementation test for a little while.
+- 05/11/2024: Current task: Add a warm-up subscriptions server request, so that the server can specify the correct subsciption to use for warming up a consolidated subscription.
 - 05/11/2024: My next task is live data and trading for Oanda. Then I will focus on making backtests more accurate and finishing backtest related functionality for all brokers/vendors, then I will focus on any live trading bugs, finnally i will add the bitget api, then some fundamental data provider apis, and finally add an equities/etf/options brokerage.
 
 ### Initial Setup
