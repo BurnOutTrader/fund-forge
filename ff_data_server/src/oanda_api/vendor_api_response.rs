@@ -323,7 +323,7 @@ impl VendorApiResponse for OandaClient {
         }
 
         if !from_back {
-
+            self.update_latest_bars(symbol.clone(), base_data_type, resolution).await?;
         }
 
         // Save any remaining data

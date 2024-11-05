@@ -15,15 +15,22 @@ use lazy_static::lazy_static;
 use rust_decimal::Decimal;
 use serde_json::{Value};
 use tokio::sync::mpsc::{Receiver, Sender};
+use ff_standard_lib::messages::data_server_messaging::FundForgeError;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId, AccountInfo};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;
+use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
+use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
-use crate::oanda_api::get_requests::{oanda_account_summary, oanda_accounts_list, oanda_instruments_download};
+use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
+use crate::oanda_api::get_requests::{oanda_account_summary, oanda_accounts_list, oanda_clean_instrument, oanda_instruments_download};
 use crate::oanda_api::instruments::OandaInstrument;
 use crate::oanda_api::models::position::OandaPosition;
+use crate::oanda_api::support_and_conversions::resolution_to_oanda_interval;
+use crate::server_features::database::DATA_STORAGE;
 use crate::ServerLaunchOptions;
 
 lazy_static! {
@@ -100,6 +107,141 @@ impl OandaClient {
                 }
             }
         }
+    }
+
+    pub async fn get_latest_bars(
+        &self,
+        symbol: Symbol,
+        base_data_type: BaseDataType,
+        resolution: Resolution,
+        account_id: &str,
+    ) -> Result<Vec<BaseDataEnum>, FundForgeError> {
+        let interval = resolution_to_oanda_interval(&resolution)
+            .ok_or_else(|| FundForgeError::ClientSideErrorDebug("Invalid resolution".to_string()))?;
+
+        let instrument = oanda_clean_instrument(&symbol.name).await;
+
+        // For bid/ask we use "BA" instead of separate "B" and "A" specifications
+        let candle_spec = match base_data_type {
+            BaseDataType::QuoteBars => format!("{}:{}:BA", instrument, interval),
+            _ => return Err(FundForgeError::ClientSideErrorDebug("Unsupported data type".to_string())),
+        };
+
+        // Use UTC alignment
+        let url = format!(
+            "/accounts/{}/candles/latest?candleSpecifications={}&smooth=false&alignmentTimezone=UTC",
+            account_id,
+            candle_spec
+        );
+
+        let response = match self.send_rest_request(&url).await {
+            Ok(response) => response,
+            Err(e) => {
+                return Err(FundForgeError::ClientSideErrorDebug(format!("Failed to get latest bars: {}", e)));
+            }
+        };
+
+        if !response.status().is_success() {
+            return Err(FundForgeError::ClientSideErrorDebug(format!(
+                "Failed to get latest bars: HTTP {}",
+                response.status()
+            )));
+        }
+
+        let content = response.text().await.map_err(|e| {
+            FundForgeError::ClientSideErrorDebug(format!("Failed to get response text: {}", e))
+        })?;
+
+        let json: serde_json::Value = serde_json::from_str(&content).map_err(|e| {
+            FundForgeError::ClientSideErrorDebug(format!("Failed to parse JSON: {}", e))
+        })?;
+
+        let latest_candles = json["latestCandles"].as_array().ok_or_else(|| {
+            FundForgeError::ClientSideErrorDebug("No latestCandles array in response".to_string())
+        })?;
+
+        let mut bars = Vec::new();
+
+        for candle_response in latest_candles {
+            let candles = candle_response["candles"].as_array().ok_or_else(|| {
+                FundForgeError::ClientSideErrorDebug("No candles array in response".to_string())
+            })?;
+
+            for price_data in candles {
+                // Only process complete candles
+                if !price_data["complete"].as_bool().unwrap_or(false) {
+                    continue;
+                }
+
+                let bar: BaseDataEnum = match base_data_type {
+                    BaseDataType::QuoteBars => {
+                        match oanda_quotebar_from_candle(price_data, symbol.clone(), resolution.clone()) {
+                            Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
+                            Err(e) => {
+                                eprintln!("Failed to create quote bar: {}", e);
+                                continue;
+                            }
+                        }
+                    },
+                    BaseDataType::Candles => {
+                        match candle_from_candle(price_data, symbol.clone(), resolution.clone()) {
+                            Ok(candle) => BaseDataEnum::Candle(candle),
+                            Err(e) => {
+                                eprintln!("Failed to create candle: {}", e);
+                                continue;
+                            }
+                        }
+                    },
+                    _ => continue,
+                };
+
+                bars.push(bar);
+            }
+        }
+
+        bars.sort_by_key(|bar| bar.time_utc());
+        Ok(bars)
+    }
+
+    pub async fn update_latest_bars(
+        &self,
+        symbol: Symbol,
+        base_data_type: BaseDataType,
+        resolution: Resolution,
+    ) -> Result<(), FundForgeError> {
+        let data_storage = DATA_STORAGE.get().unwrap();
+        let account_id = if let Some(id) = self.accounts.get(0) {
+            id.account_id.clone()
+        } else {
+            return Err(FundForgeError::ClientSideErrorDebug("No account ID found".to_string()));
+        };
+
+
+        let bars = self.get_latest_bars(symbol, base_data_type, resolution, &account_id).await?;
+
+        if bars.is_empty() {
+            return Ok(());
+        }
+
+
+        const MAX_RETRIES: u32 = 3;
+        let mut retry_count = 0;
+        while retry_count < MAX_RETRIES {
+            match data_storage.save_data_bulk(bars.clone()).await {
+                Ok(_) => return Ok(()),
+                Err(e) => {
+                    retry_count += 1;
+                    if retry_count >= MAX_RETRIES {
+                        return Err(FundForgeError::ClientSideErrorDebug(
+                            format!("Failed to save latest bars after {} retries: {}", MAX_RETRIES, e)
+                        ));
+                    }
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

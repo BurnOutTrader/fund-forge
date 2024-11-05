@@ -6,10 +6,8 @@ use crate::standardized_types::enums::{MarketType, StrategyMode};
 use crate::standardized_types::rolling_window::RollingWindow;
 use crate::standardized_types::subscriptions::{filter_resolutions, CandleType, DataSubscription};
 use chrono::{DateTime, Datelike, Duration, Utc, Weekday};
-use chrono_tz::Tz::Australia__Brisbane;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
 use crate::standardized_types::base_data::history::get_historical_data;
-use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::resolution::Resolution;
 use crate::standardized_types::futures_products::extract_symbol_from_contract;
 
@@ -189,7 +187,7 @@ impl ConsolidatorEnum {
                 if let Some(closed_data) = consolidated_data.closed_data {
                     history.add(closed_data);
                 }
-               // println!("time: {}", base_data.time_local(&Australia__Brisbane));
+               //println!("time: {}", base_data.time_local(&Australia__Brisbane));
             }
         }
         //eprintln!("Warmup complete: {}", history.len());
