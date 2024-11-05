@@ -317,8 +317,10 @@ async fn handle_price_stream(
                 Some(new_subscriptions) = subscription_receiver.recv() => {
                     let mut cleaned_new_subscriptions = vec![];
 
+                    // Check for new active subscriptions
                     for sub in new_subscriptions {
                         if let Some(instrument) = instruments_map.get(&sub) {
+                            // Add to cleaned subs if there's an active broadcaster or it's a new subscription
                             if let Some(broadcaster) = quote_feed_broadcasters.get(&sub) {
                                 if broadcaster.receiver_count() > 0 {
                                     cleaned_new_subscriptions.push(instrument.name.clone());
@@ -327,17 +329,34 @@ async fn handle_price_stream(
                         }
                     }
 
-                    if cleaned_new_subscriptions != current_subscriptions {
-                        if !cleaned_new_subscriptions.is_empty() {
-                            let suffix = format!("/accounts/{}/pricing/stream?instruments={}",
-                                account.account_id,
-                                cleaned_new_subscriptions.join("%2C")
-                            );
+                    // Always check if current subscriptions still have active broadcasters
+                    current_subscriptions.retain(|sub| {
+                        if let Some(broadcaster) = quote_feed_broadcasters.get(sub) {
+                            broadcaster.receiver_count() > 0
+                        } else {
+                            false
+                        }
+                    });
 
+                    // Merge current and new subscriptions without duplicates
+                    for sub in cleaned_new_subscriptions {
+                        if !current_subscriptions.contains(&sub) {
+                            current_subscriptions.push(sub);
+                        }
+                    }
+
+                    // If we have any subscriptions, ensure stream is active
+                    if !current_subscriptions.is_empty() {
+                        let suffix = format!("/accounts/{}/pricing/stream?instruments={}",
+                            account.account_id,
+                            current_subscriptions.join("%2C")
+                        );
+
+                        // Only create new stream if we don't have one or subscriptions changed
+                        if current_stream.is_none() {
                             match establish_stream(&client, &stream_endpoint, &suffix, &stream_limit, &api_key).await {
                                 Ok(stream) => {
                                     current_stream = Some(Box::pin(stream));
-                                    current_subscriptions = cleaned_new_subscriptions;
                                     OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
                                 }
                                 Err(e) => {
@@ -345,10 +364,6 @@ async fn handle_price_stream(
                                     OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
                                 }
                             }
-                        } else {
-                            current_stream = None;
-                            current_subscriptions.clear();
-                            OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
                         }
                     }
                 }
@@ -357,7 +372,25 @@ async fn handle_price_stream(
                     match &mut current_stream {
                         Some(stream) => stream.try_next().await.transpose(),
                         None => {
+                            // Check for any active subscriptions periodically
                             tokio::time::sleep(Duration::from_secs(1)).await;
+                            if !current_subscriptions.is_empty() {
+                                let suffix = format!("/accounts/{}/pricing/stream?instruments={}",
+                                    account.account_id,
+                                    current_subscriptions.join("%2C")
+                                );
+
+                                match establish_stream(&client, &stream_endpoint, &suffix, &stream_limit, &api_key).await {
+                                    Ok(stream) => {
+                                        current_stream = Some(Box::pin(stream));
+                                        OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                                    }
+                                    Err(e) => {
+                                        eprintln!("Failed to establish stream: {}", e);
+                                        OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                                    }
+                                }
+                            }
                             Some(Ok(Bytes::new()))
                         }
                     }
@@ -392,7 +425,7 @@ async fn handle_price_stream(
                                 Err(e) => {
                                     match e {
                                         FundForgeError::ConnectionNotFound(_) => {
-                                            // Clean dead subscriptions
+                                            // Only remove dead subscriptions, keep active ones
                                             current_subscriptions.retain(|sub| {
                                                 if let Some(broadcaster) = quote_feed_broadcasters.get(sub) {
                                                     broadcaster.receiver_count() > 0
@@ -401,28 +434,8 @@ async fn handle_price_stream(
                                                 }
                                             });
 
-                                            // Force stream reconnection if we still have subscriptions
-                                            if !current_subscriptions.is_empty() {
-                                                let suffix = format!("/accounts/{}/pricing/stream?instruments={}",
-                                                    account.account_id,
-                                                    current_subscriptions.join("%2C")
-                                                );
-
-                                                match establish_stream(&client, &stream_endpoint, &suffix, &stream_limit, &api_key).await {
-                                                    Ok(stream) => {
-                                                        current_stream = Some(Box::pin(stream));
-                                                        OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
-                                                    }
-                                                    Err(e) => {
-                                                        eprintln!("Failed to reestablish stream: {}", e);
-                                                        current_stream = None;
-                                                        OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
-                                                    }
-                                                }
-                                            } else {
-                                                current_stream = None;
-                                                OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
-                                            }
+                                            // Drop stream to force reconnection with current subscriptions
+                                            current_stream = None;
                                         }
                                         _ => {}
                                     }
@@ -439,7 +452,6 @@ async fn handle_price_stream(
         }
     });
 }
-
 async fn process_stream_data(
     text: &str,
     instrument_symbol_map: &Arc<DashMap<String, Symbol>>,
