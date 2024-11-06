@@ -200,6 +200,7 @@ impl BrokerApiResponse for OandaClient {
 
     #[allow(unused)]
     async fn other_orders(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
+        let mut order = order;
         // Convert the symbol format from "EUR/USD" to "EUR_USD"
         let oanda_symbol =  if let Some(instrument) = self.instruments_map.get(&order.symbol_name) {
             // Add to cleaned subs if there's an active broadcaster or it's a new subscription
@@ -448,6 +449,7 @@ impl BrokerApiResponse for OandaClient {
                                     tag: order.tag.clone(),
                                     time: Utc::now().to_string(),
                                 };
+                                order.state = OrderState::Accepted;
                                 //send to the stream receiver
                                 if let Some(stream_receiver) = RESPONSE_SENDERS.get(&stream_name) {
                                     stream_receiver.send(DataServerResponse::OrderUpdates {
@@ -473,17 +475,38 @@ impl BrokerApiResponse for OandaClient {
                                         None => return Ok(())
                                     };
 
-                                    let fill_event = OrderUpdateEvent::OrderFilled {
-                                        order_id: order.id,
-                                        account: order.account,
-                                        symbol_name: order.symbol_name.clone(),
-                                        symbol_code: order.symbol_name,
-                                        quantity,
-                                        price,
-                                        side: order.side,
-                                        tag: order.tag,
-                                        time: Utc::now().to_string(),
+                                    let fill_event = match quantity == order.quantity_open {
+                                        true => {
+                                            order.state = OrderState::Filled;
+                                            OrderUpdateEvent::OrderFilled {
+                                                order_id: order.id.clone(),
+                                                account: order.account.clone(),
+                                                symbol_name: order.symbol_name.clone(),
+                                                symbol_code: order.symbol_name.clone(),
+                                                quantity,
+                                                price,
+                                                side: order.side.clone(),
+                                                tag: order.tag.clone(),
+                                                time: Utc::now().to_string(),
+                                            }
+                                        },
+                                        false => {
+                                            order.state = OrderState::PartiallyFilled;
+                                            OrderUpdateEvent::OrderPartiallyFilled {
+                                                order_id: order.id.clone(),
+                                                account: order.account.clone(),
+                                                symbol_name: order.symbol_name.clone(),
+                                                symbol_code: order.symbol_name.clone(),
+                                                quantity,
+                                                price,
+                                                side: order.side.clone(),
+                                                tag: order.tag.clone(),
+                                                time: Utc::now().to_string(),
+                                            }
+                                        },
                                     };
+                                    order.quantity_open -= quantity;
+                                    order.quantity_filled += quantity;
 
                                     if let Some(stream_receiver) = RESPONSE_SENDERS.get(&stream_name) {
                                         stream_receiver.send(DataServerResponse::OrderUpdates {
@@ -491,6 +514,10 @@ impl BrokerApiResponse for OandaClient {
                                             time: Utc::now().to_string(),
                                         }).await;
                                     }
+                                }
+
+                                if order.state != OrderState::Filled {
+                                    self.open_orders.insert(order.id.clone(), order);
                                 }
                                 Ok(())
                             }
