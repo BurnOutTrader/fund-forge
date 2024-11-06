@@ -19,7 +19,7 @@ use crate::oanda_api::models::order::limit_order::LimitOrderRequest;
 use crate::oanda_api::models::order::market_if_touched_order::MarketIfTouchedOrderRequest;
 use crate::oanda_api::models::order::market_order::{MarketOrderRequest};
 use crate::oanda_api::models::order::order_related;
-use crate::oanda_api::models::order::order_related::{OrderCreateResponse, OrderPositionFill, OrderRejectResponse, OrderTriggerCondition};
+use crate::oanda_api::models::order::order_related::{OrderPositionFill, OrderTriggerCondition};
 use crate::oanda_api::models::order::stop_order::StopOrderRequest;
 use crate::oanda_api::models::transaction_related::ClientExtensions;
 use crate::request_handlers::RESPONSE_SENDERS;
@@ -434,9 +434,10 @@ impl BrokerApiResponse for OandaClient {
 
         match response {
             Ok(response) => {
+                println!("Response: {:?}", response);
                 match response.status() {
                     StatusCode::CREATED => {
-                        match response.json::<OrderCreateResponse>().await {
+                        match response.json::<serde_json::Value>().await {
                             Ok(create_response) => {
                                 // Send order accepted event
                                 let accept_event = OrderUpdateEvent::OrderAccepted {
@@ -456,15 +457,22 @@ impl BrokerApiResponse for OandaClient {
                                 }
 
                                 // If order was immediately filled
-                                if let Some(fill) = create_response.order_fill_transaction {
-                                    let quantity = match Decimal::from_str(&fill.units) {
-                                        Ok(fill_units) => fill_units,
-                                        Err(_) => return Ok(())
+                                // Check if fill transaction exists and get its fields
+                                if let Some(fill) = create_response["orderFillTransaction"].as_object() {
+                                    let quantity = match fill["units"]
+                                        .as_str()
+                                        .and_then(|u| Decimal::from_str(u).ok()) {
+                                        Some(q) => q,
+                                        None => return Ok(())
                                     };
-                                    let price = match Decimal::from_str(&fill.price) {
-                                        Ok(fill_price) => fill_price,
-                                        Err(_) => return Ok(())
+
+                                    let price = match fill["price"]
+                                        .as_str()
+                                        .and_then(|p| Decimal::from_str(p).ok()) {
+                                        Some(p) => p,
+                                        None => return Ok(())
                                     };
+
                                     let fill_event = OrderUpdateEvent::OrderFilled {
                                         order_id: order.id,
                                         account: order.account,
@@ -476,6 +484,7 @@ impl BrokerApiResponse for OandaClient {
                                         tag: order.tag,
                                         time: Utc::now().to_string(),
                                     };
+
                                     if let Some(stream_receiver) = RESPONSE_SENDERS.get(&stream_name) {
                                         stream_receiver.send(DataServerResponse::OrderUpdates {
                                             event: fill_event,
@@ -497,18 +506,16 @@ impl BrokerApiResponse for OandaClient {
                         }
                     }
                     StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND => {
-                        match response.json::<OrderRejectResponse>().await {
-                            Ok(reject) => {
-                                Err(OrderUpdateEvent::OrderRejected {
-                                    account: order.account,
-                                    symbol_name: order.symbol_name.to_string(),
-                                    symbol_code: order.symbol_name,
-                                    order_id: order.id,
-                                    reason: reject.error_message,
-                                    tag: order.tag,
-                                    time: Utc::now().to_string(),
-                                })
-                            },
+                        match response.json::<serde_json::Value>().await {
+                            Ok(json) => Err(OrderUpdateEvent::OrderRejected {
+                                account: order.account,
+                                symbol_name: order.symbol_name.to_string(),
+                                symbol_code: order.symbol_name,
+                                order_id: order.id,
+                                reason: json["errorMessage"].as_str().unwrap_or("Unknown error").to_string(),
+                                tag: order.tag,
+                                time: Utc::now().to_string(),
+                            }),
                             Err(e) => Err(OrderUpdateEvent::OrderRejected {
                                 account: order.account,
                                 symbol_name: order.symbol_name.to_string(),
