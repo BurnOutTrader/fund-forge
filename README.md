@@ -22,7 +22,8 @@ If you use the second option before launching the on_data_received function, you
 - 05/11/2024: Fixed divide by 0 bug in backtesting engine, from using order quantity filled instead of quantity open in backtest matching engine.
 - 05/11/2024: Data download functions are now working perfectly, as far as I can tell.
 - 05-11-2024: Oanda backtesting accuracy should now be as good as it can be, using a symbol info map for tick size, value and decimal accuracy, and using the best bid, offer for fills.
-- 05-11-2024: Next Task, live trading for Oanda.
+- 06-11-2024: Enter Long, Enter Short, Exit Long, Exit Short and Market Orders work for Oanda, but I have not tested limit orders or stop orders yet, other orders will work but the strategy will not get update events and so they are currently unsafe.
+- 06-11-2024: Oanda backtesting is not accurate for currencies, I need to redo the symbol info map to account for lot sizes on currencies.
 
 Please report any issues, some bugs I don't notice after I change code because there are so many possible states to test, backtesting, live trading, live paper * 2 brokerages.
 
