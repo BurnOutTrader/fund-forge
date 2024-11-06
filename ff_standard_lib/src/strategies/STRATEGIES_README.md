@@ -1166,7 +1166,7 @@ async fn example() {
         tag: String
     ).await;
     
-    // Protective orders for Enter Long and Enter Short
+    // Protective orders for Enter Long and Enter Short //todo Not implemented yet
     pub enum ProtectiveOrder {
         TakeProfit {
             price: Price
