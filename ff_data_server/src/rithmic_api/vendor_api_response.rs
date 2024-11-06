@@ -400,6 +400,10 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 false => Utc::now() + Duration::seconds(2),
             };
 
+            if from.timestamp() > to.timestamp() - 3{
+                break 'main_loop;
+            }
+
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, to.format("%Y-%m-%d %H:%M:%S")));
             let (sender, receiver) = oneshot::channel();
 
