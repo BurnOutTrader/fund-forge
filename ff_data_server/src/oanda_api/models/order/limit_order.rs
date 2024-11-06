@@ -1,5 +1,6 @@
 use rust_decimal::Decimal;
 use serde::{Serialize, Deserialize};
+use ff_standard_lib::standardized_types::new_types::{Price, Volume};
 use ff_standard_lib::standardized_types::orders::OrderId;
 use crate::oanda_api::models::order::order_related::{OrderPositionFill, OrderState, OrderTriggerCondition, OrderType, TimeInForce};
 use crate::oanda_api::models::primitives::{DateTime, InstrumentName};
@@ -8,7 +9,7 @@ use crate::oanda_api::models::transaction_related::{ClientExtensions, Guaranteed
 
 /// A LimitOrder is an order that is created with a prices threshold and will only be filled by a prices that is equal to or better than the threshold.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct LimitOrder {
+pub struct OandaLimitOrder {
     /// The Order’s identifier, unique within the Order’s Account.
     #[serde(rename = "id")]
     pub id: OrderId,
@@ -132,11 +133,11 @@ pub struct LimitOrderRequest {
 
     /// The quantity requested to be filled by the Limit Order. A positive number of units results in a long Order, and a negative number of units results in a short Order.
     #[serde(rename = "units")]
-    pub units: Decimal,
+    pub units: Volume,
 
     /// The prices threshold specified for the Limit Order. The Limit Order will only be filled by a market prices that is equal to or better than this prices.
     #[serde(rename = "prices")]
-    pub price: Decimal,
+    pub price: Price,
 
     /// The time-in-force requested for the Limit Order. default = "TimeInForce::GTC"
     #[serde(rename = "timeInForce")]

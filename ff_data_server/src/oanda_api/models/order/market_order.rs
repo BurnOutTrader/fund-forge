@@ -8,7 +8,7 @@ use crate::oanda_api::models::transaction_related::{ClientExtensions, Guaranteed
 
 /// A MarketOrder is an order that is filled immediately upon creation using the current market prices.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct MarketOrder {
+pub struct OandaMarketOrder {
     /// The Order’s identifier, unique within the Order’s Account.
     #[serde(rename = "id")]
     pub id: OrderId,

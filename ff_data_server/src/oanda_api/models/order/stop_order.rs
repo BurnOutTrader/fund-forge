@@ -8,7 +8,7 @@ use crate::oanda_api::models::transaction_related::{ClientExtensions, Guaranteed
 
 /// A StopOrder is an order that is created with a prices threshold and will only be filled by a prices that is equal to or worse than the threshold.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct StopOrder {
+pub struct OandaStopOrder {
     /// The Order’s identifier, unique within the Order’s Account.
     #[serde(rename = "id")]
     pub id: OrderId,

@@ -10,9 +10,13 @@ use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderState, Or
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::OandaClient;
+use crate::oanda_api::models::order::limit_order::LimitOrderRequest;
+use crate::oanda_api::models::order::market_if_touched_order::MarketIfTouchedOrderRequest;
+use crate::oanda_api::models::order::market_order::{MarketOrderRequest};
 use crate::oanda_api::models::order::order_related;
-use crate::oanda_api::models::order::order_related::OrderPositionFill;
-use crate::oanda_api::models::order::placement::{OandaOrder, OandaOrderRequest};
+use crate::oanda_api::models::order::order_related::{OrderPositionFill, OrderTriggerCondition};
+use crate::oanda_api::models::order::stop_order::StopOrderRequest;
+use crate::oanda_api::models::transaction_related::ClientExtensions;
 
 #[async_trait]
 impl BrokerApiResponse for OandaClient {
@@ -212,11 +216,11 @@ impl BrokerApiResponse for OandaClient {
             OrderSide::Sell => -order.quantity_open,
         };
 
-        let time_in_force = match order.time_in_force {
-            TimeInForce::GTC => order_related::TimeInForce::GTC,
-            TimeInForce::IOC => order_related::TimeInForce::IOC,
-            TimeInForce::FOK => order_related::TimeInForce::FOK,
-            TimeInForce::Day => order_related::TimeInForce::GFD,
+        let (time_in_force, gtd_time) = match order.time_in_force {
+            TimeInForce::GTC => (order_related::TimeInForce::GTC, None),
+            TimeInForce::IOC => (order_related::TimeInForce::IOC, None),
+            TimeInForce::FOK => (order_related::TimeInForce::FOK, None),
+            TimeInForce::Day => (order_related::TimeInForce::GFD, None),
             TimeInForce::Time(time_stamp) => {
                 let time = match DateTime::<Utc>::from_timestamp(time_stamp, 0) {
                     Some(t) => t,
@@ -232,18 +236,19 @@ impl BrokerApiResponse for OandaClient {
                         });
                     }
                 };
-                self.custom_tif_cancel_time_map.insert(order.id.clone(), time);
-                order_related::TimeInForce::GTC
+
+                (order_related::TimeInForce::GTD, Some(crate::oanda_api::models::primitives::DateTime::new(time.naive_utc())))
             }
         };
 
-        let (price, order_type, position_fill) = match order.order_type {
-            OrderType::Limit => (Some(order.limit_price.unwrap().to_string()), order_related::OrderType::Limit, OrderPositionFill::ReduceFirst),
-            OrderType::Market => (None, order_related::OrderType::Market, OrderPositionFill::ReduceFirst),
-            OrderType::MarketIfTouched => (Some(order.trigger_price.unwrap().to_string()), order_related::OrderType::MarketIfTouched, OrderPositionFill::ReduceFirst),
-            OrderType::StopMarket =>  (Some(order.trigger_price.unwrap().to_string()), order_related::OrderType::Stop, OrderPositionFill::ReduceFirst),
-            OrderType::EnterLong | OrderType::EnterShort => (Some(order.trigger_price.unwrap().to_string()), order_related::OrderType::Market, OrderPositionFill::Default),
-            OrderType::ExitLong |  OrderType::ExitShort => (Some(order.trigger_price.unwrap().to_string()), order_related::OrderType::Market, OrderPositionFill::ReduceOnly),
+        let (limit_price, order_type, position_fill, trigger_price) = match order.order_type {
+            OrderType::Limit => (Some(order.limit_price.unwrap()), order_related::OrderType::Limit, OrderPositionFill::ReduceFirst, None),
+            OrderType::Market => (None, order_related::OrderType::Market, OrderPositionFill::ReduceFirst, None),
+            OrderType::MarketIfTouched => (None, order_related::OrderType::MarketIfTouched, OrderPositionFill::ReduceFirst, Some(order.trigger_price.unwrap())),
+            OrderType::StopMarket =>  (None, order_related::OrderType::Stop, OrderPositionFill::ReduceFirst, Some(order.trigger_price.unwrap())),
+            OrderType::StopLimit =>  (Some(order.limit_price.unwrap()), order_related::OrderType::Stop, OrderPositionFill::ReduceFirst, Some(order.trigger_price.unwrap())),
+            OrderType::EnterLong | OrderType::EnterShort => (Some(order.trigger_price.unwrap()), order_related::OrderType::Market, OrderPositionFill::Default, None),
+            OrderType::ExitLong |  OrderType::ExitShort => (Some(order.trigger_price.unwrap()), order_related::OrderType::Market, OrderPositionFill::ReduceOnly, None),
             _ => {
                 return Err(OrderUpdateEvent::OrderRejected {
                     account: order.account,
@@ -257,16 +262,11 @@ impl BrokerApiResponse for OandaClient {
             },
         };
 
-        let oanda_order = OandaOrderRequest {
-            order: OandaOrder {
-                units: units.to_string(),
-                instrument: oanda_symbol,
-                time_in_force,
-                order_type,
-                position_fill,
-                price,
-            },
-        };
+        let client_extensions = Some(ClientExtensions {
+            id: order.id.clone(),
+            tag: order.tag.clone(),
+            comment: "".to_string(),
+        });
 
         self.open_orders.insert(order.id.clone(), order.clone());
         self.id_stream_name_map.insert(order.id.clone(), stream_name.clone());
@@ -278,14 +278,111 @@ impl BrokerApiResponse for OandaClient {
         // Acquire a permit from the rate limiter
         let permit = self.rate_limiter.acquire().await;
 
-        match self.client
-            .post(&url)
-            .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&order)
-            .send()
-            .await
-        {
+        let response = match order.order_type {
+            OrderType::Market | OrderType::EnterLong | OrderType::EnterShort | OrderType::ExitLong | OrderType::ExitShort => {
+                let req = MarketOrderRequest {
+                    order_type,
+                    instrument: oanda_symbol,
+                    units,
+                    time_in_force,
+                    price_bound: None,
+                    position_fill,
+                    client_extensions,
+                    take_profit_on_fill: None,
+                    stop_loss_on_fill: None,
+                    guaranteed_stop_loss_on_fill: None,
+                    trailing_stop_loss_on_fill: None,
+                    trade_client_extensions: None,
+                };
+                self.client
+                    .post(&url)
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .json(&req)
+                    .send()
+                    .await
+            }
+            OrderType::Limit => {
+                let req =  LimitOrderRequest {
+                    order_type,
+                    instrument: oanda_symbol,
+                    units,
+                    price: limit_price.unwrap(),
+                    time_in_force,
+                    gtd_time,
+                    position_fill,
+                    trigger_condition: OrderTriggerCondition::Default,
+                    client_extensions,
+                    take_profit_on_fill: None,
+                    stop_loss_on_fill: None,
+                    guaranteed_stop_loss_on_fill: None,
+                    trailing_stop_loss_on_fill: None,
+                    trade_client_extensions: None,
+                };
+                self.client
+                    .post(&url)
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .json(&req)
+                    .send()
+                    .await
+            }
+            
+            OrderType::MarketIfTouched => {
+                let req = MarketIfTouchedOrderRequest {
+                    order_type,
+                    instrument: oanda_symbol,
+                    units,
+                    price: trigger_price.unwrap(),
+                    price_bound: limit_price,
+                    time_in_force,
+                    gtd_time,
+                    position_fill,
+                    trigger_condition: OrderTriggerCondition::Default,
+                    client_extensions,
+                    take_profit_on_fill: None,
+                    stop_loss_on_fill: None,
+                    guaranteed_stop_loss_on_fill: None,
+                    trailing_stop_loss_on_fill: None,
+                    trade_client_extensions: None,
+                };
+                self.client
+                    .post(&url)
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .json(&req)
+                    .send()
+                    .await
+            }
+            OrderType::StopMarket | OrderType::StopLimit => {
+                let req = StopOrderRequest {
+                    order_type,
+                    instrument: oanda_symbol,
+                    units,
+                    price: trigger_price.unwrap(),
+                    price_bound: limit_price,
+                    time_in_force,
+                    gtd_time,
+                    position_fill,
+                    trigger_condition: OrderTriggerCondition::Default,
+                    client_extensions,
+                    take_profit_on_fill: None,
+                    stop_loss_on_fill: None,
+                    guaranteed_stop_loss_on_fill: None,
+                    trailing_stop_loss_on_fill: None,
+                    trade_client_extensions: None,
+                };
+                self.client
+                    .post(&url)
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", format!("Bearer {}", self.api_key))
+                    .json(&req)
+                    .send()
+                    .await
+            }
+        };
+
+        match response {
             Ok(response) => {
                 Ok(())
             }

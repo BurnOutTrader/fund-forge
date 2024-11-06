@@ -166,6 +166,10 @@ impl DateTime {
     pub fn to_naive_datetime(&self) -> NaiveDateTime {
         self.0
     }
+
+    pub fn new(naive_datetime: NaiveDateTime) -> Self {
+        DateTime(naive_datetime)
+    }
 }
 
 impl Serialize for DateTime {

@@ -8,7 +8,7 @@ use crate::oanda_api::models::transaction_related::{ClientExtensions, Guaranteed
 
 /// A MarketIfTouchedOrder is an order that is created with a prices threshold and will only be filled by a market prices that touches or crosses the threshold.
 #[derive(Serialize, Deserialize, Debug)]
-pub struct MarketIfTouchedOrder {
+pub struct OandaMarketIfTouchedOrder {
     /// The Order’s identifier, unique within the Order’s Account.
     #[serde(rename = "id")]
     pub id: OrderId,
