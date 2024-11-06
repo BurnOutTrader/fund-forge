@@ -1,11 +1,13 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Datelike, NaiveDateTime, NaiveTime, TimeZone, Utc, Weekday};
 use chrono_tz::Tz;
 use dashmap::DashMap;
 use std::sync::Arc;
 use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Sender};
 use crate::helpers::converters::{time_convert_utc_to_local};
+use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{OrderSide};
+use crate::standardized_types::market_maps::product_trading_hours::get_futures_trading_hours;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{Order, OrderId, OrderRequest, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use crate::strategies::handlers::market_handler::price_service::{price_service_request_limit_fill_price_quantity, price_service_request_market_fill_price, price_service_request_market_price, PriceServiceResponse};
@@ -61,6 +63,7 @@ pub(crate) async fn backtest_matching_engine(
                                     Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
                                 }
                             }
+                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::Update { account, order_id, update } => {
                             if let Some((order_id, mut order)) = open_order_cache.remove(&order_id) {
@@ -97,6 +100,7 @@ pub(crate) async fn backtest_matching_engine(
                                     Err(e) => eprintln!("Timed Event Handler: Failed to send event: {}", e)
                                 }
                             }
+                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::CancelAll { account } => {
                             let mut remove = vec![];
@@ -125,9 +129,11 @@ pub(crate) async fn backtest_matching_engine(
                                     closed_order_cache.insert(order_id, order);
                                 }
                             }
+                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                         OrderRequest::FlattenAllFor { account} => {
                             ledger_service.flatten_all_for_paper_account(&account, time).await;
+                            simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                         }
                     }
                 }
@@ -135,7 +141,6 @@ pub(crate) async fn backtest_matching_engine(
                     if !open_order_cache.is_empty() {
                         simulated_order_matching(time.clone(), &open_order_cache, &closed_order_cache, strategy_event_sender.clone(), &ledger_service).await;
                     }
-
                 }
             }
             notify.notify_one();
@@ -161,13 +166,67 @@ pub(crate) async fn simulated_order_matching (
         //println!("Order matching: {:?}", order.value());
         match &order.time_in_force {
             TimeInForce::GTC => {},
-            TimeInForce::Day(time_zone_string) => {
-                let tz: Tz = time_zone_string.parse().unwrap();
-                let order_time = time_convert_utc_to_local(&tz, order.time_created_utc());
-                let local_time = time_convert_utc_to_local(&tz, time);
-                if local_time.date_naive() != order_time.date_naive() {
+            TimeInForce::Day => {
+                let tz: Tz = order.account.brokerage.timezone();
+                let close_time: DateTime<Utc> = match order.account.brokerage {
+                    Brokerage::Rithmic(_) => {
+                        match get_futures_trading_hours(&order.symbol_name) {
+                            None => {
+                                // CME closes at 17:00 Eastern Time
+                                let local_date = NaiveDateTime::new(
+                                    time_convert_utc_to_local(&tz, order.time_created_utc()).date_naive(),
+                                    NaiveTime::from_hms_opt(17, 0, 0).unwrap()
+                                );
+                                tz.from_local_datetime(&local_date)
+                                    .unwrap()
+                                    .with_timezone(&Utc)
+                            }
+                            Some(hours) => {
+                                match order.time_created_utc().date_naive().weekday() {
+                                    Weekday::Sun => {
+                                        let time_naive = hours.monday.close.unwrap();
+                                        let date_naive = order.time_created_utc()
+                                            .date_naive()
+                                            .succ_opt()
+                                            .unwrap();
+                                        let local_dt = NaiveDateTime::new(date_naive, time_naive);
+                                        tz.from_local_datetime(&local_dt)
+                                            .unwrap()
+                                            .to_utc()
+                                    }
+                                    Weekday::Sat => {
+                                        let reason = "Market Closed".to_string();
+                                        cancelled.push((order.id.clone(), reason));
+                                        continue
+                                    }
+                                    _ => {
+                                        let time_naive = hours.monday.close.unwrap();
+                                        let date_naive = order.time_created_utc().date_naive();
+                                        let local_dt = NaiveDateTime::new(date_naive, time_naive);
+                                        tz.from_local_datetime(&local_dt)
+                                            .unwrap()
+                                            .to_utc()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    _ => {
+                        // For test broker, use end of day in local timezone
+                        let local_date = NaiveDateTime::new(
+                            time_convert_utc_to_local(&tz, order.time_created_utc()).date_naive(),
+                            NaiveTime::from_hms_opt(23, 59, 59).unwrap()
+                        );
+                        tz.from_local_datetime(&local_date)
+                            .unwrap()
+                            .to_utc()
+                    }
+                };
+
+                if time >= close_time {
                     let reason = "Time In Force Expired: TimeInForce::Day".to_string();
                     cancelled.push((order.id.clone(), reason));
+                    continue
                 }
             }
             TimeInForce::IOC=> {
@@ -194,6 +253,7 @@ pub(crate) async fn simulated_order_matching (
                 if Utc::now() >= cancel_time {
                     let reason = "Time In Force Expired: TimeInForce::Time".to_string();
                     cancelled.push((order.id.clone(), reason));
+                    continue
                 }
             }
         }

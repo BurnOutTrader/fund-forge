@@ -2,6 +2,8 @@ use std::fmt;
 use serde_derive::{Deserialize, Serialize};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use std::str::FromStr;
+use chrono_tz::{America, Tz};
+use chrono_tz::Tz::UTC;
 use crate::apis::rithmic::rithmic_systems::RithmicSystem;
 use crate::messages::data_server_messaging::FundForgeError;
 
@@ -14,6 +16,17 @@ pub enum Brokerage {
     Rithmic(RithmicSystem),
     Bitget,
     Oanda
+}
+
+impl Brokerage {
+    pub fn timezone(&self) -> Tz {
+        match self {
+            Brokerage::Test => UTC,
+            Brokerage::Rithmic(_) => America::Chicago,
+            Brokerage::Bitget => UTC,
+            Brokerage::Oanda => UTC,
+        }
+    }
 }
 
 impl fmt::Display for Brokerage {

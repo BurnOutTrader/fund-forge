@@ -45,7 +45,7 @@ rkyv = { version =  "0.7.6", features = ["std", "alloc", "validation"] }
 thiserror = "*"
 strum_macros = "*"
 uuid = { version = "1.10.0", features = ["v4"] }
-reqwest = "0.12.9"
+reqwest = { version = "0.12.9", features = ["json"] }
 urlencoding = "*"
 bytes = "1.8.0"
 memmap2 = "0.9.5"

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use serde::Serialize;
-use crate::oanda_api::models::order::orders::Order;
+use crate::oanda_api::models::order::placement::OandaOrder;
 use crate::oanda_api::models::position::OandaPosition;
 use crate::oanda_api::models::trade::TradeSummary;
 use crate::oanda_api::models::transaction::transaction::Transaction;
@@ -11,19 +11,19 @@ use crate::oanda_api::models::transaction::transaction::Transaction;
 struct AccountChanges {
     /// The Orders created. These Orders may have been filled, cancelled, or triggered in the same period.
     #[serde(rename = "ordersCreated")]
-    orders_created: Vec<Order>,
+    orders_created: Vec<OandaOrder>,
 
     /// The Orders cancelled.
     #[serde(rename = "ordersCancelled")]
-    orders_cancelled: Vec<Order>,
+    orders_cancelled: Vec<OandaOrder>,
 
     /// The Orders filled.
     #[serde(rename = "ordersFilled")]
-    orders_filled: Vec<Order>,
+    orders_filled: Vec<OandaOrder>,
 
     /// The Orders triggered.
     #[serde(rename = "ordersTriggered")]
-    orders_triggered: Vec<Order>,
+    orders_triggered: Vec<OandaOrder>,
 
     /// The Trades opened.
     #[serde(rename = "tradesOpened")]

@@ -1,13 +1,11 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use ahash::AHashMap;
-use chrono::{DateTime, TimeZone, Utc};
-use chrono_tz::{Tz};
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
 use futures::{SinkExt, StreamExt};
 use futures::future::join_all;
@@ -664,27 +662,7 @@ impl RithmicBrokerageClient {
             TimeInForce::IOC => (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Ioc.into(), None, None),
             TimeInForce::FOK => (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Fok.into(), None, None),
             TimeInForce::GTC => (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(), None, None),
-            TimeInForce::Day(ref tz_string) => {
-                let time_zone = match Tz::from_str(tz_string) {
-                    Ok(time_zone) => time_zone,
-                    Err(e) => return Err(Self::reject_order(&order, format!("Failed to parse Tz: {}", e)))
-                };
-
-                let now = Utc::now();
-                let end_of_day = match time_zone.from_utc_datetime(&now.naive_utc())
-                    .date_naive()
-                    .and_hms_opt(23, 59, 59)
-                    .and_then(|naive_dt| naive_dt.and_local_timezone(time_zone).single())
-                    .map(|tz_dt| tz_dt.with_timezone(&Utc))
-                {
-                    Some(dt) => dt,
-                    None => return Err(Self::reject_order(&order, format!("Failed to calculate end of day for timezone: {}", tz_string)))
-                };
-
-                (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Gtc.into(),
-                 Some(end_of_day.timestamp() as i32),
-                 Some(end_of_day.timestamp_subsec_micros() as i32))
-            }
+            TimeInForce::Day => (crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_bracket_order::Duration::Day.into(), None, None),
             TimeInForce::Time(ref time_stamp) => {
                 let cancel_time = match DateTime::<Utc>::from_timestamp(*time_stamp, 0) {
                     Some(dt) => dt,

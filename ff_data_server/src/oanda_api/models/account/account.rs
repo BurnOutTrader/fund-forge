@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use ff_standard_lib::standardized_types::accounts::{AccountId, Currency};
 use crate::oanda_api::models::account::enums::{GuaranteedStopLossOrderMode, GuaranteedStopLossOrderMutability};
 use crate::oanda_api::models::account::guaranteed_stop_loss_parameters::GuaranteedStopLossOrderParameters;
-use crate::oanda_api::models::order::orders::Order;
+use crate::oanda_api::models::order::placement::OandaOrder;
 use crate::oanda_api::models::position::OandaPosition;
 use crate::oanda_api::models::primitives::DateTime;
 use crate::oanda_api::models::trade::{TradeSummary};
@@ -187,6 +187,6 @@ pub(crate) struct OandaAccount {
 
     /// The details of the Orders currently pending in the Account.
     #[serde(rename = "orders", default)]
-    pub orders: Vec<Order>,
+    pub orders: Vec<OandaOrder>,
 }
 

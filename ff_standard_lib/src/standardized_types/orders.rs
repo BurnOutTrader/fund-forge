@@ -10,7 +10,7 @@ use std::str::FromStr;
 use rust_decimal_macros::dec;
 use strum_macros::Display;
 use crate::standardized_types::broker_enum::Brokerage;
-use crate::standardized_types::new_types::{Price, TzString, Volume};
+use crate::standardized_types::new_types::{Price, Volume};
 
 #[derive(
     Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize,
@@ -82,7 +82,7 @@ pub enum TimeInForce {
     GTC,
     IOC,
     FOK,
-    Day(TzString),
+    Day,
 
     //Utc Timestamp
     Time(i64)

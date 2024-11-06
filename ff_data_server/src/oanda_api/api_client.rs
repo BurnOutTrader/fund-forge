@@ -3,6 +3,7 @@ use std::time::Duration;
 use tokio::sync::{broadcast, OnceCell, Semaphore};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use chrono::{DateTime, Utc};
 use crate::oanda_api::settings::{OandaApiMode, OandaSettings};
 use crate::rate_limiter::RateLimiter;
 use dashmap::DashMap;
@@ -15,6 +16,7 @@ use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
+use ff_standard_lib::standardized_types::orders::{OrderId};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
@@ -57,11 +59,16 @@ pub struct OandaClient {
     pub instruments_map: Arc<DashMap<SymbolName, OandaInstrument>>,
     pub accounts: Vec<Account>,
     pub account_info: DashMap<AccountId, AccountInfo>,
-    pub positions: DashMap<AccountId, OandaPosition>,
+    pub positions: DashMap<AccountId, DashMap<SymbolName, OandaPosition>>,
     pub instrument_symbol_map: Arc<DashMap<String, Symbol>>,
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
     pub subscription_sender: Sender<Vec<SymbolName>>,
+    pub oanda_id_map: DashMap<String, OrderId>,
+    pub open_orders: DashMap<OrderId, ff_standard_lib::standardized_types::orders::Order>,
+    pub id_stream_name_map: DashMap<OrderId , u16>,
+    pub custom_tif_cancel_time_map: Arc<DashMap<OrderId, DateTime<Utc>>> //todo, need to start a task to handle this
 }
+
 pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
     if options.disable_oanda_server != 0 {
         OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
@@ -160,6 +167,10 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         instrument_symbol_map: Default::default(),
         quote_feed_broadcasters: Arc::new(Default::default()),
         subscription_sender: sender,
+        oanda_id_map: Default::default(),
+        open_orders: Default::default(),
+        id_stream_name_map: Default::default(),
+        custom_tif_cancel_time_map: Arc::new(Default::default()),
     };
     match oanda_accounts_list(&oanda_client).await {
         Ok(accounts) => oanda_client.accounts = accounts.clone(),
