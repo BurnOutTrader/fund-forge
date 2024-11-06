@@ -37,7 +37,7 @@ async fn main() {
     );
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::LivePaperTrading,
+        StrategyMode::Live,
         dec!(100000),
         Currency::USD,
         NaiveDate::from_ymd_opt(2024, 6, 5).unwrap().and_hms_opt(0, 0, 0).unwrap(),
@@ -69,10 +69,10 @@ async fn main() {
 // 5. The limit order expiry is on the exchange/rithmic side.
 // 6. It will cancel the take profit order if the position is closed.
 
-const RENKO_RANGE: Decimal = dec!(2);
+const RENKO_RANGE: Decimal = dec!(3);
 const MAX_SIZE: Decimal = dec!(20);
 const SIZE: Decimal = dec!(5);
-const INCREMENTAL_SCALP_PNL: Decimal = dec!(50);
+const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
 const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60;
 const TRADING_LONG: bool = true;
 const TRADING_SHORT: bool = false;
