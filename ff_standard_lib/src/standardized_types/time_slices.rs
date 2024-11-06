@@ -1,3 +1,4 @@
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
@@ -102,5 +103,20 @@ impl TimeSlice {
         self.data.iter().flat_map(|(time, items)| {
             items.iter().map(move |item| (time, item))
         })
+    }
+
+    pub fn merge(&mut self, other: TimeSlice) {
+        for (time, mut items) in other.data {
+            match self.data.entry(time) {
+                Entry::Vacant(entry) => {
+                    // If we don't have data for this timestamp, insert directly
+                    entry.insert(items);
+                },
+                Entry::Occupied(mut entry) => {
+                    // If we have existing data, append the new items
+                    entry.get_mut().append(&mut items);
+                }
+            }
+        }
     }
 }

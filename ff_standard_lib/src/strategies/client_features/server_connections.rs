@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use crate::communicators::communications_async::ExternalSender;
 use crate::strategies::client_features::init_clients::create_async_api_client;
-use crate::strategies::client_features::connection_settings::client_settings::initialise_settings;
+use crate::strategies::client_features::connection_settings::client_settings::{initialise_settings, ConnectionSettings};
 use crate::messages::data_server_messaging::DataServerResponse;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,7 +27,9 @@ use crate::strategies::ledgers::ledger_service::LedgerService;
 
 lazy_static! {
     static ref WARM_UP_COMPLETE: AtomicBool = AtomicBool::new(false);
+    pub static ref SETTINGS_MAP: Arc<HashMap<ConnectionType, ConnectionSettings>> = Arc::new(initialise_settings().unwrap());
 }
+
 #[inline(always)]
 pub fn set_warmup_complete() {
     WARM_UP_COMPLETE.store(true, Ordering::SeqCst);
@@ -47,13 +50,11 @@ pub async fn init_connections(
     indicator_handler: Arc<IndicatorHandler>,
     subscription_handler: Arc<SubscriptionHandler>
 ) {
-    let settings_map = initialise_settings().unwrap();
-    let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(settings_map.len());
-    let server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(settings_map.len());
+    let server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>> = DashMap::with_capacity(SETTINGS_MAP.len());
+    let server_senders: DashMap<ConnectionType, ExternalSender> = DashMap::with_capacity(SETTINGS_MAP.len());
 
-    println!("Connections: {:?}", settings_map);
     // for each connection type specified in our server_settings.toml we will establish a connection
-    for (connection_type, settings) in settings_map.iter() {
+    for (connection_type, settings) in SETTINGS_MAP.iter() {
         if !gui_enabled && connection_type == &ConnectionType::StrategyRegistry {
             continue
         }
@@ -75,6 +76,6 @@ pub async fn init_connections(
     }).clone();
 
     let callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>> = Default::default();
-    request_handler::request_handler(rx, settings_map.clone(), server_senders, callbacks.clone()).await;
-    response_handler::response_handler(mode, buffer_duration, settings_map, server_receivers, callbacks, order_updates_sender, synchronise_accounts, strategy_event_sender, ledger_service, indicator_handler, subscription_handler).await;
+    request_handler::request_handler(rx, server_senders, callbacks.clone()).await;
+    response_handler::response_handler(mode, buffer_duration, server_receivers, callbacks, order_updates_sender, synchronise_accounts, strategy_event_sender, ledger_service, indicator_handler, subscription_handler).await;
 }

@@ -1,5 +1,4 @@
 use std::time::Duration;
-use std::collections::HashMap;
 use dashmap::DashMap;
 use tokio::io::{AsyncReadExt, ReadHalf};
 use tokio_rustls::TlsStream;
@@ -14,10 +13,10 @@ use crate::standardized_types::bytes_trait::Bytes;
 use crate::standardized_types::enums::StrategyMode;
 use crate::standardized_types::orders::OrderUpdateEvent;
 use crate::standardized_types::subscriptions::DataSubscriptionEvent;
-use crate::strategies::client_features::connection_settings::client_settings::ConnectionSettings;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::{live_data_receiver, request_handler};
 use crate::strategies::client_features::request_handler::StrategyRequest;
+use crate::strategies::client_features::server_connections::SETTINGS_MAP;
 use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
 use crate::strategies::ledgers::ledger_service::LedgerService;
@@ -26,7 +25,6 @@ use crate::strategies::strategy_events::StrategyEvent;
 pub async fn response_handler(
     mode: StrategyMode,
     buffer_duration: Duration,
-    settings_map: HashMap<ConnectionType, ConnectionSettings>,
     server_receivers: DashMap<ConnectionType, ReadHalf<TlsStream<TcpStream>>>,
     callbacks: Arc<DashMap<u64, oneshot::Sender<DataServerResponse>>>,
     order_updates_sender: Sender<(OrderUpdateEvent, DateTime<Utc>)>,
@@ -37,7 +35,8 @@ pub async fn response_handler(
     subscription_handler: Arc<SubscriptionHandler>,
 
 ) {
-    for (connection, settings) in &settings_map {
+    let settings_map = SETTINGS_MAP.clone();
+    for (connection, settings) in settings_map.iter() {
         let order_updates_sender = order_updates_sender.clone();
         if let Some((connection, stream)) = server_receivers.remove(connection) {
             let register_message = StrategyRequest::OneWay(connection.clone(), DataServerRequest::Register(mode.clone()));

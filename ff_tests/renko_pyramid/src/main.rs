@@ -25,7 +25,7 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 #[tokio::main]
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
-    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string());
+    let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-169".to_string());
     let symbol_code = SymbolCode::from("MNQZ4");
     let symbol_name = SymbolName::from("MNQ");
     let subscription = DataSubscription::new(
@@ -70,8 +70,8 @@ async fn main() {
 // 6. It will cancel the take profit order if the position is closed.
 
 const RENKO_RANGE: Decimal = dec!(5);
-const MAX_SIZE: Decimal = dec!(20);
-const SIZE: Decimal = dec!(5);
+const MAX_SIZE: Decimal = dec!(40);
+const SIZE: Decimal = dec!(10);
 const INCREMENTAL_SCALP_PNL: Decimal = dec!(150);
 const LIMIT_ORDER_EXPIRE_IN_SECS: i64 = 60;
 const TRADING_LONG: bool = true;

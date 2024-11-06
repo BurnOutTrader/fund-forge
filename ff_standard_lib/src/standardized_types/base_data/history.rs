@@ -9,10 +9,14 @@ use crate::standardized_types::subscriptions::{DataSubscription, Symbol};
 use crate::standardized_types::time_slices::TimeSlice;
 use chrono::{DateTime, Duration, Utc};
 use std::collections::{BTreeMap, HashMap};
+use std::collections::btree_map::Entry;
+use ahash::AHashMap;
+use futures::future::join_all;
 use tokio::sync::oneshot;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::standardized_types::enums::{StrategyMode, SubscriptionResolutionType};
 use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
+use crate::strategies::client_features::server_connections::SETTINGS_MAP;
 use crate::strategies::consolidators::consolidator_enum::ConsolidatorEnum;
 
 pub async fn get_historical_data(
@@ -20,33 +24,114 @@ pub async fn get_historical_data(
     from_time: DateTime<Utc>,
     to_time: DateTime<Utc>,
 ) -> Result<BTreeMap<i64, TimeSlice>, FundForgeError> {
-    let req = DataServerRequest::HistoricalBaseDataRange {
-        callback_id: 0,
-        subscriptions: subscriptions.clone(),
-        from_time: from_time.to_string(),
-        to_time: to_time.to_string(),
-    };
-    let (tx, rx) = oneshot::channel();
-    let request = StrategyRequest::CallBack(
-        ConnectionType::Default,
-        req,
-        tx
-    );
+    let connections = SETTINGS_MAP.clone();
+    if connections.len() <= 2 {
+        let req = DataServerRequest::HistoricalBaseDataRange {
+            callback_id: 0,
+            subscriptions: subscriptions.clone(),
+            from_time: from_time.to_string(),
+            to_time: to_time.to_string(),
+        };
+        let (tx, rx) = oneshot::channel();
+        let request = StrategyRequest::CallBack(
+            ConnectionType::Default,
+            req,
+            tx
+        );
 
-    // Send request sequentially
-    send_request(request).await;
-    let response = rx.await;
-    match response {
-        Ok(payload ) => {
-            match payload {
-                DataServerResponse::HistoricalBaseData { payload, .. } => Ok(payload),
-                DataServerResponse::Error { error, .. } => {
-                    panic!("{}", error)
-                },
-                _ => panic!("Incorrect callback data received")
+        // Send request sequentially
+        send_request(request).await;
+        let response = rx.await;
+        match response {
+            Ok(payload) => {
+                match payload {
+                    DataServerResponse::HistoricalBaseData { payload, .. } => Ok(payload),
+                    DataServerResponse::Error { error, .. } => {
+                        panic!("{}", error)
+                    },
+                    _ => panic!("Incorrect callback data received")
+                }
+            }
+            Err(e) => panic!("Failed to receive payload: {}", e)
+        }
+    } else { //todo this is untested.
+        // For len > 2, handle potential vendor-specific connections
+        let mut requests_map: AHashMap<ConnectionType, Vec<DataSubscription>> = AHashMap::new();
+
+        // Sort subscriptions into appropriate connections
+        for sub in subscriptions {
+            let vendor_connection = ConnectionType::Vendor(sub.symbol.data_vendor.clone());
+
+            // If vendor connection exists in settings, use it; otherwise use default
+            if connections.contains_key(&vendor_connection) {
+                requests_map.entry(vendor_connection)
+                    .or_insert_with(Vec::new)
+                    .push(sub);
+            } else {
+                requests_map.entry(ConnectionType::Default)
+                    .or_insert_with(Vec::new)
+                    .push(sub);
             }
         }
-        Err(e) => panic!("Failed to receive payload: {}", e)
+
+        // Create and execute concurrent requests
+        let mut futures = Vec::new();
+        for (connection_type, subs) in requests_map {
+            let (tx, rx) = oneshot::channel();
+            let req = DataServerRequest::HistoricalBaseDataRange {
+                callback_id: 0,
+                subscriptions: subs,
+                from_time: from_time.to_string(),
+                to_time: to_time.to_string(),
+            };
+            let request = StrategyRequest::CallBack(
+                connection_type,
+                req,
+                tx
+            );
+
+            // Create future for this request
+            let future = async move {
+                send_request(request).await;
+                match rx.await {
+                    Ok(response) => match response {
+                        DataServerResponse::HistoricalBaseData { payload, .. } => Ok(payload),
+                        DataServerResponse::Error { error, .. } => Err(error),
+                        _ => Err(FundForgeError::UnknownBlameError("Incorrect response received at callback".to_string()))
+                    },
+                    Err(e) => Err(FundForgeError::ClientSideErrorDebug(format!("Failed to receive payload: {}", e)))
+                }
+            };
+
+            futures.push(future);
+        }
+
+        // Wait for all requests to complete
+        let results = join_all(futures).await;
+
+        // Combine BTreeMap results, merging TimeSlices for same timestamps
+        let mut combined_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
+        for result in results {
+            match result {
+                Ok(payload) => {
+                    // Merge each payload's data into the combined map
+                    for (timestamp, time_slice) in payload {
+                        match combined_data.entry(timestamp) {
+                            Entry::Vacant(entry) => {
+                                entry.insert(time_slice);
+                            },
+                            Entry::Occupied(mut entry) => {
+                                // Merge the new TimeSlice with existing one
+                                entry.get_mut().merge(time_slice);
+                            }
+                        }
+                    }
+                },
+                Err(e) => return Err(e),
+            }
+        }
+
+        Ok(combined_data)
     }
 }
 
