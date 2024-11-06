@@ -241,14 +241,14 @@ impl BrokerApiResponse for OandaClient {
             }
         };
 
-        let (limit_price, order_type, position_fill, trigger_price) = match order.order_type {
-            OrderType::Limit => (Some(order.limit_price.unwrap()), order_related::OrderType::Limit, OrderPositionFill::ReduceFirst, None),
-            OrderType::Market => (None, order_related::OrderType::Market, OrderPositionFill::ReduceFirst, None),
-            OrderType::MarketIfTouched => (None, order_related::OrderType::MarketIfTouched, OrderPositionFill::ReduceFirst, Some(order.trigger_price.unwrap())),
-            OrderType::StopMarket =>  (None, order_related::OrderType::Stop, OrderPositionFill::ReduceFirst, Some(order.trigger_price.unwrap())),
-            OrderType::StopLimit =>  (Some(order.limit_price.unwrap()), order_related::OrderType::Stop, OrderPositionFill::ReduceFirst, Some(order.trigger_price.unwrap())),
-            OrderType::EnterLong | OrderType::EnterShort => (Some(order.trigger_price.unwrap()), order_related::OrderType::Market, OrderPositionFill::Default, None),
-            OrderType::ExitLong |  OrderType::ExitShort => (Some(order.trigger_price.unwrap()), order_related::OrderType::Market, OrderPositionFill::ReduceOnly, None),
+        let (order_type, position_fill) = match order.order_type {
+            OrderType::Limit => (order_related::OrderType::Limit, OrderPositionFill::ReduceFirst),
+            OrderType::Market => (order_related::OrderType::Market, OrderPositionFill::ReduceFirst),
+            OrderType::MarketIfTouched => (order_related::OrderType::MarketIfTouched, OrderPositionFill::ReduceFirst),
+            OrderType::StopMarket =>  (order_related::OrderType::Stop, OrderPositionFill::ReduceFirst),
+            OrderType::StopLimit =>  (order_related::OrderType::Stop, OrderPositionFill::ReduceFirst),
+            OrderType::EnterLong | OrderType::EnterShort => (order_related::OrderType::Market, OrderPositionFill::Default),
+            OrderType::ExitLong |  OrderType::ExitShort => (order_related::OrderType::Market, OrderPositionFill::ReduceOnly),
             _ => {
                 return Err(OrderUpdateEvent::OrderRejected {
                     account: order.account,
@@ -303,11 +303,25 @@ impl BrokerApiResponse for OandaClient {
                     .await
             }
             OrderType::Limit => {
+                let price = match order.limit_price {
+                    Some(p) => p,
+                    None => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            account: order.account,
+                            symbol_name: order.symbol_name.to_string(),
+                            symbol_code: order.symbol_name,
+                            order_id: order.id,
+                            reason: "No limit price provided".to_string(),
+                            tag: order.tag,
+                            time: Utc::now().to_string(),
+                        });
+                    }
+                };
                 let req =  LimitOrderRequest {
                     order_type,
                     instrument: oanda_symbol,
                     units,
-                    price: limit_price.unwrap(),
+                    price,
                     time_in_force,
                     gtd_time,
                     position_fill,
@@ -329,12 +343,26 @@ impl BrokerApiResponse for OandaClient {
             }
             
             OrderType::MarketIfTouched => {
+                let price = match order.trigger_price {
+                    Some(p) => p,
+                    None => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            account: order.account,
+                            symbol_name: order.symbol_name.to_string(),
+                            symbol_code: order.symbol_name,
+                            order_id: order.id,
+                            reason: "No trigger price provided".to_string(),
+                            tag: order.tag,
+                            time: Utc::now().to_string(),
+                        });
+                    }
+                };
                 let req = MarketIfTouchedOrderRequest {
                     order_type,
                     instrument: oanda_symbol,
                     units,
-                    price: trigger_price.unwrap(),
-                    price_bound: limit_price,
+                    price,
+                    price_bound: order.limit_price,
                     time_in_force,
                     gtd_time,
                     position_fill,
@@ -355,12 +383,26 @@ impl BrokerApiResponse for OandaClient {
                     .await
             }
             OrderType::StopMarket | OrderType::StopLimit => {
+                let price = match order.trigger_price {
+                    Some(p) => p,
+                    None => {
+                        return Err(OrderUpdateEvent::OrderRejected {
+                            account: order.account,
+                            symbol_name: order.symbol_name.to_string(),
+                            symbol_code: order.symbol_name,
+                            order_id: order.id,
+                            reason: "No trigger price provided".to_string(),
+                            tag: order.tag,
+                            time: Utc::now().to_string(),
+                        });
+                    }
+                };
                 let req = StopOrderRequest {
                     order_type,
                     instrument: oanda_symbol,
                     units,
-                    price: trigger_price.unwrap(),
-                    price_bound: limit_price,
+                    price,
+                    price_bound: order.limit_price,
                     time_in_force,
                     gtd_time,
                     position_fill,
