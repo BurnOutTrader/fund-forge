@@ -17,6 +17,7 @@ use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::{OrderId};
+use ff_standard_lib::standardized_types::position::Position;
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
@@ -59,7 +60,7 @@ pub struct OandaClient {
     pub instruments_map: Arc<DashMap<SymbolName, OandaInstrument>>,
     pub accounts: Vec<Account>,
     pub account_info: DashMap<AccountId, AccountInfo>,
-    pub positions: DashMap<AccountId, DashMap<SymbolName, OandaPosition>>,
+    pub positions: DashMap<AccountId, DashMap<SymbolName, Position>>,
     pub instrument_symbol_map: Arc<DashMap<String, Symbol>>,
     pub quote_feed_broadcasters: Arc<DashMap<SymbolName, broadcast::Sender<BaseDataEnum>>>,
     pub subscription_sender: Sender<Vec<SymbolName>>,

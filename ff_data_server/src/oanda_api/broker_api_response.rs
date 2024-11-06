@@ -4,9 +4,9 @@ use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundF
 use ff_standard_lib::product_maps::oanda::maps::{calculate_oanda_margin, OANDA_SYMBOL_INFO};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
-use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use ff_standard_lib::standardized_types::new_types::Volume;
-use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
+use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::OandaClient;
@@ -104,12 +104,78 @@ impl BrokerApiResponse for OandaClient {
 
     #[allow(unused)]
     async fn live_enter_long(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
-        todo!()
+        if let Some(position_map) = self.positions.get(&order.account.account_id) {
+            if let Some(position) = position_map.get(&order.symbol_name) {
+                if position.side == PositionSide::Short {
+                    let exit_long_order = Order {
+                        id: order.id.clone(),
+                        time_created_utc: Utc::now().to_string(),
+                        time_filled_utc: None,
+                        state: OrderState::Created,
+                        fees: Default::default(),
+                        value: Default::default(),
+                        account: order.account.clone(),
+                        symbol_name: order.symbol_name.clone(),
+                        side: OrderSide::Buy,
+                        order_type: OrderType::ExitShort,
+                        quantity_open: position.quantity_open,
+                        quantity_filled: Default::default(),
+                        average_fill_price: None,
+                        limit_price: None,
+                        trigger_price: None,
+                        time_in_force: TimeInForce::FOK,
+                        tag: "Exit Short, Before Enter Long".to_string(),
+                        symbol_code: order.symbol_code.clone(),
+                        exchange: order.exchange.clone(),
+                    };
+                    match self.other_orders(stream_name.clone(), mode, exit_long_order).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            return Err(e)
+                        }
+                    }
+                }
+            }
+        }
+        self.other_orders(stream_name, mode, order).await
     }
 
     #[allow(unused)]
     async fn live_enter_short(&self, stream_name: StreamName, mode: StrategyMode, order: Order) -> Result<(), OrderUpdateEvent> {
-        todo!()
+        if let Some(position_map) = self.positions.get(&order.account.account_id) {
+            if let Some(position) = position_map.get(&order.symbol_name) {
+                if position.side == PositionSide::Long {
+                    let exit_long_order = Order {
+                        id: order.id.clone(),
+                        time_created_utc: Utc::now().to_string(),
+                        time_filled_utc: None,
+                        state: OrderState::Created,
+                        fees: Default::default(),
+                        value: Default::default(),
+                        account: order.account.clone(),
+                        symbol_name: order.symbol_name.clone(),
+                        side: OrderSide::Sell,
+                        order_type: OrderType::ExitLong,
+                        quantity_open: position.quantity_open,
+                        quantity_filled: Default::default(),
+                        average_fill_price: None,
+                        limit_price: None,
+                        trigger_price: None,
+                        time_in_force: TimeInForce::FOK,
+                        tag: "Exit Long, Before Enter Short".to_string(),
+                        symbol_code: order.symbol_code.clone(),
+                        exchange: order.exchange.clone(),
+                    };
+                    match self.other_orders(stream_name.clone(), mode, exit_long_order).await {
+                        Ok(_) => {}
+                        Err(e) => {
+                            return Err(e)
+                        }
+                    }
+                }
+            }
+        }
+        self.other_orders(stream_name, mode, order).await
     }
 
     #[allow(unused)]
