@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use uuid::Uuid;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::product_maps::oanda::maps::{calculate_oanda_margin, OANDA_SYMBOL_INFO};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
@@ -268,8 +269,10 @@ impl BrokerApiResponse for OandaClient {
             comment: "".to_string(),
         });
 
-        self.open_orders.insert(order.id.clone(), order.clone());
-        self.id_stream_name_map.insert(order.id.clone(), stream_name.clone());
+        if stream_name != 0 {
+            self.open_orders.insert(order.id.clone(), order.clone());
+            self.id_stream_name_map.insert(order.id.clone(), stream_name.clone());
+        }
 
         // Construct the endpoint
         let endpoint = format!("/accounts/{}/orders", order.account.account_id);
@@ -444,21 +447,79 @@ impl BrokerApiResponse for OandaClient {
 
     #[allow(unused)]
     async fn cancel_orders_on_account(&self, account: Account) {
-        todo!()
+        for order in self.open_orders.iter() {
+            if order.account == account {
+                self.cancel_order(account.clone(), order.id.clone()).await;
+            }
+        }
     }
 
     #[allow(unused)]
     async fn cancel_order(&self, account: Account, order_id: OrderId) {
-        todo!()
+        let endpoint = format!("/accounts/{}/orders/{}/cancel", account.account_id, order_id);
+        let url = format!("{}{}", self.base_endpoint, endpoint);
+
+        // Acquire a permit from the rate limiter
+        let _permit = self.rate_limiter.acquire().await;
+
+        if let Err(e) = self.client
+            .put(&url)
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+        {
+            return;
+        }
     }
 
     #[allow(unused)]
     async fn flatten_all_for(&self, account: Account) {
-        todo!()
+        self.cancel_orders_on_account(account.clone()).await;
+        if let Some(position_map) = self.positions.get(&account.account_id) {
+            for position in position_map.iter() {
+                let guid = Uuid::new_v4();
+                let (tag, side,order_type) = match position.value().side {
+                    PositionSide::Long => {
+                        ("Flatten Long".to_string(), OrderSide::Sell, OrderType::ExitLong)
+                    }
+                    PositionSide::Short => {
+                        ("Flatten Short".to_string(), OrderSide::Buy, OrderType::ExitShort)
+                    }
+                };
+                let exit_order = Order {
+                    id: guid.to_string(),
+                    time_created_utc: Utc::now().to_string(),
+                    time_filled_utc: None,
+                    state: OrderState::Created,
+                    fees: Default::default(),
+                    value: Default::default(),
+                    account: account.clone(),
+                    symbol_name: position.symbol_name.clone(),
+                    side,
+                    order_type,
+                    quantity_open: position.quantity_open,
+                    quantity_filled: Default::default(),
+                    average_fill_price: None,
+                    limit_price: None,
+                    trigger_price: None,
+                    time_in_force: TimeInForce::FOK,
+                    tag,
+                    symbol_code: None,
+                    exchange: None,
+                };
+                let _ = self.other_orders(0, StrategyMode::Live, exit_order).await;
+            }
+        }
     }
 
     #[allow(unused)]
     async fn update_order(&self, account: Account, order_id: OrderId, update: OrderUpdateType) -> Result<(), OrderUpdateEvent> {
-        todo!()
+        Err(OrderUpdateEvent::OrderUpdateRejected {
+            account,
+            order_id,
+            reason: "Order updates not supported with Oanda, please cancel order and replace".to_string(),
+            time: Utc::now().to_string(),
+        })
     }
 }
