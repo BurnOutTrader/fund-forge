@@ -165,7 +165,6 @@ async fn receive_and_process(
     let mut interval = tokio::time::interval(Duration::from_secs(1));
 
     //todo, we should possibly have an option for strategies to use this fn, or a fn that implements sequential processing indicators updates at the cost of potentially having a lagging data feed.
-    let indicator_sender =indicator_handler.live_update_time_slice(strategy_event_sender.clone()).await;
     loop {
         tokio::select! {
             _ = interval.tick() => {
