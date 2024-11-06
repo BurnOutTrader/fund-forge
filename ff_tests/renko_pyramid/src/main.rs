@@ -26,7 +26,7 @@ use ff_standard_lib::strategies::indicators::indicator_events::IndicatorEvents;
 async fn main() {
     let (strategy_event_sender, strategy_event_receiver) = mpsc::channel(100);
     let account = Account::new(Brokerage::Rithmic(RithmicSystem::Apex), "APEX-3396-168".to_string());
-    let symbol_code = SymbolCode::from("MNQZ24");
+    let symbol_code = SymbolCode::from("MNQZ4");
     let symbol_name = SymbolName::from("MNQ");
     let subscription = DataSubscription::new(
         symbol_name.clone(),
