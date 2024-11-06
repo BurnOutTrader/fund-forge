@@ -209,7 +209,7 @@ impl VendorApiResponse for OandaClient {
 
             let to = match from_back {
                 true => to,
-                false => Utc::now(),
+                false => Utc::now() + Duration::seconds(2),
             };
 
             if last_bar_time >= to - TIME_NEGATIVE {

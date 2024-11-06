@@ -391,14 +391,13 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 .progress_chars("=>-")
         );
 
-
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
             let window_end = window_start + resolution_multiplier;
             let to = match from_back {
                 true => to,
-                false => Utc::now(),
+                false => Utc::now() + Duration::seconds(2),
             };
 
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, to.format("%Y-%m-%d %H:%M:%S")));
