@@ -11,7 +11,7 @@ pub(crate) struct Transaction {
     id: TransactionID,
 
     /// The date/time when the Transaction was created.
-    time: DateTime,
+    pub(crate) time: DateTime,
 
     /// The ID of the user that initiated the creation of the Transaction.
     #[serde(rename = "userID")]

@@ -65,6 +65,7 @@ pub struct OandaClient {
     pub oanda_id_map: DashMap<String, OrderId>,
     pub open_orders: DashMap<OrderId, ff_standard_lib::standardized_types::orders::Order>,
     pub id_stream_name_map: DashMap<OrderId , u16>,
+    pub last_transaction_id: DashMap<AccountId, String>,
 }
 
 pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
@@ -168,6 +169,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         oanda_id_map: Default::default(),
         open_orders: Default::default(),
         id_stream_name_map: Default::default(),
+        last_transaction_id: Default::default(),
     };
     match oanda_accounts_list(&oanda_client).await {
         Ok(accounts) => oanda_client.accounts = accounts.clone(),

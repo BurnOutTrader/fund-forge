@@ -1,5 +1,8 @@
+use std::str::FromStr;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use reqwest::StatusCode;
+use rust_decimal::{Decimal};
 use rust_decimal_macros::dec;
 use uuid::Uuid;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
@@ -16,9 +19,10 @@ use crate::oanda_api::models::order::limit_order::LimitOrderRequest;
 use crate::oanda_api::models::order::market_if_touched_order::MarketIfTouchedOrderRequest;
 use crate::oanda_api::models::order::market_order::{MarketOrderRequest};
 use crate::oanda_api::models::order::order_related;
-use crate::oanda_api::models::order::order_related::{OrderPositionFill, OrderTriggerCondition};
+use crate::oanda_api::models::order::order_related::{OrderCreateResponse, OrderPositionFill, OrderRejectResponse, OrderTriggerCondition};
 use crate::oanda_api::models::order::stop_order::StopOrderRequest;
 use crate::oanda_api::models::transaction_related::ClientExtensions;
+use crate::request_handlers::RESPONSE_SENDERS;
 
 #[async_trait]
 impl BrokerApiResponse for OandaClient {
@@ -430,7 +434,102 @@ impl BrokerApiResponse for OandaClient {
 
         match response {
             Ok(response) => {
-                Ok(())
+                match response.status() {
+                    StatusCode::CREATED => {
+                        match response.json::<OrderCreateResponse>().await {
+                            Ok(create_response) => {
+                                // Send order accepted event
+                                let accept_event = OrderUpdateEvent::OrderAccepted {
+                                    order_id: order.id.clone(),
+                                    account: order.account.clone(),
+                                    symbol_name: order.symbol_name.clone(),
+                                    symbol_code: order.symbol_name.clone(),
+                                    tag: order.tag.clone(),
+                                    time: Utc::now().to_string(),
+                                };
+                                //send to the stream receiver
+                                if let Some(stream_receiver) = RESPONSE_SENDERS.get(&stream_name) {
+                                    stream_receiver.send(DataServerResponse::OrderUpdates {
+                                        event: accept_event,
+                                        time: Utc::now().to_string(),
+                                    }).await;
+                                }
+
+                                // If order was immediately filled
+                                if let Some(fill) = create_response.order_fill_transaction {
+                                    let quantity = match Decimal::from_str(&fill.units) {
+                                        Ok(fill_units) => fill_units,
+                                        Err(_) => return Ok(())
+                                    };
+                                    let price = match Decimal::from_str(&fill.price) {
+                                        Ok(fill_price) => fill_price,
+                                        Err(_) => return Ok(())
+                                    };
+                                    let fill_event = OrderUpdateEvent::OrderFilled {
+                                        order_id: order.id,
+                                        account: order.account,
+                                        symbol_name: order.symbol_name.clone(),
+                                        symbol_code: order.symbol_name,
+                                        quantity,
+                                        price,
+                                        side: order.side,
+                                        tag: order.tag,
+                                        time: Utc::now().to_string(),
+                                    };
+                                    if let Some(stream_receiver) = RESPONSE_SENDERS.get(&stream_name) {
+                                        stream_receiver.send(DataServerResponse::OrderUpdates {
+                                            event: fill_event,
+                                            time: Utc::now().to_string(),
+                                        }).await;
+                                    }
+                                }
+                                Ok(())
+                            }
+                            Err(e) => Err(OrderUpdateEvent::OrderRejected {
+                                account: order.account,
+                                symbol_name: order.symbol_name.to_string(),
+                                symbol_code: order.symbol_name,
+                                order_id: order.id,
+                                reason: format!("Failed to parse order response: {}", e),
+                                tag: order.tag,
+                                time: Utc::now().to_string(),
+                            })
+                        }
+                    }
+                    StatusCode::BAD_REQUEST | StatusCode::NOT_FOUND => {
+                        match response.json::<OrderRejectResponse>().await {
+                            Ok(reject) => {
+                                Err(OrderUpdateEvent::OrderRejected {
+                                    account: order.account,
+                                    symbol_name: order.symbol_name.to_string(),
+                                    symbol_code: order.symbol_name,
+                                    order_id: order.id,
+                                    reason: reject.error_message,
+                                    tag: order.tag,
+                                    time: Utc::now().to_string(),
+                                })
+                            },
+                            Err(e) => Err(OrderUpdateEvent::OrderRejected {
+                                account: order.account,
+                                symbol_name: order.symbol_name.to_string(),
+                                symbol_code: order.symbol_name,
+                                order_id: order.id,
+                                reason: format!("Failed to parse rejection: {}", e),
+                                tag: order.tag,
+                                time: Utc::now().to_string(),
+                            })
+                        }
+                    }
+                    status => Err(OrderUpdateEvent::OrderRejected {
+                        account: order.account,
+                        symbol_name: order.symbol_name.to_string(),
+                        symbol_code: order.symbol_name,
+                        order_id: order.id,
+                        reason: format!("Unexpected response status: {}", status),
+                        tag: order.tag,
+                        time: Utc::now().to_string(),
+                    })
+                }
             }
             Err(e) => {
                 Err(OrderUpdateEvent::OrderRejected {

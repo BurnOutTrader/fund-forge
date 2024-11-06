@@ -41,6 +41,6 @@ pub struct OrderFillTransaction {
     id: String,
     order_id: String,
     time: String,
-    price: String,
-    units: String,
+    pub(crate) price: String,
+    pub(crate) units: String,
 }

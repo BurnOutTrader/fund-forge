@@ -1,7 +1,30 @@
 use rust_decimal::Decimal;
 use serde::{Serialize, Deserialize};
 use ff_standard_lib::standardized_types::orders::OrderId;
+use crate::oanda_api::models::order::placement::OrderFillTransaction;
 use crate::oanda_api::models::primitives::GuaranteedStopLossOrderLevelRestriction;
+use crate::oanda_api::models::transaction::order_feedback::OrderCancelTransaction;
+use crate::oanda_api::models::transaction::transaction::Transaction;
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(unused)]
+pub struct OrderCreateResponse {
+    order_create_transaction: Transaction,
+    pub(crate) order_fill_transaction: Option<OrderFillTransaction>,
+    order_cancel_transaction: Option<OrderCancelTransaction>,
+    related_transaction_ids: Vec<String>,
+    last_transaction_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(unused)]
+pub struct OrderRejectResponse {
+    pub(crate) order_reject_transaction: Transaction,
+    error_code: Option<String>,
+    pub(crate) error_message: String,
+}
 
 /// The type of the Order.
 #[derive(Serialize, Deserialize, Debug)]
