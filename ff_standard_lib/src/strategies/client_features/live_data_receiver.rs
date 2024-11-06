@@ -18,7 +18,7 @@ use crate::strategies::handlers::indicator_handler::IndicatorHandler;
 use crate::strategies::handlers::live_warmup::WARMUP_COMPLETE_BROADCASTER;
 use crate::strategies::handlers::market_handler::price_service::{get_price_service_sender, PriceServiceMessage};
 use crate::strategies::handlers::subscription_handler::SubscriptionHandler;
-use crate::strategies::historical_time::update_backtest_time;
+use crate::strategies::historical_time::{get_backtest_time, update_backtest_time};
 use crate::strategies::ledgers::ledger_service::LedgerService;
 use crate::strategies::strategy_events::StrategyEvent;
 
@@ -59,11 +59,9 @@ pub async fn handle_live_data(
     let _ = tokio::task::spawn_blocking(move || {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
-            let mut buffered_data: BTreeMap<i64, TimeSlice> = BTreeMap::new();
             let price_service_sender = get_price_service_sender();
             receive_and_process(
                 stream_client,
-                &mut buffered_data,
                 strategy_event_sender,
                 ledger_service,
                 indicator_handler,
@@ -76,7 +74,6 @@ pub async fn handle_live_data(
 
 async fn receive_and_process(
     mut stream_client: TlsStream<TcpStream>,
-    buffered_data: &mut BTreeMap<i64, TimeSlice>,
     strategy_event_sender: Sender<StrategyEvent>,
     ledger_service: Arc<LedgerService>,
     indicator_handler: Arc<IndicatorHandler>,
@@ -85,6 +82,7 @@ async fn receive_and_process(
 ) {
     const LENGTH: usize = 4;
     let mut length_bytes = [0u8; LENGTH];
+    let mut  buffered_data: BTreeMap<i64, TimeSlice> =BTreeMap::new();
     let mut warmup_completion_receiver = WARMUP_COMPLETE_BROADCASTER.subscribe();
     #[allow(unused_assignments)]
     let mut warm_up_end = Utc::now();
@@ -105,7 +103,7 @@ async fn receive_and_process(
                         if let Ok(time_slice) = TimeSlice::from_bytes(&message_body) {
                             for data in time_slice.iter() {
                                 let timestamp = data.time_closed_utc().timestamp_nanos_opt().unwrap();
-                                buffered_data.entry(timestamp)
+                                buffered_data.entry(timestamp.clone())
                                     .and_modify(|slice| slice.extend(time_slice.clone()))
                                     .or_insert_with(|| {
                                         let mut new_slice = TimeSlice::new();
@@ -127,13 +125,15 @@ async fn receive_and_process(
             }
         }
     }
-
+    drop(warmup_completion_receiver);
     // Process buffered data
-    let buffer_to_process = std::mem::take(buffered_data);
-    for (_, slice) in buffer_to_process
+    for (time, slice) in buffered_data
         .range(warm_up_end.timestamp()..=Utc::now().timestamp())
         .filter(|(_, slice)| !slice.is_empty())
     {
+        if *time <= get_backtest_time().timestamp() {
+            continue;
+        }
         let mut strategy_time_slice = TimeSlice::new();
         let arc_slice = Arc::new(slice.clone());
 
@@ -150,9 +150,9 @@ async fn receive_and_process(
         }
         let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
     }
-    drop(buffer_to_process);
+    drop(buffered_data);
     set_warmup_complete();
-    drop(warmup_completion_receiver);
+
 
     let now = tokio::time::Instant::now();
     let nanos_into_second = now.elapsed().subsec_nanos();
@@ -171,7 +171,9 @@ async fn receive_and_process(
             _ = interval.tick() => {
                 let now = Utc::now();
                 if let Some(consolidated_data) = subscription_handler.update_consolidators_time(now).await {
-                    let _ = indicator_sender.send(consolidated_data.clone()).await;
+                    if let Some(indicator_slice) = indicator_handler.update_time_slice(&consolidated_data).await {
+                        let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(indicator_slice)).await;
+                    };
                     let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(consolidated_data)).await;
                 }
                 update_backtest_time(now);
@@ -199,7 +201,9 @@ async fn receive_and_process(
                                 }
                                 strategy_time_slice.extend(time_slice);
                                 //the indicator update will not be garanteed to be in sync with the time slice, but it should be close enough and this prevents very resource intense indicators from slowing down the strategy.
-                                let _ = indicator_sender.send(strategy_time_slice.clone()).await;
+                                 if let Some(indicator_slice) = indicator_handler.update_time_slice(&strategy_time_slice).await {
+                                    let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(indicator_slice)).await;
+                                };
                                 let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
                             }
                         }
