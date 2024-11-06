@@ -64,7 +64,7 @@ async fn main() {
         //tick over no data, strategy will run at buffer resolution speed to simulate weekends and holidays, if false we will just skip over them to the next data point.
         false,
         false,
-        vec![Account::new(Brokerage::Oanda, "101-011-24767836-002".to_string()), Account::new(Brokerage::Oanda, "101-011-24767836-001".to_string())]
+        vec![Account::new(Brokerage::Oanda, "101-011-24767836-001".to_string())]
     ).await;
 
     on_data_received(strategy, strategy_event_receiver, data_subscription).await;
@@ -84,7 +84,7 @@ pub async fn on_data_received(
 ) {
 
     let mut warmup_complete = false;
-    let account_1 = Account::new(Brokerage::Oanda, "Test_Account_1".to_string());
+    let account_1 = Account::new(Brokerage::Oanda, "101-011-24767836-001".to_string());
     let mut last_side = LastSide::Flat;
 
     'strategy_loop: while let Some(strategy_event) = event_receiver.recv().await {

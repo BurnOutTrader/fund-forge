@@ -15,12 +15,8 @@ use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderState, Or
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::OandaClient;
-use crate::oanda_api::models::order::limit_order::LimitOrderRequest;
-use crate::oanda_api::models::order::market_if_touched_order::MarketIfTouchedOrderRequest;
-use crate::oanda_api::models::order::market_order::{MarketOrderRequest};
 use crate::oanda_api::models::order::order_related;
-use crate::oanda_api::models::order::order_related::{OrderPositionFill, OrderTriggerCondition};
-use crate::oanda_api::models::order::stop_order::StopOrderRequest;
+use crate::oanda_api::models::order::order_related::{OrderPositionFill};
 use crate::oanda_api::models::transaction_related::ClientExtensions;
 use crate::request_handlers::RESPONSE_SENDERS;
 
@@ -224,10 +220,10 @@ impl BrokerApiResponse for OandaClient {
         };
 
         let (time_in_force, gtd_time) = match order.time_in_force {
-            TimeInForce::GTC => (order_related::TimeInForce::GTC, None),
-            TimeInForce::IOC => (order_related::TimeInForce::IOC, None),
-            TimeInForce::FOK => (order_related::TimeInForce::FOK, None),
-            TimeInForce::Day => (order_related::TimeInForce::GFD, None),
+            TimeInForce::GTC => ("GTC".to_string(), None),
+            TimeInForce::IOC => ("IOC".to_string(), None),
+            TimeInForce::FOK => ("FOK".to_string(), None),
+            TimeInForce::Day => ("GFD".to_string(), None),
             TimeInForce::Time(time_stamp) => {
                 let time = match DateTime::<Utc>::from_timestamp(time_stamp, 0) {
                     Some(t) => t,
@@ -244,7 +240,7 @@ impl BrokerApiResponse for OandaClient {
                     }
                 };
 
-                (order_related::TimeInForce::GTD, Some(crate::oanda_api::models::primitives::DateTime::new(time.naive_utc())))
+                ("GTD".to_string(), Some(crate::oanda_api::models::primitives::DateTime::new(time.naive_utc())))
             }
         };
 
@@ -287,29 +283,18 @@ impl BrokerApiResponse for OandaClient {
         // Acquire a permit from the rate limiter
         let permit = self.rate_limiter.acquire().await;
 
-        let response = match order.order_type {
+       let json_order =  match order.order_type {
             OrderType::Market | OrderType::EnterLong | OrderType::EnterShort | OrderType::ExitLong | OrderType::ExitShort => {
-                let req = MarketOrderRequest {
-                    order_type,
-                    instrument: oanda_symbol,
-                    units,
-                    time_in_force,
-                    price_bound: None,
-                    position_fill,
-                    client_extensions,
-                    take_profit_on_fill: None,
-                    stop_loss_on_fill: None,
-                    guaranteed_stop_loss_on_fill: None,
-                    trailing_stop_loss_on_fill: None,
-                    trade_client_extensions: None,
-                };
-                self.client
-                    .post(&url)
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", format!("Bearer {}", self.api_key))
-                    .json(&req)
-                    .send()
-                    .await
+                serde_json::json!({
+                    "order": {
+                        "type": order_type,
+                        "instrument": oanda_symbol,
+                        "units": units,
+                        "timeInForce": time_in_force,
+                        "positionFill": "REDUCE_FIRST".to_string(),
+                        "clientExtensions": client_extensions,
+                    }
+                })
             }
             OrderType::Limit => {
                 let price = match order.limit_price {
@@ -326,29 +311,20 @@ impl BrokerApiResponse for OandaClient {
                         });
                     }
                 };
-                let req =  LimitOrderRequest {
-                    order_type,
-                    instrument: oanda_symbol,
-                    units,
-                    price,
-                    time_in_force,
-                    gtd_time,
-                    position_fill,
-                    trigger_condition: OrderTriggerCondition::Default,
-                    client_extensions,
-                    take_profit_on_fill: None,
-                    stop_loss_on_fill: None,
-                    guaranteed_stop_loss_on_fill: None,
-                    trailing_stop_loss_on_fill: None,
-                    trade_client_extensions: None,
-                };
-                self.client
-                    .post(&url)
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", format!("Bearer {}", self.api_key))
-                    .json(&req)
-                    .send()
-                    .await
+                serde_json::json!({
+                    "order": {
+                        "type": order_type,
+                        "instrument": oanda_symbol,
+                        "units": units,
+                        "timeInForce": time_in_force,
+                        "gtd_time": gtd_time,
+                        "positionFill": "REDUCE_FIRST".to_string(),
+                        "clientExtensions": client_extensions,
+                        "trigger_condition": "DEFAULT".to_string(),
+                        "price": price,
+
+                    }
+                })
             }
             
             OrderType::MarketIfTouched => {
@@ -366,32 +342,23 @@ impl BrokerApiResponse for OandaClient {
                         });
                     }
                 };
-                let req = MarketIfTouchedOrderRequest {
-                    order_type,
-                    instrument: oanda_symbol,
-                    units,
-                    price,
-                    price_bound: order.limit_price,
-                    time_in_force,
-                    gtd_time,
-                    position_fill,
-                    trigger_condition: OrderTriggerCondition::Default,
-                    client_extensions,
-                    take_profit_on_fill: None,
-                    stop_loss_on_fill: None,
-                    guaranteed_stop_loss_on_fill: None,
-                    trailing_stop_loss_on_fill: None,
-                    trade_client_extensions: None,
-                };
-                self.client
-                    .post(&url)
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", format!("Bearer {}", self.api_key))
-                    .json(&req)
-                    .send()
-                    .await
+                serde_json::json!({
+                    "order": {
+                        "type": order_type,
+                        "instrument": oanda_symbol,
+                        "units": units,
+                        "timeInForce": time_in_force,
+                        "gtd_time": gtd_time,
+                        "positionFill": "REDUCE_FIRST".to_string(),
+                        "clientExtensions": client_extensions,
+                        "trigger_condition": "DEFAULT".to_string(),
+                        "price": price,
+                        "price_bound": order.limit_price,
+
+                    }
+                })
             }
-            OrderType::StopMarket | OrderType::StopLimit => {
+            OrderType::StopMarket => {
                 let price = match order.trigger_price {
                     Some(p) => p,
                     None => {
@@ -406,34 +373,58 @@ impl BrokerApiResponse for OandaClient {
                         });
                     }
                 };
-                let req = StopOrderRequest {
-                    order_type,
-                    instrument: oanda_symbol,
-                    units,
-                    price,
-                    price_bound: order.limit_price,
-                    time_in_force,
-                    gtd_time,
-                    position_fill,
-                    trigger_condition: OrderTriggerCondition::Default,
-                    client_extensions,
-                    take_profit_on_fill: None,
-                    stop_loss_on_fill: None,
-                    guaranteed_stop_loss_on_fill: None,
-                    trailing_stop_loss_on_fill: None,
-                    trade_client_extensions: None,
-                };
-                self.client
-                    .post(&url)
-                    .header("Content-Type", "application/json")
-                    .header("Authorization", format!("Bearer {}", self.api_key))
-                    .json(&req)
-                    .send()
-                    .await
+                serde_json::json!({
+                    "order": {
+                        "type": order_type,
+                        "instrument": oanda_symbol,
+                        "units": units,
+                        "timeInForce": time_in_force,
+                        "gtd_time": gtd_time,
+                        "positionFill": "REDUCE_FIRST".to_string(),
+                        "clientExtensions": client_extensions,
+                        "trigger_condition": "DEFAULT".to_string(),
+                        "price": price,
+                    }
+                })
             }
-        };
-
-        match response {
+           OrderType::StopLimit => {
+               let price = match order.trigger_price {
+                   Some(p) => p,
+                   None => {
+                       return Err(OrderUpdateEvent::OrderRejected {
+                           account: order.account,
+                           symbol_name: order.symbol_name.to_string(),
+                           symbol_code: order.symbol_name,
+                           order_id: order.id,
+                           reason: "No trigger price provided".to_string(),
+                           tag: order.tag,
+                           time: Utc::now().to_string(),
+                       });
+                   }
+               };
+               serde_json::json!({
+                    "order": {
+                        "type": order_type,
+                        "instrument": oanda_symbol,
+                        "units": units,
+                        "timeInForce": time_in_force,
+                        "gtd_time": gtd_time,
+                        "positionFill": "REDUCE_FIRST".to_string(),
+                        "clientExtensions": client_extensions,
+                        "trigger_condition": "DEFAULT".to_string(),
+                        "price": price,
+                        "price_bound": order.limit_price,
+                    }
+                })
+           }
+       };
+        match self.client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&json_order)
+            .send()
+            .await {
             Ok(response) => {
                 println!("Response: {:?}", response);
                 match response.status() {
@@ -466,7 +457,7 @@ impl BrokerApiResponse for OandaClient {
                                         .and_then(|u| Decimal::from_str(u).ok()) {
                                         Some(q) => q,
                                         None => return Ok(())
-                                    };
+                                    }.abs();
 
                                     let price = match fill["price"]
                                         .as_str()
