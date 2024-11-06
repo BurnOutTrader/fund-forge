@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use rust_decimal_macros::dec;
 use uuid::Uuid;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::product_maps::oanda::maps::{calculate_oanda_margin, OANDA_SYMBOL_INFO};
@@ -499,7 +500,7 @@ impl BrokerApiResponse for OandaClient {
                     side,
                     order_type,
                     quantity_open: position.quantity_open,
-                    quantity_filled: Default::default(),
+                    quantity_filled: dec!(0),
                     average_fill_price: None,
                     limit_price: None,
                     trigger_price: None,
