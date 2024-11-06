@@ -405,7 +405,7 @@ fn create_order_rejected(order: &Order, reason: String) -> OrderUpdateEvent {
     }
 }
 
-const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
+const TIMEOUT_DURATION: Duration = Duration::from_secs(320);
 #[allow(dead_code, unused)]
 async fn order_response(stream_name: StreamName, mode: StrategyMode, request: OrderRequest, sender: tokio::sync::mpsc::Sender<DataServerResponse>) {
     match request {
