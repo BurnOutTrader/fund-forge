@@ -25,6 +25,7 @@ If you use the second option before launching the on_data_received function, you
 - 06-11-2024: Enter Long, Enter Short, Exit Long, Exit Short and Market Orders work for Oanda, but I have not tested limit orders or stop orders yet, other orders will work but the strategy will not get update events and so they are currently unsafe.
 - 06-11-2024: Oanda backtesting is not accurate for currencies, I need to redo the symbol info map to account for lot sizes on currencies.
 - 06-11-2024: I had a major problem on indicator updates, I hadnt tested a change over the weekend because the market was closed, it resulted in multiple live updates for the same indicator, I have fixed this now.
+- 06-11-2024: Dont use sync_accounts == true for any strategy, It is not working properly.
 
 Please report any issues, some bugs I don't notice after I change code because there are so many possible states to test, backtesting, live trading, live paper * 2 brokerages.
 
