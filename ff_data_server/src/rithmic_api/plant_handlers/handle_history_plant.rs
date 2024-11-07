@@ -30,8 +30,8 @@ lazy_static! {
     pub static ref HISTORICAL_BUFFER: DashMap<u64, BTreeMap<DateTime<Utc>, BaseDataEnum>> = Default::default();
 
     //for ticks we use this to ensure we can capture consecutive ticks with the same timestamp
-    pub static ref LAST_TIME: DashMap<u64, DateTime<Utc>> = Default::default();
-    pub static ref CONSECUTIVE_STAMPS: DashMap<u64, i32> = Default::default();
+    pub static ref LAST_TICK_TIME: DashMap<u64, DateTime<Utc>> = Default::default();
+    pub static ref CONSECUTIVE_TICK_TIMESTAMPS: DashMap<u64, i32> = Default::default();
 }
 
 #[allow(dead_code, unused)]
@@ -179,21 +179,21 @@ pub async fn match_history_plant_id(
                             // this means that when requesting data from last serialized data time to now, we will not adjust the duplicate start time (because currently we have no last time), but we will adjust the duplicate times inside the buffer,
                             // this allows the hybrid storage to filter out duplicates from the initial start time.
                             // Check for duplicate timestamp
-                            if let Some(last_time) = LAST_TIME.get(&user_msg) {
+                            if let Some(last_time) = LAST_TICK_TIME.get(&user_msg) {
                                 let mut time = tick.time_utc();
                                 if time == *last_time {
-                                    let count = CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
-                                    time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps, this avoids consecutive collisions
+                                    let count = CONSECUTIVE_TICK_TIMESTAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
+                                    time = time + (ADD_NANO * *count);  // Adjust by count * ADD_NANO for unique timestamps, this avoids consecutive collisions
                                     tick.time = time.to_string();
                                     eprintln!("Duplicate timestamp detected: {}", time);
                                 } else {
-                                    CONSECUTIVE_STAMPS.insert(user_msg, 0);  // Reset count for new timestamp
+                                    CONSECUTIVE_TICK_TIMESTAMPS.insert(user_msg, 0);  // Reset count for new timestamp
                                 }
                             }
 
                             // Use the updated `tick.time` directly in LAST_TIME and buffer
                             let tick_time = tick.time_utc();
-                            LAST_TIME.insert(user_msg, tick_time);
+                            LAST_TICK_TIME.insert(user_msg, tick_time);
                             buffer.insert(tick_time, BaseDataEnum::Tick(tick));
                         }
                         return;
@@ -202,15 +202,15 @@ pub async fn match_history_plant_id(
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
                         if let Some(mut tick) = tick {
                             // Check for duplicate timestamp
-                            if let Some(last_time) = LAST_TIME.get(&user_msg) {
+                            if let Some(last_time) = LAST_TICK_TIME.get(&user_msg) {
                                 let mut time = tick.time_utc();
                                 if time == *last_time {
-                                    let count = CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
-                                    time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps this avoids consecutive collisions
+                                    let count = CONSECUTIVE_TICK_TIMESTAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
+                                    time = time + (ADD_NANO * *count);  // Adjust by count * ADD_NANO for unique timestamps this avoids consecutive collisions
                                     tick.time = time.to_string();
                                     eprintln!("Duplicate timestamp detected: {}", time);
                                 } else {
-                                    CONSECUTIVE_STAMPS.insert(user_msg, 0);  // Reset count for new timestamp
+                                    CONSECUTIVE_TICK_TIMESTAMPS.insert(user_msg, 0);  // Reset count for new timestamp
                                 }
                             }
 
@@ -219,8 +219,8 @@ pub async fn match_history_plant_id(
                         }
 
                         // Remove entries before sending in case of immediate next request
-                        LAST_TIME.remove(&id);
-                        CONSECUTIVE_STAMPS.remove(&id);
+                        LAST_TICK_TIME.remove(&id);
+                        CONSECUTIVE_TICK_TIMESTAMPS.remove(&id);
 
                         // Send the buffered data via the callback
                         if let Some((_, mut sender)) = client.historical_callbacks.remove(&id) {
