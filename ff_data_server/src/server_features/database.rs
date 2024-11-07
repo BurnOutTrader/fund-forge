@@ -84,12 +84,6 @@ impl HybridStorage {
                 Ok(_) => { }
                 Err(e) => eprintln!("Initial forward update failed: {}", e),
             }
-
-            // Wait for all forward tasks to complete
-            while !self.download_tasks.is_empty() {
-                tokio::time::sleep(Duration::from_secs(5)).await;
-            }
-
             // Run backward update after forward completes
             match HybridStorage::update_data(self.clone(), true).await {
                 Ok(_) => {},
@@ -233,6 +227,9 @@ impl HybridStorage {
         to: DateTime<Utc>,
         from_back: bool,
     ) -> Option<JoinHandle<()>> {
+        if download_tasks.contains_key(&(symbol.name.clone(), base_data_type, resolution)) {
+            return None;
+        }
         let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
             DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
                 match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
@@ -320,6 +317,9 @@ impl HybridStorage {
 
                 if !symbol_configs.is_empty() {
                     for symbol_config in symbol_configs {
+                        if self.download_tasks.contains_key(&(symbol_config.symbol_name.clone(), symbol_config.base_data_type, symbol_config.resolution)) {
+                            continue;
+                        }
                         //eprintln!("Symbol: {:?}", symbol_config);
                         let market_type = match vendor {
                             DataVendor::Oanda => {
