@@ -41,6 +41,7 @@ impl RateLimiter {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use super::*;
     use tokio::time::{sleep, Duration, Instant};
     use futures::future::join_all;
@@ -101,5 +102,75 @@ mod tests {
         let intervals = elapsed.as_secs_f64() / interval.as_secs_f64();
         let expected_count = (intervals * rate as f64) as usize;
         assert!(times.len() >= expected_count * 9 / 10, "Throughput too low");
+    }
+
+    #[tokio::test]
+    async fn test_sustained_throughput_over_one_minute() {
+        let rate = 200;
+        let interval = Duration::from_millis(100);
+        let rate_limiter = RateLimiter::new(rate, interval);
+
+        // Allow the rate limiter to stabilize
+        sleep(interval).await;
+
+        // Run for 1 minute (60,000 ms) with checks at each interval
+        let test_duration = Duration::from_secs(60);
+        let intervals = (test_duration.as_millis() / interval.as_millis()) as usize;
+
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut throughput_data = Vec::new();
+
+        for i in 0..intervals {
+            let interval_start = Instant::now();
+            let mut handles = Vec::new();
+
+            // Attempt to acquire tokens up to the rate limit in each interval
+            for _ in 0..rate {
+                let rate_limiter = rate_limiter.clone();
+                let counter = counter.clone();
+                handles.push(tokio::spawn(async move {
+                    rate_limiter.acquire().await;
+                    counter.fetch_add(1, Ordering::Relaxed);
+                }));
+            }
+
+            // Wait for the interval to complete
+            sleep(interval.saturating_sub(interval_start.elapsed())).await;
+
+            // Record the throughput for this interval
+            let interval_count = counter.swap(0, Ordering::Relaxed);
+            throughput_data.push(interval_count);
+
+            // Output interval results for monitoring
+            println!("Interval {}: {} operations", i + 1, interval_count);
+
+            // Check that throughput is within an acceptable range (90%-100% of rate)
+            let min_expected_throughput = (rate as f64 * 0.9) as usize;
+            assert!(
+                interval_count >= min_expected_throughput,
+                "Interval {} throughput too low: {} (expected at least {})",
+                i + 1,
+                interval_count,
+                min_expected_throughput
+            );
+            assert!(
+                interval_count <= rate,
+                "Interval {} exceeded rate limit: {} (expected at most {})",
+                i + 1,
+                interval_count,
+                rate
+            );
+        }
+
+        // Final summary and checks
+        let average_throughput: f64 = throughput_data.iter().copied().sum::<usize>() as f64 / intervals as f64;
+        println!("\nFinal 1-Minute Summary:");
+        println!("Average throughput per interval: {:.1}", average_throughput);
+        assert!(
+            average_throughput >= (rate as f64 * 0.9),
+            "Average throughput too low: {:.1} (should be at least {:.1})",
+            average_throughput,
+            rate as f64 * 0.9
+        );
     }
 }
