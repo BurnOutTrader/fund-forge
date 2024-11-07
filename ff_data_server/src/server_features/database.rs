@@ -100,14 +100,6 @@ impl HybridStorage {
                         break;
                     }
                     _ = interval.tick() => {
-                        if !self.download_tasks.is_empty() {
-                            tokio::time::sleep(Duration::from_secs(60)).await;
-                            interval = tokio::time::interval(Duration::from_secs(60));
-                            continue;
-                        } else {
-                            interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
-                        }
-
                         // Run forward update
                         match HybridStorage::update_data(self.clone(), false).await {
                             Ok(_) => {},
