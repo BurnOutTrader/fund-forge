@@ -193,7 +193,7 @@ impl VendorApiResponse for OandaClient {
         let instrument = oanda_clean_instrument(&symbol.name).await;
         let add_time = add_time_to_date(&interval);
 
-        let mut num_days = ((Utc::now() - from).num_seconds() / (60 * 60 * 5)).abs();
+        let num_days = ((Utc::now() - from).num_seconds() / (60 * 60 * 5)).abs();
         progress_bar.set_length(num_days as u64);
         progress_bar.set_style(
             ProgressStyle::default_bar()
@@ -351,7 +351,7 @@ impl VendorApiResponse for OandaClient {
                         }
                     };
 
-                    if let Err(e) = save_result {
+                    if let Err(_e) = save_result {
                         while i > 0 && bar.time_utc().day() == new_bar_time.day() {
                             i -= 1;
                         }
