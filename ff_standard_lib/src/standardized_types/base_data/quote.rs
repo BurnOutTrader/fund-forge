@@ -18,12 +18,12 @@ use crate::standardized_types::resolution::Resolution;
 /// A `Quote` is a snapshot of the current bid and ask prices for a given symbol. This is generally used to read the book or for cfd trading.
 ///
 /// # Parameters
-/// * `symbol` - The symbol of the asset.
-/// * `ask` - The current ask price.
-/// * `bid` - The current bid price.
-/// * `ask_volume` - The volume of the ask price.
-/// * `bid_volume` - The volume of the bid price.
-/// * `time` - The time of the quote.
+/// * `symbol: Symbol` - The symbol of the asset.
+/// * `ask: Price (Decimal)` - The current ask price.
+/// * `bid: Price (Decimal)` - The current bid price.
+/// * `ask_volume: Volume (Decimal)` - The volume of the ask price.
+/// * `bid_volume: Volume (Decimal)` - The volume of the bid price.
+/// * `time: String` - The time of the quote.
 pub struct Quote {
     pub symbol: Symbol,
     pub ask: Price,
