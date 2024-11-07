@@ -222,7 +222,6 @@ impl VendorApiResponse for OandaClient {
                 Ok(resp) => resp,
                 Err(_) => {
                     // On error, advance time window and continue
-                    last_bar_time = to_time;
                     consecutive_empty_responses += 1;
                     eprintln!("Error downloading data for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time);
                     continue;
