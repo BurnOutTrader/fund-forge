@@ -15,6 +15,7 @@ use chrono::{DateTime, Datelike, NaiveDate, Utc};
 use dashmap::DashMap;
 use futures::future;
 use indicatif::{MultiProgress, ProgressBar};
+use lazy_static::lazy_static;
 use memmap2::{Mmap};
 use serde::{Deserialize, Deserializer};
 use tokio::sync::{OnceCell, Semaphore};
@@ -37,6 +38,10 @@ use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 
 pub static DATA_STORAGE: OnceCell<Arc<HybridStorage>> = OnceCell::const_new();
 
+lazy_static!(
+    static ref MULTIBAR: MultiProgress = MultiProgress::new();
+);
+
 #[allow(unused)]
 pub struct HybridStorage {
     base_path: PathBuf,
@@ -46,7 +51,6 @@ pub struct HybridStorage {
     clear_cache_duration: Duration,
     download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
     options: ServerLaunchOptions,
-    multi_bar: MultiProgress,
     download_semaphore: Arc<Semaphore>,
     update_seconds: u64,
 }
@@ -61,7 +65,6 @@ impl HybridStorage {
             clear_cache_duration,
             download_tasks:Default::default(),
             options,
-            multi_bar: MultiProgress::new(),
             download_semaphore: Arc::new(Semaphore::new(max_concurrent_downloads)),
             update_seconds
         };
@@ -92,7 +95,7 @@ impl HybridStorage {
                         task.value().abort();
                     }
                     self.download_tasks.clear();
-                    self.multi_bar.clear().ok();
+                    MULTIBAR.clear().ok();
                     break;
                 }
 
@@ -101,7 +104,7 @@ impl HybridStorage {
                     // Remove any completed tasks from the map
                     self.download_tasks.retain(|_, task| !task.is_finished());
                     if self.download_tasks.is_empty() {
-                        self.multi_bar.clear().ok();
+                        MULTIBAR.clear().ok();
                     }
                 }
 
@@ -207,7 +210,7 @@ impl HybridStorage {
             }
         };*/
 
-        let symbol_pb = self.multi_bar.add(ProgressBar::new(1));
+        let symbol_pb = MULTIBAR.add(ProgressBar::new(1));
         symbol_pb.set_prefix(format!("{}", symbol.name));
 
         match client.update_historical_data(symbol.clone(), base_data_type, resolution, start_time, Utc::now() + Duration::from_secs(15), false, symbol_pb).await {
@@ -222,7 +225,6 @@ impl HybridStorage {
     async fn update_symbol(
         download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
         download_semaphore: Arc<Semaphore>,
-        multi_bar: MultiProgress,
         symbol: Symbol,
         resolution: Resolution,
         base_data_type: BaseDataType,
@@ -262,7 +264,7 @@ impl HybridStorage {
         let download_tasks_clone = download_tasks.clone();
         let key_clone = key.clone();
         let task = task::spawn(async move {
-            let symbol_pb = multi_bar.add(ProgressBar::new(1));
+            let symbol_pb = MULTIBAR.add(ProgressBar::new(1));
             // Acquire the permit inside the spawned task
             let _permit = match download_semaphore.acquire().await {
                 Ok(permit) => permit,
@@ -417,7 +419,6 @@ impl HybridStorage {
                         HybridStorage::update_symbol(
                             download_tasks.clone(),
                             semaphore,
-                            self.multi_bar.clone(),
                             symbol.clone(),
                             symbol_config.resolution,
                             symbol_config.base_data_type.clone(),
@@ -437,7 +438,6 @@ impl HybridStorage {
         let cache_last_accessed = Arc::clone(&self.cache_last_accessed);
         let cache_is_updated = Arc::clone(&self.cache_is_updated);
         let clear_cache_duration = self.clear_cache_duration;
-        let multi_bar = self.multi_bar.clone();
 
         task::spawn(async move {
             let mut interval = interval(clear_cache_duration);
@@ -470,9 +470,6 @@ impl HybridStorage {
                 // Clean up auxiliary hashmaps
                 cache_last_accessed.retain(|k, _| mmap_cache.contains_key(k));
                 cache_is_updated.retain(|k, _| mmap_cache.contains_key(k));
-
-                // Clean up finished progress bars
-                multi_bar.clear().ok();
             }
         });
     }
