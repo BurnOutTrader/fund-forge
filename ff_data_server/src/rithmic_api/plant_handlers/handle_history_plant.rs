@@ -26,6 +26,7 @@ use ff_standard_lib::standardized_types::subscriptions::{CandleType, Symbol};
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 
 lazy_static! {
+    //we use the callback id as key for historical data
     pub static ref HISTORICAL_BUFFER: DashMap<u64, BTreeMap<DateTime<Utc>, BaseDataEnum>> = Default::default();
     pub static ref LAST_TIME: DashMap<u64, DateTime<Utc>> = Default::default();
 }
