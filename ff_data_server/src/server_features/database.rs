@@ -902,3 +902,145 @@ where
     let s = String::deserialize(deserializer)?;
     T::from_str(&s).map_err(serde::de::Error::custom)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+    use std::time::Duration;
+    use chrono::Utc;
+    use rust_decimal::Decimal;
+    use rust_decimal_macros::dec;
+    use ff_standard_lib::standardized_types::base_data::quote::Quote;
+
+    // Helper function to create test data using Quote with proper decimal values
+    fn create_test_data(time: DateTime<Utc>) -> BaseDataEnum {
+        BaseDataEnum::Quote(Quote {
+            symbol: Symbol::new(
+                "EUR/USD".to_string(),
+                DataVendor::Test,
+                MarketType::Forex
+            ),
+            ask: dec!(1.2345),
+            bid: dec!(1.2343),
+            ask_volume: dec!(100000.0),
+            bid_volume: dec!(150000.0),
+            time: time.to_string(),
+        })
+    }
+
+    // Helper to create test storage
+    fn setup_test_storage() -> (HybridStorage, TempDir) {
+        let temp_dir = TempDir::new().unwrap();
+        let options = ServerLaunchOptions {
+            data_folder: temp_dir.path().to_path_buf(),
+            ..Default::default()
+        };
+
+        let storage = HybridStorage::new(
+            Duration::from_secs(3600),
+            options,
+            5,
+            300
+        );
+
+        (storage, temp_dir)
+    }
+
+    #[tokio::test]
+    async fn test_save_and_retrieve_single_quote() {
+        let (storage, _temp) = setup_test_storage();
+        let time = Utc::now();
+        let test_data = create_test_data(time);
+
+        // Save data
+        storage.save_data(&test_data).await.unwrap();
+
+        // Retrieve data
+        let retrieved = storage.get_data_range(
+            test_data.symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes,
+            time - chrono::Duration::hours(1),
+            time + chrono::Duration::hours(1)
+        ).await.unwrap();
+
+        assert_eq!(retrieved.len(), 1);
+        assert_eq!(retrieved[0], test_data);
+    }
+
+    #[tokio::test]
+    async fn test_bulk_save_and_retrieve() {
+        let (storage, _temp) = setup_test_storage();
+        let base_time = Utc::now();
+
+        // Create multiple quotes with increasing spreads
+        let test_data: Vec<BaseDataEnum> = (0..10)
+            .map(|i| {
+                let time = base_time + chrono::Duration::seconds(i);
+                BaseDataEnum::Quote(Quote {
+                    symbol: Symbol::new(
+                        "EUR/USD".to_string(),
+                        DataVendor::Test,
+                        MarketType::Forex
+                    ),
+                    ask: dec!(1.2345) + dec!(0.0001) * Decimal::from(i),
+                    bid: dec!(1.2343),
+                    ask_volume: dec!(100000.0),
+                    bid_volume: dec!(150000.0),
+                    time: time.to_string(),
+                })
+            })
+            .collect();
+
+        // Save bulk data
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
+
+        // Retrieve data range
+        let retrieved = storage.get_data_range(
+            test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes,
+            base_time,
+            base_time + chrono::Duration::seconds(10)
+        ).await.unwrap();
+
+        assert_eq!(retrieved.len(), 10);
+        assert_eq!(retrieved, test_data);
+    }
+
+    #[tokio::test]
+    async fn test_latest_data_point() {
+        let (storage, _temp) = setup_test_storage();
+        let base_time = Utc::now();
+
+        let test_data: Vec<BaseDataEnum> = (0..5)
+            .map(|i| {
+                let time = base_time + chrono::Duration::seconds(i);
+                BaseDataEnum::Quote(Quote {
+                    symbol: Symbol::new(
+                        "EUR/USD".to_string(),
+                        DataVendor::Test,
+                        MarketType::Forex
+                    ),
+                    ask: dec!(1.2345),
+                    bid: dec!(1.2343),
+                    ask_volume: dec!(100000.0),
+                    bid_volume: dec!(150000.0),
+                    time: time.to_string(),
+                })
+            })
+            .collect();
+
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
+
+        let latest = storage.get_latest_data_point(
+            test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert!(latest.is_some());
+        assert_eq!(latest.unwrap(), test_data.last().unwrap().clone());
+    }
+}
