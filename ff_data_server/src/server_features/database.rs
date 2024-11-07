@@ -203,7 +203,8 @@ impl HybridStorage {
         if was_downloading {
             return;
         }
-
+        //we probably dont want a permit here, just get it done
+/*
         let permit = match self.download_semaphore.acquire().await {
             Ok(permit) => permit,
             Err(_) => {
@@ -211,7 +212,7 @@ impl HybridStorage {
                 self.download_tasks.remove(&key);
                 return;
             }
-        };
+        };*/
 
         let symbol_pb = self.multi_bar.add(ProgressBar::new(1));
         symbol_pb.set_prefix(format!("{}", symbol.name));
@@ -223,7 +224,6 @@ impl HybridStorage {
 
         // Remove from active tasks
         self.download_tasks.remove(&key);
-        drop(permit);
     }
 
     async fn update_symbol(
