@@ -26,11 +26,6 @@ use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
 
-/*lazy_static! {
-    //I am not sure if this is needed,
-    // only consolidators would filter out data, and it makes sense in historical so we dont skip data when serializing with time as key, but in live the ticks and quotes going to the strategy can have the same time.
-    pub static ref LAST_TIME: DashMap<SymbolName, DashMap<BaseDataType, DateTime<Utc>>> = Default::default();
-}*/
 
 #[allow(unused, dead_code)]
 pub async fn match_ticker_plant_id(
@@ -362,18 +357,8 @@ async fn handle_tick(client: Arc<RithmicBrokerageClient>, msg: LastTrade) {
     };
 
     let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
-   /* const BASE_DATA_TYPE: BaseDataType = BaseDataType::Ticks;
-
-    if let Some(last_time) = LAST_TIME.get(&symbol.name) {
-        if let Some(last_time) = last_time.get(&BASE_DATA_TYPE) {
-            if last_time.value() == &time {
-                time = time + Duration::from_nanos(1);
-            }
-        }
-    }
-    LAST_TIME.entry(symbol.name.clone()).or_default().insert(BASE_DATA_TYPE, time);*/
-
     let tick = Tick::new(symbol.clone(), price, time.to_string(), volume, side);
+
     let mut remove_broadcaster = false;
     if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
         match broadcaster.value().send(BaseDataEnum::Tick(tick.clone())) {
@@ -480,15 +465,7 @@ async fn handle_quote(client: Arc<RithmicBrokerageClient>, msg: BestBidOffer) {
             return;
         }
         let symbol_obj = Symbol::new(symbol.clone(), client.data_vendor.clone(), MarketType::Futures(exchange));
-    /*    const BASE_DATA_TYPE: BaseDataType = BaseDataType::Quotes;
-        if let Some(last_time) = LAST_TIME.get(&symbol_obj.name) {
-            if let Some(last_time) = last_time.get(&BASE_DATA_TYPE) {
-                if last_time.value() == &time {
-                    time = time + Duration::from_nanos(1);
-                }
-            }
-        }
-        LAST_TIME.entry(symbol_obj.name.clone()).or_default().insert(BASE_DATA_TYPE, time);*/
+
         let data = BaseDataEnum::Quote(
             Quote {
                 symbol: symbol_obj.clone(),
