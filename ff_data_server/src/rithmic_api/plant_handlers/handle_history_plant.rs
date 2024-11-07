@@ -207,12 +207,13 @@ pub async fn match_history_plant_id(
                             buffer.insert( tick.time_utc(), BaseDataEnum::Tick(tick));
                         }
 
+                        //remove last time before sending in case the next request is sent immediately
+                        LAST_TIME.remove(&id);
                         // Send the buffered data via the callback
                         if let Some((_, mut sender)) = client.historical_callbacks.remove(&id) {
                             let _ = sender.send(buffer);
                         }
                     }
-
                     // Remove the LAST_TIME entry for this id after processing
                     LAST_TIME.remove(&id);
                 }
