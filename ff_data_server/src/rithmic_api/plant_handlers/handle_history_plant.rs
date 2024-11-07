@@ -175,8 +175,9 @@ pub async fn match_history_plant_id(
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         if let Some(mut tick) = tick {
                             // since we are using a callback window for each data request, even if we have duplicate timestamps overall, we will not get them here, because we delete last time after processing a buffer.
-                            // this means that when requesting data from last serialized data time to now, we will not adjust the duplicate start time (because it we have no last time), but we will adjust the duplicate times inside the buffer,
+                            // this means that when requesting data from last serialized data time to now, we will not adjust the duplicate start time (because currently we have no last time), but we will adjust the duplicate times inside the buffer,
                             // this allows the hybrid storage to filter out duplicates from the initial start time.
+
                             // Check for duplicate timestamp
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 let time = tick.time_utc();
@@ -195,6 +196,7 @@ pub async fn match_history_plant_id(
                 } else if let Some((id, mut buffer)) = HISTORICAL_BUFFER.remove(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
                         if let Some(mut tick) = tick {
+                            
                             // Check for duplicate timestamp
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 let time = tick.time_utc();
