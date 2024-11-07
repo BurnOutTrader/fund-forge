@@ -229,5 +229,25 @@ fn example(client: ClientExample, subscription: DataSubscription) {
 }
 ```
 
+### Historical Tick Data Time Accuracy
+### Timestamp Handling in Fund Forge Engine for Historical Data
+
+The Fund Forge engine maintains nanosecond-level DateTime precision. When retrieving historical tick data from specific DataVendor implementations, there can be instances where multiple ticks share the same timestamp due to vendor-specific timestamp limitations or simply because 2 ticks were created by the same aggressor order at the same time. To prevent data duplication, the engine compares each tick’s timestamp with the last processed timestamp.
+
+If a timestamp collision occurs, the engine adjusts the new tick’s timestamp by adding +1 nanosecond * number of consecutive collisions, ensuring each tick is uniquely stored.
+
+### Rationale
+Since we buffer data in memory, we are not trading below a nanosecond accuracy, so we can safely adjust the timestamp to ensure uniqueness.
+
+This approach strikes a balance between storage efficiency and data precision, avoiding the need for additional structures that could duplicate data unnecessarily. Although this adjustment alters the original timestamp slightly, the impact on practical backtesting is minimal.
+
+Considerations for Supporting Identical Timestamps
+
+Allowing identical timestamps would require extensive structural changes, including storing vectors of data points (e.g., Vec<Tick> or Vec<BaseDataType>) at each timestamp. This adjustment would increase both storage demands and computational load for all BaseDataTypes, not just ticks, complicating data processing and aggregation tasks such as timeslicing.
+
+### Conclusion
+
+This solution offers an efficient balance by using a minor timestamp adjustment to ensure uniqueness while maintaining the engine’s performance and scalability, particularly when handling data from vendors with limited timestamp granularity.
+
 
 
