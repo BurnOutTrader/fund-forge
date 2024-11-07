@@ -239,10 +239,6 @@ impl HybridStorage {
             _ => return None,
         };
 
-        if download_tasks.contains_key(&key) {
-            return None;
-        }
-
         let semaphore = download_semaphore.clone();
         let download_tasks = download_tasks.clone();
 
