@@ -265,11 +265,6 @@ impl HybridStorage {
             _ => return,
         };
 
-        // Insert a placeholder task into download_tasks to prevent duplicates
-        if download_tasks.contains_key(&key) {
-            return;
-        }
-
         let download_tasks_clone = download_tasks.clone();
         let semaphore = download_semaphore.clone();
 
