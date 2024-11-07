@@ -185,6 +185,7 @@ pub async fn match_history_plant_id(
                                     let count = CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
                                     time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps, this avoids consecutive collisions
                                     tick.time = time.to_string();
+                                    eprintln!("Duplicate timestamp detected: {}", time);
                                 } else {
                                     CONSECUTIVE_STAMPS.insert(user_msg, 0);  // Reset count for new timestamp
                                 }
@@ -207,6 +208,7 @@ pub async fn match_history_plant_id(
                                     let count = CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
                                     time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps this avoids consecutive collisions
                                     tick.time = time.to_string();
+                                    eprintln!("Duplicate timestamp detected: {}", time);
                                 } else {
                                     CONSECUTIVE_STAMPS.insert(user_msg, 0);  // Reset count for new timestamp
                                 }
@@ -225,9 +227,6 @@ pub async fn match_history_plant_id(
                             let _ = sender.send(buffer);
                         }
                     }
-                    // Final removal to clean up after processing
-                    LAST_TIME.remove(&id);
-                    CONSECUTIVE_STAMPS.remove(&id);
                 }
             }
         },
