@@ -236,43 +236,55 @@ impl HybridStorage {
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         from_back: bool,
-    ) -> Option<JoinHandle<()>> {
+    ) {
         let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
+
+        // Check if there's already a task running for this key
         if let Some(task) = download_tasks.get(&key) {
             if task.is_finished() {
                 download_tasks.remove(&key);
             } else {
-                return None;
+                return;
             }
         }
+
+        // Get the client before attempting to acquire the semaphore
         let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
             DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
                 match get_rithmic_market_data_system().and_then(|sys| RITHMIC_CLIENTS.get(&sys)) {
                     Some(client) => client.clone(),
-                    None => return None,
+                    None => return,
                 }
             }
             DataVendor::Oanda if OANDA_IS_CONNECTED.load(Ordering::SeqCst)=> {
                 match OANDA_CLIENT.get() {
                     Some(client) => client.clone(),
-                    None => return None,
+                    None => return,
                 }
             }
-            _ => return None,
+            _ => return,
         };
 
-        let semaphore = download_semaphore.clone();
-        let download_tasks = download_tasks.clone();
+        // Insert a placeholder task into download_tasks to prevent duplicates
+        if download_tasks.contains_key(&key) {
+            return;
+        }
 
-        Some(task::spawn(async move {
-            let permit = match semaphore.acquire().await {
+        let download_tasks_clone = download_tasks.clone();
+        let semaphore = download_semaphore.clone();
+
+        // Now spawn the task and acquire the permit inside the task
+        let key_clone = key.clone();
+        let task = task::spawn(async move {
+            // Acquire the permit inside the spawned task
+            let _permit = match semaphore.acquire().await {
                 Ok(permit) => permit,
                 Err(_) => {
-                    // Remove from tasks if we couldn't get a permit
-                    download_tasks.remove(&key);
+                    download_tasks_clone.remove(&key_clone);
                     return;
                 }
             };
+
             let prefix = match Utc::now().date_naive() == to.date_naive() {
                 true => "Moving Data Forward",
                 false => "Moving Data Backward",
@@ -285,9 +297,12 @@ impl HybridStorage {
             }
 
             // Remove from active tasks
-            download_tasks.remove(&key);
-            drop(permit);
-        }))
+            download_tasks_clone.remove(&key_clone);
+            // permit is automatically dropped here
+        });
+
+        // Insert the task if we successfully spawned it
+        download_tasks.insert(key, task);
     }
 
     async fn update_data(self: Arc<Self>, from_back: bool) -> Result<(), FundForgeError> {
@@ -413,7 +428,7 @@ impl HybridStorage {
                         // Directly spawn the update_symbol task
                         // Create and configure symbol progress bar with an initial length
                         let symbol_pb = multi_bar.add(ProgressBar::new(1));
-                        if let Some(spawn_handle) = HybridStorage::update_symbol(
+                        HybridStorage::update_symbol(
                             download_tasks.clone(),
                             semaphore,
                             symbol.clone(),
@@ -423,9 +438,7 @@ impl HybridStorage {
                             start_time,
                             end_time,
                             from_back
-                        ).await {
-                            download_tasks.insert((symbol_config.symbol_name, symbol_config.base_data_type, symbol_config.resolution.clone()), spawn_handle);
-                        }
+                        ).await;
                     }
                 }
             }
