@@ -201,7 +201,7 @@ impl VendorApiResponse for OandaClient {
         // Keep track of empty responses to prevent infinite loops
         let mut consecutive_empty_responses = 0;
         const MAX_EMPTY_RESPONSES: u32 = 20;
-        const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(1);
+        const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(5);
         let mut last_bar_time = from;
         loop {
             let to_time = (last_bar_time + add_time).min(current_time + Duration::seconds(15));
@@ -212,7 +212,7 @@ impl VendorApiResponse for OandaClient {
                 false => Utc::now() + Duration::seconds(2),
             };
 
-            if last_bar_time >= to - TIME_NEGATIVE {
+            if last_bar_time >= to - TIME_NEGATIVE || from > to - TIME_NEGATIVE {
                 break;
             }
 
