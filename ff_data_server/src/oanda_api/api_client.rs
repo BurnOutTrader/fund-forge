@@ -223,84 +223,44 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
 impl OandaClient {
     pub async fn send_rest_request(&self, endpoint: &str) -> Result<Response, Error> {
         let url = format!("{}{}", self.base_endpoint, endpoint);
-        let mut retries = 0;
-        let max_retries = 50;
-        let base_delay = Duration::from_secs(1);
-
-        loop {
-            // Acquire a permit asynchronously
-            let _permit = self.rate_limiter.acquire().await;
-
-            match self.client.get(&url)
-                .header("Authorization", format!("Bearer {}", self.api_key))
-                .send()
-                .await
-            {
-                Ok(response) => {
-                    OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
-                    return Ok(response);
-                }
-                Err(e) => {
-                    OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
-                    if retries >= max_retries {
-                        return Err(e);
-                    }
-
-                    // Exponential backoff with jitter
-                    let delay = base_delay * 2u32.pow(retries as u32);
-                    let jitter = Duration::from_millis(rand::random::<u64>() % 1000);
-                    tokio::time::sleep(delay + jitter).await;
-
-                    retries += 1;
-                    eprintln!("REST request failed, attempt {}/{}: {}", retries, max_retries, e);
-                    continue;
-                }
+        let _permit = self.rate_limiter.acquire().await;
+        match self.client.get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                Ok(response)
+            }
+            Err(e) => {
+                Err(e)
             }
         }
     }
 
     pub async fn send_download_request(&self, endpoint: &str) -> Result<Response, Error> {
         let url = format!("{}{}", self.base_endpoint, endpoint);
-        let mut retries = 0;
-        let max_retries = 50;
-        let base_delay = Duration::from_secs(1);
+        // Acquire a permit asynchronously
+        match self.quote_feed_broadcasters.is_empty() {
+            false => {
+                self.rate_limiter.acquire().await;
+                self.download_limiter.acquire().await;
+            },
+            true => self.rate_limiter.acquire().await,
+        };
 
-        loop {
-            // Acquire a permit asynchronously
-            match self.quote_feed_broadcasters.is_empty() {
-                false => {
-                    self.rate_limiter.acquire().await;
-                    self.download_limiter.acquire().await;
-                },
-                true => self.rate_limiter.acquire().await,
-            };
-
-            match self.client.get(&url)
-                .header("Authorization", format!("Bearer {}", self.api_key))
-                .send()
-                .await
-            {
-                Ok(response) => {
-                    OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
-                    return Ok(response);
-                }
-                Err(e) => {
-                    OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
-                    if retries >= max_retries {
-                        return Err(e);
-                    }
-
-                    // Exponential backoff with jitter
-                    let delay = base_delay * 2u32.pow(retries as u32);
-                    let jitter = Duration::from_millis(rand::random::<u64>() % 1000);
-                    tokio::time::sleep(delay + jitter).await;
-
-                    retries += 1;
-                    eprintln!("REST request failed, attempt {}/{}: {}", retries, max_retries, e);
-                    continue;
-                }
+        match self.client.get(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .send()
+            .await
+        {
+            Ok(response) => {
+                OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                Ok(response)
             }
-
+            Err(e) => {
+              Err(e)
+            }
         }
     }
 
