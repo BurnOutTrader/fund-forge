@@ -31,6 +31,7 @@ lazy_static! {
 
     //for ticks we use this to ensure we can capture consecutive ticks with the same timestamp
     pub static ref LAST_TIME: DashMap<u64, DateTime<Utc>> = Default::default();
+    pub static ref CONSECUTIVE_STAMPS: DashMap<u64, i32> = Default::default();
 }
 
 #[allow(dead_code, unused)]
@@ -183,6 +184,9 @@ pub async fn match_history_plant_id(
                                 let time = tick.time_utc();
                                 if time == *last_time {
                                     tick.time = (time + ADD_NANO).to_string(); // Adjust tick time by 1 nanosecond if duplicate: this is lower than rithmic precision, so won't happen sequentially
+                                    CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1);
+                                } else {
+                                    CONSECUTIVE_STAMPS.insert(user_msg, 0);
                                 }
                             }
 
@@ -196,12 +200,15 @@ pub async fn match_history_plant_id(
                 } else if let Some((id, mut buffer)) = HISTORICAL_BUFFER.remove(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
                         if let Some(mut tick) = tick {
-                            
+
                             // Check for duplicate timestamp
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 let time = tick.time_utc();
                                 if time == *last_time {
                                     tick.time = (time + ADD_NANO).to_string(); // Adjust tick time by 1 nanosecond if duplicate: this is lower than rithmic precision, so won't happen sequentially
+                                    CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1);
+                                } else {
+                                    CONSECUTIVE_STAMPS.insert(user_msg, 0);
                                 }
                             }
 
@@ -211,6 +218,7 @@ pub async fn match_history_plant_id(
 
                         //remove last time before sending in case the next request is sent immediately
                         LAST_TIME.remove(&id);
+                        CONSECUTIVE_STAMPS.remove(&id);
                         // Send the buffered data via the callback
                         if let Some((_, mut sender)) = client.historical_callbacks.remove(&id) {
                             let _ = sender.send(buffer);
@@ -218,6 +226,7 @@ pub async fn match_history_plant_id(
                     }
                     // Remove the LAST_TIME entry for this id after processing
                     LAST_TIME.remove(&id);
+                    CONSECUTIVE_STAMPS.remove(&id);
                 }
             }
         },
