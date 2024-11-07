@@ -58,7 +58,7 @@ pub async fn response_handler(
 
                     match receiver.read_exact(&mut message_body).await {
                         Ok(_) => {},
-                        Err(e) => {
+                        Err(_) => {
                             //eprintln!("Error reading message body: {}", e);
                             continue;
                         }
@@ -97,7 +97,7 @@ pub async fn response_handler(
                                     let time = DateTime::<Utc>::from_str(&time).unwrap();
                                     match order_updates_sender.send((event, time)).await {
                                         Ok(_) => {}
-                                        Err(e) => {}//eprintln!("Order Update Sender Error: {}", e)
+                                        Err(_) => {}//eprintln!("Order Update Sender Error: {}", e)
                                     }
                                 }
                                 DataServerResponse::LiveAccountUpdates { account, cash_value, cash_available, cash_used } => {
