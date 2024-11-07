@@ -170,14 +170,13 @@ pub async fn match_history_plant_id(
                 if !HISTORICAL_BUFFER.contains_key(&user_msg) {
                     HISTORICAL_BUFFER.insert(user_msg, BTreeMap::new());
                 }
+                const ADD_NANO: Duration = Duration::nanoseconds(1);
                 if !finished {
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         if let Some(mut tick) = tick {
                             //since we are using a callback window for each data request, even if we have duplicate timestamps overall, we will not get them here, because we delete last time after processing a buffer.
                             // this means that when requesting data from last serialized data time to now, we will not adjust the duplicate start time (because it we have no last time), but we will adjust the duplicate times inside the buffer,
                             // this allows the hybrid storage to filter out duplicates from the initial start time.
-                            const ADD_NANO: Duration = Duration::nanoseconds(1);
-
                             // Check for duplicate timestamp
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 let time = tick.time_utc();
@@ -196,8 +195,6 @@ pub async fn match_history_plant_id(
                 } else if let Some((id, mut buffer)) = HISTORICAL_BUFFER.remove(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
                         if let Some(mut tick) = tick {
-                            const ADD_NANO: Duration = Duration::nanoseconds(1);
-
                             // Check for duplicate timestamp
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 let time = tick.time_utc();
