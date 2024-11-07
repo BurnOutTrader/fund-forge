@@ -5,18 +5,18 @@ use tokio::time::interval;
 use std::sync::atomic::{AtomicUsize, Ordering};
 pub struct RateLimiter {
     semaphore: Arc<Semaphore>,
-    current_permits: Arc<AtomicUsize>,
+    available_permits: Arc<AtomicUsize>,
     max_permits: usize,
 }
 
 impl RateLimiter {
     pub fn new(rate: usize, per_duration: Duration) -> Arc<Self> {
-        // Start with zero permits
-        let semaphore = Arc::new(Semaphore::new(0));
-        let current_permits = Arc::new(AtomicUsize::new(0));
+        // Start with max permits
+        let semaphore = Arc::new(Semaphore::new(rate));
+        let available_permits = Arc::new(AtomicUsize::new(rate));
         let rate_limiter = Arc::new(Self {
             semaphore,
-            current_permits,
+            available_permits,
             max_permits: rate,
         });
 
@@ -26,44 +26,49 @@ impl RateLimiter {
         // Start a background task to replenish permits
         tokio::spawn(async move {
             let mut interval_timer = interval(per_duration);
+            interval_timer.tick().await; // Skip first tick
 
             loop {
                 interval_timer.tick().await;
 
-                // First, calculate how many permits we need to add
-                let current = replenishing_rate_limiter.current_permits.load(Ordering::Acquire);
-                let to_add = replenishing_rate_limiter.max_permits.saturating_sub(current);
-
-                if to_add > 0 {
-                    replenishing_rate_limiter.semaphore.add_permits(to_add);
-                    replenishing_rate_limiter.current_permits.store(
-                        replenishing_rate_limiter.max_permits,
-                        Ordering::Release
-                    );
-                }
+                // First drain any remaining permits
+                let _ = replenishing_rate_limiter.available_permits.swap(0, Ordering::SeqCst);
+                replenishing_rate_limiter.semaphore.add_permits(rate);
+                replenishing_rate_limiter.available_permits.store(rate, Ordering::SeqCst);
             }
         });
-
-        // Initial permit allocation
-        rate_limiter.semaphore.add_permits(rate);
-        rate_limiter.current_permits.store(rate, Ordering::Release);
 
         rate_limiter
     }
 
     pub async fn acquire(&self) {
-        self.semaphore
-            .acquire()
-            .await
-            .expect("Semaphore closed")
-            .forget();
+        // First check if we have permits available
+        if self.available_permits.fetch_sub(1, Ordering::SeqCst) <= 0 {
+            // If we decremented to or below 0, add 1 back since we couldn't actually take a permit
+            self.available_permits.fetch_add(1, Ordering::SeqCst);
 
-        self.current_permits.fetch_sub(1, Ordering::Release);
+            // Now wait for the next interval
+            self.semaphore
+                .acquire()
+                .await
+                .expect("Semaphore closed")
+                .forget();
+
+            // Successfully acquired, now decrement the count
+            self.available_permits.fetch_sub(1, Ordering::SeqCst);
+        } else {
+            // We got a permit from the counter, also take one from semaphore
+            self.semaphore
+                .acquire()
+                .await
+                .expect("Semaphore closed")
+                .forget();
+        }
     }
 
     #[cfg(test)]
-    pub fn available_permits(&self) -> usize {
-        self.current_permits.load(Ordering::Relaxed)
+    pub fn available(&self) -> usize {
+        self.available_permits.load(Ordering::SeqCst)
     }
 }
 
@@ -83,27 +88,27 @@ mod tests {
         // Let the rate limiter initialize
         sleep(interval).await;
 
-        // Test 1: Burst test
+        // Test 1: Speed test - verify we can achieve close to max rate
+        let test_duration = Duration::from_secs(1);
         let start = Instant::now();
-        let mut handles = vec![];
+        let mut count = 0;
 
-        // Launch exactly rate number of tasks
-        for i in 0..rate {
-            let rate_limiter = rate_limiter.clone();
-            handles.push(tokio::spawn(async move {
-                rate_limiter.acquire().await;
-                (i, start.elapsed())
-            }));
+        while start.elapsed() < test_duration {
+            rate_limiter.acquire().await;
+            count += 1;
         }
 
-        let results = join_all(handles).await;
-        let elapsed_times: Vec<_> = results.into_iter()
-            .filter_map(Result::ok)
-            .collect();
+        // Calculate actual rate (ops per 100ms)
+        let elapsed = start.elapsed();
+        let actual_rate = (count as f64 * interval.as_secs_f64()) / elapsed.as_secs_f64();
 
-        assert_eq!(elapsed_times.len(), rate, "Not all tasks completed");
+        // We should achieve at least 90% of target rate
+        let min_acceptable = rate as f64 * 0.90;
+        println!("Achieved rate: {}/100ms (minimum: {}/100ms)", actual_rate, min_acceptable);
+        assert!(actual_rate >= min_acceptable,
+                "Rate too low: {}/100ms, expected at least {}/100ms", actual_rate, min_acceptable);
 
-        // Test 2: Verify rate limiting
+        // Test 2: Verify we can't exceed rate limit
         let start = Instant::now();
         let mut handles = vec![];
 
@@ -134,5 +139,10 @@ mod tests {
         // Verify second batch starts after first interval
         assert!(elapsed_times[rate] >= interval,
                 "Second batch started too early: {:?}", elapsed_times[rate]);
+
+        // Also verify first batch is close to max rate
+        assert!(first_interval_count >= (rate as f64 * 0.90) as usize,
+                "First interval too slow: got {} ops, expected at least {}",
+                first_interval_count, (rate as f64 * 0.90) as usize);
     }
 }
