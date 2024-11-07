@@ -177,8 +177,8 @@ pub async fn match_history_plant_id(
                             //todo, instead of mut here, do this after we parse time
                             let mut time = tick.time_utc();
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
-                                if last_time.value() == *time {
-                                    time = (time + std::time::Duration::from_nanos(1));
+                                if *last_time.value() == time {
+                                    tick.time = (time + std::time::Duration::from_nanos(1)).to_string();
                                 }
                             }
                             LAST_TIME.insert(user_msg, time);
