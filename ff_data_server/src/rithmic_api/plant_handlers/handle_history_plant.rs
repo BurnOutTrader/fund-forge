@@ -181,7 +181,7 @@ pub async fn match_history_plant_id(
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 let time = tick.time_utc();
                                 if time == *last_time {
-                                    tick.time = (time + ADD_NANO).to_string(); // Adjust tick time by 1 nanosecond if duplicate
+                                    tick.time = (time + ADD_NANO).to_string(); // Adjust tick time by 1 nanosecond if duplicate: this is lower than rithmic precision, so won't happen sequentially
                                 }
                             }
 
@@ -199,7 +199,7 @@ pub async fn match_history_plant_id(
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 let time = tick.time_utc();
                                 if time == *last_time {
-                                    tick.time = (time + ADD_NANO).to_string(); // Adjust tick time by 1 nanosecond if duplicate
+                                    tick.time = (time + ADD_NANO).to_string(); // Adjust tick time by 1 nanosecond if duplicate: this is lower than rithmic precision, so won't happen sequentially
                                 }
                             }
 
