@@ -71,50 +71,68 @@ impl HybridStorage {
 
         storage
     }
-
     pub fn run_update_schedule(self: Arc<Self>) {
-        //println!("Initializing update schedule with {} second interval", self.update_seconds);
         let mut shutdown_receiver = subscribe_server_shutdown();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
-            interval.tick().await;
 
-            // Initial update on startup - first forward then backward
-            match HybridStorage::update_data(self.clone(), false).await {
-                Ok(_) => { }
-                Err(e) => eprintln!("Initial forward update failed: {}", e),
-            }
-            // Run backward update after forward completes
-            match HybridStorage::update_data(self.clone(), true).await {
-                Ok(_) => {},
-                Err(e) => eprintln!("Initial backward update failed: {}", e),
-            }
+        tokio::spawn(async move {
+            // Main interval for regular updates (defined by update_seconds)
+            let mut interval = tokio::time::interval(Duration::from_secs(self.update_seconds));
+
+            // New: Additional interval specifically for cleaning up finished tasks
+            let mut cleanup_interval = tokio::time::interval(Duration::from_secs(300)); // 5 minutes
 
             loop {
                 tokio::select! {
+                // Handle shutdown signal
                     _ = shutdown_receiver.recv() => {
                         println!("Received shutdown signal, stopping update schedule");
+                        // Actively abort all running tasks
                         for task in self.download_tasks.iter() {
                             task.value().abort();
                         }
+                        self.download_tasks.clear();
+                        self.multi_bar.clear().ok();
                         break;
                     }
+
+                    // New: Periodic cleanup every 5 minutes
+                    _ = cleanup_interval.tick() => {
+                        // Remove any completed tasks from the map
+                        self.download_tasks.retain(|_, task| !task.is_finished());
+                        self.multi_bar.clear().ok();
+                    }
+
+                    // Regular update interval
                     _ = interval.tick() => {
                         // Run forward update
-                        match HybridStorage::update_data(self.clone(), false).await {
-                            Ok(_) => {},
-                            Err(e) => eprintln!("Forward update failed: {}", e),
+                        if let Err(e) = HybridStorage::update_data(self.clone(), false).await {
+                            eprintln!("Forward update failed: {}", e);
                         }
 
-                        // Wait for all forward tasks to complete
-                        while !self.download_tasks.is_empty() {
-                            tokio::time::sleep(Duration::from_secs(5)).await;
+                        // New: Add timeout for forward tasks
+                        let timeout = tokio::time::sleep(Duration::from_secs(300));  // 5 minute timeout
+                        tokio::pin!(timeout);
+
+                        // Wait for forward tasks to complete or timeout
+                        loop {
+                            tokio::select! {
+                                _ = &mut timeout => {
+                                    eprintln!("Forward update timeout reached");
+                                    break;
+                                }
+                                _ = tokio::time::sleep(Duration::from_secs(5)) => {
+                                    // Check every 5 seconds if tasks are done
+                                    self.download_tasks.retain(|_, task| !task.is_finished());
+                                    if self.download_tasks.is_empty() {
+                                        break;
+                                    }
+                                }
+                            }
                         }
 
                         // Run backward update after forward completes
-                        match HybridStorage::update_data(self.clone(), true).await {
-                            Ok(_) => {},
-                            Err(e) => eprintln!("Backward update failed: {}", e),
+                        if let Err(e) = HybridStorage::update_data(self.clone(), true).await {
+                            eprintln!("Backward update failed: {}", e);
                         }
                     }
                 }
@@ -220,8 +238,12 @@ impl HybridStorage {
         from_back: bool,
     ) -> Option<JoinHandle<()>> {
         let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
-        if download_tasks.contains_key(&key) {
-            return None;
+        if let Some(task) = download_tasks.get(&key) {
+            if task.is_finished() {
+                download_tasks.remove(&key);
+            } else {
+                return None;
+            }
         }
         let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
             DataVendor::Rithmic if RITHMIC_DATA_IS_CONNECTED.load(Ordering::SeqCst) => {
@@ -413,6 +435,7 @@ impl HybridStorage {
         let cache_last_accessed = Arc::clone(&self.cache_last_accessed);
         let cache_is_updated = Arc::clone(&self.cache_is_updated);
         let clear_cache_duration = self.clear_cache_duration;
+        let multi_bar = self.multi_bar.clone();
 
         task::spawn(async move {
             let mut interval = interval(clear_cache_duration);
@@ -422,29 +445,32 @@ impl HybridStorage {
 
                 let now = Utc::now();
 
+                // Clean up mmap cache
                 mmap_cache.retain(|path, mmap| {
                     if let Some(last_access) = cache_last_accessed.get(path) {
                         if now.signed_duration_since(*last_access) > chrono::Duration::from_std(clear_cache_duration).unwrap() {
                             if let Some(updated) = cache_is_updated.get(path) {
                                 if *updated.value() {
-                                    // Save the updated mmap to disk
                                     if let Err(e) = Self::save_mmap_to_disk(path, mmap) {
                                         eprintln!("Failed to save mmap to disk: {}", e);
                                     }
                                 }
                             }
-                            false // Remove from cache
+                            false
                         } else {
-                            true // Keep in cache
+                            true
                         }
                     } else {
-                        false // Remove if no last access time (shouldn't happen)
+                        false
                     }
                 });
 
-                // Clean up the auxiliary hashmaps
+                // Clean up auxiliary hashmaps
                 cache_last_accessed.retain(|k, _| mmap_cache.contains_key(k));
                 cache_is_updated.retain(|k, _| mmap_cache.contains_key(k));
+
+                // Clean up finished progress bars
+                multi_bar.clear().ok();
             }
         });
     }
