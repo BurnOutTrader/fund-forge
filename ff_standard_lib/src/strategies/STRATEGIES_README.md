@@ -423,7 +423,7 @@ This approach strikes a balance between storage efficiency and data precision, a
 
 ### Considerations for Supporting Identical Timestamps
 
-Allowing identical timestamps would require extensive structural changes, including storing vectors of data points (e.g., Vec<Tick> or Vec<BaseDataType>) at each timestamp. This adjustment would increase both storage demands and computational load for all BaseDataTypes, not just ticks, complicating data processing and aggregation tasks such as timeslicing.
+Allowing identical timestamps would require extensive structural changes, including storing vectors of data points (e.g., `vec![BaseDataEnum]` and `vec![BaseDataEnum, BaseDataEnum, BaseDataEnum]`) at each timestamp. This adjustment would increase both storage demands and computational load for all BaseDataTypes, not just ticks, complicating data processing and aggregation tasks such as time-slicing.
 
 ### Conclusion
 
