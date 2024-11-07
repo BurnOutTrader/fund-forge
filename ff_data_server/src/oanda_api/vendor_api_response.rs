@@ -6,6 +6,7 @@ use chrono::{DateTime, Datelike, Duration, Utc};
 use indicatif::{ProgressBar, ProgressStyle};
 use rust_decimal::Decimal;
 use tokio::sync::broadcast;
+use tokio::time::timeout;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
@@ -174,9 +175,16 @@ impl VendorApiResponse for OandaClient {
     async fn session_market_hours_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, date_time: DateTime<Utc>, callback_id: u64) -> DataServerResponse {
         todo!()
     }
-
-    #[allow(unused)]
-    async fn update_historical_data(&self, symbol: Symbol, base_data_type: BaseDataType, resolution: Resolution, from: DateTime<Utc>, to: DateTime<Utc>, from_back: bool, progress_bar: ProgressBar) -> Result<(), FundForgeError> {
+    async fn update_historical_data(
+        &self,
+        symbol: Symbol,
+        base_data_type: BaseDataType,
+        resolution: Resolution,
+        from: DateTime<Utc>,
+        to: DateTime<Utc>,
+        from_back: bool,
+        progress_bar: ProgressBar,
+    ) -> Result<(), FundForgeError> {
         let data_storage = DATA_STORAGE.get().unwrap();
         let interval = match resolution_to_oanda_interval(&resolution) {
             Some(interval) => interval,
@@ -185,7 +193,7 @@ impl VendorApiResponse for OandaClient {
         let instrument = oanda_clean_instrument(&symbol.name).await;
         let add_time = add_time_to_date(&interval);
 
-        let mut num_days = ((Utc::now() - from).num_seconds() / (60*60*5)).abs();
+        let mut num_days = ((Utc::now() - from).num_seconds() / (60 * 60 * 5)).abs();
         progress_bar.set_length(num_days as u64);
         progress_bar.set_style(
             ProgressStyle::default_bar()
@@ -193,19 +201,19 @@ impl VendorApiResponse for OandaClient {
                 .unwrap()
                 .progress_chars("=>-")
         );
-        progress_bar.set_prefix(symbol.name.clone());
+
 
         let mut new_data: BTreeMap<DateTime<Utc>, BaseDataEnum> = BTreeMap::new();
         let current_time = Utc::now() - Duration::seconds(5);
 
-        // Keep track of empty responses to prevent infinite loops
         let mut consecutive_empty_responses = 0;
         const MAX_EMPTY_RESPONSES: u32 = 20;
         const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(5);
+        const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
         let mut last_bar_time = from;
-        loop {
-            let to_time = (last_bar_time + add_time).min(current_time + Duration::seconds(15));
 
+        'main_loop: loop {
+            let to_time = (last_bar_time + add_time).min(current_time + Duration::seconds(15));
 
             let to = match from_back {
                 true => to,
@@ -216,39 +224,78 @@ impl VendorApiResponse for OandaClient {
                 break;
             }
 
-            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, last_bar_time, to.format("%Y-%m-%d %H:%M:%S")));
+            progress_bar.set_message(format!(
+                "Downloading: ({}: {}) from: {}, to {}",
+                resolution,
+                base_data_type,
+                last_bar_time,
+                to.format("%Y-%m-%d %H:%M:%S")
+            ));
+
             let url = generate_url(&last_bar_time.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
-            let response = match self.send_download_request(&url).await {
-                Ok(resp) => resp,
+
+            // Add timeout to request
+            let response = match timeout(REQUEST_TIMEOUT, self.send_download_request(&url)).await {
+                Ok(result) => match result {
+                    Ok(resp) => resp,
+                    Err(_) => {
+                        consecutive_empty_responses += 1;
+                        eprintln!("Error downloading data for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time);
+                        if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
+                            break 'main_loop;
+                        }
+                        // Add delay before retry
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                        continue;
+                    }
+                },
                 Err(_) => {
-                    // On error, advance time window and continue
+                    eprintln!("Request timeout for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time);
                     consecutive_empty_responses += 1;
-                    eprintln!("Error downloading data for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time);
+                    if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
+                        break 'main_loop;
+                    }
+                    last_bar_time = to_time;
                     continue;
                 }
             };
 
             if !response.status().is_success() {
+                consecutive_empty_responses += 1;
+                if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
+                    break 'main_loop;
+                }
                 last_bar_time = to_time;
                 continue;
             }
 
-            let content = response.text().await.unwrap();
+            // Add timeout to reading response
+            let content = match timeout(REQUEST_TIMEOUT, response.text()).await {
+                Ok(result) => result.unwrap(),
+                Err(_) => {
+                    eprintln!("Response timeout for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time);
+                    consecutive_empty_responses += 1;
+                    if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
+                        break 'main_loop;
+                    }
+                    last_bar_time = to_time;
+                    continue;
+                }
+            };
+
             let json: serde_json::Value = serde_json::from_str(&content).unwrap();
             let candles = json["candles"].as_array().unwrap();
 
             if candles.is_empty() {
                 consecutive_empty_responses += 1;
                 if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
-                    // If we get multiple empty responses, assume we've reached the end of available data
-                    break;
+                    break 'main_loop;
                 }
-                // Advance time window even when no data is found
                 last_bar_time = to_time;
                 continue;
             }
 
-            // Reset empty response counter when we get data
+            // Reset counter when we get data
             consecutive_empty_responses = 0;
 
             // Process candles
@@ -260,7 +307,7 @@ impl VendorApiResponse for OandaClient {
                 let is_closed = price_data["complete"].as_bool().unwrap();
                 if !is_closed {
                     i += 1;
-                    continue;
+                    break 'main_loop;
                 }
 
                 let bar: BaseDataEnum = match base_data_type {
@@ -331,9 +378,8 @@ impl VendorApiResponse for OandaClient {
         // Save any remaining data
         if !new_data.is_empty() {
             let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
-            match data_storage.save_data_bulk(data_vec).await {
-                Ok(_) => {}
-                Err(_) => {}
+            if let Err(e) = data_storage.save_data_bulk(data_vec).await {
+                eprintln!("Error saving final data batch: {}", e);
             }
         }
 
