@@ -28,9 +28,6 @@ use crate::rithmic_api::api_client::RithmicBrokerageClient;
 lazy_static! {
     //we use the callback id as key for historical data
     pub static ref HISTORICAL_BUFFER: DashMap<u64, BTreeMap<DateTime<Utc>, BaseDataEnum>> = Default::default();
-
-    //for ticks we use this to ensure we can capture consecutive ticks with the same timestamp
-    pub static ref LAST_TIME: DashMap<u64, DateTime<Utc>> = Default::default();
 }
 
 #[allow(dead_code, unused)]
@@ -174,49 +171,14 @@ pub async fn match_history_plant_id(
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         // More messages coming, buffer the data
                         if let Some(mut tick) = tick {
-                            //todo, need to print line the time of all ticks in a history and make sure are getting the correct order/time as response
-                            let time = tick.time_utc();
-                            let mut is_duplicate = false;
-                            if let Some(last_time) = LAST_TIME.get(&user_msg) {
-                                if *last_time.value() == time {
-                                    tick.time = (time + std::time::Duration::from_nanos(1)).to_string();
-                                    is_duplicate = true;
-                                }
-                            }
-                            match is_duplicate {
-                                true => {
-                                    let add_time = time + std::time::Duration::from_nanos(1);
-                                    buffer.insert(add_time, BaseDataEnum::Tick(tick));
-                                    LAST_TIME.insert(user_msg, add_time)
-                                },
-                                false => {
-                                    buffer.insert(time, BaseDataEnum::Tick(tick));
-                                    LAST_TIME.insert(user_msg, time)
-                                },
-                            };
+                            buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
                         }
                         return
                     }
                 } else if let Some((id, mut buffer)) = HISTORICAL_BUFFER.remove(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
-                        if let Some(mut tick) = tick {
-                            let time = tick.time_utc();
-                            let mut is_duplicate = false;
-                            if let Some(last_time) = LAST_TIME.get(&user_msg) {
-                                if *last_time.value() == time {
-                                    tick.time = (time + std::time::Duration::from_nanos(1)).to_string();
-                                    is_duplicate = true;
-                                }
-                            }
-                            match is_duplicate {
-                                true => {
-                                    let add_time = time + std::time::Duration::from_nanos(1);
-                                    buffer.insert(add_time, BaseDataEnum::Tick(tick));
-                                },
-                                false => {
-                                    buffer.insert(time, BaseDataEnum::Tick(tick));
-                                },
-                            }
+                        if let Some(tick) = tick {
+                            buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
                         }
                         if let Some((_, mut sender)) = client.historical_callbacks.remove(&id) {
                             let _ = sender.send(buffer);
