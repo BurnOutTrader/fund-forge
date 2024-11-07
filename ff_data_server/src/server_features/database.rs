@@ -908,7 +908,7 @@ mod tests {
     use super::*;
     use tempfile::TempDir;
     use std::time::Duration;
-    use chrono::Utc;
+    use chrono::{TimeZone, Utc};
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use ff_standard_lib::standardized_types::base_data::quote::Quote;
@@ -1042,5 +1042,210 @@ mod tests {
 
         assert!(latest.is_some());
         assert_eq!(latest.unwrap(), test_data.last().unwrap().clone());
+    }
+
+    #[tokio::test]
+    async fn test_earliest_data_point() {
+        let (storage, _temp) = setup_test_storage();
+        let base_time = Utc::now();
+
+        let test_data: Vec<BaseDataEnum> = (0..5)
+            .map(|i| {
+                let time = base_time + chrono::Duration::seconds(i);
+                BaseDataEnum::Quote(Quote {
+                    symbol: Symbol::new(
+                        "EUR/USD".to_string(),
+                        DataVendor::Test,
+                        MarketType::Forex
+                    ),
+                    ask: dec!(1.2345),
+                    bid: dec!(1.2343),
+                    ask_volume: dec!(100000.0),
+                    bid_volume: dec!(150000.0),
+                    time: time.to_string(),
+                })
+            })
+            .collect();
+
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
+
+        let earliest = storage.get_earliest_data_time(
+            test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert!(earliest.is_some());
+        assert_eq!(
+            earliest.unwrap(),
+            base_time,
+            "Earliest time should match the first data point's time"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_no_duplicate_saves() {
+        let (storage, _temp) = setup_test_storage();
+        let time = Utc::now();
+
+        // Create two identical quotes with the same timestamp
+        let quote1 = BaseDataEnum::Quote(Quote {
+            symbol: Symbol::new(
+                "EUR/USD".to_string(),
+                DataVendor::Test,
+                MarketType::Forex
+            ),
+            ask: dec!(1.2345),
+            bid: dec!(1.2343),
+            ask_volume: dec!(100000.0),
+            bid_volume: dec!(150000.0),
+            time: time.to_string(),
+        });
+
+        let quote2 = BaseDataEnum::Quote(Quote {
+            symbol: Symbol::new(
+                "EUR/USD".to_string(),
+                DataVendor::Test,
+                MarketType::Forex
+            ),
+            ask: dec!(1.2346), // Different price
+            bid: dec!(1.2344), // Different price
+            ask_volume: dec!(100000.0),
+            bid_volume: dec!(150000.0),
+            time: time.to_string(), // Same time
+        });
+
+        // Save first quote
+        storage.save_data(&quote1).await.unwrap();
+
+        // Try to save second quote with same timestamp
+        storage.save_data(&quote2).await.unwrap();
+
+        // Retrieve data for the time period
+        let retrieved = storage.get_data_range(
+            quote1.symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes,
+            time - chrono::Duration::seconds(1),
+            time + chrono::Duration::seconds(1)
+        ).await.unwrap();
+
+        // Should only have one quote - the latest one
+        assert_eq!(retrieved.len(), 1, "Should only have one quote for the timestamp");
+        assert_eq!(retrieved[0], quote2, "Should have the latest quote for the timestamp");
+    }
+
+    #[tokio::test]
+    async fn test_bulk_save_deduplication() {
+        let (storage, _temp) = setup_test_storage();
+        let time = Utc::now();
+
+        // Create a vector of quotes with some duplicate timestamps
+        let mut test_data = Vec::new();
+
+        // Add first quote
+        test_data.push(BaseDataEnum::Quote(Quote {
+            symbol: Symbol::new(
+                "EUR/USD".to_string(),
+                DataVendor::Test,
+                MarketType::Forex
+            ),
+            ask: dec!(1.2345),
+            bid: dec!(1.2343),
+            ask_volume: dec!(100000.0),
+            bid_volume: dec!(150000.0),
+            time: time.to_string(),
+        }));
+
+        // Add second quote with same timestamp but different prices
+        test_data.push(BaseDataEnum::Quote(Quote {
+            symbol: Symbol::new(
+                "EUR/USD".to_string(),
+                DataVendor::Test,
+                MarketType::Forex
+            ),
+            ask: dec!(1.2346),
+            bid: dec!(1.2344),
+            ask_volume: dec!(100000.0),
+            bid_volume: dec!(150000.0),
+            time: time.to_string(),
+        }));
+
+        // Add a quote with different timestamp
+        test_data.push(BaseDataEnum::Quote(Quote {
+            symbol: Symbol::new(
+                "EUR/USD".to_string(),
+                DataVendor::Test,
+                MarketType::Forex
+            ),
+            ask: dec!(1.2347),
+            bid: dec!(1.2345),
+            ask_volume: dec!(100000.0),
+            bid_volume: dec!(150000.0),
+            time: (time + chrono::Duration::seconds(1)).to_string(),
+        }));
+
+        // Save all data
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
+
+        // Retrieve data for the time period
+        let retrieved = storage.get_data_range(
+            test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes,
+            time - chrono::Duration::seconds(1),
+            time + chrono::Duration::seconds(2)
+        ).await.unwrap();
+
+        // Should have 2 quotes - one for each unique timestamp
+        assert_eq!(retrieved.len(), 2, "Should have one quote per unique timestamp");
+
+        // First quote should be the latest one for the duplicate timestamp
+        assert_eq!(retrieved[0].time_closed_utc(), time);
+        assert_eq!(retrieved[0], test_data[1]); // Second quote (latest) for first timestamp
+
+        // Second quote should be the one with the different timestamp
+        assert_eq!(retrieved[1].time_closed_utc(), time + chrono::Duration::seconds(1));
+        assert_eq!(retrieved[1], test_data[2]);
+    }
+
+    #[tokio::test]
+    async fn test_earliest_data_across_days() {
+        let (storage, _temp) = setup_test_storage();
+        let base_time = Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
+
+        // Create data points across different days
+        let test_data: Vec<BaseDataEnum> = (0..48) // 2 days worth of hourly data
+            .map(|i| {
+                let time = base_time + chrono::Duration::hours(i);
+                BaseDataEnum::Quote(Quote {
+                    symbol: Symbol::new(
+                        "EUR/USD".to_string(),
+                        DataVendor::Test,
+                        MarketType::Forex
+                    ),
+                    ask: dec!(1.2345) + dec!(0.0001) * Decimal::from(i),
+                    bid: dec!(1.2343) + dec!(0.0001) * Decimal::from(i),
+                    ask_volume: dec!(100000.0),
+                    bid_volume: dec!(150000.0),
+                    time: time.to_string(),
+                })
+            })
+            .collect();
+
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
+
+        let earliest = storage.get_earliest_data_time(
+            test_data[0].symbol(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes
+        ).await.unwrap();
+
+        assert!(earliest.is_some());
+        assert_eq!(
+            earliest.unwrap(),
+            base_time,
+            "Earliest time should match the first data point across multiple days"
+        );
     }
 }
