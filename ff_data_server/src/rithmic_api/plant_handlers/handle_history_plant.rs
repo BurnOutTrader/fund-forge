@@ -175,18 +175,15 @@ pub async fn match_history_plant_id(
                 if !finished {
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         if let Some(mut tick) = tick {
-                            // since we are using a callback window for each data request, even if we have duplicate timestamps overall, we will not get them here, because we delete last time after processing a buffer.
-                            // this means that when requesting data from last serialized data time to now, we will not adjust the duplicate start time (because currently we have no last time), but we will adjust the duplicate times inside the buffer,
-                            // this allows the hybrid storage to filter out duplicates from the initial start time.
-
                             // Check for duplicate timestamp
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
-                                let time = tick.time_utc();
+                                let mut time = tick.time_utc();
                                 if time == *last_time {
-                                    tick.time = (time + ADD_NANO).to_string(); // Adjust tick time by 1 nanosecond if duplicate: this is lower than rithmic precision, so won't happen sequentially
-                                    CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1);
+                                    let count = CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
+                                    time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps
+                                    tick.time = time.to_string();
                                 } else {
-                                    CONSECUTIVE_STAMPS.insert(user_msg, 0);
+                                    CONSECUTIVE_STAMPS.insert(user_msg, 0);  // Reset count for new timestamp
                                 }
                             }
 
@@ -200,31 +197,32 @@ pub async fn match_history_plant_id(
                 } else if let Some((id, mut buffer)) = HISTORICAL_BUFFER.remove(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
                         if let Some(mut tick) = tick {
-
                             // Check for duplicate timestamp
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
-                                let time = tick.time_utc();
+                                let mut time = tick.time_utc();
                                 if time == *last_time {
-                                    tick.time = (time + ADD_NANO).to_string(); // Adjust tick time by 1 nanosecond if duplicate: this is lower than rithmic precision, so won't happen sequentially
-                                    CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1);
+                                    let count = CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
+                                    time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps
+                                    tick.time = time.to_string();
                                 } else {
-                                    CONSECUTIVE_STAMPS.insert(user_msg, 0);
+                                    CONSECUTIVE_STAMPS.insert(user_msg, 0);  // Reset count for new timestamp
                                 }
                             }
 
-                            // Use the updated `tick.time` directly in buffer, no need to do any work here because tick time is either adjusted or not
-                            buffer.insert( tick.time_utc(), BaseDataEnum::Tick(tick));
+                            // Insert the adjusted `tick.time` into buffer
+                            buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
                         }
 
-                        //remove last time before sending in case the next request is sent immediately
+                        // Remove entries before sending in case of immediate next request
                         LAST_TIME.remove(&id);
                         CONSECUTIVE_STAMPS.remove(&id);
+
                         // Send the buffered data via the callback
                         if let Some((_, mut sender)) = client.historical_callbacks.remove(&id) {
                             let _ = sender.send(buffer);
                         }
                     }
-                    // Remove the LAST_TIME entry for this id after processing
+                    // Final removal to clean up after processing
                     LAST_TIME.remove(&id);
                     CONSECUTIVE_STAMPS.remove(&id);
                 }
