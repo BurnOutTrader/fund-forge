@@ -240,7 +240,7 @@ impl VendorApiResponse for OandaClient {
                     Ok(resp) => resp,
                     Err(_) => {
                         consecutive_empty_responses += 1;
-                        eprintln!("Error downloading data for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time);
+                        progress_bar.set_message(format!("Error downloading data for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time));
                         if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                             break 'main_loop;
                         }
@@ -250,7 +250,7 @@ impl VendorApiResponse for OandaClient {
                     }
                 },
                 Err(_) => {
-                    eprintln!("Request timeout for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time);
+                    progress_bar.set_message(format!("Request timeout for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time));
                     consecutive_empty_responses += 1;
                     if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                         break 'main_loop;
@@ -273,7 +273,7 @@ impl VendorApiResponse for OandaClient {
             let content = match timeout(REQUEST_TIMEOUT, response.text()).await {
                 Ok(result) => result.unwrap(),
                 Err(_) => {
-                    eprintln!("Response timeout for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time);
+                    progress_bar.set_message(format!("Response timeout for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time));
                     consecutive_empty_responses += 1;
                     if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                         break 'main_loop;
@@ -379,7 +379,7 @@ impl VendorApiResponse for OandaClient {
         if !new_data.is_empty() {
             let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
             if let Err(e) = data_storage.save_data_bulk(data_vec).await {
-                eprintln!("Error saving final data batch: {}", e);
+                progress_bar.set_message(format!("Error saving final data batch: {}", e));
             }
         }
 

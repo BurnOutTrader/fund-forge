@@ -416,6 +416,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                             empty_windows += 1;
                             //eprintln!("Empty window: {} - {}", window_start, window_end);
                             if empty_windows >= 30 {
+                                progress_bar.set_message(format!("Empty window: {} - {}", window_start, window_end));
                                 break 'main_loop;
                             }
                         } else {
@@ -423,9 +424,15 @@ impl VendorApiResponse for RithmicBrokerageClient {
                         }
                         response
                     },
-                    Err(_) => break 'main_loop
+                    Err(e) =>{
+                        progress_bar.set_message(format!("Failed to get data for: {} - {}, {}", window_start, window_end, e));
+                        break 'main_loop;
+                    }
                 },
-                Err(_) => break 'main_loop
+                Err(e) => {
+                    progress_bar.set_message(format!("Failed to get data for: {} - {}, {}", window_start, window_end, e));
+                    break 'main_loop
+                }
             };
 
             let mut is_end = false;
@@ -449,7 +456,8 @@ impl VendorApiResponse for RithmicBrokerageClient {
 
             if !data_map.is_empty() {
                 let save_data: Vec<BaseDataEnum> = data_map.clone().into_values().collect();
-                if let Err(_e) = data_storage.save_data_bulk(save_data).await {
+                if let Err(e) = data_storage.save_data_bulk(save_data).await {
+                    progress_bar.set_message(format!("Failed to save data for: {} - {}, {}", window_start, window_end, e));
                     break 'main_loop;
                 }
             }
