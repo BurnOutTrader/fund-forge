@@ -225,6 +225,8 @@ pub async fn match_history_plant_id(
                             let _ = sender.send(buffer);
                         }
                     }
+                    LAST_TICK_TIME.remove(&id);
+                    CONSECUTIVE_TICK_TIMESTAMPS.remove(&id);
                 }
             }
         },
