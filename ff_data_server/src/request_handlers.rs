@@ -286,6 +286,7 @@ pub async fn manage_async_requests(
                     DataServerRequest::RegisterStreamer { .. } => {
                         //no need to handle here
                     }
+                    DataServerRequest::Rates { .. } => {}
                 }
             });
         }
