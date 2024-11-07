@@ -141,6 +141,8 @@ For each RithmicSystem system you intend to use you will need a RithmicCredentia
 The templates files can be found in `ff_data_server/data/rithmic_credentials/inactive`
 
 ## Historical Data
+Rithmic Historical data is capped at around 20 Gb per week.
+
 To download historical data you need to add the symbols to the download list for the specified brokerage.
 The download list can be found in ff_data-server/data/credentials/{Brokerage}_credentials/download_list.toml (see folder structure above).
 
