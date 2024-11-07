@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
@@ -54,6 +54,12 @@ pub enum StreamRequest {
 /// * [`SynchronousRequestType::HistoricalBaseData`](ff_data_vendors::networks::RequestType) : Requests the Base data for the specified subscriptions. Server returns a ResponseType::HistoricalBaseData with the data payload.
 pub enum DataServerRequest {
     Register(StrategyMode),
+
+    Rates{
+        callback_id: u64,
+        currency: Currency,
+        time: String
+    },
 
     HistoricalBaseDataRange {
         callback_id: u64,
@@ -178,6 +184,7 @@ impl DataServerRequest {
             DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
             DataServerRequest::WarmUpResolutions { callback_id, .. } => {*callback_id = id}
+            DataServerRequest::Rates{ callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -212,6 +219,11 @@ DataServerResponse {
         callback_id: u64,
         base_data_types: Vec<BaseDataType>
     },
+
+/*    Rates{
+        callback_id: u64,
+        rates: BTreeMap<(Currency, Currency), Decimal>
+    },*/
 
     /// Responds with a vec<(Resolution, BaseDataType)> which represents all the native resolutions available for the data types from the vendor api (note we only support intraday resolutions, higher resolutions are consolidated by the engine)
     Resolutions {
@@ -358,6 +370,7 @@ impl DataServerResponse {
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
+            //DataServerResponse::Rates { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
             DataServerResponse::LivePositionUpdates { .. } => None,
             DataServerResponse::AsyncError { .. } => None
