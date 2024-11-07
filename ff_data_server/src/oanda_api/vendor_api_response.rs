@@ -306,7 +306,6 @@ impl VendorApiResponse for OandaClient {
                 let price_data = &candles_vec[i];
                 let is_closed = price_data["complete"].as_bool().unwrap();
                 if !is_closed {
-                    i += 1;
                     break 'main_loop;
                 }
 
