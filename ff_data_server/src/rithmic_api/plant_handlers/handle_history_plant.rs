@@ -174,9 +174,9 @@ pub async fn match_history_plant_id(
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         // More messages coming, buffer the data
                         if let Some(mut tick) = tick {
+                            //todo, need to print line the time of all ticks in a history and make sure are getting the correct order/time as response
                             let time = tick.time_utc();
                             let mut is_duplicate = false;
-                            //todo, need to print line the time of all ticks in a history and make sure are getting the correct order/time as response
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 if *last_time.value() == time {
                                     tick.time = (time + std::time::Duration::from_nanos(1)).to_string();
@@ -186,7 +186,7 @@ pub async fn match_history_plant_id(
                             match is_duplicate {
                                 true => {
                                     let add_time = time + std::time::Duration::from_nanos(1);
-                                    buffer.insert(time, BaseDataEnum::Tick(tick));
+                                    buffer.insert(add_time, BaseDataEnum::Tick(tick));
                                     LAST_TIME.insert(user_msg, add_time)
                                 },
                                 false => {
@@ -199,8 +199,24 @@ pub async fn match_history_plant_id(
                     }
                 } else if let Some((id, mut buffer)) = HISTORICAL_BUFFER.remove(&user_msg) {
                     if (msg.symbol.is_none() && buffer.len() == 0) || buffer.len() > 0 {
-                        if let Some(tick) = tick {
-                            buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
+                        if let Some(mut tick) = tick {
+                            let time = tick.time_utc();
+                            let mut is_duplicate = false;
+                            if let Some(last_time) = LAST_TIME.get(&user_msg) {
+                                if *last_time.value() == time {
+                                    tick.time = (time + std::time::Duration::from_nanos(1)).to_string();
+                                    is_duplicate = true;
+                                }
+                            }
+                            match is_duplicate {
+                                true => {
+                                    let add_time = time + std::time::Duration::from_nanos(1);
+                                    buffer.insert(add_time, BaseDataEnum::Tick(tick));
+                                },
+                                false => {
+                                    buffer.insert(time, BaseDataEnum::Tick(tick));
+                                },
+                            }
                         }
                         if let Some((_, mut sender)) = client.historical_callbacks.remove(&id) {
                             let _ = sender.send(buffer);
