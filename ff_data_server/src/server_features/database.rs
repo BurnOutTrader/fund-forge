@@ -222,10 +222,10 @@ impl HybridStorage {
     async fn update_symbol(
         download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
         download_semaphore: Arc<Semaphore>,
+        multi_bar: MultiProgress,
         symbol: Symbol,
         resolution: Resolution,
         base_data_type: BaseDataType,
-        symbol_pb: ProgressBar,
         from: DateTime<Utc>,
         to: DateTime<Utc>,
         from_back: bool,
@@ -262,6 +262,7 @@ impl HybridStorage {
         let download_tasks_clone = download_tasks.clone();
         let key_clone = key.clone();
         let task = task::spawn(async move {
+            let symbol_pb = multi_bar.add(ProgressBar::new(1));
             // Acquire the permit inside the spawned task
             let _permit = match download_semaphore.acquire().await {
                 Ok(permit) => permit,
@@ -293,7 +294,6 @@ impl HybridStorage {
 
     async fn update_data(self: Arc<Self>, from_back: bool) -> Result<(), FundForgeError> {
         let options = self.options.clone();
-        let multi_bar = self.multi_bar.clone();
         // Create a semaphore to limit concurrent downloads
         let semaphore = self.download_semaphore.clone();
 
@@ -413,14 +413,14 @@ impl HybridStorage {
                         let download_tasks = self.download_tasks.clone();
                         // Directly spawn the update_symbol task
                         // Create and configure symbol progress bar with an initial length
-                        let symbol_pb = multi_bar.add(ProgressBar::new(1));
+
                         HybridStorage::update_symbol(
                             download_tasks.clone(),
                             semaphore,
+                            self.multi_bar.clone(),
                             symbol.clone(),
                             symbol_config.resolution,
                             symbol_config.base_data_type.clone(),
-                            symbol_pb,
                             start_time,
                             end_time,
                             from_back
