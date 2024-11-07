@@ -71,6 +71,7 @@ impl HybridStorage {
 
         storage
     }
+
     pub fn run_update_schedule(self: Arc<Self>) {
         let mut shutdown_receiver = subscribe_server_shutdown();
 
@@ -84,58 +85,50 @@ impl HybridStorage {
             loop {
                 tokio::select! {
                 // Handle shutdown signal
-                    _ = shutdown_receiver.recv() => {
-                        println!("Received shutdown signal, stopping update schedule");
-                        // Actively abort all running tasks
-                        for task in self.download_tasks.iter() {
-                            task.value().abort();
-                        }
-                        self.download_tasks.clear();
-                        self.multi_bar.clear().ok();
-                        break;
+                _ = shutdown_receiver.recv() => {
+                    println!("Received shutdown signal, stopping update schedule");
+                    // Actively abort all running tasks
+                    for task in self.download_tasks.iter() {
+                        task.value().abort();
                     }
+                    self.download_tasks.clear();
+                    self.multi_bar.clear().ok();
+                    break;
+                }
 
-                    // New: Periodic cleanup every 5 minutes
-                    _ = cleanup_interval.tick() => {
-                        // Remove any completed tasks from the map
-                        self.download_tasks.retain(|_, task| !task.is_finished());
+                // New: Periodic cleanup every 5 minutes
+                _ = cleanup_interval.tick() => {
+                    // Remove any completed tasks from the map
+                    self.download_tasks.retain(|_, task| !task.is_finished());
+                    if self.download_tasks.is_empty() {
                         self.multi_bar.clear().ok();
-                    }
-
-                    // Regular update interval
-                    _ = interval.tick() => {
-                        // Run forward update
-                        if let Err(e) = HybridStorage::update_data(self.clone(), false).await {
-                            eprintln!("Forward update failed: {}", e);
-                        }
-
-                        // New: Add timeout for forward tasks
-                        let timeout = tokio::time::sleep(Duration::from_secs(300));  // 5 minute timeout
-                        tokio::pin!(timeout);
-
-                        // Wait for forward tasks to complete or timeout
-                        loop {
-                            tokio::select! {
-                                _ = &mut timeout => {
-                                    eprintln!("Forward update timeout reached");
-                                    break;
-                                }
-                                _ = tokio::time::sleep(Duration::from_secs(5)) => {
-                                    // Check every 5 seconds if tasks are done
-                                    self.download_tasks.retain(|_, task| !task.is_finished());
-                                    if self.download_tasks.is_empty() {
-                                        break;
-                                    }
-                                }
-                            }
-                        }
-
-                        // Run backward update after forward completes
-                        if let Err(e) = HybridStorage::update_data(self.clone(), true).await {
-                            eprintln!("Backward update failed: {}", e);
-                        }
                     }
                 }
+
+                // Regular update interval
+                _ = interval.tick() => {
+                    // Wait for any existing tasks to complete before starting new ones
+                    if !self.download_tasks.is_empty() {
+                        self.download_tasks.retain(|_, task| !task.is_finished());
+                    }
+
+                    // Run forward update
+                    if let Err(e) = HybridStorage::update_data(self.clone(), false).await {
+                        eprintln!("Forward update failed: {}", e);
+                    }
+
+                    // Wait for forward tasks to complete before starting backward tasks
+                    self.download_tasks.retain(|_, task| !task.is_finished());
+                    if !self.download_tasks.is_empty() {
+                        self.download_tasks.retain(|_, task| !task.is_finished());
+                    }
+
+                    // Run backward update after forward completes
+                    if let Err(e) = HybridStorage::update_data(self.clone(), true).await {
+                        eprintln!("Backward update failed: {}", e);
+                    }
+                }
+            }
             }
         });
     }
@@ -265,14 +258,12 @@ impl HybridStorage {
             _ => return,
         };
 
+        // Now spawn the real task
         let download_tasks_clone = download_tasks.clone();
-        let semaphore = download_semaphore.clone();
-
-        // Now spawn the task and acquire the permit inside the task
         let key_clone = key.clone();
         let task = task::spawn(async move {
             // Acquire the permit inside the spawned task
-            let _permit = match semaphore.acquire().await {
+            let _permit = match download_semaphore.acquire().await {
                 Ok(permit) => permit,
                 Err(_) => {
                     download_tasks_clone.remove(&key_clone);
@@ -296,7 +287,7 @@ impl HybridStorage {
             // permit is automatically dropped here
         });
 
-        // Insert the task if we successfully spawned it
+        // Replace the dummy task with the real one
         download_tasks.insert(key, task);
     }
 
