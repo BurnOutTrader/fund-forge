@@ -3,7 +3,6 @@ use std::net::SocketAddr;
 use tokio_rustls::TlsAcceptor;
 use std::sync::Arc;
 use tokio::net::{TcpStream};
-use chrono::Utc;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::messages::data_server_messaging::{DataServerRequest, DataServerResponse, StreamRequest};
 use std::time::Duration;
@@ -61,7 +60,7 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
                             }
                         });
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         //eprintln!("Stream: Failed to accept connection: {:?}", e);
                         continue;
                     }
@@ -91,7 +90,7 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
     println!("Stream: Server stopped.");
 }
 const LENGTH: usize = 4;
-async fn handle_stream_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr: SocketAddr) {
+async fn handle_stream_connection(mut tls_stream: TlsStream<TcpStream>, _peer_addr: SocketAddr) {
     let mut length_bytes = [0u8; LENGTH];
     while let Ok(_) = tls_stream.read_exact(&mut length_bytes).await {
         // Parse the length from the header
@@ -101,7 +100,7 @@ async fn handle_stream_connection(mut tls_stream: TlsStream<TcpStream>, peer_add
         // Read the message body based on the length
         match tls_stream.read_exact(&mut message_body).await {
             Ok(_) => {},
-            Err(e) => {
+            Err(_e) => {
                 //eprintln!("Stream: Error reading message body: {}", e);
                 continue;
             }
@@ -110,7 +109,7 @@ async fn handle_stream_connection(mut tls_stream: TlsStream<TcpStream>, peer_add
         // Parse the request from the message body
         let request = match DataServerRequest::from_bytes(&message_body) {
             Ok(req) => req,
-            Err(e) => {
+            Err(_e) => {
                 //eprintln!("Stream: Failed to parse request: {:?}", e);
                 continue;
             }

@@ -5,7 +5,6 @@ use tokio_rustls::TlsAcceptor;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::net::{TcpListener, TcpStream};
-use chrono::Utc;
 use tokio_rustls::server::TlsStream;
 use ff_standard_lib::messages::data_server_messaging::{DataServerRequest, DataServerResponse};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
@@ -75,7 +74,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
                                 Ok(tls_stream) => {
                                     handle_async_connection(tls_stream, peer_addr).await;
                                 }
-                                Err(e) => {
+                                Err(_e) => {
                                     //eprintln!("Server: Failed to accept TLS connection: {:?}", e);
                                 }
                             }
@@ -84,7 +83,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
                             }
                         });
                     }
-                    Err(e) => {
+                    Err(_e) => {
                         //eprintln!("Server: Failed to accept connection: {:?}", e);
                         continue;
                     }
@@ -112,7 +111,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
 
     drop(listener);
 }
-async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr: SocketAddr) {
+async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, _peer_addr: SocketAddr) {
     const LENGTH: usize = 8;
     let mut length_bytes = [0u8; LENGTH];
     let mut mode = StrategyMode::Backtest;
@@ -124,8 +123,8 @@ async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr
         // Read the message body based on the length
         match tls_stream.read_exact(&mut message_body).await {
             Ok(_) => {},
-            Err(e) => {
-                //eprintln!("Server: Error reading message body: {}", e);
+            Err(_e) => {
+                //eprintln!("Server: Error reading message body: {}", _e);
                 return;
             }
         }
@@ -133,8 +132,8 @@ async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr
         // Parse the request from the message body
         let request = match DataServerRequest::from_bytes(&message_body) {
             Ok(req) => req,
-            Err(e) => {
-                //eprintln!("Server: Failed to parse request: {:?}", e);
+            Err(_e) => {
+                //eprintln!("Server: Failed to parse request: {:?}", _e);
                 return;
             }
         };
