@@ -146,7 +146,7 @@ Rithmic Historical data is capped at around 20 Gb per week.
 To download historical data you need to add the symbols to the download list for the specified brokerage.
 The download list can be found in ff_data-server/data/credentials/{Brokerage}_credentials/download_list.toml (see folder structure above).
 
-Keep in mind rithmic limits history to 40gb per month per user, if you go over this limit then your historical data for live warm up will not be up to date.
+Keep in mind rithmic limits history to 40gb per week per user, if you go over this limit then your historical data for live warm up will not be up to date.
 Limit downloads to symbols you trade, if only backtesting, remove symbols from the list once you have the data you need.
 
 The symbols should fund forge format, in fund forge `-` is used to replace `/` or `_` or any other symbols that are in the symbol name.
