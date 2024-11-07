@@ -218,7 +218,7 @@ impl VendorApiResponse for OandaClient {
 
             progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, last_bar_time, to.format("%Y-%m-%d %H:%M:%S")));
             let url = generate_url(&last_bar_time.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
-            let response = match self.send_rest_request(&url).await {
+            let response = match self.send_download_request(&url).await {
                 Ok(resp) => resp,
                 Err(_) => {
                     // On error, advance time window and continue
