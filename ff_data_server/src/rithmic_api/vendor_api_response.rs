@@ -394,8 +394,6 @@ impl VendorApiResponse for RithmicBrokerageClient {
         let mut empty_windows = 0;
         'main_loop: loop {
             // Calculate window end based on start time (always 1 hour)
-            //todo, need to handle possibility of duplicate tick timestamps.
-            window_start = window_start + Duration::seconds(1);
             let window_end = window_start + resolution_multiplier;
             let to = match from_back {
                 true => to,
