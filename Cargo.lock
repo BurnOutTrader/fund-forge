@@ -954,6 +954,7 @@ dependencies = [
  "structopt",
  "strum",
  "strum_macros",
+ "tempfile",
  "thiserror",
  "tokio",
  "tokio-rustls",
