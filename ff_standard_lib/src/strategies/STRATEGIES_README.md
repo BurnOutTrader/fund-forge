@@ -366,19 +366,11 @@ fn example() {
 ```
 
 ## Time
-### When downloading and parsing data from a DataVendor for the engine
-All data should be saved using the static `HybridStorage` object, the data server hosts a public static `DATA_STORAGE` object, this object acts as a data base tool for serializing and loading data.
-Historical data loading will be handled automatically by the server, when you need to serialize data in a new API implementation, you should use the `DATA_STORAGE.save_data_bulk(data).await.unwrap()` function.
-chrono_tz will automatically handle live and historical time zone conversions for us.
-All serialized data should be saved in UTC time as a `DateTime<Utc>`, and then converted to the strategy's time zone when needed.
-there are converters for both local and utc time in ff_standard_lib/src/helpers/converters.
-1. You can convert to a `NaiveDateTime` from a specific `Tz` like `Australia::Sydney` and return a `DateTime<Tz>` object using the helper
-2. You can call `time.to_utc()` to convert to a `DateTime<Utc>`, this will make adjustments to the actual date and hour of the original `DateTime<Tz>` to properly convert the time, not just change the Tz by name.
-
 When working with `BaseDataEnum` types you must know the time zone of your data and you must parse it as `DateTime<Utc>.to_string()` for serialization!
 The `time` property of all `BaseDataEnum Variants` is a String, this is for easier serialization and deserialization using rkyv.
 This makes it very easy to work between foreign markets starting from a standardized `Tz` (Utc) for all time functions.
 see https://docs.rs/chrono-tz/latest/chrono_tz/
+
 ### The engine is designed to handle all serialized data as UTC, and then convert it to the strategy's time zone when needed.
 ```rust
 use chrono_tz::Tz;
@@ -437,6 +429,14 @@ Allowing identical timestamps would require extensive structural changes, includ
 
 This solution offers an efficient balance by using a minor timestamp adjustment to ensure uniqueness while maintaining the engine’s performance and scalability, particularly when handling data from vendors with limited timestamp granularity.
 
+### When downloading and parsing data from a DataVendor for the engine
+All data should be saved using the static `HybridStorage` object, the data server hosts a public static `DATA_STORAGE` object, this object acts as a data base tool for serializing and loading data.
+Historical data loading will be handled automatically by the server, when you need to serialize data in a new API implementation, you should use the `DATA_STORAGE.save_data_bulk(data).await.unwrap()` function.
+chrono_tz will automatically handle live and historical time zone conversions for us.
+All serialized data should be saved in UTC time as a `DateTime<Utc>`, and then converted to the strategy's time zone when needed.
+there are converters for both local and utc time in ff_standard_lib/src/helpers/converters.
+1. You can convert to a `NaiveDateTime` from a specific `Tz` like `Australia::Sydney` and return a `DateTime<Tz>` object using the helper
+2. You can call `time.to_utc()` to convert to a `DateTime<Utc>`, this will make adjustments to the actual date and hour of the original `DateTime<Tz>` to properly convert the time, not just change the Tz by name.
 
 
 ## Subscriptions
