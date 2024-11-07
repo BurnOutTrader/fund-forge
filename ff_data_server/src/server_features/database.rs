@@ -273,8 +273,8 @@ impl HybridStorage {
             };
 
             let prefix = match Utc::now().date_naive() == to.date_naive() {
-                true => "Moving Data Forward",
-                false => "Moving Data Backward",
+                true => "Moving Data End Time Forwards",
+                false => "Moving Data Start Time Backwards",
             };
             symbol_pb.set_prefix(format!("{}: {}", prefix, symbol.name));
 
