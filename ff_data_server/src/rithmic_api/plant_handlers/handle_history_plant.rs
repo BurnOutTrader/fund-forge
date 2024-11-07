@@ -184,7 +184,6 @@ pub async fn match_history_plant_id(
                             let _ = sender.send(buffer);
                         }
                     }
-                    LAST_TIME.remove(&id);
                 }
             }
         },
