@@ -24,9 +24,9 @@ If you use the second option before launching the on_data_received function, you
 - 05-11-2024: Oanda backtesting accuracy should now be as good as it can be, using a symbol info map for tick size, value and decimal accuracy, and using the best bid, offer for fills.
 - 06-11-2024: Enter Long, Enter Short, Exit Long, Exit Short and Market Orders work for Oanda, but I have not tested limit orders or stop orders yet, other orders will work but the strategy will not get update events and so they are currently unsafe.
 - 06-11-2024: Oanda backtesting is not accurate for currencies, I need to redo the symbol info map to account for lot sizes on currencies.
-- 06-11-2024: I had a major problem on indicator updates, I hadnt tested a change over the weekend because the market was closed, it resulted in multiple live updates for the same indicator, I have fixed this now.
+- 06-11-2024: I had a major problem on indicator updates, I hadn't tested a change over the weekend because the market was closed, it resulted in multiple live updates for the same indicator, I have fixed this now.
 - 06-11-2024: Don't use sync_accounts == true for any strategy, It is not working properly.
-- 07-11-2024: Oanda Symbols like Jpy will have very high value per point, because they are in yen, I will be building a currency convertion tool for backtesting to convert the pnl to the account currency, this will require the user to have the 1-hour data for every currency pair.
+- 07-11-2024: Oanda Symbols like Jpy will have very high value per point, because they are in yen, I will be building a currency conversion tool for backtesting to convert the pnl to the account currency, this will require the user to have the 1-hour data for every currency pair.
 
 - Please report any issues, some bugs I don't notice after I change code because there are so many possible states to test, backtesting, live trading, live paper * 2 brokerages.
 
