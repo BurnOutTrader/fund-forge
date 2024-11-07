@@ -176,6 +176,7 @@ pub async fn match_history_plant_id(
                         if let Some(mut tick) = tick {
                             let time = tick.time_utc();
                             let mut is_duplicate = false;
+                            //todo, need to print line the time of all ticks in a history and make sure are getting the correct order/time as response
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 if *last_time.value() == time {
                                     tick.time = (time + std::time::Duration::from_nanos(1)).to_string();
