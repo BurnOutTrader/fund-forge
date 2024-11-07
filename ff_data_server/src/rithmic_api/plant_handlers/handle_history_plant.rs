@@ -179,22 +179,21 @@ pub async fn match_history_plant_id(
                             // this means that when requesting data from last serialized data time to now, we will not adjust the duplicate start time (because currently we have no last time), but we will adjust the duplicate times inside the buffer,
                             // this allows the hybrid storage to filter out duplicates from the initial start time.
                             // Check for duplicate timestamp
+                            let mut original_tick_time = tick.time_utc();
                             if let Some(last_time) = LAST_TICK_TIME.get(&user_msg) {
-                                let mut time = tick.time_utc();
-                                if time == *last_time {
+                                if original_tick_time == *last_time {
                                     let count = CONSECUTIVE_TICK_TIMESTAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
-                                    time = time + (ADD_NANO * *count);  // Adjust by count * ADD_NANO for unique timestamps, this avoids consecutive collisions
-                                    tick.time = time.to_string();
-                                    eprintln!("Duplicate timestamp detected: {}", time);
+                                    tick.time = (original_tick_time + (ADD_NANO * *count)).to_string();  // Adjust by count * ADD_NANO for unique timestamps, this avoids consecutive collisions
+                                    //eprintln!("Duplicate timestamp detected: {}", time);
                                 } else {
                                     CONSECUTIVE_TICK_TIMESTAMPS.insert(user_msg, 0);  // Reset count for new timestamp
                                 }
                             }
 
+                            //insert the original time into last time to detect consecutive duplicates
+                            LAST_TICK_TIME.insert(user_msg, original_tick_time);
                             // Use the updated `tick.time` directly in LAST_TIME and buffer
-                            let tick_time = tick.time_utc();
-                            LAST_TICK_TIME.insert(user_msg, tick_time);
-                            buffer.insert(tick_time, BaseDataEnum::Tick(tick));
+                            buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
                         }
                         return;
                     }
@@ -203,12 +202,11 @@ pub async fn match_history_plant_id(
                         if let Some(mut tick) = tick {
                             // Check for duplicate timestamp
                             if let Some(last_time) = LAST_TICK_TIME.get(&user_msg) {
-                                let mut time = tick.time_utc();
-                                if time == *last_time {
+                                let mut tick_time = tick.time_utc();
+                                if tick_time == *last_time {
                                     let count = CONSECUTIVE_TICK_TIMESTAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
-                                    time = time + (ADD_NANO * *count);  // Adjust by count * ADD_NANO for unique timestamps this avoids consecutive collisions
-                                    tick.time = time.to_string();
-                                    eprintln!("Duplicate timestamp detected: {}", time);
+                                    tick.time = (tick_time + (ADD_NANO * *count)).to_string();
+                                    //eprintln!("Duplicate timestamp detected: {}", time);
                                 } else {
                                     CONSECUTIVE_TICK_TIMESTAMPS.insert(user_msg, 0);  // Reset count for new timestamp
                                 }
