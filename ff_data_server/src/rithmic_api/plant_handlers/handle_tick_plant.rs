@@ -315,7 +315,7 @@ pub async fn match_ticker_plant_id(
 }
 
 async fn handle_tick(client: Arc<RithmicBrokerageClient>, msg: LastTrade) {
-    let mut time = deserialize_time(&msg);
+    let time = deserialize_time(&msg);
    // println!("{:?}", msg);
     let volume = match msg.trade_size {
         None => return,
@@ -426,7 +426,7 @@ fn deserialize_time(msg: &LastTrade) -> DateTime<Utc> {
 }
 
 async fn handle_quote(client: Arc<RithmicBrokerageClient>, msg: BestBidOffer) {
-    let mut time = deserialize_quote_time(&msg);
+    let time = deserialize_quote_time(&msg);
 
     let symbol = match msg.symbol {
         None => return,
