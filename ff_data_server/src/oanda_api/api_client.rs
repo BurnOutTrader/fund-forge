@@ -268,7 +268,10 @@ impl OandaClient {
         loop {
             // Acquire a permit asynchronously
             match self.quote_feed_broadcasters.is_empty() {
-                false => self.download_limiter.acquire().await,
+                false => {
+                    self.rate_limiter.acquire().await;
+                    self.download_limiter.acquire().await;
+                },
                 true => self.rate_limiter.acquire().await,
             };
 
