@@ -63,7 +63,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
             result = listener.accept() => {
                 match result {
                     Ok((stream, peer_addr)) => {
-                        println!("Server: {}, peer_addr: {:?}", Utc::now(), peer_addr);
+                        //println!("Server: {}, peer_addr: {:?}", Utc::now(), peer_addr);
                         let acceptor = acceptor.clone();
                         let active_connections = active_connections.clone();
                         let shutdown_complete = shutdown_complete_tx.clone();
@@ -76,7 +76,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
                                     handle_async_connection(tls_stream, peer_addr).await;
                                 }
                                 Err(e) => {
-                                    eprintln!("Server: Failed to accept TLS connection: {:?}", e);
+                                    //eprintln!("Server: Failed to accept TLS connection: {:?}", e);
                                 }
                             }
                             if active_connections.fetch_sub(1, Ordering::SeqCst) == 1 {
@@ -85,7 +85,7 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
                         });
                     }
                     Err(e) => {
-                        eprintln!("Server: Failed to accept connection: {:?}", e);
+                        //eprintln!("Server: Failed to accept connection: {:?}", e);
                         continue;
                     }
                 }
@@ -125,7 +125,7 @@ async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr
         match tls_stream.read_exact(&mut message_body).await {
             Ok(_) => {},
             Err(e) => {
-                eprintln!("Server: Error reading message body: {}", e);
+                //eprintln!("Server: Error reading message body: {}", e);
                 return;
             }
         }
@@ -134,11 +134,11 @@ async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr
         let request = match DataServerRequest::from_bytes(&message_body) {
             Ok(req) => req,
             Err(e) => {
-                eprintln!("Server: Failed to parse request: {:?}", e);
+                //eprintln!("Server: Failed to parse request: {:?}", e);
                 return;
             }
         };
-        println!("{:?}", request);
+        //println!("{:?}", request);
         // Handle the request and generate a response
         match request {
             DataServerRequest::Register(registered_mode) => {
@@ -148,7 +148,7 @@ async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr
             _ => eprintln!("Server: Strategy Did not register a Strategy mode")
         }
     }
-    println!("Server: TLS connection established with {:?}", peer_addr);
+    //println!("Server: TLS connection established with {:?}", peer_addr);
     let stream_name = crate::get_ip_addresses(&tls_stream).await.port();
 
     // If we are using live stream send the stream response so that the strategy can

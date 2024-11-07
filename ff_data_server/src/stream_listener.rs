@@ -40,7 +40,7 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
             result = listener.accept() => {
                 match result {
                     Ok((stream, peer_addr)) => {
-                        println!("Stream: {}, peer_addr: {:?}", Utc::now(), peer_addr);
+                        //println!("Stream: {}, peer_addr: {:?}", Utc::now(), peer_addr);
                         let acceptor = acceptor.clone();
                         let active_connections = active_connections.clone();
                         let shutdown_complete = shutdown_complete_tx.clone();
@@ -62,7 +62,7 @@ pub(crate) async fn stream_server(config: ServerConfig, addr: SocketAddr) {
                         });
                     }
                     Err(e) => {
-                        eprintln!("Stream: Failed to accept connection: {:?}", e);
+                        //eprintln!("Stream: Failed to accept connection: {:?}", e);
                         continue;
                     }
                 }
@@ -102,7 +102,7 @@ async fn handle_stream_connection(mut tls_stream: TlsStream<TcpStream>, peer_add
         match tls_stream.read_exact(&mut message_body).await {
             Ok(_) => {},
             Err(e) => {
-                eprintln!("Stream: Error reading message body: {}", e);
+                //eprintln!("Stream: Error reading message body: {}", e);
                 continue;
             }
         }
@@ -111,23 +111,23 @@ async fn handle_stream_connection(mut tls_stream: TlsStream<TcpStream>, peer_add
         let request = match DataServerRequest::from_bytes(&message_body) {
             Ok(req) => req,
             Err(e) => {
-                eprintln!("Stream: Failed to parse request: {:?}", e);
+                //eprintln!("Stream: Failed to parse request: {:?}", e);
                 continue;
             }
         };
-        println!("{:?}", request);
+        //println!("{:?}", request);
 
         // Handle the request and generate a response
         match request {
             DataServerRequest::RegisterStreamer{port, secs, subsec } => {
                 initialize_streamer(port, Duration::new(secs, subsec), tls_stream).await;
-                println!("Streamer Registered");
+                //println!("Streamer Registered");
                 return;
             },
             _ => eprintln!("Stream: Strategy Did not register a Strategy mode")
         }
     }
-    println!("Stream: TLS connection established with {:?}", peer_addr);
+    //println!("Stream: TLS connection established with {:?}", peer_addr);
 }
 
 
