@@ -174,7 +174,7 @@ pub async fn match_history_plant_id(
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         if let Some(mut tick) = tick {
                             //since we are using a callback window for each data request, even if we have duplicate timestamps overall, we will not get them here, because we delete last time after processing a buffer.
-                            // this means that when requesting data from last_time to now, we will not adjust the duplicate start time, but we will adjust the duplicate time inside the buffer,
+                            // this means that when requesting data from last serialized data time to now, we will not adjust the duplicate start time (because it we have no last time), but we will adjust the duplicate times inside the buffer,
                             // this allows the hybrid storage to filter out duplicates from the initial start time.
                             const ADD_NANO: Duration = Duration::nanoseconds(1);
 
