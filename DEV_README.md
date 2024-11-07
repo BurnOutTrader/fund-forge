@@ -241,7 +241,7 @@ Since we buffer data in memory, we are not trading below a nanosecond accuracy, 
 
 This approach strikes a balance between storage efficiency and data precision, avoiding the need for additional structures that could duplicate data unnecessarily. Although this adjustment alters the original timestamp slightly, the impact on practical backtesting is minimal.
 
-Considerations for Supporting Identical Timestamps
+### Considerations for Supporting Identical Timestamps
 
 Allowing identical timestamps would require extensive structural changes, including storing vectors of data points (e.g., Vec<Tick> or Vec<BaseDataType>) at each timestamp. This adjustment would increase both storage demands and computational load for all BaseDataTypes, not just ticks, complicating data processing and aggregation tasks such as timeslicing.
 
