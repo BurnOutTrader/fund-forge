@@ -52,6 +52,7 @@ pub struct OandaClient {
     pub client: Arc<Client>,
     pub streaming_client: Arc<Client>,
     pub rate_limiter: Arc<RateLimiter>,
+    pub download_limiter: Arc<RateLimiter>,
     pub api_key: String,
     pub base_endpoint: String,
     pub stream_endpoint: String,
@@ -150,6 +151,7 @@ pub(crate) async fn oanda_init(options: ServerLaunchOptions) {
         client,
         streaming_client,
         rate_limiter,
+        download_limiter: RateLimiter::new(60, Duration::from_secs(1)),
         api_key: settings.api_key.clone(),
         base_endpoint: match &settings.mode {
             OandaApiMode::Live => "https://api-fxtrade.oanda.com/v3",
@@ -254,6 +256,48 @@ impl OandaClient {
                     continue;
                 }
             }
+        }
+    }
+
+    pub async fn send_download_request(&self, endpoint: &str) -> Result<Response, Error> {
+        let url = format!("{}{}", self.base_endpoint, endpoint);
+        let mut retries = 0;
+        let max_retries = 50;
+        let base_delay = Duration::from_secs(1);
+
+        loop {
+            // Acquire a permit asynchronously
+            match self.quote_feed_broadcasters.is_empty() {
+                false => self.download_limiter.acquire().await,
+                true => self.rate_limiter.acquire().await,
+            };
+
+            match self.client.get(&url)
+                .header("Authorization", format!("Bearer {}", self.api_key))
+                .send()
+                .await
+            {
+                Ok(response) => {
+                    OANDA_IS_CONNECTED.store(true, Ordering::SeqCst);
+                    return Ok(response);
+                }
+                Err(e) => {
+                    OANDA_IS_CONNECTED.store(false, Ordering::SeqCst);
+                    if retries >= max_retries {
+                        return Err(e);
+                    }
+
+                    // Exponential backoff with jitter
+                    let delay = base_delay * 2u32.pow(retries as u32);
+                    let jitter = Duration::from_millis(rand::random::<u64>() % 1000);
+                    tokio::time::sleep(delay + jitter).await;
+
+                    retries += 1;
+                    eprintln!("REST request failed, attempt {}/{}: {}", retries, max_retries, e);
+                    continue;
+                }
+            }
+
         }
     }
 
