@@ -166,7 +166,7 @@ pub async fn match_history_plant_id(
                     Some(tick) => Some(tick),
                     None => None,
                 };
-                let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap();
+                let user_msg = u64::from_str(msg.user_msg.get(0).unwrap()).unwrap(); //todo we could handle this by just sending the buffer to the callback and not removing it + last time from the map
                 if !HISTORICAL_BUFFER.contains_key(&user_msg) {
                     HISTORICAL_BUFFER.insert(user_msg, BTreeMap::new());
                 }
@@ -174,7 +174,7 @@ pub async fn match_history_plant_id(
                 if !finished {
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         if let Some(mut tick) = tick {
-                            //since we are using a callback window for each data request, even if we have duplicate timestamps overall, we will not get them here, because we delete last time after processing a buffer.
+                            // since we are using a callback window for each data request, even if we have duplicate timestamps overall, we will not get them here, because we delete last time after processing a buffer.
                             // this means that when requesting data from last serialized data time to now, we will not adjust the duplicate start time (because it we have no last time), but we will adjust the duplicate times inside the buffer,
                             // this allows the hybrid storage to filter out duplicates from the initial start time.
                             // Check for duplicate timestamp
