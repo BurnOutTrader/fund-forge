@@ -1,7 +1,9 @@
+use std::io;
 use rustls::ServerConfig;
 use std::net::SocketAddr;
 use tokio_rustls::TlsAcceptor;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::net::{TcpListener, TcpStream};
 use chrono::Utc;
 use tokio_rustls::server::TlsStream;
@@ -11,31 +13,62 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use ff_standard_lib::standardized_types::bytes_trait::Bytes;
 use crate::request_handlers::manage_async_requests;
 use crate::subscribe_server_shutdown;
+use socket2::{Socket, Domain, Type, Protocol};
+use tokio::sync::Notify;
 
-#[allow(unused_assignments)]
+pub(crate) async fn create_listener(addr: SocketAddr) -> io::Result<TcpListener> {
+    let domain = if addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
+
+    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
+
+    socket.set_reuse_address(true)?;
+    #[cfg(unix)] // Unix-specific option
+    socket.set_reuse_port(true)?;
+
+    // For IPv6, we might want to handle both IPv4 and IPv6
+    if addr.is_ipv6() {
+        socket.set_only_v6(false)?;
+    }
+
+    socket.bind(&addr.into())?;
+    socket.listen(1024)?;
+
+    // Set non-blocking mode for tokio
+    socket.set_nonblocking(true)?;
+
+    TcpListener::from_std(socket.into())
+}
+
 pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
     let acceptor = TlsAcceptor::from(Arc::new(config));
-    let listener = match TcpListener::bind(&addr).await {
-        Ok(listener) => listener,
+
+    let listener = match create_listener(addr).await {
+        Ok(l) => l,
         Err(e) => {
-            eprintln!("Server: Failed to listen on {}: {}", addr, e);
+            eprintln!("Server: Failed to create listener on {}: {}", addr, e);
             return;
         }
     };
+
     println!("Listening on: {}", addr);
 
-    // Subscribe to the shutdown signal
     let mut shutdown_receiver = subscribe_server_shutdown();
-
-    let mut listener = Some(listener);
+    let active_connections = Arc::new(AtomicUsize::new(0));
+    let listener = Arc::new(listener);
+    let shutdown_complete_tx = Arc::new(Notify::new());
+    let shutdown_complete_rx = shutdown_complete_tx.clone();
 
     loop {
         tokio::select! {
-            result = listener.as_ref().unwrap().accept() => {
+            result = listener.accept() => {
                 match result {
                     Ok((stream, peer_addr)) => {
                         println!("Server: {}, peer_addr: {:?}", Utc::now(), peer_addr);
                         let acceptor = acceptor.clone();
+                        let active_connections = active_connections.clone();
+                        let shutdown_complete = shutdown_complete_tx.clone();
+
+                        active_connections.fetch_add(1, Ordering::SeqCst);
 
                         tokio::spawn(async move {
                             match acceptor.accept(stream).await {
@@ -46,25 +79,39 @@ pub(crate) async fn async_server(config: ServerConfig, addr: SocketAddr) {
                                     eprintln!("Server: Failed to accept TLS connection: {:?}", e);
                                 }
                             }
+                            if active_connections.fetch_sub(1, Ordering::SeqCst) == 1 {
+                                shutdown_complete.notify_one();
+                            }
                         });
                     }
                     Err(e) => {
-                        eprintln!("Server: Failed to accept TLS connection: {:?}", e);
+                        eprintln!("Server: Failed to accept connection: {:?}", e);
                         continue;
                     }
                 }
             },
 
             _ = shutdown_receiver.recv() => {
-                println!("Server: Shutdown signal received.");
-                listener = None;  // Explicitly drop the listener
+                println!("Server: Shutdown signal received, stopping accept loop");
                 break;
             }
         }
     }
+
+    let timeout = tokio::time::sleep(std::time::Duration::from_secs(10));
+    tokio::pin!(timeout);
+
+    tokio::select! {
+        _ = shutdown_complete_rx.notified() => {
+            println!("Server: All connections completed gracefully");
+        }
+        _ = &mut timeout => {
+            println!("Server: Shutdown timeout reached, forcing close");
+        }
+    }
+
+    drop(listener);
 }
-
-
 async fn handle_async_connection(mut tls_stream: TlsStream<TcpStream>, peer_addr: SocketAddr) {
     const LENGTH: usize = 8;
     let mut length_bytes = [0u8; LENGTH];
