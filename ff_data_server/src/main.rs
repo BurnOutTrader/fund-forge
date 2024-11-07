@@ -3,7 +3,7 @@ use rustls_pemfile::{certs, private_key};
 use std::fs::File;
 use std::io;
 use std::io::BufReader;
-use std::net::{IpAddr, SocketAddr};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -116,6 +116,23 @@ pub struct ServerLaunchOptions {
         default_value = "900"
     )]
     pub update_seconds: u64,
+}
+impl Default for ServerLaunchOptions {
+    fn default() -> Self {
+        ServerLaunchOptions {
+            data_folder: PathBuf::from("./data"),
+            ssl_auth_folder: PathBuf::from("./resources/keys"),
+            listener_address: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            port: 8081,
+            stream_address: IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            stream_port: 8082,
+            disable_rithmic_server: 0,
+            disable_oanda_server: 0,
+            disable_bitget_server: 0,
+            max_downloads: 20,
+            update_seconds: 900,
+        }
+    }
 }
 
 async fn logout_apis() {
