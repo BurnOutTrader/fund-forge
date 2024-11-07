@@ -8,7 +8,7 @@ use rust_decimal_macros::dec;
 use serde_derive::{Deserialize, Serialize};
 use crate::helpers::converters::format_duration;
 use crate::helpers::decimal_calculators::calculate_theoretical_pnl;
-use crate::standardized_types::accounts::{Account, AccountId, Currency};
+use crate::standardized_types::accounts::{Account, AccountId};
 use crate::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::enums::{PositionSide, StrategyMode};
@@ -235,12 +235,12 @@ pub struct Position {
     pub booked_pnl: Price,
     pub highest_recoded_price: Price,
     pub lowest_recoded_price: Price,
+    pub exchange_rate_multiplier: Decimal,
     pub average_exit_price: Option<Price>,
     pub is_closed: bool,
     pub position_id: PositionId,
     pub symbol_info: SymbolInfo,
-    pub pnl_currency: Currency,
-    pub tag: String
+    pub tag: String,
 }
 
 impl Position {
@@ -253,7 +253,7 @@ impl Position {
         average_price: Price,
         id: PositionId,
         symbol_info: SymbolInfo,
-        account_currency: Currency,
+        exchange_rate_multiplier: Decimal,
         tag: String,
         time: DateTime<Utc>
     ) -> Self {
@@ -275,7 +275,7 @@ impl Position {
             is_closed: false,
             position_id: id,
             symbol_info,
-            pnl_currency: account_currency,
+            exchange_rate_multiplier,
             tag,
         }
     }
@@ -303,7 +303,7 @@ impl Position {
     }
 
     /// Returns the open pnl for the paper position
-    pub(crate) fn update_base_data(&mut self, base_data: &BaseDataEnum, time: DateTime<Utc>, account_currency: Currency) -> Decimal {
+    pub(crate) fn update_base_data(&mut self, base_data: &BaseDataEnum) -> Decimal {
         if self.is_closed {
             return dec!(0)
         }
@@ -333,16 +333,15 @@ impl Position {
             self.average_price,
             market_price,
             self.quantity_open,
-            account_currency,
-            time,
-            &self.symbol_info
+            &self.symbol_info,
+            self.exchange_rate_multiplier
         );
 
         self.open_pnl.clone()
     }
 
     /// Reduces position size a position event, this event will include a booked_pnl property
-    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
+    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         if quantity > self.quantity_open {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
@@ -353,9 +352,8 @@ impl Position {
             self.average_price,
             market_price,
             quantity,
-            account_currency,
-            time,
-            &self.symbol_info
+            &self.symbol_info,
+            self.exchange_rate_multiplier
         );
 
         // Update position
@@ -418,7 +416,7 @@ impl Position {
     }
 
     /// Adds to the paper position
-    pub(crate) async fn add_to_position(&mut self, mode: StrategyMode, is_simulating_pnl: bool, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String, account_currency: Currency) -> PositionUpdateEvent {
+    pub(crate) async fn add_to_position(&mut self, mode: StrategyMode, is_simulating_pnl: bool, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         // Correct the average price calculation with proper parentheses
         if mode != StrategyMode::Live || is_simulating_pnl {
             if self.quantity_open + quantity != Decimal::ZERO {
@@ -438,9 +436,8 @@ impl Position {
                 self.average_price,
                 market_price,
                 self.quantity_open,
-                account_currency,
-                time,
-                &self.symbol_info
+                &self.symbol_info,
+                self.exchange_rate_multiplier
             );
         }
 

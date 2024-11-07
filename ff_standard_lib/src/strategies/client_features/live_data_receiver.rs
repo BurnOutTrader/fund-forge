@@ -138,7 +138,7 @@ async fn receive_and_process(
         let arc_slice = Arc::new(slice.clone());
 
         let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
-        ledger_service.timeslice_updates(Utc::now(), arc_slice.clone()).await;
+        ledger_service.timeslice_updates(arc_slice.clone()).await;
 
         if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
             strategy_time_slice.extend(consolidated_data);
@@ -193,7 +193,7 @@ async fn receive_and_process(
                             if !time_slice.is_empty() {
                                 let arc_slice = Arc::new(time_slice.clone());
                                 let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
-                                ledger_service.timeslice_updates(Utc::now(), arc_slice.clone()).await;
+                                ledger_service.timeslice_updates(arc_slice.clone()).await;
 
                                 if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
                                     strategy_time_slice.extend(consolidated_data);

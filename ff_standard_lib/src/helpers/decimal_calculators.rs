@@ -1,30 +1,27 @@
-use chrono::{DateTime, Utc};
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive, Zero};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
-use crate::standardized_types::enums::PositionSide;
+use crate::standardized_types::enums::{PositionSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
-use crate::standardized_types::accounts::Currency;
 
 pub fn calculate_theoretical_pnl(
     side: PositionSide,
     entry_price: Price,
     market_price: Price,
     quantity: Volume,
-    _account_currency: Currency,
-    _time: DateTime<Utc>,
-    symbol_info: &SymbolInfo
+    symbol_info: &SymbolInfo,
+    exchange_rate_multiplier: Decimal,
 ) -> Price {
     // Calculate the price difference based on position side
     let raw_ticks = match side {
         PositionSide::Long => {
-            let ticks =  ((market_price - entry_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
+            let ticks = ((market_price - entry_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
             if ticks == dec!(0.0) {
                 return dec!(0.0)
             }
             ticks
-        },   // Profit if market price > entry price
+        },
         PositionSide::Short => {
             let ticks = ((entry_price - market_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
             if ticks == dec!(0.0) {
@@ -34,14 +31,11 @@ pub fn calculate_theoretical_pnl(
         },
     };
 
-    /*   if pnl_currency != account_currency && time > *EARLIEST_CURRENCY_CONVERSIONS {
-           //todo historical currency conversion using time
-           // return pnl in account currency
-       }*/
-
-    // Calculate PnL by multiplying with value per tick and quantity
+    // Calculate PnL in the symbol's currency
     let pnl = raw_ticks * symbol_info.value_per_tick * quantity;
-    pnl
+
+    // Convert to account currency
+    pnl * exchange_rate_multiplier
 }
 
 /// Safely divides two f64 values using Decimal for precision.

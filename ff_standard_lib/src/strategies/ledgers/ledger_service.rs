@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 use chrono::{DateTime, Utc};
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
@@ -28,6 +29,13 @@ impl LedgerService {
             ledgers: Default::default(),
             ledger_senders: Default::default(),
             strategy_sender,
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn update_rates(&self, rates: HashMap<(Currency, Currency), Decimal>) {
+        for ledger in self.ledgers.iter() {
+            ledger.value().update_rates(&rates);
         }
     }
 
@@ -128,9 +136,9 @@ impl LedgerService {
        }
     }
 
-    pub async fn timeslice_updates(&self, time: DateTime<Utc>, time_slice: Arc<TimeSlice>) {
+    pub async fn timeslice_updates(&self, time_slice: Arc<TimeSlice>) {
         for ledger in self.ledgers.iter() {
-            ledger.timeslice_update(time_slice.clone(), time).await;
+            ledger.timeslice_update(time_slice.clone()).await;
         }
     }
 
@@ -170,6 +178,7 @@ impl LedgerService {
                         is_simulating_pnl: true,
                         strategy_sender: self.strategy_sender.clone(),
                         leverage: Decimal::from_u32(1).unwrap(), //todo, need a way to init accounts per broker without hardcode in server
+                        rates: Arc::new(DashMap::new()),
                     })
                 }
             };

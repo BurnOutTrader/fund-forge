@@ -233,7 +233,7 @@ impl HistoricalEngine {
                         Ok(_) => {}
                         Err(e) => panic!("Market Handler: Error sending backtest message: {}", e)
                     }
-                    self.ledger_service.timeslice_updates(time, arc_slice.clone()).await;
+                    self.ledger_service.timeslice_updates(arc_slice.clone()).await;
 
                     // Add only primary data which the strategy has subscribed to into the strategies time slice
                     if let Some(consolidated_data) = self.subscription_handler.update_time_slice(arc_slice.clone()).await {

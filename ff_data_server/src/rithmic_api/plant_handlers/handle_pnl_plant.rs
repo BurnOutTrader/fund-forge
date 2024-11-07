@@ -227,7 +227,6 @@ pub async fn match_pnl_plant_id(
                                 };
                                 //println!("Creating Position");
                                 let position = Position {
-                                    pnl_currency: symbol_info.pnl_currency.clone(),
                                     symbol_name: symbol_name.clone(),
                                     symbol_code: symbol_code.clone(),
                                     account: Account {
@@ -244,6 +243,7 @@ pub async fn match_pnl_plant_id(
                                     booked_pnl: dec!(0),
                                     highest_recoded_price: average_price,
                                     lowest_recoded_price: average_price,
+                                    exchange_rate_multiplier: dec!(1),
                                     average_exit_price: None,
                                     is_closed: false,
                                     position_id: client.generate_id(side),

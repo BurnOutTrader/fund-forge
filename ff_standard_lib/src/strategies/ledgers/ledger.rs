@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use dashmap::DashMap;
 use tokio::sync::Mutex;
 use rust_decimal::Decimal;
@@ -36,7 +37,6 @@ pub enum LedgerMessage {
     UpdateOrCreatePosition{symbol_name: SymbolName, symbol_code: SymbolCode, quantity: Volume, side: OrderSide, time: DateTime<Utc>, market_fill_price: Price, tag: String}
 }
 /// A ledger specific to the strategy which will ignore positions not related to the strategy but will update its balances relative to the actual account balances for live trading.
-#[derive(Debug)]
 pub struct Ledger {
     pub account: Account,
     pub cash_value: Mutex<Price>,
@@ -55,7 +55,8 @@ pub struct Ledger {
     pub mode: StrategyMode,
     pub is_simulating_pnl: bool,
     pub(crate) strategy_sender: Sender<StrategyEvent>,
-    pub leverage: Decimal
+    pub leverage: Decimal,
+    pub rates: Arc<DashMap<(Currency, Currency), Decimal>>,
     //todo, add daily max loss, max order size etc to ledger
 }
 
@@ -103,9 +104,35 @@ impl Ledger {
             mode,
             is_simulating_pnl,
             strategy_sender,
-            leverage: Decimal::from(account_info.leverage)
+            leverage: Decimal::from(account_info.leverage),
+            rates: Arc::new(Default::default()),
         };
         ledger
+    }
+
+    pub fn update_rates(&self, rates: &HashMap<(Currency, Currency), Decimal>) {
+        for (c1, c2) in rates.iter() {
+            self.rates.insert(c1.clone(), c2.clone());
+        }
+    }
+
+    pub fn get_exchange_multiplier(&self, from_currency: Currency, to_currency: Currency) -> Decimal {
+        if from_currency == to_currency {
+            return dec!(1.0);
+        }
+
+        // Try direct rate
+        if let Some(rate) = self.rates.get(&(from_currency, to_currency)) {
+            return *rate;
+        }
+
+        // Try inverse rate
+        if let Some(rate) = self.rates.get(&(to_currency, from_currency)) {
+            return dec!(1.0) / *rate;
+        }
+
+        // Default to 1.0 if rate not found
+        dec!(1.0)
     }
 
     pub async fn update(&mut self, cash_value: Decimal, cash_available: Decimal, cash_used: Decimal) {
@@ -237,7 +264,7 @@ impl Ledger {
                 Some(price) => price
             };
 
-            position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone(), self.currency).await;
+            position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone()).await;
         } else if let Some(mut position_vec) = self.positions_closed.get_mut(&symbol) {
             if let Some(last_position) = position_vec.last_mut() {
                 let is_reducing = (last_position.side == PositionSide::Long && order.side == OrderSide::Sell)
@@ -252,7 +279,7 @@ impl Ledger {
                     Some(price) => price
                 };
 
-                last_position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone(), self.currency).await;
+                last_position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone()).await;
             }
         }
     }
@@ -488,13 +515,13 @@ impl Ledger {
         )
     }
 
-    pub async fn timeslice_update(&self, time_slice: Arc<TimeSlice>, time: DateTime<Utc>) {
+    pub async fn timeslice_update(&self, time_slice: Arc<TimeSlice>) {
         for base_data_enum in time_slice.iter() {
             let data_symbol_name = &base_data_enum.symbol().name;
             if let Some(codes) = self.symbol_code_map.get(data_symbol_name) {
                 for code in codes.value() {
                     if let Some(mut position) = self.positions.get_mut(code) {
-                        let open_pnl = position.update_base_data(&base_data_enum, time, self.currency);
+                        let open_pnl = position.update_base_data(&base_data_enum);
                         self.open_pnl.insert(data_symbol_name.clone(), open_pnl);
                     }
                 }
@@ -505,7 +532,7 @@ impl Ledger {
                 }
 
                 if self.mode != StrategyMode::Live || self.is_simulating_pnl {
-                    let open_pnl = position.update_base_data(&base_data_enum, time, self.currency);
+                    let open_pnl = position.update_base_data(&base_data_enum);
                     self.open_pnl.insert(data_symbol_name.clone(), open_pnl);
                 }
 
@@ -553,7 +580,7 @@ impl Ledger {
 
             if is_reducing {
                 remaining_quantity -= existing_position.quantity_open;
-                let event= existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
+                let event= existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone()).await;
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         self.positions.insert(symbol_code.clone(), existing_position);
@@ -592,7 +619,7 @@ impl Ledger {
                 }
                 position_events.push(event);
             } else {
-                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, market_fill_price, quantity, time, tag.clone(), self.currency).await;
+                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, market_fill_price, quantity, time, tag.clone()).await;
                 self.positions.insert(symbol_code.clone(), existing_position);
 
                 position_events.push(event);
@@ -617,7 +644,7 @@ impl Ledger {
                     }
                 }
             }
-
+            let exchange_rate_multiplier= self.get_exchange_multiplier(info.pnl_currency, self.currency);
             let id = self.generate_id(position_side);
             // Create a new position
             let position = Position::new(
@@ -629,7 +656,7 @@ impl Ledger {
                 market_fill_price,
                 id.clone(),
                 info.clone(),
-                info.pnl_currency,
+                exchange_rate_multiplier,
                 tag.clone(),
                 time,
             );

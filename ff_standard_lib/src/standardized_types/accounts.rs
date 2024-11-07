@@ -55,7 +55,7 @@ impl fmt::Display for Account {
     }
 }
 
-#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize, PartialOrd, Copy)]
+#[derive(Clone, Serialize_rkyv, Deserialize_rkyv, Archive, PartialEq, Debug, Serialize, Deserialize, PartialOrd, Copy, Eq, Ord, Hash)]
 #[archive(compare(PartialEq), check_bytes)]
 #[archive_attr(derive(Debug))]
 pub enum Currency {
@@ -64,7 +64,6 @@ pub enum Currency {
     CAD,
     EUR,
     JPY,
-    USDT,
     CHF,
     GBP,
     SEK,
@@ -89,8 +88,21 @@ impl Currency {
             "CAD" => Currency::CAD,
             "EUR" => Currency::EUR,
             "JPY" => Currency::JPY,
-            "USDT" => Currency::USDT,
-            _ => panic!("No currency matching string, please implement")
+            "CHF" => Currency::CHF,
+            "GBP" => Currency::GBP,
+            "SEK" => Currency::SEK,
+            "NOK" => Currency::NOK,
+            "TRY" => Currency::TRY,
+            "PLN" => Currency::PLN,
+            "HUF" => Currency::HUF,
+            "CZK" => Currency::CZK,
+            "MXN" => Currency::MXN,
+            "ZAR" => Currency::ZAR,
+            "HKD" => Currency::HKD,
+            "SGD" => Currency::SGD,
+            "NZD" => Currency::NZD,
+            "CNH" => Currency::CNH,
+            _ => panic!("No currency matching string: {}", string),
         }
     }
 }

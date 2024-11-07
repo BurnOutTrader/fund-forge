@@ -75,7 +75,7 @@ impl Ledger {
             {
                 self.release_margin_used(&symbol_name).await;
             }
-            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, time, tag, self.currency).await;
+            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, time, tag).await;
             let mut cash_available = self.cash_available.lock().await;
             let mut total_booked_pnl = self.total_booked_pnl.lock().await;
             match &event {
@@ -133,7 +133,7 @@ impl Ledger {
 
             if is_reducing {
                 remaining_quantity -= existing_position.quantity_open;
-                let event = existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone(), self.currency).await;
+                let event = existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone()).await;
 
                 self.release_margin_used(&symbol_name).await;
 
@@ -207,7 +207,7 @@ impl Ledger {
                         return Err(event)
                     }
                 }
-                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, market_fill_price, quantity, time, tag.clone(), self.currency).await;
+                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, market_fill_price, quantity, time, tag.clone()).await;
                 self.positions.insert(symbol_code.clone(), existing_position);
 
                 {
@@ -255,7 +255,7 @@ impl Ledger {
                     }
                 }
             }
-
+            let exchange_rate_multiplier= self.get_exchange_multiplier(info.pnl_currency, self.currency);
             let id = self.generate_id(position_side);
             // Create a new position
             let position = Position::new(
@@ -267,7 +267,7 @@ impl Ledger {
                 market_fill_price,
                 id.clone(),
                 info.clone(),
-                info.pnl_currency,
+                exchange_rate_multiplier,
                 tag.clone(),
                 time,
             );
