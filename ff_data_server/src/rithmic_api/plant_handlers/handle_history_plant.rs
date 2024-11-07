@@ -175,12 +175,15 @@ pub async fn match_history_plant_id(
                 if !finished {
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         if let Some(mut tick) = tick {
+                            // since we are using a callback window for each data request, even if we have duplicate timestamps overall, we will not get them here, because we delete last time after processing a buffer.
+                            // this means that when requesting data from last serialized data time to now, we will not adjust the duplicate start time (because currently we have no last time), but we will adjust the duplicate times inside the buffer,
+                            // this allows the hybrid storage to filter out duplicates from the initial start time.
                             // Check for duplicate timestamp
                             if let Some(last_time) = LAST_TIME.get(&user_msg) {
                                 let mut time = tick.time_utc();
                                 if time == *last_time {
                                     let count = CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
-                                    time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps
+                                    time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps, this avoids consecutive collisions
                                     tick.time = time.to_string();
                                 } else {
                                     CONSECUTIVE_STAMPS.insert(user_msg, 0);  // Reset count for new timestamp
@@ -202,7 +205,7 @@ pub async fn match_history_plant_id(
                                 let mut time = tick.time_utc();
                                 if time == *last_time {
                                     let count = CONSECUTIVE_STAMPS.entry(user_msg).and_modify(|e| *e += 1).or_insert(1);
-                                    time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps
+                                    time = time + ADD_NANO * *count;  // Adjust by count * ADD_NANO for unique timestamps this avoids consecutive collisions
                                     tick.time = time.to_string();
                                 } else {
                                     CONSECUTIVE_STAMPS.insert(user_msg, 0);  // Reset count for new timestamp
