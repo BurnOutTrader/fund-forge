@@ -3,6 +3,8 @@ use std::sync::Arc;
 #[allow(unused_imports)]
 use std::time::Duration;
 use chrono::{DateTime, TimeZone, Utc};
+use dashmap::DashMap;
+use lazy_static::lazy_static;
 #[allow(unused_imports)]
 #[allow(unused_imports)]
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::{AccountListUpdates, AccountPnLPositionUpdate, AccountRmsUpdates, BestBidOffer, BracketUpdates, DepthByOrder, DepthByOrderEndEvent, EndOfDayPrices, ExchangeOrderNotification, FrontMonthContractUpdate, IndicatorPrices, InstrumentPnLPositionUpdate, LastTrade, MarketMode, OpenInterest, OrderBook, OrderPriceLimits, QuoteStatistics, RequestAccountList, RequestAccountRmsInfo, RequestHeartbeat, RequestLoginInfo, RequestMarketDataUpdate, RequestPnLPositionSnapshot, RequestPnLPositionUpdates, RequestProductCodes, RequestProductRmsInfo, RequestReferenceData, RequestTickBarUpdate, RequestTimeBarUpdate, RequestVolumeProfileMinuteBars, ResponseAcceptAgreement, ResponseAccountList, ResponseAccountRmsInfo, ResponseAccountRmsUpdates, ResponseAuxilliaryReferenceData, ResponseBracketOrder, ResponseCancelAllOrders, ResponseCancelOrder, ResponseDepthByOrderSnapshot, ResponseDepthByOrderUpdates, ResponseEasyToBorrowList, ResponseExitPosition, ResponseFrontMonthContract, ResponseGetInstrumentByUnderlying, ResponseGetInstrumentByUnderlyingKeys, ResponseGetVolumeAtPrice, ResponseGiveTickSizeTypeTable, ResponseHeartbeat, ResponseLinkOrders, ResponseListAcceptedAgreements, ResponseListExchangePermissions, ResponseListUnacceptedAgreements, ResponseLogin, ResponseLoginInfo, ResponseLogout, ResponseMarketDataUpdate, ResponseMarketDataUpdateByUnderlying, ResponseModifyOrder, ResponseModifyOrderReferenceData, ResponseNewOrder, ResponseOcoOrder, ResponseOrderSessionConfig, ResponsePnLPositionSnapshot, ResponsePnLPositionUpdates, ResponseProductCodes, ResponseProductRmsInfo, ResponseReferenceData, ResponseReplayExecutions, ResponseResumeBars, ResponseRithmicSystemInfo, ResponseSearchSymbols, ResponseSetRithmicMrktDataSelfCertStatus, ResponseShowAgreement, ResponseShowBracketStops, ResponseShowBrackets, ResponseShowOrderHistory, ResponseShowOrderHistoryDates, ResponseShowOrderHistoryDetail, ResponseShowOrderHistorySummary, ResponseShowOrders, ResponseSubscribeForOrderUpdates, ResponseSubscribeToBracketUpdates, ResponseTickBarReplay, ResponseTickBarUpdate, ResponseTimeBarReplay, ResponseTimeBarUpdate, ResponseTradeRoutes, ResponseUpdateStopBracketLevel, ResponseUpdateTargetBracketLevel, ResponseVolumeProfileMinuteBars, RithmicOrderNotification, SymbolMarginRate, TickBar, TimeBar, TradeRoute, TradeStatistics, UpdateEasyToBorrowList};
@@ -16,15 +18,20 @@ use ff_standard_lib::messages::data_server_messaging::DataServerResponse;
 #[allow(unused_imports)]
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
+use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::quote::Quote;
 use ff_standard_lib::standardized_types::base_data::tick::{Aggressor, Tick};
 use ff_standard_lib::standardized_types::enums::{FuturesExchange, MarketType};
-use ff_standard_lib::standardized_types::subscriptions::Symbol;
+use ff_standard_lib::standardized_types::subscriptions::{Symbol, SymbolName};
 use ff_standard_lib::standardized_types::symbol_info::FrontMonthInfo;
 use ff_standard_lib::standardized_types::books::BookLevel;
 use ff_standard_lib::StreamName;
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::client_base::rithmic_proto_objects::rti::request_login::SysInfraType;
+
+lazy_static! {
+    pub static ref LAST_TIME: DashMap<SymbolName, DashMap<BaseDataType, DateTime<Utc>>> = Default::default();
+}
 
 #[allow(unused, dead_code)]
 pub async fn match_ticker_plant_id(
@@ -309,7 +316,7 @@ pub async fn match_ticker_plant_id(
 }
 
 async fn handle_tick(client: Arc<RithmicBrokerageClient>, msg: LastTrade) {
-    let time = deserialize_time(&msg);
+    let mut time = deserialize_time(&msg);
    // println!("{:?}", msg);
     let volume = match msg.trade_size {
         None => return,
@@ -355,7 +362,17 @@ async fn handle_tick(client: Arc<RithmicBrokerageClient>, msg: LastTrade) {
         Some(symbol) => symbol
     };
 
+    const BASE_DATA_TYPE: BaseDataType = BaseDataType::Ticks;
     let symbol = Symbol::new(symbol, client.data_vendor.clone(), MarketType::Futures(exchange));
+    if let Some(last_time) = LAST_TIME.get(&symbol.name) {
+        if let Some(last_time) = last_time.get(&BASE_DATA_TYPE) {
+            if last_time.value() == &time {
+                time = time + Duration::from_nanos(1);
+            }
+        }
+    }
+    LAST_TIME.entry(symbol.name.clone()).or_default().insert(BASE_DATA_TYPE, time);
+
     let tick = Tick::new(symbol.clone(), price, time.to_string(), volume, side);
     let mut remove_broadcaster = false;
     if let Some(broadcaster) = client.tick_feed_broadcasters.get(&tick.symbol.name) {
@@ -409,7 +426,8 @@ fn deserialize_time(msg: &LastTrade) -> DateTime<Utc> {
 }
 
 async fn handle_quote(client: Arc<RithmicBrokerageClient>, msg: BestBidOffer) {
-    let time = deserialize_quote_time(&msg);
+    let mut time = deserialize_quote_time(&msg);
+
     let symbol = match msg.symbol {
         None => return,
         Some(symbol) => symbol
@@ -462,7 +480,16 @@ async fn handle_quote(client: Arc<RithmicBrokerageClient>, msg: BestBidOffer) {
             return;
         }
 
+        const BASE_DATA_TYPE: BaseDataType = BaseDataType::Quotes;
         let symbol_obj = Symbol::new(symbol.clone(), client.data_vendor.clone(), MarketType::Futures(exchange));
+        if let Some(last_time) = LAST_TIME.get(&symbol_obj.name) {
+            if let Some(last_time) = last_time.get(&BASE_DATA_TYPE) {
+                if last_time.value() == &time {
+                    time = time + Duration::from_nanos(1);
+                }
+            }
+        }
+        LAST_TIME.entry(symbol_obj.name.clone()).or_default().insert(BASE_DATA_TYPE, time);
         let data = BaseDataEnum::Quote(
             Quote {
                 symbol: symbol_obj.clone(),

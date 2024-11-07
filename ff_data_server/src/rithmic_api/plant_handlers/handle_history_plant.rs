@@ -27,6 +27,7 @@ use crate::rithmic_api::api_client::RithmicBrokerageClient;
 
 lazy_static! {
     pub static ref HISTORICAL_BUFFER: DashMap<u64, BTreeMap<DateTime<Utc>, BaseDataEnum>> = Default::default();
+    pub static ref LAST_TIME: DashMap<u64, DateTime<Utc>> = Default::default();
 }
 
 #[allow(dead_code, unused)]
@@ -169,8 +170,13 @@ pub async fn match_history_plant_id(
                 if !finished {
                     if let Some(mut buffer) = HISTORICAL_BUFFER.get_mut(&user_msg) {
                         // More messages coming, buffer the data
-                        if let Some(tick) = tick {
-                            buffer.insert(tick.time_utc(), BaseDataEnum::Tick(tick));
+                        if let Some(mut tick) = tick {
+                            let time = tick.time_utc();
+                            if let Some(last_time) = LAST_TIME.get(&user_msg) {
+                                tick.time = (time + std::time::Duration::from_nanos(1)).to_string();
+                            }
+                            LAST_TIME.insert(user_msg, time);
+                            buffer.insert(time, BaseDataEnum::Tick(tick));
                         }
                         return
                     }
@@ -183,6 +189,7 @@ pub async fn match_history_plant_id(
                             let _ = sender.send(buffer);
                         }
                     }
+                    LAST_TIME.remove(&id);
                 }
             }
         },
