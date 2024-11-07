@@ -219,7 +219,8 @@ impl HybridStorage {
         to: DateTime<Utc>,
         from_back: bool,
     ) -> Option<JoinHandle<()>> {
-        if download_tasks.contains_key(&(symbol.name.clone(), base_data_type, resolution)) {
+        let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
+        if download_tasks.contains_key(&key) {
             return None;
         }
         let client: Arc<dyn VendorApiResponse> = match symbol.data_vendor {
@@ -238,7 +239,6 @@ impl HybridStorage {
             _ => return None,
         };
 
-        let key = (symbol.name.clone(), base_data_type.clone(), resolution.clone());
         if download_tasks.contains_key(&key) {
             return None;
         }
