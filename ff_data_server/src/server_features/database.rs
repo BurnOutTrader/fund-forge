@@ -273,8 +273,11 @@ impl HybridStorage {
                     return;
                 }
             };
-
-            symbol_pb.set_prefix(format!("{}", symbol.name));
+            let prefix = match Utc::now().date_naive() == to.date_naive() {
+                true => "Moving Data Forward",
+                false => "Moving Data Backward",
+            };
+            symbol_pb.set_prefix(format!("{}: {}", prefix, symbol.name));
 
             match client.update_historical_data(symbol.clone(), base_data_type, resolution, from, to, from_back, symbol_pb).await {
                 Ok(_) => {},
