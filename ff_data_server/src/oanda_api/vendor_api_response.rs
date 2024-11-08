@@ -381,6 +381,10 @@ impl VendorApiResponse for OandaClient {
             }
 
             progress_bar.inc(1);
+
+            if to > Utc::now() - Duration::seconds(5) {
+                break 'main_loop;
+            }
         }
 
         // Save any remaining data
