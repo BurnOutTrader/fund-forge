@@ -18,7 +18,7 @@ use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::StreamName;
 use crate::oanda_api::api_client::{OandaClient, OANDA_IS_CONNECTED};
-use crate::oanda_api::base_data_converters::{candle_from_candle, oanda_quotebar_from_candle};
+use crate::oanda_api::base_data_converters::oanda_quotebar_from_candle;
 use crate::oanda_api::download::{generate_url};
 use crate::oanda_api::get_requests::oanda_clean_instrument;
 use crate::oanda_api::support_and_conversions::{add_time_to_date, resolution_to_oanda_interval};
@@ -194,7 +194,7 @@ impl VendorApiResponse for OandaClient {
         let instrument = oanda_clean_instrument(&symbol.name).await;
         let add_time = add_time_to_date(&interval);
 
-        let num_days = ((Utc::now() - from).num_seconds() / (60 * 60 * 5)).abs();
+        let num_days = (from - to).abs().num_days();
         progress_bar.set_length(num_days as u64);
         progress_bar.set_style(
             ProgressStyle::default_bar()
@@ -273,6 +273,9 @@ impl VendorApiResponse for OandaClient {
                     if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                         break 'main_loop;
                     }
+                    if to_time != last_bar_time {
+                        progress_bar.inc(1);
+                    }
                     last_bar_time = to_time;
                     continue;
                 }
@@ -284,16 +287,15 @@ impl VendorApiResponse for OandaClient {
             if candles.is_empty() {
                 consecutive_empty_responses += 1;
                 if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
-                    progress_bar.inc(1);
                     break 'main_loop;
                 }
+
                 if from.date_naive() == Utc::now().date_naive() && consecutive_empty_responses == 2 {
                     progress_bar.inc(1);
                     break 'main_loop;
                 }
 
                 last_bar_time = to_time;
-                progress_bar.inc(1);
                 continue;
             }
 
@@ -303,34 +305,20 @@ impl VendorApiResponse for OandaClient {
             // Process candles
             let candles_vec: Vec<_> = candles.into_iter().collect();
 
-
-            let mut i = 0;
-
-            while i < candles_vec.len() {
-                let price_data = &candles_vec[i];
-                let is_closed = price_data["complete"].as_bool().unwrap();
+            for candle in candles_vec {
+                let is_closed = candle["complete"].as_bool().unwrap();
                 if !is_closed {
-                    progress_bar.inc(1);
                     break 'main_loop;
                 }
 
                 let bar: BaseDataEnum = match base_data_type {
-                    BaseDataType::QuoteBars => match oanda_quotebar_from_candle(price_data, symbol.clone(), resolution.clone()) {
+                    BaseDataType::QuoteBars => match oanda_quotebar_from_candle(candle, symbol.clone(), resolution.clone()) {
                         Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
                         Err(_) => {
-                            i += 1;
-                            continue
-                        }
-                    },
-                    BaseDataType::Candles => match candle_from_candle(price_data, symbol.clone(), resolution.clone()) {
-                        Ok(candle) => BaseDataEnum::Candle(candle),
-                        Err(_) => {
-                            i += 1;
                             continue
                         }
                     },
                     _ => {
-                        i += 1;
                         continue
                     }
                 };
@@ -338,42 +326,24 @@ impl VendorApiResponse for OandaClient {
                 let new_bar_time = bar.time_utc();
                 if last_bar_time.day() != new_bar_time.day() && !new_data.is_empty() {
                     let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
-
-                    // Retry loop for saving data
-                    const MAX_RETRIES: u32 = 3;
-                    let mut retry_count = 0;
-                    let save_result = 'save_loop: loop {
-                        match data_storage.save_data_bulk(data_vec.clone()).await {
-                            Ok(_) => break 'save_loop Ok(()),
-                            Err(e) => {
-                                retry_count += 1;
-                                if retry_count >= MAX_RETRIES {
-                                    break Err(e);
-                                }
-                                tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-                            }
+                    match data_storage.save_data_bulk(data_vec.clone()).await {
+                        Ok(_) => {
+                            progress_bar.inc(1);
+                        },
+                        Err(e) => {
+                            progress_bar.set_message(format!("Error saving data batch: {}", e));
+                            break 'main_loop;
                         }
-                    };
-
-                    if let Err(_e) = save_result {
-                        while i > 0 && bar.time_utc().day() == new_bar_time.day() {
-                            i -= 1;
-                        }
-                        i += 1;
-                        continue;
                     }
-
                     new_data.clear();
                 }
 
                 last_bar_time = bar.time_utc();
                 new_data.entry(new_bar_time).or_insert(bar);
-                i += 1;
             }
             if start == last_bar_time {
                 last_bar_time = to_time;
             }
-            progress_bar.inc(1);
         }
 
         // Save any remaining data
