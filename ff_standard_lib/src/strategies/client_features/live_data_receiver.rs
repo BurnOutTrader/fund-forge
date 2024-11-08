@@ -126,29 +126,33 @@ async fn receive_and_process(
         }
     }
     drop(warmup_completion_receiver);
-    // Process buffered data
-    for (time, slice) in buffered_data
-        .range(warm_up_end.timestamp()..=Utc::now().timestamp())
-        .filter(|(_, slice)| !slice.is_empty())
-    {
-        if *time <= get_backtest_time().timestamp() {
-            continue;
-        }
-        let mut strategy_time_slice = TimeSlice::new();
-        let arc_slice = Arc::new(slice.clone());
+    let range_start = warm_up_end.timestamp();
+    let range_end = Utc::now().timestamp();
+    if range_start < range_end {
+        // Process buffered data
+        for (time, slice) in buffered_data
+            .range(..=Utc::now().timestamp())
+            .filter(|(_, slice)| !slice.is_empty())
+        {
+            if *time <= get_backtest_time().timestamp() {
+                continue;
+            }
+            let mut strategy_time_slice = TimeSlice::new();
+            let arc_slice = Arc::new(slice.clone());
 
-        let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
-        ledger_service.timeslice_updates(arc_slice.clone()).await;
+            let _ = price_service_sender.send(PriceServiceMessage::TimeSliceUpdate(arc_slice.clone())).await;
+            ledger_service.timeslice_updates(arc_slice.clone()).await;
 
-        if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
-            strategy_time_slice.extend(consolidated_data);
-        }
-        strategy_time_slice.extend(slice.clone());
+            if let Some(consolidated_data) = subscription_handler.update_time_slice(arc_slice).await {
+                strategy_time_slice.extend(consolidated_data);
+            }
+            strategy_time_slice.extend(slice.clone());
 
-        if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
-            let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
+            if let Some(events) = indicator_handler.update_time_slice(&strategy_time_slice).await {
+                let _ = strategy_event_sender.send(StrategyEvent::IndicatorEvent(events)).await;
+            }
+            let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
         }
-        let _ = strategy_event_sender.send(StrategyEvent::TimeSlice(strategy_time_slice)).await;
     }
     drop(buffered_data);
     set_warmup_complete();
