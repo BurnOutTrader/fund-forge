@@ -446,30 +446,39 @@ impl HybridStorage {
                 interval.tick().await;
 
                 let now = Utc::now();
+                let expiration_duration = chrono::Duration::from_std(clear_cache_duration).unwrap();
 
-                // Clean up mmap cache
-                mmap_cache.retain(|path, mmap| {
-                    if let Some(last_access) = cache_last_accessed.get(path) {
-                        if now.signed_duration_since(*last_access) > chrono::Duration::from_std(clear_cache_duration).unwrap() {
-                            if let Some(updated) = cache_is_updated.get(path) {
-                                if *updated.value() {
-                                    if let Err(e) = Self::save_mmap_to_disk(path, mmap) {
+                // Collect keys that should be removed
+                let mut keys_to_remove = Vec::new();
+
+                // Iterate over `cache_last_accessed` to find expired entries
+                for entry in cache_last_accessed.iter() {
+                    let path = entry.key();
+                    let last_access = entry.value();
+
+                    // Check if the entry has expired
+                    if now.signed_duration_since(*last_access) > expiration_duration {
+                        // Save the mmap to disk if it was updated
+                        if let Some(updated) = cache_is_updated.get(path) {
+                            if *updated.value() {
+                                if let Some(mmap) = mmap_cache.get(path) {
+                                    if let Err(e) = Self::save_mmap_to_disk(path, &mmap) {
                                         eprintln!("Failed to save mmap to disk: {}", e);
                                     }
                                 }
                             }
-                            false
-                        } else {
-                            true
                         }
-                    } else {
-                        false
+                        // Mark this path for removal
+                        keys_to_remove.push(path.clone());
                     }
-                });
+                }
 
-                // Clean up auxiliary hashmaps
-                cache_last_accessed.retain(|k, _| mmap_cache.contains_key(k));
-                cache_is_updated.retain(|k, _| mmap_cache.contains_key(k));
+                // Remove expired entries from all caches
+                for path in keys_to_remove {
+                    mmap_cache.remove(&path);
+                    cache_last_accessed.remove(&path);
+                    cache_is_updated.remove(&path);
+                }
             }
         });
     }
