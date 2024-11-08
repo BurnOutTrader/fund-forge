@@ -173,7 +173,7 @@ pub async fn on_data_received(
                                     {
                                         let limit_price = last_bar.ask_low;
                                         // we will set the time in force to Day, based on the strategy Tz of Australia::Sydney, I am not sure how this will work in live trading, TIF might be handled by manually sending cancel order on data server.
-                                        let time_in_force = TimeInForce::Day(strategy.time_zone().to_string());
+                                        let time_in_force = TimeInForce::Day;
                                         entry_order_id = Some(strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(1), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
                                         bars_since_entry = 0;
                                     }
