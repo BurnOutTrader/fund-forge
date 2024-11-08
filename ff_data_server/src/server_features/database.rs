@@ -199,16 +199,6 @@ impl HybridStorage {
         if was_downloading {
             return;
         }
-        //we probably dont want a permit here, just get it done
-/*
-        let permit = match self.download_semaphore.acquire().await {
-            Ok(permit) => permit,
-            Err(_) => {
-                // Remove from tasks if we couldn't get a permit
-                self.download_tasks.remove(&key);
-                return;
-            }
-        };*/
 
         let symbol_pb = MULTIBAR.add(ProgressBar::new(1));
         symbol_pb.set_prefix(format!("{}", symbol.name));
@@ -467,7 +457,15 @@ impl HybridStorage {
                 for path in keys_to_remove {
                     mmap_cache.remove(&path);
                     cache_last_accessed.remove(&path);
-                    file_locks.remove(&path);
+                    let mut remove_semaphore = false;
+                    if let Some(file_semaphore) = file_locks.get(&path) {
+                        if file_semaphore.available_permits() == 1 {
+                            remove_semaphore = true;
+                        }
+                    }
+                    if remove_semaphore {
+                        file_locks.remove(&path);
+                    }
                 }
             }
         });
@@ -545,13 +543,20 @@ impl HybridStorage {
     }
 
     /// This is only used for reads and so we will never have conflicting write states regarding mmaps in memory
-    fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
+    async fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
         let path_str = file_path.to_string_lossy().to_string();
 
         if let Some(mmap) = self.mmap_cache.get(&path_str) {
             self.cache_last_accessed.insert(path_str.clone(), Utc::now());
             Ok(Arc::clone(mmap.value()))
         } else {
+            let semaphore = self.file_locks.entry(file_path.to_str().unwrap().to_string()).or_insert(Semaphore::new(1));
+            let _permit = match semaphore.acquire().await {
+                Ok(p) => p,
+                Err(e) => {
+                    panic!("Thread Tripwire, Error aquiring save permit: {}", e)
+                }
+            };
             let file = File::open(file_path)?;
             let mmap = Arc::new(unsafe { Mmap::map(&file)? });
             self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
@@ -651,7 +656,7 @@ impl HybridStorage {
                 let mut current_date = current_date;
                 while current_date <= month_end {
                     let file_path = month_path.join(format!("{:04}{:02}{:02}.bin", year, month, current_date.day()));
-                    if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
+                    if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
                         let day_data = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()).unwrap();
                         all_data.extend(day_data.into_iter().filter(|d| d.time_closed_utc() >= start && d.time_closed_utc() <= end));
                     }
@@ -703,7 +708,7 @@ impl HybridStorage {
 
                 // Check first (latest) file in this month
                 if let Some(latest_file) = days.first() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()) {
+                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()).await {
                         if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
                             if let Some(latest) = day_data.into_iter().max_by_key(|d| d.time_closed_utc()) {
                                 return Ok(Some(latest));
@@ -748,7 +753,7 @@ impl HybridStorage {
                 days.sort_by_key(|e| e.path());
 
                 if let Some(latest_file) = days.last() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()) {
+                    if let Ok(mmap) = self.get_or_create_mmap(&latest_file.path()).await {
                         if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap.to_vec()) {
                             return Ok(day_data.into_iter().map(|d| d.time_closed_utc()).max());
                         }
@@ -808,7 +813,7 @@ impl HybridStorage {
                 let file_path = self.get_file_path(symbol, resolution, data_type, &current_date, false);
 
                 if file_path.exists() {
-                    if let Ok(mmap) = self.get_or_create_mmap(&file_path) {
+                    if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
                         if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
                             if let Some(earliest) = day_data.into_iter()
                                 .map(|d| d.time_closed_utc())
