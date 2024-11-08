@@ -26,6 +26,7 @@ use crate::{stream_listener};
 
 lazy_static!(
     pub static ref RESPONSE_SENDERS: Arc<DashMap<StreamName, Sender<DataServerResponse>>> = Arc::new(DashMap::new());
+    //todo, we should have a disconnect broadcaster so that we broadcast on disconnect of a streamer, this needs to be done for base data response, where we await updates for before live streams
 );
 
 pub async fn base_data_response(
