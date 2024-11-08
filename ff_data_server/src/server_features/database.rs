@@ -47,8 +47,8 @@ pub struct HybridStorage {
     base_path: PathBuf,
     mmap_cache: Arc<DashMap<String, Arc<Mmap>>>,
     cache_last_accessed: Arc<DashMap<String, DateTime<Utc>>>,
-    cache_is_updated: Arc<DashMap<String, bool>>,
     clear_cache_duration: Duration,
+    file_locks: Arc<DashMap<String, Semaphore>>,
     download_tasks: Arc<DashMap<(SymbolName, BaseDataType, Resolution), JoinHandle<()>>>,
     options: ServerLaunchOptions,
     download_semaphore: Arc<Semaphore>,
@@ -61,8 +61,8 @@ impl HybridStorage {
             base_path: options.data_folder.clone().join("historical"),
             mmap_cache: Arc::new(DashMap::new()),
             cache_last_accessed: Arc::new(DashMap::new()),
-            cache_is_updated: Arc::new(DashMap::new()),
             clear_cache_duration,
+            file_locks: Default::default(),
             download_tasks:Default::default(),
             options,
             download_semaphore: Arc::new(Semaphore::new(max_concurrent_downloads)),
@@ -436,9 +436,8 @@ impl HybridStorage {
     fn start_cache_management(&self) {
         let mmap_cache = Arc::clone(&self.mmap_cache);
         let cache_last_accessed = Arc::clone(&self.cache_last_accessed);
-        let cache_is_updated = Arc::clone(&self.cache_is_updated);
         let clear_cache_duration = self.clear_cache_duration;
-
+        let file_locks = self.file_locks.clone();
         task::spawn(async move {
             let mut interval = interval(clear_cache_duration);
 
@@ -459,15 +458,6 @@ impl HybridStorage {
                     // Check if the entry has expired
                     if now.signed_duration_since(*last_access) > expiration_duration {
                         // Save the mmap to disk if it was updated
-                        if let Some(updated) = cache_is_updated.get(path) {
-                            if *updated.value() {
-                                if let Some(mmap) = mmap_cache.get(path) {
-                                    if let Err(e) = Self::save_mmap_to_disk(path, &mmap) {
-                                        eprintln!("Failed to save mmap to disk: {}", e);
-                                    }
-                                }
-                            }
-                        }
                         // Mark this path for removal
                         keys_to_remove.push(path.clone());
                     }
@@ -477,17 +467,10 @@ impl HybridStorage {
                 for path in keys_to_remove {
                     mmap_cache.remove(&path);
                     cache_last_accessed.remove(&path);
-                    cache_is_updated.remove(&path);
+                    file_locks.remove(&path);
                 }
             }
         });
-    }
-
-    fn save_mmap_to_disk(path: &str, mmap: &Arc<Mmap>) -> io::Result<()> {
-        let mut file = OpenOptions::new().write(true).open(path)?;
-        file.write_all(mmap.as_ref())?;
-        file.sync_all()?;
-        Ok(())
     }
 
     fn get_base_path(&self, symbol: &Symbol, resolution: &Resolution, data_type: &BaseDataType, is_saving: bool) -> PathBuf {
@@ -561,7 +544,34 @@ impl HybridStorage {
         Ok(())
     }
 
+    /// This is only used for reads and so we will never have conflicting write states regarding mmaps in memory
+    fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
+        let path_str = file_path.to_string_lossy().to_string();
+
+        if let Some(mmap) = self.mmap_cache.get(&path_str) {
+            self.cache_last_accessed.insert(path_str.clone(), Utc::now());
+            Ok(Arc::clone(mmap.value()))
+        } else {
+            let file = File::open(file_path)?;
+            let mmap = Arc::new(unsafe { Mmap::map(&file)? });
+            self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
+
+            self.cache_last_accessed.insert(path_str.clone(), Utc::now());
+
+            Ok(mmap)
+        }
+    }
+
+    /// This first updates the file on disk, then the file in memory is replaced with the new file, therefore we do not have saftey issues.
     async fn save_data_to_file(&self, file_path: &Path, new_data: &[BaseDataEnum]) -> io::Result<()> {
+        let semaphore = self.file_locks.entry(file_path.to_str().unwrap().to_string()).or_insert(Semaphore::new(1));
+        let _permit = match semaphore.acquire().await {
+            Ok(p) => p,
+            Err(e) => {
+                panic!("Thread Tripwire, Error aquiring save permit: {}", e)
+            }
+        };
+
         let mut file = OpenOptions::new()
             .create(true)
             .read(true)
@@ -594,8 +604,6 @@ impl HybridStorage {
 
         let mmap = unsafe { Mmap::map(&file)? };
         self.mmap_cache.insert(file_path.to_string_lossy().to_string(), Arc::new(mmap));
-
-        self.cache_is_updated.insert(file_path.to_string_lossy().to_string(), true);
 
         Ok(())
     }
@@ -823,26 +831,6 @@ impl HybridStorage {
         }
 
         Ok(None)
-    }
-
-
-    fn get_or_create_mmap(&self, file_path: &Path) -> io::Result<Arc<Mmap>> {
-        let path_str = file_path.to_string_lossy().to_string();
-
-        if let Some(mmap) = self.mmap_cache.get(&path_str) {
-            self.cache_last_accessed.insert(path_str.clone(), Utc::now());
-            Ok(Arc::clone(mmap.value()))
-        } else {
-            let file = File::open(file_path)?;
-            let mmap = Arc::new(unsafe { Mmap::map(&file)? });
-            self.mmap_cache.insert(path_str.clone(), Arc::clone(&mmap));
-
-            self.cache_last_accessed.insert(path_str.clone(), Utc::now());
-
-            self.cache_is_updated.insert(path_str, false);
-
-            Ok(mmap)
-        }
     }
 
     pub async fn get_bulk_data(
