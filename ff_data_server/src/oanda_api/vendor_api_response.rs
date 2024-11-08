@@ -290,12 +290,16 @@ impl VendorApiResponse for OandaClient {
             if candles.is_empty() {
                 consecutive_empty_responses += 1;
                 if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
+                    progress_bar.inc(1);
                     break 'main_loop;
                 }
                 if from.date_naive() == Utc::now().date_naive() && consecutive_empty_responses == 2 {
+                    progress_bar.inc(1);
                     break 'main_loop;
                 }
+
                 last_bar_time = to_time;
+                progress_bar.inc(1);
                 continue;
             }
 
@@ -310,6 +314,7 @@ impl VendorApiResponse for OandaClient {
                 let price_data = &candles_vec[i];
                 let is_closed = price_data["complete"].as_bool().unwrap();
                 if !is_closed {
+                    progress_bar.inc(1);
                     break 'main_loop;
                 }
 
