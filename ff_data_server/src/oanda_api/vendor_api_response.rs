@@ -214,6 +214,7 @@ impl VendorApiResponse for OandaClient {
         let mut last_bar_time = from;
 
         'main_loop: loop {
+            let mut start = last_bar_time;
             let to_time = (last_bar_time + add_time).min(current_time + Duration::seconds(15));
 
             let to = match from_back {
@@ -256,7 +257,6 @@ impl VendorApiResponse for OandaClient {
                     if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                         break 'main_loop;
                     }
-                    last_bar_time = to_time;
                     continue;
                 }
             };
@@ -266,7 +266,6 @@ impl VendorApiResponse for OandaClient {
                 if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                     break 'main_loop;
                 }
-                last_bar_time = to_time;
                 continue;
             }
 
@@ -374,7 +373,9 @@ impl VendorApiResponse for OandaClient {
                 new_data.entry(new_bar_time).or_insert(bar);
                 i += 1;
             }
-
+            if start == last_bar_time {
+                last_bar_time = to_time;
+            }
             progress_bar.inc(1);
         }
 
