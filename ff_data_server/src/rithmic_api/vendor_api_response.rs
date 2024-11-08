@@ -404,7 +404,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
                 break 'main_loop;
             }
 
-            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, to.format("%Y-%m-%d %H:%M:%S")));
+            progress_bar.set_message(format!("Downloading: ({}: {}) from: {}, to {}", resolution, base_data_type, window_start, window_end.format("%Y-%m-%d %H:%M:%S")));
             let (sender, receiver) = oneshot::channel();
 
             self.send_replay_request(base_data_type, resolution, symbol_name.clone(), exchange, window_start, window_end, sender).await;

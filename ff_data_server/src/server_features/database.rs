@@ -383,10 +383,8 @@ impl HybridStorage {
                         } else {
                             let earliest = match self.get_earliest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
                                 Ok(Some(date)) if date > start_time => Some(date), // If we have data and it's after our target start time
-                                Ok(None) => Some(Utc::now()),  // If we have no data
-                                _ => None,
+                                _ => continue
                             };
-
                             match earliest {
                                 Some(time) => time,
                                 None => {
@@ -400,10 +398,23 @@ impl HybridStorage {
                             continue;
                         }
 
-                        // Only skip if we're moving backwards and we've already reached our target
-                        if from_back && start_time >= end_time - Duration::from_secs(60*60*72) {
-                            continue;
+
+                        if from_back == true {
+                            let latest_date = match self.get_latest_data_time(&symbol, &symbol_config.resolution, &symbol_config.base_data_type).await {
+                                Ok(Some(date)) => date,
+                                Err(_) | Ok(None) => {
+                                    continue //skip move start date back if we have no existing data
+                                }
+                            };
+                            if from_back && start_time >= end_time - chrono::Duration::days(3) {
+                                continue;
+                            }
+                            // Only skip if we're moving backwards and we've already reached our target or we have updated data to the present
+                            if start_time >= end_time - chrono::Duration::days(3) || end_time.date_naive() > Utc::now().date_naive() - chrono::Duration::days(3) || latest_date < Utc::now() - chrono::Duration::days(3)  {
+                                continue;
+                            }
                         }
+
 
                         let semaphore = semaphore.clone();
                         let download_tasks = self.download_tasks.clone();

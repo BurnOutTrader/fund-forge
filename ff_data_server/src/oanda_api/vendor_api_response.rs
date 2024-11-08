@@ -208,7 +208,7 @@ impl VendorApiResponse for OandaClient {
         let current_time = Utc::now() - Duration::seconds(5);
 
         let mut consecutive_empty_responses = 0;
-        const MAX_EMPTY_RESPONSES: u32 = 20;
+        const MAX_EMPTY_RESPONSES: u32 = 100;
         const TIME_NEGATIVE: std::time::Duration = std::time::Duration::from_secs(60 * 40);
         const REQUEST_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
         let mut last_bar_time = from;
@@ -216,11 +216,6 @@ impl VendorApiResponse for OandaClient {
         'main_loop: loop {
             let start = last_bar_time;
             let to_time = (start + add_time).min(current_time);
-
-            let to = match from_back {
-                true => to,
-                false => Utc::now(),
-            };
 
             if last_bar_time >= to - TIME_NEGATIVE {
                 break;
@@ -231,7 +226,7 @@ impl VendorApiResponse for OandaClient {
                 resolution,
                 base_data_type,
                 last_bar_time,
-                to.format("%Y-%m-%d %H:%M:%S")
+                to_time.format("%Y-%m-%d %H:%M:%S")
             ));
 
             let url = generate_url(&start.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);

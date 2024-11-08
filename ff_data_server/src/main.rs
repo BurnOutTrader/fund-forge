@@ -105,7 +105,7 @@ pub struct ServerLaunchOptions {
     #[structopt(
         short = "m",
         long = "downloads",
-        default_value = "50"
+        default_value = "20"
     )]
     pub max_downloads: usize,
 
