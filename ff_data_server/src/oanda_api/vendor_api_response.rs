@@ -214,7 +214,7 @@ impl VendorApiResponse for OandaClient {
         let mut last_bar_time = from;
 
         'main_loop: loop {
-            let mut start = last_bar_time;
+            //let mut start = last_bar_time;
             let to_time = (last_bar_time + add_time).min(current_time + Duration::seconds(15));
 
             let to = match from_back {
@@ -286,7 +286,13 @@ impl VendorApiResponse for OandaClient {
             let json: serde_json::Value = serde_json::from_str(&content).unwrap();
             let candles = json["candles"].as_array().unwrap();
 
-            if candles.is_empty() {
+            // Reset counter when we get data
+            consecutive_empty_responses = 0;
+
+            // Process candles
+            let candles_vec: Vec<_> = candles.into_iter().collect();
+
+            if candles_vec.is_empty() {
                 consecutive_empty_responses += 1;
                 if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                     progress_bar.inc(1);
@@ -301,12 +307,6 @@ impl VendorApiResponse for OandaClient {
                 progress_bar.inc(1);
                 continue;
             }
-
-            // Reset counter when we get data
-            consecutive_empty_responses = 0;
-
-            // Process candles
-            let candles_vec: Vec<_> = candles.into_iter().collect();
             let mut i = 0;
 
             while i < candles_vec.len() {
@@ -373,9 +373,9 @@ impl VendorApiResponse for OandaClient {
                 new_data.entry(new_bar_time).or_insert(bar);
                 i += 1;
             }
-            if start == last_bar_time {
+        /*    if start == last_bar_time {
                 last_bar_time = to_time;
-            }
+            }*/
             progress_bar.inc(1);
         }
 
