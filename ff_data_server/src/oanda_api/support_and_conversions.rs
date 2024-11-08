@@ -33,9 +33,9 @@ pub(crate) fn resolution_to_oanda_interval(resolution: &Resolution) -> Option<In
 
 pub(crate) fn add_time_to_date(resolution: &Interval) -> Duration {
     match resolution {
-        Interval::S5 => Duration::hours(6) + Duration::minutes(50),
-        Interval::M1 => Duration::days(5),
-        Interval::H1 => Duration::days(200),
+        Interval::S5 => Duration::hours(2),
+        Interval::M1 => Duration::days(2),
+        Interval::H1 => Duration::days(50),
     }
 }
 
