@@ -241,12 +241,12 @@ impl OandaClient {
     pub async fn send_download_request(&self, endpoint: &str) -> Result<Response, Error> {
         let url = format!("{}{}", self.base_endpoint, endpoint);
         // Acquire a permit asynchronously
-        match self.quote_feed_broadcasters.is_empty() {
-            false => {
-                self.rate_limiter.acquire().await;
-                self.download_limiter.acquire().await;
-            },
-            true => self.rate_limiter.acquire().await,
+        // Use a guard pattern to ensure we release permits properly
+        let _rate_permit = self.rate_limiter.acquire().await;
+        let _download_permit = if !self.quote_feed_broadcasters.is_empty() {
+            Some(self.download_limiter.acquire().await)
+        } else {
+            None
         };
 
         match self.client.get(&url)
