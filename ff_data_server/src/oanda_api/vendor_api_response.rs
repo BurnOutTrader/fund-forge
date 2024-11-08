@@ -280,7 +280,6 @@ impl VendorApiResponse for OandaClient {
             let json: serde_json::Value = serde_json::from_str(&content).unwrap();
             let candles = json["candles"].as_array().unwrap();
 
-
             // Process candles
             let candles_vec: Vec<_> = candles.into_iter().collect();
 
@@ -294,11 +293,11 @@ impl VendorApiResponse for OandaClient {
                     BaseDataType::QuoteBars => match oanda_quotebar_from_candle(candle, symbol.clone(), resolution.clone()) {
                         Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
                         Err(_) => {
-                            continue
+                            break 'main_loop;
                         }
                     },
                     _ => {
-                        continue
+                        break 'main_loop;
                     }
                 };
 
