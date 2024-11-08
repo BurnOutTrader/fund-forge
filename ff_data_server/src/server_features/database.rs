@@ -113,6 +113,10 @@ impl HybridStorage {
                     // Wait for any existing tasks to complete before starting new ones
                     if !self.download_tasks.is_empty() {
                         self.download_tasks.retain(|_, task| !task.is_finished());
+
+                        if self.download_semaphore.available_permits() == 0 {
+                            continue;
+                        }
                     }
 
                     // Run forward update
