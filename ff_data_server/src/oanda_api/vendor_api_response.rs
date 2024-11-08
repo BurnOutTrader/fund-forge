@@ -286,13 +286,7 @@ impl VendorApiResponse for OandaClient {
             let json: serde_json::Value = serde_json::from_str(&content).unwrap();
             let candles = json["candles"].as_array().unwrap();
 
-            // Reset counter when we get data
-            consecutive_empty_responses = 0;
-
-            // Process candles
-            let candles_vec: Vec<_> = candles.into_iter().collect();
-
-            if candles_vec.is_empty() {
+            if candles.is_empty() {
                 consecutive_empty_responses += 1;
                 if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                     progress_bar.inc(1);
@@ -307,6 +301,14 @@ impl VendorApiResponse for OandaClient {
                 progress_bar.inc(1);
                 continue;
             }
+
+            // Reset counter when we get data
+            consecutive_empty_responses = 0;
+
+            // Process candles
+            let candles_vec: Vec<_> = candles.into_iter().collect();
+
+
             let mut i = 0;
 
             while i < candles_vec.len() {
