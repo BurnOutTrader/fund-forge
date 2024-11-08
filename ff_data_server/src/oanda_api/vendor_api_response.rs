@@ -214,8 +214,8 @@ impl VendorApiResponse for OandaClient {
         let mut last_bar_time = from;
 
         'main_loop: loop {
-            let mut start = last_bar_time;
-            let to_time = (last_bar_time + add_time).min(current_time + Duration::seconds(15));
+            let start = last_bar_time;
+            let to_time = (start + add_time).min(current_time + Duration::seconds(15));
 
             let to = match from_back {
                 true => to,
@@ -234,7 +234,7 @@ impl VendorApiResponse for OandaClient {
                 to.format("%Y-%m-%d %H:%M:%S")
             ));
 
-            let url = generate_url(&last_bar_time.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
+            let url = generate_url(&start.naive_utc(), &to_time.naive_utc(), &instrument, &interval, &base_data_type);
 
             // Add timeout to request
             let response = match timeout(REQUEST_TIMEOUT, self.send_download_request(&url)).await {
