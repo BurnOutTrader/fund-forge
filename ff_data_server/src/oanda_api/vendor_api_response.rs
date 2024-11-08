@@ -221,7 +221,7 @@ impl VendorApiResponse for OandaClient {
                 false => Utc::now() + Duration::seconds(2),
             };
 
-            if last_bar_time >= to - TIME_NEGATIVE {
+            if last_bar_time >= to - TIME_NEGATIVE || from > to - TIME_NEGATIVE {
                 break;
             }
 
@@ -375,16 +375,7 @@ impl VendorApiResponse for OandaClient {
                 i += 1;
             }
 
-            // Update last_bar_time to the end of the current window if no data was processed
-            if last_bar_time < to_time {
-                last_bar_time = to_time;
-            }
-
             progress_bar.inc(1);
-
-            if from >= Utc::now() - Duration::seconds(5) || to_time >= Utc::now() - Duration::seconds(5) {
-                break 'main_loop;
-            }
         }
 
         // Save any remaining data

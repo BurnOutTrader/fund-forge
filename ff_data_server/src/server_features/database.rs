@@ -130,10 +130,10 @@ impl HybridStorage {
                         self.download_tasks.retain(|_, task| !task.is_finished());
                     }
 
-                    // Run backward update after forward completes
+                /*    // Run backward update after forward completes
                     if let Err(e) = HybridStorage::update_data(self.clone(), true).await {
                         eprintln!("Backward update failed: {}", e);
-                    }
+                    }*/
                 }
             }
             }
