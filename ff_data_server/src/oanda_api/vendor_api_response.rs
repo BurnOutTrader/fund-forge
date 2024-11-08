@@ -221,7 +221,7 @@ impl VendorApiResponse for OandaClient {
                 false => Utc::now() + Duration::seconds(2),
             };
 
-            if last_bar_time >= to - TIME_NEGATIVE || from > to - TIME_NEGATIVE {
+            if last_bar_time >= to - TIME_NEGATIVE {
                 break;
             }
 
@@ -382,7 +382,7 @@ impl VendorApiResponse for OandaClient {
 
             progress_bar.inc(1);
 
-            if to > Utc::now() - Duration::seconds(5) {
+            if from >= Utc::now() - Duration::seconds(5) || to_time >= Utc::now() - Duration::seconds(5) {
                 break 'main_loop;
             }
         }
