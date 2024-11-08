@@ -265,10 +265,10 @@ impl VendorApiResponse for OandaClient {
             }
 
             // Add timeout to reading response
-            let content = match timeout(REQUEST_TIMEOUT, response.text()).await {
-                Ok(result) => result.unwrap(),
-                Err(_) => {
-                    progress_bar.set_message(format!("Response timeout for: {} from: {}, to: {}", symbol.name, last_bar_time, to_time));
+            let content = match response.text().await {
+                Ok(text) => text,
+                Err(e) => {
+                    progress_bar.set_message(format!("Error reading response body: {} for: {} from: {}, to: {}", e, symbol.name, last_bar_time, to_time));
                     consecutive_empty_responses += 1;
                     if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                         break 'main_loop;
@@ -283,46 +283,48 @@ impl VendorApiResponse for OandaClient {
             // Process candles
             let candles_vec: Vec<_> = candles.into_iter().collect();
 
-            for candle in candles_vec {
-                let is_closed = candle["complete"].as_bool().unwrap();
-                if !is_closed {
-                    break 'main_loop;
-                }
-
-                let bar: BaseDataEnum = match base_data_type {
-                    BaseDataType::QuoteBars => match oanda_quotebar_from_candle(candle, symbol.clone(), resolution.clone()) {
-                        Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
-                        Err(_) => {
-                            break 'main_loop;
-                        }
-                    },
-                    _ => {
+            if !candles_vec.is_empty() {
+                for candle in candles_vec {
+                    let is_closed = candle["complete"].as_bool().unwrap();
+                    if !is_closed {
                         break 'main_loop;
                     }
-                };
 
-                let new_bar_time = bar.time_utc();
-                if last_bar_time.day() != new_bar_time.day() && !new_data.is_empty() {
-                    let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
-                    match data_storage.save_data_bulk(data_vec.clone()).await {
-                        Ok(_) => {
-                            progress_bar.inc(1);
+                    let bar: BaseDataEnum = match base_data_type {
+                        BaseDataType::QuoteBars => match oanda_quotebar_from_candle(candle, symbol.clone(), resolution.clone()) {
+                            Ok(quotebar) => BaseDataEnum::QuoteBar(quotebar),
+                            Err(_) => break 'main_loop
                         },
-                        Err(e) => {
-                            progress_bar.set_message(format!("Error saving data batch: {}", e));
-                            break 'main_loop;
-                        }
-                    }
-                    new_data.clear();
-                }
+                        _ => break 'main_loop
+                    };
 
-                last_bar_time = bar.time_utc();
-                new_data.entry(new_bar_time).or_insert(bar);
-                // Reset counter when we get data
+                    let new_bar_time = bar.time_utc();
+                    if last_bar_time.day() != new_bar_time.day() && !new_data.is_empty() {
+                        let data_vec: Vec<BaseDataEnum> = new_data.values().cloned().collect();
+                        match data_storage.save_data_bulk(data_vec.clone()).await {
+                            Ok(_) => {
+                                progress_bar.inc(1);
+                            },
+                            Err(e) => {
+                                progress_bar.set_message(format!("Error saving data batch: {}", e));
+                                break 'main_loop;
+                            }
+                        }
+                        new_data.clear();
+                    }
+
+                    last_bar_time = bar.time_utc();
+                    new_data.entry(new_bar_time).or_insert(bar);
+                    // Reset counter when we get data
+                }
             }
             if start == last_bar_time {
                 last_bar_time = to_time;
-            } else {
+                if last_bar_time.day() != start.day() {
+                    progress_bar.inc(1);
+                }
+            }
+            else {
                 consecutive_empty_responses = 0;
             }
         }
