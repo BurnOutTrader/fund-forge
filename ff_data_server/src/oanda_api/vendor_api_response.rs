@@ -273,10 +273,6 @@ impl VendorApiResponse for OandaClient {
                     if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
                         break 'main_loop;
                     }
-                    if to_time != last_bar_time {
-                        progress_bar.inc(1);
-                    }
-                    last_bar_time = to_time;
                     continue;
                 }
             };
@@ -284,23 +280,6 @@ impl VendorApiResponse for OandaClient {
             let json: serde_json::Value = serde_json::from_str(&content).unwrap();
             let candles = json["candles"].as_array().unwrap();
 
-            if candles.is_empty() {
-                consecutive_empty_responses += 1;
-                if consecutive_empty_responses >= MAX_EMPTY_RESPONSES {
-                    break 'main_loop;
-                }
-
-                if from.date_naive() == Utc::now().date_naive() && consecutive_empty_responses == 2 {
-                    progress_bar.inc(1);
-                    break 'main_loop;
-                }
-
-                last_bar_time = to_time;
-                continue;
-            }
-
-            // Reset counter when we get data
-            consecutive_empty_responses = 0;
 
             // Process candles
             let candles_vec: Vec<_> = candles.into_iter().collect();
@@ -340,9 +319,12 @@ impl VendorApiResponse for OandaClient {
 
                 last_bar_time = bar.time_utc();
                 new_data.entry(new_bar_time).or_insert(bar);
+                // Reset counter when we get data
             }
             if start == last_bar_time {
                 last_bar_time = to_time;
+            } else {
+                consecutive_empty_responses = 0;
             }
         }
 
