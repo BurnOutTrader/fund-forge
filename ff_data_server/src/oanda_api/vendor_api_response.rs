@@ -215,11 +215,11 @@ impl VendorApiResponse for OandaClient {
 
         'main_loop: loop {
             let start = last_bar_time;
-            let to_time = (start + add_time).min(current_time + Duration::seconds(15));
+            let to_time = (start + add_time).min(current_time);
 
             let to = match from_back {
                 true => to,
-                false => Utc::now() + Duration::seconds(2),
+                false => Utc::now(),
             };
 
             if last_bar_time >= to - TIME_NEGATIVE {
