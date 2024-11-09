@@ -181,7 +181,7 @@ impl Ledger {
     }
 
     async fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) {
-        if let Some((_, mut existing_position)) = self.positions.remove(&position.symbol_code) {
+        if let Some(mut existing_position) = self.positions.get_mut(&position.symbol_code) {
             if existing_position.side != position.side {
                 let side = match existing_position.side {
                     PositionSide::Long => OrderSide::Buy,
@@ -217,10 +217,11 @@ impl Ledger {
                     Ok(_) => {}
                     Err(e) => eprintln!("Error sending position event: {}", e)
                 }
+
                 self.positions_closed
                     .entry(position.symbol_code.clone())
                     .or_insert_with(Vec::new)
-                    .push(existing_position);
+                    .push(existing_position.value().clone());
             }
         }
         self.positions.insert(position.symbol_code.clone(), position.clone());
