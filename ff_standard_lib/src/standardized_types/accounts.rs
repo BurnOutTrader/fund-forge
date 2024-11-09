@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::{Display, Formatter};
 use rkyv::{Archive, Deserialize as Deserialize_rkyv, Serialize as Serialize_rkyv};
 use rust_decimal::Decimal;
 use serde_derive::{Deserialize, Serialize};
@@ -104,5 +105,31 @@ impl Currency {
             "CNH" => Currency::CNH,
             _ => panic!("No currency matching string: {}", string),
         }
+    }
+}
+
+impl Display for Currency {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Currency::AUD => "AUD",
+            Currency::USD => "USD",
+            Currency::CAD => "CAD",
+            Currency::EUR => "EUR",
+            Currency::JPY => "JPY",
+            Currency::CHF => "CHF",
+            Currency::GBP => "GBP",
+            Currency::SEK => "SEK",
+            Currency::NOK => "NOK",
+            Currency::TRY => "TRY",
+            Currency::PLN => "PLN",
+            Currency::HUF => "HUF",
+            Currency::CZK => "CZK",
+            Currency::MXN => "MXN",
+            Currency::ZAR => "ZAR",
+            Currency::HKD => "HKD",
+            Currency::SGD => "SGD",
+            Currency::NZD => "NZD",
+            Currency::CNH => "CNH",
+        })
     }
 }

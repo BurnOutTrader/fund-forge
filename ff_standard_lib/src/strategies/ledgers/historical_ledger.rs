@@ -7,6 +7,7 @@ use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
 use crate::standardized_types::position::{Position, PositionUpdateEvent};
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
+use crate::strategies::client_features::other_requests::get_exchange_rate;
 
 impl Ledger {
     pub(crate) async fn release_margin_used(&self, symbol_name: &SymbolName) {
@@ -75,7 +76,19 @@ impl Ledger {
             {
                 self.release_margin_used(&symbol_name).await;
             }
-            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, time, tag).await;
+            let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
+            let exchange_rate = if self.currency != info.pnl_currency {
+                match get_exchange_rate(self.currency, info.pnl_currency, time).await {
+                    Ok(rate) => {
+                        self.rates.insert(info.pnl_currency, rate);
+                        rate
+                    },
+                    Err(_e) => self.get_exchange_multiplier(info.pnl_currency)
+                }
+            } else {
+                dec!(1.0)
+            };
+            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, exchange_rate, time, tag).await;
             let mut cash_available = self.cash_available.lock().await;
             let mut total_booked_pnl = self.total_booked_pnl.lock().await;
             match &event {
@@ -133,7 +146,19 @@ impl Ledger {
 
             if is_reducing {
                 remaining_quantity -= existing_position.quantity_open;
-                let event = existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone()).await;
+                let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
+                let exchange_rate = if self.currency != info.pnl_currency {
+                    match get_exchange_rate(self.currency, info.pnl_currency, time).await {
+                        Ok(rate) => {
+                            self.rates.insert(info.pnl_currency, rate);
+                            rate
+                        },
+                        Err(_e) => self.get_exchange_multiplier(info.pnl_currency)
+                    }
+                } else {
+                    dec!(1.0)
+                };
+                let event = existing_position.reduce_position_size(market_fill_price, quantity, exchange_rate, time, tag.clone()).await;
 
                 self.release_margin_used(&symbol_name).await;
 
@@ -245,6 +270,18 @@ impl Ledger {
             };
 
             let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
+            let exchange_rate = if self.currency != info.pnl_currency {
+                match get_exchange_rate(self.currency, info.pnl_currency, time).await {
+                    Ok(rate) => {
+                        self.rates.insert(info.pnl_currency, rate);
+                        rate
+                    },
+                    Err(_e) => self.get_exchange_multiplier(info.pnl_currency)
+                }
+            } else {
+                dec!(1.0)
+            };
+
             if symbol_name != symbol_code && !self.symbol_code_map.contains_key(&symbol_name) {
                 self.symbol_code_map.insert(symbol_name.clone(), vec![]);
             };
@@ -255,7 +292,7 @@ impl Ledger {
                     }
                 }
             }
-            let exchange_rate_multiplier= self.get_exchange_multiplier(info.pnl_currency, self.currency);
+
             let id = self.generate_id(position_side);
             // Create a new position
             let position = Position::new(
@@ -267,7 +304,7 @@ impl Ledger {
                 market_fill_price,
                 id.clone(),
                 info.clone(),
-                exchange_rate_multiplier,
+                exchange_rate,
                 tag.clone(),
                 time,
             );

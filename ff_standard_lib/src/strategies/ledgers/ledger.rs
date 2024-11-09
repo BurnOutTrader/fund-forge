@@ -23,6 +23,7 @@ use crate::standardized_types::position::{Position, PositionId, PositionUpdateEv
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
+use crate::strategies::client_features::other_requests::get_exchange_rate;
 use crate::strategies::strategy_events::StrategyEvent;
 
 /*
@@ -56,7 +57,7 @@ pub struct Ledger {
     pub is_simulating_pnl: bool,
     pub(crate) strategy_sender: Sender<StrategyEvent>,
     pub leverage: Decimal,
-    pub rates: Arc<DashMap<(Currency, Currency), Decimal>>,
+    pub rates: Arc<DashMap<Currency, Decimal>>,
     //todo, add daily max loss, max order size etc to ledger
 }
 
@@ -110,24 +111,24 @@ impl Ledger {
         ledger
     }
 
-    pub fn update_rates(&self, rates: &HashMap<(Currency, Currency), Decimal>) {
+    pub fn update_rates(&self, rates: &HashMap<Currency, Decimal>) {
         for (c1, c2) in rates.iter() {
             self.rates.insert(c1.clone(), c2.clone());
         }
     }
 
-    pub fn get_exchange_multiplier(&self, from_currency: Currency, to_currency: Currency) -> Decimal {
-        if from_currency == to_currency {
+    pub fn get_exchange_multiplier(&self, to_currency: Currency) -> Decimal {
+        if self.currency == to_currency {
             return dec!(1.0);
         }
 
         // Try direct rate
-        if let Some(rate) = self.rates.get(&(from_currency, to_currency)) {
+        if let Some(rate) = self.rates.get(&to_currency) {
             return *rate;
         }
 
         // Try inverse rate
-        if let Some(rate) = self.rates.get(&(to_currency, from_currency)) {
+        if let Some(rate) = self.rates.get(&to_currency) {
             return dec!(1.0) / *rate;
         }
 
@@ -160,8 +161,8 @@ impl Ledger {
                             }
                         }
                     }
-                    LedgerMessage::ProcessOrder { order, quantity, time } => {
-                        ledger.process_synchronized_orders(order, quantity, time).await;
+                    LedgerMessage::ProcessOrder { .. } => {
+                        //ledger.process_synchronized_orders(order, quantity, time).await; //todo, doesnt work
                     }
                     LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag } => {
                         let updates = ledger.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await;
@@ -235,52 +236,6 @@ impl Ledger {
             }
         } else {
             None
-        }
-    }
-
-    async fn process_synchronized_orders(&self, order: Order, quantity: Decimal, time: DateTime<Utc>) {
-        let symbol = match order.symbol_code {
-            None => order.symbol_name,
-            Some(code) => code
-        };
-
-    /*    if let Some(last_update) = self.last_update.get(&symbol) {
-            if last_update.value() > &time {
-                return;
-            }
-        }*/
-        self.last_update.insert(symbol.clone(), time);
-
-        if let Some(mut position) = self.positions.get_mut(&symbol) {
-            let is_reducing = (position.side == PositionSide::Long && order.side == OrderSide::Sell)
-                || (position.side == PositionSide::Short && order.side == OrderSide::Buy);
-
-            if !is_reducing {
-                return;
-            }
-
-            let market_fill_price = match order.average_fill_price {
-                None => return,
-                Some(price) => price
-            };
-
-            position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone()).await;
-        } else if let Some(mut position_vec) = self.positions_closed.get_mut(&symbol) {
-            if let Some(last_position) = position_vec.last_mut() {
-                let is_reducing = (last_position.side == PositionSide::Long && order.side == OrderSide::Sell)
-                    || (last_position.side == PositionSide::Short && order.side == OrderSide::Buy);
-
-                if !is_reducing {
-                    return;
-                }
-
-                let market_fill_price = match order.average_fill_price {
-                    None => return,
-                    Some(price) => price
-                };
-
-                last_position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone()).await;
-            }
         }
     }
 
@@ -580,7 +535,19 @@ impl Ledger {
 
             if is_reducing {
                 remaining_quantity -= existing_position.quantity_open;
-                let event= existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone()).await;
+                let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
+                let exchange_rate = if self.currency != info.pnl_currency {
+                    match get_exchange_rate(self.currency, info.pnl_currency, time).await {
+                        Ok(rate) => {
+                            self.rates.insert(info.pnl_currency, rate);
+                            rate
+                        },
+                        Err(_e) => self.get_exchange_multiplier(info.pnl_currency)
+                    }
+                } else {
+                    dec!(1.0)
+                };
+                let event= existing_position.reduce_position_size(market_fill_price, quantity, exchange_rate, time, tag.clone()).await;
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         self.positions.insert(symbol_code.clone(), existing_position);
@@ -644,7 +611,18 @@ impl Ledger {
                     }
                 }
             }
-            let exchange_rate_multiplier= self.get_exchange_multiplier(info.pnl_currency, self.currency);
+            let exchange_rate = if self.currency != info.pnl_currency {
+                match get_exchange_rate(self.currency, info.pnl_currency, time).await {
+                    Ok(rate) => {
+                        self.rates.insert(info.pnl_currency, rate);
+                        rate
+                    },
+                    Err(_e) => self.get_exchange_multiplier(info.pnl_currency)
+                }
+            } else {
+                dec!(1.0)
+            };
+
             let id = self.generate_id(position_side);
             // Create a new position
             let position = Position::new(
@@ -656,7 +634,7 @@ impl Ledger {
                 market_fill_price,
                 id.clone(),
                 info.clone(),
-                exchange_rate_multiplier,
+                exchange_rate,
                 tag.clone(),
                 time,
             );

@@ -10,11 +10,11 @@ use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::gui_types::settings::Color;
 use crate::helpers::decimal_calculators::round_to_tick_size;
+use crate::product_maps::rithmic::maps::extract_symbol_from_contract;
 use crate::strategies::indicators::indicators_trait::{IndicatorName, Indicators};
 use crate::strategies::indicators::indicator_values::{IndicatorPlot, IndicatorValues};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::enums::MarketType;
-use crate::standardized_types::futures_products::extract_symbol_from_contract;
 
 #[derive(Clone, Debug)]
 /// The Atr indicator only updates on closed data

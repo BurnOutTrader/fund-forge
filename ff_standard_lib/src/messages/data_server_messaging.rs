@@ -55,12 +55,6 @@ pub enum StreamRequest {
 pub enum DataServerRequest {
     Register(StrategyMode),
 
-    Rates{
-        callback_id: u64,
-        currency: Currency,
-        time: String
-    },
-
     HistoricalBaseDataRange {
         callback_id: u64,
         subscriptions: Vec<DataSubscription>,
@@ -143,7 +137,13 @@ pub enum DataServerRequest {
         brokerage: Brokerage,
         symbol_name: SymbolName
     },
-
+    ExchangeRate {
+        callback_id: u64,
+        from_currency: Currency,
+        to_currency: Currency,
+        date_time_string: String,
+        data_vendor: DataVendor
+    },
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage, time: Option<String>},
     RegisterStreamer{port: u16, secs: u64, subsec: u32},
@@ -184,7 +184,7 @@ impl DataServerRequest {
             DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
             DataServerRequest::WarmUpResolutions { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::Rates{ callback_id, .. } => {*callback_id = id}
+            DataServerRequest::ExchangeRate { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -230,6 +230,11 @@ DataServerResponse {
         callback_id: u64,
         subscription_resolutions_types: Vec<SubscriptionResolutionType>,
         market_type: MarketType
+    },
+
+    ExchangeRate {
+        callback_id: u64,
+        rate: Decimal,
     },
 
     /// Provides the client with an error message
@@ -370,10 +375,10 @@ impl DataServerResponse {
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
-            //DataServerResponse::Rates { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
             DataServerResponse::LivePositionUpdates { .. } => None,
-            DataServerResponse::AsyncError { .. } => None
+            DataServerResponse::AsyncError { .. } => None,
+            DataServerResponse::ExchangeRate { callback_id, .. } => Some(callback_id.clone()),
         }
     }
 }

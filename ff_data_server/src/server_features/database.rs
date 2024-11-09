@@ -17,6 +17,8 @@ use futures::future;
 use indicatif::{MultiProgress, ProgressBar};
 use lazy_static::lazy_static;
 use memmap2::{Mmap};
+use rust_decimal::Decimal;
+use rust_decimal_macros::dec;
 use serde::{Deserialize, Deserializer};
 use tokio::sync::{OnceCell, Semaphore};
 use tokio::task;
@@ -33,6 +35,7 @@ use ff_standard_lib::standardized_types::time_slices::TimeSlice;
 use crate::oanda_api::api_client::{OANDA_CLIENT, OANDA_IS_CONNECTED};
 use crate::rithmic_api::api_client::{get_rithmic_market_data_system, RITHMIC_CLIENTS, RITHMIC_DATA_IS_CONNECTED};
 use ff_standard_lib::product_maps::rithmic::maps::get_exchange_by_symbol_name;
+use ff_standard_lib::standardized_types::accounts::Currency;
 use crate::server_features::server_side_datavendor::VendorApiResponse;
 use crate::{get_data_folder, subscribe_server_shutdown, ServerLaunchOptions};
 
@@ -73,6 +76,66 @@ impl HybridStorage {
         storage.start_cache_management();
 
         storage
+    }
+
+    #[allow(unused)]
+    pub async fn get_exchange_rate(&self, from_currency: Currency, to_currency: Currency, date_time: DateTime<Utc>, data_vendor: DataVendor) -> Result<Decimal, FundForgeError> {
+        let (resolutions, market_type, base_data_type) = match data_vendor {
+            DataVendor::Bitget => (vec![Resolution::Minutes(1), Resolution::Hours(1)], MarketType::Crypto, BaseDataType::Candles),
+            DataVendor::Oanda => (vec![Resolution::Seconds(5), Resolution::Minutes(1), Resolution::Hours(1)], MarketType::Forex, BaseDataType::QuoteBars),
+            _ => return Err(FundForgeError::ServerErrorDebug(format!("Data Vendor not supported for currency conversion: {}", data_vendor)))
+        };
+
+        // Try direct currency pair
+        let symbol_name = format!("{}-{}", from_currency.to_string(), to_currency.to_string());
+        for resolution in &resolutions {
+            match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, &base_data_type, date_time).await {
+                Ok(Some(data)) => {
+                    match data {
+                        BaseDataEnum::Candle(candle) => {
+                            return Ok(candle.close);
+                        },
+                        BaseDataEnum::QuoteBar(quote_bar) => {
+                            return Ok((quote_bar.ask_close + quote_bar.bid_close) / dec!(2));
+                        },
+                        _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
+                    }
+                },
+                Ok(None) => continue,
+                Err(e) => return Err(e),
+            }
+        }
+
+        // Try inverse currency pair
+        let inverse_symbol_name = format!("{}-{}", to_currency.to_string(), from_currency.to_string());
+        for resolution in resolutions {
+            match self.get_data_point_asof(&Symbol::new(inverse_symbol_name.clone(), data_vendor, market_type), &resolution, &base_data_type, date_time).await {
+                Ok(Some(data)) => {
+                    match data {
+                        BaseDataEnum::Candle(candle) => {
+                            return Ok(dec!(1) / candle.close);
+                        },
+                        BaseDataEnum::QuoteBar(quote_bar) => {
+                            let mid_price = (quote_bar.ask_close + quote_bar.bid_close) / dec!(2);
+                            return Ok(dec!(1) / mid_price);
+                        },
+                        _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
+                    }
+                },
+                Ok(None) => continue,
+                Err(e) => return Err(e),
+            }
+        }
+
+        // If we get here, we couldn't find either direct or inverse rates
+        Err(FundForgeError::ServerErrorDebug(format!(
+            "Could not find exchange rate for {}-{} or {}-{} at {}",
+            from_currency.to_string(),
+            to_currency.to_string(),
+            to_currency.to_string(),
+            from_currency.to_string(),
+            date_time
+        )))
     }
 
     pub fn run_update_schedule(self: Arc<Self>) {
@@ -893,6 +956,75 @@ impl HybridStorage {
 
         Ok(combined_data)
     }
+
+    pub async fn get_data_point_asof(
+        &self,
+        symbol: &Symbol,
+        resolution: &Resolution,
+        data_type: &BaseDataType,
+        target_time: DateTime<Utc>,
+    ) -> Result<Option<BaseDataEnum>, FundForgeError> {
+        // Get the file path for the target date
+        let file_path = self.get_file_path(symbol, resolution, data_type, &target_time, false);
+
+        // If the file exists for the target date, check it first
+        if file_path.exists() {
+            if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
+                if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
+                    // Find the closest point before or at target_time
+                    let result = day_data.into_iter()
+                        .filter(|d| d.time_closed_utc() <= target_time)
+                        .max_by_key(|d| d.time_closed_utc());
+
+                    if let Some(point) = result {
+                        return Ok(Some(point));
+                    }
+                }
+            }
+        }
+
+        let mut current_date = target_time.date_naive();
+
+        while let Some(prev_date) = current_date.pred_opt() {
+            current_date = prev_date;
+            let file_path = self.get_file_path(
+                symbol,
+                resolution,
+                data_type,
+                &DateTime::<Utc>::from_naive_utc_and_offset(
+                    current_date.and_hms_opt(0, 0, 0).unwrap(),
+                    Utc,
+                ),
+                false,
+            );
+
+            if !file_path.exists() {
+                // Check if we've moved to a different month/year directory
+                let month_path = file_path.parent().unwrap();
+                let year_path = month_path.parent().unwrap();
+
+                // If neither the month nor year directory exists, break to avoid unnecessary checks
+                if !month_path.exists() && !year_path.exists() {
+                    break;
+                }
+                continue;
+            }
+
+            if let Ok(mmap) = self.get_or_create_mmap(&file_path).await {
+                if let Ok(day_data) = BaseDataEnum::from_array_bytes(&mmap[..].to_vec()) {
+                    let result = day_data.into_iter()
+                        .filter(|d| d.time_closed_utc() <= target_time)
+                        .max_by_key(|d| d.time_closed_utc());
+
+                    if let Some(point) = result {
+                        return Ok(Some(point));
+                    }
+                }
+            }
+        }
+
+        Ok(None)
+    }
 }
 
 #[derive(Deserialize)]
@@ -1264,5 +1396,131 @@ mod tests {
             base_time,
             "Earliest time should match the first data point across multiple days"
         );
+    }
+
+    #[tokio::test]
+    async fn test_get_data_point_asof() {
+        let (storage, _temp) = setup_test_storage();
+        let base_time = Utc::now();
+
+        // Create test data with known timestamps
+        let test_data: Vec<BaseDataEnum> = vec![
+            // T+0
+            BaseDataEnum::Quote(Quote {
+                symbol: Symbol::new(
+                    "EUR-USD".to_string(),
+                    DataVendor::Test,
+                    MarketType::Forex
+                ),
+                ask: dec!(1.2345),
+                bid: dec!(1.2343),
+                ask_volume: dec!(100000.0),
+                bid_volume: dec!(150000.0),
+                time: base_time.to_string(),
+            }),
+            // T+2
+            BaseDataEnum::Quote(Quote {
+                symbol: Symbol::new(
+                    "EUR-USD".to_string(),
+                    DataVendor::Test,
+                    MarketType::Forex
+                ),
+                ask: dec!(1.2346),
+                bid: dec!(1.2344),
+                ask_volume: dec!(100000.0),
+                bid_volume: dec!(150000.0),
+                time: (base_time + chrono::Duration::seconds(2)).to_string(),
+            }),
+            // T+5
+            BaseDataEnum::Quote(Quote {
+                symbol: Symbol::new(
+                    "EUR-USD".to_string(),
+                    DataVendor::Test,
+                    MarketType::Forex
+                ),
+                ask: dec!(1.2347),
+                bid: dec!(1.2345),
+                ask_volume: dec!(100000.0),
+                bid_volume: dec!(150000.0),
+                time: (base_time + chrono::Duration::seconds(5)).to_string(),
+            }),
+        ];
+
+        // Save the test data
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
+
+        // Test cases
+        let test_cases = vec![
+            // Exact match at T+0
+            (base_time, Some(&test_data[0])),
+            // Between T+0 and T+2 should return T+0
+            (base_time + chrono::Duration::seconds(1), Some(&test_data[0])),
+            // Exact match at T+2
+            (base_time + chrono::Duration::seconds(2), Some(&test_data[1])),
+            // Between T+2 and T+5 should return T+2
+            (base_time + chrono::Duration::seconds(3), Some(&test_data[1])),
+            // Exact match at T+5
+            (base_time + chrono::Duration::seconds(5), Some(&test_data[2])),
+            // After T+5 should return T+5
+            (base_time + chrono::Duration::seconds(6), Some(&test_data[2])),
+            // Before all data should return None
+            (base_time - chrono::Duration::seconds(1), None),
+        ];
+
+        for (query_time, expected_result) in test_cases {
+            let result = storage.get_data_point_asof(
+                &test_data[0].symbol().clone(),
+                &Resolution::Instant,
+                &BaseDataType::Quotes,
+                query_time
+            ).await.unwrap();
+
+            match (result, expected_result) {
+                (Some(actual), Some(expected)) => assert_eq!(actual, *expected),
+                (None, None) => (),
+                _ => panic!("Result mismatch for query time {:?}", query_time),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_get_data_point_asof_across_days() {
+        let (storage, _temp) = setup_test_storage();
+        let day1 = Utc.with_ymd_and_hms(2024, 1, 1, 12, 0, 0).unwrap();
+        let day2 = Utc.with_ymd_and_hms(2024, 1, 2, 12, 0, 0).unwrap();
+
+        // Create test data across two days
+        let test_data = vec![
+            BaseDataEnum::Quote(Quote {
+                symbol: Symbol::new("EUR-USD".to_string(), DataVendor::Test, MarketType::Forex),
+                ask: dec!(1.2345),
+                bid: dec!(1.2343),
+                ask_volume: dec!(100000.0),
+                bid_volume: dec!(150000.0),
+                time: day1.to_string(),
+            }),
+            BaseDataEnum::Quote(Quote {
+                symbol: Symbol::new("EUR-USD".to_string(), DataVendor::Test, MarketType::Forex),
+                ask: dec!(1.2346),
+                bid: dec!(1.2344),
+                ask_volume: dec!(100000.0),
+                bid_volume: dec!(150000.0),
+                time: day2.to_string(),
+            }),
+        ];
+
+        storage.save_data_bulk(test_data.clone()).await.unwrap();
+
+        // Query for a time between the two days
+        let query_time = Utc.with_ymd_and_hms(2024, 1, 2, 1, 0, 0).unwrap();
+        let result = storage.get_data_point_asof(
+            &test_data[0].symbol().clone(),
+            &Resolution::Instant,
+            &BaseDataType::Quotes,
+            query_time
+        ).await.unwrap();
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), test_data[0]);
     }
 }
