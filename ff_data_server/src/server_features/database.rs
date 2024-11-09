@@ -107,17 +107,17 @@ impl HybridStorage {
         }
 
         // Try inverse currency pair
-        let inverse_symbol_name = format!("{}-{}", to_currency.to_string(), from_currency.to_string());
-        for resolution in resolutions {
-            match self.get_data_point_asof(&Symbol::new(inverse_symbol_name.clone(), data_vendor, market_type), &resolution, &base_data_type, date_time).await {
+        let symbol_name = format!("{}-{}", from_currency.to_string(), to_currency.to_string());
+        for resolution in &resolutions {
+            match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, &base_data_type, date_time).await {
                 Ok(Some(data)) => {
                     match data {
                         BaseDataEnum::Candle(candle) => {
-                            return Ok(dec!(1) / candle.close);
+                            return Ok(dec!(1) / candle.close);  // Take reciprocal
                         },
                         BaseDataEnum::QuoteBar(quote_bar) => {
                             let mid_price = (quote_bar.ask_close + quote_bar.bid_close) / dec!(2);
-                            return Ok(dec!(1) / mid_price);
+                            return Ok(dec!(1) / mid_price);  // Take reciprocal
                         },
                         _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
                     }
