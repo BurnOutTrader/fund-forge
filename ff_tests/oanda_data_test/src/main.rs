@@ -33,11 +33,11 @@ async fn main() {
     );
 
     let strategy = FundForgeStrategy::initialize(
-        StrategyMode::Live, // Backtest, Live, LivePaper
+        StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
-        Currency::USD,
+        Currency::JPY,
         NaiveDate::from_ymd_opt(2024, 10, 8).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
-        NaiveDate::from_ymd_opt(2024, 10, 10).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
+        NaiveDate::from_ymd_opt(2024, 10, 9).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
         Duration::hours(1), // the warmup duration, the duration of historical data we will pump through the strategy to warm up indicators etc before the strategy starts executing.
         vec![
@@ -115,7 +115,7 @@ pub async fn on_data_received(
                                     if is_flat
                                         && qb.bid_close > qb.bid_open
                                     {
-                                        let _entry_order_id = strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(1), String::from("Enter Long")).await;
+                                        let _entry_order_id = strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(1000), String::from("Enter Long")).await;
                                         println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                         last_side = LastSide::Long;
                                     }
@@ -127,12 +127,12 @@ pub async fn on_data_received(
                                     println!("Open pnl: {}, Is_short: {}, is_long:{} ", long_pnl, is_short, is_long);
 
                                     // LONG SL+TP
-                                    if is_long && long_pnl > dec!(10.0) {
+                                    if is_long && long_pnl > dec!(100.0) {
                                         let position_size = strategy.position_size(&account_1, &qb.symbol.name);
                                         let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Profit")).await;
                                         println!("Strategy: Exit Long Take Profit, Time {}", strategy.time_local());  // Fixed message
                                     } else if is_long
-                                        && long_pnl <= dec!(-10.0)
+                                        && long_pnl <= dec!(-100.0)
                                     {
                                         let position_size: Decimal = strategy.position_size(&account_1, &qb.symbol.name);
                                         let _exit_order_id = strategy.exit_long(&qb.symbol.name, None, &account_1, None, position_size, String::from("Exit Long Take Loss")).await;

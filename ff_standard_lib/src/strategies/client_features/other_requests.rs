@@ -15,7 +15,13 @@ pub async fn get_exchange_rate(from_currency: Currency, to_currency: Currency, d
     let currency_pair_string = format!("{}-{}", from_currency.to_string(), to_currency.to_string());
     let data_vendor = match OANDA_SYMBOL_INFO.contains_key(&currency_pair_string) {
         true => DataVendor::Oanda,
-        false => DataVendor::Bitget
+        false => {
+            let currency_pair_string = format!("{}-{}", to_currency.to_string(), from_currency.to_string());
+            match OANDA_SYMBOL_INFO.contains_key(&currency_pair_string) {
+                true => DataVendor::Oanda,
+                false => DataVendor::Bitget
+            }
+        }
     };
     let request = DataServerRequest::ExchangeRate {
         callback_id: 0,
