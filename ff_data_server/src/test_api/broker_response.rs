@@ -69,12 +69,14 @@ impl BrokerApiResponse for TestApiClient {
             _ => (Currency::USD, dec!(0.1), dec!(0.00001))         // Default values
         };
 
+        let base_currency = symbol_name.split("-").next().unwrap().to_string();
         let symbol_info = SymbolInfo {
             symbol_name,
             pnl_currency,
             value_per_tick,
             tick_size,
             decimal_accuracy: 5,
+            base_currency: Some(Currency::from_str(&base_currency)),
         };
 
         DataServerResponse::SymbolInfo {

@@ -17,7 +17,7 @@ use crate::strategies::client_features::request_handler::{send_request, Strategy
 
 pub(crate) const TIME_OUT: Duration = Duration::from_secs(15);
 impl Brokerage {
-    pub async fn intraday_margin_required(&self, symbol_name: &SymbolName, quantity: Volume, price: Price, account_currency: Currency, conversion_rate: Decimal) -> Result<Option<Decimal>, FundForgeError> {
+    pub async fn intraday_margin_required(&self, symbol_name: &SymbolName, quantity: Volume, price: Price, account_currency: Currency, base_currency: Option<Currency>, conversion_rate: Decimal) -> Result<Option<Decimal>, FundForgeError> {
         match self {
             // Test broker uses simple leverage
             Brokerage::Test => {
@@ -36,20 +36,21 @@ impl Brokerage {
             Brokerage::Oanda => {
                 match SYMBOL_DIVISORS.get(symbol_name.as_str()) {
                     Some(divisor) => {
-                        let base_value = quantity * price; // Value in quote currency
+                        // Calculate base value first
+                        let value = quantity * price;  // Value in quote currency
 
-                        // If account currency is in the symbol pair
-                        let margin_value = if symbol_name.contains(&account_currency.to_string()) {
-                            if symbol_name.starts_with(&account_currency.to_string()) {
-                                // Account currency is base currency (e.g., AUD account trading AUD/JPY)
-                                quantity  // Use quantity directly since it's already in account currency
+                        // Convert to account currency based on the currency relationships
+                        let margin_value = if let Some(base_curr) = base_currency {
+                            if account_currency == base_curr {
+                                // e.g., USD account trading USD/JPY - quantity is already in account currency
+                                quantity
                             } else {
-                                // Account currency is quote currency (e.g., JPY account trading AUD/JPY)
-                                base_value
+                                // For all other cases, convert using the provided rate
+                                value * conversion_rate
                             }
                         } else {
-                            // Need to convert to account currency (e.g., USD account trading EUR/JPY)
-                            base_value * conversion_rate
+                            // Non-currency pairs (indices, commodities, etc)
+                            value * conversion_rate
                         };
 
                         Ok(Some(margin_value / divisor))

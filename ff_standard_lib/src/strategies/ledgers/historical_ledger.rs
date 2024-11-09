@@ -28,21 +28,35 @@ impl Ledger {
         }
     }
 
-    pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, position_currency: Currency) -> Result<(), FundForgeError> {
+    pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, base_currency: Option<Currency>, position_currency: Currency) -> Result<(), FundForgeError> {
         let rate = if position_currency == self.currency {
             dec!(1)
         } else {
+            // We want rate from position_currency to account_currency
             match self.rates.get(&position_currency) {
                 Some(rate) => rate.value().clone(),
                 None => {
+                    // Get position_currency to account_currency rate
                     let rate = get_exchange_rate(position_currency, self.currency, time, side).await.unwrap_or_else(|_e| dec!(1));
                     self.rates.insert(position_currency, rate);
                     rate
                 }
             }
         };
-       // eprintln!("Account Currency: {}, Position Currency: {}, Rate: {}", self.currency, position_currency, rate);
-        let margin = self.account.brokerage.intraday_margin_required(symbol_name, quantity, market_price, self.currency, rate).await?
+
+        eprintln!("Account Currency: {}, Position Currency: {}, Base Currency: {:?}, Rate: {}",
+                  self.currency, position_currency, base_currency, rate);
+
+        // Now in intraday_margin_required:
+        // If account_currency == base_currency (like USD account trading USD/JPY):
+        //   - quantity is already in account currency
+        // Else:
+        //   - value (quantity * price) is in position_currency
+        //   - multiply by rate to convert to account currency
+        let margin = self.account.brokerage.intraday_margin_required(
+            symbol_name, quantity, market_price,
+            self.currency, base_currency, rate
+        ).await?
             .unwrap_or_else(|| quantity * market_price * rate);
 
         // Check available cash first
@@ -180,7 +194,7 @@ impl Ledger {
 
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
-                        self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price, time, side, existing_position.symbol_info.pnl_currency).await.unwrap();
+                        self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await.unwrap();
                         self.positions.insert(symbol_code.clone(), existing_position);
 
                         self.symbol_closed_pnl
@@ -230,7 +244,7 @@ impl Ledger {
 
                 updates.push(event);
             } else {
-                match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, existing_position.symbol_info.pnl_currency).await {
+                match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await {
                     Ok(_) => {}
                     Err(e) => {
                         //todo this now gets added directly to buffer
@@ -262,7 +276,7 @@ impl Ledger {
         }
         if remaining_quantity > dec!(0.0) {
             let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
-            match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, info.pnl_currency).await {
+            match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, info.base_currency, info.pnl_currency).await {
                 Ok(_) => {}
                 Err(e) => {
                     let event = OrderUpdateEvent::OrderRejected {
