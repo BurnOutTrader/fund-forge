@@ -12,7 +12,7 @@ use rust_decimal_macros::dec;
 use tokio::sync::mpsc::{Receiver, Sender};
 use uuid::Uuid;
 use crate::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
-use crate::product_maps::rithmic::maps::{find_base_symbol, get_symbol_info};
+use crate::product_maps::rithmic::maps::{find_base_symbol, get_rithmic_symbol_info};
 use crate::standardized_types::accounts::{Account, AccountInfo, Currency};
 use crate::standardized_types::base_data::traits::BaseData;
 use crate::standardized_types::broker_enum::Brokerage;
@@ -56,7 +56,6 @@ pub struct Ledger {
     pub mode: StrategyMode,
     pub is_simulating_pnl: bool,
     pub(crate) strategy_sender: Sender<StrategyEvent>,
-    pub leverage: Decimal,
     pub rates: Arc<DashMap<Currency, Decimal>>,
     //todo, add daily max loss, max order size etc to ledger
 }
@@ -105,7 +104,6 @@ impl Ledger {
             mode,
             is_simulating_pnl,
             strategy_sender,
-            leverage: Decimal::from(account_info.leverage),
             rates: Arc::new(Default::default()),
         };
         ledger
@@ -319,8 +317,8 @@ impl Ledger {
             StrategyMode::Backtest => {
                 match brokerage {
                     Brokerage::Rithmic(_) => {
-                        if let Some(symbol) = find_base_symbol(symbol_name.clone()) {
-                            return match get_symbol_info(&symbol) {
+                        if let Some(symbol) = find_base_symbol(symbol_name) {
+                            return match get_rithmic_symbol_info(&symbol) {
                                 Ok(info) => info,
                                 Err(_) => panic!("Ledgers: Error getting symbol info: {}, {}", brokerage, symbol_name),
                             };

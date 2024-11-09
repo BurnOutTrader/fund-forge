@@ -15,7 +15,7 @@ use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbo
 use ff_standard_lib::StreamName;
 use tokio::sync::{broadcast, oneshot};
 use tokio::time::timeout;
-use ff_standard_lib::product_maps::rithmic::maps::{get_available_symbol_names, get_exchange_by_symbol_name, get_symbol_info};
+use ff_standard_lib::product_maps::rithmic::maps::{get_available_rithmic_symbol_names, get_exchange_by_symbol_name, get_rithmic_symbol_info};
 use ff_standard_lib::standardized_types::base_data::base_data_enum::BaseDataEnum;
 use crate::rithmic_api::api_client::{RithmicBrokerageClient, RITHMIC_DATA_IS_CONNECTED};
 use crate::server_features::database::DATA_STORAGE;
@@ -25,7 +25,7 @@ use crate::stream_tasks::{subscribe_stream, unsubscribe_stream};
 #[async_trait]
 impl VendorApiResponse for RithmicBrokerageClient {
     async fn symbols_response(&self, _mode: StrategyMode, _stream_name: StreamName, market_type: MarketType, _time: Option<DateTime<Utc>>, callback_id: u64) -> DataServerResponse{
-        let names = get_available_symbol_names();
+        let names = get_available_rithmic_symbol_names();
         let mut symbols = Vec::new();
         for name in names {
             let exchange = match get_exchange_by_symbol_name(name) {
@@ -97,7 +97,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
     }
 
     async fn decimal_accuracy_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        let info = match get_symbol_info(&symbol_name) {
+        let info = match get_rithmic_symbol_info(&symbol_name) {
             Ok(info) => {
                 info
             }
@@ -112,7 +112,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
     }
 
     async fn tick_size_response(&self, _mode: StrategyMode, _stream_name: StreamName, symbol_name: SymbolName, callback_id: u64) -> DataServerResponse {
-        let info = match get_symbol_info(&symbol_name) {
+        let info = match get_rithmic_symbol_info(&symbol_name) {
             Ok(info) => {
                 info
             }
@@ -138,7 +138,7 @@ impl VendorApiResponse for RithmicBrokerageClient {
             _ => todo!()
         };
 
-        let symbols = get_available_symbol_names();
+        let symbols = get_available_rithmic_symbol_names();
         if !symbols.contains(&subscription.symbol.name) {
             return DataServerResponse::SubscribeResponse{ success: false, subscription: subscription.clone(), reason: Some(format!("This subscription is not available with {}: {}", subscription.symbol.data_vendor, subscription))}
         }

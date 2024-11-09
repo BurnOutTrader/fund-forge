@@ -22,7 +22,7 @@ use ff_standard_lib::standardized_types::subscriptions::{SymbolCode};
 use crate::rithmic_api::api_client::RithmicBrokerageClient;
 use crate::rithmic_api::plant_handlers::create_datetime;
 use crate::rithmic_api::plant_handlers::handler_loop::send_updates;
-use ff_standard_lib::product_maps::rithmic::maps::get_symbol_info;
+use ff_standard_lib::product_maps::rithmic::maps::get_rithmic_symbol_info;
 
 lazy_static! {
     pub static ref POSITIONS: DashMap<SymbolCode, Position> = DashMap::new();
@@ -195,7 +195,7 @@ pub async fn match_pnl_plant_id(
                             None => return
                         };
 
-                        let symbol_info = match get_symbol_info(symbol_name) {
+                        let symbol_info = match get_rithmic_symbol_info(symbol_name) {
                             Err(e) => return,
                             Ok(info) => info
                         };
