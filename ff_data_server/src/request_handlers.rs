@@ -17,7 +17,7 @@ use tokio::sync::mpsc::{Receiver, Sender};
 use tokio::time::timeout;
 use tokio_rustls::server::TlsStream;
 use crate::server_features::database::DATA_STORAGE;
-use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, intraday_margin_required_response, overnight_margin_required_response, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders, cancel_order, flatten_all_for, update_order, cancel_orders_on_account, exchange_rate_response};
+use crate::server_side_brokerage::{account_info_response, accounts_response, commission_info_response, live_market_order, symbol_info_response, symbol_names_response, live_enter_long, live_exit_long, live_exit_short, live_enter_short, other_orders, cancel_order, flatten_all_for, update_order, cancel_orders_on_account, exchange_rate_response};
 use crate::server_side_datavendor::{base_data_types_response, decimal_accuracy_response, markets_response, resolutions_response, symbols_response, tick_size_response};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
 use ff_standard_lib::standardized_types::orders::{Order, OrderRequest, OrderType, OrderUpdateEvent};
@@ -230,24 +230,6 @@ pub async fn manage_async_requests(
                         data_vendor
                     } => handle_callback(
                         || base_data_types_response(data_vendor, mode, stream_name, callback_id),
-                        sender.clone()).await,
-
-                    DataServerRequest::IntradayMarginRequired {
-                        brokerage,
-                        callback_id,
-                        symbol_name,
-                        quantity,
-                    } => handle_callback(
-                        || intraday_margin_required_response(brokerage, mode, stream_name, symbol_name, quantity, callback_id),
-                        sender.clone()).await,
-
-                    DataServerRequest::OvernightMarginRequired {
-                        brokerage,
-                        callback_id,
-                        symbol_name,
-                        quantity
-                    } => handle_callback(
-                        || overnight_margin_required_response(brokerage, mode, stream_name, symbol_name, quantity, callback_id),
                         sender.clone()).await,
 
                     DataServerRequest::SymbolNames { callback_id, brokerage, time } => {

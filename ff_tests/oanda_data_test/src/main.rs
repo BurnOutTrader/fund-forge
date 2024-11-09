@@ -115,7 +115,7 @@ pub async fn on_data_received(
                                     if is_flat
                                         && qb.bid_close > qb.bid_open
                                     {
-                                        let _entry_order_id = strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(1000), String::from("Enter Long")).await;
+                                        let _entry_order_id = strategy.enter_long(&qb.symbol.name, None, &account_1, None, dec!(100000), String::from("Enter Long")).await;
                                         println!("Strategy: Enter Long, Time {}", strategy.time_local());
                                         last_side = LastSide::Long;
                                     }

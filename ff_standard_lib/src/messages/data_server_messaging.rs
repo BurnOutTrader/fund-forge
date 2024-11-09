@@ -10,7 +10,7 @@ use crate::standardized_types::accounts::{Account, AccountId, AccountInfo, Curre
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::datavendor_enum::DataVendor;
 use crate::standardized_types::base_data::base_data_type::BaseDataType;
-use crate::standardized_types::new_types::{Price, Volume};
+use crate::standardized_types::new_types::{Price};
 use crate::standardized_types::orders::{OrderRequest, OrderUpdateEvent};
 use crate::standardized_types::position::Position;
 use crate::standardized_types::symbol_info::{CommissionInfo, FrontMonthInfo, SymbolInfo};
@@ -116,18 +116,6 @@ pub enum DataServerRequest {
     OrderRequest {
         request: OrderRequest
     },
-    IntradayMarginRequired {
-        callback_id: u64,
-        quantity: Volume,
-        brokerage: Brokerage,
-        symbol_name: SymbolName
-    },
-    OvernightMarginRequired {
-        callback_id: u64,
-        quantity: Volume,
-        brokerage: Brokerage,
-        symbol_name: SymbolName
-    },
     PrimarySubscriptionFor {
         callback_id: u64,
         subscription: DataSubscription
@@ -176,13 +164,11 @@ impl DataServerRequest {
             DataServerRequest::StreamRequest   { .. } => {}
             DataServerRequest::Register {  .. } => {}
             DataServerRequest::OrderRequest { .. } => {}
-            DataServerRequest::IntradayMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::Accounts { callback_id, .. } => {*callback_id = id}
             DataServerRequest::PrimarySubscriptionFor { callback_id, .. } => {*callback_id = id}
             DataServerRequest::SymbolNames { callback_id, .. } => {*callback_id = id}
             DataServerRequest::RegisterStreamer{..} => {}
             DataServerRequest::CommissionInfo { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
             DataServerRequest::WarmUpResolutions { callback_id, .. } => {*callback_id = id}
             DataServerRequest::ExchangeRate { callback_id, .. } => {*callback_id = id}
@@ -286,20 +272,6 @@ DataServerResponse {
         info_vec: Vec<SymbolInfo>
     },
 
-    /// if `price: None` is returned the engine will treat the product as an un-leveraged product and calculate cash used as 1 to 1
-    IntradayMarginRequired {
-        callback_id: u64,
-        symbol_name: SymbolName,
-        price: Option<Price>
-    },
-
-    /// if `price: None` is returned the engine will treat the product as an un-leveraged product and calculate cash used as 1 to 1
-    OvernightMarginRequired {
-        callback_id: u64,
-        symbol_name: SymbolName,
-        price: Option<Price>
-    },
-
     SubscribeResponse {
         success: bool,
         subscription: DataSubscription,
@@ -364,7 +336,6 @@ impl DataServerResponse {
             DataServerResponse::ValuePerTick  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SymbolInfo  { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SymbolInfoMany  { callback_id,.. } => Some(callback_id.clone()),
-            DataServerResponse::IntradayMarginRequired { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::BaseDataTypes { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::SubscribeResponse { .. } => None,
             DataServerResponse::UnSubscribeResponse { .. } => None,
@@ -374,7 +345,6 @@ impl DataServerResponse {
             DataServerResponse::SymbolNames {callback_id, ..} => Some(callback_id.clone()),
             DataServerResponse::RegistrationResponse(_) => None,
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
-            DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
             DataServerResponse::LivePositionUpdates { .. } => None,

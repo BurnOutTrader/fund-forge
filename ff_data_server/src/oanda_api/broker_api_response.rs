@@ -10,7 +10,6 @@ use ff_standard_lib::product_maps::oanda::maps::{OANDA_SYMBOL_INFO};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
 use ff_standard_lib::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
-use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderState, OrderType, OrderUpdateEvent, OrderUpdateType, TimeInForce};
 use ff_standard_lib::standardized_types::subscriptions::{SymbolName};
 use ff_standard_lib::StreamName;
@@ -60,22 +59,6 @@ impl BrokerApiResponse for OandaClient {
             callback_id,
             error: FundForgeError::ClientSideErrorDebug(format!("Symbol not found: {}", symbol_name)),
         }
-    }
-
-    #[allow(unused)]
-    async fn intraday_margin_required_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-        let value = quantity * dec!(0.0333);
-        // Calculate the margin required based on symbol and position size
-            DataServerResponse::IntradayMarginRequired {
-                callback_id,
-                symbol_name,
-                price: Some(value),
-            }
-    }
-
-    #[allow(unused)]
-    async fn overnight_margin_required_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
-        self.intraday_margin_required_response(mode, stream_name, symbol_name, quantity, callback_id).await
     }
 
     #[allow(unused)]

@@ -538,7 +538,7 @@ pub fn get_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
         .ok_or_else(|| format!("{} not found", symbol))
 }
 
-pub fn get_intraday_margin(symbol: &str) -> Option<Decimal> {
+pub fn get_rithmic_intraday_margin(symbol: &str) -> Option<Decimal> {
     INTRADAY_MARGINS.get(symbol).cloned()
 }
 

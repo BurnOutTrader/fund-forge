@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use lazy_static::lazy_static;
 use rust_decimal::Decimal;
+use rust_decimal::prelude::FromPrimitive;
 use rust_decimal_macros::dec;
 use crate::standardized_types::accounts::Currency;
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -1236,4 +1237,32 @@ lazy_static! {
 
         m
     };
+}
+fn find_margin_tier(position_size: Decimal, margin_tiers: &[MarginTier]) -> &MarginTier {
+    for tier in margin_tiers {
+        if tier.max_position.is_infinite() {
+            return tier;
+        }
+
+        // Only try to convert non-infinite values
+        let max_pos = Decimal::from_f64(tier.max_position).unwrap();
+        if position_size <= max_pos {
+            return tier;
+        }
+    }
+    // If we haven't found a tier (shouldn't happen due to infinity tier), return last tier
+    margin_tiers.last().unwrap()
+}
+
+pub fn calculate_oanda_margin(symbol_name: &str, quantity: Decimal, contract_value: Decimal) -> Option<Decimal> {
+    let margin_tiers = MARGIN_TIERS.get(symbol_name)?;
+
+    // Convert quantity to position size for tier comparison
+    let position_size = quantity * contract_value;
+
+    // Find the appropriate tier
+    let tier = find_margin_tier(position_size, margin_tiers);
+
+    // Calculate margin using the found tier
+    Some(tier.calculate_margin(quantity, contract_value))
 }
