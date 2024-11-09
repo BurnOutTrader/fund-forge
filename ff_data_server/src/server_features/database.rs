@@ -25,6 +25,7 @@ use tokio::task;
 use tokio::task::JoinHandle;
 use tokio::time::interval;
 use ff_standard_lib::messages::data_server_messaging::{FundForgeError};
+use ff_standard_lib::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
@@ -86,49 +87,75 @@ impl HybridStorage {
             _ => return Err(FundForgeError::ServerErrorDebug(format!("Data Vendor not supported for currency conversion: {}", data_vendor)))
         };
 
-        // Try direct currency pair
-        let symbol_name = format!("{}-{}", from_currency.to_string(), to_currency.to_string());
-        for resolution in &resolutions {
-            match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, &base_data_type, date_time).await {
-                Ok(Some(data)) => {
-                    match data {
-                        BaseDataEnum::Candle(candle) => {
-                            return Ok(candle.close);
-                        },
-                        BaseDataEnum::QuoteBar(quote_bar) => {
-                            return match side {
-                                OrderSide::Buy => Ok(quote_bar.ask_close),
-                                OrderSide::Sell => Ok(quote_bar.bid_close),
-                            }
-                        },
-                        _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
-                    }
-                },
-                Ok(None) => continue,
-                Err(e) => return Err(e),
-            }
-        }
+        eprintln!("Getting exchange rate for {}-{} at {}", from_currency.to_string(), to_currency.to_string(), date_time);
 
-        // Try inverse currency pair
         let symbol_name = format!("{}-{}", from_currency.to_string(), to_currency.to_string());
-        for resolution in &resolutions {
-            match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, &base_data_type, date_time).await {
-                Ok(Some(data)) => {
-                    match data {
-                        BaseDataEnum::Candle(candle) => {
-                            return Ok(dec!(1) / candle.close);  // Take reciprocal
-                        },
-                        BaseDataEnum::QuoteBar(quote_bar) => {
-                            return match side {
-                                OrderSide::Buy => Ok(dec!(1) / quote_bar.ask_close),  // Take reciprocal
-                                OrderSide::Sell => Ok(dec!(1) / quote_bar.bid_close),  // Take reciprocal
+        let has_symbol: bool = match data_vendor {
+            DataVendor::Bitget => {
+                todo!()
+            }
+            DataVendor::Oanda => {
+                OANDA_SYMBOL_INFO.contains_key(&symbol_name)
+            }
+            _ => return Err(FundForgeError::ServerErrorDebug(format!("Data Vendor not supported for currency conversion: {}", data_vendor)))
+        };
+        if has_symbol {
+            // Try direct currency pair
+            for resolution in &resolutions {
+                match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, &base_data_type, date_time).await {
+                    Ok(Some(data)) => {
+                        match data {
+                            BaseDataEnum::Candle(candle) => {
+                                return Ok(candle.close);
+                            },
+                            BaseDataEnum::QuoteBar(quote_bar) => {
+                                return match side {
+                                    OrderSide::Buy => Ok(quote_bar.ask_close),
+                                    OrderSide::Sell => Ok(quote_bar.bid_close),
+                                }
+                            },
+                            _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
+                        }
+                    },
+                    Ok(None) => continue,
+                    Err(e) => return Err(e),
+                }
+            }
+        } else {
+
+            // Try inverse currency pair
+            let symbol_name = format!("{}-{}", from_currency.to_string(), to_currency.to_string());
+            let has_symbol: bool = match data_vendor {
+                DataVendor::Bitget => {
+                    todo!()
+                }
+                DataVendor::Oanda => {
+                    OANDA_SYMBOL_INFO.contains_key(&symbol_name)
+                }
+                _ => return Err(FundForgeError::ServerErrorDebug(format!("Data Vendor not supported for currency conversion: {}", data_vendor)))
+            };
+
+            if has_symbol {
+                for resolution in &resolutions {
+                    match self.get_data_point_asof(&Symbol::new(symbol_name.clone(), data_vendor, market_type), resolution, &base_data_type, date_time).await {
+                        Ok(Some(data)) => {
+                            match data {
+                                BaseDataEnum::Candle(candle) => {
+                                    return Ok(dec!(1) / candle.close);  // Take reciprocal
+                                },
+                                BaseDataEnum::QuoteBar(quote_bar) => {
+                                    return match side {
+                                        OrderSide::Buy => Ok(dec!(1) / quote_bar.ask_close),  // Take reciprocal
+                                        OrderSide::Sell => Ok(dec!(1) / quote_bar.bid_close),  // Take reciprocal
+                                    }
+                                },
+                                _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
                             }
                         },
-                        _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
+                        Ok(None) => continue,
+                        Err(e) => return Err(e),
                     }
-                },
-                Ok(None) => continue,
-                Err(e) => return Err(e),
+                }
             }
         }
 

@@ -36,7 +36,7 @@ async fn main() {
         //ToDo: You can Test Live paper using the simulated data feed which simulates quote stream from the server side at 10 ms per quote.
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
-        Currency::AUD,
+        Currency::USD,
         NaiveDate::from_ymd_opt(2011, 1, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
         NaiveDate::from_ymd_opt(2011, 01, 25).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
@@ -144,7 +144,7 @@ pub async fn on_data_received(
                                     continue;
                                 }
 
-                                if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "NAS100-USD" && quotebar.symbol.data_vendor == DataVendor::Oanda {
+                                if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "AUD-JPY"  {
                                     // We are using a limit order to enter here, so we will manage our order differently. there are a number of ways to do this, this is probably not the best way.
                                     // Using Option<OrderId> for entry order as an alternative to is_long()
                                     if entry_order_id.is_some() {
@@ -167,14 +167,14 @@ pub async fn on_data_received(
                                     // buy below the low of prior bar when atr is high and atr is increasing and the bars are closing higher, we are using a limit order which will cancel out at the end of the day
                                     if entry_order_id.is_none()
                                         && quotebar.bid_close > last_bar.bid_close
-                                        && current_heikin_3m_atr_5 >= dec!(0.3)
+                                        && current_heikin_3m_atr_5 >= dec!(0.003)
                                         && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
                                         && entry_order_id.is_none()
                                     {
                                         let limit_price = last_bar.ask_low;
                                         // we will set the time in force to Day, based on the strategy Tz of Australia::Sydney, I am not sure how this will work in live trading, TIF might be handled by manually sending cancel order on data server.
                                         let time_in_force = TimeInForce::Day;
-                                        entry_order_id = Some(strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(1), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
+                                        entry_order_id = Some(strategy.limit_order(&quotebar.symbol.name, None, &account, None, dec!(1000), OrderSide::Buy, limit_price, time_in_force, String::from("Enter Long Limit")).await);
                                         bars_since_entry = 0;
                                     }
 
@@ -211,11 +211,11 @@ pub async fn on_data_received(
                                         let in_profit = strategy.in_profit(&account, &quotebar.symbol.name);
                                         let position_size: Decimal = strategy.position_size(&account, &quotebar.symbol.name);
                                         if  in_profit
-                                            && position_size < dec!(5)
+                                            && position_size < dec!(3000)
                                             && bars_since_entry == 3
                                             && current_heikin_3m_atr_5 >= last_heikin_3m_atr_5
                                         {
-                                            entry_order_id = Some(strategy.enter_long(&quotebar.symbol.name, None, &account, None, dec!(2), String::from("Add Long")).await);
+                                            entry_order_id = Some(strategy.enter_long(&quotebar.symbol.name, None, &account, None, dec!(1000), String::from("Add Long")).await);
                                         }
                                     }
                                 }

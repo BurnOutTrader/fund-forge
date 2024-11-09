@@ -6,7 +6,7 @@ use rust_decimal::{Decimal};
 use rust_decimal_macros::dec;
 use uuid::Uuid;
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::product_maps::oanda::maps::{calculate_oanda_margin, OANDA_SYMBOL_INFO};
+use ff_standard_lib::product_maps::oanda::maps::{OANDA_SYMBOL_INFO};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
 use ff_standard_lib::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
@@ -64,19 +64,13 @@ impl BrokerApiResponse for OandaClient {
 
     #[allow(unused)]
     async fn intraday_margin_required_response(&self, mode: StrategyMode, stream_name: StreamName, symbol_name: SymbolName, quantity: Volume, callback_id: u64) -> DataServerResponse {
+        let value = quantity * dec!(0.0333);
         // Calculate the margin required based on symbol and position size
-        if let Some(margin_used) = calculate_oanda_margin(&symbol_name, quantity, quantity) { //todo this will all be replaced, for live only, the backtesting info will come from the coded maps
-            return DataServerResponse::IntradayMarginRequired {
+            DataServerResponse::IntradayMarginRequired {
                 callback_id,
                 symbol_name,
-                price: Some(margin_used),
+                price: Some(value),
             }
-        }
-
-        DataServerResponse::Error {
-            callback_id,
-            error: FundForgeError::ClientSideErrorDebug(format!("Symbol not found in margin map: {}", symbol_name)),
-        }
     }
 
     #[allow(unused)]
