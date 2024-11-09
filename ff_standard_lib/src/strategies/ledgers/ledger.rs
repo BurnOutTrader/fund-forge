@@ -181,12 +181,15 @@ impl Ledger {
     }
 
     async fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) {
+        let mut inserted = false;
         if let Some((_, mut existing_position)) = self.positions.remove(&position.symbol_code) {
             if existing_position.side != position.side {
                 let side = match existing_position.side {
                     PositionSide::Long => OrderSide::Buy,
                     PositionSide::Short => OrderSide::Sell,
                 };
+                self.positions.insert(position.symbol_code.clone(), position.clone());
+                inserted = true;
                 let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
                     match get_exchange_rate(self.currency, existing_position.symbol_info.pnl_currency, time, side).await {
                         Ok(rate) => {
@@ -224,7 +227,9 @@ impl Ledger {
                     .push(existing_position.clone());
             }
         }
-        self.positions.insert(position.symbol_code.clone(), position.clone());
+        if !inserted {
+            self.positions.insert(position.symbol_code.clone(), position.clone());
+        }
     }
 
     pub fn in_profit(&self, symbol_name: &SymbolName) -> bool {
