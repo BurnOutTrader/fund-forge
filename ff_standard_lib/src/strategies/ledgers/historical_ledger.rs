@@ -76,19 +76,17 @@ impl Ledger {
             {
                 self.release_margin_used(&symbol_name).await;
             }
-            let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
-
-            let exchange_rate = if self.currency != info.pnl_currency {
+            let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
                 let side = match existing_position.side {
-                    PositionSide::Long => OrderSide::Sell,
-                    PositionSide::Short => OrderSide::Buy,
+                    PositionSide::Long => OrderSide::Buy,
+                    PositionSide::Short => OrderSide::Sell
                 };
-                match get_exchange_rate(self.currency, info.pnl_currency, time, side).await {
+                match get_exchange_rate(self.currency, existing_position.symbol_info.pnl_currency, time, side).await {
                     Ok(rate) => {
-                        self.rates.insert(info.pnl_currency, rate);
+                        self.rates.insert(existing_position.symbol_info.pnl_currency, rate);
                         rate
                     },
-                    Err(_e) => self.get_exchange_multiplier(info.pnl_currency)
+                    Err(_e) => self.get_exchange_multiplier(existing_position.symbol_info.pnl_currency)
                 }
             } else {
                 dec!(1.0)
@@ -151,14 +149,13 @@ impl Ledger {
 
             if is_reducing {
                 remaining_quantity -= existing_position.quantity_open;
-                let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
-                let exchange_rate = if self.currency != info.pnl_currency {
-                    match get_exchange_rate(self.currency, info.pnl_currency, time, side).await {
+                let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
+                    match get_exchange_rate(self.currency, existing_position.symbol_info.pnl_currency, time, side).await {
                         Ok(rate) => {
-                            self.rates.insert(info.pnl_currency, rate);
+                            self.rates.insert(existing_position.symbol_info.pnl_currency, rate);
                             rate
                         },
-                        Err(_e) => self.get_exchange_multiplier(info.pnl_currency)
+                        Err(_e) => self.get_exchange_multiplier(existing_position.symbol_info.pnl_currency)
                     }
                 } else {
                     dec!(1.0)
@@ -172,7 +169,6 @@ impl Ledger {
                         self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price).await.unwrap();
                         self.positions.insert(symbol_code.clone(), existing_position);
 
-                        // TODO[Strategy]: Add option to mirror account position or use internal position curating.
                         self.symbol_closed_pnl
                             .entry(symbol_code.clone())
                             .and_modify(|pnl| *pnl += booked_pnl)
@@ -187,7 +183,6 @@ impl Ledger {
                         //println!("Reduced Position: {}", symbol_name);
                     }
                     PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
-                        // TODO[Strategy]: Add option to mirror account position or use internal position curating.
                         self.symbol_closed_pnl
                             .entry(symbol_code.clone())
                             .and_modify(|pnl| *pnl += booked_pnl)
