@@ -23,6 +23,7 @@ use crate::standardized_types::position::{Position, PositionId, PositionUpdateEv
 use crate::standardized_types::subscriptions::{SymbolCode, SymbolName};
 use crate::standardized_types::symbol_info::SymbolInfo;
 use crate::standardized_types::time_slices::TimeSlice;
+use crate::strategies::client_features::other_requests::get_exchange_rate;
 use crate::strategies::strategy_events::StrategyEvent;
 
 /*
@@ -56,7 +57,7 @@ pub struct Ledger {
     pub is_simulating_pnl: bool,
     pub(crate) strategy_sender: Sender<StrategyEvent>,
     pub leverage: Decimal,
-    pub rates: Arc<DashMap<(Currency, Currency), Decimal>>,
+    pub rates: Arc<DashMap<Currency, Decimal>>,
     //todo, add daily max loss, max order size etc to ledger
 }
 
@@ -110,24 +111,24 @@ impl Ledger {
         ledger
     }
 
-    pub fn update_rates(&self, rates: &HashMap<(Currency, Currency), Decimal>) {
+    pub fn update_rates(&self, rates: &HashMap<Currency, Decimal>) {
         for (c1, c2) in rates.iter() {
             self.rates.insert(c1.clone(), c2.clone());
         }
     }
 
-    pub fn get_exchange_multiplier(&self, from_currency: Currency, to_currency: Currency) -> Decimal {
-        if from_currency == to_currency {
+    pub fn get_exchange_multiplier(&self, to_currency: Currency) -> Decimal {
+        if self.currency == to_currency {
             return dec!(1.0);
         }
 
         // Try direct rate
-        if let Some(rate) = self.rates.get(&(from_currency, to_currency)) {
+        if let Some(rate) = self.rates.get(&to_currency) {
             return *rate;
         }
 
         // Try inverse rate
-        if let Some(rate) = self.rates.get(&(to_currency, from_currency)) {
+        if let Some(rate) = self.rates.get(&to_currency) {
             return dec!(1.0) / *rate;
         }
 
@@ -149,19 +150,20 @@ impl Ledger {
 
     pub fn live_ledger_updates(ledger: Arc<Ledger>, mut receiver: Receiver<LedgerMessage>) {
         tokio::spawn(async move {
+            let mut last_time = Utc::now();
             while let Some(message) = receiver.recv().await {
                 match message {
                     LedgerMessage::SyncPosition { position, time } => {
-                        let event = ledger.synchronize_live_position(position, time);
-                        if let Some(event) = event {
-                            match ledger.strategy_sender.send(StrategyEvent::PositionEvents(event)).await {
-                                Ok(_) => {}
-                                Err(e) => eprintln!("Error sending position event: {}", e)
-                            }
+                        if time < last_time {
+                            continue;
                         }
+                        if !ledger.is_simulating_pnl {
+                            ledger.synchronize_live_position(position, time).await;
+                        }
+                        last_time = time;
                     }
-                    LedgerMessage::ProcessOrder { order, quantity, time } => {
-                        ledger.process_synchronized_orders(order, quantity, time).await;
+                    LedgerMessage::ProcessOrder { .. } => {
+                        //ledger.process_synchronized_orders(order, quantity, time).await; //todo, doesnt work
                     }
                     LedgerMessage::UpdateOrCreatePosition { symbol_name, symbol_code, quantity, side, time, market_fill_price, tag } => {
                         let updates = ledger.update_or_create_live_position(symbol_name, symbol_code, quantity, side, time, market_fill_price, tag).await;
@@ -171,117 +173,57 @@ impl Ledger {
                                 Err(e) => eprintln!("Error sending position event: {}", e)
                             }
                         }
+                        last_time = time;
                     }
                 }
             }
         });
     }
 
-    fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) -> Option<PositionUpdateEvent> {
-       /* if let Some(last_update) = self.last_update.get(&position.symbol_code) {
-            if last_update.value() > &time {
-                return None;
-            }
-        }*/
-        self.last_update.insert(position.symbol_code.clone(), time);
-
-        if position.is_closed {
-            // If position is closed, remove it and don't try to create a new one
-            self.positions.remove(&position.symbol_code);
-            self.positions_closed.entry(position.symbol_code.clone())
-                .or_insert(vec![])
-                .push(position.clone());
-
-            let close_time = position.close_time.unwrap_or_else(|| Utc::now().to_string());
-
-            println!("Average Exit Price: {:?}", position.average_exit_price);
-            return Some(PositionUpdateEvent::PositionClosed {
-                symbol_name: position.symbol_name.clone(),
-                side: position.side.clone(),
-                symbol_code: position.symbol_code.clone(),
-                position_id: position.position_id.clone(),
-                total_quantity_open: dec!(0),
-                total_quantity_closed: position.quantity_closed,
-                average_price: position.average_price,
-                booked_pnl: Default::default(),
-                average_exit_price: position.average_exit_price,
-                account: self.account.clone(),
-                originating_order_tag: position.tag,
-                time: close_time
-            });
-        }
-
-        // Only handle open position updates if quantity > 0
-        if position.quantity_open > dec!(0) {
-            if let Some(mut existing) = self.positions.get_mut(&position.symbol_code) {
-                // Update existing position
-                existing.quantity_open = position.quantity_open;
-                existing.open_pnl = position.open_pnl;
-                existing.side = position.side;
-                existing.average_price = position.average_price;
-                None
-            } else {
-                // Create new position
-                self.positions.insert(position.symbol_code.clone(), position.clone());
-                Some(PositionUpdateEvent::PositionOpened {
-                    side: position.side,
-                    symbol_name: position.symbol_name,
-                    symbol_code: position.symbol_code,
-                    position_id: position.position_id,
-                    account: self.account.clone(),
-                    originating_order_tag: position.tag,
-                    time: position.open_time
-                })
-            }
-        } else {
-            None
-        }
-    }
-
-    async fn process_synchronized_orders(&self, order: Order, quantity: Decimal, time: DateTime<Utc>) {
-        let symbol = match order.symbol_code {
-            None => order.symbol_name,
-            Some(code) => code
-        };
-
-    /*    if let Some(last_update) = self.last_update.get(&symbol) {
-            if last_update.value() > &time {
-                return;
-            }
-        }*/
-        self.last_update.insert(symbol.clone(), time);
-
-        if let Some(mut position) = self.positions.get_mut(&symbol) {
-            let is_reducing = (position.side == PositionSide::Long && order.side == OrderSide::Sell)
-                || (position.side == PositionSide::Short && order.side == OrderSide::Buy);
-
-            if !is_reducing {
-                return;
-            }
-
-            let market_fill_price = match order.average_fill_price {
-                None => return,
-                Some(price) => price
-            };
-
-            position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone()).await;
-        } else if let Some(mut position_vec) = self.positions_closed.get_mut(&symbol) {
-            if let Some(last_position) = position_vec.last_mut() {
-                let is_reducing = (last_position.side == PositionSide::Long && order.side == OrderSide::Sell)
-                    || (last_position.side == PositionSide::Short && order.side == OrderSide::Buy);
-
-                if !is_reducing {
-                    return;
-                }
-
-                let market_fill_price = match order.average_fill_price {
-                    None => return,
-                    Some(price) => price
+    async fn synchronize_live_position(&self, position: Position, time: DateTime<Utc>) {
+        if let Some((_, mut existing_position)) = self.positions.remove(&position.symbol_code) {
+            if existing_position.side != position.side {
+                let side = match existing_position.side {
+                    PositionSide::Long => OrderSide::Buy,
+                    PositionSide::Short => OrderSide::Sell,
                 };
-
-                last_position.reduce_position_size(market_fill_price, quantity, Utc::now(), order.tag.clone()).await;
+                let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
+                    match get_exchange_rate(self.currency, existing_position.symbol_info.pnl_currency, time, side).await {
+                        Ok(rate) => {
+                            self.rates.insert(existing_position.symbol_info.pnl_currency, rate);
+                            rate
+                        },
+                        Err(_e) => self.get_exchange_multiplier(existing_position.symbol_info.pnl_currency)
+                    }
+                } else {
+                    dec!(1.0)
+                };
+                existing_position.reduce_position_size(position.average_price, existing_position.quantity_open, exchange_rate, time, "Synchronizing".to_string()).await;
+                let closed_event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionClosed {
+                    position_id: existing_position.position_id.clone(),
+                    side: existing_position.side,
+                    symbol_name: existing_position.symbol_name.clone(),
+                    symbol_code: existing_position.symbol_code.clone(),
+                    total_quantity_open: existing_position.quantity_open.clone(),
+                    total_quantity_closed: existing_position.quantity_closed.clone(),
+                    average_price: existing_position.average_price.clone(),
+                    booked_pnl: existing_position.booked_pnl.clone(),
+                    average_exit_price: existing_position.average_exit_price,
+                    account: existing_position.account.clone(),
+                    originating_order_tag: "".to_string(),
+                    time: "".to_string(),
+                });
+                match self.strategy_sender.send(closed_event).await {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("Error sending position event: {}", e)
+                }
+                self.positions_closed
+                    .entry(position.symbol_code.clone())
+                    .or_insert_with(Vec::new)
+                    .push(existing_position);
             }
         }
+        self.positions.insert(position.symbol_code.clone(), position.clone());
     }
 
     pub fn in_profit(&self, symbol_name: &SymbolName) -> bool {
@@ -580,12 +522,21 @@ impl Ledger {
 
             if is_reducing {
                 remaining_quantity -= existing_position.quantity_open;
-                let event= existing_position.reduce_position_size(market_fill_price, quantity, time, tag.clone()).await;
+                let exchange_rate = if self.currency != existing_position.symbol_info.pnl_currency {
+                    match get_exchange_rate(self.currency, existing_position.symbol_info.pnl_currency, time, side).await {
+                        Ok(rate) => {
+                            self.rates.insert(existing_position.symbol_info.pnl_currency, rate);
+                            rate
+                        },
+                        Err(_e) => self.get_exchange_multiplier(existing_position.symbol_info.pnl_currency)
+                    }
+                } else {
+                    dec!(1.0)
+                };
+                let event= existing_position.reduce_position_size(market_fill_price, quantity, exchange_rate, time, tag.clone()).await;
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         self.positions.insert(symbol_code.clone(), existing_position);
-
-                        // TODO[Strategy]: Add option to mirror account position or use internal position curating.
                         if self.is_simulating_pnl {
                             self.symbol_closed_pnl
                                 .entry(symbol_code.clone())
@@ -597,7 +548,6 @@ impl Ledger {
                         //println!("Reduced Position: {}", symbol_name);
                     }
                     PositionUpdateEvent::PositionClosed { booked_pnl, .. } => {
-                        // TODO[Strategy]: Add option to mirror account position or use internal position curating.
                         if self.is_simulating_pnl {
                             self.symbol_closed_pnl
                                 .entry(symbol_code.clone())
@@ -644,7 +594,18 @@ impl Ledger {
                     }
                 }
             }
-            let exchange_rate_multiplier= self.get_exchange_multiplier(info.pnl_currency, self.currency);
+            let exchange_rate = if self.currency != info.pnl_currency {
+                match get_exchange_rate(self.currency, info.pnl_currency, time, side).await {
+                    Ok(rate) => {
+                        self.rates.insert(info.pnl_currency, rate);
+                        rate
+                    },
+                    Err(_e) => self.get_exchange_multiplier(info.pnl_currency)
+                }
+            } else {
+                dec!(1.0)
+            };
+
             let id = self.generate_id(position_side);
             // Create a new position
             let position = Position::new(
@@ -656,7 +617,7 @@ impl Ledger {
                 market_fill_price,
                 id.clone(),
                 info.clone(),
-                exchange_rate_multiplier,
+                exchange_rate,
                 tag.clone(),
                 time,
             );

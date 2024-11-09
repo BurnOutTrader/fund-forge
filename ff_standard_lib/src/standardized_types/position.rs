@@ -341,10 +341,12 @@ impl Position {
     }
 
     /// Reduces position size a position event, this event will include a booked_pnl property
-    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
+    pub(crate) async fn reduce_position_size(&mut self, market_price: Price, quantity: Volume, exchange_rate: Decimal, time: DateTime<Utc>, tag: String) -> PositionUpdateEvent {
         if quantity > self.quantity_open {
             panic!("Something wrong with logic, ledger should know this not to be possible")
         }
+
+        self.exchange_rate_multiplier = exchange_rate;
 
         // Calculate booked PnL
         let booked_pnl = calculate_theoretical_pnl(

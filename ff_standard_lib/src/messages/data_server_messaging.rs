@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap};
-use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -54,12 +54,6 @@ pub enum StreamRequest {
 /// * [`SynchronousRequestType::HistoricalBaseData`](ff_data_vendors::networks::RequestType) : Requests the Base data for the specified subscriptions. Server returns a ResponseType::HistoricalBaseData with the data payload.
 pub enum DataServerRequest {
     Register(StrategyMode),
-
-    Rates{
-        callback_id: u64,
-        currency: Currency,
-        time: String
-    },
 
     HistoricalBaseDataRange {
         callback_id: u64,
@@ -143,7 +137,14 @@ pub enum DataServerRequest {
         brokerage: Brokerage,
         symbol_name: SymbolName
     },
-
+    ExchangeRate {
+        callback_id: u64,
+        from_currency: Currency,
+        to_currency: Currency,
+        date_time_string: String,
+        data_vendor: DataVendor,
+        side: OrderSide
+    },
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage, time: Option<String>},
     RegisterStreamer{port: u16, secs: u64, subsec: u32},
@@ -184,7 +185,7 @@ impl DataServerRequest {
             DataServerRequest::OvernightMarginRequired { callback_id, .. } => {*callback_id = id}
             DataServerRequest::HistoricalBaseDataRange { callback_id, .. } => {*callback_id = id}
             DataServerRequest::WarmUpResolutions { callback_id, .. } => {*callback_id = id}
-            DataServerRequest::Rates{ callback_id, .. } => {*callback_id = id}
+            DataServerRequest::ExchangeRate { callback_id, .. } => {*callback_id = id}
         }
     }
 }
@@ -230,6 +231,11 @@ DataServerResponse {
         callback_id: u64,
         subscription_resolutions_types: Vec<SubscriptionResolutionType>,
         market_type: MarketType
+    },
+
+    ExchangeRate {
+        callback_id: u64,
+        rate: Decimal,
     },
 
     /// Provides the client with an error message
@@ -370,10 +376,10 @@ impl DataServerResponse {
             DataServerResponse::CommissionInfo { callback_id,.. } => Some(callback_id.clone()),
             DataServerResponse::OvernightMarginRequired { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::FrontMonthInfo { callback_id, .. } => Some(callback_id.clone()),
-            //DataServerResponse::Rates { callback_id, .. } => Some(callback_id.clone()),
             DataServerResponse::LiveAccountUpdates { .. } => None,
             DataServerResponse::LivePositionUpdates { .. } => None,
-            DataServerResponse::AsyncError { .. } => None
+            DataServerResponse::AsyncError { .. } => None,
+            DataServerResponse::ExchangeRate { callback_id, .. } => Some(callback_id.clone()),
         }
     }
 }

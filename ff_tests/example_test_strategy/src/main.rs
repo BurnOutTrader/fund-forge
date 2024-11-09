@@ -36,7 +36,7 @@ async fn main() {
         //ToDo: You can Test Live paper using the simulated data feed which simulates quote stream from the server side at 10 ms per quote.
         StrategyMode::Backtest, // Backtest, Live, LivePaper
         dec!(100000),
-        Currency::USD,
+        Currency::AUD,
         NaiveDate::from_ymd_opt(2011, 1, 20).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Starting date of the backtest is a NaiveDateTime not NaiveDate
         NaiveDate::from_ymd_opt(2011, 01, 25).unwrap().and_hms_opt(0, 0, 0).unwrap(), // Ending date of the backtest is a NaiveDateTime not NaiveDate
         Australia::Sydney,                      // the strategy time zone
@@ -44,11 +44,11 @@ async fn main() {
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
             DataSubscription::new(
-                SymbolName::from("NAS100-USD"),
+                SymbolName::from("AUD-JPY"),
                 DataVendor::Oanda,
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
-                MarketType::CFD
+                MarketType::Forex
             ),
         ],
 
@@ -81,11 +81,11 @@ async fn main() {
             IndicatorName::from("quotebar_5s_atr_5"),
               // The subscription for the indicator
               DataSubscription::new(
-                  SymbolName::from("NAS100-USD"),
+                  SymbolName::from("AUD-JPY"),
                   DataVendor::Oanda,
                   Resolution::Seconds(5),
                   BaseDataType::QuoteBars,
-                  MarketType::CFD,
+                  MarketType::Forex,
               ),
 
               // history to retain

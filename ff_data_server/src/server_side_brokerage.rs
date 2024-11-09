@@ -1,21 +1,48 @@
+use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::new_types::Volume;
+use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
+use ff_standard_lib::standardized_types::new_types::{TimeString, Volume};
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
-use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
+use ff_standard_lib::standardized_types::accounts::{Account, AccountId, Currency};
 use ff_standard_lib::StreamName;
 use crate::bitget_api::api_client::BITGET_CLIENT;
 use crate::rithmic_api::api_client::{get_rithmic_client, RITHMIC_CLIENTS};
 use crate::test_api::api_client::TEST_CLIENT;
 use tokio::time::{timeout, Duration};
+use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
 use ff_standard_lib::standardized_types::orders::OrderUpdateEvent::OrderUpdateRejected;
 use crate::oanda_api::api_client::{get_oanda_client, OANDA_CLIENT};
+use crate::server_features::database::DATA_STORAGE;
 
 pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
+
+#[allow(unused)]
+/// This request is only sent to Oanda server
+pub async fn exchange_rate_response(mode: StrategyMode, from_currency: Currency, to_currency: Currency, time_string: TimeString, data_vendor: DataVendor, side: OrderSide, callback_id: u64) -> DataServerResponse {
+    //todo, if live mode we request the api directly for the latest rate.
+    //todo get exchange rate from hybrid storage,
+    let time = match DateTime::<Utc>::from_str(&time_string) {
+        Ok(time) => time,
+        Err(_) => return DataServerResponse::Error {
+            callback_id,
+            error: FundForgeError::ServerErrorDebug("Invalid time string".to_string())
+        }
+    };
+    match DATA_STORAGE.get().unwrap().get_exchange_rate(from_currency, to_currency, time, data_vendor, side).await {
+        Ok(rate) => DataServerResponse::ExchangeRate {
+            callback_id,
+            rate,
+        },
+        Err(e) => DataServerResponse::Error {
+            callback_id,
+            error: FundForgeError::ServerErrorDebug(format!("Exchange rate not found: {}", e))
+        }
+    }
+}
 
 /// return `DataServerResponse::CommissionInfo` or `DataServerResponse::Error(FundForgeError)`.
 pub async fn commission_info_response(mode: StrategyMode, brokerage: Brokerage, symbol_name: SymbolName, stream_name: StreamName, callback_id: u64) -> DataServerResponse {

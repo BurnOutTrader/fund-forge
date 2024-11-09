@@ -33,7 +33,7 @@ impl LedgerService {
     }
 
     #[allow(dead_code)]
-    pub fn update_rates(&self, rates: HashMap<(Currency, Currency), Decimal>) {
+    pub fn update_rates(&self, rates: HashMap<Currency, Decimal>) {
         for ledger in self.ledgers.iter() {
             ledger.value().update_rates(&rates);
         }
