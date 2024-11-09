@@ -4,11 +4,10 @@ use dashmap::DashMap;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
-use ff_standard_lib::product_maps::rithmic::maps::{find_base_symbol, get_available_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_intraday_margin, get_overnight_margin, get_symbol_info};
+use ff_standard_lib::product_maps::rithmic::maps::{find_base_symbol, get_available_symbol_names, get_exchange_by_symbol_name, get_futures_commissions_info, get_symbol_info};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::accounts::{Account, AccountId};
 use ff_standard_lib::standardized_types::enums::StrategyMode;
-use ff_standard_lib::standardized_types::new_types::Volume;
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
 use ff_standard_lib::StreamName;
@@ -71,59 +70,6 @@ impl BrokerApiResponse for RithmicBrokerageClient {
                     }
                 };
                 DataServerResponse::Error {callback_id, error: FundForgeError::ClientSideErrorDebug(format!("{}", e))}
-            }
-        }
-    }
-
-    async fn intraday_margin_required_response(
-        &self,
-        _mode: StrategyMode, //todo we should check with broker when live
-        _stream_name: StreamName,
-        symbol_name: SymbolName,
-        quantity: Volume,
-        callback_id: u64
-    ) -> DataServerResponse {
-        match get_intraday_margin(&symbol_name) {
-            None => {
-                DataServerResponse::Error {
-                    callback_id,
-                    error: FundForgeError::ClientSideErrorDebug(format!("{} not found with: {}", symbol_name, self.brokerage)),
-                }
-            }
-            Some(margin) => {
-                let required_margin = margin * Decimal::from(quantity.abs());
-                DataServerResponse::IntradayMarginRequired {
-                    callback_id,
-                    symbol_name,
-                    price: Some(required_margin),
-                }
-            }
-        }
-    }
-
-    async fn overnight_margin_required_response(
-        &self,
-        _mode: StrategyMode, //todo we should check with broker when live
-        _stream_name: StreamName,
-        symbol_name: SymbolName,
-        quantity: Volume,
-        callback_id: u64
-    ) -> DataServerResponse {
-        match get_overnight_margin(&symbol_name) {
-            None => {
-                DataServerResponse::Error {
-                    callback_id,
-                    error: FundForgeError::ClientSideErrorDebug(format!("{} not found with: {}", symbol_name, self.brokerage)),
-                }
-            }
-            Some(margin) => {
-                let required_margin = margin * Decimal::from(quantity.abs());
-
-                DataServerResponse::IntradayMarginRequired {
-                    callback_id,
-                    symbol_name,
-                    price: Some(required_margin),
-                }
             }
         }
     }
