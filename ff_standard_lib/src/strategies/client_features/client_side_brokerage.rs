@@ -7,7 +7,7 @@ use tokio::time::timeout;
 use crate::messages::data_server_messaging::{DataServerRequest, DataServerResponse, FundForgeError};
 use crate::product_maps::oanda::maps::{get_oanda_symbol_names, OANDA_SYMBOL_INFO, SYMBOL_DIVISORS};
 use crate::product_maps::rithmic::maps::{find_base_symbol, get_available_rithmic_symbol_names, get_rithmic_intraday_margin_in_usd, get_rithmic_symbol_info};
-use crate::standardized_types::accounts::{AccountId, AccountInfo};
+use crate::standardized_types::accounts::{AccountId, AccountInfo, Currency};
 use crate::standardized_types::broker_enum::Brokerage;
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::subscriptions::SymbolName;
@@ -17,25 +17,51 @@ use crate::strategies::client_features::request_handler::{send_request, Strategy
 
 pub(crate) const TIME_OUT: Duration = Duration::from_secs(15);
 impl Brokerage {
-    pub async fn intraday_margin_required(&self, symbol_name: &SymbolName, quantity: Volume, price: Price, conversion_rate: Decimal) -> Result<Option<Decimal>, FundForgeError> {
+    pub async fn intraday_margin_required(&self, symbol_name: &SymbolName, quantity: Volume, price: Price, account_currency: Currency, conversion_rate: Decimal) -> Result<Option<Decimal>, FundForgeError> {
         match self {
-            Brokerage::Test => Ok(Some((quantity * price) / dec!(30))),
+            // Test broker uses simple leverage
+            Brokerage::Test => {
+                let base_margin = quantity * price; // Calculate margin in position currency
+                Ok(Some(base_margin * conversion_rate / dec!(30))) // Convert to account currency and apply leverage
+            },
+
+            // Rithmic provides margins in USD
             Brokerage::Rithmic(_) => {
                 match get_rithmic_intraday_margin_in_usd(symbol_name) {
                     Some(margin) => Ok(Some(margin * quantity * conversion_rate)),
                     None => Ok(None)
                 }
             },
+
             Brokerage::Oanda => {
-                // advanced way for pro accounts?
-                /*match calculate_oanda_margin(symbol_name,quantity * price * usd_rate) {
-                    Some(margin) => Ok(Some(margin)),
-                    None => Ok(None)
-                }*/
-                SYMBOL_DIVISORS.get(symbol_name.as_str()).map(|divisor| Some((quantity * price * conversion_rate) / divisor)).ok_or(FundForgeError::ClientSideErrorDebug(format!("Symbol not found: {}", symbol_name)))
-            }
+                match SYMBOL_DIVISORS.get(symbol_name.as_str()) {
+                    Some(divisor) => {
+                        let base_value = quantity * price; // Value in quote currency
+
+                        // If account currency is in the symbol pair
+                        let margin_value = if symbol_name.contains(&account_currency.to_string()) {
+                            if symbol_name.starts_with(&account_currency.to_string()) {
+                                // Account currency is base currency (e.g., AUD account trading AUD/JPY)
+                                quantity  // Use quantity directly since it's already in account currency
+                            } else {
+                                // Account currency is quote currency (e.g., JPY account trading AUD/JPY)
+                                base_value
+                            }
+                        } else {
+                            // Need to convert to account currency (e.g., USD account trading EUR/JPY)
+                            base_value * conversion_rate
+                        };
+
+                        Ok(Some(margin_value / divisor))
+                    },
+                    None => Err(FundForgeError::ClientSideErrorDebug(format!("Symbol not found: {}", symbol_name)))
+                }
+            },
+
+            // Bitget needs spot vs futures handling
             Brokerage::Bitget => {
-                Ok(Some(quantity * price * conversion_rate)) //todo, depending on spot vs futures
+                let base_margin = quantity * price; // Calculate margin in position currency
+                Ok(Some(base_margin * conversion_rate)) // Convert to account currency
             }
         }
     }

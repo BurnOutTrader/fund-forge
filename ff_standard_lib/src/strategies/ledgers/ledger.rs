@@ -200,7 +200,7 @@ impl Ledger {
                 } else {
                     dec!(1.0)
                 };
-                existing_position.reduce_position_size(position.average_price, existing_position.quantity_open, exchange_rate, time, "Synchronizing".to_string()).await;
+                existing_position.reduce_position_size(position.average_price, existing_position.quantity_open, self.currency, exchange_rate, time, "Synchronizing".to_string()).await;
                 let closed_event = StrategyEvent::PositionEvents(PositionUpdateEvent::PositionClosed {
                     position_id: existing_position.position_id.clone(),
                     side: existing_position.side,
@@ -468,7 +468,7 @@ impl Ledger {
             if let Some(codes) = self.symbol_code_map.get(data_symbol_name) {
                 for code in codes.value() {
                     if let Some(mut position) = self.positions.get_mut(code) {
-                        let open_pnl = position.update_base_data(&base_data_enum);
+                        let open_pnl = position.update_base_data(&base_data_enum, self.currency);
                         self.open_pnl.insert(data_symbol_name.clone(), open_pnl);
                     }
                 }
@@ -479,7 +479,7 @@ impl Ledger {
                 }
 
                 if self.mode != StrategyMode::Live || self.is_simulating_pnl {
-                    let open_pnl = position.update_base_data(&base_data_enum);
+                    let open_pnl = position.update_base_data(&base_data_enum, self.currency);
                     self.open_pnl.insert(data_symbol_name.clone(), open_pnl);
                 }
 
@@ -538,7 +538,7 @@ impl Ledger {
                 } else {
                     dec!(1.0)
                 };
-                let event= existing_position.reduce_position_size(market_fill_price, quantity, exchange_rate, time, tag.clone()).await;
+                let event= existing_position.reduce_position_size(market_fill_price, quantity, self.currency, exchange_rate, time, tag.clone()).await;
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
                         self.positions.insert(symbol_code.clone(), existing_position);
@@ -574,7 +574,7 @@ impl Ledger {
                 }
                 position_events.push(event);
             } else {
-                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, market_fill_price, quantity, time, tag.clone()).await;
+                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, self.currency, market_fill_price, quantity, time, tag.clone()).await;
                 self.positions.insert(symbol_code.clone(), existing_position);
 
                 position_events.push(event);
