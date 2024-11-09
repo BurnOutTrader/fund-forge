@@ -28,7 +28,7 @@ impl Ledger {
         }
     }
 
-    pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, position_currency: Currency) -> Result<(), FundForgeError> {
+    pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, base_currency: Option<Currency>, position_currency: Currency) -> Result<(), FundForgeError> {
         let rate = if position_currency == self.currency {
             dec!(1)
         } else {
@@ -41,8 +41,8 @@ impl Ledger {
                 }
             }
         };
-       // eprintln!("Account Currency: {}, Position Currency: {}, Rate: {}", self.currency, position_currency, rate);
-        let margin = self.account.brokerage.intraday_margin_required(symbol_name, quantity, market_price, self.currency, rate).await?
+       eprintln!("Account Currency: {}, Position Currency: {}, Rate: {}", self.currency, position_currency, rate);
+        let margin = self.account.brokerage.intraday_margin_required(symbol_name, quantity, market_price, self.currency, base_currency, position_currency, rate).await?
             .unwrap_or_else(|| quantity * market_price * rate);
 
         // Check available cash first
@@ -180,7 +180,7 @@ impl Ledger {
 
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
-                        self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price, time, side, existing_position.symbol_info.pnl_currency).await.unwrap();
+                        self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await.unwrap();
                         self.positions.insert(symbol_code.clone(), existing_position);
 
                         self.symbol_closed_pnl
@@ -230,7 +230,7 @@ impl Ledger {
 
                 updates.push(event);
             } else {
-                match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, existing_position.symbol_info.pnl_currency).await {
+                match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, existing_position.symbol_info.base_currency, existing_position.symbol_info.pnl_currency).await {
                     Ok(_) => {}
                     Err(e) => {
                         //todo this now gets added directly to buffer
@@ -262,7 +262,7 @@ impl Ledger {
         }
         if remaining_quantity > dec!(0.0) {
             let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
-            match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, info.pnl_currency).await {
+            match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, info.base_currency, info.pnl_currency).await {
                 Ok(_) => {}
                 Err(e) => {
                     let event = OrderUpdateEvent::OrderRejected {

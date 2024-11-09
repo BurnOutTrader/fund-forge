@@ -11,6 +11,7 @@ use crate::standardized_types::enums::FuturesExchange;
 #[archive_attr(derive(Debug))]
 pub struct SymbolInfo {
     pub symbol_name: SymbolName,
+    pub base_currency: Option<Currency>,
     pub pnl_currency: Currency,
     pub value_per_tick: Price,
     pub tick_size: Price,
@@ -20,6 +21,7 @@ pub struct SymbolInfo {
 impl SymbolInfo {
     pub fn new(
         symbol_name: SymbolName,
+        base_currency: Option<Currency>,
        pnl_currency: Currency,
        value_per_tick: Price,
        tick_size: Price,
@@ -27,6 +29,7 @@ impl SymbolInfo {
     ) -> Self {
         Self {
             symbol_name,
+            base_currency,
             pnl_currency,
             value_per_tick,
             tick_size,

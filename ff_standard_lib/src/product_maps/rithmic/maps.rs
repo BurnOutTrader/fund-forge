@@ -158,6 +158,7 @@ lazy_static! {
                     value_per_tick: dec!($value_per_tick),
                     tick_size: dec!($tick_size),
                     decimal_accuracy: $accuracy,
+                    base_currency: None,
                 });
             };
         }

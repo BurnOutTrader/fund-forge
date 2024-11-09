@@ -79,6 +79,10 @@ pub enum Currency {
     SGD,
     NZD,
     CNH,
+    BCH,
+    BTC,
+    ETH,
+    LTC,
 }
 
 impl Currency {
@@ -130,6 +134,10 @@ impl Display for Currency {
             Currency::SGD => "SGD",
             Currency::NZD => "NZD",
             Currency::CNH => "CNH",
+            Currency::BCH => "BCH",
+            Currency::BTC => "BTC",
+            Currency::ETH => "ETH",
+            Currency::LTC => "LTC",
         })
     }
 }
