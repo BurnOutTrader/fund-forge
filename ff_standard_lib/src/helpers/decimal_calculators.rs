@@ -1,6 +1,7 @@
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive, Zero};
 use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
+use crate::standardized_types::accounts::Currency;
 use crate::standardized_types::enums::{PositionSide};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::symbol_info::SymbolInfo;
@@ -12,8 +13,8 @@ pub fn calculate_theoretical_pnl(
     quantity: Volume,
     symbol_info: &SymbolInfo,
     exchange_rate_multiplier: Decimal,
+    account_currency: Currency,  // Need to add this
 ) -> Price {
-    // Calculate the price difference based on position side
     let raw_ticks = match side {
         PositionSide::Long => {
             let ticks = ((market_price - entry_price) / symbol_info.tick_size).round_dp(symbol_info.decimal_accuracy);
@@ -31,11 +32,16 @@ pub fn calculate_theoretical_pnl(
         },
     };
 
-    // Calculate PnL in the symbol's currency
     let pnl = raw_ticks * symbol_info.value_per_tick * quantity;
 
-    // Convert to account currency
-    pnl * exchange_rate_multiplier
+    // If account currency is base currency (e.g., AUD in AUD/JPY)
+    // We need to divide by the price to convert from quote to base currency
+    if symbol_info.symbol_name.starts_with(&account_currency.to_string()) {
+        pnl / entry_price
+    } else {
+        // Otherwise use normal conversion
+        pnl * exchange_rate_multiplier
+    }
 }
 
 /// Safely divides two f64 values using Decimal for precision.

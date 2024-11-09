@@ -35,13 +35,14 @@ impl Ledger {
             match self.rates.get(&position_currency) {
                 Some(rate) => rate.value().clone(),
                 None => {
-                    let rate = get_exchange_rate(self.currency, position_currency, time, side).await.unwrap_or_else(|_e| dec!(1.0));
+                    let rate = get_exchange_rate(position_currency, self.currency, time, side).await.unwrap_or_else(|_e| dec!(1));
                     self.rates.insert(position_currency, rate);
                     rate
                 }
             }
         };
-        let margin = self.account.brokerage.intraday_margin_required(symbol_name, quantity, market_price, rate).await?
+       // eprintln!("Account Currency: {}, Position Currency: {}, Rate: {}", self.currency, position_currency, rate);
+        let margin = self.account.brokerage.intraday_margin_required(symbol_name, quantity, market_price, self.currency, rate).await?
             .unwrap_or_else(|| quantity * market_price * rate);
 
         // Check available cash first
@@ -104,7 +105,7 @@ impl Ledger {
             } else {
                 dec!(1.0)
             };
-            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, exchange_rate, time, tag).await;
+            let event = existing_position.reduce_position_size(market_price, existing_position.quantity_open, self.currency, exchange_rate, time, tag).await;
             let mut cash_available = self.cash_available.lock().await;
             let mut total_booked_pnl = self.total_booked_pnl.lock().await;
             match &event {
@@ -173,7 +174,7 @@ impl Ledger {
                 } else {
                     dec!(1.0)
                 };
-                let event = existing_position.reduce_position_size(market_fill_price, quantity, exchange_rate, time, tag.clone()).await;
+                let event = existing_position.reduce_position_size(market_fill_price, quantity, self.currency,exchange_rate, time, tag.clone()).await;
 
                 self.release_margin_used(&symbol_name).await;
 
@@ -245,7 +246,7 @@ impl Ledger {
                         return Err(event)
                     }
                 }
-                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, market_fill_price, quantity, time, tag.clone()).await;
+                let event = existing_position.add_to_position(self.mode, self.is_simulating_pnl, self.currency, market_fill_price, quantity, time, tag.clone()).await;
                 self.positions.insert(symbol_code.clone(), existing_position);
 
                 {

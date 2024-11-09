@@ -1353,7 +1353,7 @@ pub fn get_oanda_symbol_names() -> &'static Vec<String> {
 }
 
 lazy_static! {
-    pub static ref FX_SYMBOLS: Vec<String> = vec![
+    pub static ref OANDA_FX_SYMBOLS: Vec<String> = vec![
         "AUD-USD".to_string(),
         "EUR-USD".to_string(),
         "GBP-USD".to_string(),

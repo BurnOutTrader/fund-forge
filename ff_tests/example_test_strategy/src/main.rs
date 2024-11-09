@@ -44,7 +44,7 @@ async fn main() {
         vec![
             // Since we only have quote level test data, the 2 subscriptions will be created by consolidating the quote feed. Quote data will automatically be subscribed as primary data source.
             DataSubscription::new(
-                SymbolName::from("AUD-JPY"),
+                SymbolName::from("EUR-USD"),
                 DataVendor::Oanda,
                 Resolution::Seconds(5),
                 BaseDataType::QuoteBars,
@@ -81,7 +81,7 @@ async fn main() {
             IndicatorName::from("quotebar_5s_atr_5"),
               // The subscription for the indicator
               DataSubscription::new(
-                  SymbolName::from("AUD-JPY"),
+                  SymbolName::from("EUR-USD"),
                   DataVendor::Oanda,
                   Resolution::Seconds(5),
                   BaseDataType::QuoteBars,
@@ -144,7 +144,7 @@ pub async fn on_data_received(
                                     continue;
                                 }
 
-                                if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "AUD-JPY"  {
+                                if quotebar.resolution == Resolution::Seconds(5) && quotebar.symbol.name == "EUR-USD"  {
                                     // We are using a limit order to enter here, so we will manage our order differently. there are a number of ways to do this, this is probably not the best way.
                                     // Using Option<OrderId> for entry order as an alternative to is_long()
                                     if entry_order_id.is_some() {
@@ -167,7 +167,7 @@ pub async fn on_data_received(
                                     // buy below the low of prior bar when atr is high and atr is increasing and the bars are closing higher, we are using a limit order which will cancel out at the end of the day
                                     if entry_order_id.is_none()
                                         && quotebar.bid_close > last_bar.bid_close
-                                        && current_heikin_3m_atr_5 >= dec!(0.003)
+                                        && current_heikin_3m_atr_5 >= dec!(0.00003)
                                         && current_heikin_3m_atr_5 > last_heikin_3m_atr_5
                                         && entry_order_id.is_none()
                                     {

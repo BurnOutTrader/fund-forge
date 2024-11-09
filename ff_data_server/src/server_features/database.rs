@@ -87,7 +87,7 @@ impl HybridStorage {
             _ => return Err(FundForgeError::ServerErrorDebug(format!("Data Vendor not supported for currency conversion: {}", data_vendor)))
         };
 
-        eprintln!("Getting exchange rate for {}-{} at {}", from_currency.to_string(), to_currency.to_string(), date_time);
+        //eprintln!("Getting exchange rate for {}-{} at {}", from_currency.to_string(), to_currency.to_string(), date_time);
 
         let symbol_name = format!("{}-{}", from_currency.to_string(), to_currency.to_string());
         let has_symbol: bool = match data_vendor {
@@ -109,10 +109,12 @@ impl HybridStorage {
                                 return Ok(candle.close);
                             },
                             BaseDataEnum::QuoteBar(quote_bar) => {
+                                //eprintln!("Quote Bar: {:?}", quote_bar);
                                 return match side {
                                     OrderSide::Buy => Ok(quote_bar.ask_close),
                                     OrderSide::Sell => Ok(quote_bar.bid_close),
                                 }
+
                             },
                             _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
                         }
@@ -124,7 +126,7 @@ impl HybridStorage {
         } else {
 
             // Try inverse currency pair
-            let symbol_name = format!("{}-{}", from_currency.to_string(), to_currency.to_string());
+            let symbol_name = format!("{}-{}", to_currency.to_string(), from_currency.to_string());
             let has_symbol: bool = match data_vendor {
                 DataVendor::Bitget => {
                     todo!()
@@ -144,6 +146,7 @@ impl HybridStorage {
                                     return Ok(dec!(1) / candle.close);  // Take reciprocal
                                 },
                                 BaseDataEnum::QuoteBar(quote_bar) => {
+                                    //eprintln!("Quote Bar: {:?}", quote_bar);
                                     return match side {
                                         OrderSide::Buy => Ok(dec!(1) / quote_bar.ask_close),  // Take reciprocal
                                         OrderSide::Sell => Ok(dec!(1) / quote_bar.bid_close),  // Take reciprocal
