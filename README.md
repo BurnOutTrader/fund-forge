@@ -21,14 +21,10 @@ On the client/strategy side, warming up data feeds etc is not currently done asy
 If you use the second option before launching the on_data_received function, you will still get warm up data, just pass in an empty vec in strategy initialize.
 - 05/11/2024: Fixed divide by 0 bug in backtesting engine, from using order quantity filled instead of quantity open in backtest matching engine.
 - 05/11/2024: Data download functions are now working perfectly, as far as I can tell.
-- 05-11-2024: Oanda backtesting accuracy should now be as good as it can be, using a symbol info map for tick size, value and decimal accuracy, and using the best bid, offer for fills.
 - 06-11-2024: Enter Long, Enter Short, Exit Long, Exit Short and Market Orders work for Oanda, but I have not tested limit orders or stop orders yet, other orders will work but the strategy will not get update events and so they are currently unsafe.
-- 06-11-2024: Oanda backtesting is not accurate for currencies, I need to redo the symbol info map to account for lot sizes on currencies.
-- 06-11-2024: I had a major problem on indicator updates, I hadn't tested a change over the weekend because the market was closed, it resulted in multiple live updates for the same indicator, I have fixed this now.
-- 06-11-2024: Don't use sync_accounts == true for any strategy, It is not working properly.
-- 07-11-2024: Oanda Symbols like Jpy will have very high value per point, because they are in yen, I will be building a currency conversion tool for backtesting to convert the pnl to the account currency, this will require the user to have the 1-hour data for every currency pair.
-
-- Please report any issues, some bugs I don't notice after I change code because there are so many possible states to test, backtesting, live trading, live paper * 2 brokerages.
+- 06-11-2024: Don't use sync_accounts == true for any strategy, It is not finished.
+- 09-11-2024: Historical currency conversion is now working but is untested, open and booked pnl will always be estimated in account currency even in live (live rates will be implemented soon) None of this is tested properly but it is relatively straight forward, we get the last know convertion rate and multiply it by the open or booked pnl, the server will do this as accurately as possible depending on the resolution of your fx data, if no rate is found it will fall back to 1 to 1 conversion.
+- 09-11-2024: Oanda lot sizes should be fixed but are not fully tested, I got an Ai to create the hard coded symbol info map from a table provided by Oanda, but I have not tested it yet.
 
 ### Initial Setup
 1. Install [rust](https://www.rust-lang.org/tools/install).
