@@ -13,7 +13,7 @@ pub fn calculate_theoretical_pnl(
     quantity: Volume,
     symbol_info: &SymbolInfo,
     exchange_rate_multiplier: Decimal,
-    account_currency: Currency,  // Need to add this
+    account_currency: Currency,
 ) -> Price {
     let raw_ticks = match side {
         PositionSide::Long => {
@@ -34,12 +34,29 @@ pub fn calculate_theoretical_pnl(
 
     let pnl = raw_ticks * symbol_info.value_per_tick * quantity;
 
-    // If account currency is base currency (e.g., AUD in AUD/JPY)
-    // We need to divide by the price to convert from quote to base currency
-    if symbol_info.symbol_name.starts_with(&account_currency.to_string()) {
-        pnl / entry_price
+    // Convert PnL to account currency
+    if let Some(base_curr) = symbol_info.base_currency {
+        if account_currency == base_curr {
+            // Case 1: Account currency is base currency
+            // Example: AUD account trading AUD/JPY
+            pnl / entry_price
+        } else if account_currency == symbol_info.pnl_currency {
+            // Case 2: Account currency is quote/pnl currency
+            // Example: JPY account trading AUD/JPY
+            pnl
+        } else {
+            // Case 3: Account currency is neither
+            // Example: EUR account trading AUD/JPY
+            if exchange_rate_multiplier > dec!(1) {
+                // Rate is EUR/JPY, need to divide
+                pnl / exchange_rate_multiplier
+            } else {
+                // Rate is JPY/EUR, can multiply
+                pnl * exchange_rate_multiplier
+            }
+        }
     } else {
-        // Otherwise use normal conversion
+        // Not a currency pair
         pnl * exchange_rate_multiplier
     }
 }
