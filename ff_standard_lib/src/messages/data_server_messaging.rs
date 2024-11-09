@@ -1,5 +1,5 @@
 use std::collections::{BTreeMap};
-use crate::standardized_types::enums::{MarketType, StrategyMode, SubscriptionResolutionType};
+use crate::standardized_types::enums::{MarketType, OrderSide, StrategyMode, SubscriptionResolutionType};
 use crate::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use crate::standardized_types::bytes_trait::Bytes;
 use rkyv::{Archive, Deserialize, Serialize};
@@ -142,7 +142,8 @@ pub enum DataServerRequest {
         from_currency: Currency,
         to_currency: Currency,
         date_time_string: String,
-        data_vendor: DataVendor
+        data_vendor: DataVendor,
+        side: OrderSide
     },
     Accounts{callback_id: u64, brokerage: Brokerage},
     SymbolNames{callback_id: u64, brokerage: Brokerage, time: Option<String>},

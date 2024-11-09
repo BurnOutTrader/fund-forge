@@ -28,7 +28,7 @@ use ff_standard_lib::messages::data_server_messaging::{FundForgeError};
 use ff_standard_lib::standardized_types::base_data::base_data_type::BaseDataType;
 use ff_standard_lib::standardized_types::base_data::traits::BaseData;
 use ff_standard_lib::standardized_types::datavendor_enum::DataVendor;
-use ff_standard_lib::standardized_types::enums::MarketType;
+use ff_standard_lib::standardized_types::enums::{MarketType, OrderSide};
 use ff_standard_lib::standardized_types::resolution::Resolution;
 use ff_standard_lib::standardized_types::subscriptions::{DataSubscription, Symbol, SymbolName};
 use ff_standard_lib::standardized_types::time_slices::TimeSlice;
@@ -79,7 +79,7 @@ impl HybridStorage {
     }
 
     #[allow(unused)]
-    pub async fn get_exchange_rate(&self, from_currency: Currency, to_currency: Currency, date_time: DateTime<Utc>, data_vendor: DataVendor) -> Result<Decimal, FundForgeError> {
+    pub async fn get_exchange_rate(&self, from_currency: Currency, to_currency: Currency, date_time: DateTime<Utc>, data_vendor: DataVendor, side: OrderSide) -> Result<Decimal, FundForgeError> {
         let (resolutions, market_type, base_data_type) = match data_vendor {
             DataVendor::Bitget => (vec![Resolution::Minutes(1), Resolution::Hours(1)], MarketType::Crypto, BaseDataType::Candles),
             DataVendor::Oanda => (vec![Resolution::Seconds(5), Resolution::Minutes(1), Resolution::Hours(1)], MarketType::Forex, BaseDataType::QuoteBars),
@@ -96,7 +96,10 @@ impl HybridStorage {
                             return Ok(candle.close);
                         },
                         BaseDataEnum::QuoteBar(quote_bar) => {
-                            return Ok((quote_bar.ask_close + quote_bar.bid_close) / dec!(2));
+                            return match side {
+                                OrderSide::Buy => Ok(quote_bar.ask_close),
+                                OrderSide::Sell => Ok(quote_bar.bid_close),
+                            }
                         },
                         _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
                     }
@@ -116,8 +119,10 @@ impl HybridStorage {
                             return Ok(dec!(1) / candle.close);  // Take reciprocal
                         },
                         BaseDataEnum::QuoteBar(quote_bar) => {
-                            let mid_price = (quote_bar.ask_close + quote_bar.bid_close) / dec!(2);
-                            return Ok(dec!(1) / mid_price);  // Take reciprocal
+                            return match side {
+                                OrderSide::Buy => Ok(dec!(1) / quote_bar.ask_close),  // Take reciprocal
+                                OrderSide::Sell => Ok(dec!(1) / quote_bar.bid_close),  // Take reciprocal
+                            }
                         },
                         _ => return Err(FundForgeError::ServerErrorDebug(format!("Unexpected data type for currency conversion: {:?}", data)))
                     }

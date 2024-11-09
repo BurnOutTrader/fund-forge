@@ -6,11 +6,12 @@ use crate::messages::data_server_messaging::{DataServerRequest, DataServerRespon
 use crate::product_maps::oanda::maps::OANDA_SYMBOL_INFO;
 use crate::standardized_types::accounts::Currency;
 use crate::standardized_types::datavendor_enum::DataVendor;
+use crate::standardized_types::enums::OrderSide;
 use crate::strategies::client_features::client_side_brokerage::TIME_OUT;
 use crate::strategies::client_features::connection_types::ConnectionType;
 use crate::strategies::client_features::request_handler::{send_request, StrategyRequest};
 
-pub async fn get_exchange_rate(from_currency: Currency, to_currency: Currency, date_time: DateTime<Utc>) -> Result<Decimal, FundForgeError> {
+pub async fn get_exchange_rate(from_currency: Currency, to_currency: Currency, date_time: DateTime<Utc>, side: OrderSide) -> Result<Decimal, FundForgeError> {
     let currency_pair_string = format!("{}-{}", from_currency.to_string(), to_currency.to_string());
     let data_vendor = match OANDA_SYMBOL_INFO.contains_key(&currency_pair_string) {
         true => DataVendor::Oanda,
@@ -21,7 +22,8 @@ pub async fn get_exchange_rate(from_currency: Currency, to_currency: Currency, d
         from_currency,
         to_currency,
         date_time_string: date_time.to_string(),
-        data_vendor
+        data_vendor,
+        side
     };
     let (sender, receiver) = oneshot::channel();
     let msg = StrategyRequest::CallBack(ConnectionType::Vendor(data_vendor), request, sender);

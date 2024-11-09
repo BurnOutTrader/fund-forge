@@ -107,10 +107,11 @@ pub async fn manage_async_requests(
                         from_currency,
                         to_currency,
                         date_time_string,
-                        data_vendor
+                        data_vendor,
+                        side
                     } => {
                         handle_callback(
-                            ||  exchange_rate_response(mode, from_currency, to_currency, date_time_string, data_vendor, callback_id),
+                            ||  exchange_rate_response(mode, from_currency, to_currency, date_time_string, data_vendor, side, callback_id),
                             sender.clone()
                         ).await
                     }

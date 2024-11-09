@@ -77,8 +77,13 @@ impl Ledger {
                 self.release_margin_used(&symbol_name).await;
             }
             let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
+
             let exchange_rate = if self.currency != info.pnl_currency {
-                match get_exchange_rate(self.currency, info.pnl_currency, time).await {
+                let side = match existing_position.side {
+                    PositionSide::Long => OrderSide::Sell,
+                    PositionSide::Short => OrderSide::Buy,
+                };
+                match get_exchange_rate(self.currency, info.pnl_currency, time, side).await {
                     Ok(rate) => {
                         self.rates.insert(info.pnl_currency, rate);
                         rate
@@ -148,7 +153,7 @@ impl Ledger {
                 remaining_quantity -= existing_position.quantity_open;
                 let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
                 let exchange_rate = if self.currency != info.pnl_currency {
-                    match get_exchange_rate(self.currency, info.pnl_currency, time).await {
+                    match get_exchange_rate(self.currency, info.pnl_currency, time, side).await {
                         Ok(rate) => {
                             self.rates.insert(info.pnl_currency, rate);
                             rate
@@ -271,7 +276,7 @@ impl Ledger {
 
             let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
             let exchange_rate = if self.currency != info.pnl_currency {
-                match get_exchange_rate(self.currency, info.pnl_currency, time).await {
+                match get_exchange_rate(self.currency, info.pnl_currency, time, side).await {
                     Ok(rate) => {
                         self.rates.insert(info.pnl_currency, rate);
                         rate

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use ff_standard_lib::messages::data_server_messaging::{DataServerResponse, FundForgeError};
 use crate::server_features::server_side_brokerage::BrokerApiResponse;
 use ff_standard_lib::standardized_types::broker_enum::Brokerage;
-use ff_standard_lib::standardized_types::enums::StrategyMode;
+use ff_standard_lib::standardized_types::enums::{OrderSide, StrategyMode};
 use ff_standard_lib::standardized_types::new_types::{TimeString, Volume};
 use ff_standard_lib::standardized_types::orders::{Order, OrderId, OrderUpdateEvent, OrderUpdateType};
 use ff_standard_lib::standardized_types::subscriptions::SymbolName;
@@ -22,7 +22,7 @@ pub const TIMEOUT_DURATION: Duration = Duration::from_secs(10);
 
 #[allow(unused)]
 /// This request is only sent to Oanda server
-pub async fn exchange_rate_response(mode: StrategyMode, from_currency: Currency, to_currency: Currency, time_string: TimeString, data_vendor: DataVendor, callback_id: u64) -> DataServerResponse {
+pub async fn exchange_rate_response(mode: StrategyMode, from_currency: Currency, to_currency: Currency, time_string: TimeString, data_vendor: DataVendor, side: OrderSide, callback_id: u64) -> DataServerResponse {
     //todo, if live mode we request the api directly for the latest rate.
     //todo get exchange rate from hybrid storage,
     let time = match DateTime::<Utc>::from_str(&time_string) {
@@ -32,7 +32,7 @@ pub async fn exchange_rate_response(mode: StrategyMode, from_currency: Currency,
             error: FundForgeError::ServerErrorDebug("Invalid time string".to_string())
         }
     };
-    match DATA_STORAGE.get().unwrap().get_exchange_rate(from_currency, to_currency, time, data_vendor).await {
+    match DATA_STORAGE.get().unwrap().get_exchange_rate(from_currency, to_currency, time, data_vendor, side).await {
         Ok(rate) => DataServerResponse::ExchangeRate {
             callback_id,
             rate,
