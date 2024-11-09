@@ -47,13 +47,7 @@ pub fn calculate_theoretical_pnl(
         } else {
             // Case 3: Account currency is neither
             // Example: EUR account trading AUD/JPY
-            if exchange_rate_multiplier > dec!(1) {
-                // Rate is EUR/JPY, need to divide
-                pnl / exchange_rate_multiplier
-            } else {
-                // Rate is JPY/EUR, can multiply
-                pnl * exchange_rate_multiplier
-            }
+            pnl * exchange_rate_multiplier
         }
     } else {
         // Not a currency pair

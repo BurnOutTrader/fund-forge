@@ -44,13 +44,8 @@ impl Brokerage {
                             } else {
                                 // For EUR account trading AUD/JPY:
                                 let position_value = quantity * price;  // Gets us 10,000,000 JPY
-                                if conversion_rate > dec!(1) {
-                                    // Rate is EUR/JPY (162.665), need to divide
-                                    position_value / conversion_rate  // Convert JPY to EUR
-                                } else {
                                     // Rate is JPY/EUR (0.00614), can multiply directly
-                                    position_value * conversion_rate  // Convert JPY to EUR
-                                }
+                                position_value * conversion_rate  // Convert JPY to EUR
                             }
                         } else {
                             // Non-currency pair logic unchanged
