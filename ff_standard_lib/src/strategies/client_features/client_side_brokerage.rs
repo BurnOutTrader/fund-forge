@@ -34,7 +34,7 @@ impl Brokerage {
                 SYMBOL_DIVISORS.get(symbol_name.as_str()).map(|divisor| Some((quantity * price * conversion_rate) / divisor)).ok_or(FundForgeError::ClientSideErrorDebug(format!("Symbol not found: {}", symbol_name)))
             }
             Brokerage::Bitget => {
-                todo!()
+                Ok(Some(quantity * price * conversion_rate)) //todo, depending on spot vs futures
             }
         }
     }
