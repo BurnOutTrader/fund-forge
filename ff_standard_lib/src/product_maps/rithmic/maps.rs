@@ -490,9 +490,9 @@ lazy_static! {
     };
 }
 
-pub fn find_base_symbol(symbol: SymbolName) -> Option<String> {
+pub fn find_base_symbol(symbol: &SymbolName) -> Option<String> {
     // Check if the full symbol is in the list
-    if AVAILABLE_SYMBOL_NAMES.contains(&symbol) {
+    if AVAILABLE_SYMBOL_NAMES.contains(symbol) {
         return Some(symbol.to_string());
     }
 
@@ -515,7 +515,7 @@ pub fn find_base_symbol(symbol: SymbolName) -> Option<String> {
     None
 }
 
-pub fn get_available_symbol_names() -> &'static Vec<String> {
+pub fn get_available_rithmic_symbol_names() -> &'static Vec<String> {
     &AVAILABLE_SYMBOL_NAMES
 }
 
@@ -532,13 +532,13 @@ pub fn get_exchange_by_symbol_name(code: &str) -> Option<FuturesExchange> {
     }
 }
 
-pub fn get_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
+pub fn get_rithmic_symbol_info(symbol: &str) -> Result<SymbolInfo, String> {
     SYMBOL_INFO_MAP.get(symbol)
         .cloned()
         .ok_or_else(|| format!("{} not found", symbol))
 }
 
-pub fn get_rithmic_intraday_margin(symbol: &str) -> Option<Decimal> {
+pub fn get_rithmic_intraday_margin_in_usd(symbol: &str) -> Option<Decimal> {
     INTRADAY_MARGINS.get(symbol).cloned()
 }
 

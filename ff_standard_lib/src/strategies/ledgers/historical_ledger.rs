@@ -2,6 +2,7 @@ use crate::strategies::ledgers::ledger::Ledger;
 use chrono::{DateTime, Utc};
 use rust_decimal_macros::dec;
 use crate::messages::data_server_messaging::FundForgeError;
+use crate::standardized_types::accounts::Currency;
 use crate::standardized_types::enums::{OrderSide, PositionSide, StrategyMode};
 use crate::standardized_types::new_types::{Price, Volume};
 use crate::standardized_types::orders::{OrderId, OrderUpdateEvent};
@@ -27,9 +28,21 @@ impl Ledger {
         }
     }
 
-    pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price) -> Result<(), FundForgeError> {
-        let margin = self.account.brokerage.intraday_margin_required(symbol_name, quantity, market_price).await?
-            .unwrap_or_else(|| (quantity * market_price) / self.leverage);
+    pub(crate) async fn commit_margin(&self, symbol_name: &SymbolName, quantity: Volume, market_price: Price, time: DateTime<Utc>, side: OrderSide, position_currency: Currency) -> Result<(), FundForgeError> {
+        let rate = if position_currency == self.currency {
+            dec!(1)
+        } else {
+            match self.rates.get(&position_currency) {
+                Some(rate) => rate.value().clone(),
+                None => {
+                    let rate = get_exchange_rate(self.currency, position_currency, time, side).await.unwrap_or_else(|_e| dec!(1.0));
+                    self.rates.insert(position_currency, rate);
+                    rate
+                }
+            }
+        };
+        let margin = self.account.brokerage.intraday_margin_required(symbol_name, quantity, market_price, rate).await?
+            .unwrap_or_else(|| quantity * market_price * rate);
 
         // Check available cash first
         {
@@ -166,7 +179,7 @@ impl Ledger {
 
                 match &event {
                     PositionUpdateEvent::PositionReduced { booked_pnl, .. } => {
-                        self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price).await.unwrap();
+                        self.commit_margin(&symbol_name, existing_position.quantity_open, existing_position.average_price, time, side, existing_position.symbol_info.pnl_currency).await.unwrap();
                         self.positions.insert(symbol_code.clone(), existing_position);
 
                         self.symbol_closed_pnl
@@ -216,7 +229,7 @@ impl Ledger {
 
                 updates.push(event);
             } else {
-                match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
+                match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, existing_position.symbol_info.pnl_currency).await {
                     Ok(_) => {}
                     Err(e) => {
                         //todo this now gets added directly to buffer
@@ -247,7 +260,8 @@ impl Ledger {
             }
         }
         if remaining_quantity > dec!(0.0) {
-            match self.commit_margin(&symbol_name, quantity, market_fill_price).await {
+            let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
+            match self.commit_margin(&symbol_name, quantity, market_fill_price, time, side, info.pnl_currency).await {
                 Ok(_) => {}
                 Err(e) => {
                     let event = OrderUpdateEvent::OrderRejected {
@@ -269,7 +283,7 @@ impl Ledger {
                 OrderSide::Sell => PositionSide::Short,
             };
 
-            let info = self.symbol_info(self.account.brokerage, &symbol_name).await;
+
             let exchange_rate = if self.currency != info.pnl_currency {
                 match get_exchange_rate(self.currency, info.pnl_currency, time, side).await {
                     Ok(rate) => {

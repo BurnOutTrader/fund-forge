@@ -566,7 +566,7 @@ pub async fn match_order_plant_id(
                     let (symbol_name, symbol_code) = match msg.symbol {
                         None => return,
                         Some(code) => {
-                            let symbol_name = match find_base_symbol(code.clone()) {
+                            let symbol_name = match find_base_symbol(&code) {
                                 None => return,
                                 Some(symbol_name) => symbol_name
                             };

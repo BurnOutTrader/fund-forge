@@ -669,8 +669,8 @@ struct MarginTier {
 }
 
 impl MarginTier {
-    fn calculate_margin(&self, position: Decimal, contract_value: Decimal) -> Decimal {
-        position * contract_value * (self.margin_percent / dec!(100))
+    fn calculate_margin(&self, contract_value: Decimal) -> Decimal {
+        contract_value * (self.margin_percent / dec!(100))
     }
 }
 
@@ -1238,15 +1238,13 @@ lazy_static! {
         m
     };
 }
-fn find_margin_tier(position_size: Decimal, margin_tiers: &[MarginTier]) -> &MarginTier {
-    for tier in margin_tiers {
-        if tier.max_position.is_infinite() {
-            return tier;
-        }
 
-        // Only try to convert non-infinite values
-        let max_pos = Decimal::from_f64(tier.max_position).unwrap();
-        if position_size <= max_pos {
+fn find_margin_tier(position_value_usd: Decimal, margin_tiers: &[MarginTier]) -> &MarginTier {
+    // Convert position size to lots
+    let lots = position_value_usd / dec!(100000);
+
+    for tier in margin_tiers {
+        if position_value_usd == Decimal::ZERO || tier.max_position.is_infinite() || lots <= Decimal::from_f64(tier.max_position).unwrap() {
             return tier;
         }
     }
@@ -1254,15 +1252,337 @@ fn find_margin_tier(position_size: Decimal, margin_tiers: &[MarginTier]) -> &Mar
     margin_tiers.last().unwrap()
 }
 
-pub fn calculate_oanda_margin(symbol_name: &str, quantity: Decimal, contract_value: Decimal) -> Option<Decimal> {
+pub fn calculate_oanda_margin(symbol_name: &str, contract_value: Decimal) -> Option<Decimal> {
     let margin_tiers = MARGIN_TIERS.get(symbol_name)?;
 
-    // Convert quantity to position size for tier comparison
-    let position_size = quantity * contract_value;
-
-    // Find the appropriate tier
-    let tier = find_margin_tier(position_size, margin_tiers);
+    // Find the appropriate tier based on position size
+    let tier = find_margin_tier(contract_value, margin_tiers);
 
     // Calculate margin using the found tier
-    Some(tier.calculate_margin(quantity, contract_value))
+    Some(tier.calculate_margin(contract_value))
+}
+
+lazy_static! {
+    pub static ref SYMBOL_NAMES: Vec<String> = vec![
+        "AUD-USD".to_string(),
+        "EUR-USD".to_string(),
+        "GBP-USD".to_string(),
+        "NZD-USD".to_string(),
+        "USD-CAD".to_string(),
+        "USD-CHF".to_string(),
+        "USD-JPY".to_string(),
+        "EUR-GBP".to_string(),
+        "EUR-JPY".to_string(),
+        "EUR-CHF".to_string(),
+        "AUD-CAD".to_string(),
+        "AUD-CHF".to_string(),
+        "AUD-JPY".to_string(),
+        "AUD-NZD".to_string(),
+        "CAD-CHF".to_string(),
+        "CAD-JPY".to_string(),
+        "CHF-JPY".to_string(),
+        "EUR-AUD".to_string(),
+        "EUR-CAD".to_string(),
+        "EUR-NOK".to_string(),
+        "EUR-NZD".to_string(),
+        "EUR-SEK".to_string(),
+        "GBP-AUD".to_string(),
+        "GBP-CAD".to_string(),
+        "GBP-CHF".to_string(),
+        "GBP-JPY".to_string(),
+        "GBP-NZD".to_string(),
+        "NZD-CAD".to_string(),
+        "NZD-CHF".to_string(),
+        "NZD-JPY".to_string(),
+        "USD-NOK".to_string(),
+        "USD-SEK".to_string(),
+        "USD-CNH".to_string(),
+        "USD-MXN".to_string(),
+        "USD-ZAR".to_string(),
+        "SGD-JPY".to_string(),
+        "USD-HKD".to_string(),
+        "USD-SGD".to_string(),
+        "EUR-CZK".to_string(),
+        "EUR-HUF".to_string(),
+        "EUR-PLN".to_string(),
+        "USD-CZK".to_string(),
+        "USD-HUF".to_string(),
+        "USD-PLN".to_string(),
+        "ZAR-JPY".to_string(),
+        "USD-TRY".to_string(),
+        "EUR-TRY".to_string(),
+        "TRY-JPY".to_string(),
+        "BTC-USD".to_string(),
+        "BCH-USD".to_string(),
+        "ETH-USD".to_string(),
+        "LTC-USD".to_string(),
+        "AUS200-USD".to_string(),
+        "CHINA50-USD".to_string(),
+        "EU50-USD".to_string(),
+        "GER30-USD".to_string(),
+        "HK50-USD".to_string(),
+        "US100-USD".to_string(),
+        "NAS100-USD".to_string(),
+        "US30-USD".to_string(),
+        "US500-USD".to_string(),
+        "US2000-USD".to_string(),
+        "FRA40-USD".to_string(),
+        "UK100-USD".to_string(),
+        "INDIA50-USD".to_string(),
+        "JP225-USD".to_string(),
+        "TWIX-USD".to_string(),
+        "NL25-USD".to_string(),
+        "SING30-USD".to_string(),
+        "CH20-USD".to_string(),
+        "ES35-USD".to_string(),
+        "UKOIL-USD".to_string(),
+        "USOIL-USD".to_string(),
+        "NATGAS-USD".to_string(),
+        "COPPER-USD".to_string(),
+        "WHEAT-USD".to_string(),
+        "CORN-USD".to_string(),
+        "SOYBEANS-USD".to_string(),
+        "SUGAR-USD".to_string(),
+        "XAG-USD".to_string(),
+        "XAU-USD".to_string(),
+    ];
+}
+
+pub fn get_oanda_symbol_names() -> &'static Vec<String> {
+    &SYMBOL_NAMES
+}
+
+lazy_static! {
+    pub static ref FX_SYMBOLS: Vec<String> = vec![
+        "AUD-USD".to_string(),
+        "EUR-USD".to_string(),
+        "GBP-USD".to_string(),
+        "NZD-USD".to_string(),
+        "USD-CAD".to_string(),
+        "USD-CHF".to_string(),
+        "USD-JPY".to_string(),
+        "EUR-GBP".to_string(),
+        "EUR-JPY".to_string(),
+        "EUR-CHF".to_string(),
+        "AUD-CAD".to_string(),
+        "AUD-CHF".to_string(),
+        "AUD-JPY".to_string(),
+        "AUD-NZD".to_string(),
+        "CAD-CHF".to_string(),
+        "CAD-JPY".to_string(),
+        "CHF-JPY".to_string(),
+        "EUR-AUD".to_string(),
+        "EUR-CAD".to_string(),
+        "EUR-NOK".to_string(),
+        "EUR-NZD".to_string(),
+        "EUR-SEK".to_string(),
+        "GBP-AUD".to_string(),
+        "GBP-CAD".to_string(),
+        "GBP-CHF".to_string(),
+        "GBP-JPY".to_string(),
+        "GBP-NZD".to_string(),
+        "NZD-CAD".to_string(),
+        "NZD-CHF".to_string(),
+        "NZD-JPY".to_string(),
+        "USD-NOK".to_string(),
+        "USD-SEK".to_string(),
+        "USD-CNH".to_string(),
+        "USD-MXN".to_string(),
+        "USD-ZAR".to_string(),
+        "SGD-JPY".to_string(),
+        "USD-HKD".to_string(),
+        "USD-SGD".to_string(),
+        "EUR-CZK".to_string(),
+        "EUR-HUF".to_string(),
+        "EUR-PLN".to_string(),
+        "USD-CZK".to_string(),
+        "USD-HUF".to_string(),
+        "USD-PLN".to_string(),
+        "ZAR-JPY".to_string(),
+        "USD-TRY".to_string(),
+        "EUR-TRY".to_string(),
+        "TRY-JPY".to_string(),
+    ];
+
+    pub static ref INDEX_SYMBOLS: Vec<String> = vec![
+        "AUS200-USD".to_string(),
+        "CHINA50-USD".to_string(),
+        "EU50-USD".to_string(),
+        "GER30-USD".to_string(),
+        "HK50-USD".to_string(),
+        "US100-USD".to_string(),
+        "NAS100-USD".to_string(),
+        "US30-USD".to_string(),
+        "US500-USD".to_string(),
+        "US2000-USD".to_string(),
+        "FRA40-USD".to_string(),
+        "UK100-USD".to_string(),
+        "INDIA50-USD".to_string(),
+        "JP225-USD".to_string(),
+        "TWIX-USD".to_string(),
+        "NL25-USD".to_string(),
+        "SING30-USD".to_string(),
+        "CH20-USD".to_string(),
+        "ES35-USD".to_string(),
+    ];
+
+    pub static ref COMMODITY_SYMBOLS: Vec<String> = vec![
+        "UKOIL-USD".to_string(),
+        "USOIL-USD".to_string(),
+        "NATGAS-USD".to_string(),
+        "COPPER-USD".to_string(),
+        "WHEAT-USD".to_string(),
+        "CORN-USD".to_string(),
+        "SOYBEANS-USD".to_string(),
+        "SUGAR-USD".to_string(),
+        "XAG-USD".to_string(),
+        "XAU-USD".to_string(),
+    ];
+}
+
+lazy_static! {
+    pub static ref SYMBOL_DIVISORS: HashMap<&'static str, Decimal> = {
+        let mut m = HashMap::new();
+
+        // Indices
+        m.insert("JP225-USD", dec!(20.0));
+        m.insert("US500-USD", dec!(20.0));
+        m.insert("EU50-USD", dec!(20.0));
+        m.insert("JP225-JPY", dec!(20.0));
+        m.insert("NL25-USD", dec!(10.0));
+        m.insert("GER30-USD", dec!(20.0));
+        m.insert("US2000-USD", dec!(20.0));
+        m.insert("UK100-USD", dec!(20.0));
+        m.insert("CH20-USD", dec!(10.0));
+        m.insert("CHINA50-USD", dec!(10.0));
+        m.insert("NAS100-USD", dec!(20.0));
+        m.insert("CHINA-A50-USD", dec!(10.0));
+        m.insert("AUS200-USD", dec!(20.0));
+        m.insert("US30-USD", dec!(20.0));
+        m.insert("HK50-USD", dec!(10.0));
+        m.insert("ES35-USD", dec!(10.0));
+        m.insert("SING30-USD", dec!(10.0));
+        m.insert("FRA40-USD", dec!(20.0));
+
+        // Metals
+        m.insert("XAU-GBP", dec!(20.0));
+        m.insert("XAU-AUD", dec!(20.0));
+        m.insert("XAG-EUR", dec!(10.0));
+        m.insert("XAU-CAD", dec!(20.0));
+        m.insert("XAG-JPY", dec!(10.0));
+        m.insert("XAG-NZD", dec!(10.0));
+        m.insert("XAU-EUR", dec!(20.0));
+        m.insert("XAG-CHF", dec!(10.0));
+        m.insert("XAU-XAG", dec!(20.0));
+        m.insert("XAG-HKD", dec!(10.0));
+        m.insert("XAU-CHF", dec!(20.0));
+        m.insert("XAU-USD", dec!(20.0));
+        m.insert("XAG-SGD", dec!(10.0));
+        m.insert("XAU-SGD", dec!(20.0));
+        m.insert("XAG-AUD", dec!(10.0));
+        m.insert("XAU-NZD", dec!(20.0));
+        m.insert("XAG-CAD", dec!(10.0));
+        m.insert("XAG-USD", dec!(10.0));
+        m.insert("XAU-JPY", dec!(20.0));
+        m.insert("XAG-GBP", dec!(10.0));
+        m.insert("XAU-HKD", dec!(20.0));
+
+        // Forex
+        m.insert("EUR-HKD", dec!(20.0));
+        m.insert("EUR-NOK", dec!(20.0));
+        m.insert("CAD-JPY", dec!(30.0));
+        m.insert("AUD-CHF", dec!(30.0));
+        m.insert("CHF-HKD", dec!(20.0));
+        m.insert("USD-ZAR", dec!(20.0));
+        m.insert("GBP-HKD", dec!(20.0));
+        m.insert("EUR-SGD", dec!(20.0));
+        m.insert("CHF-JPY", dec!(30.0));
+        m.insert("EUR-ZAR", dec!(20.0));
+        m.insert("NZD-CHF", dec!(20.0));
+        m.insert("EUR-USD", dec!(30.0));
+        m.insert("CAD-HKD", dec!(20.0));
+        m.insert("SGD-CHF", dec!(20.0));
+        m.insert("USD-CAD", dec!(30.0));
+        m.insert("USD-CZK", dec!(20.0));
+        m.insert("GBP-CAD", dec!(30.0));
+        m.insert("AUD-CAD", dec!(30.0));
+        m.insert("NZD-HKD", dec!(20.0));
+        m.insert("USD-CHF", dec!(30.0));
+        m.insert("EUR-NZD", dec!(20.0));
+        m.insert("USD-HUF", dec!(20.0));
+        m.insert("GBP-JPY", dec!(30.0));
+        m.insert("USD-TRY", dec!(4.0));
+        m.insert("USD-DKK", dec!(20.0));
+        m.insert("GBP-PLN", dec!(20.0));
+        m.insert("CAD-CHF", dec!(30.0));
+        m.insert("EUR-CHF", dec!(30.0));
+        m.insert("USD-SEK", dec!(20.0));
+        m.insert("GBP-SGD", dec!(20.0));
+        m.insert("TRY-JPY", dec!(4.0));
+        m.insert("USD-JPY", dec!(30.0));
+        m.insert("EUR-TRY", dec!(4.0));
+        m.insert("AUD-SGD", dec!(20.0));
+        m.insert("EUR-GBP", dec!(30.0));
+        m.insert("EUR-SEK", dec!(20.0));
+        m.insert("USD-SGD", dec!(20.0));
+        m.insert("EUR-DKK", dec!(20.0));
+        m.insert("EUR-CZK", dec!(20.0));
+        m.insert("EUR-AUD", dec!(30.0));
+        m.insert("EUR-JPY", dec!(30.0));
+        m.insert("AUD-USD", dec!(30.0));
+        m.insert("GBP-USD", dec!(30.0));
+        m.insert("USD-MXN", dec!(20.0));
+        m.insert("NZD-CAD", dec!(20.0));
+        m.insert("GBP-NZD", dec!(20.0));
+        m.insert("SGD-JPY", dec!(20.0));
+        m.insert("EUR-CAD", dec!(30.0));
+        m.insert("USD-HKD", dec!(20.0));
+        m.insert("HKD-JPY", dec!(20.0));
+        m.insert("GBP-ZAR", dec!(20.0));
+        m.insert("NZD-SGD", dec!(20.0));
+        m.insert("GBP-AUD", dec!(30.0));
+        m.insert("USD-PLN", dec!(20.0));
+        m.insert("ZAR-JPY", dec!(20.0));
+        m.insert("AUD-NZD", dec!(20.0));
+        m.insert("USD-THB", dec!(20.0));
+        m.insert("GBP-CHF", dec!(30.0));
+        m.insert("CHF-ZAR", dec!(20.0));
+        m.insert("EUR-HUF", dec!(20.0));
+        m.insert("NZD-USD", dec!(20.0));
+        m.insert("USD-CNH", dec!(20.0));
+        m.insert("AUD-JPY", dec!(30.0));
+        m.insert("CAD-SGD", dec!(20.0));
+        m.insert("AUD-HKD", dec!(20.0));
+        m.insert("NZD-JPY", dec!(20.0));
+        m.insert("USD-NOK", dec!(20.0));
+        m.insert("EUR-PLN", dec!(20.0));
+
+        // Crypto
+        m.insert("BCH-USD", dec!(2.0));
+        m.insert("ETH-USD", dec!(2.0));
+        m.insert("BTC-USD", dec!(2.0));
+        m.insert("LTC-USD", dec!(2.0));
+
+        // Bonds
+        m.insert("US10Y-USD", dec!(5.0));
+        m.insert("BUND-USD", dec!(5.0));
+        m.insert("UK10Y-USD", dec!(5.0));
+        m.insert("US2Y-USD", dec!(5.0));
+        m.insert("USTBOND-USD", dec!(5.0));
+        m.insert("US5Y-USD", dec!(5.0));
+
+        // Commodities
+        m.insert("SOYBEANS-USD", dec!(10.0));
+        m.insert("SUGAR-USD", dec!(10.0));
+        m.insert("WTOIL-USD", dec!(10.0));
+        m.insert("CORN-USD", dec!(10.0));
+        m.insert("PALLADIUM-USD", dec!(10.0));
+        m.insert("PLATINUM-USD", dec!(10.0));
+        m.insert("COPPER-USD", dec!(10.0));
+        m.insert("BRENT-USD", dec!(10.0));
+        m.insert("NATGAS-USD", dec!(10.0));
+        m.insert("WHEAT-USD", dec!(10.0));
+
+        m
+    };
 }
