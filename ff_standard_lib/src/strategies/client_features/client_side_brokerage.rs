@@ -43,7 +43,7 @@ impl Brokerage {
                                 quantity * price  // Value is in quote currency already
                             } else {
                                 // For EUR account trading AUD/JPY:
-                                let position_value = quantity * price;  // Gets us 10,000,000 JPY
+                                let position_value = quantity / price;  // Gets us 10,000,000 JPY
                                     // Rate is JPY/EUR (0.00614), can multiply directly
                                 position_value * conversion_rate  // Convert JPY to EUR
                             }
